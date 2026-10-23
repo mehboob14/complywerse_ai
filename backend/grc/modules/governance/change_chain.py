@@ -48,7 +48,7 @@ EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent
                "archived": "Archived", "restored": "Restored from the archive", "status_changed": "Status changed",
                "review_completed": "Review completed", "review_skipped": "Review skipped", "version_rollback": "Earlier version restored",
                "return_to_draft": "Returned to draft", "request_cancelled": "Request withdrawn", "participant_removed": "Reviewer or approver removed",
-               "owner_assigned": "Owner changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted",
+               "owner_assigned": "Owner changed", "department_changed": "Department changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted",
                "changes_requested": "Changes requested", "resubmitted": "Resubmitted", "withdrawn": "Withdrawn from review",
                "review_again_requested": "Asked again after changes",
                "route_set": "Approval route set",
@@ -644,7 +644,7 @@ CATALOG_HEADERS = {
 # event; ``kinds`` chooses which entries are there.
 LOG_KINDS = {"text": "Changes to the text", "review": "Reviews & approvals", "statement": "Statements", "other": "Other activity"}
 LOG_SOURCES = ("ai", "manual", "statement", "revert", "restore", "file", "import", "signoff", "initial")
-_OTHER_EVENTS = {"created", "archived", "restored", "status_changed", "version_rollback", "owner_assigned"}
+_OTHER_EVENTS = {"created", "archived", "restored", "status_changed", "version_rollback", "owner_assigned", "department_changed"}
 
 
 def event_group(e: Dict[str, Any]) -> str:

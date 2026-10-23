@@ -30,6 +30,8 @@ from .nca_kpi_router import router as nca_kpi_router
 from .search_router import router as search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .teams_router import router as teams_router
+# Departments - admin CRUD for the organisation's units, their roles and people (the Teams of before, DECISIONS D37).
+from .admin_departments_router import router as admin_departments_router
 from .module_settings_router import router as module_settings_router
 from .scheduler_router import router as scheduler_router
 
@@ -57,6 +59,7 @@ __all__ = [
     "artifacts_router",
     "search_router",
     "teams_router",
+    "admin_departments_router",
     "module_settings_router",
     "scheduler_router",
 ]

@@ -263,6 +263,9 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # Departments replace teams (services/org_departments.py): the department a team is the picker record of (no foreign key on an
+    # existing table; create_all gives a new database one)
+    ("grc_teams", "department_id", "INTEGER", "ix_team_department"),
     # Change chain: what a document version changed against the one before it, from -> to, and where each change came from
     ("grc_governance_document_versions", "change_set", "JSON", None),
     # AI Studio: what the screen shows while an AI turn works (the steps, the text so far, the parts of a document)
@@ -1238,6 +1241,25 @@ def _backfill_imported_account_owners(engine: Engine) -> None:
         logger.exception("imported-account owner fix failed on %s", getattr(engine.url, "database", "?"))
 
 
+def _backfill_departments_from_teams(engine: Engine) -> None:
+    """Teams become departments (services/org_departments.py, DECISIONS D37): every team with no department gets one, with its
+    people, and every active department a picker record. Adds and links only, never deletes or rewrites; idempotent and safe to
+    run from two processes at once."""
+    try:
+        insp = inspect(engine)
+        if not all(insp.has_table(t) for t in ("grc_teams", "grc_team_members", "grc_departments", "grc_department_members", "grc_users")):
+            return
+        if "department_id" not in {c["name"] for c in insp.get_columns("grc_teams")}:
+            return                  # the column add failed: the next run (it is retried) does this
+        from ...services import org_departments
+        with Session(bind=engine) as db:
+            out = org_departments.backfill(db)
+        if any(out.values()):
+            logger.info("Teams turned into departments on %s: %s", getattr(engine.url, "database", "?"), out)
+    except Exception:
+        logger.exception("teams-to-departments backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
 def _backfill_regulatory_task_twins(engine: Engine) -> None:
     """Every regulatory implementation task without a Task Management twin gets one."""
     try:
@@ -1456,6 +1478,9 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Documents owned by accounts an access review imported: the author owns them now. Once per tenant.
         _backfill_imported_account_owners(engine)
+
+        # Teams become departments: each team without one gets a department (with its people), each department a picker record.
+        _backfill_departments_from_teams(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

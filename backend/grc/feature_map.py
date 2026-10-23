@@ -160,6 +160,7 @@ BY_PREFIX: Dict[str, Place] = {
     "/admin/roles": ("Administration", "Role Management"),
     "/admin/permissions": ("Administration", "Role Management"),
     "/admin/teams": ("Administration", "Teams"),
+    "/admin/departments": ("Administration", "Departments"),
     "/admin/password-policy": ("Administration", "Password Policy"),
     "/admin/ai-usage": ("Administration", "Token usage"),
     "/admin/ai-governance": ("Administration", "AI Governance"),

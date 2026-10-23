@@ -39,9 +39,10 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from ...models import (DocumentObligation, DocumentSignoffAssignment, GovernanceDocument, GovernanceDocumentVersion, GRCUser, Role,
-                       Team, TeamMember, Tenant, UserRole, get_db)
+                       Tenant, UserRole, get_db)
 from ...routers.auth_router import (ADMIN_ROLE, PLATFORM_GRANT, get_user_tenants, has_tenant_permission, is_tenant_admin,
                                     platform_role_ids, require_auth)
+from ...services import org_departments
 
 EDIT_REFUSED = "Only the document's owner, its author or someone allowed to edit documents can change it."
 PUBLISH_REFUSED = "Only someone allowed to publish documents can approve or publish it."
@@ -207,13 +208,13 @@ def is_auditor(db: Session, user: GRCUser) -> bool:
 
 def _assigned(db: Session, user: GRCUser, kinds: Iterable[str] = SIGNOFF_KINDS):
     """A select of the ids of documents whose sign-off names the person in one of these kinds: by name, by a role the platform gave
-    them (not a link a connector imported) or by a team they belong to or lead - the matching of document_signoff._resolve_target_users."""
+    them (not a link a connector imported) or by a team they belong to or lead (a department's people count: org_departments.teams_of)
+    - the matching of document_signoff._resolve_target_users."""
     A = DocumentSignoffAssignment
     return select(A.document_id).where(A.role_type.in_(tuple(kinds)), or_(
         and_(A.target_type == "user", A.target_id == user.id),
         and_(A.target_type == "role", A.target_id.in_(platform_role_ids(db, user))),
-        and_(A.target_type == "team", or_(A.target_id.in_(select(TeamMember.team_id).where(TeamMember.user_id == user.id)),
-                                          A.target_id.in_(select(Team.id).where(Team.lead_user_id == user.id))))))
+        and_(A.target_type == "team", A.target_id.in_(org_departments.teams_of(db, user)))))
 
 
 def participant(db: Session, user: GRCUser, doc_id: int, kinds: Iterable[str] = SIGNOFF_KINDS) -> bool:

@@ -211,6 +211,11 @@ class Team(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # The department this team is the picker record of (grc/services/org_departments.py, DECISIONS D37). A linked team mirrors
+    # its department's name, description, head (lead_user_id) and active flag, and its members are the department's; NULL is a
+    # legacy team, which keeps its own TeamMember rows. The team id stays what other records store (asset owner, assignees,
+    # sign-off targets...).
+    department_id = Column(Integer, ForeignKey("grc_departments.id"), nullable=True)
 
     tenant = relationship("Tenant")
     lead = relationship("GRCUser", foreign_keys=[lead_user_id])
@@ -220,6 +225,7 @@ class Team(Base):
         UniqueConstraint("tenant_id", "name", name="uq_team_tenant_name"),
         Index("ix_team_tenant", "tenant_id"),
         Index("ix_team_tenant_active", "tenant_id", "is_active"),
+        Index("ix_team_department", "department_id"),    # the name schema_migrations._COLUMN_ADDS gives it on existing databases
     )
 
 

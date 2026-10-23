@@ -14,6 +14,11 @@ of Payments while holding the "Compliance Analyst" platform role.
 All endpoints are tenant-scoped via `get_user_tenants`. Write endpoints
 require the `admin:teams:manage` permission (falls back to legacy admin
 check), keeping the surface auditable.
+
+Departments (DECISIONS D37): every team made since is the picker record of a department (`department_id`), and so is every older
+one once the backfill has run. Such a team shows its department's name and people (hand-made members, the head and the holders of
+the department's roles); it is changed in Administration → Departments (/admin/departments), and a write here answers 409. A team
+with no department keeps working as it always did. A new team made here makes its department too.
 """
 from __future__ import annotations
 
@@ -25,7 +30,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import GRCUser, Team, TeamMember, get_db
+from ..models import GRCDepartment, GRCUser, Team, TeamMember, get_db
+from ..services import org_departments
 from .auth_router import (
     require_auth, get_user_tenants, get_user_primary_tenant, has_tenant_permission,
 )
@@ -73,6 +79,7 @@ class TeamResponse(BaseModel):
     member_count: int = 0
     created_at: datetime
     updated_at: datetime
+    department_id: Optional[int] = None     # set: the picker record of that department (Administration → Departments)
 
     class Config:
         from_attributes = True
@@ -137,6 +144,7 @@ def _serialize_team(t: Team, member_count: Optional[int] = None) -> TeamResponse
         ),
         created_at=t.created_at,
         updated_at=t.updated_at,
+        department_id=t.department_id,
     )
 
 
@@ -149,6 +157,24 @@ def _serialize_member(m: TeamMember) -> TeamMemberResponse:
         role_in_team=m.role_in_team,
         added_at=m.added_at,
     )
+
+
+def _not_a_department(team: Team) -> None:
+    """A team that is a department's picker record is changed in Administration → Departments."""
+    if team.department_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=org_departments.MANAGED_BY_DEPARTMENT)
+
+
+def _department_members(db: Session, team: Team) -> List[TeamMemberResponse]:
+    """The people of a linked team - its department's - in the shape of the team's own members. Nobody here has a TeamMember row, so
+    ``id`` is the person's; a person who was not added by hand (the head, a role holder) carries the department's creation date."""
+    department = db.get(GRCDepartment, team.department_id)
+    if department is None:
+        return []
+    return [TeamMemberResponse(id=m["user_id"], user_id=m["user_id"], user_display_name=m["name"], user_email=m["email"],
+                               role_in_team=m["member_role"] or "member",
+                               added_at=m["added_at"] or department.created_at or datetime.utcnow())
+            for m in org_departments.members_detail(db, department)]
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -173,7 +199,8 @@ def list_teams(
     if not include_inactive:
         q = q.filter(Team.is_active.is_(True))
     rows = q.order_by(Team.name.asc()).all()
-    return [_serialize_team(t, member_count=len(t.members)) for t in rows]
+    linked = org_departments.team_member_sets(db, [t for t in rows if t.department_id])      # a department's people, counted once
+    return [_serialize_team(t, member_count=len(linked[t.id]) if t.department_id else len(t.members)) for t in rows]
 
 
 @router.post("", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
@@ -202,22 +229,14 @@ def create_team(
     )
     if existing:
         raise HTTPException(status_code=400, detail=f"A team named '{name}' already exists.")
-    from .auth_router import refuse_imported_accounts
-    refuse_imported_accounts(db, [payload.lead_user_id])
-
-    row = Team(
-        tenant_id=tenant_id,
-        name=name,
-        description=(payload.description or None),
-        lead_user_id=payload.lead_user_id,
-        is_active=True,
-    )
-    db.add(row)
+    # A new team is a department with its picker record (its lead is the department's head).
+    department = org_departments.create_department(
+        db, tenant_id, name=name, description=payload.description, department_head_user_id=payload.lead_user_id,
+        by_user_id=current_user.id)
+    row = db.query(Team).filter(Team.department_id == department.id).order_by(Team.id).first()
     db.commit()
     db.refresh(row)
-    # Refresh members eagerly to keep the response shape consistent.
-    _ = row.members  # forces lazy load (will be empty)
-    return _serialize_team(row, member_count=0)
+    return _serialize_team(row, member_count=len(org_departments.team_member_ids(db, row)))
 
 
 @router.get("/{team_id}", response_model=TeamDetailResponse)
@@ -227,6 +246,9 @@ def get_team(
     current_user: GRCUser = Depends(require_auth),
 ):
     team = _get_team_for_user(team_id, current_user, db)
+    if team.department_id:
+        members = _department_members(db, team)
+        return TeamDetailResponse(**_serialize_team(team, member_count=len(members)).model_dump(), members=members)
     # Load members + user info in one query.
     members = (
         db.query(TeamMember)
@@ -251,6 +273,7 @@ def update_team(
 ):
     _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
+    _not_a_department(team)
     data = payload.model_dump(exclude_unset=True)
     if "name" in data:
         new_name = (data["name"] or "").strip()
@@ -287,6 +310,7 @@ def delete_team(
 ):
     _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
+    _not_a_department(team)
     # Best-effort cleanup: clear ITAsset.owning_team_id pointing here so we
     # don't leave dangling FKs on databases without ON DELETE SET NULL.
     try:
@@ -311,6 +335,8 @@ def list_members(
     current_user: GRCUser = Depends(require_auth),
 ):
     team = _get_team_for_user(team_id, current_user, db)
+    if team.department_id:
+        return _department_members(db, team)
     members = (
         db.query(TeamMember)
         .options(joinedload(TeamMember.user))
@@ -330,6 +356,7 @@ def add_member(
 ):
     _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
+    _not_a_department(team)
     role = (payload.role_in_team or "member").strip().lower()
     if role not in _VALID_ROLES_IN_TEAM:
         raise HTTPException(
@@ -388,6 +415,7 @@ def update_member(
 ):
     _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
+    _not_a_department(team)
     member = (
         db.query(TeamMember)
         .options(joinedload(TeamMember.user))
@@ -418,6 +446,7 @@ def remove_member(
 ):
     _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
+    _not_a_department(team)
     member = (
         db.query(TeamMember)
         .filter(TeamMember.id == member_id)

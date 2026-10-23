@@ -38,6 +38,8 @@ from .routers import criticality_assessments_router
 from .routers import search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .routers import teams_router
+# Departments - admin CRUD for departments with roles and hand-added members; Teams are their picker records.
+from .routers import admin_departments_router
 # Per-tenant status levels, SLA days and extra fields for a module.
 from .routers import module_settings_router
 # Administration → Scheduler: the recurring jobs the platform clock queues.
@@ -286,6 +288,7 @@ app.include_router(connectors_router)
 app.include_router(search_router)
 # Teams — admin CRUD for org teams + asset owning-team dropdown.
 app.include_router(teams_router)
+app.include_router(admin_departments_router)
 # Status levels, SLA days and extra fields a tenant sets per module.
 app.include_router(module_settings_router)
 app.include_router(scheduler_router)
