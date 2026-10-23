@@ -6,8 +6,8 @@ import { CheckCircle2, Loader2, ShieldAlert } from 'lucide-react';
 import { esignApi } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
 
-/** The drawn signature, fetched with the user's login (a plain image link would be refused). */
-export function SignatureImage({ id, className = 'h-10' }: { id: number; className?: string }) {
+/** The drawn signature, fetched with the user's login (a plain image link would be refused). `alt` names whose it is ("Drawn signature of Rana Qureshi"). */
+export function SignatureImage({ id, className = 'h-10', alt = 'Drawn signature' }: { id: number; className?: string; alt?: string }) {
   const { data } = useQuery({
     queryKey: ['esign-image', id],
     queryFn: async () => {
@@ -19,7 +19,7 @@ export function SignatureImage({ id, className = 'h-10' }: { id: number; classNa
     retry: false,
   });
   // eslint-disable-next-line @next/next/no-img-element
-  return data ? <img src={data} alt="Drawn signature" className={`rounded border border-slate-200 bg-white ${className}`} /> : <span className={`inline-block w-20 rounded bg-slate-100 ${className}`} />;
+  return data ? <img src={data} alt={alt} className={`rounded border border-slate-200 bg-white ${className}`} /> : <span className={`inline-block w-20 rounded bg-slate-100 ${className}`} />;
 }
 
 type Verified = {
@@ -27,8 +27,8 @@ type Verified = {
   document_version?: string | null; document_changed_since?: boolean | null;
 };
 
-/** What a signed record shows: the drawing, its fingerprint, and a Verify that checks the seal again. */
-export default function SignatureSeal({ id, fingerprint, thumb = true }: { id: number; fingerprint: string; thumb?: boolean }) {
+/** What a signed record shows: the drawing, its fingerprint, and a Verify that checks the seal again. `codeTitle`: what the code is, when it is not the image's fingerprint. */
+export default function SignatureSeal({ id, fingerprint, thumb = true, codeTitle = 'SHA-256 fingerprint of the drawn signature' }: { id: number; fingerprint: string; thumb?: boolean; codeTitle?: string }) {
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<Verified | null | false>(null);
 
@@ -42,7 +42,7 @@ export default function SignatureSeal({ id, fingerprint, thumb = true }: { id: n
       {thumb && <SignatureImage id={id} />}
       <div className="min-w-0 text-[11px] text-slate-500">
         <div className="flex flex-wrap items-center gap-x-2">
-          <span title="SHA-256 fingerprint of the drawn signature">E-signed · <span className="font-mono">{fingerprint.slice(0, 12)}</span></span>
+          <span title={codeTitle}>E-signed · <span className="font-mono">{fingerprint.slice(0, 12)}</span></span>
           <button type="button" onClick={verify} disabled={busy} className="font-medium text-primary-700 hover:underline disabled:opacity-50">
             {busy ? <Loader2 className="inline h-3 w-3 animate-spin" /> : 'Verify'}
           </button>

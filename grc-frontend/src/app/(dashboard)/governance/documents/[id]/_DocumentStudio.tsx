@@ -12,13 +12,14 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ChevronDown, Download, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
+  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ChevronDown, Download, FileCheck2, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { documentApi, type DraftOpened } from '@/lib/studio/documentApi';
-import { problemOf, saveBlob } from '@/lib/studio/api';
+import { problemOf, problemOfBlob, saveBlob } from '@/lib/studio/api';
 import { ago } from '@/lib/studio/text';
 import { documentChainApi, type ExportFormat } from '@/lib/documentChain';
+import { approvalRecordExport, exportReply, recordFileName } from '@/lib/approvalRecord';
 import { day, type LifecycleReply } from '@/lib/documentLifecycle';
 import { actOf, actOutcome } from '@/lib/documentTasks';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -98,6 +99,8 @@ export default function DocumentStudio() {
   const search = useSearchParams();
   const qc = useQueryClient();
   const { toast } = useToast();
+  // the view's scroll box: the approval record's link to the Change log starts that view at its top, not where the record was
+  const scroller = useRef<HTMLDivElement>(null);
 
   const [view, setViewState] = useState<DocView>(() => viewOf(search?.get('tab')));
   const [popup, setPopup] = useState<Popup | null>(() => (search?.get('details') === '1' ? 'details' : null));
@@ -354,6 +357,27 @@ export default function DocumentStudio() {
       toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
     } finally { setDownloading(null); }
   };
+  // the document with its approval record at the end; a file the platform does not rewrite comes as it is (X-Approval-Record: separate)
+  // and the record as a PDF of its own
+  const downloadWithRecord = async () => {
+    setDownloading('record');
+    try {
+      const res = await governanceApi.exportDocument(id, { withRecord: true });
+      const { filename, separate } = exportReply(res.headers, doc.file_name || `${doc.title} v${version}.pdf`);
+      saveBlob(res.data as Blob, filename);
+      if (separate) {
+        try {
+          const record = await approvalRecordExport(id, { fallbackName: recordFileName(doc.title, version) });
+          saveBlob(record.blob, record.filename);
+          toast({ type: 'info', title: 'Two files downloaded', message: 'This kind of file cannot carry the approval record inside it, so the record came as a PDF of its own.' });
+        } catch (e) {
+          toast({ type: 'error', title: 'The approval record was not downloaded', message: `${await problemOfBlob(e)} The document itself was.` });
+        }
+      }
+    } catch (e) {
+      toast({ type: 'error', title: 'Not downloaded', message: await problemOfBlob(e) });
+    } finally { setDownloading(null); }
+  };
   const downloadLog = async (format: ExportFormat) => {
     setDownloading(format);
     try {
@@ -411,6 +435,7 @@ export default function DocumentStudio() {
               {(close) => (
                 <>
                   <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> This version (v{version})</button>
+                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> Download with approval record</button>
                   <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setView('versions'); }}>An earlier version…</button>
                   {lifecycleOn && (
                     <>
@@ -469,7 +494,7 @@ export default function DocumentStudio() {
 
       {/* ── the view ────────────────────────────────────────────────── */}
       {/* (Proposed changes is wider: two documents side by side) */}
-      <div className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
         {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
         {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
         {archived && (
@@ -518,7 +543,8 @@ export default function DocumentStudio() {
           <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
             chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={mayChange} reading={reading} onStopReading={() => setReading(null)}
             onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
-            ackedVersion={ackedVersion} />
+            ackedVersion={ackedVersion}
+            onOpenChangeLog={() => { scroller.current?.scrollTo({ top: 0 }); setView('versions'); }} />
         )}
         {view === 'approvals' && (
           lifecycleOn ? (
