@@ -429,17 +429,17 @@ def test_people_who_have_not_signed_are_pending_with_a_group_as_one_entry(world)
     assert rec["state"] == "in_review"
     review, approval = rec["stages"]
     assert decisions(review) == [("Rana Reviewer", "signed"), ("Rafay Reviewer", "pending"), ("Uma User", "pending")]      # in turn: Rafay is next
-    assert decisions(approval) == [("Role: Approvers", "pending"), ("Team: Policy board", "pending")]                      # a group is one entry
+    assert decisions(approval) == [("Role: Approvers", "pending"), ("Department: Policy board", "pending")]                      # a group is one entry
     assert [s["status"] for s in rec["stages"]] == ["pending", "pending"]
     assert approval["people"][0]["designation"] is None and approval["people"][0]["signed_at"] is None and approval["people"][0]["meaning"] == "Approved by"
     sign(world, RAFAY)
     sign(world, UMA)
     rec = record(world)
     assert rec["state"] == "in_approval" and [s["status"] for s in rec["stages"]] == ["complete", "pending"]
-    assert decisions(rec["stages"][1]) == [("Role: Approvers", "pending"), ("Team: Policy board", "pending")] and rec["document"]["approved_at"] is None
+    assert decisions(rec["stages"][1]) == [("Role: Approvers", "pending"), ("Department: Policy board", "pending")] and rec["document"]["approved_at"] is None
     sign(world, MINA)                                                          # a role is satisfied by one member: the entry becomes the signer
     rec = record(world)
-    assert decisions(rec["stages"][1]) == [("Mina Manager", "signed"), ("Team: Policy board", "pending")] and rec["state"] == "in_approval"
+    assert decisions(rec["stages"][1]) == [("Mina Manager", "signed"), ("Department: Policy board", "pending")] and rec["state"] == "in_approval"
     sign(world, ADAM)                                                          # ... and so is a team
     rec = record(world)
     assert decisions(rec["stages"][1]) == [("Mina Manager", "signed"), ("Adam Admin", "signed")] and rec["state"] == "approved"
