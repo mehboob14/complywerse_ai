@@ -15,7 +15,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BookOpen, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
+  BookOpen, BookOpenCheck, Building2, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
   RotateCcw, FileCheck2, FileInput, FileX2, ListPlus, ListX, PencilLine, RefreshCw, Undo2, Wrench, GitPullRequest,
 } from 'lucide-react';
@@ -75,6 +75,7 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   request_cancelled: { label: 'Request withdrawn', icon: XCircle, tone: SLATE },
   participant_removed: { label: 'Reviewer or approver removed', icon: Users, tone: SLATE },
   owner_assigned: { label: 'Owner changed', icon: Users, tone: SLATE },
+  department_changed: { label: 'Department changed', icon: Building2, tone: SLATE },
   return_to_draft: { label: 'Returned to draft', icon: RotateCcw, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   escalated: { label: 'Escalated', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   delegated: { label: 'Delegated', icon: Send, tone: SLATE },

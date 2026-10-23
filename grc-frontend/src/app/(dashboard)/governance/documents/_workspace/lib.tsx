@@ -13,6 +13,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
+import { useOrgDepartments } from '../_DetailsFields';
+import { departmentNames } from './library';
 
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
@@ -297,6 +299,16 @@ export function useFrameworkNames() {
     return m;
   }, [data]);
   return nameMap;
+}
+
+/**
+ * Cached lookup of department id -> name for the register's Department column. A document's department_id is a department of
+ * Administration → Departments; the list is the one the Details fields read (same query), the switched-off ones included so a
+ * document that still sits in one shows its name. An id the list does not hold has no entry.
+ */
+export function useDepartmentNames() {
+  const { data } = useOrgDepartments();
+  return useMemo(() => departmentNames(data), [data]);
 }
 
 export function FrameworkPills({

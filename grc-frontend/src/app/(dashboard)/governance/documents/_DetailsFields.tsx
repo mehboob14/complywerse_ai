@@ -7,8 +7,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import apiClient, { governanceApi, tenantApi } from '@/lib/api';
+import apiClient, { departmentsApi, governanceApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
+import { departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
 import { EMPTY_DETAILS, applyRead, change, type DetailKey, type Details, type Origin, type ReadResult } from './_detailsRead';
 
@@ -40,18 +41,16 @@ export function useOrgUsers(tenantId?: number, enabled = true) {
   });
 }
 
-/** The organisation's departments (grc_departments: the table department_id points at, as studio/setup.py reads it). */
+/** The organisation's departments - Administration → Departments (GET /admin/departments, any signed-in user; the ones switched off
+ *  too, so a document that still sits in one shows its name). The read is not swallowed into an empty list: a failed one is the
+ *  query's error state, which the Department field says ("Couldn't load departments") instead of looking like "none yet". */
 export function useOrgDepartments(enabled = true) {
   return useQuery({
     queryKey: ['org-departments'],
-    queryFn: async () => {
-      try {
-        const d: any = (await apiClient.get('/vuln-management/departments', { params: { limit: 500 } })).data;
-        return (Array.isArray(d) ? d : []) as Array<{ id: number; name: string; is_active?: boolean }>;
-      } catch { return []; }
-    },
+    queryFn: async () => (await departmentsApi.list(true)).data,
     enabled,
     staleTime: 5 * 60 * 1000,
+    retry: 1,                                         // the field shows a failure within a second or two, not after three backed-off tries
   });
 }
 
@@ -172,10 +171,13 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
     if (form.owner_id != null && !out.some((i) => i.value === String(form.owner_id))) out.unshift({ value: String(form.owner_id), label: `User ${form.owner_id}` });
     return out;
   }, [usersQ.data, form.owner_id]);
-  const deptItems = useMemo<Item[]>(
-    () => (deptQ.data || []).filter((x) => x.is_active !== false || x.id === form.department_id).map((x) => ({ value: String(x.id), label: x.name })),
-    [deptQ.data, form.department_id],
-  );
+  const deptItems = useMemo<Item[]>(() => {
+    const out: Item[] = (deptQ.data || []).filter((x) => x.is_active !== false || x.id === form.department_id).map((x) => ({ value: String(x.id), label: x.name }));
+    // the chosen one the list does not hold (it could not be read, or is gone) still shows as chosen
+    if (form.department_id != null && !deptQ.isLoading && !out.some((i) => i.value === String(form.department_id))) out.unshift({ value: String(form.department_id), label: `Department ${form.department_id}` });
+    return out;
+  }, [deptQ.data, deptQ.isLoading, form.department_id]);
+  const noDepartments = !deptQ.isLoading && !deptQ.isError && deptItems.length === 0;
 
   const tag = (key: DetailKey) => (from[key]
     ? <span className="mt-0.5 block text-[11px] text-[#586472]">{from[key] === 'ai' ? 'By Comply Agent' : 'From the file'}</span>
@@ -211,9 +213,10 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
         <MultiSelectDropdown title="Owner" items={ownerItems} selectedValues={one(form.owner_id)} onApply={(v) => set({ owner_id: toId(v) })}
           multiSelect={false} autoApply triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />
       </Field>
-      <Field label="Department" note={tag('department_id')}>
+      <Field label="Department" note={tag('department_id') || (noDepartments && <span className="mt-0.5 block text-[11px] text-[#586472]">Departments are added by an administrator in Administration → Departments.</span>)}>
         <MultiSelectDropdown title="Department" items={deptItems} selectedValues={one(form.department_id)} onApply={(v) => set({ department_id: toId(v) })}
-          multiSelect={false} autoApply triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Choose a department" triggerClassName={TRIGGER} />
+          multiSelect={false} autoApply triggerVariant="input" size="sm" forceSearch showAvatars={false}
+          placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />
       </Field>
       <Field label="Review cycle" note={tag('review_cycle_months')}>
         <select value={form.review_cycle_months} onChange={(e) => set({ review_cycle_months: Number(e.target.value) })} className={INPUT}>

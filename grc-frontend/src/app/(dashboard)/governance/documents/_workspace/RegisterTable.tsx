@@ -2,7 +2,7 @@
 
 /**
  * Register TABLE of the Governance Documents workspace, built on the shipped DataTable<GovDoc>. Columns: Title · Type · Lifecycle ·
- * Owner · Frameworks · Ver · Actions. Every document has an arrow before its title: opened, it shows every version of the document
+ * Owner · Department · Frameworks · Ver · Actions. Every document has an arrow before its title: opened, it shows every version of the document
  * (each major version with its minor versions under it, newest major first; each opens the document on that version) and the
  * documents under it (parent_document_id) as rows of the same table, one level in, which open the same way. The shell owns
  * filtering/data + action handlers.
@@ -32,6 +32,7 @@ import {
   FrameworkPills,
   AttestCell,
   useFrameworkNames,
+  useDepartmentNames,
   inForceNote,
   statusLabel,
   verLabel,
@@ -205,6 +206,7 @@ export function RegisterTable({
   loading = false,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
+  const departmentName = useDepartmentNames();
   const rows = docs ?? [];
 
   // each document under its parent; with a search or filter, the matches and the documents above them (docTree.ts)
@@ -262,6 +264,14 @@ export function RegisterTable({
       accessor: 'owner_name',
       minWidth: '150px',
       render: (d) => <OwnerChip name={d.owner_name} />,
+    },
+    {
+      id: 'department',
+      header: 'Department',
+      // the NAME, so sorting and the CSV export carry what the table shows, not the id; an id the list does not know shows a dash
+      accessor: (d) => (d.department_id != null ? departmentName[String(d.department_id)] : undefined) || '—',
+      sortable: true,
+      minWidth: '130px',
     },
     {
       id: 'frameworks',

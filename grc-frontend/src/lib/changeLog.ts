@@ -39,10 +39,10 @@ export const WHAT_LABEL: Record<What, string> = { text: 'Changes to the text', r
 export const WHEN_LABEL: Record<When, string> = { any: 'Any time', today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', custom: 'Custom dates' };
 export const WHATS = Object.keys(WHAT_LABEL) as What[];
 export const WHENS = Object.keys(WHEN_LABEL) as When[];
-const OTHER_EVENTS = new Set(['created', 'archived', 'restored', 'status_changed', 'version_rollback', 'owner_assigned']);
+const OTHER_EVENTS = new Set(['created', 'archived', 'restored', 'status_changed', 'version_rollback', 'owner_assigned', 'department_changed']);
 
 /** What an event is to the filters: a change to a statement; other activity (created, archived, restored from the archive, a status
- *  set by hand, an earlier version restored, a new owner); else a step of the review and approval trail (a status set to approved
+ *  set by hand, an earlier version restored, a new owner, a new department); else a step of the review and approval trail (a status set to approved
  *  or published by hand is an approval). */
 export function eventGroup(e: Pick<ChainEvent, 'kind' | 'to'>): What {
   if (e.kind.startsWith('statement')) return 'statement';

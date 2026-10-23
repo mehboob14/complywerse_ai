@@ -20,9 +20,10 @@ import {
   bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
 } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
-import { creation } from './library';
+import { creation, departmentFilterOptions, matchesDepartment } from './library';
 import { RegisterTable } from './RegisterTable';
 import DetailsDialog from '../[id]/_DetailsDialog';
+import { useOrgDepartments } from '../_DetailsFields';
 
 export interface DocumentsWorkspaceProps {
   canCreate: boolean;
@@ -56,6 +57,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [ownerFilter, setOwnerFilter] = useState<string>('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('');
 
   // bulk side-panels
   const [assignOwnerFor, setAssignOwnerFor] = useState<number[] | null>(null);
@@ -79,6 +81,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     () => users.map((u) => ({ value: String(u.id), label: u.display_name, subLabel: u.email })),
     [users]
   );
+  // Administration → Departments (the list the Details fields pick from): "No department", then the active ones
+  const departmentsQ = useOrgDepartments();
+  const departmentOptions = useMemo(() => departmentFilterOptions(departmentsQ.data, allDocs), [departmentsQ.data, allDocs]);
   // archived documents count only under Archived (archive.ts)
   const counts = useMemo(() => libraryCounts(allDocs), [allDocs]);
 
@@ -89,20 +94,21 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   // the documents the table is drawn from (the documents above a match come from here) and the ones that match
   const scope = useMemo(() => unlessArchivedAsked(allDocs, statusFilter), [allDocs, statusFilter]);
-  const filtering = !!(search.trim() || typeFilter || statusFilter || ownerFilter);
+  const filtering = !!(search.trim() || typeFilter || statusFilter || ownerFilter || departmentFilter);
   const filteredDocs = useMemo(() => {
     const q = search.trim().toLowerCase();
     return scope.filter((d) => {
       if (typeFilter && d.doc_type !== typeFilter) return false;
       if (statusFilter && d.status !== statusFilter) return false;
       if (ownerFilter && String(d.owner_id ?? '') !== ownerFilter) return false;
+      if (!matchesDepartment(d, departmentFilter)) return false;
       if (q) {
         const hay = `${d.title} ${d.document_code ?? ''} ${d.description ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [scope, typeFilter, statusFilter, ownerFilter, search]);
+  }, [scope, typeFilter, statusFilter, ownerFilter, departmentFilter, search]);
 
   // ── handlers ──
   const openDoc = (id: number) => router.push(`/governance/documents/${id}`);
@@ -224,6 +230,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         </div>
         <div className="shrink-0">
           <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="All" size="md" />
+        </div>
+        <div className="shrink-0">
+          <MultiSelectDropdown title="Department" items={departmentOptions} selectedValues={departmentFilter ? [departmentFilter] : []} onApply={(v) => setDepartmentFilter(v[0] || '')} multiSelect={false} autoApply forceSearch showAvatars={false} placeholder="All" size="md" />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {create === 'studio-off' && (
