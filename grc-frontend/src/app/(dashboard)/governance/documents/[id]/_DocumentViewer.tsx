@@ -16,6 +16,7 @@ import { PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
+import ApprovalRecord from './_ApprovalRecord';
 import { ProposeNote, useProposedAnswer } from './_ProposalsView';
 import { sendLabel } from '@/lib/proposals';
 import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
@@ -456,7 +457,7 @@ export function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
   );
 }
 
-export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion }: any) {
+export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion, onOpenChangeLog }: any) {
   // variant 'studio': the AI Studio's document view draws the document at full height; its actions are in the view's top bar
   const studio = variant === 'studio';
   // reading ({id, number}): an earlier version shown as it was, its file as Word or the PDF draws it, else its text
@@ -735,6 +736,9 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
     </div>
   );
 
+  // the approval record goes with the document, not with its marked-up changes: it is left out while the Tracked changes show
+  const showRecord = !!doc?.id && !(tracking && chainOn);
+
   if (studio) {
     return (
       <div className="space-y-3">
@@ -784,6 +788,8 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           </div>
         )}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-8">{renderReadBody(true)}</div>
+        {/* the approval record: a sibling of the card, never inside the Word view's shadow root or the PDF's frame; it follows the version read */}
+        {showRecord && <ApprovalRecord documentId={doc.id} version={reading ? reading.number : null} onOpenChangeLog={onOpenChangeLog} />}
       </div>
     );
   }
@@ -884,6 +890,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           </div>
         </div>
       </div>
+      {showRecord && <ApprovalRecord documentId={doc.id} version={null} onOpenChangeLog={onOpenChangeLog} />}
     </div>
   );
 }

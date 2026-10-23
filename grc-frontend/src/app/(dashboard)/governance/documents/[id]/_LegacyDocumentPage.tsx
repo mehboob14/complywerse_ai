@@ -543,6 +543,7 @@ export default function LegacyDocumentPage() {
           chainOn={lifecycleOn}
           trackedRange={trackedRange}
           canTakeBack={mayChange}
+          onOpenChangeLog={lifecycleOn ? () => { setActiveTab('chain'); window.scrollTo({ top: 0 }); } : undefined}
         />
       )}
 

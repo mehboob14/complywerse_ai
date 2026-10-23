@@ -417,10 +417,15 @@ export const governanceApi = {
     }),
   // Download any document: the uploaded file when present, else a PDF rendered
   // from the document's markdown content. Works for content-only (AI-drafted) docs.
-  exportDocument: (documentId: number) =>
+  // `withRecord`: the approval record appended (a file type that cannot carry it answers X-Approval-Record: separate; lib/approvalRecord.ts).
+  exportDocument: (documentId: number, opts?: { withRecord?: boolean }) =>
     apiClient.get(`/governance/documents/${documentId}/export`, {
       responseType: 'blob',
+      ...(opts?.withRecord ? { params: { with_record: true } } : {}),
     }),
+  /** The approval record at the end of a document, built by the platform from its workflow and signatures; `version`: an earlier one ("1.1"). */
+  approvalRecord: (documentId: number, version?: string | null) =>
+    apiClient.get<import('./approvalRecord').ApprovalRecord>(`/governance/documents/${documentId}/approval-record`, { params: version ? { version } : undefined }),
   parsePolicy: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/parse-policy`, {}, {
       timeout: 900000, // 15 minutes for large document parsing
