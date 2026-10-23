@@ -2,6 +2,7 @@
 department's escalation path, who may change the paths and assign vulnerabilities, and the department list/members the
 Vulnerabilities > Departments page reads. Over HTTP through the mounted /vuln-management router, on in-memory SQLite."""
 import os
+from datetime import datetime, timedelta
 
 os.environ.setdefault("SESSION_SECRET", "unit-test-secret")
 
@@ -92,3 +93,61 @@ def test_a_transition_that_needs_approval_asks_the_department_of_the_state_it_go
     db.expire_all()
     asked = db.query(m.GRCVulnNotification).filter_by(notification_type="approval_required").all()
     assert [(n.vulnerability_id, n.recipient_department_id, n.triggered_by_user_id) for n in asked] == [(1, IT, PLAIN)]
+
+
+# --- SLA escalation along a department's escalation path ----------------------------------------------------------------
+
+def _breached_in_it(db):
+    """A high finding open for 60 days (its SLA is 30) that sits with IT, whose level-1 path goes to the department head."""
+    db.add(m.Vulnerability(id=1, tenant_id=1, vuln_id="VULN-1", title="Open port", severity="high", status="open",
+                           discovered_at=datetime.utcnow() - timedelta(days=60)))
+    db.flush()
+    db.add(m.GRCVulnerabilityDepartmentAssignment(vulnerability_id=1, department_id=IT, assigned_by=ADMIN))
+    db.add(m.GRCDepartmentEscalationPath(department_id=IT, escalation_level=1, target_role="head", sla_threshold_percent=75))
+    db.commit()
+
+
+def test_the_sla_check_escalates_along_a_departments_path_and_only_once(w):
+    db, as_ = w
+    _breached_in_it(db)
+    http = as_(PLAIN)
+    r = http.post("/vuln-management/escalations/run-sla-check?send_emails=false")
+    assert r.status_code == 200, r.text
+    assert [(d["department_id"], d["escalated_to_user_id"]) for d in r.json()["details"]] == [(IT, HEAD)]
+    db.expire_all()
+    logs = db.query(m.GRCVulnEscalationLog).all()
+    assert [(x.vulnerability_id, x.escalation_rule_id, x.escalated_to_department_id, x.escalated_to_user_id) for x in logs] == [
+        (1, None, IT, HEAD)]
+    # that log row is what keeps the next run from escalating to the same person again
+    again = http.post("/vuln-management/escalations/run-sla-check?send_emails=false")
+    assert again.status_code == 200, again.text
+    assert again.json()["escalations_triggered"] == 0
+    assert db.query(m.GRCVulnEscalationLog).count() == 1
+
+
+def test_a_departments_escalation_shows_in_the_escalation_logs(w):
+    db, as_ = w
+    _breached_in_it(db)
+    http = as_(PLAIN)
+    assert http.post("/vuln-management/escalations/run-sla-check?send_emails=false").status_code == 200
+    for url in ("/vuln-management/escalations/logs", "/vuln-management/vulnerabilities/1/escalations"):
+        r = http.get(url)
+        assert r.status_code == 200, (url, r.text)
+        row = r.json()[0]
+        assert (row["escalation_rule_id"], row["escalation_rule_name"], row["escalated_to_department_name"],
+                row["escalated_to_user_name"]) == (None, None, "IT", "Hugo"), url
+
+
+def test_tenants_made_before_get_the_rule_of_an_escalation_log_made_optional(monkeypatch):
+    """create_all never alters a table: a tenant database made while escalation_rule_id was NOT NULL needs DROP NOT NULL
+    (run for every tenant at its first connection). SQLite cannot drop it, so this checks the step is registered; the SQL
+    itself was run against a throwaway Postgres database."""
+    from grc.modules.compliance import schema_migrations as sm
+
+    asked = []
+    monkeypatch.setattr(sm, "_ensured_engines", set())
+    monkeypatch.setattr(sm, "_ensure_column_nullable", lambda engine, table, column: asked.append((table, column)))
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    m.Base.metadata.create_all(engine)
+    sm._ensure_for_engine(engine)
+    assert ("grc_vuln_escalation_logs", "escalation_rule_id") in asked

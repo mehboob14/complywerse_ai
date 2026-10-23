@@ -8,7 +8,7 @@ class GRCVulnEscalationLogResponse(BaseModel):
     id: int
     vulnerability_id: int
     vulnerability_title: Optional[str] = None
-    escalation_rule_id: int
+    escalation_rule_id: Optional[int]  # None: the escalation followed a department's escalation path
     escalation_rule_name: Optional[str] = None
     triggered_at: datetime
     escalated_to_department_id: Optional[int]

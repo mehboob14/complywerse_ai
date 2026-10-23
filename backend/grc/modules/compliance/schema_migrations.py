@@ -1432,6 +1432,8 @@ def _ensure_for_engine(engine: Engine) -> None:
         # CTEM Validate: a proposal now targets EITHER a Unified-Library control OR an
         # uploaded-framework control, so the UCL ref must be nullable.
         _ensure_column_nullable(engine, "grc_ai_control_proposals", "normalized_control_id")
+        # An SLA escalation along a department's escalation path has no workflow rule behind it.
+        _ensure_column_nullable(engine, "grc_vuln_escalation_logs", "escalation_rule_id")
 
         # One-shot data backfill: re-tag legacy "Framework Assessment #<id>"
         # risks with their actual framework short_code/name so the Risk
