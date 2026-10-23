@@ -1047,6 +1047,7 @@ ROUTE_FILE_MODULES: dict[str, tuple[str, Optional[str]]] = {
     # Administration
     "grc.routers.admin_router": ("Administration", None),
     "grc.routers.teams_router": ("Administration", "Teams"),
+    "grc.routers.admin_departments_router": ("Administration", "Departments"),
     "grc.routers.tenants_router": ("Administration", "Company"),
     "grc.routers.sso_router": ("Administration", "Identity Providers"),
     "grc.modules.integrations.cloud.router": ("Administration", "Cloud Connectors"),
@@ -1462,6 +1463,10 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
     ("team_updated", "Team updated", "Administration", ("teams_router.update_team",), None),
     ("team_member_added", "Team member added", "Administration", ("teams_router.add_member",), None),
     ("team_member_removed", "Team member removed", "Administration", ("teams_router.remove_member",), None),
+    ("department_created", "Department created", "Administration", ("admin_departments_router.create_department",), None),
+    ("department_updated", "Department updated", "Administration", ("admin_departments_router.update_department",), None),
+    ("department_member_added", "Department member added", "Administration", ("admin_departments_router.add_member",), None),
+    ("department_member_removed", "Department member removed", "Administration", ("admin_departments_router.remove_member",), None),
     ("company_settings_updated", "Company settings updated", "Administration",
      ("admin_router.update_organization_profile", "tenants_router.update_tenant"), None),
     ("business_unit_created", "Business unit created", "Administration",

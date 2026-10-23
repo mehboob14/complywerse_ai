@@ -32,6 +32,50 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-10-23 — Departments replace teams: one new table, one new column, a one-time link of teams to departments (auto-applied)
+
+### What
+
+- **New table `grc_department_roles`** (`id`, `department_id` → `grc_departments.id` ON DELETE CASCADE, `role_id` → `grc_roles.id`
+  ON DELETE CASCADE, `added_by` → `grc_users.id` ON DELETE SET NULL, `added_at`; unique `(department_id, role_id)`). The roles a
+  department takes its members from. Model: [`backend/grc/models/_83_department_roles.py`](backend/grc/models/_83_department_roles.py).
+  Membership through a role is computed when asked and never stored.
+- **New column `grc_teams.department_id`** (INTEGER, nullable, index `ix_team_department`; no foreign key on an existing table, the
+  model has one for a new database). A team with a department is that department's *picker record*: it keeps its id (assets,
+  assignees, sign-off targets, risks and RCSA store team ids), mirrors the department's name, description, head (as `lead_user_id`)
+  and active flag, and its people are the department's. A team with no department keeps working as before.
+- **One-time data link (adds and links only, deletes and rewrites nothing that holds data):**
+  `services/org_departments.backfill()`, run from `schema_migrations._backfill_departments_from_teams` at each tenant's first
+  connect. For every team with no department: link it to the department of the same name (case and spaces aside) if that has no
+  team yet, else create a department from it (name, description, the lead as head, the active flag, a code made from the name); the
+  team's members (and its lead, if the department has another head) are copied into `grc_department_members`. Every active
+  department without a team gets one. The `grc_team_members` rows stay where they are.
+
+### Why
+
+Administration → Teams and the departments the Documents dropdown reads (`grc_departments`) were two unrelated lists, so the
+dropdown showed nothing for the teams an administrator had made. Departments are now the one unit; Teams are their picker records.
+
+### How
+
+```sql
+-- Auto-applied by schema_migrations.py (_COLUMN_ADDS + create_all + the backfill) at a tenant's first connection. Shown for
+-- visibility / manual replay only; the column add is idempotent. The new table is made by create_all.
+ALTER TABLE grc_teams ADD COLUMN IF NOT EXISTS department_id INTEGER;
+CREATE INDEX IF NOT EXISTS ix_team_department ON grc_teams (department_id);
+-- the linking itself is Python (org_departments.backfill); to replay it, restart the backend or call that function on a session
+```
+
+- **Risk**: a team and a department with the same name become one (their people are merged; the department's name, head and active
+  flag win on the team). Two teams whose names differ only in case: the first links, the second stays a legacy team (logged).
+  Leaving a team as it is never loses anyone. The backfill is safe to run again and from two processes at once (a collision is
+  rolled back and found settled next time).
+- **Auto-applied?**: yes, at the first request or start-up per tenant after the new code runs.
+- **Code-only companions**: `GRCDepartmentCreate.code` is optional (a code is made from the name); `GET/POST/PATCH /admin/departments`;
+  the documents' `department_id` is validated; deleting a role also deletes its `grc_department_roles` rows.
+
+---
+
 ## 2026-07-06 — ERM risk register: new `consequences` column (auto-applied)
 
 ### What

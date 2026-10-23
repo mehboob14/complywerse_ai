@@ -161,9 +161,20 @@ def test_writes_refuse_an_imported_account_with_a_plain_message(w):
         assert e.value.status_code == 400 and ARIF_NAME in e.value.detail
     assert tasks._normalize_assignee_list(db, [LOCAL, ADOPTED]) == [LOCAL, ADOPTED]
     teams = importlib.import_module("grc.routers.teams_router")
+    departments = importlib.import_module("grc.routers.admin_departments_router")
+    # (the governance calls above ran the start-up fix that turns every team into a department, so team 30 is managed in
+    # Administration -> Departments now; a team with no department still has its own member rule)
+    db.add(m.Team(id=77, tenant_id=1, name="Legacy"))
+    db.commit()
     with pytest.raises(HTTPException) as e:
-        teams.add_member(team_id=30, payload=teams.TeamMemberCreate(user_id=ARIF), db=db, current_user=w.user(CONTACT))
+        teams.add_member(team_id=77, payload=teams.TeamMemberCreate(user_id=ARIF), db=db, current_user=w.user(CONTACT))
     assert e.value.status_code == 400
+    security = db.query(m.Team).filter_by(id=30).one().department_id
+    assert security is not None
+    with pytest.raises(HTTPException) as e:
+        departments.add_member(department_id=security, payload=departments.MemberIn(user_id=ARIF), db=db,
+                               current_user=w.user(CONTACT), _perm=True)
+    assert e.value.status_code == 400 and ARIF_NAME in e.value.detail
 
 
 def test_an_imported_account_already_named_may_be_sent_back_but_roles_and_teams_never_ask_it(w):
@@ -287,8 +298,19 @@ def test_a_team_lead_must_use_the_platform_and_one_already_lead_may_stay(w):
     db, me = w.db, w.user(CONTACT)
     _refused(lambda: teams.create_team(payload=teams.TeamCreate(name="Ops", lead_user_id=ARIF), db=db, current_user=me))
     assert teams.create_team(payload=teams.TeamCreate(name="Ops", lead_user_id=LOCAL), db=db, current_user=me).lead_user_id == LOCAL
-    ops = db.query(m.Team).filter_by(name="Ops").one().id
-    _refused(lambda: teams.update_team(team_id=ops, payload=teams.TeamUpdate(lead_user_id=ARIF), db=db, current_user=me))
+    ops = db.query(m.Team).filter_by(name="Ops").one()
+    assert ops.department_id is not None                    # a team made now is a department: its head is changed there
+    with pytest.raises(HTTPException) as e:
+        teams.update_team(team_id=ops.id, payload=teams.TeamUpdate(lead_user_id=LOCAL), db=db, current_user=me)
+    assert e.value.status_code == 409
+    departments = importlib.import_module("grc.routers.admin_departments_router")
+    with pytest.raises(HTTPException) as e:                  # ...and the same rule holds there
+        departments.update_department(department_id=ops.department_id, payload=departments.DepartmentUpdate(department_head_user_id=ARIF),
+                                      db=db, current_user=me, _perm=True)
+    assert e.value.status_code == 400 and e.value.detail.startswith(f"{ARIF_NAME} is an account an access review imported")
+    db.add(m.Team(id=77, tenant_id=1, name="Legacy", lead_user_id=LOCAL))                # a team with no department keeps its own rule
+    db.commit()
+    _refused(lambda: teams.update_team(team_id=77, payload=teams.TeamUpdate(lead_user_id=ARIF), db=db, current_user=me))
     # team 30 was led by the imported account before the rule: renaming it sends that lead back as it is
     assert teams.update_team(team_id=30, payload=teams.TeamUpdate(name="Security team", lead_user_id=ARIF), db=db,
                              current_user=me).name == "Security team"

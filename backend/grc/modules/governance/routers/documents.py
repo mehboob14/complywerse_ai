@@ -422,6 +422,29 @@ def _resolve_tenant_slug_for_autoparse(tenant_id: int) -> Optional[str]:
         return None
 
 
+def _check_department(db: Session, tenant_id: int, department_id: Optional[int], current: Optional[int] = None) -> None:
+    """The department a document is filed under exists in the organisation; choosing another one means an active one (a document
+    may keep the department it has after that was deactivated)."""
+    from ....models import GRCDepartment
+
+    if department_id is None or department_id == current:
+        return
+    department = db.get(GRCDepartment, int(department_id))
+    if department is None or department.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen does not exist.")
+    if department.is_active is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen is not active.")
+
+
+def _department_name(db: Session, department_id: Optional[int]) -> str:
+    from ....models import GRCDepartment
+
+    if department_id is None:
+        return "none"
+    department = db.get(GRCDepartment, int(department_id))
+    return department.name if department is not None else f"#{department_id}"
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_document(
     document: GovernanceDocumentCreate,
@@ -459,6 +482,7 @@ def create_document(
     from ....routers.auth_router import refuse_imported_accounts
 
     refuse_imported_accounts(db, [document.owner_id, document.author_id])
+    _check_department(db, tenant_id, document.department_id)
 
     db_document = GovernanceDocument(
         tenant_id=tenant_id,
@@ -1052,6 +1076,8 @@ def update_document(
     from ....routers.auth_router import refuse_imported_accounts
 
     refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "author_id") if update_data.get(k) != getattr(document, k)])
+    if "department_id" in update_data:
+        _check_department(db, document.tenant_id, update_data["department_id"], current=document.department_id)
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
     change_reason = update_data.pop("change_reason", None) or update_data.pop("message", None)
@@ -1095,6 +1121,16 @@ def update_document(
             db=db, document_id=document_id, tenant_id=document.tenant_id,
             user_id=current_user.id, action="updated",
             action_details=f"Updated fields: {', '.join(c['field'] for c in non_content)}",
+        )
+    moved = next((c for c in changed_fields if c["field"] == "department_id"), None)
+    if moved is not None:           # its own entry in the Change log (governance/change_chain.py: "Department changed")
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id, user_id=current_user.id, action="department_changed",
+            action_details=(f"Department changed from {_department_name(db, moved['old_value'])} "
+                            f"to {_department_name(db, moved['new_value'])}"),
+            field_changed="department_id",
+            old_value=str(moved["old_value"]) if moved["old_value"] is not None else None,
+            new_value=str(moved["new_value"]) if moved["new_value"] is not None else None,
         )
 
     db.commit()

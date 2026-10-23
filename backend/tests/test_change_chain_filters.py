@@ -95,7 +95,8 @@ def test_the_kinds_choose_the_entries_and_each_event_is_a_review_a_statement_or_
     assert _shape(C.filter_chain(c, kinds=["review"])) == ([], ["sent_for_review"])
     assert _shape(C.filter_chain(c, kinds=["statement", "other"])) == ([], ["statement_edited", "owner_assigned"])
     group = {k: C.event_group({"kind": k, "to": None}) for k in C.EVENT_LABEL}
-    assert {k for k, g in group.items() if g == "other"} == {"created", "archived", "restored", "status_changed", "version_rollback", "owner_assigned"}
+    assert {k for k, g in group.items() if g == "other"} == {"created", "archived", "restored", "status_changed", "version_rollback", "owner_assigned",
+                                                              "department_changed"}
     assert {k for k, g in group.items() if g == "statement"} == set(C.STATEMENT_EVENT_LABEL) | {"statements_updated_from_document"}
     assert {"sent_for_review", "signed", "approved", "acknowledged", "changes_requested", "route_set"} <= {k for k, g in group.items() if g == "review"}
     assert C.event_group({"kind": "status_changed", "to": "published"}) == "review"             # set to published by hand: an approval

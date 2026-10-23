@@ -14,6 +14,7 @@ from ..models import (
     AuditLog as GlobalAuditLog,
     GRCUser,
     GRCUser as TenantUser,
+    GRCDepartmentRole,
     Permission,
     Role,
     RolePermission,
@@ -1127,6 +1128,7 @@ def delete_role(
                                                     f"{'person' if imported == 1 else 'people'}; that access is managed in Access "
                                                     "Reviews, so the role cannot be deleted here.")
     
+    tenant_db.query(GRCDepartmentRole).filter(GRCDepartmentRole.role_id == role_id).delete(synchronize_session=False)   # departments that took members from it
     tenant_db.delete(role)
     tenant_db.commit()
     

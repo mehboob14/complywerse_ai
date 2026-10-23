@@ -162,16 +162,11 @@ def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, 
         ).all()
         return people({r[0] for r in rows})
     if target_type == "team":
-        try:
-            from ....models import TeamMember, Team
-        except Exception:
-            return set()
-        rows = db.query(TeamMember.user_id).filter(TeamMember.team_id == target_id).all()
-        out = {r[0] for r in rows}
+        from ....models import Team
+        from ....services import org_departments
+
         team = db.query(Team).filter(Team.id == target_id).first()
-        if team and getattr(team, "lead_user_id", None):
-            out.add(team.lead_user_id)
-        return people(out)
+        return org_departments.team_member_ids(db, team) if team else set()      # a department's people, or a legacy team's
     return set()
 
 
@@ -183,13 +178,10 @@ def _target_display(db: Session, target_type: str, target_id: int) -> str:
         from ....models import Role
         r = db.query(Role).filter(Role.id == target_id).first()
         return f"Role: {r.name}" if r else f"Role #{target_id}"
-    if target_type == "team":
-        try:
-            from ....models import Team
-            t = db.query(Team).filter(Team.id == target_id).first()
-            return f"Team: {t.name}" if t else f"Team #{target_id}"
-        except Exception:
-            return f"Team #{target_id}"
+    if target_type == "team":                      # a team is a department's picker record, and the people see departments
+        from ....models import Team
+        t = db.query(Team).filter(Team.id == target_id).first()
+        return f"Department: {t.name}" if t else f"Department #{target_id}"
     return f"{target_type} #{target_id}"
 
 
@@ -248,7 +240,7 @@ def nobody_can_sign(db: Session, doc: GovernanceDocument) -> List[str]:
         if a.role_type not in _STAGE_STATUS:
             continue
         people = set(doc_lifecycle._members(db, doc, a))
-        label = _target_display(db, a.target_type, a.target_id)           # "Role: <name>", "Team: <name>" or the person
+        label = _target_display(db, a.target_type, a.target_id)           # "Role: <name>", "Department: <name>" or the person
         who = "reviewers" if a.role_type == "reviewer" else "approvers"
         if not people:
             out.append(f"{label} cannot sign it; choose other {who}." if a.target_type == "user"
@@ -262,21 +254,19 @@ def nobody_can_sign(db: Session, doc: GovernanceDocument) -> List[str]:
 def signoff_targets(db: Session, tenant_ids: List[int]) -> Dict[str, list]:
     """Who a document's reviewers and approvers (and Governance Settings' escalation) can be: the platform's people by name, the
     roles an access-review connector did not make (a role whose every link it imported, such as "DigitalOcean: team My Team", has
-    nobody who can sign) and the active teams, each counting the people ``_resolve_target_users`` would ask."""
-    from collections import defaultdict
+    nobody who can sign) and the active teams (the departments' picker records), each counting the people ``_resolve_target_users``
+    would ask."""
     from sqlalchemy import func
 
-    from ....models import Team, TeamMember
+    from ....models import Team
+    from ....services import org_departments
 
     people = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(doc_lifecycle._people(db)))}
     users = sorted(({"id": u.id, "name": u.display_name or u.username or u.email or f"User {u.id}", "email": u.email}
                     for u in people.values()), key=lambda u: (u["name"].casefold(), u["id"]))
-    members = defaultdict(set)
-    for team_id, user_id in db.query(TeamMember.team_id, TeamMember.user_id):
-        members[team_id].add(user_id)
-    teams = []
-    for t in db.query(Team).filter(Team.tenant_id.in_(tenant_ids), Team.is_active.is_(True)).order_by(func.lower(Team.name), Team.id):
-        teams.append({"id": t.id, "name": t.name, "member_count": len((members[t.id] | {t.lead_user_id}) & people.keys())})
+    rows = db.query(Team).filter(Team.tenant_id.in_(tenant_ids), Team.is_active.is_(True)).order_by(func.lower(Team.name), Team.id).all()
+    asked = org_departments.team_member_sets(db, rows)
+    teams = [{"id": t.id, "name": t.name, "member_count": len(asked[t.id] & people.keys())} for t in rows]
     return {"users": users, "roles": signoff_roles(db, tenant_ids, set(people)), "teams": teams}
 
 
