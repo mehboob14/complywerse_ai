@@ -9,6 +9,9 @@ from .routers.document_proposals import router as document_proposals_router  # n
 router.include_router(document_proposals_router, tags=["Governance Proposed Changes"])
 router.include_router(documents_router, tags=["Governance Documents"])
 router.include_router(document_signoff_router, tags=["Governance Sign-off"])
+# A document's approval record (who reviewed and approved it, derived on demand) and the file that carries it
+from .routers.approval_record import router as approval_record_router  # noqa: E402
+router.include_router(approval_record_router, tags=["Governance Sign-off"])
 router.include_router(versions_router, tags=["Governance Document Versions"])
 router.include_router(workflows_router, tags=["Governance Workflows"])
 router.include_router(workflow_templates_router, tags=["Governance Workflow Templates"])

@@ -110,6 +110,17 @@ def _round(doc: GovernanceDocument) -> Optional[str]:
     return doc.signoff_round_at.isoformat() if doc.signoff_round_at else None
 
 
+def _signed_version_id(db: Session, doc: GovernanceDocument) -> Optional[int]:
+    """The version row a signature or rejection is given on (``DocumentSignature.version_id``): the row of the document's current
+    number - the one a sign-off stamp is written into - or None when the document has no version rows. It is what ties a signature
+    to a version for good (the approval record, approval_record.py); the rows from before are tied through their e-signature."""
+    db.flush()          # tenant sessions do not autoflush (PITFALLS 74): a version row the stamp just added must be found
+    row = (db.query(GovernanceDocumentVersion.id)
+           .filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == (doc.current_version or "1.0"))
+           .order_by(GovernanceDocumentVersion.id.desc()).first())
+    return row[0] if row else None
+
+
 def check_version(db: Session, doc: GovernanceDocument, shown: Optional[str], round_at: Optional[str] = None) -> None:
     """A decision is about the version the person was shown: refused when the document changed since (older callers send none).
     Versions that only stamped someone's sign-off into its table are not a change to what was read. A change also starts a new
@@ -675,6 +686,7 @@ def sign_document(
         role_type=role_type, role_label=role_label, decision="signed",
         signature_text=signer_name, comment=body.comment, signed_at=datetime.utcnow(),
         stage_position=stage.position if stage.custom else None, on_behalf_of=step.on_behalf_of,
+        version_id=_signed_version_id(db, doc),
     )
     db.add(signature)
     db.flush()
@@ -745,6 +757,7 @@ def reject_document(
         signature_text=current_user.display_name or current_user.username,
         comment=body.comment, signed_at=datetime.utcnow(),
         stage_position=step.stage.position if step.stage.custom else None, on_behalf_of=step.on_behalf_of,
+        version_id=_signed_version_id(db, doc),
     ))
     doc.status, doc.route_stage = "draft", None
     doc.updated_at = datetime.utcnow()
