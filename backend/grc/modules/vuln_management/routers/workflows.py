@@ -171,10 +171,10 @@ def get_workflow_template(
     
     template = db.query(GRCVulnWorkflowTemplate).options(
         joinedload(GRCVulnWorkflowTemplate.creator),
-        joinedload(GRCVulnWorkflowTemplate.states).joinedload(GRCVulnWorkflowState.auto_assign_team),
+        joinedload(GRCVulnWorkflowTemplate.states).joinedload(GRCVulnWorkflowState.auto_assign_department),
         joinedload(GRCVulnWorkflowTemplate.transitions).joinedload(GRCVulnWorkflowTransition.from_state),
         joinedload(GRCVulnWorkflowTemplate.transitions).joinedload(GRCVulnWorkflowTransition.to_state),
-        joinedload(GRCVulnWorkflowTemplate.escalations).joinedload(GRCVulnWorkflowEscalation.escalate_to_team),
+        joinedload(GRCVulnWorkflowTemplate.escalations).joinedload(GRCVulnWorkflowEscalation.escalate_to_department),
         joinedload(GRCVulnWorkflowTemplate.escalations).joinedload(GRCVulnWorkflowEscalation.auto_transition_to_state)
     ).filter(
         GRCVulnWorkflowTemplate.id == template_id,
@@ -194,8 +194,8 @@ def get_workflow_template(
             color=s.color,
             requires_approval=s.requires_approval,
             requires_evidence=s.requires_evidence,
-            auto_assign_team_id=s.auto_assign_team_id,
-            auto_assign_team_name=s.auto_assign_team.name if s.auto_assign_team else None,
+            auto_assign_department_id=s.auto_assign_department_id,
+            auto_assign_department_name=s.auto_assign_department.name if s.auto_assign_department else None,
             sla_multiplier=s.sla_multiplier,
             is_terminal=s.is_terminal
         )
@@ -227,8 +227,8 @@ def get_workflow_template(
             name=e.name,
             trigger_type=e.trigger_type,
             trigger_value=e.trigger_value,
-            escalate_to_team_id=e.escalate_to_team_id,
-            escalate_to_team_name=e.escalate_to_team.name if e.escalate_to_team else None,
+            escalate_to_department_id=e.escalate_to_department_id,
+            escalate_to_department_name=e.escalate_to_department.name if e.escalate_to_department else None,
             escalate_to_role=e.escalate_to_role,
             auto_transition_to_state_id=e.auto_transition_to_state_id,
             auto_transition_to_state_name=e.auto_transition_to_state.name if e.auto_transition_to_state else None,
@@ -798,10 +798,10 @@ def perform_vulnerability_transition(
                 approver_role=transition.approver_role,
                 transition_name=transition.name,
                 requested_by_user_id=current_user.id,
-                approver_team_id=to_state.auto_assign_team_id
+                approver_department_id=to_state.auto_assign_department_id
             )
         except Exception:
-            pass
+            logger.exception("Approval-required notification failed for vulnerability %s", vuln_id)
     
     return GRCVulnWorkflowHistoryResponse(
         id=history.id,
