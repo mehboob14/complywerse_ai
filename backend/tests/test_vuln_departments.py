@@ -151,3 +151,51 @@ def test_tenants_made_before_get_the_rule_of_an_escalation_log_made_optional(mon
     m.Base.metadata.create_all(engine)
     sm._ensure_for_engine(engine)
     assert ("grc_vuln_escalation_logs", "escalation_rule_id") in asked
+
+
+# --- who may change escalation paths and assign vulnerabilities --------------------------------------------------------
+
+NET = 11
+# (kind, method, url, kwargs): the escalation paths are the organisation's structure (admin:organization:edit, like the
+# department itself); handing a finding to a department is triage, like assigning it to a person (the vulnerability
+# register's edit right)
+WRITES = [
+    ("paths", "post", f"/vuln-management/departments/{IT}/escalation-paths",
+     {"json": {"escalation_level": 1, "target_role": "head", "sla_threshold_percent": 75, "auto_escalate": True}}),
+    ("paths", "delete", f"/vuln-management/departments/{IT}/escalation-paths/1", {}),
+    ("assign", "post", "/vuln-management/vulnerabilities/1/assign-department", {"json": {"department_id": NET}}),
+    ("assign", "delete", f"/vuln-management/vulnerabilities/1/assign-department/{IT}", {}),
+    ("assign", "post", "/vuln-management/vulnerabilities/bulk-assign", {"json": {"vulnerability_ids": [2], "department_id": NET}}),
+]
+
+
+@pytest.mark.parametrize("who, may", [
+    (PLAIN, set()),
+    (VULN_EDITOR, {"assign"}),
+    (ORG_EDITOR, {"paths"}),
+    (ADMIN, {"assign", "paths"}),
+])
+def test_escalation_paths_need_the_organisation_right_and_assigning_the_vulnerability_right(w, who, may):
+    db, as_ = w
+    db.add(m.GRCDepartment(id=NET, tenant_id=1, name="Network", code="NET"))
+    db.add(m.Vulnerability(id=1, tenant_id=1, vuln_id="VULN-1", title="Open port", severity="high"))
+    db.add(m.Vulnerability(id=2, tenant_id=1, vuln_id="VULN-2", title="Old TLS", severity="low"))
+    db.flush()
+    db.add(m.GRCDepartmentEscalationPath(id=1, department_id=IT, escalation_level=2, target_role="head"))
+    db.add(m.GRCVulnerabilityDepartmentAssignment(vulnerability_id=1, department_id=IT, assigned_by=ADMIN))
+    db.commit()
+    http = as_(who)
+    for kind, method, url, kw in WRITES:
+        r = getattr(http, method)(url, **kw)
+        if kind in may:
+            assert r.status_code in (200, 201), (who, method, url, r.text)
+        else:
+            assert (r.status_code, r.json()["detail"]) == (403, "Permission denied"), (who, method, url, r.text)
+    db.expire_all()
+    paths = sorted(p.escalation_level for p in db.query(m.GRCDepartmentEscalationPath))
+    assigned = sorted((a.vulnerability_id, a.department_id) for a in db.query(m.GRCVulnerabilityDepartmentAssignment))
+    assert paths == ([1] if "paths" in may else [2])
+    assert assigned == ([(1, NET), (2, NET)] if "assign" in may else [(1, IT)])
+    # reading them stays open to anyone signed in
+    assert http.get(f"/vuln-management/departments/{IT}/escalation-paths").status_code == 200
+    assert http.get("/vuln-management/vulnerabilities/1/departments").status_code == 200

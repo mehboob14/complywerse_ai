@@ -24,9 +24,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Departments"])
 
-# Departments, their heads and members are the organisation's structure (a head can be asked to approve documents):
-# changing them is an administrator's right, reading them is anyone's.
+# Departments, their heads, members and escalation paths are the organisation's structure (a head can be asked to approve
+# documents and is who an SLA breach is escalated to): changing them is an administrator's right, reading them is anyone's.
 _manage = Depends(require_tenant_permission("admin:organization:edit"))
+# Handing a finding to a department is triage, like assigning it to a person (POST /vulnerabilities/{id}/assign): the
+# vulnerability register's edit right, the one the Vulnerabilities screens already gate Edit on.
+_assign = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit"))
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -528,7 +531,8 @@ def assign_vulnerability_to_department(
     vuln_id: int,
     request: GRCVulnerabilityDepartmentAssignmentCreate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _assign,
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -616,7 +620,8 @@ def unassign_vulnerability_from_department(
     vuln_id: int,
     dept_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _assign,
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -691,7 +696,8 @@ def create_escalation_path(
     dept_id: int,
     request: GRCDepartmentEscalationPathCreate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -765,7 +771,8 @@ def delete_escalation_path(
     dept_id: int,
     path_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -788,7 +795,8 @@ def delete_escalation_path(
 def bulk_assign_vulnerabilities(
     request: BulkVulnerabilityAssignRequest,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _assign,
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
