@@ -3747,7 +3747,7 @@ erDiagram
 - **`grc_vuln_escalation_logs`** *(class `GRCVulnEscalationLog`, 10 cols)*
   - `id` — INTEGER · **PK** · NOT NULL
   - `vulnerability_id` — INTEGER · FK→`grc_vulnerabilities.id` · NOT NULL
-  - `escalation_rule_id` — INTEGER · FK→`grc_vuln_workflow_escalations.id` · NOT NULL
+  - `escalation_rule_id` — INTEGER · FK→`grc_vuln_workflow_escalations.id`
   - `triggered_at` — DATETIME
   - `escalated_to_department_id` — INTEGER · FK→`grc_departments.id`
   - `escalated_to_user_id` — INTEGER · FK→`grc_users.id`
