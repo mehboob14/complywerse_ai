@@ -271,7 +271,7 @@ const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; 
   { id: 'ai-usage',         label: 'Token usage',        icon: BarChart3, href: '/admin/ai-usage' },
   { id: 'ai-governance',    label: 'AI Governance',      icon: Sparkles, href: '/admin/ai-governance' },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
-  { id: 'teams',            label: 'Teams',              icon: Users },
+  { id: 'departments',      label: 'Departments',        icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
