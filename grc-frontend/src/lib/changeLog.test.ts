@@ -93,7 +93,7 @@ test('what chooses the kinds of entries: text, reviews and approvals, statements
   assert.deepEqual(keys({ split: 'changes', what: ['review'] }), keys({ split: 'changes' }));
   assert.deepEqual(whatCounts(CHAIN), { text: 3, review: 2, statement: 1, other: 1 });
   const group = (kind: string, to: string | null = null) => eventGroup({ kind, to });
-  assert.deepEqual(['created', 'archived', 'restored', 'version_rollback', 'owner_assigned'].map((k) => group(k)), Array(5).fill('other'));
+  assert.deepEqual(['created', 'archived', 'restored', 'version_rollback', 'owner_assigned', 'department_changed'].map((k) => group(k)), Array(6).fill('other'));
   assert.equal(group('status_changed', 'pending_review'), 'other');
   assert.equal(group('status_changed', 'approved'), 'review');
   for (const k of ['statement_added', 'statements_reparsed', 'statements_written_to_document', 'statements_updated_from_document']) assert.equal(group(k), 'statement', k);

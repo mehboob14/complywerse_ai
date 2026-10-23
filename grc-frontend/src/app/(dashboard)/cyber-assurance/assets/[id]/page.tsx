@@ -1392,7 +1392,7 @@ function EditAssetModal({
     queryFn: () => assetsApi.getTenantUsers().then((r) => r.data),
     staleTime: 60 * 1000,
   });
-  // Active org teams — drives the Owning Team dropdown.
+  // Active org departments (each as its picker record, /admin/teams) — drives the Owning department dropdown.
   const { data: teams } = useQuery({
     queryKey: ['teams-for-asset-edit'],
     queryFn: () => apiClient.get('/admin/teams').then((r) => r.data as Array<{
@@ -1789,8 +1789,8 @@ function EditAssetModal({
 
           {/* ── Phase 5.2: Ownership Chain ────────────────────────────── */}
           {/* Pickers feed off the existing /assets/tenant-users endpoint;
-              the team picker uses the new /admin/teams endpoint. If no
-              teams are configured yet, the user falls back to a free-text
+              the department picker uses the /admin/teams endpoint. If no
+              departments are configured yet, the user falls back to a free-text
               field — that legacy value still saves on the backend. */}
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -1808,7 +1808,7 @@ function EditAssetModal({
                 onChange={(v) => setForm({ ...form, secondary_owner_id: v })}
               />
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Owning Team</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Owning department</label>
                 {teams && teams.length > 0 ? (
                   <select
                     value={form.owning_team_id === '' ? '' : form.owning_team_id}
@@ -1832,13 +1832,13 @@ function EditAssetModal({
                   <input
                     value={form.owning_team}
                     onChange={(e) => setForm({ ...form, owning_team: e.target.value, owning_team_id: '' })}
-                    placeholder="Create teams in Admin → Teams"
+                    placeholder="Create departments in Admin → Departments"
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                   />
                 )}
                 {teams && teams.length === 0 && (
                   <p className="mt-1 text-[10px] text-slate-500">
-                    No teams configured yet. <a href="/cyber-assurance/admin" className="text-blue-600 hover:underline">Manage teams →</a>
+                    No departments configured yet. <a href="/cyber-assurance/admin?tab=departments" className="text-blue-600 hover:underline">Manage departments →</a>
                   </p>
                 )}
               </div>
@@ -2189,7 +2189,7 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
             </p>
           </div>
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owning Team</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owning department</span>
             <p className="text-sm text-slate-700">{asset.owning_team || <span className="text-slate-400">Not assigned</span>}</p>
           </div>
           <div>

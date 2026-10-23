@@ -914,7 +914,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
           { label: 'Lifecycle', value: dash(asset?.lifecycle_state) },
           { label: 'Data Classification', value: dash(asset?.data_classification) },
           { label: 'Business Function', value: dash(asset?.business_function) },
-          { label: 'Owning Team', value: dash(asset?.owning_team_name || asset?.owning_team) },
+          { label: 'Owning department', value: dash(asset?.owning_team_name || asset?.owning_team) },
           { label: 'Secondary Owner', value: dash(asset?.secondary_owner_name) },
           { label: 'Business Owner', value: dash(asset?.business_owner_name) },
           { label: 'Escalation Contact', value: dash(asset?.escalation_contact_name) },

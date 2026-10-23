@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Who an assessment item is assigned to: any number of people and/or teams, ticked from one popover
- * (People | Teams). Every tick saves. One component for the rows of every assessment screen.
+ * Who an assessment item is assigned to: any number of people and/or departments, ticked from one popover
+ * (People | Departments; a department goes over the wire as type 'team', its picker record). Every tick saves. One component for
+ * the rows of every assessment screen.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -131,7 +132,7 @@ export default function ItemAssignees({ itemId, value, onSaved, fallback, label,
     <>
       <button ref={trigger} type="button" onClick={toggleOpen} aria-haspopup="dialog" aria-expanded={open}
         aria-label={`Assigned to ${names || 'no one'}${label ? ` for ${label}` : ''}. Change`}
-        title={names || (fallback ? `Imported as “${fallback}”. Click to assign people or teams.` : 'Assign to people or teams')}
+        title={names || (fallback ? `Imported as “${fallback}”. Click to assign people or departments.` : 'Assign to people or departments')}
         className={`flex min-w-0 max-w-full items-center gap-1.5 rounded-lg px-1.5 py-1 text-left text-xs transition-colors hover:bg-primary-50 ${open ? 'ring-2 ring-primary-500/30' : ''}`}>
         {saved.length === 0 ? (
           fallback
@@ -146,11 +147,11 @@ export default function ItemAssignees({ itemId, value, onSaved, fallback, label,
       </button>
       {open && pos && typeof document !== 'undefined' && createPortal(
         // Portalled out of the page, so it re-enters the platform's colour scope (outside it every slate text goes muted grey).
-        <div ref={pop} role="dialog" aria-label="Assign to people or teams" onClick={(e) => e.stopPropagation()}
+        <div ref={pop} role="dialog" aria-label="Assign to people or departments" onClick={(e) => e.stopPropagation()}
           style={{ top: pos.top, left: pos.left, maxHeight: pos.maxH, transform: pos.up ? 'translateY(-100%)' : undefined }}
           className="platform-ui cw-dashboard fixed z-[9999] flex w-[17rem] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="flex shrink-0 gap-1 border-b border-slate-100 p-2">
-            {([['user', 'People'], ['team', 'Teams']] as const).map(([kind, text]) => (
+            {([['user', 'People'], ['team', 'Departments']] as const).map(([kind, text]) => (
               <button key={kind} type="button" aria-pressed={tab === kind} onClick={() => { setTab(kind); setQ(''); }}
                 className={`flex-1 rounded-lg px-2 py-1 text-xs font-medium ${tab === kind ? 'bg-primary-50 font-semibold text-[#0f766e]' : 'text-slate-500 hover:bg-primary-50/60'}`}>
                 {text}{count(kind) > 0 && <span className="ml-1 rounded-full bg-primary-100 px-1.5 text-[10px] font-semibold text-[#0f766e]">{count(kind)}</span>}
@@ -159,15 +160,15 @@ export default function ItemAssignees({ itemId, value, onSaved, fallback, label,
           </div>
           <div className="relative shrink-0 border-b border-slate-100 p-2">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'user' ? 'Search people' : 'Search teams'}
-              aria-label={tab === 'user' ? 'Search people' : 'Search teams'}
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tab === 'user' ? 'Search people' : 'Search departments'}
+              aria-label={tab === 'user' ? 'Search people' : 'Search departments'}
               className="w-full rounded-lg border border-slate-200 py-1.5 pl-7 pr-2 text-xs focus:border-primary-500 focus:outline-none" />
           </div>
           <ul className="max-h-64 min-h-0 overflow-y-auto py-1">
             {loading.isError ? <li className="px-3 py-2 text-xs text-rose-600">Couldn’t load the list. Close this and try again.</li>
               : loading.isLoading ? <li className="px-3 py-2 text-xs text-slate-500">Loading…</li>
               : list.length === 0 ? <li className="px-3 py-2 text-xs text-slate-500">
-                {rows.length === 0 && tab === 'team' ? 'No teams yet. Create them under Admin → Teams.' : 'No match.'}</li>
+                {rows.length === 0 && tab === 'team' ? 'No departments yet. Create them under Admin → Departments.' : 'No match.'}</li>
               : list.map((r) => {
                 const on = has(r.type, r.id);
                 return (

@@ -90,6 +90,7 @@ test('only review, approval, signing, rejection and publication events are appro
   assert.ok(!isApprovalEvent({ kind: 'created', to: null }));
   assert.ok(!isApprovalEvent({ kind: 'version_rollback', to: null }));
   assert.ok(!isApprovalEvent({ kind: 'owner_assigned', to: null }));                  // an owner change is not an approval
+  assert.ok(!isApprovalEvent({ kind: 'department_changed', to: null }));              // nor is a department change
 });
 
 test('a version written from statements says so, and a change to a statement is not an approval', () => {

@@ -1,6 +1,6 @@
 'use client';
 
-// Sign-off & Document Control — the approval flow: who prepares, reviews and approves (by user, role or team), sending for
+// Sign-off & Document Control — the approval flow: who prepares, reviews and approves (by user, role or department), sending for
 // review, signing or rejecting with a drawn electronic signature, and the trail of signatures. Its parts share one query
 // (['doc-signoff', id]) so they can be placed apart: the document's Sign-off tab shows them together, and for organisations
 // with the document life cycle the Approvals & Acknowledgements tab (_LifecycleTab) puts the person's own action first.
@@ -86,7 +86,7 @@ function useRefreshAll(documentId: number) {
 }
 
 /** Who can be picked to review or approve: one read-only list anyone signed in may ask for (people of this platform by name, roles
- *  a connector did not make, teams), not the administrators' role list. `_tenantId`: kept for the callers; the server knows it. */
+ *  a connector did not make, departments), not the administrators' role list. `_tenantId`: kept for the callers; the server knows it. */
 export function useAssigneeOptions(_tenantId?: number): Option[] {
   const targetsQ = useQuery({
     queryKey: ['signoff-targets'],
@@ -392,7 +392,7 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
         </dl>
       ) : (
         <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-600">Choose people, a role or a team. With a role or a team, the first member to sign signs for all of them.</p>
+          <p className="text-xs text-gray-600">Choose people, a role or a department. With a role or a department, the first member to sign signs for all of them.</p>
           <div className="grid gap-3 md:grid-cols-3">
             <AssigneeMultiSelect label="Prepared by" hint="the author when left empty" value={prepared} onChange={setPrepared} options={options} />
             <AssigneeMultiSelect label="Reviewers" value={reviewers} onChange={setReviewers} options={options} />

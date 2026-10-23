@@ -42,3 +42,35 @@ export function versionGroups<V extends { number: string }>(newestFirst: readonl
 export function shownFrameworkIds(d: { applicable_framework_ids?: number[] | null; framework_ids?: number[] | null }): number[] {
   return d.applicable_framework_ids?.length ? d.applicable_framework_ids : d.framework_ids ?? [];
 }
+
+/** The Department filter's choice for the documents that sit in no department (a department's id is a number, so this cannot clash). */
+export const NO_DEPARTMENT = 'none';
+
+/** Whether a document passes the Department filter ('' = all; NO_DEPARTMENT = documents with none; else the department's id). */
+export function matchesDepartment(d: { department_id?: number | null }, filter: string): boolean {
+  if (!filter) return true;
+  if (filter === NO_DEPARTMENT) return d.department_id == null;
+  return String(d.department_id ?? '') === filter;
+}
+
+/** What the Department filter offers: "No department", then the active departments by name; one switched off that a document still
+ *  sits in is kept (marked), so those documents can still be found. */
+export function departmentFilterOptions(
+  departments: readonly { id: number; name: string; is_active?: boolean }[] | null | undefined,
+  docs: readonly { department_id?: number | null }[],
+): { value: string; label: string }[] {
+  const used = new Set<number>();
+  docs.forEach((d) => { if (d.department_id != null) used.add(d.department_id); });
+  const rows = (departments ?? [])
+    .filter((d) => d.is_active !== false || used.has(d.id))
+    .map((d) => ({ value: String(d.id), label: d.is_active === false ? `${d.name} (inactive)` : d.name }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  return [{ value: NO_DEPARTMENT, label: 'No department' }, ...rows];
+}
+
+/** Department id -> name, for the register's Department column. */
+export function departmentNames(departments: readonly { id: number; name: string }[] | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  (departments ?? []).forEach((d) => { out[String(d.id)] = d.name; });
+  return out;
+}

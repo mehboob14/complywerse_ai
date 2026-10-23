@@ -12,6 +12,7 @@ import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { useToast } from '@/components/ui/ToastProvider';
+import { departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { addMonths } from '../_detailsRead';
@@ -342,7 +343,8 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
         multiSelect={false} triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />),
     row('Department', departments.find((d) => d.id === form.department_id)?.name || '',
       <MultiSelectDropdown title="Department" items={deptItems} selectedValues={one(form.department_id)} onApply={(v) => set({ department_id: toId(v) })}
-        multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Choose a department" triggerClassName={TRIGGER} />),
+        multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false}
+        placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />),
     row('Review cycle', form.review_cycle_months == null ? '' : labelOf(cycles, form.review_cycle_months),
       <select value={form.review_cycle_months ?? ''} onChange={(e) => setSchedule({ review_cycle_months: e.target.value ? Number(e.target.value) : null })} className={INPUT}>
         {form.review_cycle_months == null && <option value="">Not set</option>}

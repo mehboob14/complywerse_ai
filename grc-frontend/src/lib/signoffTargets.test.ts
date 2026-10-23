@@ -11,21 +11,21 @@ const targets: SignoffTargets = {
   teams: [{ id: 5, name: 'Security', member_count: 1 }],
 };
 
-test('people, then roles, then teams, each alphabetically whatever the case, with counts of people who can sign', () => {
+test('people, then roles, then departments, each alphabetically whatever the case, with counts of people who can sign', () => {
   assert.deepEqual(assigneeOptions(targets), [
     { value: 'user:2', label: 'Bilal', subLabel: 'b@x.test' },
     { value: 'user:1', label: 'Olivia Owner', subLabel: undefined },
     { value: 'user:3', label: 'zara Khan', subLabel: 'z@x.test' },
     { value: 'role:8', label: 'Role · Approvers', subLabel: '2 users' },
     { value: 'role:9', label: 'Role · Reviewers', subLabel: '1 user' },
-    { value: 'team:5', label: 'Team · Security', subLabel: '1 member' },
+    { value: 'team:5', label: 'Department · Security', subLabel: '1 member' },
   ]);
   assert.deepEqual(assigneeOptions(null), []);
 });
 
 test('the placeholder names only what can be picked', () => {
-  assert.equal(assigneePlaceholder(assigneeOptions(targets)), 'Add users, roles or teams…');
-  assert.equal(assigneePlaceholder(assigneeOptions({ ...targets, roles: [] })), 'Add users or teams…');
+  assert.equal(assigneePlaceholder(assigneeOptions(targets)), 'Add users, roles or departments…');
+  assert.equal(assigneePlaceholder(assigneeOptions({ ...targets, roles: [] })), 'Add users or departments…');
   assert.equal(assigneePlaceholder(assigneeOptions({ ...targets, roles: [], teams: [] })), 'Add users…');
   assert.equal(assigneePlaceholder([]), 'Nobody to choose yet');
 });
@@ -54,6 +54,7 @@ test('a saved participant missing from the options shows under its saved name, c
   assert.equal(withChosen(options, saved.slice(0, 1)), options);
   assert.equal(withChosen([], saved)[1].subLabel, undefined);                         // options not loaded yet: nothing claimed
   assert.equal(withChosen(options, [{ target_type: 'user', target_id: 77 }])[0].label, 'user #77');
+  assert.equal(withChosen(options, [{ target_type: 'team', target_id: 41 }])[0].label, 'department #41');       // a department with no saved name
 
   // ticking another one keeps the saved name; unticking the unknown one removes it
   assert.deepEqual(chosenFrom(['role:40', 'team:5'], saved), [saved[1], { target_type: 'team', target_id: 5 }]);

@@ -2346,7 +2346,7 @@ function RiskModal({
     },
   });
 
-  // Active teams from admin/teams. These drive the "Assigned Team / Department"
+  // Active departments (each as its picker record, admin/teams). These drive the "Assigned Team / Department"
   // picker — replacing the hardcoded list that the tenant couldn't edit.
   const { data: teams } = useQuery({
     queryKey: ['risk-modal-teams'],
@@ -3268,7 +3268,7 @@ function RiskModal({
               onApply={(vals) => setFormData({ ...formData, team_id: vals[0] ? Number(vals[0]) : undefined })}
               multiSelect={false}
               triggerVariant="input"
-              placeholder={(teams || []).length === 0 ? 'No teams configured yet — create one in Admin → Teams' : 'Select a team / department'}
+              placeholder={(teams || []).length === 0 ? 'No departments configured yet — create one in Admin → Departments' : 'Select a team / department'}
               size="md"
               forceSearch
             />

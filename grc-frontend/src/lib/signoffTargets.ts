@@ -1,5 +1,6 @@
 // Who a document's reviewers and approvers can be: GET /governance/documents/signoff/targets (people of this platform, roles a
-// connector did not make, active teams; the counts are of people who can sign). Turned here into the pickers' options.
+// connector did not make, active departments - sent as `teams`, each department's picker record; the counts are of people who can
+// sign). Turned here into the pickers' options.
 
 export type SignoffTargets = {
   users: { id: number; name: string; email?: string | null }[];
@@ -11,13 +12,13 @@ export type TargetOption = { value: string; label: string; subLabel?: string };
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** People first, then roles, then teams, each alphabetically. */
+/** People first, then roles, then departments, each alphabetically. */
 export function assigneeOptions(t?: SignoffTargets | null): TargetOption[] {
   if (!t) return [];
   return [
     ...[...(t.users || [])].sort(byName).map((u) => ({ value: `user:${u.id}`, label: u.name, subLabel: u.email || undefined })),
     ...[...(t.roles || [])].sort(byName).map((r) => ({ value: `role:${r.id}`, label: `Role · ${r.name}`, subLabel: count(r.user_count, 'user', 'users') })),
-    ...[...(t.teams || [])].sort(byName).map((m) => ({ value: `team:${m.id}`, label: `Team · ${m.name}`, subLabel: count(m.member_count, 'member', 'members') })),
+    ...[...(t.teams || [])].sort(byName).map((m) => ({ value: `team:${m.id}`, label: `Department · ${m.name}`, subLabel: count(m.member_count, 'member', 'members') })),
   ];
 }
 
@@ -25,12 +26,12 @@ type Chosen = { target_type: string; target_id: number; display?: string };
 const keyOf = (p: Chosen) => `${p.target_type}:${p.target_id}`;
 
 /** The picker's options with each chosen participant that is not among them (a role a connector made, someone no longer on the
- *  platform, a team out of use) put first under the name it was saved with, so it shows as chosen and can be unticked. The note
+ *  platform, a department out of use) put first under the name it was saved with, so it shows as chosen and can be unticked. The note
  *  that it cannot sign waits for the options (before they load nothing is known). */
 export function withChosen(options: TargetOption[], chosen: Chosen[]): TargetOption[] {
   const known = new Set(options.map((o) => o.value));
   const extra = chosen.filter((p) => !known.has(keyOf(p))).map((p) => ({
-    value: keyOf(p), label: p.display || `${p.target_type} #${p.target_id}`, subLabel: options.length ? 'Cannot sign: untick to remove it' : undefined,
+    value: keyOf(p), label: p.display || `${p.target_type === 'team' ? 'department' : p.target_type} #${p.target_id}`, subLabel: options.length ? 'Cannot sign: untick to remove it' : undefined,
   }));
   return extra.length ? [...extra, ...options] : options;
 }
@@ -50,9 +51,10 @@ export function sentToast(data: { status?: string; notice?: string | null } | nu
   return { type: 'warning', title: data.status === 'draft' ? 'Not sent' : title, message: data.notice };
 }
 
-/** "Add users, roles or teams…", naming only the kinds there are to pick. */
+/** "Add users, roles or departments…", naming only the kinds there are to pick. */
 export function assigneePlaceholder(options: TargetOption[]): string {
-  const kinds = (['user', 'role', 'team'] as const).filter((k) => options.some((o) => o.value.startsWith(`${k}:`))).map((k) => `${k}s`);
+  const WORD = { user: 'users', role: 'roles', team: 'departments' } as const;          // `team:` is a department's picker record
+  const kinds = (['user', 'role', 'team'] as const).filter((k) => options.some((o) => o.value.startsWith(`${k}:`))).map((k) => WORD[k]);
   if (!kinds.length) return 'Nobody to choose yet';
   return `Add ${kinds.length === 1 ? kinds[0] : `${kinds.slice(0, -1).join(', ')} or ${kinds[kinds.length - 1]}`}…`;
 }

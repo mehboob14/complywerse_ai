@@ -3774,7 +3774,9 @@ export const cloudConnectorsApi = {
 };
 
 // ── Teams (admin) ────────────────────────────────────────────────────────────
-// Tenant-scoped org teams used by the asset ownership-chain dropdown.
+// A department's linked picker record, which the asset, risk, assessment and stage-owner pickers read (the old team routes: the list
+// answers with the departments' names). Writes to a team that belongs to a department are refused - Administration → Departments
+// (departmentsApi below) is where they are made.
 
 export interface Team {
   id: number;
@@ -3816,6 +3818,65 @@ export const teamsApi = {
     apiClient.patch<TeamMember>(`/admin/teams/${teamId}/members/${memberId}`, data),
   removeMember: (teamId: number, memberId: number) =>
     apiClient.delete(`/admin/teams/${teamId}/members/${memberId}`),
+};
+
+// ── Departments (admin) ──────────────────────────────────────────────────────
+// The one list of departments (Administration → Departments): the document, sign-off, asset, assessment, stage-owner and risk
+// pickers all read it (the old team routes above return each department's linked picker record). A person belongs to a department
+// by hand, as its lead (`head`) or by holding one of its roles.
+
+export interface DepartmentRole { id: number; name: string }
+export interface Department {
+  id: number;
+  tenant_id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  parent_department_id: number | null;
+  parent_department_name: string | null;
+  department_head_user_id: number | null;
+  department_head_name: string | null;
+  is_active: boolean;
+  roles: DepartmentRole[];
+  member_count: number;
+  manual_member_count: number;
+  team_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+export type DepartmentMemberRole = 'lead' | 'member' | 'viewer';
+export interface DepartmentMember {
+  user_id: number;
+  name: string;
+  email: string;
+  designation: string | null;
+  how: Array<'head' | 'manual' | 'role'>;
+  member_role: DepartmentMemberRole | null;
+  via_roles: string[];
+  added_at: string | null;
+}
+export interface DepartmentDetail extends Department {
+  members: DepartmentMember[];
+  sub_departments: Array<{ id: number; name: string; code: string; is_active: boolean }>;
+}
+export interface DepartmentRoleOption { id: number; name: string; user_count: number }
+
+export const departmentsApi = {
+  list: (includeInactive = false) =>
+    apiClient.get<Department[]>('/admin/departments', { params: { include_inactive: includeInactive } }),
+  get: (id: number) => apiClient.get<DepartmentDetail>(`/admin/departments/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post<Department>('/admin/departments', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.patch<Department>(`/admin/departments/${id}`, data),
+  /** switches it off: the department and what points at it (documents) stay */
+  deactivate: (id: number) => apiClient.delete<{ message: string; id: number }>(`/admin/departments/${id}`),
+  setRoles: (id: number, roleIds: number[]) =>
+    apiClient.put<DepartmentDetail>(`/admin/departments/${id}/roles`, { role_ids: roleIds }),
+  roleOptions: () => apiClient.get<DepartmentRoleOption[]>('/admin/departments/role-options'),
+  addMember: (id: number, data: { user_id: number; role: DepartmentMemberRole }) =>
+    apiClient.post<DepartmentMember>(`/admin/departments/${id}/members`, data),
+  updateMember: (id: number, userId: number, data: { role: DepartmentMemberRole }) =>
+    apiClient.patch<DepartmentMember>(`/admin/departments/${id}/members/${userId}`, data),
+  removeMember: (id: number, userId: number) => apiClient.delete(`/admin/departments/${id}/members/${userId}`),
 };
 
 // ── Phase 4: Software identifier (CPE / PURL) inventory per asset ───────────
