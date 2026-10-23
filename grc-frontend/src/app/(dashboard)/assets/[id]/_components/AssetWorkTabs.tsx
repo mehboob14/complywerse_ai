@@ -658,7 +658,7 @@ export function AssignmentsPanel({ asset, onEdit }: { asset: any; onEdit?: () =>
     { role: 'Secondary owner', who: asset.secondary_owner_name, note: 'Backup when the primary is unavailable' },
     { role: 'Business owner', who: asset.business_owner_name, note: 'Owns the business service this supports' },
     { role: 'Custodian', who: asset.custodian, note: 'Holds and operates the asset' },
-    { role: 'Owning team', who: asset.owning_team_name ?? asset.owning_team, note: 'Team the asset belongs to' },
+    { role: 'Owning department', who: asset.owning_team_name ?? asset.owning_team, note: 'Department the asset belongs to' },
     { role: 'Escalation contact', who: asset.escalation_contact_name, note: 'Who to call when it breaks' },
     { role: 'Assigned user', who: asset.assigned_user, note: 'The person actually using it' },
     { role: 'Department', who: asset.department, note: 'Cost and reporting line' },

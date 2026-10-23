@@ -7,8 +7,8 @@ export function personOf(row: any): { id: number; name: string; email?: string }
   return { id, name: u.display_name || u.full_name || u.username || u.email || `User ${id}`, email: u.email || undefined };
 }
 
-/** The initials on a picker's avatar: "Olivia Owner" -> "OO", "bilal" -> "BI". A role or a team, labelled with its kind first
- *  ("Role · Approvers", "Team: Security Ops"), gets its own name's initials ("AP", "SO"), never "R·". */
+/** The initials on a picker's avatar: "Olivia Owner" -> "OO", "bilal" -> "BI". A role or a department, labelled with its kind first
+ *  ("Role · Approvers", "Department: Security Ops"), gets its own name's initials ("AP", "SO"), never "R·". */
 export function initialsOf(label: string): string {
   const name = (label || '').split(/\s*[·:]\s+/).pop() || '';
   const words = name.split(/\s+/).map((w) => w.replace(/[·:()[\]{}.,;'"!?&\/\\_\-–—]/g, '')).filter(Boolean);

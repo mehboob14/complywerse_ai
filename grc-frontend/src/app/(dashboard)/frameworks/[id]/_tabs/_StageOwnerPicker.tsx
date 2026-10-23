@@ -2,7 +2,7 @@
 
 /**
  * StageOwnerPicker — assign the owner of a single journey stage to a real
- * person, team, or role that exists in the tenant (persisted on the journey via
+ * person, department, or role that exists in the tenant (persisted on the journey via
  * PATCH /certifications/{id}/stage-owners/{n}). The static flow owner string is
  * shown only as a "Suggested:" hint.
  */
@@ -18,7 +18,7 @@ export interface StageOwner { type: OwnerType; ref_id?: number | null; label: st
 
 const TYPE_META: Record<OwnerType, { label: string; icon: typeof UserRound }> = {
   user: { label: 'People', icon: UserRound },
-  team: { label: 'Teams', icon: Users },
+  team: { label: 'Departments', icon: Users },
   role: { label: 'Roles', icon: ShieldCheck },
 };
 
@@ -104,7 +104,7 @@ export default function StageOwnerPicker({
     tab === 'user'
       ? (usersQ.data || []).map((u) => ({ id: u.id, label: u.display_name || u.name || u.email || `User #${u.id}` }))
       : tab === 'team'
-      ? (teamsQ.data || []).map((t) => ({ id: t.id, label: t.name || `Team #${t.id}` }))
+      ? (teamsQ.data || []).map((t) => ({ id: t.id, label: t.name || `Department #${t.id}` }))
       : (rolesQ.data || []).map((r) => ({ id: r.id, label: r.name || `Role #${r.id}` }));
   const filtered = items.filter((it) => !search || it.label.toLowerCase().includes(search.toLowerCase()));
   const loading =

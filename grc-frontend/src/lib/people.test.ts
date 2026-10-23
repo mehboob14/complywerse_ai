@@ -5,11 +5,11 @@ import assert from 'node:assert/strict';
 
 import { initialsOf, personOf } from './people.ts';
 
-test('a picker avatar: a person by name, a role or a team by its own name, never "R·"', () => {
+test('a picker avatar: a person by name, a role or a department by its own name, never "R·"', () => {
   assert.equal(initialsOf('Olivia Owner'), 'OO');
   assert.equal(initialsOf('bilal'), 'BI');
   assert.equal(initialsOf('Role · Approvers'), 'AP');
-  assert.equal(initialsOf('Team · Security Ops'), 'SO');
+  assert.equal(initialsOf('Department · Security Ops'), 'SO');
   assert.equal(initialsOf('Role: DigitalOcean admins'), 'DA');     // the name the server saved for a participant
   assert.equal(initialsOf('Zara (Audit) Khan'), 'ZA');
   assert.equal(initialsOf(''), 'U');

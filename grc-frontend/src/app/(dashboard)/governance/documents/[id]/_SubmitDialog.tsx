@@ -79,7 +79,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
       }
     },
     onSuccess: (sent: any) => {
-      // the server names reviewers or approvers nobody can sign for (a role or team without users of this platform)
+      // the server names reviewers or approvers nobody can sign for (a role or department without users of this platform)
       const first = used(stages)[0];
       const said = sentToast(sent, isDefaultShape(stages) ? (first?.kind === 'review' ? 'Reviewers were asked' : 'Approvers were asked')
         : `Its first stage (${first?.name ?? 'Review'}) was asked.`);
@@ -132,7 +132,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
       <div className="max-h-[65vh] space-y-3 overflow-y-auto px-5 py-4 max-sm:max-h-none">
         <p className="text-xs text-[#586472]">
           Each stage is asked in order; the next one starts when it is signed. Anyone whose turn it is can ask for changes, which waits for you to make them and resubmit.
-          A role or a team is signed by its first member.
+          A role or a department is signed by its first member.
         </p>
         <ol className="space-y-3">
           {stages.map((s, i) => (
