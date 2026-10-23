@@ -199,3 +199,31 @@ def test_escalation_paths_need_the_organisation_right_and_assigning_the_vulnerab
     # reading them stays open to anyone signed in
     assert http.get(f"/vuln-management/departments/{IT}/escalation-paths").status_code == 200
     assert http.get("/vuln-management/vulnerabilities/1/departments").status_code == 200
+
+
+# --- what the Vulnerabilities > Departments page reads ------------------------------------------------------------------
+
+def test_a_departments_members_can_be_listed(w):
+    db, as_ = w
+    db.add(m.GRCDepartmentMember(department_id=IT, user_id=PLAIN, role="member", is_active=False))   # left the department
+    db.add(m.GRCDepartmentMember(department_id=IT, user_id=VULN_EDITOR, role="lead", escalation_order=1))
+    db.commit()
+    http = as_(PLAIN)
+    r = http.get(f"/vuln-management/departments/{IT}/members")
+    assert r.status_code == 200, r.text
+    assert [(x["user_id"], x["role"], x["user_name"], x["user_email"]) for x in r.json()] == [
+        (HEAD, "head", "Hugo", "hugo@acme.test"), (VULN_EDITOR, "lead", "Vera", "vera@acme.test")]
+    assert http.get("/vuln-management/departments/999/members").status_code == 404
+
+
+def test_the_department_list_counts_each_departments_findings(w):
+    db, as_ = w
+    db.add(m.GRCDepartment(id=11, tenant_id=1, name="Network", code="NET"))
+    db.add_all([m.Vulnerability(id=i, tenant_id=1, vuln_id=f"VULN-{i}", title="t", severity="low") for i in (1, 2)])
+    db.flush()
+    db.add_all([m.GRCVulnerabilityDepartmentAssignment(vulnerability_id=i, department_id=IT) for i in (1, 2)])
+    db.commit()
+    rows = {d["name"]: (d["member_count"], d["vulnerability_count"]) for d in as_(PLAIN).get("/vuln-management/departments").json()}
+    assert rows == {"IT": (1, 2), "Network": (0, 0)}
+    saved = as_(ADMIN).put(f"/vuln-management/departments/{IT}", json={"description": "Infrastructure"})
+    assert (saved.status_code, saved.json()["vulnerability_count"]) == (200, 2), saved.text

@@ -54,6 +54,12 @@ def get_department_or_404(dept_id: int, user_tenants: List[int], db: Session) ->
     return dept
 
 
+def _vulnerability_count(db: Session, dept_id: int) -> int:
+    return db.query(func.count(GRCVulnerabilityDepartmentAssignment.id)).filter(
+        GRCVulnerabilityDepartmentAssignment.department_id == dept_id
+    ).scalar() or 0
+
+
 @router.get("/departments", response_model=List[GRCDepartmentResponse])
 def list_departments(
     tenant_id: Optional[int] = None,
@@ -106,9 +112,10 @@ def list_departments(
             is_active=dept.is_active,
             created_at=dept.created_at,
             updated_at=dept.updated_at,
-            member_count=member_count
+            member_count=member_count,
+            vulnerability_count=_vulnerability_count(db, dept.id)
         ))
-    
+
     return result
 
 
@@ -331,7 +338,8 @@ def update_department(
         is_active=dept.is_active,
         created_at=dept.created_at,
         updated_at=dept.updated_at,
-        member_count=member_count
+        member_count=member_count,
+        vulnerability_count=_vulnerability_count(db, dept.id)
     )
 
 
@@ -350,6 +358,40 @@ def delete_department(
     db.commit()
     
     return MessageResponse(message="Department deleted successfully", id=dept_id)
+
+
+@router.get("/departments/{dept_id}/members", response_model=List[GRCDepartmentMemberResponse])
+def list_department_members(
+    dept_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    get_department_or_404(dept_id, user_tenants, db)
+
+    members = db.query(GRCDepartmentMember).options(
+        joinedload(GRCDepartmentMember.user)
+    ).filter(
+        GRCDepartmentMember.department_id == dept_id,
+        GRCDepartmentMember.is_active == True
+    ).order_by(GRCDepartmentMember.id).all()
+
+    return [
+        GRCDepartmentMemberResponse(
+            id=mb.id,
+            department_id=mb.department_id,
+            user_id=mb.user_id,
+            role=mb.role,
+            email_notifications_enabled=mb.email_notifications_enabled,
+            escalation_order=mb.escalation_order,
+            added_at=mb.added_at,
+            added_by=mb.added_by,
+            is_active=mb.is_active,
+            user_name=mb.user.display_name if mb.user else None,
+            user_email=mb.user.email if mb.user else None
+        )
+        for mb in members
+    ]
 
 
 @router.post("/departments/{dept_id}/members", response_model=GRCDepartmentMemberResponse, status_code=status.HTTP_201_CREATED)

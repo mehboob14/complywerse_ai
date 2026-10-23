@@ -52,6 +52,7 @@ class GRCDepartmentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     member_count: int = 0
+    vulnerability_count: int = 0
 
     class Config:
         from_attributes = True
