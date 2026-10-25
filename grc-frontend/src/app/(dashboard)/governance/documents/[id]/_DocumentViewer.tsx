@@ -5,24 +5,27 @@
  * otherwise cleaned HTML), with its version history, the typed-name sign-off and document control fields, and its details. Used
  * by the AI Studio's document view (variant 'studio': the document at full height, its newest changes marked when it opens, or
  * an earlier version read as it was) and by the classic document page.
+ * The document control pages (Document Description, review and approval, Revision History) are PART of what is shown: in its own
+ * sections for a platform document (ControlledMarkdown), inserted after the cover in a Word or PDF file (fileQ); under it, for the
+ * screen, ControlActions. None of them is a card of its own.
  */
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { problemOf as studioProblem, saveBlob } from '@/lib/studio/api';
 import { documentChainApi } from '@/lib/documentChain';
+import { controlledCopy, controlledFileKey, recordStamp } from '@/lib/controlPages';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
-import ApprovalRecord from './_ApprovalRecord';
+import { ControlActions, ControlledMarkdown } from './ControlPages';
 import { ProposeNote, useProposedAnswer } from './_ProposalsView';
 import { sendLabel } from '@/lib/proposals';
 import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
 import { versionGroups } from '../_workspace/library';
 import WordView from '@/components/governance/WordView';
-import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 import { useRouter } from 'next/navigation';
 import {
   FileText, Loader2, Download, GitCompare, RotateCcw, User, Clock, CheckCircle, X, Info, History, Pencil, Maximize2, Save,
@@ -510,11 +513,25 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   const [sinceRange, setSinceRange] = useState<{ from: number; to: number | null } | null>(null);
   useEffect(() => { if (trackedRange) { setPicked(true); setSinceRange(null); } }, [trackedRange]);
 
-  // the file shown: the document's own, or the file of the version being read
-  const fetchFile = async (): Promise<Blob> => {
-    if (reading) return (await documentChainApi.versionFile(doc.id, reading.id, shown?.file_name || 'document', reading.number)).blob;
-    const res = await governanceApi.downloadDocumentFile(doc.id);
-    return res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+  // The file shown: the document's own, or the file of the version being read, WITH the document control pages the platform inserts
+  // after the cover (?with_record=true), so they are part of what is seen. If that cannot be made, the file as stored (`inside`: false).
+  const fetchFile = async (): Promise<{ blob: Blob; inside: boolean | null }> => {
+    if (reading) {
+      const name = shown?.file_name || 'document';
+      try {
+        const r = await documentChainApi.versionFile(doc.id, reading.id, name, reading.number, { withRecord: true });
+        return { blob: r.blob, inside: r.controlled };
+      } catch {
+        return { blob: (await documentChainApi.versionFile(doc.id, reading.id, name, reading.number)).blob, inside: false };
+      }
+    }
+    const asBlob = (data: unknown) => (data instanceof Blob ? data : new Blob([data as BlobPart]));
+    try {
+      const res = await governanceApi.downloadDocumentFile(doc.id, { withRecord: true });
+      return { blob: asBlob(res.data), inside: controlledCopy(res.headers) };
+    } catch {
+      return { blob: asBlob((await governanceApi.downloadDocumentFile(doc.id)).data), inside: false };
+    }
   };
 
   // If the document is a file-backed PDF, render the *exact* original file in
@@ -525,45 +542,32 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   const isPdfFile = !!shown?.has_file && (
     String(shown?.file_type || '').toLowerCase() === 'pdf' || /\.pdf$/i.test(String(shown?.file_name || ''))
   );
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfError, setPdfError] = useState(false);
-  useEffect(() => {
-    if (!isPdfFile || !doc?.id) { setPdfUrl(null); return; }
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    setPdfError(false);
-    fetchFile()
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' }));
-        setPdfUrl(objectUrl);
-      })
-      .catch(() => { if (!cancelled) setPdfError(true); });
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPdfFile, doc?.id, doc?.current_version, reading?.id]);
-
   // A Word file is drawn as Word draws it (docx-preview): its own numbering (1.3.1.1, I., a.), headings, tables where they are,
   // headers and footers. The old text conversion below stays as the fallback when it cannot be drawn.
   const isWordFile = !!shown?.has_file && !isPdfFile && (
     String(shown?.file_type || '').toLowerCase() === 'docx' || /\.docx$/i.test(String(shown?.file_name || ''))
   );
-  const [wordFile, setWordFile] = useState<Blob | null>(null);
-  const [wordError, setWordError] = useState(false);
+  // One query for both: its key starts with the document's own ('governance-document'), so every refresh of the document (a signature,
+  // a submit, a publish, an edit of its details) makes the file again with the pages as they are now; the version read and a stamp of the
+  // record are in the key. A file is made on the server each time, so it is kept only while it is shown (gcTime 0) and never refetched on focus.
+  const fileQ = useQuery({
+    queryKey: controlledFileKey(doc?.id, reading?.id, recordStamp(doc)),
+    queryFn: fetchFile,
+    enabled: (isPdfFile || isWordFile) && !!doc?.id,
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
+  const shownFile = fileQ.data?.blob ?? null;
+  const pdfError = isPdfFile && fileQ.isError;
+  const wordError = isWordFile && fileQ.isError;
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!isWordFile || !doc?.id) { setWordFile(null); return; }
-    let cancelled = false;
-    setWordError(false);
-    setWordFile(null);
-    fetchFile()
-      .then((blob) => { if (!cancelled) setWordFile(blob); })
-      .catch(() => { if (!cancelled) setWordError(true); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isWordFile, doc?.id, doc?.current_version, reading?.id]);
+    if (!isPdfFile || !shownFile) { setPdfUrl(null); return; }
+    const url = URL.createObjectURL(shownFile.type === 'application/pdf' ? shownFile : new Blob([shownFile], { type: 'application/pdf' }));
+    setPdfUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isPdfFile, shownFile]);
 
   const openEditor = () => { startEdit(); setShowFullViewer(true); };
   const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
@@ -660,7 +664,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
         <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
           <FileText className="h-12 w-12" />
           <p className="text-sm text-slate-700">Couldn&rsquo;t load the file preview.</p>
-          <p className="text-sm text-slate-600">{reading ? 'Use File on its card in Versions to download it.' : studio ? 'Use Download, This version, at the top to open it.' : <>Use &ldquo;Download File&rdquo; above to view it.</>}</p>
+          <p className="text-sm text-slate-600">{reading ? 'Use File on its card in Versions to download it.' : studio ? 'Use Download, Original file as stored, at the top to open it.' : <>Use &ldquo;Download File&rdquo; above to view it.</>}</p>
         </div>
       ) : pdfUrl ? (
         <iframe
@@ -672,11 +676,15 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
         <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
       )
     ) : isWordFile && !wordError ? (
-      <WordView file={wordFile} height={full || studio ? undefined : 340} label={shown?.file_name || doc?.title || 'Document'} />
+      <WordView file={shownFile} height={full || studio ? undefined : 340} label={shown?.file_name || doc?.title || 'Document'} />
     ) : htmlLoading && !reading ? (
       <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
     ) : isMarkdown ? (
-      <GovernanceDocumentMarkdown
+      // the document with its control pages where its own sections are; the document as it is until they are here (an earlier version: its own pages)
+      <ControlledMarkdown
+        documentId={doc?.id}
+        version={reading ? reading.number : null}
+        stamp={reading ? null : doc?.current_version}
         content={rawContent}
         references={referenceItems}
         onDraftReference={canTakeBack && !reading ? handleDraftReference : undefined}
@@ -736,8 +744,13 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
     </div>
   );
 
-  // the approval record goes with the document, not with its marked-up changes: it is left out while the Tracked changes show
-  const showRecord = !!doc?.id && !(tracking && chainOn);
+  // the control pages are part of the document (in its sections, or inside its file); under it, for the screen, a line says where they come
+  // from and offers them alone as a PDF. It is left out while the Tracked changes show, which are the stored text without the pages.
+  const showActions = !!doc?.id && !(tracking && chainOn);
+  const actions = showActions ? (
+    <ControlActions documentId={doc.id} title={doc.title} version={reading ? reading.number : null} currentVersion={doc.current_version}
+      inside={isPdfFile || isWordFile ? fileQ.data?.inside ?? null : null} onOpenChangeLog={onOpenChangeLog} />
+  ) : null;
 
   if (studio) {
     return (
@@ -788,8 +801,8 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           </div>
         )}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-8">{renderReadBody(true)}</div>
-        {/* the approval record: a sibling of the card, never inside the Word view's shadow root or the PDF's frame; it follows the version read */}
-        {showRecord && <ApprovalRecord documentId={doc.id} version={reading ? reading.number : null} onOpenChangeLog={onOpenChangeLog} />}
+        {/* (a sibling of the card, never inside the Word view's shadow root or the PDF's frame; it follows the version read) */}
+        {actions}
       </div>
     );
   }
@@ -890,7 +903,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           </div>
         </div>
       </div>
-      {showRecord && <ApprovalRecord documentId={doc.id} version={null} onOpenChangeLog={onOpenChangeLog} />}
+      {actions}
     </div>
   );
 }

@@ -411,21 +411,25 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/upload-file`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  downloadDocumentFile: (documentId: number) =>
+  // The uploaded file as stored. `withRecord`: with the document control pages inserted after the cover (Word, PDF); the header
+  // X-Controlled-Copy says whether that could be done (lib/controlPages.ts).
+  downloadDocumentFile: (documentId: number, opts?: { withRecord?: boolean }) =>
     apiClient.get(`/governance/documents/${documentId}/download-file`, {
       responseType: 'blob',
+      ...(opts?.withRecord ? { params: { with_record: true } } : {}),
     }),
   // Download any document: the uploaded file when present, else a PDF rendered
   // from the document's markdown content. Works for content-only (AI-drafted) docs.
-  // `withRecord`: the approval record appended (a file type that cannot carry it answers X-Approval-Record: separate; lib/approvalRecord.ts).
+  // `withRecord`: with the document control pages (a platform document: a PDF with them where its own sections are; Word, PDF: inserted after
+  // the cover); a file type that cannot carry them answers X-Approval-Record: separate (lib/approvalRecord.ts).
   exportDocument: (documentId: number, opts?: { withRecord?: boolean }) =>
     apiClient.get(`/governance/documents/${documentId}/export`, {
       responseType: 'blob',
       ...(opts?.withRecord ? { params: { with_record: true } } : {}),
     }),
-  /** The approval record at the end of a document, built by the platform from its workflow and signatures; `version`: an earlier one ("1.1"). */
-  approvalRecord: (documentId: number, version?: string | null) =>
-    apiClient.get<import('./approvalRecord').ApprovalRecord>(`/governance/documents/${documentId}/approval-record`, { params: version ? { version } : undefined }),
+  /** A platform document cut where its own sections are, with the pages the platform fills them with (documents/[id]/ControlPages.tsx); `version`: an earlier one ("1.1"). */
+  controlledContent: (documentId: number, version?: string | null) =>
+    apiClient.get<import('./approvalRecord').ControlledContent>(`/governance/documents/${documentId}/controlled-content`, { params: version ? { version } : undefined }),
   parsePolicy: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/parse-policy`, {}, {
       timeout: 900000, // 15 minutes for large document parsing
