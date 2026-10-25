@@ -19,6 +19,12 @@ designations are the e-signature's snapshot when there is one, else the person's
 Reading only: nothing here writes or commits. Who may read a document is the caller's (``permissions.require_doc_reader``); someone who
 reads the version in force instead of the newest (``permissions.version_for``) gets that version's record and nothing about a newer
 round or any version after it.
+
+The document control pages (the user, 2026-10-25: the revision, reviewers and approvals section belongs to the document itself, as in
+a bank's own policies) are made from the same facts: ``control`` (the Document Description), ``revision_history`` (one row for each
+version that completed approval and for the version being worked on) and ``approval_history`` (who reviewed and approved each released
+version). They are keys of the record, so every screen and file reads the same thing; the files that place them in a document are
+approval_record_export.py and controlled_copy.py.
 """
 from __future__ import annotations
 
@@ -50,6 +56,13 @@ UNKNOWN = "unknown"                                             # the version of
 _STAGE_STATUS = {"on_hold": "changes_requested", "done": "complete", "informed": "complete"}      # a stage of the live route; anything else is pending
 _DECISION = {"waiting": "pending", "not_yet": "pending", "changes_requested": "changes_requested", "delegated": "delegated"}
 _FAR = 1 << 60                                                  # the rank of a version that has no row
+STATE_LABEL = {"published": "Published", "approved": "Approved, not published", "in_approval": "In approval", "in_review": "In review",
+               "draft": "Draft", "archived": "Archived"}
+TYPE_LABEL = {"policy": "Policy", "standard": "Standard", "procedure": "Procedure", "guideline": "Guideline", "charter": "Charter",
+              "framework": "Framework"}
+NAMELESS = "Unknown"                                            # a person is never listed without a name
+SAVES_LISTED = 4                                                # saves a revision's summary lists besides the released version's own
+SAVE_CHARS = 90
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -106,7 +119,7 @@ class _Facts:
         self.db, self.doc = db, doc
         V, S, E, A, H, R = (GovernanceDocumentVersion, DocumentSignature, ElectronicSignature, DocumentAuditLog, DocumentRouteHold,
                             DocumentRouteStage)
-        self.versions = (db.query(V.id, V.version_number, V.change_type, V.change_summary, V.created_at, V.created_by, V.title)
+        self.versions = (db.query(V.id, V.version_number, V.change_type, V.change_summary, V.created_at, V.created_by, V.title, V.status)
                          .filter(V.document_id == doc.id).order_by(V.id).all())
         self.row = {v.id: v for v in self.versions}
         self.rank: Dict[str, int] = {}
@@ -183,11 +196,15 @@ class _Facts:
         e = self.esig.get(s.id)
         return (e.document_version or None) if e is not None else None
 
+    def row_of(self, number: str):
+        """The row that stands for a version: its first one that is not a baseline, else its first (None: it has no row)."""
+        rows = [v for v in self.versions if v.version_number == number]
+        return next((v for v in rows if v.change_type != "baseline"), rows[0] if rows else None)
+
     def prepared(self, number: str) -> Dict[str, Any]:
         """Who prepared the version and when it was made: its row's creator and time (a baseline row records the first edit, not the
         version: then the document's own author and creation). The preparer never signs in the platform, so there is no signature."""
-        rows = [v for v in self.versions if v.version_number == number]
-        row = next((v for v in rows if v.change_type != "baseline"), rows[0] if rows else None)
+        row = self.row_of(number)
         real = row is not None and row.change_type != "baseline"
         who = (row.created_by if real else None) or self.doc.author_id or self.doc.owner_id or (row.created_by if row is not None else None)
         return {"name": self.name(who), "designation": self.designation(who), "at": _iso(row.created_at if real else self.doc.created_at),
@@ -289,11 +306,20 @@ def _label(group: Sequence[Any], row, p: int) -> str:
 
 def _person(f: _Facts, s, label: str) -> Dict[str, Any]:
     e = f.esig.get(s.id)
-    return {"name": (e.signer_name if e is not None else None) or f.name(s.signer_user_id),
+    return {"name": (e.signer_name if e is not None else None) or f.name(s.signer_user_id) or NAMELESS,
             "designation": (e.signer_title if e is not None else None) or f.designation(s.signer_user_id),
             "decision": "rejected" if s.decision == "rejected" else "signed", "meaning": s.role_label or label,
             "signed_at": _iso(s.signed_at), "comment": _cut(s.comment), "on_behalf_of": f.name(s.on_behalf_of),
             "signature": None if e is None else {"id": e.id, "drawn": bool(e.ink), "seal_short": (e.seal or "")[:8].upper()}}
+
+
+def _route_cfg(f: _Facts, rnd: _Round, custom: bool, p: int, label: str) -> Optional[Dict[str, Any]]:
+    """A stage's name and rule from the route's row at its position, while the row still is that stage (same kind of stage, made
+    before the round began: a route set again says nothing of an earlier round's names); None otherwise."""
+    row = f.route.get(p) if custom else None
+    if row is not None and routes.KIND_LABEL.get(row.kind) == label and f.route_was(row, rnd):
+        return {"name": row.name, "rule": row.rule, "min_count": row.min_count}
+    return None
 
 
 def _stages(f: _Facts, rnd: _Round, live: Optional[Dict[str, Any]]):
@@ -316,8 +342,8 @@ def _stages(f: _Facts, rnd: _Round, live: Optional[Dict[str, Any]]):
         cfg = None                                      # the stage's name and rule: the live route's, else the route's row while it is still that stage
         if vs is not None and custom:
             cfg = vs
-        elif vs is None and row is not None and routes.KIND_LABEL.get(row.kind) == label and f.route_was(row, rnd):
-            cfg = {"name": row.name, "rule": row.rule, "min_count": row.min_count}
+        elif vs is None:
+            cfg = _route_cfg(f, rnd, custom, p, label)
         rule = cfg["rule"] if cfg and cfg["rule"] in routes.RULES else "all"
         stage = {"position": len(stages) + 1, "label": label, "name": cfg["name"] if cfg else None, "rule": rule,
                  "min_count": cfg["min_count"] if cfg and rule == "at_least" else None}
@@ -326,7 +352,7 @@ def _stages(f: _Facts, rnd: _Round, live: Optional[Dict[str, Any]]):
             if q["state"] in _DECISION:                              # who has not signed: waiting, not yet asked, asked for changes, handed over
                 held = q["state"] == "changes_requested"
                 note = (_cut(q["comment"]) if held else f"Handed over to {q['delegated_to']}" if q["state"] == "delegated" and q["delegated_to"] else None)
-                people.append({"name": q["display"], "designation": f.designation(q["target_id"]) if q["target_type"] == "user" else None,
+                people.append({"name": q["display"] or NAMELESS, "designation": f.designation(q["target_id"]) if q["target_type"] == "user" else None,
                                "decision": _DECISION[q["state"]], "meaning": label, "signed_at": hold["requested_at"] if held and hold else None,
                                "comment": note, "on_behalf_of": None, "signature": None})
         state = "rejected" if rejected else _STAGE_STATUS.get(vs["status"], "pending") if vs is not None else "complete" if counted else "pending"
@@ -401,10 +427,38 @@ def _milestones(f: _Facts, rnd: _Round, number: str, stages: Sequence[Dict[str, 
 
 
 # ── the record ────────────────────────────────────────────────────────────────────
-def _summary(f: _Facts, number: str, counted_by, labels, approved_at, published_at) -> Dict[str, Any]:
+def _once(people: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The people of a list once each (a person who signed two stages of a kind is listed once), in the order they signed."""
+    seen, out = set(), []
+    for p in people:
+        if (p["name"], p.get("stage")) not in seen:
+            seen.add((p["name"], p.get("stage")))
+            out.append(p)
+    return out
+
+
+def _approval_row(f: _Facts, number: str, counted_by, labels, names, approved_at) -> Dict[str, Any]:
+    """One row of the approval history: who reviewed the version (the signers of its review, concurrence and recommendation stages)
+    and who approved it (the signers of its approval stages, each with the stage's name when the stage has one)."""
+    reviewed: List[Dict[str, Any]] = []
+    approved: List[Dict[str, Any]] = []
+    for p in sorted(counted_by):
+        stage = (names.get(p) or "").strip()
+        for s in counted_by[p]:
+            who = _person(f, s, labels.get(p, ""))
+            entry = {"name": who["name"], "designation": who["designation"]}
+            if labels.get(p) == "Approved by":
+                approved.append({**entry, "stage": stage if stage and stage not in routes.UNNAMED else None})      # only a name the route gave the stage
+            else:
+                reviewed.append(entry)
+    return {"version": number, "reviewed_by": _once(reviewed), "approved_by": _once(approved), "approval_date": _iso(approved_at)}
+
+
+def _summary(f: _Facts, number: str, counted_by, labels, names, approved_at, published_at) -> Dict[str, Any]:
     made = f.prepared(number)
     return {"version": number, "approved_at": _iso(approved_at), "published_at": _iso(published_at), "summary": made["summary"],
-            "prepared_by": made["name"], "approvers": _approvers(f, counted_by, labels)}
+            "prepared_by": made["name"], "approvers": _approvers(f, counted_by, labels),
+            "_approval": _approval_row(f, number, counted_by, labels, names, approved_at)}          # (moved out of the history rows by ``build``)
 
 
 def _reference(doc_id: int, number: str, body: Dict[str, Any]) -> str:
@@ -441,17 +495,74 @@ def _history(f: _Facts, number: str, own: Dict[str, Dict[str, Any]], skip: set, 
         if not any(counted_by.values()):
             continue
         labels = {p: _label(c, f.route.get(p) if custom else None, p) for p, c in counted_by.items()}
-        row = _summary(f, rnd.number or UNKNOWN, counted_by, labels, approved.performed_at, published.performed_at if published is not None else None)
+        names = {p: (_route_cfg(f, rnd, custom, p, labels[p]) or {}).get("name") for p in counted_by}
+        row = _summary(f, rnd.number or UNKNOWN, counted_by, labels, names, approved.performed_at, published.performed_at if published is not None else None)
         if rnd.number is None:
             loose.append(row)
         else:
             done[rnd.number] = row
     if loose:
+        merged = {"version": UNKNOWN, "reviewed_by": _once([x for r in loose for x in r["_approval"]["reviewed_by"]]),
+                  "approved_by": _once([x for r in loose for x in r["_approval"]["approved_by"]]),
+                  "approval_date": max(r["_approval"]["approval_date"] for r in loose)}
         done[UNKNOWN] = {"version": UNKNOWN, "approved_at": max(r["approved_at"] for r in loose),
                          "published_at": max((r["published_at"] for r in loose if r["published_at"]), default=None), "summary": None,
-                         "prepared_by": None, "approvers": sorted((a for r in loose for a in r["approvers"]), key=lambda a: a["signed_at"] or "")}
+                         "prepared_by": None, "approvers": sorted((a for r in loose for a in r["approvers"]), key=lambda a: a["signed_at"] or ""),
+                         "_approval": merged}
     done.update(own)
     return sorted(done.values(), key=lambda r: (r["approved_at"] or "", f.rank.get(r["version"], _FAR)), reverse=True)
+
+
+def _authority(stages: Sequence[Dict[str, Any]]) -> Optional[str]:
+    """Who approves it: the name of the last stage when it has one of its own (not the one its kind gives it), else the people asked at it."""
+    if not stages:
+        return None
+    last = stages[-1]
+    name = (last.get("name") or "").strip()
+    if name and name not in routes.UNNAMED:
+        return name
+    return ", ".join(dict.fromkeys(p["name"] for p in last["people"] if p["name"])) or None
+
+
+def _frequency(months: Optional[int]) -> Optional[str]:
+    if not months or months < 1:
+        return None
+    return "Every month" if months == 1 else f"Every {months} months"
+
+
+def _revisions(f: _Facts, number: str, released: Sequence[Tuple[str, Optional[str]]], working: bool) -> List[Dict[str, Any]]:
+    """The revision history, oldest first: a row for every version that completed approval (``released``: its number and the time it
+    was approved) and, when ``working`` and it is not one of them, one for the version being worked on (``released`` false: not
+    approved yet, dated by when it was made). A version's summary is its own followed by what the saves since the version released
+    before it said - every save is a version of its own, and they are not rows here - at most SAVES_LISTED of them, then how many
+    more there were. The first row is the creation."""
+    plan = list(released)
+    done = {v for v, _ in plan}
+    if working and number not in done:
+        plan.append((number, None))
+    out: List[Dict[str, Any]] = []
+    before_id, before = 0, None
+    for version, approved_at in plan:
+        known = version != UNKNOWN
+        row = f.row_of(version) if known else None
+        rid = f.rank.get(version) if known else None
+        made = f.prepared(version) if known else {"name": None, "at": None, "summary": None}
+        own = made["summary"] if row is not None and row.change_type != "baseline" else None
+        between = [] if rid is None else [v for v in f.versions if before_id < v.id < rid and v.version_number not in (version, before)
+                                          and v.change_type not in ("baseline", "signoff") and v.status != "reverted"]
+        said: List[str] = []
+        for v in between:
+            text = _cut(v.change_summary, SAVE_CHARS)
+            if text and text != own and text not in said:
+                said.append(text)
+        more = len(said) - SAVES_LISTED
+        summary = "; ".join(([own] if own else []) + said[:SAVES_LISTED] + ([f"and {more} more"] if more > 0 else []))
+        kind = ("Creation" if not out else "Major revision" if row is not None and row.change_type == "major" else "Minor revision" if known else "Revision")
+        out.append({"version": version, "date": approved_at or made["at"], "change_type": kind,
+                    "summary": summary or ("Initial version" if not out else None), "updated_by": made["name"], "released": version in done})
+        if rid is not None:
+            before_id, before = rid, version
+    return out
 
 
 def build(db, doc, *, version: Optional[str] = None, viewer=None) -> Dict[str, Any]:
@@ -499,8 +610,21 @@ def build(db, doc, *, version: Optional[str] = None, viewer=None) -> Dict[str, A
         row = next((v for v in f.versions if v.version_number == number), None)
         title = row.title if row is not None and row.title else doc.title
 
-    own = {number: _summary(f, number, counted_by, labels, approved_at, published_at)} if finished else {}
-    history = _history(f, number, own, {s.id for s in rnd.sigs}, None if newest else approved_at if finished else rnd.start)
+    names = {p: st["name"] for p, st in zip(order, stages)}
+    own = {number: _summary(f, number, counted_by, labels, names, approved_at, published_at)} if finished else {}
+    rows = _history(f, number, own, {s.id for s in rnd.sigs}, None if newest else approved_at if finished else rnd.start)
+    history = [{k: v for k, v in r.items() if k != "_approval"} for r in rows]                      # the approval history rides on the same rows
+    approval_history = [r["_approval"] for r in reversed(rows)]                                    # oldest first
+    released = [(r["version"], r["approved_at"]) for r in reversed(rows)]                          # the versions that completed approval, with when
+    approvals_at = [at for _v, at in released if at]
+    archived_done = newest and doc.status == "archived" and approved is not None and complete
+    own_approval = approved_at or (approved.performed_at if archived_done else None)
+    if number not in {v for v, _ in released} and (state in ("approved", "published") or archived_done):
+        # approved or published without a round that is complete (signed before signatures were kept, set by hand), or archived after
+        # its approval (``history`` says nothing of either, as it never did): the version was released all the same
+        released.append((number, _iso(own_approval or published_at)))
+        approval_history.append(_approval_row(f, number, counted_by, labels, names, own_approval))
+        approvals_at += [_iso(own_approval)] if own_approval else []
 
     # what the record cannot tie down, said plainly
     notes = []
@@ -538,5 +662,18 @@ def build(db, doc, *, version: Optional[str] = None, viewer=None) -> Dict[str, A
         "milestones": milestones,
         "history": history,
         "notes": notes,
+        # the document control pages (Document Description, Revision History, Approval History)
+        "control": {
+            "title": title, "code": doc.document_code, "version": number, "type": doc.doc_type,
+            "type_label": TYPE_LABEL.get(doc.doc_type) or (doc.doc_type or "").replace("_", " ").replace("-", " ").title() or None,
+            "classification": doc.classification, "owner": f.name(doc.owner_id), "department": department,
+            "ownership": " — ".join(x for x in (department, f.name(doc.owner_id)) if x) or None,
+            "approving_authority": _authority(stages), "date_of_approval": _iso(own_approval),
+            "date_of_implementation": _iso(doc.effective_date), "review_frequency": _frequency(doc.review_cycle_months),
+            "last_approval_date": max(approvals_at, default=None),
+            "next_review_date": _iso(doc.next_review_date), "status": STATE_LABEL.get(state, state),
+        },
+        "revision_history": _revisions(f, number, released, working=number == current),         # the version being worked on is the document's newest
+        "approval_history": approval_history,
     }
     return {"reference": _reference(doc.id, number, body), "generated_at": datetime.utcnow().replace(microsecond=0).isoformat(), **body}

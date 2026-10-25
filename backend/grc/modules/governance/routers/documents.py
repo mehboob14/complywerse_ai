@@ -2213,14 +2213,23 @@ def attach_file(db: Session, document: GovernanceDocument, current_user: GRCUser
     )
 
 
+PLAIN_FILE = {"X-Controlled-Copy": "false"}         # what download-file says of every answer that is not a controlled copy: the file as it is, or an error
+
+
 @router.get("/{document_id}/download-file", dependencies=[Depends(permissions.require_doc_reader)])
 def download_document_file(
     document_id: int,
     version_id: Optional[int] = None,
+    with_record: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Download the attached file for a governance document"""
+    """Download the attached file for a governance document.
+
+    ``with_record`` returns it as a controlled copy: a Word file or a PDF with the document control pages (Document Description,
+    Review and Approval, Revision and Approval History: approval_record.py) inside it, after its cover - the header
+    ``X-Controlled-Copy: true``. Any other file, or one that cannot be extended, comes as it is, and every other answer says
+    ``X-Controlled-Copy: false``. With ``version_id`` the pages are that version's. The stored file is never modified."""
     user_tenants = get_user_tenants(current_user, db)
     
     document = db.query(GovernanceDocument).filter(
@@ -2231,7 +2240,8 @@ def download_document_file(
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
+            detail="Document not found",
+            headers=PLAIN_FILE
         )
     in_force = permissions.version_for(db, current_user, document)      # someone who reads the version in force: its file
     
@@ -2244,32 +2254,46 @@ def download_document_file(
         if not version or (in_force is not None and version.id > in_force.id):     # never a newer version than the one in force
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Version not found"
+                detail="Version not found",
+                headers=PLAIN_FILE
             )
         
         if not version.file_path or not os.path.exists(version.file_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="File not found for this version"
+                detail="File not found for this version",
+                headers=PLAIN_FILE
             )
         
+        if with_record:
+            from .approval_record import download_with_record
+
+            return download_with_record(db, current_user, document, version, ALLOWED_FILE_TYPES, version=version.version_number,
+                                        fallback=f"document_{document_id}_v{version.version_number}")
         return FileResponse(
             path=version.file_path,
             filename=version.file_name or f"document_{document_id}_v{version.version_number}",
-            media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream")
+            media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream"),
+            headers=PLAIN_FILE
         )
     src = in_force or document
     
     if not src.file_path or not os.path.exists(src.file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file attached to this document"
+            detail="No file attached to this document",
+            headers=PLAIN_FILE
         )
     
+    if with_record:
+        from .approval_record import download_with_record
+
+        return download_with_record(db, current_user, document, src, ALLOWED_FILE_TYPES, fallback=f"document_{document_id}")
     return FileResponse(
         path=src.file_path,
         filename=src.file_name or f"document_{document_id}",
-        media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream")
+        media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream"),
+        headers=PLAIN_FILE
     )
 
 
@@ -2288,10 +2312,11 @@ def export_document(
     exporter) so that content-only / AI-drafted documents are downloadable
     too.
 
-    ``with_record`` adds the document's approval record (approval_record.py) after its own pages - a PDF, or a Word file - so what
-    compliance hands an auditor carries who approved it. A file of another kind is served unchanged with the header
-    ``X-Approval-Record: separate`` (its record is then a file of its own, ``/approval-record/export``). The stored file is never
-    modified. Without it, nothing is different.
+    ``with_record`` puts the document control pages (approval_record.py: Document Description, Review and Approval, Revision and
+    Approval History) in the document - a Word file or a PDF after its cover, a document the platform holds the text of at the places
+    of its own sections (controlled_copy.py) - so what compliance hands an auditor carries who approved it. A file of another kind is
+    served unchanged with the header ``X-Approval-Record: separate`` (its pages are then a file of their own,
+    ``/approval-record/export``). The stored file is never modified. Without it, nothing is different.
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -2323,17 +2348,21 @@ def export_document(
     if src.content:
         from grc.routers._artifact_export import build_export  # local import: heavy libs
         title = document.title or "document"
-        data, media_type, ext = build_export("pdf", title=title, content=src.content or "")
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())[:80] or "document"
-        headers = {"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+        merged = None
         if with_record:
             from .approval_record import pdf_with_record
 
-            merged = pdf_with_record(db, current_user, document, data)          # None: it could not be made, the PDF is served as it is
-            if merged is None:
+            # the PDF with the control pages in the places of its own sections; None: it could not be made, the PDF is served as it is
+            merged = pdf_with_record(db, current_user, document, src.content or "", title)
+        if merged is None:
+            data, media_type, ext = build_export("pdf", title=title, content=src.content or "")
+            headers = {"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+            if with_record:
                 headers["X-Approval-Record"] = "separate"
-            else:
-                data, headers = merged, {"Content-Disposition": f'attachment; filename="{safe_name}-with-approval-record.{ext}"'}
+        else:
+            data, media_type, ext = merged, "application/pdf", "pdf"
+            headers = {"Content-Disposition": f'attachment; filename="{safe_name}-with-approval-record.{ext}"'}
         return StreamingResponse(
             io.BytesIO(data),
             media_type=media_type,

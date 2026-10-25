@@ -29,6 +29,7 @@ KIND_LABEL = {"review": "Reviewed by", "concurrence": "Concurred by", "recommend
               "information": "For information"}
 KIND_NAME = {"review": "Review", "concurrence": "Concurrence", "recommendation": "Recommendation", "approval": "Approval",
              "information": "For information"}
+UNNAMED = set(KIND_NAME.values()) | set(KIND_LABEL.values())      # what a stage is called when nobody named it (``validate`` gives it its kind's name)
 VERB = {"review": "review", "concurrence": "concur with", "recommendation": "recommend", "approval": "approve"}
 DID = {"review": "reviewed", "concurrence": "concurred with", "recommendation": "recommended", "approval": "approved"}
 AGAIN = {"review": "Review again", "concurrence": "Concur again", "recommendation": "Recommend again", "approval": "Approve again"}
