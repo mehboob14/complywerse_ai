@@ -20,15 +20,13 @@ from docx.oxml.ns import nsdecls
 from lxml import etree
 
 import grc.models as m
-from grc.modules.governance import approval_record
 from grc.modules.governance import approval_record_export as X
 from grc.modules.governance import controlled_copy as C
 from grc.modules.governance.router import router
 
 from _docx_fixtures import corporate_policy, png as ink, tracked_policy
-from test_approval_record import (ADAM, DOCX_MEDIA, MINA, MO, OLIVIA, RAFAY, RANA, SMALL, TEXT, UMA, VERA, WHEN, approve_and_publish, ask_changes,  # noqa: F401
-                                  attach, doc, edit, finished, get, names, pdf_file, pdf_text, person, publish, record, reject, role, send, set_route,
-                                  sign, stage, usual, user)
+from test_approval_record import (ADAM, DOCX_MEDIA, MINA, MO, OLIVIA, RAFAY, RANA, SMALL, TEXT, UMA, VERA, approve_and_publish, attach, doc, edit,
+                                  finished, get, person, publish, record, reject, role, send, set_route, sign, stage, usual)
 from test_approval_record import _schema, _tenants, world  # noqa: F401  (the fixtures)
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
@@ -212,6 +210,20 @@ def test_an_ai_draft_with_placeholders_is_split_like_any_other_and_its_other_pla
     assert "[[Owner name and role]]" not in joined and "[[Name]]" not in joined and "[[Date]]" not in joined
     assert "# [[Document title]]" in joined and "[[Why the document exists, in two sentences.]]" in joined and "[[Term]]" in joined
     assert texts(segs)[-1].startswith("## 5. Definitions and Acronyms")
+
+
+def test_the_studios_own_templates_have_all_three_sections_and_each_gets_its_place_under_the_documents_heading():
+    from grc.modules.governance.studio import templates
+
+    for kind in templates.DOC_TYPES:
+        segs = C.segments(templates.builtin(kind)["content"])
+        assert [(s["slot"], s["heading"]) for s in segs if s["type"] == "slot"] == [("description", False), ("signoff", False), ("revision", False)], kind
+        joined = "".join(texts(segs))
+        assert "## 1. Document Description" in joined and "## 2. Approval Signoff" in joined, kind                       # the headings, and so the numbering, stay
+        assert "[[Owner name and role]]" not in joined and "______" not in joined and "[[Author]]" not in joined, kind     # the tables the platform keeps are gone
+    rec, images = fake(stages=1, per=1)
+    pages = pdf_pages(C.pdf(templates.builtin("policy")["content"], rec, images, title="Policy"))
+    assert "1. Document Description" in pages[page_of(pages, "Information Security — Olivia Owner")] and "2. Approval Signoff" in pages[page_of(pages, "STAGE 1")]
 
 
 def test_no_segment_is_empty_adjacent_texts_are_one_and_the_result_is_stable():
@@ -659,6 +671,19 @@ def test_a_cover_made_by_a_content_control_ends_with_its_own_page_break():
 
     data, k, block = placed(docx_of(build))
     assert k == 1 and has(block, "Document Description")                                   # after the control, never inside it
+
+
+def test_a_line_or_column_break_and_a_page_break_before_that_is_switched_off_are_not_boundaries():
+    def build(d):
+        p = d.add_paragraph("Cover")
+        p.add_run().add_break(WD_BREAK.LINE)
+        p.add_run().add_break(WD_BREAK.COLUMN)
+        d.add_heading("1. Purpose", 1).paragraph_format.page_break_before = False             # written as pageBreakBefore val="0"
+        content(d)
+
+    original = docx_of(build)
+    assert 'w:pageBreakBefore w:val="0"' in zipfile.ZipFile(io.BytesIO(original)).read("word/document.xml").decode()
+    assert placed(original)[1] == len(children(original))                                    # none: the pages go at the end
 
 
 def test_a_page_break_in_the_middle_of_a_line_of_text_is_not_a_boundary():
