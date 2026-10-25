@@ -30,6 +30,8 @@ const DOC_FONT: CSSProperties = { fontFamily: '"Times New Roman", Tinos, "Libera
 const CELL = '!border !border-solid !border-[#000] !px-2 !py-1 align-top !text-[13px] !leading-snug !text-[#000]';
 const TH = `${CELL} !bg-transparent !text-left !font-bold`;
 const TD = `${CELL} font-normal break-words`;
+// (the dashboard stripes every other row of a table grey; a page of a document is plain)
+const ROW = '!bg-transparent print:break-inside-avoid';
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 
 const UNAVAILABLE = 'The document control pages are not available right now.';
@@ -72,7 +74,7 @@ function Description({ record, heading }: SectionProps) {
           <table aria-label="Document description" className="w-full border-collapse">
             <tbody>
               {rows.map((r) => (
-                <tr key={r.label} className="print:break-inside-avoid">
+                <tr key={r.label} className={ROW}>
                   <th scope="row" className={`${TH} w-[34%]`}>{r.label}</th>
                   <td className={TD}>{r.value}</td>
                 </tr>
@@ -222,7 +224,7 @@ function Revision({ record, heading }: SectionProps) {
       ) : (
         <Table label="Revision history" head={['Version', 'Date', 'Change type', 'Summary of change', 'Updated by']}>
           {revisions.map((r, i) => (
-            <tr key={`${r.version}-${i}`} className="print:break-inside-avoid">
+            <tr key={`${r.version}-${i}`} className={ROW}>
               <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>
                 {r.version}
                 {r.mark && <span className="block text-[11px] italic">{r.mark}</span>}
@@ -241,7 +243,7 @@ function Revision({ record, heading }: SectionProps) {
       ) : (
         <Table label="Approval history" head={['Version', 'Reviewed by', 'Approved by', 'Approval date']}>
           {approvals.map((a, i) => (
-            <tr key={`${a.version}-${i}`} className="print:break-inside-avoid">
+            <tr key={`${a.version}-${i}`} className={ROW}>
               <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.version}</td>
               <td className={TD}><Lines lines={a.reviewers} /></td>
               <td className={TD}><Lines lines={a.approvers} /></td>
