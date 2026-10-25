@@ -188,9 +188,35 @@ STATES = {"published", "approved", "in_approval", "in_review", "draft", "archive
 
 def check_contract(rec):
     """The JSON the screens code against: exactly these fields, and only these values where the values are a closed set."""
-    assert list(rec) == ["reference", "generated_at", "document", "state", "round", "prepared_by", "stages", "milestones", "history", "notes"]
+    assert list(rec) == ["reference", "generated_at", "document", "state", "round", "prepared_by", "stages", "milestones", "history", "notes",
+                         "control", "revision_history", "approval_history"]
     assert set(rec["document"]) == {"id", "code", "title", "type", "classification", "version", "status", "department", "owner", "author",
                                     "effective_date", "next_review_date", "approved_at", "published_at", "published_by"}
+    assert set(rec["control"]) == {"title", "code", "version", "type", "type_label", "classification", "owner", "department", "ownership",
+                                   "approving_authority", "date_of_approval", "date_of_implementation", "review_frequency",
+                                   "last_approval_date", "next_review_date", "status"}
+    control = rec["control"]
+    assert control["title"] == rec["document"]["title"] and control["version"] == rec["document"]["version"]
+    assert control["date_of_approval"] == rec["document"]["approved_at"] or rec["state"] == "archived"       # (an archived document keeps the date of its approval)
+    assert control["next_review_date"] == rec["document"]["next_review_date"]
+    assert control["status"] in {"Published", "Approved, not published", "In approval", "In review", "Draft", "Archived"}      # words, never an id
+    assert control["type_label"] is None or control["type_label"][:1].isupper()
+    iso = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$")                                                        # naive UTC: no Z, no offset
+    rows = rec["revision_history"]
+    for r in rows:
+        assert set(r) == {"version", "date", "change_type", "summary", "updated_by", "released"} and isinstance(r["released"], bool)
+        assert r["change_type"] in {"Creation", "Major revision", "Minor revision", "Revision"} and (r["date"] is None or iso.match(r["date"]))
+    assert all(r["released"] for r in rows[:-1]) and (not rows or rows[-1]["released"] or rows[-1]["version"] == rec["document"]["version"])    # not released: only the one worked on
+    assert [r["change_type"] for r in rows][:1] in (["Creation"], [])
+    assert {h["version"] for h in rec["history"]} <= {r["version"] for r in rows if r["released"]}
+    assert [a["version"] for a in rec["approval_history"]] == [r["version"] for r in rows if r["released"]]              # one for each released version, in the same order
+    for a in rec["approval_history"]:
+        assert set(a) == {"version", "reviewed_by", "approved_by", "approval_date"} and (a["approval_date"] is None or iso.match(a["approval_date"]))
+        assert all(set(x) == {"name", "designation"} and x["name"] for x in a["reviewed_by"])
+        assert all(set(x) == {"name", "designation", "stage"} and x["name"] and x["stage"] not in ("Approval", "Approved by", "Review", "Reviewed by")
+                   for x in a["approved_by"])                                                                                  # a stage is named by its route, never by its label
+    for s in rec["stages"]:
+        assert all(isinstance(p["name"], str) and p["name"] for p in s["people"])                                           # nobody is listed without a name
     assert set(rec["round"]) == {"version", "started_at", "completed_at", "complete"} and set(rec["prepared_by"]) == {"name", "designation", "at"}
     assert rec["state"] in STATES and isinstance(rec["round"]["complete"], bool) and all(isinstance(n, str) for n in rec["notes"])
     assert [s["position"] for s in rec["stages"]] == list(range(1, len(rec["stages"]) + 1)) and len(rec["stages"]) <= routes.MAX_STAGES
@@ -413,7 +439,7 @@ def test_twelve_stages_all_render_in_order(world):
     assert [names(s) for s in rec["stages"]] == [[user(world, crew[i % 4]).display_name] for i in range(11)] + [["Mina Manager"]]
     assert rec["round"]["complete"] is True and events(rec).count("Stage complete") == 12 and len(rec["history"][0]["approvers"]) == 1
     pdf, pages = pdf_text(X.to_pdf(rec, {}))
-    assert "12. Approved by - Final approval" in pdf and "1. Reviewed by - Stage 1" in pdf and pages >= 2
+    assert "STAGE 12 — APPROVED BY · Final approval" in pdf and "STAGE 1 — REVIEWED BY · Stage 1" in pdf and pages >= 2
 
 
 def test_people_who_have_not_signed_are_pending_with_a_group_as_one_entry(world):
@@ -662,7 +688,9 @@ def test_a_reader_who_may_not_see_drafts_gets_the_version_in_force_and_nothing_a
     assert rec["document"]["version"] == "1.0" and rec["document"]["status"] == "published" and rec["state"] == "published"
     assert rec["round"]["version"] == "1.0" and rec["round"]["complete"] is True
     assert [names(s) for s in rec["stages"]] == [["Rana Reviewer"], ["Mina Manager"]] and [h["version"] for h in rec["history"]] == ["1.0"]
-    assert not any(n in vera.text for n in ("Rafay", "Mo Manager", "in_review", "pending_review", "1.1", "Temporary staff"))
+    assert not any(n in vera.text for n in ("Rafay", "Mo Manager", "in_review", "pending_review", "Temporary staff"))
+    assert not re.search(r"(?<![\d.])1\.1(?!\d)", vera.text)                  # no version 1.1 (not "41.1" in a time's fraction of a second)
+    assert [r["version"] for r in rec["revision_history"]] == ["1.0"] and rec["control"]["version"] == "1.0" and rec["control"]["status"] == "Published"
     assert get(world, "/approval-record", who=VERA, version="1.1").status_code == 404           # nor a newer version by number
     assert get(world, "/approval-record/export", who=VERA, version="1.1").status_code == 404
     assert get(world, "/approval-record", who=VERA, version="1.0").status_code == 200
@@ -779,36 +807,41 @@ def finished(world):
     return record(world)
 
 
-def test_the_record_as_a_pdf_names_everyone_with_date_time_and_meaning_and_carries_the_signatures(world):
+def test_the_control_pages_as_a_pdf_name_everyone_with_date_time_and_meaning_and_carry_the_signatures(world):
     rec = finished(world)
     r = get(world, "/approval-record/export")
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
     assert r.headers["content-disposition"] == 'attachment; filename="POL-005-approval-record.pdf"'
     text, pages = pdf_text(r.content)
-    for needle in ("Approval record", "Access policy", "POL-005", "Rana Reviewer", "Compliance Manager", "Rafay Reviewer", "Mina Manager", "CISO",
-                   "Reviewed by", "Approved by", "Signed", rec["reference"], "Initial version", "Olivia Owner", "Adam Admin"):
+    for needle in ("Document Description", "Review and Approval", "Revision History", "Approval History", "Access policy", "POL-005",
+                   "Rana Reviewer", "Compliance Manager", "Rafay Reviewer", "Mina Manager", "CISO", "STAGE 1 — REVIEWED BY", "STAGE 2 — APPROVED BY",
+                   "Complete · 2 of 2 signed", "Signed", rec["reference"], "Initial version", "Olivia Owner", "PREPARED BY"):
         assert needle in text, needle
-    assert re.search(r"Page 1 of %d" % pages, text) and WHEN.search(text)
+    assert re.search(r"Document control page 1 of %d" % pages, text) and WHEN.search(text)
+    assert "generated by the platform" in text and "· Document control ·" in text                              # the foot says what the pages are
     assert rec["stages"][0]["people"][0]["signed_at"][:16].replace("T", " ") + " UTC" in text                  # date AND time of the signature
     with fitz.open(stream=r.content, filetype="pdf") as pdf:
         assert abs(pdf[0].rect.width - 595) < 2 and abs(pdf[0].rect.height - 842) < 2                          # A4
         assert sum(len(page.get_image_info()) for page in pdf) == 3                                            # the three drawn signatures
 
 
-def test_the_record_as_a_word_file_has_the_heading_the_tables_and_the_signatures_as_pictures(world):
+def test_the_control_pages_as_a_word_file_have_the_four_sections_the_grids_and_the_signatures_as_pictures(world):
     rec = finished(world)
     r = get(world, "/approval-record/export", format="docx")
     assert r.status_code == 200 and r.headers["content-type"] == DOCX_MEDIA
     assert r.headers["content-disposition"] == 'attachment; filename="POL-005-approval-record.docx"'
     word = Document(io.BytesIO(r.content))
-    assert [(p.style.name, p.text) for p in word.paragraphs if p.text == "Approval record"] == [("Title", "Approval record")]
+    paragraphs = [p.text for p in word.paragraphs]
+    assert [t for t in paragraphs if t in ("Document Description", "Review and Approval", "Revision History", "Approval History")] == [
+        "Document Description", "Review and Approval", "Revision History", "Approval History"]
+    assert all(p.style.name == "Normal" for p in word.paragraphs if p.text == "Review and Approval")           # never a Heading style: it could be numbered
     cells = "\n".join(c.text for t in word.tables for row in t.rows for c in row.cells)
-    for needle in ("Rana Reviewer", "Compliance Manager", "Rafay Reviewer", "Mina Manager", "Reviewed by", "Approved by", "Signed", "Initial version"):
+    for needle in ("Rana Reviewer", "Compliance Manager", "Rafay Reviewer", "Mina Manager", "STAGE 1 — REVIEWED BY", "STAGE 2 — APPROVED BY", "Signed",
+                   "Initial version", "Access policy", "POL-005", "PREPARED BY"):
         assert needle in cells, needle
-    assert WHEN.search(cells) and rec["reference"] in "\n".join(p.text for p in word.paragraphs)
-    assert len(word.inline_shapes) == 3 and "Drawn e-signature, seal" in cells
+    assert WHEN.search(cells) and len(word.inline_shapes) == 3 and "Drawn e-signature · seal" in cells
     footer = word.sections[0].footer.paragraphs[0]
-    assert rec["reference"] in footer.text and "Page" in footer.text
+    assert rec["reference"] in footer.text and "Document control page" in footer.text and "generated by the platform" in footer.text
     assert abs(word.sections[0].page_width.cm - 21.0) < 0.01 and abs(word.sections[0].page_height.cm - 29.7) < 0.01       # A4
     assert get(world, "/approval-record/export", format="odt").status_code == 400
 
@@ -824,13 +857,13 @@ def test_the_pdf_of_an_older_version_names_the_signers_of_that_version(world):
     new, _ = pdf_text(get(world, "/approval-record/export", format="pdf").content)
     newest, _ = pdf_text(get(world, "/approval-record/export", format="pdf", version="1.1").content)
     assert "Rana Reviewer" in old and "Mina Manager" in old and "Rafay Reviewer" not in old and "Mo Manager" not in old and "DAR-5-1.0-" in old
-    assert "Rafay Reviewer" in new and "Mo Manager" in new and "Rana Reviewer" not in new.split("Approved versions")[0] and "DAR-5-1.1-" in new
+    assert "Rafay Reviewer" in new and "Mo Manager" in new and "Rana Reviewer" not in new.split("Approval History")[0] and "DAR-5-1.1-" in new
     assert newest.replace(" ", "") != "" and "DAR-5-1.1-" in newest
     docx = Document(io.BytesIO(get(world, "/approval-record/export", format="docx", version="1.0").content))
     assert "Rana Reviewer" in "\n".join(c.text for t in docx.tables for row in t.rows for c in row.cells)
 
 
-def test_a_content_only_document_exported_with_its_record_has_its_own_pages_then_the_record(world, monkeypatch):
+def test_a_content_only_document_exported_with_its_record_has_the_control_pages_where_its_own_sections_would_be(world, monkeypatch):
     from reportlab import rl_config
 
     monkeypatch.setattr(rl_config, "invariant", 1)                           # the same input, the same bytes
@@ -845,14 +878,15 @@ def test_a_content_only_document_exported_with_its_record_has_its_own_pages_then
     combined = get(world, "/export", with_record="true")
     assert combined.status_code == 200 and combined.headers["content-type"] == "application/pdf"
     assert combined.headers["content-disposition"] == 'attachment; filename="Access_policy-with-approval-record.pdf"'
-    own, own_pages = pdf_text(today)
     text, pages = pdf_text(combined.content)
-    assert pages > own_pages and text.startswith(own[:200])
-    assert re.search(r"Approval record page 1 of %d\b" % (pages - own_pages), text)                        # the record's own page count, said as the record's
-    for needle in ("Approval record", "Rana Reviewer", "Rafay Reviewer", "Mina Manager", rec["reference"], "Purpose"):
+    assert pages > pdf_text(today)[1]
+    for needle in ("Document Description", "Review and Approval", "Revision History", "Rana Reviewer", "Rafay Reviewer", "Mina Manager", rec["reference"], "Purpose"):
         assert needle in text, needle
+    # the document has none of the sections: the pages come in after its title, before its first section
+    assert text.index("Access policy") < text.index("Document Description") < text.index("Review and Approval") < text.index("1. Purpose")
     with fitz.open(stream=combined.content, filetype="pdf") as pdf:
-        assert "Approval record" not in pdf[0].get_text() and "Approval record" in pdf[own_pages].get_text()
+        counted = [page.get_text() for page in pdf if "Document control page" in page.get_text()]
+        assert len(counted) >= 2 and all(f"of {len(counted)}" in t for t in counted)                                   # they count only themselves
 
 
 def attach(world, name, data, kind):
@@ -890,11 +924,11 @@ def test_an_uploaded_word_file_exported_with_its_record_keeps_its_own_content_an
     word = Document(io.BytesIO(r.content))
     paragraphs = [p.text for p in word.paragraphs]
     assert paragraphs[:3] == ["Access policy", "Access is reviewed every quarter.", "Leavers lose access the same day."]
-    assert "Approval record" in paragraphs and paragraphs.index("Approval record") > 3
+    assert "Document Description" in paragraphs and paragraphs.index("Document Description") > 3               # no cover (no page boundary): after its content
     cells = "\n".join(c.text for t in word.tables[1:] for row in t.rows for c in row.cells)
     assert word.tables[0].cell(0, 0).text == "Control" and "Rana Reviewer" in cells and "Mina Manager" in cells and WHEN.search(cells)
     assert len(word.inline_shapes) == 3 and rec["reference"] in "\n".join(paragraphs)
-    assert any('w:br w:type="page"' in p._p.xml for p in word.paragraphs)                                              # the record starts on a new page
+    assert any('w:br w:type="page"' in p._p.xml for p in word.paragraphs)                                              # the pages start on a new page
 
 
 def test_a_real_corporate_word_file_and_one_with_tracked_changes_keep_every_part_of_their_own(world):
@@ -920,13 +954,13 @@ def test_a_real_corporate_word_file_and_one_with_tracked_changes_keep_every_part
         w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
         kept_before = [etree.tostring(c) for c in before if c.tag != w + "sectPr"]
         assert [etree.tostring(c) for c in after[:len(kept_before)]] == kept_before, build.__name__          # its own content, untouched
-        assert after[-1].tag == w + "sectPr" and len(after) > len(before)                                    # the record came in before the section settings
+        assert after[-1].tag == w + "sectPr" and len(after) > len(before)                                    # no cover: the pages came in before the section settings
         names_before, names_after = set(parts(original).namelist()), set(parts(r.content).namelist())
         assert names_before <= names_after, build.__name__                                                  # no part of the file was dropped
         for part in sorted(n for n in names_before if n.startswith("word/header") or n.startswith("word/footer")):
             assert parts(r.content).read(part) == parts(original).read(part), part
         word = Document(io.BytesIO(r.content))
-        assert any(p.text == "Approval record" for p in word.paragraphs) and rec["reference"] in "\n".join(p.text for p in word.paragraphs)
+        assert any(p.text == "Document Description" for p in word.paragraphs) and rec["reference"] in "\n".join(p.text for p in word.paragraphs)
         assert len(word.inline_shapes) >= 3
     xml = parts(r.content).read("word/document.xml").decode()
     assert xml.count("<w:ins ") >= 2 and xml.count("<w:del ") >= 2 and "rPrChange" in xml                       # the reviewer's changes are still tracked
@@ -946,7 +980,7 @@ def test_a_word_file_without_the_usual_styles_still_gets_its_record(world):
     r = get(world, "/export", with_record="true")
     assert r.status_code == 200 and "x-approval-record" not in r.headers
     word = Document(io.BytesIO(r.content))
-    assert any(p.text == "Approval record" for p in word.paragraphs) and "Rana Reviewer" in "\n".join(c.text for t in word.tables for row in t.rows for c in row.cells)
+    assert any(p.text == "Document Description" for p in word.paragraphs) and "Rana Reviewer" in "\n".join(c.text for t in word.tables for row in t.rows for c in row.cells)
 
 
 def pdf_file(*pages):
@@ -958,9 +992,9 @@ def pdf_file(*pages):
     return data
 
 
-def test_an_uploaded_pdf_exported_with_its_record_keeps_its_pages_and_gains_the_record_pages(world):
+def test_an_uploaded_pdf_exported_with_its_record_keeps_its_pages_and_gains_the_control_pages_after_its_cover(world):
     rec = finished(world)
-    original = pdf_file("Original page one", "Original page two")
+    original = pdf_file("Original page one", "Original page two")                      # page 1 has hardly any text: a cover
     path = attach(world, "Access policy.pdf", original, "pdf")
     assert get(world, "/export").content == original
     r = get(world, "/export", with_record="true")
@@ -968,10 +1002,11 @@ def test_an_uploaded_pdf_exported_with_its_record_keeps_its_pages_and_gains_the_
     assert r.headers["content-disposition"] == 'attachment; filename="Access policy-with-approval-record.pdf"'
     assert path.read_bytes() == original
     text, pages = pdf_text(r.content)
-    assert pages > 2 and text.startswith("Original page one") and "Original page two" in text
-    assert re.search(r"Approval record page 1 of %d\b" % (pages - 2), text)
+    assert pages > 2 and text.startswith("Original page one") and text.rstrip().endswith("Original page two")
     with fitz.open(stream=r.content, filetype="pdf") as pdf:
-        assert "Original page one" in pdf[0].get_text() and "Approval record" not in pdf[1].get_text() and "Approval record" in pdf[2].get_text()
+        assert "Original page one" in pdf[0].get_text() and "Document Description" in pdf[1].get_text() and "Original page two" in pdf[pages - 1].get_text()
+        assert [p for p in range(pages) if "Document control page" in pdf[p].get_text()] == list(range(1, pages - 1))
+    assert re.search(r"Document control page 1 of %d\b" % (pages - 2), text)
     for needle in ("Rana Reviewer", "Rafay Reviewer", "Mina Manager", rec["reference"]):
         assert needle in text, needle
 
@@ -1084,10 +1119,10 @@ def test_every_time_in_the_files_is_a_date_with_a_time_and_utc_and_the_formatter
     assert X.when("2026-10-21T10:15:30.123456") == "2026-10-21 10:15 UTC" and X.when(None) == "-" and X.when("not a date") == "not a date"
     assert X.day("2026-10-21T00:00:00") == "2026-10-21" and X.day(None) == "-"
     assert X.rule_text({"rule": "at_least", "min_count": 2}) == "at least 2 sign" and X.rule_text({"rule": "any", "min_count": None}) == "any one signs"
-    assert X.stage_title({"position": 2, "label": "Approved by", "name": "Board approval"}) == "2. Approved by - Board approval"
-    assert X.stage_title({"position": 1, "label": "Reviewed by", "name": None}) == "1. Reviewed by"
+    assert X.stage_title({"position": 2, "label": "Approved by", "name": "Board approval"}) == "STAGE 2 — APPROVED BY · Board approval"
+    assert X.stage_title({"position": 1, "label": "Reviewed by", "name": None}) == "STAGE 1 — REVIEWED BY"
     assert X.fit(b"not a picture") is None
     rec = finished(world)
     text, _ = pdf_text(X.to_pdf(rec, {}))
-    assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}", text) and len(WHEN.findall(text)) >= 8
+    assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}", text) and len(WHEN.findall(text)) >= 5
     assert "Drawn e-signature" in text                                         # the seal is printed even when a picture is not available
