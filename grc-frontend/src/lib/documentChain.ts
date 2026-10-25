@@ -4,6 +4,7 @@
  * whole chain as Excel / PDF / CSV. Backend: governance/change_chain.py, routers/change_chain.py.
  */
 import apiClient from '@/lib/api';
+import { controlledCopy } from '@/lib/controlPages';
 
 export interface ChainSource {
   ref: string;
@@ -219,10 +220,16 @@ export const documentChainApi = {
     id: number; document_id: number; version_number: string; status: string; content: string | null; has_file: boolean; file_name: string | null;
     file_type: string | null;
   },
-  /** the file of one version (the original upload, or a later file), named with its version: "policy v1.0.docx" */
-  versionFile: async (id: number, versionId: number, name: string, number: string): Promise<{ blob: Blob; filename: string }> => {
-    const res = await apiClient.get(`/governance/documents/${id}/download-file`, { params: { version_id: versionId }, responseType: 'blob' });
+  /** the file of one version (the original upload, or a later file), named with its version: "policy v1.0.docx".
+   *  `withRecord`: with the document control pages inserted after the cover; `controlled` says whether the server could (null: it did not say). */
+  versionFile: async (id: number, versionId: number, name: string, number: string, opts?: { withRecord?: boolean }): Promise<{ blob: Blob; filename: string; controlled: boolean | null }> => {
+    const res = await apiClient.get(`/governance/documents/${id}/download-file`, {
+      params: { version_id: versionId, ...(opts?.withRecord ? { with_record: true } : {}) }, responseType: 'blob',
+    });
     const dot = name.lastIndexOf('.');
-    return { blob: res.data as Blob, filename: dot > 0 ? `${name.slice(0, dot)} v${number}${name.slice(dot)}` : `${name || 'document'} v${number}` };
+    return {
+      blob: res.data as Blob, controlled: controlledCopy(res.headers),
+      filename: dot > 0 ? `${name.slice(0, dot)} v${number}${name.slice(dot)}` : `${name || 'document'} v${number}`,
+    };
   },
 };

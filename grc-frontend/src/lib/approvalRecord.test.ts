@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  NONE, countedPeople, decisionLabel, decisionTone, exportReply, formatDateTime, formatDay, isMissingRoute, isWaiting, milestoneTone, noStagesLine, onBehalfLine,
-  recordFileName, recordKey, roundLine, ruleLine, stageHeading, stageStatusLabel, stageSummary, stageTone, stateLabel, stateTone, statusLabel, typeLabel,
+  NONE, countedPeople, decisionLabel, exportReply, formatDateTime, formatDay, headerOf, noStagesLine, onBehalfLine,
+  recordFileName, roundLine, ruleLine, stageStatusLabel, stageSummary, statusLabel, typeLabel,
   type RecordPerson, type RecordStage,
 } from './approvalRecord.ts';
 
@@ -19,31 +19,25 @@ const stage = (people: RecordPerson[], extra: Partial<RecordStage> = {}): Record
 // the reader is in Karachi and reads English (British); the tests say so, they do not depend on this machine
 const KHI = { locale: 'en-GB', timeZone: 'Asia/Karachi' };
 
-test('every state of a document has its words and its tone, and an unknown one is still readable', () => {
-  assert.deepEqual(
-    (['published', 'approved', 'in_approval', 'in_review', 'draft', 'archived'] as const).map((s) => [stateLabel(s), stateTone(s)]),
-    [['Published', 'good'], ['Approved', 'good'], ['Awaiting approval', 'warn'], ['In review', 'warn'], ['Draft', 'neutral'], ['Archived', 'neutral']],
-  );
-  assert.equal(stateLabel('on_hold'), 'On hold');
-  assert.equal(stateTone('on_hold'), 'neutral');
-  assert.equal(stateLabel(null), NONE);
-  // the document's own status and type, as the rest of the page says them
+test('the document\'s own status and type are said as the rest of the page says them, and an unknown one is still readable', () => {
   assert.equal(statusLabel('pending_review'), 'In review');
   assert.equal(statusLabel('pending_approval'), 'Awaiting approval');
+  assert.equal(statusLabel('published'), 'Published');
   assert.equal(statusLabel('exception_applied'), 'Exception applied');
   assert.equal(statusLabel(null), NONE);
   assert.equal(typeLabel('policy'), 'Policy');
+  assert.equal(typeLabel('change_type'), 'Change type');
   assert.equal(typeLabel(undefined), NONE);
 });
 
-test('someone who has not signed yet is Waiting, and a decision is never told by colour alone', () => {
+test('someone who has not signed yet is Waiting, and a decision is always said in words', () => {
   assert.deepEqual(
-    (['signed', 'pending', 'changes_requested', 'rejected', 'delegated'] as const).map((d) => [decisionLabel(d), decisionTone(d)]),
-    [['Signed', 'good'], ['Waiting', 'warn'], ['Asked for changes', 'warn'], ['Rejected', 'bad'], ['Delegated', 'neutral']],
+    (['signed', 'pending', 'changes_requested', 'rejected', 'delegated'] as const).map((d) => decisionLabel(d)),
+    ['Signed', 'Waiting', 'Asked for changes', 'Rejected', 'Delegated'],
   );
   assert.deepEqual(
-    (['complete', 'pending', 'changes_requested', 'rejected'] as const).map((s) => [stageStatusLabel(s), stageTone(s)]),
-    [['Complete', 'good'], ['Pending', 'warn'], ['Changes requested', 'warn'], ['Rejected', 'bad']],
+    (['complete', 'pending', 'changes_requested', 'rejected'] as const).map((s) => stageStatusLabel(s)),
+    ['Complete', 'Pending', 'Changes requested', 'Rejected'],
   );
   assert.equal(decisionLabel('mystery'), 'Mystery');
 });
@@ -52,12 +46,7 @@ test('in a stage that is complete without them, the others who were asked are no
   assert.equal(decisionLabel('pending', 'pending'), 'Waiting');
   assert.equal(decisionLabel('pending', 'changes_requested'), 'Waiting');          // held until the author resubmits: they are still to sign
   assert.equal(decisionLabel('pending', 'complete'), 'Not needed');
-  assert.equal(decisionTone('pending', 'complete'), 'neutral');
   assert.equal(decisionLabel('signed', 'complete'), 'Signed');
-  assert.equal(isWaiting('pending', 'pending'), true);
-  assert.equal(isWaiting('pending'), true);
-  assert.equal(isWaiting('pending', 'complete'), false);
-  assert.equal(isWaiting('signed', 'pending'), false);
 });
 
 test('a stage says how many signed, and what it needs when that is not everyone', () => {
@@ -87,24 +76,10 @@ test('someone who handed the step to a delegate is not counted twice', () => {
   assert.deepEqual(countedPeople(undefined), []);
 });
 
-test('a stage is headed by what its people did and, when the route named it, by its name', () => {
-  assert.equal(stageHeading({ label: 'Reviewed by', name: null }), 'Reviewed by');
-  assert.equal(stageHeading({ label: 'Approved by', name: 'Board' }), 'Approved by: Board');
-  assert.equal(stageHeading({ label: '', name: null }), 'Stage');
-});
-
 test('nobody asked yet: a draft says it was not sent, and the other states say there is nothing recorded', () => {
   assert.equal(noStagesLine('draft'), 'Not yet sent for review.');
   assert.equal(noStagesLine('archived'), 'No review or approval was recorded for this version.');
   assert.equal(noStagesLine('in_review'), 'No review or approval stages are recorded for this version.');
-});
-
-test('the workflow marks what went well, what is asked again and what was refused', () => {
-  assert.deepEqual(
-    ['Prepared', 'Sent for review', 'Stage complete', 'Changes requested', 'Resubmitted', 'Rejected', 'Approved', 'Published', 'Archived'].map(milestoneTone),
-    ['neutral', 'neutral', 'good', 'warn', 'warn', 'bad', 'good', 'good', 'neutral'],
-  );
-  assert.equal(milestoneTone('Something new'), 'neutral');
 });
 
 test('a moment is read as UTC, shown in the reader\'s zone with the zone named', () => {
@@ -154,17 +129,10 @@ test('the record\'s own file is named for the document and its version, in lette
   assert.equal(recordFileName(undefined), 'Document - approval record.pdf');
 });
 
-test('a server without the record is told from one that refuses or lacks the document', () => {
-  assert.equal(isMissingRoute({ response: { status: 404, data: { detail: 'Not Found' } } }), true);
-  assert.equal(isMissingRoute({ response: { status: 404 } }), true);
-  assert.equal(isMissingRoute({ response: { status: 404, data: { detail: 'Version 9.9 of this document was not found.' } } }), false);
-  assert.equal(isMissingRoute({ response: { status: 403, data: { detail: 'Not allowed' } } }), false);
-  assert.equal(isMissingRoute(new Error('network')), false);
-  assert.equal(isMissingRoute(null), false);
-});
-
-test('the record is refreshed by every refresh of its document, and each version has its own', () => {
-  assert.deepEqual(recordKey(5), ['governance-document', 5, 'approval-record', 'current']);
-  assert.deepEqual(recordKey(5, '1.1'), ['governance-document', 5, 'approval-record', '1.1']);
-  assert.deepEqual(recordKey(5, null).slice(0, 2), ['governance-document', 5]);              // invalidateQueries(['governance-document', 5]) reaches it
+test('a response header is found whatever its case, and no headers at all is no header', () => {
+  assert.equal(headerOf({ 'X-Controlled-Copy': 'true' }, 'x-controlled-copy'), 'true');
+  assert.equal(headerOf({ 'x-controlled-copy': 'false' }, 'x-controlled-copy'), 'false');
+  assert.equal(headerOf({}, 'x-controlled-copy'), '');
+  assert.equal(headerOf(undefined, 'x-controlled-copy'), '');
+  assert.equal(headerOf(null, 'x-controlled-copy'), '');
 });

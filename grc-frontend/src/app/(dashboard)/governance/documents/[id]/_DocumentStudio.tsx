@@ -59,7 +59,7 @@ const ITEM = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left 
 const ITEM_DANGER = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#9b1c1c] hover:bg-[#fdf2f2] disabled:opacity-50';
 
 /** A small menu: a button, a list under it; closes on a choice, a click outside or Escape. */
-function Menu({ label, icon, children, align = 'right', title }: { label?: string; icon: React.ReactNode; children: (close: () => void) => React.ReactNode; align?: 'left' | 'right'; title: string }) {
+function Menu({ label, icon, children, align = 'right', title, width = 'w-64' }: { label?: string; icon: React.ReactNode; children: (close: () => void) => React.ReactNode; align?: 'left' | 'right'; title: string; width?: string }) {
   const [open, setOpenState] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -83,7 +83,7 @@ function Menu({ label, icon, children, align = 'right', title }: { label?: strin
         {icon}{label && <span className="hidden xl:inline">{label}</span>}{label && <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
       </button>
       {open && (
-        <div role="menu" className={`absolute top-full z-50 mt-1 w-64 rounded-xl border border-[#d5dbe1] bg-white p-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
+        <div role="menu" className={`absolute top-full z-50 mt-1 ${width} max-w-[calc(100vw-1.5rem)] rounded-xl border border-[#d5dbe1] bg-white p-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
           {children(() => setOpen(false))}
         </div>
       )}
@@ -99,7 +99,7 @@ export default function DocumentStudio() {
   const search = useSearchParams();
   const qc = useQueryClient();
   const { toast } = useToast();
-  // the view's scroll box: the approval record's link to the Change log starts that view at its top, not where the record was
+  // the view's scroll box: the link to the Change log under the document starts that view at its top, not where the link was
   const scroller = useRef<HTMLDivElement>(null);
 
   const [view, setViewState] = useState<DocView>(() => viewOf(search?.get('tab')));
@@ -346,6 +346,7 @@ export default function DocumentStudio() {
     else if (primary.kind === 'review' || primary.kind === 'approve') setPopup('sign');
     else setPopup(primary.kind);
   };
+  // the file as the platform keeps it: the uploaded file, or a PDF of the text, without the document control pages
   const downloadThis = async () => {
     setDownloading('this');
     try {
@@ -357,8 +358,8 @@ export default function DocumentStudio() {
       toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
     } finally { setDownloading(null); }
   };
-  // the document with its approval record at the end; a file the platform does not rewrite comes as it is (X-Approval-Record: separate)
-  // and the record as a PDF of its own
+  // the document with its control pages in it (a platform document: a PDF with them where its own sections are; Word, PDF: after the
+  // cover); a file the platform does not rewrite comes as it is (X-Approval-Record: separate) and the pages as a PDF of their own
   const downloadWithRecord = async () => {
     setDownloading('record');
     try {
@@ -369,9 +370,9 @@ export default function DocumentStudio() {
         try {
           const record = await approvalRecordExport(id, { fallbackName: recordFileName(doc.title, version) });
           saveBlob(record.blob, record.filename);
-          toast({ type: 'info', title: 'Two files downloaded', message: 'This kind of file cannot carry the approval record inside it, so the record came as a PDF of its own.' });
+          toast({ type: 'info', title: 'Two files downloaded', message: 'This kind of file cannot carry the document control pages inside it, so they came as a PDF of their own.' });
         } catch (e) {
-          toast({ type: 'error', title: 'The approval record was not downloaded', message: `${await problemOfBlob(e)} The document itself was.` });
+          toast({ type: 'error', title: 'The document control pages were not downloaded', message: `${await problemOfBlob(e)} The document itself was.` });
         }
       }
     } catch (e) {
@@ -431,11 +432,11 @@ export default function DocumentStudio() {
                 {primary.kind === 'submit' ? <Send className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}{primary.label}
               </button>
             )}
-            <Menu title="Download" label="Download" icon={downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}>
+            <Menu title="Download" label="Download" width="w-80" icon={downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}>
               {(close) => (
                 <>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> This version (v{version})</button>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> Download with approval record</button>
+                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> Download (with document control pages)</button>
+                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> Original file as stored</button>
                   <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setView('versions'); }}>An earlier version…</button>
                   {lifecycleOn && (
                     <>
