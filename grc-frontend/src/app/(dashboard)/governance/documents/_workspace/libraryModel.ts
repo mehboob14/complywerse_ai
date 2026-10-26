@@ -479,6 +479,7 @@ export const BUILT_IN_VIEWS: SavedView[] = [
   view('in-force', 'In force', { statuses: ['published'] }),
   view('no-owner', 'Without an owner', { owners: [NO_OWNER] }),
   view('no-framework', 'Without a framework', { frameworks: [NO_FRAMEWORK] }),
+  view('archived', 'Archived', { statuses: ['archived'] }),
 ];
 
 /** The view the state is exactly (built-in ones first, then the person's own). */
