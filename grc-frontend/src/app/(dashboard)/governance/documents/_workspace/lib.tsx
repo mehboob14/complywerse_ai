@@ -15,6 +15,7 @@ import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { useOrgDepartments } from '../_DetailsFields';
 import { departmentNames } from './library';
+import { DOC_TYPE_LABEL, STAGE_ORDER, STATUS_LABEL, statusLabel, type FrameworkInfo } from './libraryModel';
 
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
@@ -62,23 +63,8 @@ export interface GovDoc {
 
 // ─── Lifecycle stages ────────────────────────────────────────────────────────
 // Ordered approval workflow. Terminal states (expired/archived/exception_applied)
-// are handled separately as neutral.
-export const STAGE_ORDER = ['draft', 'pending_review', 'pending_approval', 'approved', 'published'] as const;
-
-export const STATUS_LABEL: Record<string, string> = {
-  draft: 'Draft',
-  pending_review: 'In Review',
-  pending_approval: 'Pending Approval',
-  approved: 'Approved',
-  published: 'Published',
-  expired: 'Expired',
-  archived: 'Archived',
-  exception_applied: 'Exception',
-};
-
-export function statusLabel(status: string): string {
-  return STATUS_LABEL[status] || status.replace(/_/g, ' ');
-}
+// are handled separately as neutral. The words live in libraryModel (pure, tested).
+export { STAGE_ORDER, STATUS_LABEL, statusLabel };
 
 /** Tone for the status dot / text. */
 export function statusTone(status: string): 'draft' | 'progress' | 'pending' | 'approved' | 'published' | 'terminal' {
@@ -199,12 +185,12 @@ export function ReviewStatus({ date, className = '' }: { date: string | null | u
 // ─── Doc-type tile (letter square) ───────────────────────────────────────────
 // Category tints are sanctioned for doc-type markers (not brand meaning).
 export const DOC_TYPE_STYLE: Record<string, { letter: string; tile: string; label: string }> = {
-  policy: { letter: 'P', tile: 'bg-primary-50 text-primary-700', label: 'Policy' },
-  standard: { letter: 'S', tile: 'bg-blue-50 text-blue-700', label: 'Standard' },
-  procedure: { letter: 'P', tile: 'bg-amber-50 text-amber-700', label: 'Procedure' },
-  guideline: { letter: 'G', tile: 'bg-violet-50 text-violet-700', label: 'Guideline' },
-  charter: { letter: 'C', tile: 'bg-slate-100 text-slate-600', label: 'Charter' },
-  framework: { letter: 'F', tile: 'bg-cyan-50 text-cyan-700', label: 'Framework' },
+  policy: { letter: 'P', tile: 'bg-primary-50 text-primary-700', label: DOC_TYPE_LABEL.policy },
+  standard: { letter: 'S', tile: 'bg-blue-50 text-blue-700', label: DOC_TYPE_LABEL.standard },
+  procedure: { letter: 'P', tile: 'bg-amber-50 text-amber-700', label: DOC_TYPE_LABEL.procedure },
+  guideline: { letter: 'G', tile: 'bg-violet-50 text-violet-700', label: DOC_TYPE_LABEL.guideline },
+  charter: { letter: 'C', tile: 'bg-slate-100 text-slate-600', label: DOC_TYPE_LABEL.charter },
+  framework: { letter: 'F', tile: 'bg-cyan-50 text-cyan-700', label: DOC_TYPE_LABEL.framework },
 };
 
 export function docTypeStyle(docType: string) {
@@ -281,24 +267,42 @@ export function OwnerChip({ name }: { name: string | null | undefined }) {
  * NOT Framework-catalog ids — so resolve against the uploaded-frameworks list
  * (GET /framework-upload/upload), else pills show a raw "#11" fallback.
  */
-export function useFrameworkNames() {
+type UploadedFramework = { id: string | number; name: string; short_code?: string | null };
+function useUploadedFrameworks() {
   const { data } = useQuery({
     queryKey: ['uploaded-frameworks-name-map'],
     queryFn: async () => {
       const res = await apiClient.get('/framework-upload/upload', { params: { limit: 1000 } });
       const d = res.data as unknown;
-      return (Array.isArray(d) ? d : ((d as { items?: unknown[]; frameworks?: unknown[] })?.items ?? (d as { frameworks?: unknown[] })?.frameworks ?? [])) as Array<{ id: string | number; name: string; short_code?: string | null }>;
+      return (Array.isArray(d) ? d : ((d as { items?: unknown[]; frameworks?: unknown[] })?.items ?? (d as { frameworks?: unknown[] })?.frameworks ?? [])) as UploadedFramework[];
     },
     staleTime: 10 * 60 * 1000,
   });
+  return data as UploadedFramework[] | undefined;
+}
+
+export function useFrameworkNames() {
+  const data = useUploadedFrameworks();
   const nameMap = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const f of (data as Array<{ id: string | number; name: string; short_code?: string | null }>) || []) {
-      m[String(f.id)] = (f.short_code || f.name || '').trim() || `#${f.id}`;
-    }
+    for (const f of data || []) m[String(f.id)] = (f.short_code || f.name || '').trim() || `#${f.id}`;
     return m;
   }, [data]);
   return nameMap;
+}
+
+/** The same list with both names: the short label a chip carries and the full name a popover, a drawer and the search read. */
+export function useFrameworkInfo() {
+  const data = useUploadedFrameworks();
+  return useMemo(() => {
+    const m: Record<string, FrameworkInfo> = {};
+    for (const f of data || []) {
+      const short = (f.short_code || '').trim();
+      const name = (f.name || '').trim();
+      m[String(f.id)] = { short: short || name || `#${f.id}`, name: name || short || `#${f.id}` };
+    }
+    return m;
+  }, [data]);
 }
 
 /**

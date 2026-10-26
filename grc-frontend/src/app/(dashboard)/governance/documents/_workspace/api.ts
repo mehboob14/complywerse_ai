@@ -70,33 +70,48 @@ export async function fetchMyPending(): Promise<{ total: number; items: MyPendin
   return { total: d.total ?? (d.items?.length ?? 0), items: d.items ?? [] };
 }
 
+/** Per-document attestation coverage: the % and, where the server says them, how many of how many (the ring's "4/5"). */
+export interface Coverage {
+  pct: Record<number, number>;
+  counts: Record<number, { done: number; total: number }>;
+}
+
 /**
- * Per-document attestation coverage %. Prefers document-attestation campaigns
+ * Per-document attestation coverage. Prefers document-attestation campaigns
  * (acks / same-domain active users); falls back to legacy coverage-map.
  */
-export async function fetchCoverageMap(): Promise<Record<number, number>> {
-  const parse = (d: { coverage?: Record<string, number>; items?: Array<{ document_id: number; compliance_rate: number }> }) => {
-    const out: Record<number, number> = {};
+export async function fetchCoverage(): Promise<Coverage> {
+  type Reply = { coverage?: Record<string, number>; counts?: Record<string, { done: number; total: number }>; items?: Array<{ document_id: number; compliance_rate: number }> };
+  const parse = (d: Reply): Coverage => {
+    const out: Coverage = { pct: {}, counts: {} };
     if (d.coverage) {
-      for (const [k, v] of Object.entries(d.coverage)) out[Number(k)] = Number(v);
+      for (const [k, v] of Object.entries(d.coverage)) out.pct[Number(k)] = Number(v);
     } else if (Array.isArray(d.items)) {
-      for (const it of d.items) out[it.document_id] = it.compliance_rate;
+      for (const it of d.items) out.pct[it.document_id] = it.compliance_rate;
+    }
+    for (const [k, v] of Object.entries(d.counts ?? {})) {
+      if (v && Number.isFinite(v.done) && Number.isFinite(v.total)) out.counts[Number(k)] = { done: v.done, total: v.total };   // an older server sends none
     }
     return out;
   };
   try {
     const res = await governanceApi.getDocAttestationCoverageMap();
-    const out = parse(res.data as any);
-    if (Object.keys(out).length > 0) return out;
+    const out = parse(res.data as Reply);
+    if (Object.keys(out.pct).length > 0) return out;
   } catch {
     /* fall through */
   }
   try {
     const res = await apiClient.get('/governance/attestations/coverage-map');
-    return parse(res.data as any);
+    return parse(res.data as Reply);
   } catch {
-    return {};
+    return { pct: {}, counts: {} };
   }
+}
+
+/** The % only (what the library showed before the counts). */
+export async function fetchCoverageMap(): Promise<Record<number, number>> {
+  return (await fetchCoverage()).pct;
 }
 
 // ─── Mutations ───────────────────────────────────────────────────────────────

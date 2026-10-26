@@ -442,13 +442,15 @@ def coverage_map(
             chosen[c.document_id] = c
 
     coverage: Dict[str, Any] = {}
+    counts: Dict[str, Any] = {}
     for doc_id, camp in chosen.items():
         prog = _progress(db, camp)
         if prog["attestation_percent"] is None:
             continue
         coverage[str(doc_id)] = prog["attestation_percent"]
+        counts[str(doc_id)] = {"done": prog["acknowledgment_count"], "total": prog["active_domain_users"]}     # "4 of 5" beside the %
 
-    return {"coverage": coverage}
+    return {"coverage": coverage, "counts": counts}
 
 
 @router.get("/campaigns", dependencies=[Depends(require_library_reader)])

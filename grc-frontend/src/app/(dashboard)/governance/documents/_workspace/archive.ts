@@ -5,9 +5,11 @@ type Doc = { status?: string | null };
 
 export const isArchived = (d: Doc) => d.status === 'archived';
 
-/** The documents a list shows: archived ones only when the Status filter asks for them (it then keeps only those). */
-export function unlessArchivedAsked<T extends Doc>(docs: T[], statusFilter: string): T[] {
-  return statusFilter === 'archived' ? docs : docs.filter((d) => !isArchived(d));
+/** The documents a list shows: archived ones only when the Status filter asks for them (it then keeps only those). The filter is one
+ *  status or, in the multi-choice library, the list of them. */
+export function unlessArchivedAsked<T extends Doc>(docs: T[], statusFilter: string | readonly string[]): T[] {
+  const asked = typeof statusFilter === 'string' ? statusFilter === 'archived' : statusFilter.includes('archived');
+  return asked ? docs : docs.filter((d) => !isArchived(d));
 }
 
 /** What archiving does, as its confirmation says it (the document page and the library's row Archive). */

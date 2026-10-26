@@ -16,6 +16,10 @@ test('archived documents stay out of the lists unless the Status filter asks for
   assert.deepEqual(unlessArchivedAsked(docs, '').map((d) => d.id), [1, 3, 4]);
   assert.deepEqual(unlessArchivedAsked(docs, 'draft').map((d) => d.id), [1, 3, 4]);       // the status filter itself keeps the drafts
   assert.deepEqual(unlessArchivedAsked(docs, 'archived').map((d) => d.id), [1, 2, 3, 4]);
+  // the library's Status filter is a list
+  assert.deepEqual(unlessArchivedAsked(docs, []).map((d) => d.id), [1, 3, 4]);
+  assert.deepEqual(unlessArchivedAsked(docs, ['draft', 'published']).map((d) => d.id), [1, 3, 4]);
+  assert.deepEqual(unlessArchivedAsked(docs, ['archived']).map((d) => d.id), [1, 2, 3, 4]);
 });
 
 test('the table shows no archived parent in the working library: the documents under it are at the top', () => {

@@ -50,3 +50,27 @@ def test_only_who_may_change_the_document_runs_its_campaigns_and_acknowledged_on
     closed = http.patch(f"{API}/{cid}", json={"status": "closed"})
     assert closed.status_code == 200 and closed.json()["status"] == "closed" and len(closed.json()["acknowledgments"]) == 1
     assert http.delete(f"{API}/{spare}").status_code == 204                # nobody acknowledged it: it may go
+
+
+def test_the_coverage_map_says_how_many_of_how_many_beside_the_percent(world):
+    """The library's Attestation column draws a ring with "4/5" under it: the counts come with the percent, for the same documents."""
+    db, http, me = world.db, world.http, world.me
+    d = doc(world)
+    d.status = "published"
+    db.commit()
+    _grant(db, SAM, "governance:policies:view")
+    db.add(m.UserRole(user_id=OWNER, role_id=40, tenant_id=1))
+    db.commit()
+    me["id"] = OWNER
+    cid = http.post(API, json={"document_id": 5, "name": "Q3 access policy"}).json()["id"]
+    db.add(m.DocumentAttestationAcknowledgment(campaign_id=cid, name="Uma User", email="uma@cfsb.test", designation="Clerk",
+                                               signature_data="data:image/png;base64,AAAA"))
+    db.commit()
+    people = db.query(m.GRCUser).filter(m.GRCUser.is_active.is_(True), m.GRCUser.email.like("%@cfsb.test")).count()
+
+    me["id"] = SAM
+    got = http.get("/governance/document-attestations/coverage-map")
+    assert got.status_code == 200
+    body = got.json()
+    assert body["counts"] == {"5": {"done": 1, "total": people}}
+    assert body["coverage"] == {"5": round(1 / people * 100)}                   # the percent is unchanged: it is the same numbers

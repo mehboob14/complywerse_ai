@@ -9,21 +9,15 @@
  */
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
 import {
   Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil,
-  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Loader2,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
   type BulkAction,
 } from '@/components/ui';
-import { governanceApi } from '@/lib/api';
-import { documentChainApi } from '@/lib/documentChain';
-import { day } from '@/lib/documentLifecycle';
-import { problemOf } from '@/lib/studio/api';
 import {
   type GovDoc,
   TypePill,
@@ -41,8 +35,8 @@ import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
 import { bulkActionIds } from './archive';
 import { NOTHING_OPEN, buildTree, collapseAll, expandAll, flip, openness, treeEntries, type Fold } from './docTree';
-import { shownFrameworkIds, versionGroups, versionStates, type VersionState } from './library';
-import { retryUnlessRefused } from '../_view/docRoute';
+import { shownFrameworkIds } from './library';
+import { GAP, STEP, Versions } from './Versions';
 
 export interface RegisterTableProps {
   /** the documents that match the search and filters */
@@ -76,17 +70,10 @@ export interface RegisterTableProps {
   loading?: boolean;
 }
 
-const STEP = 24;           // px per level: the width of the arrow
-const GAP = 6;             // between the arrow and the title
 const NO_DOCS: GovDoc[] = [];
 const NONE = new Set<number>();
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-white px-2.5 py-1 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-// the version's size as the document's Versions view says it; the first one is the original
-const SIZE: Record<string, string> = { major: 'Major', minor: 'Minor', patch: 'Patch' };
-
 type Open = 'all' | 'docs' | null;
-type VersionRow = { id: number; number: string; kind: string | null; at: string | null; by: string | null };
-
 function TitleCell({ doc, depth, match, childCount, open, parentTitle, onToggle }: {
   doc: GovDoc; depth: number; match: boolean; childCount: number; open: Open; parentTitle?: string; onToggle: () => void;
 }) {
@@ -112,72 +99,6 @@ function TitleCell({ doc, depth, match, childCount, open, parentTitle, onToggle 
         {!match && <span className="block text-[11px] text-[#586472]">Parent of a match</span>}
       </span>
     </div>
-  );
-}
-
-/** One version of a document: number, state, size, date and who made it; it opens the document on that version. Only the current
- *  version (the document's state) and the one in force carry a badge; an earlier version needs none (the user, 2026-10-21: every
- *  older row saying "Superseded" read as an error). */
-function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean }) {
-  const earlier = v.state === 'superseded';
-  const word = v.state === 'in-force' ? 'In force' : earlier ? null : statusLabel(doc.status);
-  const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
-  // text-[#fff], not text-white: the library's governance-light repaints text-white grey
-  const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : 'border-[#9aa5b1] text-[#1f2933]';
-  return (
-    <Link
-      href={`/governance/documents/${doc.id}?read=${v.id}`}
-      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
-    >
-      <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
-      {word ? <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
-        : <span className="sr-only">earlier version</span>}
-      {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
-      <span className="text-[11px] text-[#586472] max-sm:basis-full">{[original ? 'The original' : SIZE[v.kind ?? ''], day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
-    </Link>
-  );
-}
-
-/** Every version of a document, read as the document page reads them (its Change log: the change chain; where the chain is off, the
- *  version history), as a hierarchy: each major version with its minor versions under it, newest major first (library.versionGroups). */
-function Versions({ doc, depth }: { doc: GovDoc; depth: number }) {
-  const chain = useQuery({ queryKey: ['document-chain', doc.id], queryFn: () => documentChainApi.chain(doc.id), staleTime: 15_000, retry: retryUnlessRefused });
-  const off = chain.data?.enabled === false;
-  const history = useQuery({
-    queryKey: ['document-versions', doc.id],
-    enabled: off,
-    retry: retryUnlessRefused,
-    queryFn: async () => {                    // as the document page's version history reads it (same key, same shape)
-      const d: any = (await governanceApi.getDocumentVersions(doc.id)).data;
-      return (Array.isArray(d) ? d : d?.items || []) as any[];
-    },
-  });
-  const rows: VersionRow[] = off
-    ? (history.data ?? []).map((v) => ({ id: v.id, number: String(v.version_number), kind: v.change_type ?? null, at: v.created_at ?? null, by: v.creator_name ?? null }))
-    : [...(chain.data?.versions ?? [])].reverse();
-  const lines = versionStates(rows, doc);
-  const failed = chain.error ?? history.error;
-  const note = { paddingLeft: depth * STEP + STEP + GAP };
-
-  if (chain.isPending || (off && history.isPending)) {
-    return <p style={note} className="inline-flex items-center gap-1.5 text-[12px] text-[#586472]"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Reading the versions…</p>;
-  }
-  if (failed) return <p style={note} role="alert" className="text-[12px] text-[#9b1c1c]">{problemOf(failed, 'The versions could not be read.')}</p>;
-  if (lines.length === 0) return <p style={note} className="text-[12px] text-[#586472]">No versions recorded yet.</p>;
-  const original = lines[lines.length - 1].id;
-  return (
-    <ul aria-label={`Versions of ${doc.title}, newest major version first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-[#d5dbe1] pl-2">
-      {versionGroups(lines).map((g) => (
-        <li key={g.head.id}>
-          <VersionLink doc={doc} v={g.head} original={g.head.id === original} />
-          {g.minors.length > 0 && (
-            <ul aria-label={`Minor versions after ${verLabel(g.head.number)}, newest first`} className="ml-3 border-l border-[#e1e6eb] pl-2">
-              {g.minors.map((v) => <li key={v.id}><VersionLink doc={doc} v={v} original={v.id === original} /></li>)}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ul>
   );
 }
 
