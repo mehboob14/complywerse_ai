@@ -22,7 +22,7 @@ export function AttestationRing({ pct, done, total, size = 28, showCounts = true
   size?: number;
   showCounts?: boolean;
 }) {
-  if (pct == null) return <span className="text-[12px] text-[#586472]" title="No acknowledgement has been requested for this document">Not requested</span>;
+  if (pct == null) return <span className="text-[13px] text-[#9aa5b1]" title="No acknowledgement requested" aria-label="No acknowledgement requested">—</span>;
   const value = Math.max(0, Math.min(100, Math.round(pct)));
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;
@@ -61,9 +61,9 @@ export function ReviewDate({ doc, now, compact = false }: { doc: Pick<LibDoc, 's
   const s = reviewState(doc, now);
   const tone = reviewTone(s.bucket);
   if (!s.due) {
-    return s.label ? <span className={`text-[12px] ${tone.text}`}>{s.label}</span> : <span className="text-[13px] text-[#9aa5b1]" aria-label="No review date">—</span>;
+    return s.label ? <span className={`text-[12px] ${tone.text}`} title={s.long}>{s.label}</span> : <span className="text-[13px] text-[#9aa5b1]" aria-label="No review date">—</span>;
   }
-  const label = s.label ? `${shortDate(s.due)}, ${s.label}` : shortDate(s.due);
+  const label = s.long ? `${shortDate(s.due)}, ${s.long}` : shortDate(s.due);
   return (
     <span className="inline-flex flex-col leading-tight" title={label}>
       <span className={`text-[13px] ${s.bucket ? 'font-medium text-[#1f2933]' : 'text-[#586472]'}`}>{shortDate(s.due)}</span>

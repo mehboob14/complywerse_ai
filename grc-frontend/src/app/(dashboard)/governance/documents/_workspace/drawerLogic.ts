@@ -187,19 +187,19 @@ export function attestationSummary(pct: number | null | undefined, counts?: { do
   const known = counts && counts.total > 0 ? counts : null;
   const percent = pct != null ? pct : known ? (100 * known.done) / known.total : null;
   if (percent == null) {
-    return { requested: false, pct: null, done: null, total: null, headline: 'No acknowledgement has been requested', detail: null };
+    return { requested: false, pct: null, done: null, total: null, headline: 'None requested', detail: null };
   }
   if (known) {
     const left = Math.max(0, known.total - known.done);
     return {
       requested: true, pct: percent, done: known.done, total: known.total,
-      headline: `${known.done} of ${known.total} ${known.total === 1 ? 'person' : 'people'} acknowledged`,
-      detail: left === 0 ? 'Everyone has acknowledged' : `${left} still to acknowledge`,
+      headline: `${known.done}/${known.total} acknowledged`,
+      detail: left === 0 ? 'All done' : `${left} to go`,
     };
   }
   return {
     requested: true, pct: percent, done: null, total: null,
     headline: `${Math.round(percent)}% acknowledged`,
-    detail: percent >= 100 ? 'Everyone has acknowledged' : null,
+    detail: percent >= 100 ? 'All done' : null,
   };
 }

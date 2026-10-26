@@ -9,8 +9,9 @@ export interface Prefs { hidden: string[]; density: Density; pageSize: number }
 /** The columns a person may switch off (the title and the actions are always there). */
 export const OPTIONAL_COLUMNS = ['type', 'lifecycle', 'owner', 'department', 'frameworks', 'attestation', 'review', 'version', 'updated'] as const;
 export const PAGE_SIZES = [10, 25, 50, 100];
-/** Department is shown under the owner; its own column is there for those who want it. */
-export const DEFAULT_PREFS: Prefs = { hidden: ['department'], density: 'comfortable', pageSize: 25 };
+/** What is off by default: the department (shown under the owner), the version (shown under the title) and the last update: they are
+ *  there for whoever wants a column of their own, and the table fits a laptop without them. */
+export const DEFAULT_PREFS: Prefs = { hidden: ['department', 'version', 'updated'], density: 'comfortable', pageSize: 25 };
 
 export interface KeyValueStore {
   getItem(key: string): string | null;

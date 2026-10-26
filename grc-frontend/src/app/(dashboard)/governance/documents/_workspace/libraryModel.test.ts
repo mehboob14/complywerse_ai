@@ -41,19 +41,19 @@ test('a review is owed on a document in force or approved, not on a draft, a wit
 
 test('the state of a review date: overdue, due soon, up to date, not scheduled, or none owed', () => {
   const at = (date: string | null, over: Partial<LibDoc> = {}) => reviewState(doc({ next_review_date: date, ...over }), NOW);
-  assert.deepEqual([at('2026-10-21T00:00:00').bucket, at('2026-10-21T00:00:00').label], ['overdue', 'Overdue by 5 days']);
-  assert.equal(at('2026-10-25T00:00:00').label, 'Overdue by 1 day');
+  assert.deepEqual([at('2026-10-21T00:00:00').bucket, at('2026-10-21T00:00:00').label, at('2026-10-21T00:00:00').long], ['overdue', '5 d overdue', 'Overdue by 5 days']);
+  assert.deepEqual([at('2026-10-25T00:00:00').label, at('2026-10-25T00:00:00').long], ['1 d overdue', 'Overdue by 1 day']);
   assert.equal(at('2026-10-26T00:00:00').label, 'Overdue today');                       // midnight today has passed: the overview says overdue too
   assert.equal(at('2026-10-26T00:00:00').bucket, 'overdue');
-  assert.deepEqual([at('2026-10-27T00:00:00').bucket, at('2026-10-27T00:00:00').label], ['due_soon', 'Due tomorrow']);
+  assert.deepEqual([at('2026-10-27T00:00:00').bucket, at('2026-10-27T00:00:00').label, at('2026-10-27T00:00:00').long], ['due_soon', 'Tomorrow', 'Due tomorrow']);
   assert.equal(at('2026-10-26T18:00:00').label, 'Due today');                           // later today: not yet late
-  assert.equal(at('2026-11-05T00:00:00').label, 'Due in 10 days');
+  assert.deepEqual([at('2026-11-05T00:00:00').label, at('2026-11-05T00:00:00').long], ['in 10 d', 'Due in 10 days']);
   assert.equal(at('2026-11-25T00:00:00').bucket, 'due_soon');                           // 30 days out is still "due soon"
   assert.equal(at('2026-11-26T00:00:00').bucket, 'ok');
-  assert.equal(at('2027-02-26T00:00:00').label, 'In 4 months');
-  assert.equal(at('2026-06-01T00:00:00').label, 'Overdue by 5 months');
-  assert.equal(at('2028-04-26T00:00:00').label, 'In 1.5 years');
-  assert.deepEqual([at(null).bucket, at(null).label], ['unscheduled', 'Not scheduled']);
+  assert.deepEqual([at('2027-02-26T00:00:00').label, at('2027-02-26T00:00:00').long], ['in 4 mo', 'In 4 months']);
+  assert.deepEqual([at('2026-06-01T00:00:00').label, at('2026-06-01T00:00:00').long], ['5 mo overdue', 'Overdue by 5 months']);
+  assert.deepEqual([at('2028-04-26T00:00:00').label, at('2028-04-26T00:00:00').long], ['in 1.5 y', 'In 1.5 years']);
+  assert.deepEqual([at(null).bucket, at(null).label, at(null).long], ['unscheduled', 'No date', 'Not scheduled']);
   assert.deepEqual([at('2026-10-01T00:00:00', { status: 'draft', version_in_force: null }).bucket, at('2026-10-01T00:00:00', { status: 'draft', version_in_force: null }).label], [null, '']);
   assert.deepEqual([at(null, { status: 'archived' }).bucket, at(null, { status: 'archived' }).label], [null, '']);
 });

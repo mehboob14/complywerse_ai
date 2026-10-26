@@ -62,7 +62,7 @@ function FileTile({ doc, compact }: { doc: GovDoc; compact: boolean }) {
  * this one, the file tile, and the title, a real link (a plain click opens the document here, a modified one in a new tab) over the
  * document's code. A row shown only for the documents under it ("Parent of a match") is greyed.
  */
-export function DocumentCell({ doc, depth, match, childCount, open, parentTitle, compact, onToggle, onOpenDoc }: {
+export function DocumentCell({ doc, depth, match, childCount, open, parentTitle, compact, showVersion = false, onToggle, onOpenDoc }: {
   doc: GovDoc;
   depth: number;
   /** false: shown only because a document under it matches */
@@ -72,6 +72,8 @@ export function DocumentCell({ doc, depth, match, childCount, open, parentTitle,
   /** the title of the document it sits under (said to a screen reader; the indent says it to the eye) */
   parentTitle?: string;
   compact: boolean;
+  /** the Version column is off: the version is said here, under the title, after the code */
+  showVersion?: boolean;
   onToggle: () => void;
   onOpenDoc: (id: number) => void;
 }) {
@@ -100,8 +102,8 @@ export function DocumentCell({ doc, depth, match, childCount, open, parentTitle,
   const tags = (
     <>
       {archived && <span className="inline-flex items-center rounded border border-[#c3ccd5] bg-[#f3f6f8] px-1.5 text-[11px] font-medium leading-4 text-[#586472]">Archived</span>}
-      {!open && childCount > 0 && <span className="whitespace-nowrap text-[11px] text-[#586472]">{childCount} under it</span>}
-      {!match && <span className="whitespace-nowrap text-[11px] text-[#586472]">Parent of a match</span>}
+      {!open && childCount > 0 && <span className="whitespace-nowrap text-[11px] text-[#586472]" title={`${childCount} ${childCount === 1 ? 'document' : 'documents'} under it`}>+{childCount}</span>}
+      {!match && <span className="whitespace-nowrap text-[11px] text-[#586472]" title="Shown because a document under it matches">Parent</span>}
     </>
   );
   return (
@@ -128,6 +130,7 @@ export function DocumentCell({ doc, depth, match, childCount, open, parentTitle,
             {title}
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 empty:hidden">
               {doc.document_code && <span className="font-mono text-[11px] text-[#586472]">{doc.document_code}</span>}
+              {showVersion && doc.current_version && <span className="text-[11px] tabular-nums text-[#586472]" title={inForceNote(doc) ?? undefined}>v{doc.current_version.replace(/^v/i, '')}</span>}
               {tags}
             </div>
           </>

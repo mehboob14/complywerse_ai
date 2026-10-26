@@ -47,11 +47,11 @@ export function reviewCycleLabel(months: number | null | undefined): string {
   return `Every ${months} months`;
 }
 
-/** "Showing 26–50 of 112" for a page of a list (1-based page). */
+/** "26–50 of 112" for a page of a list (1-based page). */
 export function rangeLabel(page: number, pageSize: number, total: number): string {
-  if (total === 0) return 'No documents';
+  if (total === 0) return '0';
   const from = (page - 1) * pageSize + 1;
-  return `Showing ${from}–${Math.min(total, page * pageSize)} of ${total}`;
+  return `${from}–${Math.min(total, page * pageSize)} of ${total}`;
 }
 
 /** The page to be on after the list changed: inside the pages that exist. */

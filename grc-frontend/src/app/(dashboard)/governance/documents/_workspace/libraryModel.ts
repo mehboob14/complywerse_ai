@@ -12,8 +12,8 @@ export const STAGE_ORDER = ['draft', 'pending_review', 'pending_approval', 'appr
 
 export const STATUS_LABEL: Record<string, string> = {
   draft: 'Draft',
-  pending_review: 'In Review',
-  pending_approval: 'Pending Approval',
+  pending_review: 'In review',
+  pending_approval: 'In approval',
   approved: 'Approved',
   published: 'Published',
   expired: 'Expired',
@@ -99,30 +99,47 @@ function span(n: number): string {
   return `${years} ${years === 1 ? 'year' : 'years'}`;
 }
 
+/** The same distance in a few characters, for a table cell: "5 d", "4 mo", "1.5 y". */
+function shortSpan(n: number): string {
+  if (n < 60) return `${n} d`;
+  if (n < 365) return `${Math.round(n / 30.44)} mo`;
+  return `${Math.round((n / 365) * 2) / 2} y`;
+}
+
 export interface ReviewState {
   /** where it counts (filters, the health card); null: no review is owed on it (not in force) */
   bucket: ReviewBucket | null;
   due: Date | null;
   /** whole UTC calendar days to the date; negative once it has passed; null without a date */
   days: number | null;
-  /** the line under the date ("Overdue by 5 days", "Due in 12 days", "In 4 months", "Not scheduled"); '' when there is nothing to say */
+  /** the short line under the date ("5 d overdue", "in 12 d", "in 4 mo", "No date"); '' when there is nothing to say */
   label: string;
+  /** the same in words, for a tooltip or a screen reader ("Overdue by 5 days", "Due in 12 days", "Not scheduled") */
+  long: string;
 }
 
 export function reviewState(d: Pick<LibDoc, 'status' | 'version_in_force' | 'next_review_date'>, now: Date = new Date()): ReviewState {
   const due = parseUtc(d.next_review_date);
   const owed = reviewable(d);
-  if (!due) return { bucket: owed ? 'unscheduled' : null, due: null, days: null, label: owed ? 'Not scheduled' : '' };
+  if (!due) return { bucket: owed ? 'unscheduled' : null, due: null, days: null, label: owed ? 'No date' : '', long: owed ? 'Not scheduled' : '' };
   const days = utcDay(due) - utcDay(now);
-  if (!owed) return { bucket: null, due, days, label: '' };
+  if (!owed) return { bucket: null, due, days, label: '', long: '' };
   if (due.getTime() < now.getTime()) {                                  // the same test as the Governance overview's "overdue"
     const late = Math.max(0, -days);
-    return { bucket: 'overdue', due, days, label: late === 0 ? 'Overdue today' : `Overdue by ${span(late)}` };
+    return {
+      bucket: 'overdue', due, days,
+      label: late === 0 ? 'Overdue today' : `${shortSpan(late)} overdue`,
+      long: late === 0 ? 'Overdue today' : `Overdue by ${span(late)}`,
+    };
   }
   if (days <= DUE_SOON_DAYS) {
-    return { bucket: 'due_soon', due, days, label: days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days` };
+    return {
+      bucket: 'due_soon', due, days,
+      label: days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `in ${days} d`,
+      long: days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
+    };
   }
-  return { bucket: 'ok', due, days, label: `In ${span(days)}` };
+  return { bucket: 'ok', due, days, label: `in ${shortSpan(days)}`, long: `In ${span(days)}` };
 }
 
 export interface Health { reviewable: number; upToDate: number; dueSoon: number; overdue: number; unscheduled: number }

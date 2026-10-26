@@ -50,6 +50,8 @@ export interface MultiSelectDropdownProps {
   onCreate?: (text: string) => void;
   /** The trigger names every selected item ("Bilal, Role · Approvers") instead of "2 selected". */
   namesInTrigger?: boolean;
+  /** A slim pill: just the title while nothing is chosen ("Type"), then "Type · Policy" or "Type · 2"; no count badge. */
+  compact?: boolean;
 }
 
 const sizeStyles = {
@@ -80,6 +82,7 @@ export function MultiSelectDropdown({
   disabled = false,
   onCreate,
   namesInTrigger = false,
+  compact = false,
 }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftValues, setDraftValues] = useState<string[]>(selectedValues);
@@ -251,14 +254,16 @@ export function MultiSelectDropdown({
           <span className="min-w-0 flex-1 truncate text-slate-700">{triggerLabel}</span>
         ) : (
           <>
-            <span className="text-slate-900">{title}:</span>
-            {showSelectionInTrigger && (
-              <span className="min-w-0 flex-1 truncate text-slate-600">{triggerLabel}</span>
+            <span className="text-slate-900">{compact ? title : `${title}:`}</span>
+            {showSelectionInTrigger && (!compact || hasAppliedFilter) && (
+              <span className="min-w-0 flex-1 truncate text-slate-600">
+                {compact ? `· ${selectedLabels.length === 1 ? selectedLabels[0] : selectedLabels.length}` : triggerLabel}
+              </span>
             )}
           </>
         )}
 
-        {hasAppliedFilter && (multiSelect || triggerVariant !== 'input') && (
+        {!compact && hasAppliedFilter && (multiSelect || triggerVariant !== 'input') && (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-[11px] font-medium text-primary-700">
             {selectedValues.length}
           </span>

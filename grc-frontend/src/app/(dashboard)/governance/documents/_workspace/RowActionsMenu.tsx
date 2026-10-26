@@ -69,6 +69,7 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
         onClick={(e) => { e.stopPropagation(); toggle(); }}
         className={`rounded-md p-1.5 transition-colors ${open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
         title="Actions"
+        aria-label="Actions"
         aria-haspopup="menu"
         aria-expanded={open}
       >

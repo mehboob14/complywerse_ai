@@ -177,28 +177,28 @@ test('arrow keys move between the tabs, wrapping round; Home and End jump; other
 
 test('attestation: nothing requested, or the counts when the server says them, or the percentage alone', () => {
   const none = attestationSummary(undefined, undefined);
-  assert.deepEqual([none.requested, none.headline, none.detail], [false, 'No acknowledgement has been requested', null]);
+  assert.deepEqual([none.requested, none.headline, none.detail], [false, 'None requested', null]);
 
   const some = attestationSummary(80, { done: 4, total: 5 });
-  assert.deepEqual([some.requested, some.headline, some.detail, some.pct, some.done, some.total], [true, '4 of 5 people acknowledged', '1 still to acknowledge', 80, 4, 5]);
+  assert.deepEqual([some.requested, some.headline, some.detail, some.pct, some.done, some.total], [true, '4/5 acknowledged', '1 to go', 80, 4, 5]);
 
   assert.deepEqual(
     [attestationSummary(0, { done: 0, total: 3 }).headline, attestationSummary(0, { done: 0, total: 3 }).detail],
-    ['0 of 3 people acknowledged', '3 still to acknowledge'],
+    ['0/3 acknowledged', '3 to go'],
   );
   const all = attestationSummary(100, { done: 5, total: 5 });
-  assert.deepEqual([all.headline, all.detail], ['5 of 5 people acknowledged', 'Everyone has acknowledged']);
-  assert.equal(attestationSummary(100, { done: 1, total: 1 }).headline, '1 of 1 person acknowledged');
+  assert.deepEqual([all.headline, all.detail], ['5/5 acknowledged', 'All done']);
+  assert.equal(attestationSummary(100, { done: 1, total: 1 }).headline, '1/1 acknowledged');
 
   const pctOnly = attestationSummary(66.6, undefined);
   assert.deepEqual([pctOnly.requested, pctOnly.headline, pctOnly.detail, pctOnly.done], [true, '67% acknowledged', null, null]);
-  assert.equal(attestationSummary(100, null).detail, 'Everyone has acknowledged');
+  assert.equal(attestationSummary(100, null).detail, 'All done');
   assert.equal(attestationSummary(0, undefined).requested, true);                       // a campaign nobody has answered yet is still a campaign
 });
 
 test('attestation: counts without a percentage (an older server) give the percentage; an empty campaign counts for nothing', () => {
   const s = attestationSummary(undefined, { done: 1, total: 4 });
-  assert.deepEqual([s.requested, s.pct, s.headline], [true, 25, '1 of 4 people acknowledged']);
+  assert.deepEqual([s.requested, s.pct, s.headline], [true, 25, '1/4 acknowledged']);
   assert.equal(attestationSummary(undefined, { done: 0, total: 0 }).requested, false);
 });
 

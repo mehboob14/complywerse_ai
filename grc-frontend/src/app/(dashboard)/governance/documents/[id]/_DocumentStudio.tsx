@@ -25,7 +25,9 @@ import { actOf, actOutcome } from '@/lib/documentTasks';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PageLoader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_ICON, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import GovernanceMappingsPage from '../../mappings/page';
 import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, StatusChip, useSignoff } from '../_SignoffControl';
@@ -53,8 +55,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'archive' | 'resubmit';
 const FULL_ON_PHONE = 'max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none';
-const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
+// (the buttons are the Documents area's shared ones, components/governance/docUi: BTN, PRIMARY = BTN_PRIMARY, BTN_ICON)
 const ITEM = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
 const ITEM_DANGER = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#9b1c1c] hover:bg-[#fdf2f2] disabled:opacity-50';
 
@@ -79,8 +80,8 @@ function Menu({ label, icon, children, align = 'right', title, width = 'w-64' }:
   }, [open]);
   return (
     <div ref={box} className="relative">
-      <button ref={trigger} type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} title={title} aria-label={label ? undefined : title} className={BTN}>
-        {icon}{label && <span className="hidden xl:inline">{label}</span>}{label && <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+      <button ref={trigger} type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} title={title} aria-label={label ? undefined : title} className={label ? BTN : BTN_ICON}>
+        {icon}{label && <span className="hidden lg:inline">{label}</span>}{label && <ChevronDown className="hidden h-3.5 w-3.5 lg:block" aria-hidden />}
       </button>
       {open && (
         <div role="menu" className={`absolute top-full z-50 mt-1 ${width} max-w-[calc(100vw-1.5rem)] rounded-xl border border-[#d5dbe1] bg-white p-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
@@ -388,7 +389,7 @@ export default function DocumentStudio() {
       toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
     } finally { setDownloading(null); }
   };
-  const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit in Comply AI Studio';
+  const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit';
   // the typed-name sign-off writes into the document's own text: only a text document (an uploaded file keeps its own table)
   const canTyped = mayChange && !doc.has_file && /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(doc.content || '');
 
@@ -421,10 +422,10 @@ export default function DocumentStudio() {
 
           <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
             {canEdit && (
-              <button type="button" onClick={() => edit.mutate(false)} disabled={!mayChange || !access?.openable || edit.isPending} className={BTN}
-                title={!mayChange || !access?.openable ? access?.reason ?? 'This document is archived. Restore it to change it.' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Open your draft of this document in the Comply AI Studio'}>
+              <button type="button" onClick={() => edit.mutate(false)} disabled={!mayChange || !access?.openable || edit.isPending} className={BTN} aria-label={editLabel}
+                title={!mayChange || !access?.openable ? access?.reason ?? 'This document is archived. Restore it to change it.' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Edit in Comply AI Studio'}>
                 {edit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                <span className="hidden md:inline">{editLabel}</span>
+                <span className="hidden lg:inline">{editLabel}</span>
               </button>
             )}
             {primary && (
@@ -435,12 +436,12 @@ export default function DocumentStudio() {
             <Menu title="Download" label="Download" width="w-80" icon={downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}>
               {(close) => (
                 <>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> Download (with document control pages)</button>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> Original file as stored</button>
+                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> With document control pages</button>
+                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> Original file</button>
                   <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setView('versions'); }}>An earlier version…</button>
                   {lifecycleOn && (
                     <>
-                      <div role="presentation" className="px-2.5 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[#7b8794]">Change log</div>
+                      <div role="presentation" className="px-2.5 pb-0.5 pt-2 text-xs font-semibold text-[#586472]">Change log</div>
                       {(['xlsx', 'pdf', 'csv'] as ExportFormat[]).map((f) => (
                         <button key={f} type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadLog(f); }}>{f === 'xlsx' ? 'Excel' : f.toUpperCase()}</button>
                       ))}
@@ -499,11 +500,11 @@ export default function DocumentStudio() {
         {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
         {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
         {archived && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2.5" role="status">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2" role="status">
             <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
-            <span className="min-w-0 flex-1 text-sm text-[#26323d]">
-              <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` on ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}.</span>
-              {canEdit ? ' It is not in force. Restore it to work on it again as a draft; it is in force again once approved and published.' : ' It is not in force.'}
+            <span className="min-w-0 flex-1 text-[13px] text-[#26323d]">
+              <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}</span> · not in force
+              {canEdit && <InfoTip className="ml-1" label="About restoring" text="Restore it to work on it again as a draft; it is in force again once approved and published." />}
             </span>
             {canEdit && (
               <button type="button" onClick={() => unarchive.mutate()} disabled={unarchive.isPending} className={BTN}>
@@ -513,18 +514,21 @@ export default function DocumentStudio() {
           </div>
         )}
         {personal && view === 'document' && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5" role="status">
-            <span className="min-w-0 flex-1 text-sm text-amber-950">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
+            <span className="min-w-0 flex-1 text-[13px] font-medium text-amber-950">
               {stepLine({ kind: personal.kind, due })}
-              {personal.kind === 'acknowledge' && ackVersion !== version ? ` (version ${ackVersion}, the one in force)` : ''}. Read it first, then {personal.kind === 'acknowledge' ? 'acknowledge it' : 'sign it'}.
+              {personal.kind === 'acknowledge' && ackVersion !== version ? ` · v${ackVersion} in force` : ''}
+              <InfoTip className="ml-1" label="What to do first" text={`Read the document first, then ${personal.kind === 'acknowledge' ? 'acknowledge it' : 'sign it'}.`} />
             </span>
             <button type="button" onClick={act} className={PRIMARY}><PenLine className="h-4 w-4" /> {personal.label}</button>
           </div>
         )}
         {inForceNote && view === 'document' && !reading && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] px-4 py-2.5" role="status">
-            <Info className="h-4 w-4 shrink-0 text-[#0b4f46]" aria-hidden />
-            <span className="min-w-0 flex-1 text-sm text-[#0b3f38]">{inForceNote}</span>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] px-4 py-2" role="status">
+            <span className="min-w-0 flex-1 text-[13px] text-[#0b3f38]">
+              {inForceNote}
+              <InfoTip className="ml-1" label="About the published version" text="The published version stays in force until the new one is approved and published." />
+            </span>
             {!doc.newer_version && doc.in_force_version_id && (
               <button type="button" onClick={() => setReading({ id: doc.in_force_version_id, number: doc.version_in_force })} className={BTN}>Read v{doc.version_in_force}</button>
             )}
@@ -532,9 +536,9 @@ export default function DocumentStudio() {
         )}
         {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} onProposeAgain={proposeAgain} />}
         {rejected && view === 'document' && (
-          <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5" role="status">
+          <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2" role="status">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9b1c1c]" aria-hidden />
-            <span className="min-w-0 flex-1 text-sm text-[#7a1616]">
+            <span className="min-w-0 flex-1 text-[13px] text-[#7a1616]">
               <span className="font-semibold">Rejected by {rejected.user || 'a reviewer'}{rejected.done_at ? ` on ${day(rejected.done_at)}` : ''}</span>
               {rejected.comment ? `: ${rejected.comment}` : '.'}
             </span>
@@ -566,9 +570,12 @@ export default function DocumentStudio() {
         )}
         {/* the Discussion: everyone who can open the document comments (its author, reviewers, approvers, the people asked to acknowledge it) */}
         {view === 'discussion' && (
-          <section className="space-y-2">
-            <p className="text-sm text-[#26323d]">Questions and comments on this document from everyone working on it: its author, reviewers and approvers, and the people asked to acknowledge it.</p>
+          <section className="relative">
             <DocumentAnnotationPanel documentId={id} variant="page" />
+            {/* the panel's own header has room on its right: the paragraph that stood above it is this (i) */}
+            <span className="absolute right-3 top-2.5">
+              <InfoTip align="end" label="About the discussion" text="Questions and comments on this document from everyone working on it: its author, reviewers and approvers, and the people asked to acknowledge it." />
+            </span>
           </section>
         )}
         {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
@@ -581,9 +588,9 @@ export default function DocumentStudio() {
               onShowInDocument={(range) => { setReading(null); setTrackedRange(range); setView('document'); }}
               onRead={(v) => { setTrackedRange(null); setReading(v); setView('document'); }} />
           ) : (
-            <section className="rounded-xl border border-[#d5dbe1] bg-white p-4">
-              <p className="text-sm text-[#26323d]">Every version of this document, with its file and what changed{mayChange ? ', and Restore' : ''}.</p>
-              <button type="button" onClick={() => setPopup('history')} className={`${BTN} mt-3`}>Open the versions</button>
+            <section className="flex items-center gap-1.5 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
+              <button type="button" onClick={() => setPopup('history')} className={BTN}>Open versions</button>
+              <InfoTip label="About the versions" text={`Every version of this document, with its file and what changed${mayChange ? ', and Restore' : ''}.`} />
             </section>
           )
         )}

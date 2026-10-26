@@ -35,9 +35,9 @@ test('sizes and review cycles read as people say them', () => {
 });
 
 test('a page of a list: its range, and the page to be on after the list shrank', () => {
-  assert.equal(rangeLabel(1, 25, 48), 'Showing 1–25 of 48');
-  assert.equal(rangeLabel(2, 25, 48), 'Showing 26–48 of 48');
-  assert.equal(rangeLabel(1, 25, 0), 'No documents');
+  assert.equal(rangeLabel(1, 25, 48), '1–25 of 48');
+  assert.equal(rangeLabel(2, 25, 48), '26–48 of 48');
+  assert.equal(rangeLabel(1, 25, 0), '0');
   assert.equal(clampPage(5, 25, 48), 2);
   assert.equal(clampPage(0, 25, 48), 1);
   assert.equal(clampPage(3, 25, 0), 1);

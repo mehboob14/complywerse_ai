@@ -14,6 +14,7 @@ import { dateTime, day, eventLabel, type DocumentLifecycle as Lifecycle, type Li
 import { askedAgain } from '@/lib/approvalRoutes';
 import { noAccess, retrySettings, type SettingsAnswer } from '@/lib/governanceSettings';
 import { useToast } from '@/components/ui/ToastProvider';
+import { InfoTip } from '@/components/ui/InfoTip';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
@@ -36,7 +37,7 @@ function Avatar({ name }: { name: string | null }) {
   );
 }
 
-const You = () => <span className="ml-1.5 rounded bg-primary-50 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-primary-800">you</span>;
+const You = () => <span className="ml-1.5 rounded bg-primary-50 px-1 py-px text-[11px] font-semibold text-primary-800">You</span>;
 
 type Tone = 'waiting' | 'overdue' | 'done' | 'rejected' | 'none' | 'delegated' | 'held' | 'changes';
 const TONE: Record<Tone, string> = {
@@ -132,11 +133,11 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
   });
   return (
     <section className="rounded-xl border-2 border-primary-300 bg-white p-4 shadow-sm" aria-label="Your acknowledgement">
-      <div className="flex flex-wrap items-start gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="rounded-full bg-primary-50 p-2"><FileCheck2 className="h-5 w-5 text-primary-700" /></span>
-        <div className="min-w-[14rem] flex-1">
-          <h3 className="text-sm font-semibold text-gray-900">Please read and acknowledge this document{row.due_date ? ` by ${day(row.due_date)}` : ''}</h3>
-          <p className="text-xs text-gray-600">Read it first. Acknowledging records that you have read it and will follow it.</p>
+        <div className="flex min-w-[14rem] flex-1 items-center gap-1">
+          <h3 className="text-sm font-semibold text-gray-900">Acknowledge{row.due_date ? ` by ${day(row.due_date)}` : ''}</h3>
+          <InfoTip label="About acknowledging" text="Read it first. Acknowledging records that you have read it and will follow it." />
         </div>
         {!open && (
           <button type="button" onClick={() => setOpen(true)} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">Acknowledge</button>
@@ -145,7 +146,7 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
       {open && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div>
-            <p className="mb-1 text-xs text-gray-600">Your signature (optional): draw it to keep it with your acknowledgement.</p>
+            <p className="mb-1 flex items-center gap-1 text-xs text-gray-600">Signature (optional) <InfoTip label="About the signature" text="Draw it to keep it with your acknowledgement." /></p>
             <SignaturePad onChange={setSignature} height={110} />
           </div>
           <div className="flex flex-col gap-2">
@@ -177,7 +178,7 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
   return (
     <section className="rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-baseline gap-x-2 border-b border-gray-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900">Review and approval</h3>
+        <h3 className="text-sm font-semibold text-gray-900">Sign-off</h3>
         {prepared && <span className="text-xs text-gray-600">prepared by {prepared}</span>}
       </div>
       {STEPS.map((step) => {
@@ -185,7 +186,7 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
         if (!list.length) return null;
         return (
           <div key={step.kind} className="px-4 py-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{step.title}</p>
+            <p className="mb-2 text-xs font-semibold text-gray-500">{step.title}</p>
             <ul className="space-y-3">
               {list.map((r) => {
                 // the row's own signature (each round is its own row); a server without it: this person's latest in the role
@@ -242,24 +243,25 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
   const earlier = new Map<number, Row[]>();
   for (const r of acks.history ?? []) earlier.set(r.user_id, [...(earlier.get(r.user_id) ?? []), r]);
   const FILTERS: [Filter, string][] = [['waiting', `Waiting · ${acks.pending}`], ['overdue', `Overdue · ${acks.overdue}`], ['done', `Acknowledged · ${acks.done}`], ['all', 'Everyone']];
-  const empty = { waiting: 'Nobody is waiting: everyone has acknowledged.', overdue: 'Nobody is overdue.', done: 'Nobody has acknowledged yet.', all: 'Nobody matches.' }[filter];
+  const empty = { waiting: 'Nobody waiting', overdue: 'Nobody overdue', done: 'None yet', all: 'No match' }[filter];
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-200 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900">Acknowledgements</h3>
-        {acks.total > 0 && <span className="text-xs text-gray-600">{acks.done} of {acks.total} people ({acks.percent}%)</span>}
+        <div className="flex items-center gap-1">
+          <h3 className="text-sm font-semibold text-gray-900">Acknowledgements</h3>
+          <InfoTip label="About acknowledgements" text="Once the document is published, everyone in the organisation is asked to read and acknowledge it; each new major version (2.0, 3.0) asks everyone again." />
+        </div>
+        {acks.total > 0 && <span className="text-xs text-gray-600" title={`${acks.done} of ${acks.total} people have acknowledged`}>{acks.done}/{acks.total} · {acks.percent}%</span>}
         {acks.pending > 0 && canRemind && (
-          <button type="button" onClick={() => remind.mutate()} disabled={remind.isPending}
+          <button type="button" onClick={() => remind.mutate()} disabled={remind.isPending} title="Remind everyone who has not acknowledged yet"
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            {remind.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />} Remind everyone waiting
+            {remind.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />} Remind waiting
           </button>
         )}
       </div>
       {acks.total === 0 ? (
-        <p className="px-4 py-3 text-xs text-gray-600">
-          {data.document.status === 'published' ? 'Nobody has been asked yet.' : 'Once the document is published, everyone in the organisation is asked to read and acknowledge it; each new major version (2.0, 3.0) asks everyone again.'}
-        </p>
+        <p className="px-4 py-3 text-xs text-gray-600">{data.document.status === 'published' ? 'Nobody asked yet' : 'Not published yet'}</p>
       ) : (
         <div className="space-y-3 px-4 py-3">
           <div className="h-2 w-full overflow-hidden rounded-full bg-[#e8ecf0]" role="progressbar" aria-valuenow={acks.percent} aria-valuemin={0} aria-valuemax={100} aria-label="Acknowledged">
@@ -289,14 +291,14 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
                   <div className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-gray-900">
                       {p.user || 'Someone'}{p.user_id === meId && <You />}
-                      {p.version && <span className="ml-2 text-[11px] text-gray-500" title={p.status === 'done' ? 'The version this person acknowledged' : 'The version this person is asked to acknowledge'}>version {p.version}</span>}
+                      {p.version && <span className="ml-2 text-[11px] text-gray-500" title={p.status === 'done' ? 'The version this person acknowledged' : 'The version this person is asked to acknowledge'}>v{p.version}</span>}
                     </span>
                     {seal && <SignatureSeal id={seal.id} fingerprint={seal.image_sha256 ?? ''} />}
                     {(earlier.get(p.user_id) ?? []).map((e) => {
                       const s = ownEsign(e);
                       return (
                         <div key={e.id} className="mt-1 border-l-2 border-emerald-200 pl-2 text-[11px] text-gray-600">
-                          Acknowledged version {e.version || '-'} on {day(e.done_at)}
+                          Acknowledged v{e.version || '-'} · {day(e.done_at)}
                           {s && <SignatureSeal id={s.id} fingerprint={s.image_sha256 ?? ''} thumb={false} />}
                         </div>
                       );
@@ -328,7 +330,7 @@ function Timeline({ events }: { events: Lifecycle['timeline'] }) {
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       <h3 className="mb-3 text-sm font-semibold text-gray-900">Life cycle</h3>
       {events.length === 0 ? (
-        <p className="text-xs text-gray-600">Nothing has happened to this document yet.</p>
+        <p className="text-xs text-gray-600">No events yet</p>
       ) : (
         <ol className="ml-1.5 border-l border-gray-200">
           {shown.map((e, i) => {
@@ -352,7 +354,7 @@ function Timeline({ events }: { events: Lifecycle['timeline'] }) {
       )}
       {events.length > 8 && (
         <button type="button" onClick={() => setAll(!all)} className="mt-2 text-xs font-medium text-primary-700 hover:underline">
-          {all ? 'Show the latest only' : `Show all ${events.length} events`}
+          {all ? 'Show less' : `Show all ${events.length}`}
         </button>
       )}
     </section>
@@ -382,10 +384,11 @@ export function SettingsCard({ inPopup = false }: { inPopup?: boolean }) {
       + `${s.escalate_role_id ? (data.escalate_role_name || 'the chosen role') : 'the administrators'} after ${days(s.admin_after_days)}`],
   ];
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
-      {!inPopup && <h3 className="text-sm font-semibold text-gray-900">Due dates and escalation</h3>}{/* the popup's own title says it */}
-      <p className="mt-0.5 text-xs text-gray-600">The same for every document in the organisation.</p>
-      <dl className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-[max-content_1fr]">
+    <section className="relative rounded-xl border border-gray-200 bg-white p-4">
+      {/* top right, so its note opens over the card (in the popup the card is short and its body scrolls: a note at the foot would be cut off) */}
+      <span className="absolute right-3 top-3"><InfoTip align="end" label="About these settings" text="The same for every document in the organisation." /></span>
+      {!inPopup && <h3 className="mb-3 text-sm font-semibold text-gray-900">Due dates and escalation</h3>}{/* the popup's own title says it */}
+      <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-[max-content_1fr]">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-xs font-medium text-gray-700">{label}</dt>
@@ -393,8 +396,9 @@ export function SettingsCard({ inPopup = false }: { inPopup?: boolean }) {
           </div>
         ))}
       </dl>
-      <Link href="/governance/settings" className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#0f766e] hover:underline">
-        {data.can_edit ? 'Change these in Governance settings' : 'See all in Governance settings'} <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+      <Link href="/governance/settings" title={data.can_edit ? 'Change these in Governance settings' : 'See all in Governance settings'}
+        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#0f766e] hover:underline">
+        Governance settings <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </Link>
     </section>
   );
@@ -434,9 +438,9 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
     <div className="space-y-4">
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h3 className="text-sm font-semibold text-gray-900">Where this document stands</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Progress</h3>
           <StatusChip status={data.document.status} />
-          <span className="text-xs text-gray-600">version {data.document.version} · owner {data.document.owner || '-'}</span>
+          <span className="text-xs text-gray-600">v{data.document.version} · owner {data.document.owner || '-'}</span>
         </div>
         <Stages status={data.document.status} signoff={signoff} acks={data.acknowledgements} />
         {canEdit && <WithdrawButton documentId={documentId} className="mt-3" />}
@@ -471,8 +475,10 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
 
       {discussion && canAnnotate && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>
-          <p className="mb-3 text-xs text-gray-500">Everyone involved (the author, reviewers and approvers) can comment here.</p>
+          <div className="mb-3 flex items-center gap-1">
+            <h3 className="text-sm font-semibold text-gray-900">Discussion</h3>
+            <InfoTip label="About the discussion" text="Everyone involved (the author, reviewers and approvers) can comment here." />
+          </div>
           <DocumentAnnotationPanel documentId={documentId} />
         </section>
       )}

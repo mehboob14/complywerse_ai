@@ -24,6 +24,16 @@ export function docLine(d: PickDoc, types: Record<string, string>, statuses: Rec
     .filter(Boolean).join(' · ');
 }
 
+/** "Policy (standard structure)" -> "Policy": a built-in template is named for its type; the note about its structure is not shown. */
+export const templateName = (name: string): string => name.replace(/ \(standard structure\)$/, '');
+
+/** The muted part of a template's row: "15 sections" (or "free structure"), the type first when the name does not already say it. */
+export function templateMeta(t: { name: string; doc_type: string; sections: number }, types: Record<string, string>): string {
+  const type = types[t.doc_type] ?? humanize(t.doc_type);
+  const sections = t.sections ? `${t.sections} ${t.sections === 1 ? 'section' : 'sections'}` : 'free structure';
+  return [templateName(t.name).toLowerCase().includes(type.toLowerCase()) ? '' : type, sections].filter(Boolean).join(' · ');
+}
+
 /** The documents a picker offers: those with a text or a file, not already chosen; to edit, only those the person may edit. */
 export function pickable<T extends PickDoc>(rows: T[], { exclude = [], editable = false }: { exclude?: number[]; editable?: boolean } = {}): T[] {
   return rows.filter((d) => !exclude.includes(d.id) && (d.has_text || d.has_file) && (!editable || d.may_edit !== false));

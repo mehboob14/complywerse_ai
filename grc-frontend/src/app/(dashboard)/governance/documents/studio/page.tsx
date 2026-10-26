@@ -3,18 +3,22 @@
 export const dynamic = 'force-dynamic';
 
 /**
- * AI Studio home, on one screen: four ways to start (write, upload, edit from the library, compare), each opening its own
- * popup, and the work in progress next to the templates, each scrolling inside its own panel.
+ * Comply AI Studio home, on one screen: four ways to start (write, upload, edit from the library, compare) as small tiles, each
+ * opening its own popup, and the work in progress next to the templates, each scrolling inside its own panel. Labels, not
+ * sentences: what a tile or a panel used to explain is its tooltip or an (i).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookMarked, FilePlus2, FileText, GitCompare, Info, Layers, Library, Loader2, Pencil, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { BookMarked, FilePlus2, FileText, GitCompare, Layers, Library, Loader2, Search, Sparkles, Trash2, Upload, X, type LucideIcon } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { DocPageHeader } from '@/components/governance/DocPageHeader';
+import { BTN, BTN_TEXT } from '@/components/governance/docUi';
 import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Session, type TemplateItem } from '@/lib/studio/api';
 import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
@@ -22,7 +26,7 @@ import { FrameworkList } from './_components/ReferencesPanel';
 import { DocumentDetailsFields, titleCase, useDocumentDetails } from '../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, SIGNOFF_STATUS, saveSignoffChoice, type SignoffChoice } from '../_SignoffControl';
 import { detailsPayload } from '../_detailsRead';
-import { docLine, pickable, workAction } from './_components/homeLists';
+import { docLine, pickable, templateMeta, templateName, workAction } from './_components/homeLists';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -42,7 +46,7 @@ function DocList({ onPick, exclude, list = 'max-h-52', focus = false, empty = 'N
     <div>
       <label className="relative block"><span className="sr-only">Search the library</span><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" /><input autoFocus={focus} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the document library" className={`${input} pl-8`} /></label>
       <ul className={`mt-2 space-y-1 overflow-y-auto ${list}`}>
-        {docs.isLoading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
+        {docs.isLoading && <li role="status" className="p-2 text-[#586472]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Loading</span></li>}
         {docs.data && rows.length === 0 && <li className="p-2 text-xs text-[#586472]">{empty}</li>}
         {rows.map((d) => (
           <li key={d.id}>
@@ -225,7 +229,7 @@ function LibraryDialog({ onClose, onCompare }: { onClose: () => void; onCompare:
   return (
     <AnimatedModal isOpen onClose={onClose} title="Edit a document from the library" size="lg">
       <div className="p-5">
-        <p className="mb-2 text-xs text-[#3f4b58]">Only the documents you may edit are listed. To read one you may not edit, <button type="button" onClick={onCompare} className="font-semibold text-[#0b6b58] underline">compare it</button> instead.</p>
+        <p className="mb-2 text-xs text-[#3f4b58]">Documents you may edit. To read any other, <button type="button" onClick={onCompare} className="font-semibold text-[#0b6b58] underline">compare it</button>.</p>
         {open.isPending ? <p className="text-sm text-[#3f4b58]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Opening…</p>
           : <DocList focus editable list="max-h-[50vh]" empty="No document you may edit was found." onPick={(d) => open.mutate(d)} />}
       </div>
@@ -270,25 +274,50 @@ function CompareDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (sess
 // ── the home screen ──────────────────────────────────────────────────────────
 type Start = 'new' | 'upload' | 'library' | 'compare';
 
-const STARTS: { key: Start; icon: typeof FilePlus2; title: string; hint: string }[] = [
-  { key: 'new', icon: FilePlus2, title: 'Write a new document', hint: 'Template and references' },
-  { key: 'upload', icon: Upload, title: 'Upload a document', hint: 'Word, PDF, text or HTML' },
-  { key: 'library', icon: Library, title: 'Edit from the library', hint: 'Edit, save a version' },
-  { key: 'compare', icon: GitCompare, title: 'Compare two documents', hint: 'Redline and what matters' },
+// the tile says one or two words; what it used to say underneath is its tooltip
+const STARTS: { key: Start; icon: LucideIcon; title: string; tip: string }[] = [
+  { key: 'new', icon: FilePlus2, title: 'Write', tip: 'Write a new document: template and references' },
+  { key: 'upload', icon: Upload, title: 'Upload', tip: 'Upload a document: Word, PDF, text or HTML' },
+  { key: 'library', icon: Library, title: 'Edit', tip: 'Edit a document from the library: edit, save a version' },
+  { key: 'compare', icon: GitCompare, title: 'Compare', tip: 'Compare two documents: redline and what matters' },
 ];
 
 /** A panel of the home screen: a title bar and a body that scrolls on its own. */
 function Panel({ title, count, info, tools, children }: { title: string; count?: number; info?: string; tools?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section aria-label={title} className="flex max-h-[28rem] min-h-0 flex-col rounded-xl border border-[#d5dbe1] bg-white shadow-card lg:max-h-none">
-      <div className="flex items-center gap-2 border-b border-[#e6eaee] px-3 py-2">
-        <h2 className="text-sm font-semibold text-[#1f2933]">{title}</h2>
-        {count !== undefined && <span className="rounded-full bg-[#eef1f4] px-1.5 py-0.5 text-[10px] font-semibold text-[#586472]">{count}</span>}
-        {info && <span title={info} aria-label={info} className="text-[#7b8794]"><Info className="h-3.5 w-3.5" /></span>}
-        <div className="ml-auto">{tools}</div>
+    <section aria-label={title} className="flex max-h-[28rem] min-h-0 flex-col rounded-xl border border-[#d5dbe1] bg-[#fff] lg:max-h-none">
+      <div className="flex items-center gap-2 border-b border-[#e1e6eb] px-3.5 py-2.5">
+        <h2 className="text-[15px] font-semibold text-[#1f2933]">{title}</h2>
+        {count !== undefined && <span className="rounded-full bg-[#eef1f4] px-2 py-0.5 text-[12px] font-medium tabular-nums text-[#586472]">{count}</span>}
+        {/* the (i) is at the right end, its note opens leftwards: the Templates panel is the right-hand one, a note opening rightwards would leave the screen */}
+        <div className="ml-auto flex items-center gap-2">{tools}{info && <InfoTip align="end" text={info} label={`About ${title.toLowerCase()}`} />}</div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </section>
+  );
+}
+
+/** What a panel shows while its list loads: grey bars, no words. */
+function Skeleton() {
+  return (
+    <div role="status" aria-label="Loading">
+      {[0, 1, 2].map((i) => (
+        <div key={i} aria-hidden className="flex items-center gap-2.5 border-b border-[#e1e6eb] px-3.5 py-3 last:border-b-0">
+          <span className="h-7 w-7 shrink-0 animate-pulse rounded-md bg-[#eef1f4]" />
+          <span className="h-3 w-2/3 animate-pulse rounded bg-[#eef1f4]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A panel with nothing in it: an icon and three words. */
+function Nothing({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+      <FileText className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+      <p className="text-[15px] font-semibold text-[#1f2933]">{text}</p>
+    </div>
   );
 }
 
@@ -301,20 +330,20 @@ function YourWork({ sessions, loading, onOpen, onDiscard, onRemove }: { sessions
   );
   return (
     <Panel title="Your work" count={sessions.length} tools={search}>
-      {loading ? <p className="p-4 text-sm text-[#586472]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Loading…</p>
-        : !sessions.length ? <p className="p-6 text-center text-sm text-[#586472]">Your documents will appear here.</p>
-        : !rows.length ? <p className="p-4 text-sm text-[#586472]">Nothing matches “{q}”.</p> : (
-          <ul className="divide-y divide-[#eef1f4]">
+      {loading ? <Skeleton />
+        : !sessions.length ? <Nothing text="Nothing yet" />
+        : !rows.length ? <p className="p-4 text-[13px] text-[#586472]">No match</p> : (
+          <ul className="divide-y divide-[#e1e6eb]">
             {rows.map((s) => (
-              <li key={s.id} className="flex items-center gap-2 px-3 py-2 hover:bg-[#f6faf9]">
+              <li key={s.id} className="flex items-center gap-2 px-3.5 py-2 hover:bg-[#f6faf9]">
                 <button type="button" onClick={() => onOpen(s.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e3f1f1] text-[#0f4c5c]"><FileText className="h-3.5 w-3.5" /></span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e6f4f1] text-[#0f766e]"><FileText className="h-3.5 w-3.5" /></span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5"><span className="truncate text-[13px] font-semibold text-[#1f2933]">{s.title}</span>
                       {s.document_id ? <span title="In the library" aria-label="In the library" className="shrink-0 text-[#0f766e]"><Library className="h-3.5 w-3.5" /></span> : null}</span>
-                    <span className="block truncate text-[11px] text-[#586472]">{DOC_TYPE_LABEL[s.doc_type] ?? titleCase(s.doc_type)} · {plural(s.words, 'word')} · rev {s.revision}{!s.document_id && s.source?.name ? ` · ${s.source.name}` : ''}</span>
+                    <span className="block truncate text-[12px] text-[#586472]">{DOC_TYPE_LABEL[s.doc_type] ?? titleCase(s.doc_type)} · {plural(s.words, 'word')} · rev {s.revision}{!s.document_id && s.source?.name ? ` · ${s.source.name}` : ''}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-[#586472]">{ago(s.updated_at)}</span>
+                  <span className="shrink-0 text-[12px] text-[#586472]">{ago(s.updated_at)}</span>
                 </button>
                 {/* a library document the person may change (an upload is one) is archived in the library, never removed here; a draft
                     can be discarded, and a document they may only read (a comparison) removed from their work */}
@@ -341,18 +370,18 @@ function Templates({ onUse }: { onUse: (t: TemplateItem) => void }) {
   const rows = (templates.data?.items ?? []).filter((t) => t.id !== 'builtin:blank');
   return (
     <Panel title="Templates" count={rows.length} info="Open a template, change it, then use Save as a template: it becomes your organisation's default for that type, and its sections are checked on every document of that type.">
-      {templates.isLoading ? <p className="p-4 text-sm text-[#586472]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Loading…</p> : (
-        <ul className="divide-y divide-[#eef1f4]">
+      {templates.isLoading ? <Skeleton /> : rows.length === 0 ? <Nothing text="No templates" /> : (
+        <ul className="divide-y divide-[#e1e6eb]">
           {rows.map((t) => (
-            <li key={t.id} title={t.description || undefined} className="flex items-center gap-2 px-3 py-2">
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5"><span className="truncate text-[13px] font-semibold text-[#1f2933]">{t.name}</span>
-                  {t.is_default && !t.builtin && <span className="shrink-0 rounded-full bg-[#d6f3ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#0b6b58]">default</span>}
-                  {t.builtin && t.replaced_by_default && <span className="shrink-0 rounded-full bg-[#eef1f4] px-1.5 py-0.5 text-[10px] font-semibold text-[#586472]">replaced</span>}</span>
-                <span className="block truncate text-[11px] text-[#586472]">{DOC_TYPE_LABEL[t.doc_type] ?? t.doc_type} · {t.structure?.sections.length ? plural(t.structure.sections.length, 'section') : 'free structure'}</span>
+            <li key={t.id} title={t.description || undefined} className="flex items-center gap-2 px-3.5 py-1.5 hover:bg-[#f6faf9]">
+              <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                <span className="truncate text-[13px] font-semibold text-[#1f2933]">{templateName(t.name)}</span>
+                {t.is_default && !t.builtin && <span className="shrink-0 rounded-full bg-[#d6f3ec] px-1.5 py-0.5 text-[11px] font-medium text-[#0b6b58]">default</span>}
+                {t.builtin && t.replaced_by_default && <span className="shrink-0 rounded-full bg-[#eef1f4] px-1.5 py-0.5 text-[11px] font-medium text-[#586472]">replaced</span>}
+                <span className="shrink-0 whitespace-nowrap text-[12px] text-[#586472]">{templateMeta({ name: t.name, doc_type: t.doc_type, sections: t.structure?.sections.length ?? 0 }, DOC_TYPE_LABEL)}</span>
               </span>
-              <button type="button" onClick={() => onUse(t)} className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#e6f4f1] px-2 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#cfe9e4]"><Pencil className="h-3 w-3" /> {t.builtin ? 'Customise' : 'Edit'}</button>
-              {!t.builtin && <button type="button" onClick={() => remove.mutate(t)} aria-label={`Delete ${t.name}`} title="Delete this template" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c]"><Trash2 className="h-3.5 w-3.5" /></button>}
+              <button type="button" onClick={() => onUse(t)} className={BTN_TEXT}>{t.builtin ? 'Customise' : 'Edit'}</button>
+              {!t.builtin && <button type="button" onClick={() => remove.mutate(t)} aria-label={`Delete ${t.name}`} title="Delete this template" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"><Trash2 className="h-3.5 w-3.5" /></button>}
             </li>
           ))}
         </ul>
@@ -382,7 +411,7 @@ export default function StudioHomePage() {
     onError: (e, s) => toast({ title: s.document_id ? 'Could not remove it' : 'Could not discard it', message: problemOf(e), type: 'error' }),
   });
   const useTemplate = useMutation({
-    mutationFn: (t: TemplateItem) => studioApi.createSession({ kind: 'new', title: t.name.replace(/ \(standard structure\)$/, ''), doc_type: t.doc_type, template_id: t.id }),
+    mutationFn: (t: TemplateItem) => studioApi.createSession({ kind: 'new', title: templateName(t.name), doc_type: t.doc_type, template_id: t.id }),
     onSuccess: (s) => router.push(`/governance/documents/studio/${s.id}`),
     onError: (e) => toast({ title: 'Could not open the template', message: problemOf(e), type: 'error' }),
   });
@@ -391,23 +420,30 @@ export default function StudioHomePage() {
 
   if (status.isLoading) return <PageLoader />;
   if (!status.data?.enabled) {
-    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The Comply AI Studio is not enabled for your organisation. <Link href="/governance/documents" className="font-semibold text-[#0b6b58] underline">Back to the documents</Link></p>;
+    return (
+      <div className="mx-auto flex max-w-sm flex-col items-center gap-3 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center">
+        <Sparkles className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+        <p className="text-[15px] font-semibold text-[#1f2933]">Comply AI Studio is not enabled</p>
+        <Link href="/governance/documents" className={BTN}>Back to documents</Link>
+      </div>
+    );
   }
   return (
     // one screen: the ways to start, then the two panels filling the rest (each scrolls inside itself) — stacked below lg
     <div className="mx-auto flex max-w-6xl flex-col gap-4 lg:h-[calc(100vh-5rem)]">
+      <div className="shrink-0"><DocPageHeader title="Comply AI Studio" /></div>
       {status.data.ai_configured === false && (
-        <p className="rounded-lg border border-[#f0cf7a] bg-[#fffbed] px-3 py-2 text-xs text-[#6b4e00]" role="status">Comply Agent is not connected yet: chat is off; the editor, checks, compare and export work.</p>
+        <p className="flex shrink-0 flex-wrap items-center gap-1 rounded-lg border border-[#f0cf7a] bg-[#fffbed] px-3 py-2 text-[13px] text-[#6b4e00]" role="status">
+          Comply Agent is not connected: chat is off.
+          <InfoTip text="The editor, checks, compare and export still work." label="What still works" />
+        </p>
       )}
-      <div className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
         {STARTS.map((s) => (
-          <button key={s.key} type="button" onClick={() => setDialog(s.key)}
-            className="group flex items-center gap-3 rounded-xl border border-[#d5dbe1] bg-white p-3 text-left shadow-card transition-colors hover:border-[#0f766e] hover:bg-[#f6faf9]">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#e3f1f1] text-[#0f4c5c] transition-colors group-hover:bg-[#0f766e] group-hover:text-white"><s.icon className="h-[18px] w-[18px]" /></span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-[#1f2933]">{s.title}</span>
-              <span className="block truncate text-xs text-[#586472]">{s.hint}</span>
-            </span>
+          <button key={s.key} type="button" onClick={() => setDialog(s.key)} title={s.tip}
+            className="group flex items-center gap-2.5 rounded-xl border border-[#d5dbe1] bg-[#fff] px-3 py-2.5 text-left transition-colors hover:border-[#0f766e] hover:bg-[#f0fdfa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#e6f4f1] text-[#0f766e] transition-colors group-hover:bg-[#0f766e] group-hover:text-[#fff]"><s.icon className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden /></span>
+            <span className="min-w-0 truncate text-sm font-semibold text-[#1f2933]">{s.title}</span>
           </button>
         ))}
       </div>

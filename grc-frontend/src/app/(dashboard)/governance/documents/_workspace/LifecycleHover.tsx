@@ -79,7 +79,7 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
       </div>
 
       {isLoading && (
-        <p className="flex items-center gap-2 text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading the life cycle…</p>
+        <p className="flex items-center gap-2 text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</p>
       )}
 
       {waiting.length > 0 && (
@@ -113,7 +113,7 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
       {full && (
         <Section title="Recent activity">
           {recent.length === 0 ? (
-            <p className="text-slate-500">Nothing has happened to this document yet.</p>
+            <p className="text-slate-500">No activity yet</p>
           ) : (
             <ol className="space-y-1">
               {recent.map((e, i) => (
@@ -144,10 +144,7 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
         </dl>
       </Section>
 
-      {isError && !data && <p className="text-slate-500">The people and the activity could not be loaded just now.</p>}
-      <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-500">
-        {full ? 'Open the document for its full life cycle.' : 'Open the document for its sign-off and review history.'}
-      </p>
+      {isError && !data && <p className="text-slate-500">Could not load the people and activity.</p>}
     </div>
   );
 }

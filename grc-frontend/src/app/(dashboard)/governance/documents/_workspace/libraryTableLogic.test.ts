@@ -100,9 +100,9 @@ test('a bulk action is for the ticked matches in the table order, never a parent
   assert.deepEqual(actionableIds(new Set(), rows), []);
 });
 
-test('the bar says how many are selected, in the singular for one', () => {
-  assert.equal(selectedLabel(1), '1 document selected');
-  assert.equal(selectedLabel(2), '2 documents selected');
+test('the bar says how many are selected', () => {
+  assert.equal(selectedLabel(1), '1 selected');
+  assert.equal(selectedLabel(2), '2 selected');
 });
 
 // ── bulk bar and row menu ────────────────────────────────────────────────────────────────────────────────────────────────

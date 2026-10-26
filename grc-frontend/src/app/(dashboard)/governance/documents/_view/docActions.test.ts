@@ -25,12 +25,12 @@ test('acknowledge while a new version is on its way: the published one stays in 
 
 test('the line about the version in force says who reads which version', () => {
   assert.equal(inForceLine({ status: 'pending_review', current: '1.0', inForce: '1.0', newer: { number: '1.1', status: 'pending_review' } }),
-    'You are reading the published version v1.0. Version 1.1 is in review; it replaces this one when it is approved and published.');
+    'Reading published v1.0 · v1.1 in review');
   assert.equal(inForceLine({ status: 'approved', current: '1.0', inForce: '1.0', newer: { number: '2.0', status: 'approved' } }),
-    'You are reading the published version v1.0. Version 2.0 is approved; it replaces this one when it is published.');
+    'Reading published v1.0 · v2.0 approved');
   assert.equal(inForceLine({ status: 'pending_review', current: '1.1', inForce: '1.0' }),
-    'This is version 1.1 (in review). Everyone else reads the published version v1.0 until this one is published.');
-  assert.match(inForceLine({ status: 'draft', current: '1.2', inForce: '1.0' }) ?? '', /^This is version 1\.2 \(being revised\)/);
+    'v1.1 in review · others read published v1.0');
+  assert.match(inForceLine({ status: 'draft', current: '1.2', inForce: '1.0' }) ?? '', /^v1\.2 being revised/);
   assert.equal(inForceLine({ status: 'published', current: '1.0', inForce: '1.0' }), null);         // the one in force itself
   assert.equal(inForceLine({ status: 'draft', current: '1.0', inForce: '1.0' }), null);             // set back to draft, no new version
   assert.equal(inForceLine({ status: 'draft', current: '1.0', inForce: null }), null);              // never published
@@ -74,18 +74,18 @@ test('nothing to do -> null', () => {
 });
 
 test('stepLine without a due date', () => {
-  assert.equal(stepLine({ kind: 'acknowledge' }), 'You are asked to read and acknowledge this document');
-  assert.equal(stepLine({ kind: 'review', due: null }), 'You are asked to review and sign this document');
-  assert.equal(stepLine({ kind: 'approve', due: '' }), 'You are asked to approve and sign this document');
-  assert.equal(stepLine({ kind: 'publish', due: 'soon' }), 'It is approved: publish it so everyone reads it');
-  assert.equal(stepLine({ kind: 'submit' }), 'This is a draft: choose reviewers and send it for review');
+  assert.equal(stepLine({ kind: 'acknowledge' }), 'Acknowledge');
+  assert.equal(stepLine({ kind: 'review', due: null }), 'Review and sign');
+  assert.equal(stepLine({ kind: 'approve', due: '' }), 'Approve and sign');
+  assert.equal(stepLine({ kind: 'publish', due: 'soon' }), 'Approved: ready to publish');
+  assert.equal(stepLine({ kind: 'submit' }), 'Draft: choose reviewers and submit');
 });
 
 test('stepLine with a due date keeps the day the server sent', () => {
-  assert.equal(stepLine({ kind: 'review', due: '2026-10-30' }), 'You are asked to review and sign this document by 30 Oct 2026');
-  assert.equal(stepLine({ kind: 'approve', due: '2026-01-01T00:00:00' }), 'You are asked to approve and sign this document by 1 Jan 2026');
-  assert.equal(stepLine({ kind: 'acknowledge', due: '2026-12-31T23:59:59.000Z' }), 'You are asked to read and acknowledge this document by 31 Dec 2026');
-  assert.equal(stepLine({ kind: 'submit', due: '2026-13-01' }), 'This is a draft: choose reviewers and send it for review');
+  assert.equal(stepLine({ kind: 'review', due: '2026-10-30' }), 'Review and sign by 30 Oct 2026');
+  assert.equal(stepLine({ kind: 'approve', due: '2026-01-01T00:00:00' }), 'Approve and sign by 1 Jan 2026');
+  assert.equal(stepLine({ kind: 'acknowledge', due: '2026-12-31T23:59:59.000Z' }), 'Acknowledge by 31 Dec 2026');
+  assert.equal(stepLine({ kind: 'submit', due: '2026-13-01' }), 'Draft: choose reviewers and submit');
 });
 
 test('publishing a major version asks everyone, a minor one only those who have not acknowledged this major version', () => {
@@ -121,5 +121,5 @@ test('changes asked for: Resubmit is the author\'s step, after anyone\'s own sig
   assert.deepEqual(primaryAction({ ...base, status: 'pending_review', canEdit: true, canResubmit: true }), { kind: 'resubmit', label: 'Resubmit' });
   assert.equal(kind({ status: 'pending_review', myRole: 'reviewer', canResubmit: true }), 'review');
   assert.deepEqual(primaryAction({ ...base, status: 'pending_review', myRole: 'reviewer', stepLabel: 'Concur and sign' }), { kind: 'review', label: 'Concur and sign' });
-  assert.equal(stepLine({ kind: 'resubmit' }), 'Changes were asked for: make them, then resubmit it');
+  assert.equal(stepLine({ kind: 'resubmit' }), 'Changes asked for: resubmit');
 });

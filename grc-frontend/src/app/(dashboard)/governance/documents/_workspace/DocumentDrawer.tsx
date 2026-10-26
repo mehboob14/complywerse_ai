@@ -171,7 +171,7 @@ function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; cou
   const scope = doc.regulatory_scope ?? [];
   return (
     <div>
-      <Section title="Key information" first>
+      <Section title="Details" first>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3.5">
           {keyInfoRows(doc, lookups, shortDate).map((row) => <InfoItem key={row.key} row={row} doc={doc} />)}
         </dl>
@@ -202,7 +202,7 @@ function OwnDates({ doc, failed }: { doc: GovDoc; failed: boolean }) {
   const events = timelineFromDates(doc, shortDate);
   return (
     <div>
-      {failed && <p role="status" className={`mb-3 ${MUTED}`}>The workflow history could not be read.</p>}
+      {failed && <p role="status" className={`mb-3 ${MUTED}`}>Could not read the history.</p>}
       <ol className="ml-1.5 border-l border-[#d5dbe1]">
         {events.map((e) => (
           <li key={e.key} className="relative pb-3 pl-4">
@@ -212,7 +212,7 @@ function OwnDates({ doc, failed }: { doc: GovDoc; failed: boolean }) {
           </li>
         ))}
       </ol>
-      <p className={MUTED}>The detailed workflow history is in the document&apos;s Change log.</p>
+      <p className={MUTED}>More in the Change log.</p>
     </div>
   );
 }
@@ -237,7 +237,7 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
       {full && (
         <>
           <Section title="Waiting for" first>
-            {waiting.length === 0 ? <p className={MUTED}>Nobody is being waited for.</p> : (
+            {waiting.length === 0 ? <p className={MUTED}>Nobody waiting</p> : (
               <ul className="divide-y divide-[#e1e6eb]">
                 {waiting.slice(0, WAITING_SHOWN).map((r) => (
                   <li key={r.id} className="flex items-baseline justify-between gap-3 py-1.5">
@@ -262,10 +262,10 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
                   {acks.overdue > 0 && <span className="font-medium text-[#b42318]"> · {acks.overdue} overdue</span>}
                 </p>
               </>
-            ) : <p className={MUTED}>No acknowledgement has been requested.</p>}
+            ) : <p className={MUTED}>None requested</p>}
           </Section>
           <Section title="Recent activity">
-            {recent.length === 0 ? <p className={MUTED}>Nothing has happened to this document yet.</p> : (
+            {recent.length === 0 ? <p className={MUTED}>No activity yet</p> : (
               <ol className="space-y-2">
                 {recent.map((e, i) => (
                   <li key={i} className="flex gap-3">
@@ -283,7 +283,7 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
       )}
       <div className="mt-5 border-t border-[#e1e6eb] pt-3">
         <button type="button" onClick={() => onOpenDoc(doc.id)} className={TEXT_LINK}>
-          Open the full workflow <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+          Open workflow <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         </button>
       </div>
     </div>
@@ -297,8 +297,8 @@ function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lo
   if (ids.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-[#c3ccd5] px-4 py-8 text-center">
-        <p className="text-[13px] font-medium text-[#1f2933]">This document is not mapped to any framework.</p>
-        <p className={`mt-1 ${MUTED}`}>Open the document and use Edit details to map it.</p>
+        <p className="text-[13px] font-medium text-[#1f2933]">No frameworks</p>
+        <p className={`mt-1 ${MUTED}`}>Map them from Edit.</p>
       </div>
     );
   }
@@ -306,7 +306,6 @@ function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lo
     <div>
       <p className="mb-3 text-[13px] font-medium text-[#1f2933]">{mappedLine(ids.length)}</p>
       <FrameworkList ids={ids} info={lookups.frameworks} active={active} onPick={onPick} maxHeight={420} />
-      <p className={`mt-3 ${MUTED}`}>Choose a framework to show every document mapped to it.</p>
     </div>
   );
 }
@@ -469,7 +468,6 @@ function DrawerPanel({
           {tab === 'workflow' && <Workflow doc={doc} onOpenDoc={onOpenDoc} />}
           {tab === 'versions' && (
             <div>
-              <p className={`mb-3 ${MUTED}`}>Each version opens the document as it was then.</p>
               <Versions doc={doc} />
             </div>
           )}

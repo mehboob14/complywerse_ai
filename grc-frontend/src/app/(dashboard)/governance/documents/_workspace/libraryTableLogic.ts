@@ -19,20 +19,20 @@ export interface Column {
 /** In the order they are drawn. The ids of the optional ones are libraryPrefs.OPTIONAL_COLUMNS; the title and the actions are always there. */
 export const COLUMNS: Column[] = [
   { id: 'title', label: 'Document', sort: 'title' },
-  { id: 'type', label: 'Type', sort: 'type', width: 100 },
-  { id: 'lifecycle', label: 'Lifecycle', sort: 'lifecycle', width: 208 },
-  { id: 'owner', label: 'Owner', sort: 'owner', width: 184 },
+  { id: 'type', label: 'Type', sort: 'type', width: 92 },
+  { id: 'lifecycle', label: 'Lifecycle', sort: 'lifecycle', width: 180 },
+  { id: 'owner', label: 'Owner', sort: 'owner', width: 160 },
   { id: 'department', label: 'Department', sort: 'department', width: 168 },
-  { id: 'frameworks', label: 'Frameworks', sort: 'frameworks', width: 248 },
-  { id: 'attestation', label: 'Attestation', sort: 'attestation', width: 120 },
-  { id: 'review', label: 'Next review', sort: 'review', width: 168 },
+  { id: 'frameworks', label: 'Frameworks', sort: 'frameworks', width: 212 },
+  { id: 'attestation', label: 'Attestation', sort: 'attestation', width: 108 },
+  { id: 'review', label: 'Next review', sort: 'review', width: 148 },
   { id: 'version', label: 'Version', sort: 'version', width: 96 },
   { id: 'updated', label: 'Updated', sort: 'updated', width: 100 },
-  { id: 'actions', label: 'Actions', width: 104 },
+  { id: 'actions', label: 'Actions', width: 88 },
 ];
 
 /** px the Document column keeps however narrow the card gets (the table scrolls sideways instead). */
-export const TITLE_MIN_WIDTH = 320;
+export const TITLE_MIN_WIDTH = 280;
 
 export function visibleColumns(hidden: readonly string[]): Column[] {
   return COLUMNS.filter((c) => c.id === 'title' || c.id === 'actions' || !hidden.includes(c.id));
@@ -103,7 +103,7 @@ export function actionableIds(selected: ReadonlySet<number>, entries: readonly {
   return entries.filter((e) => e.match && selected.has(e.doc.id)).map((e) => e.doc.id);
 }
 
-export const selectedLabel = (n: number): string => `${n} ${n === 1 ? 'document' : 'documents'} selected`;
+export const selectedLabel = (n: number): string => `${n} selected`;
 
 // ─── Bulk bar and row actions ────────────────────────────────────────────────────────────────────────────────────────────
 

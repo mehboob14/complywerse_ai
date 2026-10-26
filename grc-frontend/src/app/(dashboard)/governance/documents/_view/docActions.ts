@@ -27,13 +27,14 @@ export function primaryAction(i: PrimaryInput): { kind: PrimaryKind; label: stri
   return null;
 }
 
+// what the person is asked to do, in a few words (the banner adds the day: "Acknowledge by 8 Nov 2026"; the page's (i) says "read it first")
 const LINES: Record<PrimaryKind, string> = {
-  acknowledge: 'You are asked to read and acknowledge this document',
-  review: 'You are asked to review and sign this document',
-  approve: 'You are asked to approve and sign this document',
-  publish: 'It is approved: publish it so everyone reads it',
-  submit: 'This is a draft: choose reviewers and send it for review',
-  resubmit: 'Changes were asked for: make them, then resubmit it',
+  acknowledge: 'Acknowledge',
+  review: 'Review and sign',
+  approve: 'Approve and sign',
+  publish: 'Approved: ready to publish',
+  submit: 'Draft: choose reviewers and submit',
+  resubmit: 'Changes asked for: resubmit',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -55,16 +56,16 @@ export function stepLine(i: { kind: PrimaryKind; due?: string | null }): string 
 
 const ON_ITS_WAY: Record<string, string> = { draft: 'being revised', pending_review: 'in review', pending_approval: 'awaiting approval', approved: 'approved' };
 
-/** The line above a document while a new version of it is on its way and the published one stays in force; null otherwise.
+/** The line above a document while a new version of it is on its way and the published one stays in force; null otherwise
+ *  ("Reading published v1.0 · v1.1 in review"; the page's (i) says the new one replaces it once approved and published).
  *  `newer` (the server sends it to someone who reads the version in force): they read the published one; without it, the person
  *  reads the newest (`current`) and everyone else the published one. */
 export function inForceLine(d: { status: string; current: string; inForce?: string | null; newer?: { number: string; status: string } | null }): string | null {
   if (d.newer && d.status !== 'archived') {          // an archived one: nothing is in force, nothing on its way (its banner says so)
-    const when = d.newer.status === 'approved' ? 'when it is published' : 'when it is approved and published';
-    return `You are reading the published version v${d.current}. Version ${d.newer.number} is ${ON_ITS_WAY[d.newer.status] ?? d.newer.status.replace(/_/g, ' ')}; it replaces this one ${when}.`;
+    return `Reading published v${d.current} · v${d.newer.number} ${ON_ITS_WAY[d.newer.status] ?? d.newer.status.replace(/_/g, ' ')}`;
   }
   if (!d.inForce || d.inForce === d.current || !ON_ITS_WAY[d.status]) return null;
-  return `This is version ${d.current} (${ON_ITS_WAY[d.status]}). Everyone else reads the published version v${d.inForce} until this one is published.`;
+  return `v${d.current} ${ON_ITS_WAY[d.status]} · others read published v${d.inForce}`;
 }
 
 /** What Publish does to acknowledgements: a major version (1.0, 2.0) asks everyone, a minor one (1.1) only the people who have not

@@ -92,8 +92,8 @@ const BULK_ICON: Record<BulkId, LucideIcon> = { publish: Send, 'assign-owner': U
 
 // The scroller holds the sticky header; it is as tall as the rows, up to what the window leaves under the page's own header and
 // cards (Tailwind needs the whole class name written out). The toolbar, bulk bar and footer are outside it and always in view.
-// scroll-pt/pl keep a control the keyboard reaches from landing under the sticky header or the sticky first column (320 = TITLE_MIN_WIDTH).
-const SCROLLER = 'relative isolate max-h-[calc(100vh-14rem)] scroll-pl-[320px] scroll-pt-10 overflow-auto';
+// scroll-pt/pl keep a control the keyboard reaches from landing under the sticky header or the sticky first column (280 = TITLE_MIN_WIDTH).
+const SCROLLER = 'relative isolate max-h-[calc(100vh-14rem)] scroll-pl-[280px] scroll-pt-10 overflow-auto';
 const BTN = 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 !text-[13px] font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 // A body cell: opaque (the sticky one must hide what scrolls under it; the dashboard's zebra stripes sit on the <tr>), a hairline under it.
 const CELL = 'overflow-hidden border-b border-[#e1e6eb] px-[12px] align-middle';
@@ -144,8 +144,10 @@ function SortButton({ column, sort, onSort }: { column: Column; sort: Sort; onSo
   );
 }
 
-function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled }: {
+function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled, fold }: {
   columns: Column[]; sort: Sort; onSort: (next: Sort) => void; selectable: boolean; tick: TickState; onTickAll: () => void; scrolled: boolean;
+  /** the tree's "open all / close all" (only where some document has documents under it) */
+  fold: { allOpen: boolean; onToggle: () => void } | null;
 }) {
   return (
     <tr className="h-10">
@@ -163,6 +165,17 @@ function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled 
               <div className="flex items-center gap-2">
                 {selectable && <TickBox label="Select all documents on this page" state={tick} onChange={onTickAll} />}
                 <SortButton column={c} sort={sort} onSort={onSort} />
+                {fold && (
+                  <button
+                    type="button"
+                    onClick={fold.onToggle}
+                    aria-label={fold.allOpen ? 'Collapse all' : 'Expand all'}
+                    title={fold.allOpen ? 'Collapse all' : 'Expand all'}
+                    className="ml-auto grid h-6 w-6 place-items-center rounded-md text-[#586472] hover:bg-[#e8ecf0] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+                  >
+                    {fold.allOpen ? <ChevronsDownUp className="h-4 w-4" strokeWidth={1.75} aria-hidden /> : <ChevronsUpDown className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
+                  </button>
+                )}
               </div>
             ) : (
               <SortButton column={c} sort={sort} onSort={onSort} />
@@ -174,8 +187,8 @@ function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled 
   );
 }
 
-/** " · 4 nested documents under these": the pages count the documents at the top of the tree, the ones nested under them come with them. */
-const nestedNote = (n: number) => (n === 0 ? '' : ` · ${n} nested ${n === 1 ? 'document under it' : 'documents under these'}`);
+/** " · +4 nested": the pages count the documents at the top of the tree, the ones nested under them come with them. */
+const nestedNote = (n: number) => (n === 0 ? '' : ` · +${n} nested`);
 
 export function LibraryTable({
   docs, scope, filtering, lookups, counts, preferFrameworks, sort, onSort, hiddenColumns, density, pageSize, onPageSize, activeId,
@@ -297,6 +310,7 @@ export function LibraryTable({
                   open={r.open}
                   parentTitle={r.parent?.title}
                   compact={compact}
+                  showVersion={!columns.some((c) => c.id === 'version')}
                   onToggle={() => setFold((f) => flip(f, doc.id, openOf(doc.id, f) != null))}
                   onOpenDoc={onOpenDoc}
                 />
@@ -324,21 +338,6 @@ export function LibraryTable({
   if (empty && scrolled) setScrolled(false);        // the scroller is gone; the next one starts at the left edge
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#d5dbe1] bg-white">
-      {!loading && parents.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e1e6eb] px-[12px] py-[6px]">
-          {context > 0 && <p className="text-[12px] text-[#586472]">{context} shown as parents of a match</p>}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {/* the documents under every document; a document's versions open with its own arrow (each is read when it opens) */}
-            <button type="button" className={BTN} onClick={() => setFold(expandAll)} disabled={parents.every((id) => openOf(id) != null)} title="Show every document under its parent">
-              <ChevronsUpDown className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Expand all
-            </button>
-            <button type="button" className={BTN} onClick={() => setFold(collapseAll(parents))} disabled={!anyOpen}>
-              <ChevronsDownUp className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Collapse all
-            </button>
-          </div>
-        </div>
-      )}
-
       {!loading && ticked.length > 0 && bulkActions.length > 0 && (
         <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-[#1f2933] px-[12px] py-[8px]">
           <span role="status" className="text-[13px] font-medium text-[#fff]">{selectedLabel(ticked.length)}</span>
@@ -362,7 +361,7 @@ export function LibraryTable({
             onClick={() => setSelected(NONE)}
             className="ml-auto rounded-md px-2 py-1 !text-[13px] text-[#cbd5e1] hover:text-[#fff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99f6e4]"
           >
-            Clear selection
+            Clear
           </button>
         </div>
       )}
@@ -385,6 +384,7 @@ export function LibraryTable({
                 tick={tickState(selected, tickable)}
                 onTickAll={() => setSelected((s) => toggleAll(s, tickable))}
                 scrolled={scrolled}
+                fold={parents.length > 0 ? { allOpen: parents.every((id) => openOf(id) != null), onToggle: () => setFold(parents.every((id) => openOf(id) != null) ? collapseAll(parents) : expandAll) } : null}
               />
             </thead>
             <tbody aria-busy={loading || undefined}>
@@ -413,7 +413,7 @@ export function LibraryTable({
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="inline-flex items-center gap-2 text-[13px] text-[#586472]">
-              Rows per page
+              Rows
               <select
                 value={pageSize}
                 onChange={(e) => onPageSize(Number(e.target.value))}
@@ -424,11 +424,11 @@ export function LibraryTable({
             </label>
             <div className="flex items-center gap-2">
               <button type="button" className={BTN} disabled={page <= 1} onClick={() => setPageNo(page - 1)} aria-label="Previous page">
-                <ChevronLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Previous
+                <ChevronLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               </button>
-              <span className="text-[13px] tabular-nums text-[#586472]">Page {page} of {pages}</span>
+              <span className="text-[13px] tabular-nums text-[#586472]">{page} / {pages}</span>
               <button type="button" className={BTN} disabled={page >= pages} onClick={() => setPageNo(page + 1)} aria-label="Next page">
-                Next <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               </button>
             </div>
           </div>

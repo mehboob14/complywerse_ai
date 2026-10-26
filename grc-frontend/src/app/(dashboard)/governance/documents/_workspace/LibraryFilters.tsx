@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * The filter bar of the documents library, controlled by its props: row 1 is the search and the filter pills, row 2 says how many
- * documents match, shows what is being filtered on as chips that come off one by one, and holds the Views, Columns, density and
- * Export CSV controls. What each filter means lives in libraryModel.ts and the chips' and names' rules in libraryFiltersLogic.ts;
+ * The filter bar of the documents library, controlled by its props: ONE row (search, the filter pills, and on the right the Views,
+ * Columns, density and Export controls as icons), and, only while filtering, a line with how many match and what is filtered on as
+ * chips that come off one by one. What each filter means lives in libraryModel.ts and the chips' and names' rules in libraryFiltersLogic.ts;
  * this file only draws and keeps what is not state of the page (which popover is open, the name being typed for a new view).
  * Colours are explicit hex classes on purpose: the platform's CSS repaints slate/white inside the dashboard and gives a bare <p>
  * its own size and colour (PITFALLS: grc-frontend UI). The popovers are portaled and fixed-positioned so no table or scroll
@@ -62,7 +62,7 @@ const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:rin
 //    named sizes (text-sm = 13px, text-xs = 12px) are forced by `.compact-density` and win. So the text of a button is text-sm /
 //    text-xs, like the shared dropdown's pills; text inside a <span> may use any size.
 /** The buttons that sit among the shared dropdown's pills look like them. */
-const PILL = `inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-sm transition-colors ${FOCUS}`;
+const PILL = `inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs transition-colors ${FOCUS}`;
 const PILL_IDLE = 'border-[#d5dbe1] bg-white text-[#1f2933] hover:border-[#9aa5b1]';
 const PILL_APPLIED = 'border-[#0f766e] bg-white text-[#1f2933]';
 const PILL_ON = 'border-[#0f766e] bg-[#f0fdfa] font-medium text-[#115e59]';
@@ -166,6 +166,7 @@ function PopoverMenu({ title, label, width, align = 'left', buttonClass, button,
         type="button"
         onClick={toggleOpen}
         aria-label={label}
+        title={label ?? title}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -310,7 +311,10 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   );
 }
 
-// ─── The bar ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── The bar ─────────────────────────────────────────────────────────────────────────
+
+/** An icon-only tool button: a square, named by aria-label and title. */
+const ICON_TOOL = `${TOOL} w-8 justify-center px-0`;
 
 export function LibraryFilters({
   filters, onChange, options, canFilterMine, shown, total, views, activeViewId, onApplyView, onSaveView, onDeleteView,
@@ -319,8 +323,9 @@ export function LibraryFilters({
   const searchRef = useRef<HTMLInputElement>(null);
   const filtering = filterCount(filters) > 0;
   const chips = filterChips(filters, options);
-  const moreCount = filters.attestation.length + filters.classifications.length;
+  const moreCount = filters.review.length + filters.attestation.length + filters.classifications.length;
   const activeView = views.find((v) => v.id === activeViewId) ?? null;
+  const namedView = activeView && activeView.id !== 'all' ? activeView : null;      // "All documents" is the plain state: no name on the button
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
 
   // "/" jumps to the search, unless the person is typing somewhere or a dialog is open
@@ -344,21 +349,24 @@ export function LibraryFilters({
       onApply={onApply}
       multiSelect
       autoApply
-      size="md"
-      placeholder="All"
+      compact
+      size="sm"
       showAvatars={extra.showAvatars ?? false}
       forceSearch={extra.forceSearch}
       className="shrink-0"
-      triggerClassName="max-w-[16rem]"
+      triggerClassName="max-w-[14rem]"
     />
   );
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-3 text-[13px] text-[#26323d]">
-      {/* Row 1: the search, then the pills (on a phone the pills scroll along one line under the search) */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative w-full sm:w-auto sm:min-w-[240px] sm:flex-1">
-          <Search aria-hidden strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#586472]" />
+    <div className="flex min-w-0 max-w-full flex-col gap-2 text-[13px] text-[#26323d]">
+      {/* The count, for a screen reader (the header says it in words, the chips below when filtering) */}
+      <span role="status" aria-live="polite" className="sr-only">{resultText(shown, total, filtering)}</span>
+
+      {/* One row: the search, the pills, then (right) views, columns, density, export. It wraps on narrow screens; on a phone the pills scroll along one line. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px] sm:flex-1">
+          <Search aria-hidden strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#586472]" />
           <input
             ref={searchRef}
             type="text"
@@ -368,19 +376,20 @@ export function LibraryFilters({
             spellCheck={false}
             aria-label="Search documents"
             aria-keyshortcuts="/"
+            title="Searches title, code, owner, department, frameworks, tags and file name. Press / to jump here."
             value={filters.search}
             onChange={(e) => set({ search: e.target.value })}
-            placeholder="Search title, code, owner, department or framework…"
-            className={`h-10 w-full rounded-lg border border-[#c3ccd5] bg-white pl-10 text-sm text-[#1f2933] text-ellipsis placeholder:text-[#586472] focus-visible:!border-[#0f766e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${filters.search ? 'pr-10' : 'pr-4'}`}
+            placeholder="Search documents"
+            className={`h-8 w-full rounded-lg border border-[#c3ccd5] bg-white pl-9 pr-8 text-xs text-[#1f2933] text-ellipsis placeholder:text-[#586472] focus-visible:!border-[#0f766e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]`}
           />
           {filters.search && (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => { set({ search: '' }); searchRef.current?.focus(); }}
-              className={`absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933] ${FOCUS}`}
+              className={`absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933] ${FOCUS}`}
             >
-              <X aria-hidden strokeWidth={1.75} className="h-4 w-4" />
+              <X aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -391,27 +400,31 @@ export function LibraryFilters({
           {pill('Owner', options.owners, filters.owners, (next) => set({ owners: next }), { forceSearch: true, showAvatars: true })}
           {pill('Department', options.departments, filters.departments, (next) => set({ departments: next }), { forceSearch: true })}
           {pill('Framework', options.frameworks, filters.frameworks, (next) => set({ frameworks: next }), { forceSearch: true })}
-          {pill('Review', REVIEW_ITEMS, filters.review, (next) => set({ review: next as ReviewBucket[] }))}
 
           <PopoverMenu
-            title="More filters"
+            title="Filters"
             label={moreCount > 0 ? `More filters, ${moreCount} applied` : 'More filters'}
             width={288}
             align="left"
             buttonClass={`${PILL} ${moreCount > 0 ? PILL_APPLIED : PILL_IDLE}`}
             button={(
               <>
-                <SlidersHorizontal aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
-                <span>More filters</span>
+                <SlidersHorizontal aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-[#586472]" />
+                <span>Filters</span>
                 {moreCount > 0 && (
                   <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#ccfbf1] px-1.5 text-[11px] font-medium text-[#115e59]">{moreCount}</span>
                 )}
-                <ChevronDown aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
               </>
             )}
           >
             {() => (
               <div className="space-y-2 p-2">
+                <fieldset className="min-w-0">
+                  <legend className={SECTION}>Review</legend>
+                  {REVIEW_BUCKETS.map((b: ReviewBucket) => (
+                    <CheckRow key={b} checked={filters.review.includes(b)} label={REVIEW_BUCKET_LABEL[b]} onChange={() => set({ review: toggle(filters.review, b) })} />
+                  ))}
+                </fieldset>
                 <fieldset className="min-w-0">
                   <legend className={SECTION}>Attestation</legend>
                   {ATTESTATION_BUCKETS.map((b: AttestationBucket) => (
@@ -422,7 +435,7 @@ export function LibraryFilters({
                   <legend className={SECTION}>Classification</legend>
                   {options.classifications.length > 0 ? options.classifications.map((o) => (
                     <CheckRow key={o.value} checked={filters.classifications.includes(o.value)} label={o.label} onChange={() => set({ classifications: toggle(filters.classifications, o.value) })} />
-                  )) : <p className={QUIET}>No document has a classification yet.</p>}
+                  )) : <p className={QUIET}>None set</p>}
                 </fieldset>
               </div>
             )}
@@ -436,57 +449,24 @@ export function LibraryFilters({
               onClick={() => set({ mine: !filters.mine })}
               className={`${PILL} ${filters.mine ? PILL_ON : PILL_IDLE}`}
             >
-              {filters.mine ? <Check aria-hidden strokeWidth={2} className="h-4 w-4 shrink-0 text-[#0f766e]" /> : <UserRound aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />}
-              My documents
+              {filters.mine ? <Check aria-hidden strokeWidth={2} className="h-3.5 w-3.5 shrink-0 text-[#0f766e]" /> : <UserRound aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-[#586472]" />}
+              Mine
             </button>
           )}
         </div>
-      </div>
 
-      {/* Row 2: how many, what is filtered on; then the views, columns, density and export */}
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-2 sm:w-auto sm:flex-1">
-          <span aria-live="polite" className="inline-flex h-8 items-center text-[13px] font-medium text-[#1f2933]">{resultText(shown, total, filtering)}</span>
-          {chips.length > 0 && (
-            <ul aria-label="Active filters" className="flex min-w-0 flex-[1_1_12rem] flex-wrap items-center gap-2">
-              {chips.map((chip) => (
-                <li key={chip.key} className="inline-flex h-7 max-w-full items-center rounded-full border border-[#99d5cf] bg-[#f0fdfa] pl-2.5 pr-0.5 text-[12.5px] text-[#115e59]">
-                  <span className="min-w-0 truncate">{chip.label}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove filter ${chip.label}`}
-                    onClick={() => onChange(removeChip(filters, chip))}
-                    className={`ml-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#115e59] hover:bg-[#ccfbf1] ${FOCUS}`}
-                  >
-                    <X aria-hidden strokeWidth={2} className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-              <li>
-                <button
-                  type="button"
-                  onClick={() => { onChange(NO_FILTERS); searchRef.current?.focus(); }}
-                  className={`h-7 rounded-md px-2 text-sm font-medium text-[#0f766e] hover:bg-[#f0fdfa] hover:text-[#115e59] ${FOCUS}`}
-                >
-                  Clear all
-                </button>
-              </li>
-            </ul>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <PopoverMenu
             title="Views"
             label={activeView ? `Views, current view ${activeView.name}` : 'Views'}
             width={300}
             align="right"
-            buttonClass={TOOL}
+            buttonClass={namedView ? TOOL : ICON_TOOL}
             button={(
               <>
                 <Bookmark aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
-                <span className="max-w-[11rem] truncate">{activeView?.name ?? 'Views'}</span>
-                <ChevronDown aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
+                {namedView && <span className="max-w-[9rem] truncate">{namedView.name}</span>}
+                {namedView && <ChevronDown aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />}
               </>
             )}
           >
@@ -504,57 +484,81 @@ export function LibraryFilters({
           </PopoverMenu>
 
           <PopoverMenu
-            title="Columns"
+            title="Columns and rows"
             width={248}
             align="right"
-            buttonClass={TOOL}
-            button={(
-              <>
-                <Columns3 aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
-                <span className="hidden sm:inline">Columns</span>
-                <ChevronDown aria-hidden strokeWidth={1.75} className="hidden h-4 w-4 shrink-0 text-[#586472] sm:block" />
-              </>
-            )}
+            buttonClass={ICON_TOOL}
+            button={<Columns3 aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />}
           >
             {() => (
               <div className="p-2">
                 <p className={SECTION}>Columns</p>
                 {columns.map((c) => <CheckRow key={c.id} checked={c.visible} label={c.label} onChange={() => onToggleColumn(c.id)} />)}
-                <p className={QUIET}>The title and the actions are always shown.</p>
+                <p className={SECTION}>Rows</p>
+                <div role="group" aria-label="Row density" className="mx-2 mb-1 inline-flex h-8 items-center gap-0.5 rounded-lg border border-[#c3ccd5] bg-white p-0.5">
+                  {([['comfortable', Rows3, 'Comfortable'], ['compact', Rows4, 'Compact']] as const).map(([value, Icon, name]) => {
+                    const on = density === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={`${name} rows`}
+                        title={name}
+                        onClick={() => onDensity(value)}
+                        className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs ${FOCUS} ${on ? 'bg-[#f0fdfa] font-medium text-[#115e59] ring-1 ring-inset ring-[#99d5cf]' : 'text-[#586472] hover:bg-[#f3f6f8]'}`}
+                      >
+                        <Icon aria-hidden strokeWidth={1.75} className="h-4 w-4" />
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="mt-1 border-t border-[#e1e6eb] pt-1.5">
                   <button type="button" onClick={onResetColumns} className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-[#0f766e] hover:bg-[#f0fdfa] ${FOCUS}`}>
-                    Reset to default
+                    Reset
                   </button>
                 </div>
               </div>
             )}
           </PopoverMenu>
 
-          <div role="group" aria-label="Row density" className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-[#c3ccd5] bg-white p-0.5">
-            {([['comfortable', Rows3, 'Comfortable'], ['compact', Rows4, 'Compact']] as const).map(([value, Icon, name]) => {
-              const on = density === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={on}
-                  aria-label={`${name} rows`}
-                  title={name}
-                  onClick={() => onDensity(value)}
-                  className={`grid h-6 w-7 place-items-center rounded-md ${FOCUS} ${on ? 'bg-[#f0fdfa] text-[#0f766e] ring-1 ring-inset ring-[#99d5cf]' : 'text-[#586472] hover:bg-[#f3f6f8]'}`}
-                >
-                  <Icon aria-hidden strokeWidth={1.75} className="h-4 w-4" />
-                </button>
-              );
-            })}
-          </div>
-
-          <button type="button" onClick={onExport} disabled={!canExport} title={exportTitle(shown, canExport)} aria-label="Export CSV" className={TOOL}>
+          <button type="button" onClick={onExport} disabled={!canExport} title={exportTitle(shown, canExport)} aria-label="Export CSV" className={ICON_TOOL}>
             <Download aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Export CSV</span>
           </button>
         </div>
       </div>
+
+      {/* Only while filtering: how many match, what is filtered on (each comes off by itself), and a way to drop them all */}
+      {chips.length > 0 && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-[13px] font-medium tabular-nums text-[#1f2933]">{shown} of {total}</span>
+          <ul aria-label="Active filters" className="flex min-w-0 flex-wrap items-center gap-2">
+            {chips.map((chip) => (
+              <li key={chip.key} className="inline-flex h-7 max-w-full items-center rounded-full border border-[#99d5cf] bg-[#f0fdfa] pl-2.5 pr-0.5 text-[12.5px] text-[#115e59]">
+                <span className="min-w-0 truncate">{chip.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove filter ${chip.label}`}
+                  onClick={() => onChange(removeChip(filters, chip))}
+                  className={`ml-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#115e59] hover:bg-[#ccfbf1] ${FOCUS}`}
+                >
+                  <X aria-hidden strokeWidth={2} className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+            <li>
+              <button
+                type="button"
+                onClick={() => { onChange(NO_FILTERS); searchRef.current?.focus(); }}
+                className={`h-7 rounded-md px-2 text-sm font-medium text-[#0f766e] hover:bg-[#f0fdfa] hover:text-[#115e59] ${FOCUS}`}
+              >
+                Clear
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

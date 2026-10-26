@@ -13,6 +13,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Archive, FileText, Loader2, Plus, SearchX, Sparkles, LayoutTemplate } from 'lucide-react';
 import { AnimatedModal, MultiSelectDropdown, RightSlidePanel, useToast } from '@/components/ui';
+import { DocPageHeader } from '@/components/governance/DocPageHeader';
+import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
 import { assetsApi, governanceApi } from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { problemOf, studioApi } from '@/lib/studio/api';
@@ -57,10 +59,10 @@ const COLUMN_LABEL: Record<(typeof OPTIONAL_COLUMNS)[number], string> = {
 const STATUS_OPTIONS: Option[] = [
   ...STAGE_ORDER.map((s) => ({ value: s as string, label: statusLabel(s) })),
   { value: 'expired', label: 'Expired' },
-  { value: 'archived', label: 'Archived (shown on its own)' },
+  { value: 'archived', label: 'Archived', subLabel: 'Shown on its own' },
 ];
 
-const BTN_PLAIN = 'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+const BTN_PLAIN = BTN;     // the shared 36px page button (components/governance/docUi)
 
 function download(data: BlobPart, fileName: string, type?: string) {
   const url = URL.createObjectURL(new Blob([data], type ? { type } : undefined));
@@ -286,33 +288,27 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     const when = parseUtc(latest);     // the server's times are naive UTC
     if (!when) return '';
     const mins = Math.round((Date.now() - when.getTime()) / 60000);
-    if (mins < 1) return 'Updated just now';
-    if (mins < 60) return `Updated ${mins} min ago`;
+    if (mins < 1) return 'updated just now';
+    if (mins < 60) return `updated ${mins} min ago`;
     const hrs = Math.round(mins / 60);
-    if (hrs < 24) return `Updated ${hrs} h ago`;
-    return `Updated ${Math.round(hrs / 24)} d ago`;
+    if (hrs < 24) return `updated ${hrs} h ago`;
+    return `updated ${Math.round(hrs / 24)} d ago`;
   }, [allDocs]);
 
   const columns: ColumnChoice[] = OPTIONAL_COLUMNS.map((id) => ({ id, label: COLUMN_LABEL[id], visible: !prefs.hidden.includes(id) }));
 
   // what the table says when it has no rows: no documents yet, nothing archived, or nothing matches
   const empty = (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-2 px-4 py-12 text-center">
-      {allDocs.length === 0 ? <FileText className="h-9 w-9 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden /> : <SearchX className="h-9 w-9 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />}
+    <div className="mx-auto flex max-w-sm flex-col items-center gap-2 px-4 py-10 text-center">
+      {allDocs.length === 0 ? <FileText className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden /> : <SearchX className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />}
       <h3 className="text-[15px] font-semibold text-[#1f2933]">
-        {allDocs.length === 0 ? 'No documents yet' : archivedList && !filtering ? 'Nothing is archived' : 'No documents match'}
+        {allDocs.length === 0 ? 'No documents yet' : archivedList && !filtering ? 'Nothing archived' : 'No match'}
       </h3>
-      <p className="text-[13px] text-[#586472]">
-        {allDocs.length === 0
-          ? 'Policies, standards and procedures you write or upload appear here, with their owners, review dates and frameworks.'
-          : archivedList && !filtering ? 'Archived documents are kept here, with their versions and history, where their editors can restore them.'
-          : 'No document has all of what the filters ask for. Remove a filter, or try fewer words in the search.'}
-      </p>
       {allDocs.length > 0 && filtering && (
-        <button type="button" onClick={() => setFilters(NO_FILTERS)} className={BTN_PLAIN}>Clear all filters</button>
+        <button type="button" onClick={() => setFilters(NO_FILTERS)} className={BTN_PLAIN}>Clear filters</button>
       )}
       {allDocs.length === 0 && create === 'buttons' && (
-        <button type="button" onClick={onNewDocument} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-medium text-[#fff] hover:bg-[#115e59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+        <button type="button" onClick={onNewDocument} className={BTN_PRIMARY}>
           <Plus strokeWidth={1.75} className="h-4 w-4" /> New document
         </button>
       )}
@@ -321,30 +317,31 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   return (
     <div className="governance-light space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 max-w-xl">
-          <h1 className="text-[20px] font-semibold leading-tight text-[#1f2933]">Document library</h1>
-          <p className="text-[13px] text-[#586472]">Policies, standards and procedures: who owns them, when they are due for review, and the frameworks they cover.{updatedLabel ? ` ${updatedLabel}.` : ''}</p>
-        </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {create === 'studio-off' && (
-            <span className="shrink-0 text-xs text-[#3f4b58]">Creating documents needs the Comply AI Studio.</span>
-          )}
-          {create === 'buttons' && (
-            <>
-              <button onClick={onTemplates} title="Templates" className={BTN_PLAIN}>
-                <LayoutTemplate strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden xl:inline">Templates</span>
-              </button>
-              <button onClick={onAIDraft} title="AI Draft" className={BTN_PLAIN}>
-                <Sparkles strokeWidth={1.75} className="h-4 w-4 text-[#0f766e]" /> <span className="hidden xl:inline">AI Draft</span>
-              </button>
-              <button onClick={onNewDocument} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-medium text-[#fff] hover:bg-[#115e59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
-                <Plus strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden sm:inline">New Document</span><span className="sm:hidden">New</span>
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+      <DocPageHeader
+        title="Document library"
+        info="Policies, standards and procedures: who owns them, when they are due for review and the frameworks they cover."
+        meta={`${archivedList ? totals.archived : totals.all} ${(archivedList ? totals.archived : totals.all) === 1 ? 'document' : 'documents'}${updatedLabel ? ` · ${updatedLabel}` : ''}`}
+        actions={(
+          <>
+            {create === 'studio-off' && (
+              <span className="shrink-0 text-xs text-[#3f4b58]">Creating documents needs the Comply AI Studio.</span>
+            )}
+            {create === 'buttons' && (
+              <>
+                <button onClick={onTemplates} title="Templates" aria-label="Templates" className={BTN}>
+                  <LayoutTemplate strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden xl:inline">Templates</span>
+                </button>
+                <button onClick={onAIDraft} title="AI Draft" aria-label="AI Draft" className={BTN}>
+                  <Sparkles strokeWidth={1.75} className="h-4 w-4 text-[#0f766e]" /> <span className="hidden xl:inline">AI Draft</span>
+                </button>
+                <button onClick={onNewDocument} title="New document" className={BTN_PRIMARY}>
+                  <Plus strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden sm:inline">New document</span><span className="sm:hidden">New</span>
+                </button>
+              </>
+            )}
+          </>
+        )}
+      />
 
       <LibraryKpis
         kpis={summary}
@@ -379,14 +376,14 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       {listFailed && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-[#f1b5ae] bg-[#fef3f2] px-3 py-2 text-[13px] text-[#7a1616]">
           <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 flex-1">The documents could not be loaded.</span>
+          <span className="min-w-0 flex-1">Could not load the documents.</span>
           <button type="button" onClick={() => refetch()} className={BTN_PLAIN}>Try again</button>
         </div>
       )}
       {truncated && (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-[#e6d3a3] bg-[#fffbeb] px-3 py-2 text-[13px] text-[#6b4f0a]">
           <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
-          Showing the {allDocs.length} most recently updated of {listData?.total} documents. Older ones are not in this list.
+          Showing the latest {fmtN(allDocs.length)} of {fmtN(listData?.total ?? 0)} documents.
         </div>
       )}
 
@@ -504,3 +501,4 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 }
 
 const NO_COUNTS: Record<number, { done: number; total: number }> = {};
+const fmtN = (n: number) => n.toLocaleString('en-US');

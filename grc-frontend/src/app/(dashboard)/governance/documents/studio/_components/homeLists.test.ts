@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { docLine, humanize, pickable, workAction, type PickDoc } from './homeLists.ts';
+import { docLine, humanize, pickable, templateMeta, templateName, workAction, type PickDoc } from './homeLists.ts';
 
 test('Edit from the library asks the server for the documents the person may edit, not the newest they read', () => {
   const page = readFileSync(new URL('../page.tsx', import.meta.url), 'utf8');
@@ -26,6 +26,16 @@ test('Edit from the library offers only documents the person may edit; the other
   assert.deepEqual(pickable(rows, { editable: true }).map((d) => d.id), [1, 4]);
   assert.deepEqual(pickable(rows).map((d) => d.id), [1, 2, 4]);
   assert.deepEqual(pickable(rows, { exclude: [1] }).map((d) => d.id), [2, 4]);
+});
+
+test('a template row reads "Policy", "15 sections": the type only when the name does not already say it', () => {
+  const T = { policy: 'Policy', standard: 'Standard' };
+  assert.equal(templateName('Policy (standard structure)'), 'Policy');
+  assert.equal(templateName('Acme policy (draft)'), 'Acme policy (draft)');
+  assert.equal(templateMeta({ name: 'Policy (standard structure)', doc_type: 'policy', sections: 15 }, T), '15 sections');
+  assert.equal(templateMeta({ name: 'Information Security Policy', doc_type: 'policy', sections: 1 }, T), '1 section');
+  assert.equal(templateMeta({ name: 'Vendor onboarding', doc_type: 'standard', sections: 12 }, T), 'Standard · 12 sections');
+  assert.equal(templateMeta({ name: 'Playbook', doc_type: 'incident_plan', sections: 0 }, T), 'Incident plan · free structure');
 });
 
 test('a draft is discarded, a reader’s comparison removed, the person’s own library work kept', () => {
