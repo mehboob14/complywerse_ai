@@ -41,7 +41,7 @@ ADMIN_ROLE, EDITORS, ANALYSTS, AUDITORS, DO_ROLE = 1, 2, 3, 4, 5
 
 DEPARTMENT_KEYS = {"id", "tenant_id", "name", "code", "description", "parent_department_id", "parent_department_name",
                    "department_head_user_id", "department_head_name", "is_active", "roles", "member_count", "manual_member_count",
-                   "team_id", "created_at", "updated_at"}
+                   "team_id", "document_count", "created_at", "updated_at"}
 MEMBER_KEYS = {"user_id", "name", "email", "designation", "how", "member_role", "via_roles", "added_at"}
 MANAGED = "This team is managed as a department. Change it in Administration → Departments."
 
@@ -977,3 +977,127 @@ def test_the_lists_read_the_database_the_same_number_of_times_however_many_depar
     made(20)
     assert reads() == few
     assert len(http.get("/admin/departments").json()) == 22
+
+
+# ── Governance → Settings → Departments: the document count and the writes it makes ─────────────────────────────
+
+def _doc(w, doc_id, department_id, status="draft", owner=ADMIN, tenant_id=1):
+    w.db.add(m.GovernanceDocument(id=doc_id, tenant_id=tenant_id, title=f"Document {doc_id}", doc_type="policy", status=status,
+                                  current_version="1.0", owner_id=owner, author_id=owner, department_id=department_id))
+
+
+def _counts(http, **params):
+    return {r["name"]: r["document_count"] for r in http.get("/admin/departments", params=params).json()}
+
+
+def test_each_department_says_how_many_documents_it_has_archived_ones_left_out(w):
+    a, b, c = make(w, name="Alpha"), make(w, name="Bravo"), make(w, name="Charlie")
+    for doc_id, dept, status in [(1, a["id"], "draft"), (2, a["id"], "published"), (3, a["id"], "archived"), (4, b["id"], "archived"),
+                                 (5, a["id"], "expired"), (6, None, "published"), (7, 4242, "published"), (8, a["id"], "draft")]:
+        _doc(w, doc_id, dept, status)                       # 6: in no department; 7: a department that is not there
+    _doc(w, 9, a["id"], "published", tenant_id=2)           # another organisation's document never counts
+    w.db.commit()
+    w.db.execute(text("UPDATE grc_governance_documents SET status = NULL WHERE id = 8"))      # a status never set is not archived either
+    w.db.commit()
+    http = w.as_(ADMIN)
+    assert _counts(http) == {"Alpha": 4, "Bravo": 0, "Charlie": 0}                  # drafts, published, expired and unset; not archived
+    assert detail(w, a["id"])["document_count"] == 4 and detail(w, b["id"])["document_count"] == 0 and detail(w, c["id"])["document_count"] == 0
+    # a department made a moment ago has none; a change or a switch-off does not change what it holds
+    assert http.post("/admin/departments", json={"name": "Delta"}).json()["document_count"] == 0
+    assert http.patch(f"/admin/departments/{a['id']}", json={"name": "Alpha team"}).json()["document_count"] == 4
+    assert http.put(f"/admin/departments/{a['id']}/roles", json={"role_ids": [ANALYSTS]}).json()["document_count"] == 4
+    http.delete(f"/admin/departments/{a['id']}")
+    assert _counts(http) == {"Bravo": 0, "Charlie": 0, "Delta": 0}                  # switched off: no longer offered ...
+    assert _counts(http, include_inactive=True)["Alpha team"] == 4                  # ... but its documents are still its own
+    assert {d.id for d in w.db.query(m.GovernanceDocument).filter_by(department_id=a["id"], tenant_id=1)} == {1, 2, 3, 5, 8}
+
+
+def test_a_person_counts_only_the_documents_they_may_read(w):
+    a = make(w, name="Alpha")
+    w.db.add(m.Permission(id=2, name="governance:policies:view", resource="governance:policies", action="view"))
+    w.db.add(m.RolePermission(role_id=ANALYSTS, permission_id=2))                     # ana reads the library, she may not see drafts
+    _doc(w, 1, a["id"], "published", owner=ADMIN)
+    _doc(w, 2, a["id"], "draft", owner=ADMIN)
+    _doc(w, 3, a["id"], "draft", owner=PLAIN)
+    w.db.commit()
+    counts = {uid: _counts(w.as_(uid))["Alpha"] for uid in (ADMIN, ANA, PLAIN, HOLDER)}
+    # an administrator reads every document; a library reader the one in force (and her own); someone with no library right only their own
+    assert counts == {ADMIN: 3, ANA: 1, PLAIN: 1, HOLDER: 0}
+
+
+def _statements(w):
+    seen = []
+    event.listen(w.engine, "before_cursor_execute", lambda conn, cursor, statement, params, context, many: seen.append(statement))
+    return seen
+
+
+def test_the_document_counts_are_one_query_however_many_departments_there_are(w):
+    seen = _statements(w)
+    ids = []
+
+    def made(n):
+        for _ in range(n):
+            d = make(w, name=f"Department {len(ids):02d}")
+            ids.append(d["id"])
+            for k in range(3):
+                _doc(w, 1000 + 3 * len(ids) + k, d["id"], "published" if k else "archived", owner=PLAIN)
+        w.db.commit()
+
+    def read(uid):
+        http = w.as_(uid)
+        http.get("/admin/departments")                                      # (the first request of a person also notes their activity)
+        seen.clear()
+        rows = http.get("/admin/departments").json()
+        counting = [s for s in seen if "grc_governance_documents" in s and "GROUP BY" in s.upper() and "count(" in s.lower()]
+        return len(seen), len(counting), rows
+
+    made(2)
+    few = {uid: read(uid)[:2] for uid in (ADMIN, PLAIN)}
+    made(18)
+    for uid in (ADMIN, PLAIN):
+        total, counting, rows = read(uid)
+        assert (total, counting) == few[uid], uid                           # 20 departments cost the same statements as 2 ...
+        assert counting == 1                                                # ... and the counts are one grouped query
+        assert len(rows) == 20 and {r["document_count"] for r in rows} == {2}      # two documents each; the archived one is left out
+
+
+def test_a_holder_of_the_right_adds_edits_and_switches_off_departments_from_the_settings_page(w):
+    http = w.as_(HOLDER)                                    # not an administrator: holds admin:organization:edit through a role
+    parent = http.post("/admin/departments", json={"name": "Operations"}).json()
+    r = http.post("/admin/departments", json={"name": "Support", "parent_department_id": parent["id"], "department_head_user_id": HEADY,
+                                              "role_ids": [ANALYSTS]})
+    assert r.status_code == 201, r.text
+    d = r.json()
+    assert (d["parent_department_name"], d["department_head_name"], d["is_active"], d["document_count"]) == ("Operations", "Heady", True, 0)
+
+    def team():                                              # the picker record other modules store, as Administration → Teams lists it
+        w.db.expire_all()
+        rows = {t["id"]: t for t in w.as_(PLAIN).get("/admin/teams", params={"include_inactive": True}).json()}
+        return rows[d["team_id"]]
+
+    # (a) created together with its picker record, which Administration → Teams lists at once under the same name and lead
+    t = team()
+    assert (t["name"], t["lead_user_id"], t["department_id"], t["is_active"], t["member_count"]) == ("Support", HEADY, d["id"], True, 3)
+    assert w.db.query(m.Team).filter_by(department_id=d["id"]).count() == 1
+    assert d["team_id"] in {x["id"] for x in w.as_(PLAIN).get("/admin/teams").json()}
+    # (b) a rename, another lead, switching off and on again are mirrored on that same record
+    patched = http.patch(f"/admin/departments/{d['id']}", json={"name": "Customer support", "department_head_user_id": EVE}).json()
+    assert (patched["name"], patched["team_id"]) == ("Customer support", d["team_id"])
+    assert (team()["name"], team()["lead_user_id"]) == ("Customer support", EVE)
+    assert http.patch(f"/admin/departments/{d['id']}", json={"is_active": False}).json()["is_active"] is False
+    assert team()["is_active"] is False and d["team_id"] not in {x["id"] for x in w.as_(PLAIN).get("/admin/teams").json()}
+    assert http.patch(f"/admin/departments/{d['id']}", json={"is_active": True}).json()["is_active"] is True
+    assert team()["is_active"] is True
+    # there is no way to delete one: the button deactivates, the department, its team and its documents stay
+    _doc(w, 5, d["id"], "published")
+    w.db.commit()
+    gone = http.delete(f"/admin/departments/{d['id']}")
+    assert gone.status_code == 200 and w.db.query(m.GRCDepartment).filter_by(id=d["id"]).one().is_active is False
+    assert team()["is_active"] is False and w.db.get(m.GovernanceDocument, 5).department_id == d["id"]
+    assert _counts(w.as_(ADMIN), include_inactive=True)["Customer support"] == 1
+    # people without the right read the list (with the counts) and change nothing
+    plain = w.as_(PLAIN)
+    assert plain.get("/admin/departments").status_code == 200
+    assert plain.post("/admin/departments", json={"name": "Nope"}).status_code == 403
+    assert plain.patch(f"/admin/departments/{d['id']}", json={"is_active": False}).status_code == 403
+    assert plain.delete(f"/admin/departments/{d['id']}").status_code == 403

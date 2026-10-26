@@ -12,10 +12,10 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ..models import GRCDepartment, GRCUser, get_db
+from ..models import GovernanceDocument, GRCDepartment, GRCUser, get_db
 from ..services import org_departments
 from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth, require_tenant_permission
 
@@ -46,6 +46,7 @@ class DepartmentOut(BaseModel):
     member_count: int = 0                   # distinct people: added by hand, the head, holders of the roles
     manual_member_count: int = 0            # those of them added by hand
     team_id: Optional[int] = None           # the picker record other modules store (Administration → Teams' id)
+    document_count: int = 0                 # its documents the caller may read, archived ones left out
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -121,9 +122,28 @@ def _department(db: Session, user: GRCUser, department_id: int) -> GRCDepartment
     return row
 
 
-def _views(db: Session, rows: List[GRCDepartment]) -> List[DepartmentOut]:
+def _document_counts(db: Session, rows: List[GRCDepartment], user: GRCUser) -> dict:
+    """department id -> how many of its documents ``user`` may read, archived ones (withdrawn: D29) left out. One grouped query
+    however many departments there are. The reader's own rule (``permissions.visible_filter``) is applied so the number never
+    includes a document the library would not show them: for an administrator or an editor that is every document."""
+    from ..modules.governance import permissions        # here, not at the top: importing the governance package loads its router and every module under it
+
+    if not rows:
+        return {}
+    G = GovernanceDocument
+    q = db.query(G.department_id, func.count(G.id)).filter(
+        G.department_id.in_([r.id for r in rows]), G.tenant_id.in_({r.tenant_id for r in rows}),
+        or_(G.status.is_(None), G.status != "archived"))
+    readable = permissions.visible_filter(db, user)
+    if readable is not None:
+        q = q.filter(readable)
+    return dict(q.group_by(G.department_id).all())
+
+
+def _views(db: Session, rows: List[GRCDepartment], user: GRCUser) -> List[DepartmentOut]:
     """The departments as the API shows them, in a handful of queries however many there are."""
     info = org_departments.overview(db, rows)
+    documents = _document_counts(db, rows, user)
     parent_ids = {r.parent_department_id for r in rows if r.parent_department_id}
     head_ids = {r.department_head_user_id for r in rows if r.department_head_user_id}
     parents = dict(db.query(GRCDepartment.id, GRCDepartment.name).filter(GRCDepartment.id.in_(parent_ids)).all()) if parent_ids else {}
@@ -132,14 +152,15 @@ def _views(db: Session, rows: List[GRCDepartment]) -> List[DepartmentOut]:
         id=r.id, tenant_id=r.tenant_id, name=r.name, code=r.code, description=r.description,
         parent_department_id=r.parent_department_id, parent_department_name=parents.get(r.parent_department_id),
         department_head_user_id=r.department_head_user_id, department_head_name=heads.get(r.department_head_user_id),
-        is_active=r.is_active is not False, created_at=r.created_at, updated_at=r.updated_at, **info[r.id]) for r in rows]
+        is_active=r.is_active is not False, document_count=documents.get(r.id, 0), created_at=r.created_at, updated_at=r.updated_at,
+        **info[r.id]) for r in rows]
 
 
-def _detail(db: Session, row: GRCDepartment) -> DepartmentDetailOut:
+def _detail(db: Session, row: GRCDepartment, user: GRCUser) -> DepartmentDetailOut:
     kids = (db.query(GRCDepartment).filter(GRCDepartment.parent_department_id == row.id)
             .order_by(func.lower(GRCDepartment.name), GRCDepartment.id).all())
     return DepartmentDetailOut(
-        **_views(db, [row])[0].model_dump(), members=[MemberOut(**m) for m in org_departments.members_detail(db, row)],
+        **_views(db, [row], user)[0].model_dump(), members=[MemberOut(**m) for m in org_departments.members_detail(db, row)],
         sub_departments=[SubDepartmentOut(id=k.id, name=k.name, code=k.code, is_active=k.is_active is not False) for k in kids])
 
 
@@ -166,7 +187,7 @@ def list_departments(
     q = db.query(GRCDepartment).filter(GRCDepartment.tenant_id.in_(tenants))
     if not include_inactive:
         q = q.filter(GRCDepartment.is_active.isnot(False))
-    return _views(db, q.order_by(func.lower(GRCDepartment.name), GRCDepartment.id).all())
+    return _views(db, q.order_by(func.lower(GRCDepartment.name), GRCDepartment.id).all(), current_user)
 
 
 @router.get("/role-options", response_model=List[RoleOptionOut])
@@ -198,7 +219,7 @@ def create_department(
         role_ids=payload.role_ids, by_user_id=current_user.id)
     db.commit()
     db.refresh(row)
-    return _views(db, [row])[0]
+    return _views(db, [row], current_user)[0]
 
 
 @router.get("/{department_id}", response_model=DepartmentDetailOut)
@@ -207,7 +228,7 @@ def get_department(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    return _detail(db, _department(db, current_user, department_id))
+    return _detail(db, _department(db, current_user, department_id), current_user)
 
 
 @router.patch("/{department_id}", response_model=DepartmentOut)
@@ -222,7 +243,7 @@ def update_department(
     org_departments.update_department(db, row, payload.model_dump(exclude_unset=True), by_user_id=current_user.id)
     db.commit()
     db.refresh(row)
-    return _views(db, [row])[0]
+    return _views(db, [row], current_user)[0]
 
 
 @router.delete("/{department_id}")
@@ -250,7 +271,7 @@ def set_department_roles(
     row = _department(db, current_user, department_id)
     org_departments.set_roles(db, row, payload.role_ids, by_user_id=current_user.id)
     db.commit()
-    return _detail(db, row)
+    return _detail(db, row, current_user)
 
 
 @router.post("/{department_id}/members", response_model=MemberOut, status_code=status.HTTP_201_CREATED)

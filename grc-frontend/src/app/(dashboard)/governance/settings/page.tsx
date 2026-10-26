@@ -1,9 +1,11 @@
 'use client';
 
-// Governance > Settings: how long people have to review, approve and acknowledge documents, reminders, escalation, where each
-// alert goes and the Task Management task made for each request. One organisation-wide source (the document page's "Due dates
-// and escalation" shows a summary and links here). Administrators and holders of governance:settings:edit change it; anyone with
-// a governance right reads it, nobody else. Helpers and rules: lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
+// Governance > Settings: the organisation's departments (the same records as Administration → Departments; added, edited and
+// deactivated here: _DepartmentsSection.tsx), then how long people have to review, approve and acknowledge documents, reminders,
+// escalation, where each alert goes and the Task Management task made for each request. The lifecycle settings are one
+// organisation-wide source (the document page's "Due dates and escalation" shows a summary and links here). Administrators and
+// holders of governance:settings:edit change them; anyone with a governance right reads them, nobody else. Helpers and rules:
+// lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
 // The page prints labels, not sentences: what a field used to explain in a line is an (i) next to it (InfoTip).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,10 +17,13 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { DocPageHeader } from '@/components/governance/DocPageHeader';
 import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
+import { useAdminDepartments } from '@/components/admin/DepartmentForm';
 import {
   CHANNELS, EVENTS, KIND_LABEL, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, daysFor, noAccess, renderTemplate, retrySettings, sampleValues, shownKinds, validate,
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
+import { DepartmentsSection } from './_DepartmentsSection';
+import { Section } from './_Section';
 
 const SETTINGS_KEY = ['document-lifecycle-settings'];       // shared with the document page's summary card
 const SETTINGS_URL = '/governance/documents/lifecycle/settings';
@@ -31,15 +36,15 @@ const LABEL = 'text-[13px] font-medium text-[#26323d]';
 const EMPTY = 'mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center';
 
 // ── small pieces ─────────────────────────────────────────────────────────────
-function Section({ id, title, info, children }: { id: string; title: string; info?: string; children: ReactNode }) {
+/** The page when the lifecycle settings cannot be shown (they did not load, or approvals are not switched on): the departments,
+ *  which do not depend on them, still can. */
+function WithDepartments({ children }: { children: ReactNode }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`} className="scroll-mt-16 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
-      <div className="mb-3 flex items-center gap-1">
-        <h2 id={`${id}-h`} className="text-[15px] font-semibold text-[#1f2933]">{title}</h2>
-        {info && <InfoTip text={info} label={`About ${title.toLowerCase()}`} />}
-      </div>
+    <div className="mx-auto max-w-4xl space-y-3">
+      <DocPageHeader title="Governance settings" />
+      <DepartmentsSection />
       {children}
-    </section>
+    </div>
   );
 }
 
@@ -109,6 +114,7 @@ export default function GovernanceSettingsPage() {
   const { data, isLoading, isError, error, refetch } = useQuery<SettingsAnswer>({
     queryKey: SETTINGS_KEY, queryFn: async () => (await apiClient.get(SETTINGS_URL)).data, retry: retrySettings,
   });
+  useAdminDepartments();                               // asked together with the settings, so the Departments card below is not waiting for them
 
   const saved = data?.settings;
   const s = draft ?? saved;
@@ -162,22 +168,26 @@ export default function GovernanceSettingsPage() {
   }
   if (isError || !data) {
     return (
-      <div className={EMPTY}>
-        <AlertTriangle className="h-8 w-8 text-[#b42318]" strokeWidth={1.5} aria-hidden />
-        <p className="text-[15px] font-semibold text-[#1f2933]">Could not load the settings</p>
-        <button type="button" onClick={() => refetch()} className={BTN}>Try again</button>
-      </div>
+      <WithDepartments>
+        <div className={EMPTY}>
+          <AlertTriangle className="h-8 w-8 text-[#b42318]" strokeWidth={1.5} aria-hidden />
+          <p className="text-[15px] font-semibold text-[#1f2933]">Could not load the settings</p>
+          <button type="button" onClick={() => refetch()} className={BTN}>Try again</button>
+        </div>
+      </WithDepartments>
     );
   }
   if (!data.enabled || !s || !saved) {
     return (
-      <div className={EMPTY}>
-        <Info className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
-        <p className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
-          Approvals are not switched on
-          <InfoTip text="Document approvals and acknowledgements are not switched on for this organisation. These settings apply once they are." label="Why there are no settings" />
-        </p>
-      </div>
+      <WithDepartments>
+        <div className={EMPTY}>
+          <Info className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+          <p className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
+            Approvals are not switched on
+            <InfoTip text="Document approvals and acknowledgements are not switched on for this organisation. These settings apply once they are." label="Why there are no settings" />
+          </p>
+        </div>
+      </WithDepartments>
     );
   }
 
@@ -220,6 +230,8 @@ export default function GovernanceSettingsPage() {
           </button>
         ) : undefined}
       />
+
+      <DepartmentsSection />
 
       <Section id="due" title="Due dates" info="How many days each person has, counted from the day they are asked.">
         <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">

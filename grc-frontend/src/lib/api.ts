@@ -3845,6 +3845,8 @@ export interface Department {
   member_count: number;
   manual_member_count: number;
   team_id: number | null;
+  /** its non-archived documents the signed-in person may read (Governance → Settings shows it) */
+  document_count?: number;
   created_at: string;
   updated_at: string;
 }
