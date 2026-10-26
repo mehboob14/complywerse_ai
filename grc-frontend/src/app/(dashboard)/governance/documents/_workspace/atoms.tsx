@@ -82,16 +82,20 @@ export function ReviewDate({ doc, now, compact = false }: { doc: Pick<LibDoc, 's
 /** One framework's short label as a tinted chip; the full name is its tooltip. A framework the list does not know is grey, "#id". */
 export function FrameworkChip({ chip, onClick, active = false, children }: { chip: Chip; onClick?: () => void; active?: boolean; children?: ReactNode }) {
   const tint = chip.known ? categoryTint(chip.label).soft : 'bg-slate-100 text-slate-600';
-  const base = `inline-flex h-5 max-w-[7.5rem] shrink-0 items-center truncate rounded-md px-1.5 text-[11px] font-semibold leading-none ${tint} ${active ? 'ring-1 ring-[#0f766e]' : ''}`;
-  if (!onClick) return <span className={base} title={chip.name}>{chip.label}{children}</span>;
+  // shrinkable (two chips share a narrow cell: each gives way, with an ellipsis, before one is cut off); the label is its own span,
+  // because text-overflow does not apply to the text of a flex container
+  const base = `inline-flex h-5 min-w-[2.75rem] max-w-[7.5rem] shrink items-center rounded-md px-1.5 text-[11px] font-semibold leading-none ${tint} ${active ? 'ring-1 ring-[#0f766e]' : ''}`;
+  const label = <><span className="min-w-0 truncate">{chip.label}</span>{children}</>;
+  if (!onClick) return <span className={base} title={chip.name}>{label}</span>;
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={`${chip.name} — show the documents mapped to it`}
-      className={`${base} hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]`}
+      // !text-[11px]: the governance pages give every <button> 12px, which would make a clickable chip bigger than a plain one
+      className={`${base} !text-[11px] hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]`}
     >
-      {chip.label}{children}
+      {label}
     </button>
   );
 }

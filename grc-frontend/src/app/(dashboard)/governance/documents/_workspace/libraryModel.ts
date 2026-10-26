@@ -459,6 +459,25 @@ export function fromParams(p: URLSearchParams): LibraryState {
   return { filters: f, sort };
 }
 
+/** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
+ *  `open` is the document peeked at in the drawer. */
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'sort', 'open', 'id'];
+
+/** The address with the library's keys replaced by this state (and the open document); every other key is kept as it was. */
+export function withLibraryParams(current: URLSearchParams, state: LibraryState, openId: number | null): URLSearchParams {
+  const out = new URLSearchParams();
+  current.forEach((value, key) => { if (!PARAM_KEYS.includes(key)) out.append(key, value); });
+  toParams(state).forEach((value, key) => out.set(key, value));
+  if (openId != null) out.set('open', String(openId));
+  return out;
+}
+
+/** The document the address says is open in the drawer (`id` is what the review calendar's link has always sent). */
+export function openFromParams(p: URLSearchParams): number | null {
+  const n = Number(p.get('open') ?? p.get('id'));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export function sameState(a: LibraryState, b: LibraryState): boolean {
   return toParams(a).toString() === toParams(b).toString();
 }
@@ -515,6 +534,23 @@ export function exportValue(d: LibDoc, column: ExportColumn, lk: Lookups = NO_LO
     case 'version': return d.current_version ?? '';
     case 'updated': return iso(d.updated_at, true);
   }
+}
+
+/** The CSV columns that follow the table's: a column switched off is left out (the title, code and status always stay; the department
+ *  goes with the owner, under which the table shows it). `hidden`: the optional columns switched off. */
+export function exportColumnsFor(hidden: readonly string[]): ExportColumn[] {
+  const off = (id: string) => hidden.includes(id);
+  const out: ExportColumn[] = ['title', 'code'];
+  if (!off('type')) out.push('type');
+  out.push('status');
+  if (!off('owner')) out.push('owner');
+  if (!off('owner') || !off('department')) out.push('department');
+  if (!off('frameworks')) out.push('frameworks');
+  if (!off('attestation')) out.push('attestation');
+  if (!off('review')) out.push('review');
+  if (!off('version')) out.push('version');
+  if (!off('updated')) out.push('updated');
+  return out;
 }
 
 /** The CSV of the documents as the table shows them: one row each, the columns named, quoted where needed; the leading mark makes

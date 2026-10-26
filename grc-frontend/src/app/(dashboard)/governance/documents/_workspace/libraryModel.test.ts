@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   BUILT_IN_VIEWS, DEFAULT_SORT, DEFAULT_STATE, NO_DEPARTMENT, NO_FILTERS, NO_FRAMEWORK, NO_LOOKUPS, NO_OWNER,
-  attestationBucket, classificationOptions, compareDocs, filterCount, fold, frameworkDisplay, frameworkList, frameworkOptions,
-  fromParams, haystack, health, kpis, matchesFilters, nextSort, nextStatuses, reviewState, reviewable, sameState, toCsv, toParams,
-  versionNumber, viewMatching,
+  attestationBucket, classificationOptions, compareDocs, exportColumnsFor, filterCount, fold, frameworkDisplay, frameworkList, frameworkOptions,
+  fromParams, haystack, health, kpis, matchesFilters, nextSort, nextStatuses, openFromParams, reviewState, reviewable, sameState, toCsv, toParams,
+  versionNumber, viewMatching, withLibraryParams,
   type Filters, type LibDoc, type Lookups, type MatchContext,
 } from './libraryModel.ts';
 
@@ -264,4 +264,28 @@ test('the CSV names the columns, quotes what needs it, lists every framework and
   assert.equal(csv.charCodeAt(0), 0xfeff);
   assert.equal(head, 'Title,Owner,Department,Frameworks,Next review,Version,Status');
   assert.equal(row, '"Data, ""Governance"" Policy",Zoë Müller,Information Security,ISO/IEC 27001:2022; NCA Essential Cybersecurity Controls,2027-01-05,2.1,Published');
+});
+
+test('the address keeps the links others put in it, and says which document is open', () => {
+  const state = { filters: f({ types: ['policy'] }), sort: DEFAULT_SORT };
+  const out = withLibraryParams(new URLSearchParams('aiDraftTitle=Foo&q=old&open=3&status=draft'), state, 12);
+  assert.equal(out.get('aiDraftTitle'), 'Foo');                      // not ours: kept
+  assert.equal(out.get('q'), null);                                  // ours, no longer in the state: gone
+  assert.equal(out.get('status'), null);
+  assert.equal(out.get('type'), 'policy');
+  assert.equal(out.get('open'), '12');
+  assert.equal(withLibraryParams(new URLSearchParams('open=3'), DEFAULT_STATE, null).toString(), '');
+  assert.equal(openFromParams(new URLSearchParams('open=12')), 12);
+  assert.equal(openFromParams(new URLSearchParams('id=7')), 7);                      // the review calendar's link
+  assert.equal(withLibraryParams(new URLSearchParams('id=7'), DEFAULT_STATE, 7).toString(), 'open=7');   // rewritten as open
+  assert.equal(openFromParams(new URLSearchParams('open=abc')), null);
+  assert.equal(openFromParams(new URLSearchParams('open=-4')), null);
+  assert.equal(openFromParams(new URLSearchParams('')), null);
+});
+
+test('the CSV follows the table: a column switched off is left out, the department goes with the owner', () => {
+  assert.deepEqual(exportColumnsFor([]), ['title', 'code', 'type', 'status', 'owner', 'department', 'frameworks', 'attestation', 'review', 'version', 'updated']);
+  assert.deepEqual(exportColumnsFor(['department']), ['title', 'code', 'type', 'status', 'owner', 'department', 'frameworks', 'attestation', 'review', 'version', 'updated']);
+  assert.deepEqual(exportColumnsFor(['owner', 'department', 'type', 'updated']), ['title', 'code', 'status', 'frameworks', 'attestation', 'review', 'version']);
+  assert.deepEqual(exportColumnsFor(['owner']), ['title', 'code', 'type', 'status', 'department', 'frameworks', 'attestation', 'review', 'version', 'updated']);
 });

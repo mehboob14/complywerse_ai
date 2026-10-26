@@ -78,22 +78,24 @@ export function statusTone(status: string): 'draft' | 'progress' | 'pending' | '
   }
 }
 
+// Explicit hex, not slate-/blue-/emerald-* utilities: the platform CSS repaints those (slate fills go white, blue and green text take the
+// theme's accent), which blanked the stepper's empty track and turned "Approved" into the accent colour.
 const STATUS_DOT: Record<ReturnType<typeof statusTone>, string> = {
-  draft: 'bg-slate-400',
-  progress: 'bg-amber-500',
-  pending: 'bg-amber-500',
-  approved: 'bg-blue-500',
-  published: 'bg-emerald-500',
-  terminal: 'bg-slate-400',
+  draft: 'bg-[#94a3b8]',
+  progress: 'bg-[#f59e0b]',
+  pending: 'bg-[#f59e0b]',
+  approved: 'bg-[#3b82f6]',
+  published: 'bg-[#10b981]',
+  terminal: 'bg-[#94a3b8]',
 };
 
 const STATUS_TEXT: Record<ReturnType<typeof statusTone>, string> = {
-  draft: 'text-slate-600',
-  progress: 'text-amber-700',
-  pending: 'text-amber-700',
-  approved: 'text-blue-700',
-  published: 'text-emerald-700',
-  terminal: 'text-slate-500',
+  draft: 'text-[#3f4b58]',
+  progress: 'text-[#b45309]',
+  pending: 'text-[#b45309]',
+  approved: 'text-[#1d4ed8]',
+  published: 'text-[#047857]',
+  terminal: 'text-[#586472]',
 };
 
 /** Inline status: colored dot + label (used in list rows + table cells). */
@@ -114,18 +116,18 @@ export function LifecycleDots({ status, showLabel = true }: { status: string; sh
   const tone = statusTone(status);
   // color of the "current" (last filled) dot
   const currentDot =
-    tone === 'progress' || tone === 'pending' ? 'bg-amber-500'
-    : tone === 'approved' ? 'bg-blue-500'
-    : tone === 'published' ? 'bg-emerald-500'
-    : 'bg-slate-400';
+    tone === 'progress' || tone === 'pending' ? 'bg-[#f59e0b]'
+    : tone === 'approved' ? 'bg-[#3b82f6]'
+    : tone === 'published' ? 'bg-[#10b981]'
+    : 'bg-[#94a3b8]';
 
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1" aria-hidden>
         {STAGE_ORDER.map((_, i) => {
-          let cls = 'bg-slate-200';
+          let cls = 'bg-[#d5dbe1]';
           if (!terminal) {
-            if (i < idx) cls = 'bg-primary-500';
+            if (i < idx) cls = 'bg-[#14b8a6]';
             else if (i === idx) cls = currentDot;
           }
           return <span key={i} className={`h-1.5 w-4 rounded-full ${cls}`} />;

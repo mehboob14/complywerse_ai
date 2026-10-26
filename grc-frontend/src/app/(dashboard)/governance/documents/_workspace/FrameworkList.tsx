@@ -45,11 +45,17 @@ export function FrameworkList({ ids, info, active, onPick, maxHeight = 260, auto
         {rows.map((c) => {
           const tint = categoryTint(c.label);
           const on = !!active?.includes(String(c.id));
+          // a framework with its own short label shows it as a chip beside the full name; one without (the name IS the label) shows the
+          // full name as a tinted tag that wraps, never cut off: this list is where the whole name is read
+          const own = c.name !== c.label;
+          const tag = c.known ? tint.soft : 'bg-slate-100 text-slate-600';
           const body = (
             <>
-              <span className={`inline-flex min-w-[3.25rem] max-w-[7rem] shrink-0 items-center justify-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${c.known ? tint.soft : 'bg-slate-100 text-slate-600'}`}>{c.label}</span>
-              <span className="min-w-0 flex-1 truncate text-[13px] text-[#26323d]" title={c.name}>{c.name !== c.label ? c.name : ''}</span>
-              {on && <Check className="h-3.5 w-3.5 shrink-0 text-[#0f766e]" strokeWidth={2} aria-label="Already filtering by this" />}
+              {own
+                ? <span className={`mt-px inline-flex min-w-[3.25rem] max-w-[7rem] shrink-0 items-center justify-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${tag}`}>{c.label}</span>
+                : null}
+              <span className={own ? 'min-w-0 flex-1 break-words text-[13px] leading-5 text-[#26323d]' : `min-w-0 break-words rounded-md px-1.5 py-0.5 text-[12px] font-semibold leading-4 ${tag}`}>{c.name}</span>
+              {on && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0f766e]" strokeWidth={2} aria-label="Already filtering by this" />}
             </>
           );
           return (
@@ -59,12 +65,12 @@ export function FrameworkList({ ids, info, active, onPick, maxHeight = 260, auto
                   type="button"
                   onClick={() => onPick(c.id)}
                   title={`Show the documents mapped to ${c.label}`}
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+                  className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
                 >
                   {body}
                 </button>
               ) : (
-                <div className="flex w-full items-center gap-2 px-1.5 py-1">{body}</div>
+                <div className="flex w-full items-start gap-2 px-1.5 py-1">{body}</div>
               )}
             </li>
           );
