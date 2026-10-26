@@ -167,8 +167,10 @@ def test_it_is_registered_in_the_crosswalk_registry_and_the_labels():
     assert registry.slug_for_framework(NAME) == "uae_ia"
     assert registry.join_field_for_slug("uae_ia") == "control_id"
     assert registry.label_for_slug("uae_ia") == "UAE IA" == _FW_LABELS["uae_ia"]
-    entry = next(e for e in registry.framework_catalog() if e["slug"] == "uae_ia")
-    assert entry["file"] == CATALOG.name and entry["scf_keys"] == []
+    # no SCF rows by the owner's decision: hidden from the SCF framework list (the Controls Automation scope), still resolvable by name
+    assert "uae_ia" not in [e["slug"] for e in registry.framework_catalog()]
+    entry = next(e for e in registry._entries() if e["slug"] == "uae_ia")
+    assert entry["file"] == CATALOG.name and entry["scf_keys"] == [] and entry["emit"] is False
     # SCF's "EMEA UAE NIAF 2023" is a different document (codes 3.1.1-3.4.3): it must not be bound by name
     assert registry.expand_source_slugs(["uae_ia"]) == {"uae_ia"}
 
