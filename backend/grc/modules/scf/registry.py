@@ -23,7 +23,7 @@ _FW_LABELS = {
     "qcb_technology_risks": "QCB", "sbp_cloud": "SBP Cloud", "sbp_etgrmf": "SBP ETGRMF",
     "sbp_internet_banking": "SBP Internet Banking", "sl_csf": "SL CSF",
     "pisf_2026": "PISF 2026", "ndmo": "NDMO", "ksa_pdp_transfer": "KSA PDP Transfer",
-    "aramco_ccc": "Aramco CCC", "sabic_cybertrust": "SABIC CyberTrust", "sox": "SOX",
+    "aramco_ccc": "Aramco CCC", "sabic_cybertrust": "SABIC CyberTrust", "sox": "SOX", "uae_ia": "UAE IA",
 }
 
 

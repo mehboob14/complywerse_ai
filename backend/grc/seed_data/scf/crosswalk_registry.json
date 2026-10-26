@@ -360,6 +360,13 @@
       "note": "original_reference carries a domain label ('Governance B.3'), not a clause — check whether the source PDF cites ISO clauses before generating a mapping."
     },
     {
+      "slug": "uae_ia",
+      "file": "uae_ia.json",
+      "scf_keys": [],
+      "bridge_via": "iso_27002_2022",
+      "note": "UAE Information Assurance Standard v2.1 (UAE Cyber Security Council, Nov 2025). Not SCF's 'EMEA UAE NIAF 2023', which is a different document (15 codes, 3.1.1-3.4.3). Annex D of the standard cites ISO 27001/27002:2022 and NIST 800-53 r5 for every control; those references are kept on each control in uae_ia.json ('mappings'). No SCF rows yet: the ISO pivot (bridge.csv.gz) was retired 2026-09-04, so author one-hop rows in crosswalks/direct/uae_ia.json, as for ADHICS and PISF."
+    },
+    {
       "slug": "ndmo",
       "file": "NDMO_Data_Management_Standardsv1.5.json",
       "scf_keys": [],
