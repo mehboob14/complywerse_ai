@@ -52,12 +52,14 @@ const documents = (n: number) => `${fmt(n)} ${n === 1 ? 'document' : 'documents'
 
 // ─── Status tiles ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function StatusTile({ card, count, delta, active, onClick }: {
+function StatusTile({ card, count, delta, active, wide, onClick }: {
   card: (typeof CARDS)[number];
   count: number;
   /** documents added in the last 30 days (the "All" tile only) */
   delta?: number;
   active: boolean;
+  /** the odd tile of the two-column phone grid fills its row */
+  wide: boolean;
   onClick: () => void;
 }) {
   const { Icon } = card;
@@ -68,7 +70,7 @@ function StatusTile({ card, count, delta, active, onClick }: {
       aria-label={`${card.label}, ${documents(count)}. ${card.key === 'all' ? 'Show all.' : 'Show only these.'}`}
       title={`${card.tip}${active ? ' — click to show all' : ''}`}
       onClick={onClick}
-      className={`${TILE} flex min-w-0 flex-col justify-between rounded-xl border px-3.5 py-2.5 text-left transition-colors ${FOCUS} focus-visible:ring-offset-1 ${
+      className={`${TILE} flex min-w-0 flex-col justify-between rounded-xl border px-3.5 py-2.5 text-left transition-colors ${wide ? 'col-span-2 md:col-span-1' : ''} ${FOCUS} focus-visible:ring-offset-1 ${
         active ? 'border-[#0f766e] bg-[#f0fdfa] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-[#fff] hover:border-[#99d5cf] hover:bg-[#f0fdfa]'
       }`}
     >
@@ -102,7 +104,7 @@ function HealthTile({ health, review, onReview }: { health: Kpis['health']; revi
     <div
       role="group"
       aria-label="Review health"
-      className={`${TILE} flex min-w-0 items-center gap-3 rounded-xl border border-[#d5dbe1] bg-white px-3.5`}
+      className={`${TILE} col-span-2 flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-[#d5dbe1] bg-white px-3.5 md:col-span-1`}
     >
       <div className="relative h-[52px] w-[52px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable)} in force are up to date` : undefined}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
@@ -193,6 +195,7 @@ export function LibraryKpis({ kpis, statuses, review, onStatuses, onReview, load
             count={kpis[card.key]}
             delta={card.key === 'all' ? kpis.addedLast30 : undefined}
             active={active}
+            wide={card.key === 'published'}
             onClick={() => onStatuses(active ? [] : [...KPI_STATUSES[card.key]])}
           />
         );
