@@ -205,6 +205,11 @@ ASSESSMENT_TYPE_MAP: dict[str, str] = {
     "data transfer outside kingdom": "ksa_data_transfer",
     "regulation on personal data transfer outside the kingdom": "ksa_data_transfer",
     "regulation on personal data transfer outside ksa": "ksa_data_transfer",
+    # UAE Information Assurance Standard (UAE Cyber Security Council)
+    "uae ia": "uae_ia",
+    "uae_ia": "uae_ia",
+    "uae information assurance": "uae_ia",
+    "uae information assurance standard": "uae_ia",
 }
 
 # Artifact names that map to real platform data

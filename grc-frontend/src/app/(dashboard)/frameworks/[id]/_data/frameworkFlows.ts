@@ -1,5 +1,7 @@
 // AUTO-GENERATED from the compliance-framework-flows reference (34 frameworks).
 // Do not hand-edit; regenerate via scratchpad/gen_flows.py.
+// Exception: `uaeia` (UAE Information Assurance Standard v2.1) was written by hand from Chapters 1-3 of the
+// standard; gen_flows.py is not in the repo, so a regeneration must keep it.
 //
 // Each flow is the canonical end-to-end compliance journey for a framework:
 // ordered phases (internal work vs. external audit/certifier/regulator steps),
@@ -3939,6 +3941,161 @@ export const FRAMEWORK_FLOWS: FrameworkFlow[] = [
     "match": [
       "adhie",
       "healthinformationexchange"
+    ]
+  },
+  {
+    "id": "uaeia",
+    "name": "UAE IA — UAE Information Assurance Standard",
+    "version": "2.1",
+    "controls": 134,
+    "group": "UAE & Qatar",
+    "region": "United Arab Emirates",
+    "authority": "UAE Cyber Security Council (CSC) — national standard that implementing entities demonstrate compliance with",
+    "assessmentType": "Risk-based applicability; entity self-assessment and progress reports to the lead entity / sector regulator (or CSC); CSC compliance audit and testing where escalated",
+    "cycle": "Continual lifecycle (Ch. 3.2); periodic reporting to the lead entity, interval not fixed by the standard",
+    "phases": [
+      {
+        "n": 1,
+        "name": "Applicability & Scope",
+        "coverage": "Confirm the entity is an implementing entity (Ministry or Federal Authority, non-government CII entity, or Emirate government entity where no Emirate CIIP programme exists; the Emirate Lead assesses applicability where one does); identify the lead entity / sector regulator to report to (Ch. 1.2, 3.6)",
+        "deliverables": [
+          "Applicability determination (implementing entity status)",
+          "Lead entity / sector regulator (or CSC) identified as the reporting line"
+        ],
+        "evidence": [
+          "Confirmation from the Emirate Lead or lead entity, where one exists",
+          "Entity context, interested parties and their requirements determined (M1.1.1)"
+        ],
+        "owner": "Top Management / CISO",
+        "ext": false
+      },
+      {
+        "n": 2,
+        "name": "Governance, Policy & Support (M1)",
+        "coverage": "M1 Strategy and Planning: leadership commitment, roles and an Information Security Committee, security policy and objectives, supporting policies, resources and competence, communication plan, controlled documentation",
+        "deliverables": [
+          "Information security policy and objectives",
+          "Governance charter with Information Security Committee",
+          "Supporting policies",
+          "Communication plan"
+        ],
+        "evidence": [
+          "Top-management approval of policy and objectives",
+          "Role assignments and committee records",
+          "Document control records (M1.3.3)"
+        ],
+        "owner": "Top Management / CISO",
+        "ext": false
+      },
+      {
+        "n": 3,
+        "name": "Risk Assessment & Control Selection (M2)",
+        "coverage": "M2: risk management policy and criteria, then the risk-based approach (Ch. 3.3): establish context, identify, estimate, evaluate, treat, accept, monitor and communicate; select controls and record applicability — the 70 Always Applicable controls stay in whatever the outcome",
+        "deliverables": [
+          "Risk management policy and risk criteria",
+          "Risk register and risk assessment report",
+          "Risk treatment plan",
+          "Statement of Applicability"
+        ],
+        "evidence": [
+          "Management approval of the treatment plan and residual risk",
+          "Justification for each excluded risk-based control, with risk acceptance by an accountable person (submitted to the CSC per Ch. 3.4)"
+        ],
+        "owner": "Risk Manager / CISO",
+        "ext": false
+      },
+      {
+        "n": 4,
+        "name": "Implementation Plan & Prioritisation",
+        "coverage": "Develop the entity implementation plan (Ch. 3.6) and sequence delivery by control priority: all applicable controls are mandatory, starting with P1; priorities may be promoted or demoted from the risk assessment except P1 (Ch. 3.5)",
+        "deliverables": [
+          "Entity implementation plan",
+          "Priority-ordered roadmap (P1 39, P2 60, P3 24, P4 11 controls)"
+        ],
+        "evidence": [
+          "Approved implementation plan",
+          "Human and financial resources provided (M1.3.1)"
+        ],
+        "owner": "CISO / Information Security Committee",
+        "ext": false
+      },
+      {
+        "n": 5,
+        "name": "Control Implementation & Operation (M3–M4, T1–T9)",
+        "coverage": "Implement the selected controls: awareness and training, HR security, asset management and classification, physical security, operations (configuration, change, malware, backup, logging, vulnerabilities, cryptography), network, access management, third parties, secure acquisition and development, incident management, ICT continuity",
+        "deliverables": [
+          "Awareness and training program; HR screening and terms",
+          "Asset inventory and classification scheme",
+          "Operational procedures (configuration baselines, change, backup, logging, vulnerabilities, cryptography)",
+          "Access, third-party, application and incident procedures; ICT continuity plan"
+        ],
+        "evidence": [
+          "Training and screening records",
+          "Configured technical controls (logging, MFA for administrators, encryption)",
+          "Incident response and continuity test results (T8.2.4, T9.1.1)"
+        ],
+        "owner": "Control Owners / IT & Security",
+        "ext": false
+      },
+      {
+        "n": 6,
+        "name": "Monitoring, Internal Audit & Management Review (M5–M6)",
+        "coverage": "Check compliance with policies and standards (M5.2.1), monitor and measure performance (M6.2.1), run internal audits against the standard and the entity's own requirements (M6.2.2), top-management review (M6.2.3), correct nonconformities (M6.3.1)",
+        "deliverables": [
+          "Compliance review report",
+          "Performance measurement results",
+          "Internal audit program and report",
+          "Management review record",
+          "Corrective action register"
+        ],
+        "evidence": [
+          "Compliance check results and reported non-compliance",
+          "Audit plan, scope and results reported to management",
+          "Documented management review decisions"
+        ],
+        "owner": "Internal Audit / Compliance / Top Management",
+        "ext": false
+      },
+      {
+        "n": 7,
+        "name": "Compliance Reporting & CSC Assessment",
+        "coverage": "Periodically update the lead entity / sector regulator (or the CSC where none is defined) on implementation progress and compliance; support the audit and testing the CSC requests. The CSC reviews self-assessment reports and may escalate to a compliance audit or test (Ch. 3.6)",
+        "deliverables": [
+          "Periodic implementation progress and compliance report",
+          "Compliance self-assessment report"
+        ],
+        "evidence": [
+          "Reports submitted to the lead entity / sector regulator / CSC",
+          "Access and support provided for CSC audit and testing",
+          "Corrective action on any nonconformity found"
+        ],
+        "owner": "CISO / Compliance (reporting to the lead entity / CSC)",
+        "ext": true
+      },
+      {
+        "n": 8,
+        "name": "Continual Improvement & Re-assessment",
+        "coverage": "Close the lifecycle (Ch. 3.2): review and update the risk assessment and treatment (M2.4), improve controls from measurement results and incidents (M6.3.2), and re-select and re-prioritise controls as context, threats and requirements change",
+        "deliverables": [
+          "Updated risk assessment and treatment plan",
+          "Improvement actions drawn from measurement results and incidents"
+        ],
+        "evidence": [
+          "Review records covering all risks, including accepted ones (M2.4.1)",
+          "Management review outputs on improvement opportunities (M6.2.3)"
+        ],
+        "owner": "CISO / Information Security Committee",
+        "ext": false
+      }
+    ],
+    "loopback": {
+      "label": "Continual improvement lifecycle (Ch. 3.2): risk review and update, then control re-selection and implementation",
+      "from": 8,
+      "to": 3
+    },
+    "match": [
+      "uaeia",
+      "uaeinformationassurance"
     ]
   },
   {
