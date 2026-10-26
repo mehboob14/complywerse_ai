@@ -33,8 +33,8 @@ const CARDS: { key: CardKey; label: string; sub: string; Icon: LucideIcon; tile:
   { key: 'published', label: 'Published', sub: 'in force', Icon: BadgeCheck, tile: 'bg-[#d1fae5] text-[#047857]' },
 ];
 
-const GRID = 'grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(0,2.5fr)]';
-const HEALTH_SPAN = 'col-span-2 md:col-span-5 xl:col-span-1';
+const GRID = 'grid grid-cols-2 gap-3 lg:grid-cols-5 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(0,2.5fr)]';
+const HEALTH_SPAN = 'col-span-2 lg:col-span-5 xl:col-span-1';
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 // NOTE: the platform's CSS forces `.bg-white` with !important, which would beat a hover tint on the same element: a card whose
 // background changes is spelled bg-[#fff], not bg-white.
@@ -62,7 +62,7 @@ function StatusCard({ card, count, sub, active, wide, onClick }: {
       aria-pressed={active}
       aria-label={`${card.label}, ${documents(count)}. ${card.key === 'all' ? 'Show all.' : 'Show only these.'}`}
       onClick={onClick}
-      className={`flex min-h-[104px] min-w-0 flex-col justify-between gap-2 rounded-xl border p-3.5 text-left transition-colors ${wide ? 'col-span-2 md:col-span-1' : ''} ${FOCUS} focus-visible:ring-offset-1 ${
+      className={`flex min-h-[104px] min-w-0 flex-col justify-between gap-2 rounded-xl border p-3.5 text-left transition-colors ${wide ? 'col-span-2 lg:col-span-1' : ''} ${FOCUS} focus-visible:ring-offset-1 ${
         active ? 'border-[#0f766e] bg-[#f0fdfa] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-[#fff] hover:border-[#99d5cf] hover:bg-[#f0fdfa]'
       }`}
     >
@@ -133,7 +133,7 @@ function HealthCard({ health, review, onReview }: { health: Kpis['health']; revi
         {reviewable === 0 ? (
           <p className="min-w-0 text-[12px] leading-4 text-[#586472]">No document is in force yet.</p>
         ) : (
-          <ul className="min-w-[11.5rem] max-w-[24rem] flex-1">
+          <ul className="min-w-[10rem] max-w-[24rem] flex-1">
             {rows.map((bucket) => {
               const count = healthCount(health, bucket);
               const share = percent(count, reviewable);

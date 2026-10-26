@@ -174,6 +174,9 @@ function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled 
   );
 }
 
+/** " · 4 nested documents under these": the pages count the documents at the top of the tree, the ones nested under them come with them. */
+const nestedNote = (n: number) => (n === 0 ? '' : ` · ${n} nested ${n === 1 ? 'document under it' : 'documents under these'}`);
+
 export function LibraryTable({
   docs, scope, filtering, lookups, counts, preferFrameworks, sort, onSort, hiddenColumns, density, pageSize, onPageSize, activeId,
   onPeek, onOpenDoc, onPickFramework, onEdit, onDownload, onArchive, onRestore, canEdit = false, canEditRow, canArchiveRow, canRestoreRow,
@@ -406,7 +409,7 @@ export function LibraryTable({
           <p className="text-[13px] text-[#586472]" aria-live="polite">
             {rangeLabel(page, pageSize, top.length)}
             {/* pages count the documents at the top of the tree; the ones nested under them come with them */}
-            {entries.some((e) => e.depth > 0) ? ` · and ${entries.filter((e) => e.depth > 0).length} nested under them` : ''}
+            {nestedNote(entries.filter((e) => e.depth > 0).length)}
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="inline-flex items-center gap-2 text-[13px] text-[#586472]">

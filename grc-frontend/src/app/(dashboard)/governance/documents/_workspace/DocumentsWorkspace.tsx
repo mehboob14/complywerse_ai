@@ -8,7 +8,7 @@
  * person's own columns, density and saved views are kept in their browser (libraryPrefs.ts).
  * The existing create/upload/AI-draft/templates modals stay in page.tsx and are opened via the callbacks passed in.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Archive, FileText, Loader2, Plus, SearchX, Sparkles, LayoutTemplate } from 'lucide-react';
@@ -187,7 +187,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // the documents the table is drawn from (the documents above a match come from here) and the ones that match
   const scope = useMemo(() => unlessArchivedAsked(allDocs, filters.statuses), [allDocs, filters.statuses]);
   const filtering = isFiltering(filters);
-  const filteredDocs = useMemo(() => scope.filter((d) => matchesFilters(d, filters, ctx)), [scope, filters, ctx]);
+  // the box shows every keystroke at once; the filtering of a thousand documents follows when React has a moment (a deferred value)
+  const searched = useDeferredValue(filters.search);
+  const applied = useMemo(() => (searched === filters.search ? filters : { ...filters, search: searched }), [filters, searched]);
+  const filteredDocs = useMemo(() => scope.filter((d) => matchesFilters(d, applied, ctx)), [scope, applied, ctx]);
   const archivedList = filters.statuses.length === 1 && filters.statuses[0] === 'archived';
   const openDocRow = openId != null ? allDocs.find((d) => d.id === openId) ?? null : null;
   // the next / previous document of the list as it is sorted (the order the CSV has)
@@ -319,11 +322,11 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   return (
     <div className="governance-light space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-xl">
           <h1 className="text-[20px] font-semibold leading-tight text-[#1f2933]">Document library</h1>
           <p className="text-[13px] text-[#586472]">Policies, standards and procedures: who owns them, when they are due for review, and the frameworks they cover.{updatedLabel ? ` ${updatedLabel}.` : ''}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {create === 'studio-off' && (
             <span className="shrink-0 text-xs text-[#3f4b58]">Creating documents needs the Comply AI Studio.</span>
           )}

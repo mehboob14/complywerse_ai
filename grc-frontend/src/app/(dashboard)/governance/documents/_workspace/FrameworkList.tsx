@@ -47,7 +47,7 @@ export function FrameworkList({ ids, info, active, onPick, maxHeight = 260, auto
           const on = !!active?.includes(String(c.id));
           // a framework with its own short label shows it as a chip beside the full name; one without (the name IS the label) shows the
           // full name as a tinted tag that wraps, never cut off: this list is where the whole name is read
-          const own = c.name !== c.label;
+          const own = c.known && c.name !== c.label;          // an id the list does not know is just "Framework #12", once
           const tag = c.known ? tint.soft : 'bg-slate-100 text-slate-600';
           const body = (
             <>
