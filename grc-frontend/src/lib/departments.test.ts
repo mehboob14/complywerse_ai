@@ -2,11 +2,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 import { apiErrorText } from './apiError.ts';
 import {
-  DEPARTMENT_QUERY_KEYS, departmentCreateBody, departmentPatch, departmentPlaceholder, howChips, memberSummary, parentChoices, removeBlock,
+  DEACTIVATE_NOTE, DEPARTMENT_QUERY_KEYS, activatedText, deactivatedText, departmentCreateBody, departmentPatch, departmentPlaceholder, departmentRows,
+  departmentsSummary, documentsLabel, howChips, memberSummary, parentChoices, refreshDepartments, removeBlock,
   roleChips, roleItems, roleLabel, userItems, type DepartmentForm,
 } from './departments.ts';
 
@@ -134,4 +135,93 @@ test('every list the pickers cache under a name is refreshed when a department c
   const files = (readdirSync(src, { recursive: true }) as string[]).filter((f) => /\.tsx?$/.test(f) && !f.endsWith('.test.ts'));
   const text = files.map((f) => readFileSync(new URL(f.replace(/\\/g, '/'), src), 'utf8')).join('\n');
   DEPARTMENT_QUERY_KEYS.forEach((key) => assert.ok(text.includes(`queryKey: ['${key[0]}'`), `no query is keyed ['${key[0]}'] any more`));
+});
+
+// ── Governance → Settings → Departments ──────────────────────────────────────
+
+const node = (id: number, name: string, parent: number | null = null, is_active = true) => ({ id, name, parent_department_id: parent, is_active });
+const shape = (rows: { department: { name: string }; depth: number }[]) => rows.map((r) => `${'  '.repeat(r.depth)}${r.department.name}`);
+
+test('the table lists the top departments A-Z, each followed by the ones under it A-Z, indented', () => {
+  const all = [
+    node(1, 'Operations'), node(2, 'compliance'), node(3, 'Support', 1), node(4, 'Audit', 2), node(5, 'Helpdesk', 3),
+    node(6, 'Billing', 1), node(7, 'Legacy unit', null, false), node(8, 'Dormant child', 2, false),
+  ];
+  assert.deepEqual(shape(departmentRows(all)), [
+    'compliance', '  Audit', '  Dormant child', 'Legacy unit', 'Operations', '  Billing', '  Support', '    Helpdesk',
+  ]);
+  assert.deepEqual(departmentRows(all).map((r) => r.department.id).sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8]);   // all of them, once
+  assert.deepEqual(departmentRows([]), []);
+  assert.deepEqual(departmentRows([node(2, 'Same'), node(1, 'same')]).map((r) => r.department.id), [1, 2]);          // equal names: both, by id
+});
+
+test('a department whose parent is not in the list, or is itself, or sits in a loop, is still listed', () => {
+  const all = [node(10, 'Orphan', 99), node(11, 'Selfie', 11), node(20, 'Loop A', 21), node(21, 'Loop B', 20), node(30, 'Fine'), node(31, 'Child', 30)];
+  const rows = departmentRows(all);
+  assert.equal(rows.length, 6);
+  assert.deepEqual(shape(rows), ['Fine', '  Child', 'Orphan', 'Selfie', 'Loop A', '  Loop B']);                // a loop has no top: it follows the rest
+});
+
+test('the Documents cell shows the number and says it in words for a tooltip or a screen reader', () => {
+  assert.deepEqual(documentsLabel(12), { text: '12', long: '12 documents' });
+  assert.deepEqual(documentsLabel(1), { text: '1', long: '1 document' });
+  for (const none of [0, undefined, null, -3, Number.NaN]) assert.deepEqual(documentsLabel(none), { text: '0', long: 'No documents' });
+  assert.equal(documentsLabel(2.9).text, '2');
+});
+
+test('the section says how many departments there are and how many are switched off', () => {
+  assert.equal(departmentsSummary([]), '0 departments');
+  assert.equal(departmentsSummary([{ is_active: true }]), '1 department');
+  assert.equal(departmentsSummary([{ is_active: true }, { is_active: false }, { is_active: true }]), '3 departments · 1 inactive');
+  assert.equal(departmentsSummary([{}, { is_active: false }, { is_active: false }]), '3 departments · 2 inactive');
+});
+
+test('after any change every list read from the departments is marked out of date', () => {
+  const asked: (readonly string[])[] = [];
+  refreshDepartments({ invalidateQueries: (filters) => { asked.push(filters.queryKey); } });
+  assert.deepEqual(asked, DEPARTMENT_QUERY_KEYS.map((k) => k));
+  for (const key of ['admin-departments', 'org-departments', 'signoff-targets']) assert.ok(asked.some((k) => k[0] === key), key);
+});
+
+test('switching a department off is explained, and said, the same way from Administration and from Settings', () => {
+  assert.match(DEACTIVATE_NOTE, /Documents that are already in it keep it/);
+  assert.match(DEACTIVATE_NOTE, /activate it again/);
+  assert.equal(deactivatedText('Finance'), 'Finance is deactivated. Documents already in it keep it.');
+  assert.equal(activatedText('Finance'), 'Finance is active again.');
+});
+
+const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const ADMIN_PAGE = '../app/(dashboard)/admin/departments/page.tsx';
+const SETTINGS_SECTION = '../app/(dashboard)/governance/settings/_DepartmentsSection.tsx';
+
+test('the department form and the deactivate question exist once: Administration and Settings open the same components', () => {
+  const shared = source('../components/admin/DepartmentForm.tsx');
+  assert.match(shared, /export function DepartmentFormModal/);
+  assert.match(shared, /export function DeactivateModal/);
+  for (const path of [ADMIN_PAGE, SETTINGS_SECTION]) {
+    const page = source(path);
+    for (const name of ['DepartmentFormModal', 'DeactivateModal']) {
+      assert.match(page, new RegExp(`import \\{[^}]*\\b${name}\\b[^}]*\\} from '@/components/admin/DepartmentForm'`), `${path} does not use the shared ${name}`);
+      assert.doesNotMatch(page, new RegExp(`function ${name}\\b`), `${path} has its own ${name}`);
+    }
+  }
+});
+
+test('Settings changes departments only for those the server lets, and links to the tab where members and roles are managed', () => {
+  const section = source(SETTINGS_SECTION);
+  assert.match(section, /const EDIT_RIGHT = 'admin:organization:edit'/);                       // the right departments_router asks for
+  assert.match(section, /hasPermission\(EDIT_RIGHT\)/);
+  const router = new URL('../../../backend/grc/routers/admin_departments_router.py', import.meta.url);        // (when the backend is beside the frontend)
+  if (existsSync(router)) assert.match(readFileSync(router, 'utf8'), /require_tenant_permission\("admin:organization:edit"\)/);
+  const link = /href="(\/admin\?tab=([a-z-]+))"/.exec(section);
+  assert.equal(link?.[1], '/admin?tab=departments');
+  const admin = source('../app/(dashboard)/admin/page.tsx');
+  assert.match(admin, new RegExp(`VALID_ADMIN_TABS = new Set<AdminTab>\\(\\[[^\\]]*'${link?.[2]}'`));     // a tab Administration really has
+  assert.match(admin, new RegExp(`activeTab === '${link?.[2]}' && <DepartmentsAdminPage />`));
+});
+
+test('the Departments card comes first on Governance → Settings, and is there even when the approval settings are not', () => {
+  const page = source('../app/(dashboard)/governance/settings/page.tsx');
+  assert.match(page, /<DepartmentsSection \/>\s*<Section id="due"/);                              // before the first lifecycle card
+  assert.equal(page.match(/<WithDepartments>/g)?.length, 2);                                      // the load error and "not switched on"
 });

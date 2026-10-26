@@ -10,7 +10,7 @@ import Link from 'next/link';
 import type { MouseEvent } from 'react';
 import {
   AlertCircle, Archive, ArchiveRestore, ChevronDown, ChevronRight, Clock3, Download, ExternalLink, Eye, File as FileIcon, FileSpreadsheet, FileText,
-  FileType, Pencil, Presentation, ShieldAlert, type LucideIcon,
+  FileType, FolderInput, Pencil, Presentation, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
 import { parseUtc } from '@/lib/serverTime';
 import { AttestationRing, ReviewDate } from './atoms';
@@ -236,8 +236,8 @@ function HoverButton({ label, icon: Icon, onClick }: { label: string; icon: Luci
   );
 }
 
-/** Open and Download as buttons that appear with the row's hover, and the row's menu (Open, Edit, Download, Archive, Restore) as before. */
-export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArchive, onRestore }: {
+/** Open and Download as buttons that appear with the row's hover, and the row's menu (Open, Edit, Move to…, Download, Archive, Restore). */
+export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArchive, onRestore, canMove = false, onMove }: {
   doc: GovDoc;
   /** what the menu offers beside Open and Download (libraryTableLogic.rowRights) */
   rights: { edit: boolean; archive: boolean; restore: boolean };
@@ -246,6 +246,9 @@ export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArch
   onDownload: (doc: GovDoc) => void;
   onArchive: (doc: GovDoc) => void;
   onRestore?: (doc: GovDoc) => void;
+  /** Move to…: the person may change this document and the page can move it; `anchor` is the ⋯ button's box */
+  canMove?: boolean;
+  onMove?: (doc: GovDoc, anchor?: DOMRect) => void;
 }) {
   return (
     <div className="flex items-center justify-end gap-0.5">
@@ -255,6 +258,7 @@ export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArch
         actions={[
           { key: 'open', label: 'Open', icon: Eye, onClick: () => onOpenDoc(doc.id) },
           { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(doc), hidden: !rights.edit },
+          { key: 'move', label: 'Move to…', icon: FolderInput, onClick: (anchor) => onMove?.(doc, anchor), hidden: !(canMove && onMove) },
           { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(doc) },
           { key: 'archive', label: 'Archive', icon: Archive, onClick: () => onArchive(doc), variant: 'danger', hidden: !rights.archive },
           { key: 'restore', label: 'Restore', icon: ArchiveRestore, onClick: () => onRestore?.(doc), hidden: !rights.restore },

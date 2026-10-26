@@ -4,27 +4,22 @@
 // pick from. A department's people are those added by hand, its lead, and everyone who holds one of its roles (they join and leave
 // with the role). The rules that can be tested without a screen are in lib/departments.ts.
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Building2, Edit2, Loader2, Plus, Power, UserPlus, X } from 'lucide-react';
-import { assetsApi, departmentsApi, type Department, type DepartmentMember, type DepartmentMemberRole } from '@/lib/api';
+import { departmentsApi, type Department, type DepartmentMember, type DepartmentMemberRole } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
 import { parseUtc } from '@/lib/serverTime';
 import {
-  DEPARTMENT_QUERY_KEYS, MEMBER_ROLES, departmentCreateBody, departmentPatch, howChips, memberSummary, parentChoices, removeBlock,
-  roleChips, roleItems, userItems, type DepartmentForm,
+  MEMBER_ROLES, activatedText, deactivatedText, howChips, memberSummary, refreshDepartments, removeBlock, roleChips, userItems,
 } from '@/lib/departments';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { PageLoader } from '@/components/ui';
+// the create/edit form and the "deactivate?" question are shared with Governance → Settings → Departments (one implementation)
+import {
+  DeactivateModal, DepartmentFormModal, FOCUS, Modal, PLAIN, PRIMARY, TRIGGER, useAdminDepartments, useTenantUsers, type TenantUser,
+} from '@/components/admin/DepartmentForm';
 
-type TenantUser = { id: number; display_name: string; email: string };
-
-const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
-const LABEL = 'mb-1 block text-xs font-medium text-[#3f4b58]';
-const TRIGGER = 'w-full !h-[38px] !text-[13px]';
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1';
-const PRIMARY = `inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50 ${FOCUS}`;
-const PLAIN = `rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 ${FOCUS}`;
 const SMALL = `inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
 // teal tints for the lead and for people added by hand, grey for those who come through a role (never blue or purple)
 const CHIP: Record<'lead' | 'hand' | 'role', string> = {
@@ -45,32 +40,25 @@ export default function DepartmentsAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [okMessage, setOkMessage] = useState<string | null>(null);
 
-  const list = useQuery({
-    queryKey: ['admin-departments'],
-    queryFn: () => departmentsApi.list(true).then((r) => r.data),
-  });
-  const usersQ = useQuery({
-    queryKey: ['admin-departments-users'],
-    queryFn: () => assetsApi.getTenantUsers().then((r) => r.data as TenantUser[]),
-    staleTime: 60 * 1000,
-  });
+  const list = useAdminDepartments();
+  const usersQ = useTenantUsers();
 
   // every picker that reads the departments is out of date as soon as one changes
-  const refresh = () => DEPARTMENT_QUERY_KEYS.forEach((key) => qc.invalidateQueries({ queryKey: key }));
+  const refresh = () => refreshDepartments(qc);
 
   const deactivate = useMutation({
     mutationFn: (d: Department) => departmentsApi.deactivate(d.id),
     onSuccess: (_r, d) => {
       setSwitching(null);
       refresh();
-      setOkMessage(`${d.name} is deactivated. Documents already in it keep it.`);
+      setOkMessage(deactivatedText(d.name));
     },
   });
   const activate = useMutation({
     mutationFn: (d: Department) => departmentsApi.update(d.id, { is_active: true }),
     onSuccess: (_r, d) => {
       refresh();
-      setOkMessage(`${d.name} is active again.`);
+      setOkMessage(activatedText(d.name));
     },
     onError: (e: unknown) => setError(apiErrorText(e, 'Could not activate the department.')),
   });
@@ -195,7 +183,6 @@ export default function DepartmentsAdminPage() {
         <DepartmentFormModal
           mode="create"
           departments={rows}
-          users={users}
           onClose={() => setCreateOpen(false)}
           onSaved={(message) => { setCreateOpen(false); refresh(); setOkMessage(message); }}
         />
@@ -205,7 +192,6 @@ export default function DepartmentsAdminPage() {
           mode="edit"
           department={editing}
           departments={rows}
-          users={users}
           onClose={() => setEditing(null)}
           onSaved={(message) => { setEditing(null); refresh(); setOkMessage(message); }}
         />
@@ -214,31 +200,8 @@ export default function DepartmentsAdminPage() {
         <MembersModal department={managing} users={users} onClose={() => setManaging(null)} onChanged={refresh} />
       )}
       {switching && (
-        <Modal
-          title={`Deactivate ${switching.name}?`}
-          size="md"
-          onClose={() => setSwitching(null)}
-          footer={(
-            <>
-              <button type="button" onClick={() => setSwitching(null)} className={PLAIN}>Cancel</button>
-              <button type="button" onClick={() => deactivate.mutate(switching)} disabled={deactivate.isPending}
-                className={`inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-4 py-2 text-sm font-semibold text-[#fff] hover:bg-[#912018] disabled:opacity-50 ${FOCUS}`}>
-                {deactivate.isPending && <Loader2 size={13} className="animate-spin" aria-hidden />}
-                Deactivate
-              </button>
-            </>
-          )}
-        >
-          <p className="text-[13px] text-[#26323d]">
-            It stops appearing in the lists people pick a department from. Documents that are already in it keep it, and you can
-            activate it again at any time.
-          </p>
-          {deactivate.isError && (
-            <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-[#7a1616]">
-              {apiErrorText(deactivate.error, 'Could not deactivate the department.')}
-            </p>
-          )}
-        </Modal>
+        <DeactivateModal department={switching} pending={deactivate.isPending} error={deactivate.error}
+          onConfirm={() => deactivate.mutate(switching)} onClose={() => setSwitching(null)} />
       )}
     </div>
   );
@@ -252,187 +215,6 @@ function RoleChips({ roles }: { roles: Department['roles'] }) {
       {names.map((name, i) => <span key={`${name}-${i}`} className={`${CHIP_BASE} ${CHIP.role}`}>{name}</span>)}
       {more > 0 && <span className="text-xs text-[#586472]" title={roles.map((r) => r.name).join(', ')}>+{more} more</span>}
     </span>
-  );
-}
-
-// ── modal shell ──────────────────────────────────────────────────────────────
-
-function Modal({ title, subtitle, size = 'lg', onClose, footer, children }: {
-  title: string;
-  subtitle?: string;
-  size?: 'md' | 'lg' | 'xl';
-  onClose: () => void;
-  footer?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  const box = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  // focus goes into the dialog (to its first field when it has one that asked for it)
-  useEffect(() => { if (!box.current?.contains(document.activeElement)) box.current?.focus(); }, []);
-  useEffect(() => {
-    // Escape closes the dialog unless a picker inside it was open: that one handled the key (and said so)
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  const width = size === 'md' ? 'max-w-md' : size === 'xl' ? 'max-w-4xl' : 'max-w-xl';
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-2 sm:items-center sm:p-4">
-      <div ref={box} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
-        className={`flex max-h-[92vh] w-full ${width} flex-col rounded-xl border border-slate-200 bg-white shadow-xl focus:outline-none`}>
-        <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
-          <div className="min-w-0">
-            <h2 id={titleId} className="truncate text-sm font-semibold text-slate-900">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-[#586472]">{subtitle}</p>}
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className={`rounded text-slate-500 hover:text-slate-900 ${FOCUS}`}>
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
-        {footer && <div className="flex flex-shrink-0 justify-end gap-2 border-t border-slate-200 px-4 py-3 sm:px-5">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, htmlFor, hint, wide, children }: { label: string; htmlFor?: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
-  return (
-    <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
-      {/* a picker's trigger names itself (aria-label), so its caption is not a label for anything */}
-      {htmlFor ? <label htmlFor={htmlFor} className={LABEL}>{label}</label> : <span className={LABEL}>{label}</span>}
-      {children}
-      {hint && <p className="mt-1 text-[11px] text-[#586472]">{hint}</p>}
-    </div>
-  );
-}
-
-// ── create / edit ────────────────────────────────────────────────────────────
-
-function DepartmentFormModal({ mode, department, departments, users, onClose, onSaved }: {
-  mode: 'create' | 'edit';
-  department?: Department;
-  departments: Department[];
-  users: TenantUser[];
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
-  const id = useId();
-  const [form, setForm] = useState<DepartmentForm>(() => ({
-    name: department?.name ?? '',
-    code: department?.code ?? '',
-    description: department?.description ?? '',
-    parentId: department?.parent_department_id ?? null,
-    leadId: department?.department_head_user_id ?? null,
-    roleIds: department?.roles.map((r) => r.id) ?? [],
-    active: department?.is_active ?? true,
-  }));
-  const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const set = (patch: Partial<DepartmentForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const rolesQ = useQuery({
-    queryKey: ['department-role-options'],
-    queryFn: () => departmentsApi.roleOptions().then((r) => r.data),
-    staleTime: 60 * 1000,
-  });
-  const roleList = useMemo(() => roleItems(rolesQ.data, department?.roles), [rolesQ.data, department]);
-  const peopleList = useMemo(() => {
-    const items = userItems(users);
-    // a lead who is no longer among the people the list offers still shows, and a chosen lead can be taken off again
-    if (form.leadId != null && !items.some((i) => i.value === String(form.leadId))) {
-      items.unshift({ value: String(form.leadId), label: department?.department_head_name || `User ${form.leadId}` });
-    }
-    return form.leadId != null ? [{ value: '', label: 'No lead' }, ...items] : items;
-  }, [users, form.leadId, department?.department_head_name]);
-  const parents = useMemo(
-    () => parentChoices(departments, department?.id ?? null, department?.parent_department_id ?? null),
-    [departments, department],
-  );
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      setProblem('Give the department a name.');
-      return;
-    }
-    setSaving(true);
-    setProblem(null);
-    try {
-      if (mode === 'create') {
-        await departmentsApi.create(departmentCreateBody(form));
-        onSaved('Department created.');
-      } else if (department) {
-        const patch = departmentPatch(department, form);
-        if (Object.keys(patch).length === 0) {
-          onClose();                                           // nothing was changed: nothing to save
-          return;
-        }
-        await departmentsApi.update(department.id, patch);
-        onSaved('Department updated.');
-      }
-    } catch (err: unknown) {
-      setProblem(apiErrorText(err, 'The department could not be saved.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const formId = `${id}-form`;
-  return (
-    <Modal
-      title={mode === 'create' ? 'New department' : `Edit department — ${department?.name}`}
-      onClose={onClose}
-      footer={(
-        <>
-          <button type="button" onClick={onClose} className={PLAIN}>Cancel</button>
-          <button type="submit" form={formId} disabled={saving} className={PRIMARY}>
-            {saving && <Loader2 size={13} className="animate-spin" aria-hidden />}
-            {mode === 'create' ? 'Create' : 'Save'}
-          </button>
-        </>
-      )}
-    >
-      <form id={formId} onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Name *" htmlFor={`${id}-name`} wide>
-          <input id={`${id}-name`} value={form.name} onChange={(e) => set({ name: e.target.value })} required autoFocus className={INPUT}
-            placeholder="Compliance / IT Security / Risk" />
-        </Field>
-        <Field label="Code" htmlFor={`${id}-code`}>
-          <input id={`${id}-code`} value={form.code} onChange={(e) => set({ code: e.target.value })} className={INPUT} placeholder="Auto if empty" />
-        </Field>
-        <Field label="Parent department" htmlFor={`${id}-parent`}>
-          <select id={`${id}-parent`} value={form.parentId ?? ''} onChange={(e) => set({ parentId: e.target.value ? Number(e.target.value) : null })} className={INPUT}>
-            <option value="">— None —</option>
-            {parents.map((p) => <option key={p.id} value={p.id}>{p.name}{p.is_active ? '' : ' (inactive)'}</option>)}
-          </select>
-        </Field>
-        <Field label="Description" htmlFor={`${id}-description`} wide>
-          <textarea id={`${id}-description`} value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} className={INPUT} />
-        </Field>
-        <Field label="Lead">
-          <MultiSelectDropdown title="Lead" items={peopleList} selectedValues={form.leadId == null ? [] : [String(form.leadId)]}
-            onApply={(v) => set({ leadId: v[0] ? Number(v[0]) : null })} multiSelect={false} autoApply forceSearch triggerVariant="input"
-            size="sm" placeholder="— None —" searchPlaceholder="Search people" triggerClassName={TRIGGER} />
-        </Field>
-        <Field label="Roles" hint="Everyone who holds these roles belongs to this department automatically">
-          <MultiSelectDropdown title="Roles" items={roleList} selectedValues={form.roleIds.map(String)}
-            onApply={(v) => set({ roleIds: v.map(Number) })} multiSelect autoApply forceSearch triggerVariant="input" namesInTrigger
-            showAvatars={false} size="sm" searchPlaceholder="Search roles"
-            placeholder={rolesQ.isLoading ? 'Loading roles…' : rolesQ.isError ? "Couldn't load the roles" : 'None'} triggerClassName={TRIGGER} />
-          {rolesQ.isError && <p role="alert" className="mt-1 text-[11px] text-[#7a1616]">{apiErrorText(rolesQ.error, 'The roles could not be loaded.')}</p>}
-        </Field>
-        {mode === 'edit' && (
-          <label className="flex items-center gap-2 text-[13px] text-slate-700 sm:col-span-2">
-            <input type="checkbox" checked={form.active} onChange={(e) => set({ active: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
-            Active
-          </label>
-        )}
-        {problem && (
-          <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-[#7a1616] sm:col-span-2">{problem}</p>
-        )}
-      </form>
-    </Modal>
   );
 }
 

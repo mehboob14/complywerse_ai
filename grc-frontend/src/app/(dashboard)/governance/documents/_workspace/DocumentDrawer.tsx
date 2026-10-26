@@ -321,7 +321,7 @@ function escapeCloses(e: KeyboardEvent, panel: HTMLElement | null): boolean {
   const t = e.target;
   if (t instanceof HTMLInputElement && t.type === 'search' && t.value) return false;
   const focus = document.activeElement;
-  return !focus || focus === document.body || !!panel?.contains(focus) || !!focus.closest('[data-doc-row]');
+  return !focus || focus === document.body || !!panel?.contains(focus) || !!focus.closest('[data-doc-row], [data-folder-row]');
 }
 
 function DrawerPanel({

@@ -18,6 +18,13 @@ export const DEPARTMENT_QUERY_KEYS: readonly (readonly string[])[] = [
   ['assessment-assignee-teams'], ['stage-owner-teams'], ['risk-modal-teams'],
 ];
 
+/** Marks every cached list that is read from the departments out of date: call it after any create, edit, switch-off or switch-on,
+ *  from Administration or from Governance → Settings, so the document form, the library, the sign-off, asset, assessment, stage-owner
+ *  and risk pickers all read the change. (`qc` is the React Query client; typed by the one call it needs.) */
+export function refreshDepartments(qc: { invalidateQueries(filters: { queryKey: readonly string[] }): unknown }): void {
+  DEPARTMENT_QUERY_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }));
+}
+
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
 const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
@@ -111,6 +118,47 @@ export function parentChoices<D extends { id: number; name: string; parent_depar
   return all.filter((d) => !below.has(d.id) && (d.is_active !== false || d.id === currentParentId)).sort((a, b) => byName(a.name, b.name));
 }
 
+/** The departments as a table lists them: the top ones A-Z, each followed by the ones under it A-Z (and theirs, one step further in:
+ *  `depth`). A department whose parent is not in the list, or that is its own parent, is listed at the top; if some are left that
+ *  way (a loop that the server would not allow, but old data may hold) they are listed too, so no row is ever lost. */
+export function departmentRows<D extends { id: number; name: string; parent_department_id?: number | null }>(
+  all: readonly D[],
+): { department: D; depth: number }[] {
+  const ids = new Set(all.map((d) => d.id));
+  const under = new Map<number, D[]>();
+  const top: D[] = [];
+  all.forEach((d) => {
+    const parent = d.parent_department_id;
+    if (parent != null && parent !== d.id && ids.has(parent)) under.set(parent, (under.get(parent) ?? []).concat(d));
+    else top.push(d);
+  });
+  const out: { department: D; depth: number }[] = [];
+  const listed = new Set<number>();
+  const walk = (level: readonly D[], depth: number) => {
+    level.slice().sort((a, b) => byName(a.name, b.name) || a.id - b.id).forEach((d) => {
+      if (listed.has(d.id)) return;
+      listed.add(d.id);
+      out.push({ department: d, depth });
+      walk(under.get(d.id) ?? [], depth + 1);
+    });
+  };
+  walk(top, 0);
+  walk(all.filter((d) => !listed.has(d.id)), 0);
+  return out;
+}
+
+/** The Documents cell: the number, and the words for a tooltip or a screen reader ("12 documents", "No documents"). */
+export function documentsLabel(count: number | null | undefined): { text: string; long: string } {
+  const n = typeof count === 'number' && count > 0 ? Math.floor(count) : 0;
+  return { text: String(n), long: n === 0 ? 'No documents' : `${n} ${n === 1 ? 'document' : 'documents'}` };
+}
+
+/** The facts line of the Departments section: "6 departments · 1 inactive". */
+export function departmentsSummary(all: readonly { is_active?: boolean }[]): string {
+  const off = all.filter((d) => d.is_active === false).length;
+  return `${all.length} ${all.length === 1 ? 'department' : 'departments'}${off ? ` · ${off} inactive` : ''}`;
+}
+
 // ── the form ─────────────────────────────────────────────────────────────────
 
 export interface DepartmentForm {
@@ -171,3 +219,11 @@ export function departmentPlaceholder(s: { loading?: boolean; failed?: boolean; 
   if (s.count === 0) return 'No departments yet — an administrator adds them in Administration → Departments';
   return 'Choose a department';
 }
+
+// ── switching one off and on (Administration and Governance → Settings say the same words) ───────────────────
+
+/** What the confirm dialog says switching a department off does. There is no delete: documents and assignments point at it. */
+export const DEACTIVATE_NOTE =
+  'It stops appearing in the lists people pick a department from. Documents that are already in it keep it, and you can activate it again at any time.';
+export const deactivatedText = (name: string) => `${name} is deactivated. Documents already in it keep it.`;
+export const activatedText = (name: string) => `${name} is active again.`;
