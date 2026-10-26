@@ -104,7 +104,7 @@ def test_every_control_is_complete_and_fits_the_seeder_columns(catalog):
         assert x["title"] and x["description"] and x["full_text"].startswith(x["description"])
         assert len(cid) <= 100 and len(x["title"]) <= 500 and len(x["domain"]) <= 100 and len(x["category"]) <= 100
         assert len(x["section_number"]) <= 50 and len(x["priority"]) <= 20
-        assert x["evidence_requirements"] == []          # the standard names no evidence; none is invented
+        assert 3 <= len(x["evidence_requirements"]) <= 6      # the standard names no evidence: an authored layer, see test_uae_ia_evidence.py
         assert set(x["mappings"]) == {"iso_27001_2022", "iso_27002_2022", "nist_800_53_r5", "isr_v3"}
 
 

@@ -1,12 +1,18 @@
 """Build the UAE Information Assurance Standard v2.1 framework library from the standard's own PDF.
 
 The standard (UAE Cyber Security Council, November 2025) is not in SCF, so its library is read
-straight from the published PDF's text layer. Nothing here is paraphrased or AI-authored:
-control names, statements, sub-controls and implementation guidance are copied verbatim (line
-wraps and hyphenated line breaks repaired, page headers and footers dropped).
+straight from the published PDF's text layer. Apart from the evidence layer below, nothing here is
+paraphrased or AI-authored: control names, statements, sub-controls and implementation guidance are
+copied verbatim (line wraps and hyphenated line breaks repaired, page headers and footers dropped).
 
     python -I backend/grc/tools/build_uae_ia_catalog.py "UAE INFORMATION ASSURANCE STANDARD.pdf" \
-        backend/grc/seed_data/frameworks/uae_ia.json
+        backend/grc/seed_data/frameworks/uae_ia.json [--evidence backend/grc/seed_data/uae_ia_evidence.json]
+
+Evidence recommendations are the one part that does not come from the PDF: the standard names no evidence. They are an
+authored layer, to be reviewed like code (seed_data/uae_ia_evidence.json, outside seed_data/frameworks/ because the loader
+globs *.json there) that this script merges in as each control's evidence_requirements. Every item lists the sub-controls it
+evidences in `covers`; the script stops unless every control has items and every sub-control is covered by at least one.
+`covers` is review traceability and is not shipped. So the PDF plus the layer reproduce the committed catalog byte for byte.
 
 Where each fact comes from (PDF page numbers; printed page = PDF page - 4):
   Chapter 2 (13-182)  families, sub-families, controls. The priority legend "P1 P2 P3 P4" is printed
@@ -29,6 +35,10 @@ How a control lands in the seeder's fields (grc/seed_frameworks.py reads only th
                       (informational in the standard, so kept apart from the requirement text that AI gap
                       analysis reads); the certification API serves it as `implementation_guidance`
   is_mandatory        true = Always applicable; false = Based on risk assessment (applicable unless excluded)
+  evidence_requirements  the authored layer above: {name, description, filetype} like ADHICS and PISF, plus
+                      collection_frequency on the few items that are event-driven or continuous. The seeder reads a
+                      frequency only from the entry itself (a dict entry otherwise defaults to annually) and infers the
+                      evidence type from the name and description, so the wording avoids misleading keywords
   priority            P1 high, P2 medium, P3/P4 low. priority_level is deliberately NOT written: the
                       framework page turns any framework with P1-P3 levels into NDMO's "3-year roadmap"
                       (Year 1/2/3, P4 ignored). The exact level is kept in the extra key `priority_tier`
@@ -39,6 +49,7 @@ Requires PyMuPDF. Run it isolated (python -I) on an untrusted download.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
@@ -47,6 +58,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+EVIDENCE_LAYER = Path(__file__).resolve().parents[1] / "seed_data" / "uae_ia_evidence.json"
 CHAPTER2 = range(13, 183)                     # PDF pages holding M1..T9
 ANNEX_A = 192
 ANNEX_B, ANNEX_C, ANNEX_D, ANNEX_G, ANNEX_H = range(193, 196), range(196, 201), range(201, 207), range(226, 231), range(231, 236)
@@ -389,6 +401,25 @@ def notes(c: Dict[str, Any], ref: Dict[str, List[str]], types: List[str], v1: Li
     return "\n".join(head)
 
 
+def check_evidence_layer(layer: Dict[str, Any], controls: List[Dict[str, Any]]) -> None:
+    """The layer holds items for exactly the standard's controls, and every sub-control is covered by at least one item
+    (a changed PDF with a new or renumbered sub-control stops here until the layer is reviewed)."""
+    ids = [c["id"] for c in controls]
+    if sorted(layer["controls"]) != sorted(ids):
+        fail(f"the evidence layer and the standard list different controls: {sorted(set(layer['controls']) ^ set(ids))}")
+    for c in controls:
+        covered = {k for it in layer["controls"][c["id"]] for k in it["covers"]}
+        if covered != set(range(1, len(numbered(c)) + 1)):
+            fail(f"{c['id']}: evidence items cover sub-controls {sorted(covered)}, the control has 1..{len(numbered(c))}")
+
+
+def evidence_items(layer: Dict[str, Any], c: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """A control's authored items as the seeder's dict entries (as in ADHICS and PISF). `covers` stays in the layer."""
+    return [{"name": it["name"], "description": it["description"], "filetype": it["filetype"],
+             **({"collection_frequency": it["collection_frequency"]} if "collection_frequency" in it else {})}
+            for it in layer["controls"][c["id"]]]
+
+
 def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf_sha256: str) -> Dict[str, Any]:
     n_sub = sum(len(f["sub_families"]) for f in families)
     return {
@@ -464,12 +495,15 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
             "Built from the published PDF 'UAE Information Assurance Standard', Version 2.1, November 2025 (UAE Cyber "
             "Security Council, classification Open) by backend/grc/tools/build_uae_ia_catalog.py. Control names, "
             "statements, sub-controls and guidance are verbatim. Implementation guidance is informational in the standard "
-            "and is kept in ai_notes, apart from the requirement text. Annexes E and F are not part of this library."),
+            "and is kept in ai_notes, apart from the requirement text. Evidence requirements are not in the standard: they are "
+            "recommendations authored for this library (backend/grc/seed_data/uae_ia_evidence.json), each grounded in the "
+            "control's own statement, sub-controls or guidance and merged in by the same script. Annexes E and F are not part "
+            "of this library."),
         "total_controls": len(controls),
     }
 
 
-def build(pdf: Path) -> Dict[str, Any]:
+def build(pdf: Path, layer: Dict[str, Any]) -> Dict[str, Any]:
     try:
         import fitz                                                            # PyMuPDF
     except ImportError:
@@ -508,6 +542,7 @@ def build(pdf: Path) -> Dict[str, Any]:
         nums = [e["n"] for e in numbered(c)]
         if nums != list(range(1, len(nums) + 1)) or not nums or not c["statement"] or not c["name"] or not c["applicability"] or not h[c["id"]][0].strip():
             fail(f"{c['id']}: incomplete (sub-control numbers {nums}, applicability {c['applicability']!r})")
+    check_evidence_layer(layer, controls)
 
     out = []
     for c in controls:
@@ -522,7 +557,7 @@ def build(pdf: Path) -> Dict[str, Any]:
             "category": f"{c['sub_family']['id']} {c['sub_family']['name']}",
             "section_number": c["id"], "parent_section": c["sub_family"]["id"],
             "is_mandatory": c["applicability"] == "Always applicable", "priority": SEVERITY[c["priority"]],
-            "assessment_criteria": crit, "ai_notes": notes(c, ref, types, v1), "evidence_requirements": [],
+            "assessment_criteria": crit, "ai_notes": notes(c, ref, types, v1), "evidence_requirements": evidence_items(layer, c),
             # not read by the seeder; kept so the crosswalk tools and reviewers need not re-read the PDF
             "priority_tier": c["priority"], "applicability": c["applicability"], "control_type": types,
             "mappings": ref, "uae_ia_v1_1": v1, "sub_control_count": len(crit), "pdf_page": c["page"]})
@@ -530,16 +565,19 @@ def build(pdf: Path) -> Dict[str, Any]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        sys.exit(__doc__)
-    payload = build(Path(sys.argv[1]))
-    out = Path(sys.argv[2])
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("pdf", type=Path, help="the standard's PDF")
+    ap.add_argument("out", type=Path, help="the catalog to write")
+    ap.add_argument("--evidence", type=Path, default=EVIDENCE_LAYER, help="authored evidence layer (default: %(default)s)")
+    args = ap.parse_args()
+    payload = build(args.pdf, json.loads(args.evidence.read_text(encoding="utf-8")))
+    out = args.out
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
         f.write("\n")
     c = payload["controls"]
     print(f"wrote {out} ({out.stat().st_size:,} bytes): {len(c)} controls, "
-          f"{sum(x['sub_control_count'] for x in c)} sub-controls, "
+          f"{sum(x['sub_control_count'] for x in c)} sub-controls, {sum(len(x['evidence_requirements']) for x in c)} evidence items, "
           f"{sum(x['is_mandatory'] for x in c)} always applicable, {Counter(x['priority_tier'] for x in c)}")
     return 0
 

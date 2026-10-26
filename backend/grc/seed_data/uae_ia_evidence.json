@@ -1,0 +1,802 @@
+{
+  "about": "Evidence recommendations for the UAE Information Assurance Standard v2.1 library (uae_ia.json). Authored for this library: the standard itself names no evidence. Every item is grounded in the control's own statement, sub-controls or implementation guidance, and 'covers' lists the numbered sub-controls (1), 2) ...) it helps to evidence; every sub-control of every control is covered by at least one item. build_uae_ia_catalog.py merges this file into the generated catalog as evidence_requirements {name, description, filetype} and drops 'covers'; collection_frequency is kept where the control is event-driven or continuous (the seeder reads it from dict entries and otherwise defaults to annually).",
+  "standard": "UAE Information Assurance Standard",
+  "version": "2.1",
+  "controls": {
+    "M1.1.1": [
+      {"name": "Interested parties register", "description": "Register of the internal and external parties relevant to the entity's information security, with the owner of each relationship.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Requirements of interested parties", "description": "Record of the information security requirements each interested party places on the entity, showing which party raised each one and who owns it.", "filetype": "XLSX", "covers": [2]},
+      {"name": "External context analysis", "description": "Analysis of the sector, national, legal, regulatory and threat-environment factors that affect the entity's information security program.", "filetype": "PDF", "covers": [3]},
+      {"name": "Internal capabilities assessment", "description": "Assessment of the people, funding, skills and systems available to the information security program.", "filetype": "PDF", "covers": [4]},
+      {"name": "Organization chart", "description": "Current chart of the entity's organizational structure showing where information security sits and who holds each role.", "filetype": "PDF", "covers": [5]}
+    ],
+    "M1.1.2": [
+      {"name": "Top management approval of security direction", "description": "Signed approval or minutes showing top management established the information security policy and objectives and aligned them with the entity's strategic direction.", "filetype": "PDF", "covers": [1]},
+      {"name": "Security requirements built into business processes", "description": "Extracts from business process documents showing where information security requirements are integrated into the entity's activities.", "filetype": "PDF", "covers": [2]},
+      {"name": "Resource commitment approvals", "description": "Budget, headcount and tooling approvals showing top management made the resources the information security program needs available.", "filetype": "PDF", "covers": [4]},
+      {"name": "Top management communications on information security", "description": "Messages or briefings from top management on why effective information security management matters and on conforming to the standard's requirements.", "filetype": "EML", "covers": [5, 6]},
+      {"name": "Top management review of information security", "description": "Minutes of top management reviews of information security risks, controls and effectiveness, showing the direction given, the decisions taken and whether the intended outcomes are being achieved.", "filetype": "PDF", "covers": [3, 9]},
+      {"name": "Continual improvement and management support record", "description": "Record of improvement actions promoted by top management and of the support it gave other management roles to demonstrate leadership in their own areas.", "filetype": "PDF", "covers": [7, 8]}
+    ],
+    "M1.1.3": [
+      {"name": "Assignment of responsibility and authority", "description": "Top management's documented assignment of the responsibility and authority for conformity with the standard and for presenting information security performance to top management.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Information security performance report", "description": "Report from the assigned role to top management on how information security is performing against the standard.", "filetype": "PDF", "covers": [2]},
+      {"name": "Appointment of the information security lead", "description": "Appointment letter or role description naming the management or leadership team member with overall responsibility for information security and the dedicated function that supports them.", "filetype": "PDF", "covers": [3]},
+      {"name": "Information Security Committee charter", "description": "Terms of reference establishing the Committee to oversee and govern information security, with its membership, mandate and cross-functional role.", "filetype": "PDF", "covers": [4]},
+      {"name": "Information Security Committee minutes", "description": "Minutes showing the Committee meets, oversees information security and drives its integration across functions and departments.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M1.2.1": [
+      {"name": "Approved information security policy", "description": "Documented policy appropriate to the entity's purpose that frames the setting of information security objectives and commits to satisfying applicable requirements, including legal and regulatory ones, and to continual improvement.", "filetype": "PDF", "covers": [1, 2, 3, 4, 5]},
+      {"name": "Top management approval of the policy", "description": "Signed approval page, resolution or minutes showing top management established and approved the current version.", "filetype": "PDF", "covers": [5]},
+      {"name": "Policy review and revision record", "description": "Version history and review records showing the policy is maintained, reviewed and updated at planned intervals and when significant changes occur.", "filetype": "PDF", "covers": [6]},
+      {"name": "Policy communication to staff", "description": "Evidence the policy was communicated within the organization, such as staff notices or briefing records.", "filetype": "EML", "covers": [7]},
+      {"name": "Policy availability to interested parties", "description": "Evidence of where and how the policy is made available to relevant interested parties, such as a screenshot of the publication location or a distribution list.", "filetype": "PNG", "covers": [7]}
+    ],
+    "M1.2.2": [
+      {"name": "Documented information security objectives", "description": "Objectives set at relevant functions and levels, consistent with the information security policy and measurable where practicable.", "filetype": "PDF", "covers": [1, 2, 6]},
+      {"name": "Objectives basis record", "description": "Working showing the objectives take account of the entity's context and mission, applicable requirements, risk assessment results and risk treatment results.", "filetype": "PDF", "covers": [3]},
+      {"name": "Approval of the objectives", "description": "Sign-off or minutes showing management approved the current objectives.", "filetype": "PDF", "covers": [6]},
+      {"name": "Objectives communication record", "description": "Evidence the objectives were communicated within the entity, such as notices or briefings.", "filetype": "EML", "covers": [4]},
+      {"name": "Objectives update record", "description": "Records of reviews showing the objectives were updated as appropriate, with version history.", "filetype": "PDF", "covers": [5]}
+    ],
+    "M1.2.3": [
+      {"name": "Approved supporting policy set", "description": "The set of topic-specific information security policies, each approved and showing its owner, intended audience and version.", "filetype": "PDF", "covers": [1, 4]},
+      {"name": "Policy coverage matrix", "description": "Matrix mapping every aspect of the standard that applies to the entity after the risk assessment, and every national, Emirate and sector requirement, to the policy that addresses it.", "filetype": "XLSX", "covers": [2, 3]},
+      {"name": "Policy-to-practice consistency review", "description": "Review confirming each policy reflects what the entity has actually implemented and contains no statement the entity does not comply with.", "filetype": "PDF", "covers": [5]},
+      {"name": "Policy publication and communication record", "description": "Evidence the supporting policies were published and communicated to employees and relevant external parties.", "filetype": "EML", "covers": [1]},
+      {"name": "Personnel acknowledgement records", "description": "Records of relevant personnel acknowledging the supporting policies that apply to them.", "filetype": "PDF", "covers": [6]},
+      {"name": "Supporting policy review log", "description": "Log of reviews at planned intervals and after significant changes, with the updates that resulted.", "filetype": "XLSX", "covers": [7]}
+    ],
+    "M1.3.1": [
+      {"name": "Information security budget and staffing plan", "description": "Budget and staffing plan showing the human and financial resources allocated to the information security program and why they are adequate for the work.", "filetype": "PDF", "covers": [1]},
+      {"name": "Competence requirements for security roles", "description": "Defined competence, in terms of education, training or experience, needed by the people doing work that affects information security performance.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Staff competence records", "description": "Records of qualifications, training history and experience showing the people in information security roles are competent.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Competence gap actions and effectiveness evaluation", "description": "Actions taken to acquire missing competence, such as training or hiring, and the evaluation of whether each action worked.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M1.3.2": [
+      {"name": "Communication plan", "description": "Documented plan stating what is communicated, when, with whom, by whom and how, for internal and external information security communication.", "filetype": "PDF", "covers": [1, 3]},
+      {"name": "Authority and lead entity contact list", "description": "Current contact details and channels for the relevant authorities, including the UAE lead entities for cyber security.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Correspondence with authorities", "description": "Sample correspondence exchanged with authorities or lead entities showing adequate communication is maintained.", "filetype": "EML", "covers": [2]}
+    ],
+    "M1.3.3": [
+      {"name": "Document control procedure", "description": "Procedure covering approval before issue, review and update, revision identification, legibility, storage, availability, distribution, disposal, external-origin documents, obsolete versions and retained documents.", "filetype": "PDF", "covers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
+      {"name": "Controlled document register", "description": "Register of controlled documents showing owner, version, approval date, classification, review date, whether the document is of external origin and its retention identification.", "filetype": "XLSX", "covers": [2, 3, 4, 7, 10]},
+      {"name": "Document approval records", "description": "Sample of approval records showing documents were approved before issue.", "filetype": "PDF", "covers": [1]},
+      {"name": "Repository access and distribution settings", "description": "Screenshots of the document repository permissions and distribution lists showing documents are available to those who need them, stored by classification and distributed under control.", "filetype": "PNG", "covers": [5, 8, 9]},
+      {"name": "Document disposal records", "description": "Records showing documents were disposed of according to their classification, and obsolete versions were withdrawn.", "filetype": "PDF", "covers": [6, 9]},
+      {"name": "Mandatory controls compliance record", "description": "Document recording the entity's compliance with each mandatory control of the standard, with a reference to the supporting evidence.", "filetype": "XLSX", "covers": [11]}
+    ],
+    "M1.3.4": [
+      {"name": "Project management procedure with security requirements", "description": "Project management procedure showing information security risk assessment and requirement identification built into the project life cycle.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Project information security risk assessments", "description": "Sample project risk assessments and treatment plans showing information security risks assessed at an early stage and again through the project life cycle.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Project security requirements", "description": "Sample project requirement and specification documents listing the information security requirements identified early and how they were implemented.", "filetype": "PDF", "covers": [2]},
+      {"name": "Risk treatment progress and effectiveness review", "description": "Project or steering committee reviews of risk treatment progress, with the results of tests that evaluate whether the treatment is effective.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M1.3.5": [
+      {"name": "Special interest groups register", "description": "List of the relevant national and international interest groups, working groups, security forums and professional associations, with the entity's membership status and contact.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Rules on what participants may share", "description": "Guidance defining what employees participating in interest groups are allowed to share.", "filetype": "PDF", "covers": [2]},
+      {"name": "Circulated interest group information", "description": "Examples of advisories or updates from interest groups circulated inside the entity, as the groups' rules permit.", "filetype": "EML", "covers": [3]}
+    ],
+    "M2.1.1": [
+      {"name": "Approved risk management policy", "description": "Documented policy, approved by management, that addresses the purpose and scope for critical services and their supporting functions and defines the roles and responsibilities of the risk management team.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Risk criteria definitions", "description": "Defined risk acceptance, likelihood, impact and risk evaluation criteria, with the scales and thresholds used to apply them.", "filetype": "PDF", "covers": [3]},
+      {"name": "Risk treatment and monitoring strategy", "description": "The strategy for treating risks and the strategy for monitoring and reviewing them, as set out by the entity.", "filetype": "PDF", "covers": [4, 5]},
+      {"name": "Risk assessment approach", "description": "Criteria and steps for performing, reviewing and updating risk assessments, with the guidance that keeps repeated assessments objective, consistent, valid and comparable.", "filetype": "PDF", "covers": [6, 7]},
+      {"name": "Risk assessment consistency check", "description": "Comparison of repeated assessments, or of the same risks assessed by different people, showing the results are consistent and comparable.", "filetype": "XLSX", "covers": [7]},
+      {"name": "Risk management policy approval and version history", "description": "Approval record and version history of the risk management policy, with evidence it is applied in the entity's risk assessments.", "filetype": "PDF", "covers": [1, 2, 3, 4, 5, 6, 7]}
+    ],
+    "M2.2.1": [
+      {"name": "Risk identification results", "description": "Documented results of the risk identification, listing the risks to the confidentiality, integrity and availability of the entity's information.", "filetype": "XLSX", "covers": [1, 3]},
+      {"name": "Risk owner assignments", "description": "Record naming the owner of each identified risk.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Level of detail decision", "description": "Documented decision, with the reasons, on the level of detail and the approach used for the information security risk assessment.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M2.2.2": [
+      {"name": "Consequence assessment", "description": "Assessment of the consequences of a loss of confidentiality, integrity or availability for each identified risk, based on the business importance of the asset.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Likelihood assessment", "description": "Assessment of the realistic likelihood of each risk occurring, based on the existing controls and the identified vulnerabilities and threats.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Threat and vulnerability inputs", "description": "Threat information and vulnerability findings used to judge the likelihood of each risk.", "filetype": "PDF", "covers": [2]},
+      {"name": "Risk analysis results", "description": "Documented analysis showing the level determined for each risk and the consequence and likelihood ratings behind it.", "filetype": "XLSX", "covers": [3, 4]}
+    ],
+    "M2.2.3": [
+      {"name": "Risk evaluation results", "description": "Documented comparison of each analyzed risk with the risk criteria the entity has established, showing which risks are acceptable and which need treatment.", "filetype": "XLSX", "covers": [1, 3]},
+      {"name": "Treatment priorities", "description": "Prioritized list of the risks to be treated, with the reasons for any priority given beyond the risk level.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Evaluation results shared with lead entities", "description": "Evidence the risk evaluation results were shared with the UAE lead entities for cyber security where required, such as the transmittal message and any reply.", "filetype": "EML", "covers": [3]}
+    ],
+    "M2.3.1": [
+      {"name": "Treatment option decisions", "description": "Record of the option selected for each assessed risk (modification, retention, avoidance or sharing) and the reasons for the choice.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Risk acceptance approvals", "description": "Formal approvals from risk owners, passed to top management, for risks retained under the risk acceptance criteria.", "filetype": "PDF", "covers": [1]},
+      {"name": "Residual risk and treatment effectiveness review", "description": "Review of whether residual risk levels are tolerable, the new treatment generated where they are not, and how effective each treatment is.", "filetype": "PDF", "covers": [2]}
+    ],
+    "M2.3.2": [
+      {"name": "Control selection record", "description": "Record of the controls selected for each risk treatment decision, starting from the controls in the standard and showing the risk each control addresses.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Control omission check", "description": "Check that every applicable control of the standard was considered during control selection, with the gaps found and how they were closed.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Entity-specific additional controls", "description": "List of controls identified in addition to those in the standard, with the risk or requirement that calls for each.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Control selection criteria review", "description": "Review showing the risk acceptance criteria and the legal, regulatory and contractual requirements taken into account when controls were selected.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M2.3.3": [
+      {"name": "Risk treatment plan", "description": "Documented plan setting out the management actions, resources required, responsibilities and priorities for managing each information security risk.", "filetype": "PDF", "covers": [1]},
+      {"name": "Treatment implementation schedule", "description": "Schedule giving the target date for implementing each identified control, with its owner and progress.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Treatment plan approval", "description": "Sign-off by the accountable approver that the plan, with its resources and responsibilities, is accepted.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M2.3.4": [
+      {"name": "Statement of Applicability", "description": "Document listing the controls identified as necessary, the reason each was identified and its current implementation status.", "filetype": "XLSX", "covers": [1, 2, 3]},
+      {"name": "Risk-to-control traceability", "description": "Mapping from each treated risk to the controls that address it, supporting the reasons given in the Statement of Applicability.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Implementation status evidence", "description": "Status report or test results supporting the implementation status recorded for the controls in the Statement of Applicability.", "filetype": "PDF", "covers": [3]},
+      {"name": "Control exclusion justifications", "description": "Justification for each risk-based applicable control of the standard that the entity excludes, with the risk assessment result that supports it.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M2.4.1": [
+      {"name": "Risk review and update procedure", "description": "Documented procedure for planned and ad hoc review and update of the risk assessment and treatment, with the defined periodicity and the major changes that trigger a review.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Risk factor monitoring records", "description": "Records of monitoring of asset values, impacts, threats, vulnerabilities and likelihood that show changes in the entity's context being identified.", "filetype": "XLSX", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "Risk review records", "description": "Records of the regular review of all risks, including accepted risks, and of the reviews held after major changes.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Risk management improvement record", "description": "Record of the monitoring and review of risk management, with the improvements made.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M2.4.2": [
+      {"name": "Risk communication plan", "description": "Plan for communicating risk information with key stakeholders, including decision-makers, at every stage of risk management.", "filetype": "PDF", "covers": [1]},
+      {"name": "Risk communication records", "description": "Records of risk information shared with stakeholders and of their input, such as briefings, messages and consultation notes.", "filetype": "EML", "covers": [1]},
+      {"name": "Decision-maker risk briefings", "description": "Briefings or reports to decision-makers on the existence, nature, likelihood, severity, treatment and acceptability of risks.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M3.1.1": [
+      {"name": "Approved awareness and training policy", "description": "Documented policy, approved by management, that is appropriate to the entity's purpose, facilitates implementation of the associated controls and outlines the roles and responsibilities of providers and recipients.", "filetype": "PDF", "covers": [1, 3, 4]},
+      {"name": "Awareness and training objectives", "description": "Objectives set using the policy's framework, with the factors considered when identifying them.", "filetype": "PDF", "covers": [2]},
+      {"name": "Provider and recipient role assignments", "description": "List of the people or teams who provide awareness and training and the groups who receive it, with their responsibilities.", "filetype": "XLSX", "covers": [4]},
+      {"name": "Awareness and training policy approval and review history", "description": "Sign-off and version history showing the awareness and training policy is documented, approved and maintained, with the date of its last review.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M3.2.1": [
+      {"name": "Approved awareness and training program", "description": "Program, with its approval and version history, covering how people doing work under the entity are informed of its information security requirements, their contribution to its effectiveness and the implications of not conforming.", "filetype": "PDF", "covers": [1]},
+      {"name": "Awareness delivery records", "description": "Attendance or completion records showing people doing work under the entity were informed of its information security requirements, their contribution and the implications of not conforming.", "filetype": "CSV", "covers": [1]},
+      {"name": "Training and other actions delivered", "description": "Records of the training or other actions delivered to meet the needs of personnel whose work affects information security.", "filetype": "PDF", "covers": [2]},
+      {"name": "Effectiveness evaluation of actions taken", "description": "Evaluation of whether the training and other actions taken were effective.", "filetype": "PDF", "covers": [3]},
+      {"name": "Education, skills and qualification records", "description": "Records of the education, training, skills, experience and qualifications of personnel performing work that affects information security.", "filetype": "XLSX", "covers": [4]}
+    ],
+    "M3.3.1": [
+      {"name": "Required information security skills", "description": "List of the information security skills the entity needs.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Current skills assessment", "description": "Assessment of the information security skills currently in place in the entity.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Skills gap analysis", "description": "Analysis of the gaps between the required and current information security skills, which gives the training needs.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "M3.3.2": [
+      {"name": "Training solution per need", "description": "Record of the training solution identified for each training need, with its medium and target audience.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Training implementation plan", "description": "Plan with the timeline for delivering each training solution to its target audience.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Training resource allocation", "description": "Budget or resource approvals showing the resources needed to run the training are allocated to the program.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M3.3.3": [
+      {"name": "Training delivery records", "description": "Attendance and completion records showing training was delivered in line with the implementation plan.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Plan variance and alternative solutions record", "description": "Record of problems met against the implementation plan and the alternative training solutions identified in response.", "filetype": "PDF", "covers": [2]},
+      {"name": "Updated training implementation plan", "description": "Current version of the plan, checked against the identified training needs to show all of them are still met.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "M3.3.4": [
+      {"name": "Before and after knowledge measurements", "description": "Results of measuring information security knowledge and skills before and after the training plan, such as test scores.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Training outcome evaluation", "description": "Evaluation of whether the training delivered meets the expected outcomes against the entity's knowledge requirements.", "filetype": "PDF", "covers": [2]},
+      {"name": "Training corrective actions", "description": "Record of the actions taken to improve or replace training solutions that did not reach the expected outcome.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M3.3.5": [
+      {"name": "Individual training records", "description": "Documented training record for each person targeted by information security training, covering basic awareness and specific training.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Training records periodic check", "description": "Periodic check showing all stakeholders have completed the necessary training, with follow-up on those who have not.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Training record retention evidence", "description": "Evidence that individual training records are kept for the period the entity has set.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M3.4.1": [
+      {"name": "Awareness campaign scope", "description": "Definition of each campaign's audience, internal and external, and of its content, based on the security risks relevant to users' activities.", "filetype": "PDF", "covers": [1]},
+      {"name": "Awareness campaign timeline", "description": "Timeline for deploying the specific awareness campaigns so that the program objectives are met.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Campaign delivery evidence", "description": "Samples of the campaign materials issued, such as emails, posters or session invitations, dated against the timeline.", "filetype": "EML", "covers": [3]},
+      {"name": "Campaign adjustment record", "description": "Record of problems against the timeline, the alternative campaigns identified and the updated campaign checked against the program objectives.", "filetype": "PDF", "covers": [4, 5]},
+      {"name": "Awareness campaign records", "description": "Comprehensive records of every campaign run: dates, audience reached, content and participation.", "filetype": "XLSX", "covers": [6]}
+    ],
+    "M4.1.1": [
+      {"name": "Background verification procedure", "description": "Procedure defining the checks in line with relevant laws and ethics and proportionate to the business requirements, the classification of the information to be accessed and the perceived risks.", "filetype": "PDF", "covers": [1]},
+      {"name": "Completed verification check reports", "description": "Reports showing verification checks were completed for sampled candidates, contractors and third-party personnel.", "filetype": "PDF", "covers": [2]},
+      {"name": "Verification coverage review", "description": "Review of the current staff, contractors and third-party personnel against their verification records, showing none is missing a check.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Verification document handling", "description": "Evidence that background verification documents are held securely, such as the access permissions on their storage and the retention arrangement.", "filetype": "PNG", "covers": [3]}
+    ],
+    "M4.1.2": [
+      {"name": "Standard information security terms and conditions", "description": "Template terms and conditions stating the information security responsibilities of employees, contractors, third parties and the entity.", "filetype": "DOCX", "covers": [1]},
+      {"name": "Contracts containing information security terms", "description": "Sample signed employment, contractor and third-party contracts that include the information security terms and conditions.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Understanding and acceptance records", "description": "Signed confirmation that each person has understood and agreed the terms, such as signed terms and confidentiality or non-disclosure agreements.", "filetype": "PDF", "covers": [3]},
+      {"name": "Contract review and amendment record", "description": "Record of the review of existing contracts and of the amendments made to add the information security terms.", "filetype": "XLSX", "covers": [4]}
+    ],
+    "M4.2.1": [
+      {"name": "Security policy notification records", "description": "Evidence that employees, contractors and third parties were informed of the security policies they must comply with, such as notices and distribution lists.", "filetype": "EML", "covers": [1]},
+      {"name": "First-access acceptance screen", "description": "Screenshot of the first-access screen that presents the relevant security policy or guidelines for the user to read and accept.", "filetype": "PNG", "covers": [2]},
+      {"name": "User acceptance records", "description": "Records of users accepting the security policy at first access, with the date and the version accepted.", "filetype": "CSV", "covers": [2], "collection_frequency": "on-change"}
+    ],
+    "M4.2.2": [
+      {"name": "Formal disciplinary process", "description": "Documented disciplinary process for information security policy violations by employees, contractors and third-party users.", "filetype": "PDF", "covers": [1]},
+      {"name": "Disciplinary process awareness evidence", "description": "Evidence that people in the entity have been made aware of the disciplinary process, such as notices, induction material or briefing records.", "filetype": "EML", "covers": [2]},
+      {"name": "Disciplinary action records", "description": "Records showing the process was enforced for confirmed breaches, with the verification that a breach occurred and the action taken, identities protected as required.", "filetype": "PDF", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Security breach register", "description": "Register of the information security breaches committed, with the date, the people involved and the outcome.", "filetype": "XLSX", "covers": [4], "collection_frequency": "on-change"}
+    ],
+    "M4.3.1": [
+      {"name": "Termination and change of employment procedure", "description": "Procedure defining which information security responsibilities and duties remain valid after termination or change of employment, including confidentiality and intellectual property rights.", "filetype": "PDF", "covers": [1]},
+      {"name": "Continuing duties in contracts", "description": "Sample contracts and confidentiality agreements stating the duties that continue after employment ends and for how long.", "filetype": "PDF", "covers": [1]},
+      {"name": "Communication of continuing responsibilities", "description": "Records that leavers and people changing role were told of their continuing responsibilities, such as exit notices and signed acknowledgements.", "filetype": "PDF", "covers": [2], "collection_frequency": "on-change"}
+    ],
+    "M4.3.2": [
+      {"name": "Asset return procedure", "description": "Termination and change of employment steps for recovering all issued software, documents, equipment and other assets, including how the assets to be returned are identified.", "filetype": "PDF", "covers": [1]},
+      {"name": "Asset return records", "description": "Completed return checklists or signed receipts for the assets recovered from leavers and people changing role.", "filetype": "PDF", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Leaver asset reconciliation", "description": "Reconciliation of the assets issued to sampled leavers against those returned, with follow-up on anything outstanding.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "M5.1.1": [
+      {"name": "Compliance requirements identification procedure", "description": "Procedure, with the assigned responsibility, for identifying on an ongoing basis all statutory, regulatory and contractual compliance requirements that apply to the entity.", "filetype": "PDF", "covers": [1]},
+      {"name": "Legal, regulatory and contractual requirements register", "description": "Register of the applicable legislation and requirements for information security, each with the individual responsible for meeting it and the controls in place.", "filetype": "XLSX", "covers": [3, 5]},
+      {"name": "System requirements from compliance obligations", "description": "Record of the specific system requirements that follow from each identified compliance requirement.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Compliance requirement to control mapping", "description": "Mapping of each compliance requirement to the specific controls that ensure it is met.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Periodic review of compliance requirements", "description": "Records of reviews of the compliance requirements and associated controls for completeness, and of the updates they led to.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M5.1.2": [
+      {"name": "Intellectual property rights policy", "description": "Documented policy defining the legal use of software and information products, with its version and review history.", "filetype": "PDF", "covers": [1]},
+      {"name": "Intellectual property requirements identification", "description": "Process description and resulting list of the requirements the entity must meet to protect intellectual property rights.", "filetype": "PDF", "covers": [2]},
+      {"name": "Intellectual property system requirements", "description": "Record of the specific system requirements arising from those requirements, such as limits on the number of licensed users.", "filetype": "XLSX", "covers": [3]},
+      {"name": "License and ownership register", "description": "Register of licensed products with proof of ownership of licenses, master disks and manuals, and the checks that only authorized and licensed software is installed.", "filetype": "XLSX", "covers": [4]},
+      {"name": "Intellectual property controls review", "description": "Periodic review of the intellectual property requirements and associated controls for completeness.", "filetype": "PDF", "covers": [5]}
+    ],
+    "M5.1.3": [
+      {"name": "Record identification procedure", "description": "Process for identifying records with specific compliance requirements on loss, destruction, falsification, unauthorized access and unauthorized release.", "filetype": "PDF", "covers": [1]},
+      {"name": "Records inventory and retention schedule", "description": "Inventory of record types, such as accounting and database records, each with its retention period, storage medium and protection requirements.", "filetype": "XLSX", "covers": [1, 2]},
+      {"name": "Record protection controls", "description": "Evidence of the controls protecting important records, such as access permissions, integrity protection and archive or backup settings.", "filetype": "PNG", "covers": [3]},
+      {"name": "Record protection requirements review", "description": "Periodic review of the record protection requirements and associated controls for completeness.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M5.1.4": [
+      {"name": "Data privacy and protection policy", "description": "Documented policy covering data handling, security, breach management and the rights of data subjects, with its review history.", "filetype": "PDF", "covers": [1]},
+      {"name": "Applicable data protection laws register", "description": "Register of the data protection and privacy laws, regulations and contractual clauses that apply to the data the entity handles, with the compliance status for each.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Personal data handling inventory", "description": "Inventory of the critical business activities that handle PII or SPI, with the owner of each.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Privacy risk assessments", "description": "Privacy risk assessments carried out for the critical activities that handle PII or SPI.", "filetype": "PDF", "covers": [3]},
+      {"name": "Privacy control implementation", "description": "Evidence of the security controls implemented to meet the data protection and privacy requirements, each linked to the requirement it meets.", "filetype": "XLSX", "covers": [4]},
+      {"name": "Data breach detection and response procedure", "description": "Procedure for detecting, responding to and reporting data breaches, particularly those affecting PII and SPI.", "filetype": "PDF", "covers": [5]}
+    ],
+    "M5.2.1": [
+      {"name": "Compliance checking procedure", "description": "Defined procedure for routinely checking compliance with security policies and standards, with the schedule and who performs and reviews the checks.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Compliance check results", "description": "Results of the compliance checks carried out, including technical compliance reports where automated tools are used.", "filetype": "PDF", "covers": [1]},
+      {"name": "Checker and reviewer authorization", "description": "Record showing the people who perform and review compliance checks are authorized and have adequate capabilities, such as role assignments and qualifications.", "filetype": "PDF", "covers": [2]},
+      {"name": "Non-compliance tracking", "description": "Register of the non-compliance detected, with the causes, the report to the appropriate authority, the corrective action and its review.", "filetype": "XLSX", "covers": [3], "collection_frequency": "on-change"}
+    ],
+    "M5.3.1": [
+      {"name": "Approved audit access requests", "description": "Audit requests for access to systems and data, each with the approval of the appropriate management.", "filetype": "PDF", "covers": [1]},
+      {"name": "Technical audit test scope agreement", "description": "Agreed scope of the technical audit tests, including the systems covered and the level of access granted.", "filetype": "PDF", "covers": [2]},
+      {"name": "Audit access restrictions and clean-up", "description": "Evidence that audit access was limited as agreed, such as read-only accounts and removal of copies of system files after the audit.", "filetype": "PDF", "covers": [1, 2]}
+    ],
+    "M6.1.1": [
+      {"name": "Approved performance evaluation policy", "description": "Documented policy, approved by management, that sets the overall framework for all performance evaluations in the entity.", "filetype": "PDF", "covers": [1]},
+      {"name": "Performance results reporting methods", "description": "The methods by which performance evaluation results are reported to management, such as report formats, audiences and routes.", "filetype": "PDF", "covers": [2]},
+      {"name": "Measurement integration model", "description": "Description of how detailed control measurements are combined with higher-level measures for information security objectives, risk management and incident management.", "filetype": "PDF", "covers": [3]},
+      {"name": "Performance evaluation output sample", "description": "Sample output produced under the policy showing detailed control measurements integrated with the higher-level measures and reported to management.", "filetype": "PDF", "covers": [2, 3]}
+    ],
+    "M6.2.1": [
+      {"name": "Monitoring and measurement plan", "description": "Plan stating what is monitored and measured, including information security processes and controls, when and by whom, and when and by whom the results are analyzed and evaluated.", "filetype": "PDF", "covers": [1]},
+      {"name": "Monitoring and measurement methods", "description": "Documented methods for monitoring, measurement, analysis and evaluation, showing how they ensure valid results.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Monitoring and measurement results", "description": "Documented results of monitoring and measurement of information security processes and controls, such as performance indicator values.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Performance and effectiveness evaluation", "description": "Evaluation, by the assigned people, of the results against the information security performance and the effectiveness of the program.", "filetype": "PDF", "covers": [1]}
+    ],
+    "M6.2.2": [
+      {"name": "Internal audit program", "description": "Documented program setting the frequency, methods and responsibilities of internal audits and showing the importance of the processes concerned and previous audit results were considered.", "filetype": "PDF", "covers": [1, 4]},
+      {"name": "Audit plan, criteria and scope", "description": "For each audit, the criteria, scope and plan, including the areas to be audited and the people to be met.", "filetype": "PDF", "covers": [1]},
+      {"name": "Auditor selection and impartiality record", "description": "Record of how the auditors were selected and the confirmation of their objectivity and impartiality.", "filetype": "PDF", "covers": [2]},
+      {"name": "Internal audit reports", "description": "Report of each audit giving the results against the entity's own requirements, the requirements of the standard and any applicable Emirate, sector or national requirements.", "filetype": "PDF", "covers": [1, 5]},
+      {"name": "Audit results reported to management", "description": "Evidence the audit results were reported to relevant management, such as the transmittal, presentation or meeting minutes.", "filetype": "PDF", "covers": [3]}
+    ],
+    "M6.2.3": [
+      {"name": "Management review schedule", "description": "Schedule of the planned management reviews of the information security program, with the agenda showing the required inputs.", "filetype": "PDF", "covers": [1]},
+      {"name": "Management review inputs", "description": "Pack presented to top management: status of earlier actions, changes in issues and interested parties' needs, performance feedback, risk assessment results and treatment plan status, and opportunities for improvement.", "filetype": "PDF", "covers": [1]},
+      {"name": "Management review minutes", "description": "Documented review results with the decisions on continual improvement opportunities and on any changes needed to the information security program.", "filetype": "PDF", "covers": [2]},
+      {"name": "Management review action tracker", "description": "Tracker of the actions arising from each review and their status, used as the input to the next review.", "filetype": "XLSX", "covers": [1, 2]}
+    ],
+    "M6.3.1": [
+      {"name": "Nonconformity and corrective action procedure", "description": "Procedure for reacting to and correcting nonconformities, determining their causes and reviewing the effectiveness of corrective action.", "filetype": "PDF", "covers": [1, 2, 4, 5]},
+      {"name": "Nonconformity register", "description": "Register of nonconformities with the action taken to control and correct each one.", "filetype": "XLSX", "covers": [1, 5], "collection_frequency": "on-change"},
+      {"name": "Root cause analyses", "description": "Analyses of sampled nonconformities showing the review, the causes determined and whether similar nonconformities exist or could occur.", "filetype": "PDF", "covers": [2]},
+      {"name": "Corrective action implementation records", "description": "Records of the corrective actions implemented, with owner and completion date.", "filetype": "XLSX", "covers": [3, 5]},
+      {"name": "Corrective action effectiveness reviews", "description": "Reviews of whether the corrective actions taken eliminated the causes of the nonconformities.", "filetype": "PDF", "covers": [4]}
+    ],
+    "M6.3.2": [
+      {"name": "Improvement plan", "description": "Plan of improvements to the suitability, adequacy and effectiveness of the information security controls in place, with owners and target dates.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Improvement decisions from monitoring and review", "description": "Record of improvement decisions taken from monitoring and review results, showing the performance measurement results and incidents that prompted each one.", "filetype": "PDF", "covers": [2]},
+      {"name": "Improvement implementation evidence", "description": "Evidence that selected improvements were carried out, such as completed actions or updated documents.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T1.1.1": [
+      {"name": "Approved information asset management policy", "description": "Documented policy, approved by management, that is appropriate to the entity's complexity and the information assets it manages and provides the framework for managing them, including the assignment of owners.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Bring-your-own-device arrangements", "description": "The framework for managing personal devices used for work, stating which devices are allowed and the conditions and controls that apply.", "filetype": "PDF", "covers": [3]},
+      {"name": "Asset management policy approval and version record", "description": "Approval record naming the approver and date, with the version history of the information asset management policy.", "filetype": "PDF", "covers": [1, 2]}
+    ],
+    "T1.2.1": [
+      {"name": "Information asset inventory", "description": "Inventory of information assets showing for each its type, location, backup information, related licenses and importance or criticality.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Inventory reconciliation with other inventories", "description": "Reconciliation of the information asset inventory with the entity's other inventories, such as enterprise asset management and ERP, with differences resolved.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Asset ownership listing", "description": "Listing that names the owner with management responsibility for each identified asset and shows any assets still without one.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Inventory update records", "description": "Records of additions, changes and retirements of assets showing the inventory is kept up to date.", "filetype": "XLSX", "covers": [1], "collection_frequency": "on-change"}
+    ],
+    "T1.2.2": [
+      {"name": "Acceptable use rules", "description": "Documented and approved rules for the acceptable use of information and associated assets, including personal assets used within the entity's environment.", "filetype": "PDF", "covers": [1]},
+      {"name": "Acceptable use rules circulation record", "description": "Evidence the rules were circulated to employees and third parties.", "filetype": "EML", "covers": [2]},
+      {"name": "Signed acceptance of the rules", "description": "Records of employees and third parties accepting the acceptable use rules.", "filetype": "PDF", "covers": [2]},
+      {"name": "Acceptable use compliance checks", "description": "Results of checks that the rules are followed, such as monitoring results and the action taken on violations.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T1.3.1": [
+      {"name": "Information classification scheme", "description": "Approved scheme defining the classification levels, based on information value, legal requirements, sensitivity and criticality to the entity.", "filetype": "PDF", "covers": [1]},
+      {"name": "Classified information sample", "description": "Sample of information assets with their classification levels, showing the scheme is implemented.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Classification scheme communication", "description": "Evidence the classification scheme was communicated across the whole entity, such as notices, intranet pages or training material.", "filetype": "EML", "covers": [2]},
+      {"name": "Classification review records", "description": "Records of reclassification and periodic checks showing classifications are kept up to date as value, sensitivity and criticality change over the life cycle.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "T1.3.2": [
+      {"name": "Information labeling procedure", "description": "Procedure for applying labels that reflect the classification to information and related assets in physical and electronic formats, including where and how labels are attached.", "filetype": "PDF", "covers": [1]},
+      {"name": "Labeled information samples", "description": "Samples of labeled documents, files or media in physical and electronic formats showing labels that match the classification.", "filetype": "PNG", "covers": [1]},
+      {"name": "Labeling exceptions", "description": "Record of the cases where labeling is omitted or not technically possible and how each case is handled.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T1.3.3": [
+      {"name": "Information handling procedures", "description": "Procedures for processing, storing and communicating information consistent with its classification and label, at each classification level.", "filetype": "PDF", "covers": [1]},
+      {"name": "Access restrictions by classification", "description": "Evidence, such as permission and repository settings, that access to information is restricted according to its classification level.", "filetype": "PNG", "covers": [2]},
+      {"name": "Authorized recipients record", "description": "Formal record of the authorized recipients of classified information and other associated assets.", "filetype": "XLSX", "covers": [2]}
+    ],
+    "T1.3.4": [
+      {"name": "Information transfer rules", "description": "Documented rules and procedures for each type of transfer facility, internal and external, reflecting the information classification and regulatory and business obligations.", "filetype": "PDF", "covers": [1]},
+      {"name": "Information transfer agreements", "description": "Agreements with the parties the entity exchanges information with, covering recipient authentication and protection of the information in transit.", "filetype": "PDF", "covers": [1]},
+      {"name": "Public platform sharing controls", "description": "Evidence of the controls that limit what is shared on social media and other public platforms to authorized information, such as approval workflow or blocking rules.", "filetype": "PNG", "covers": [2]}
+    ],
+    "T1.3.5": [
+      {"name": "Data leak prevention configuration", "description": "Configuration export of the leak prevention rules that identify classified information and block user actions or network transmissions that would expose it, with the systems, networks and devices covered.", "filetype": "JSON", "covers": [1]},
+      {"name": "Leakage monitoring and detection records", "description": "Extract from the monitoring of channels such as email, file transfers and removable media, showing classified information at risk is monitored and disclosure is detected.", "filetype": "LOG", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "Blocked transmission records", "description": "Records of user actions or transmissions that were blocked or quarantined because they would expose classified information, with the follow-up taken.", "filetype": "CSV", "covers": [1], "collection_frequency": "on-change"}
+    ],
+    "T1.3.6": [
+      {"name": "Information deletion procedure", "description": "Procedure for securely deleting information by classification level, naming the deletion methods, such as overwriting or cryptographic erasure, and the point at which information is no longer needed.", "filetype": "PDF", "covers": [1]},
+      {"name": "Deletion records", "description": "Records of deletions carried out, with the date, the information or media concerned and the result, including the proof obtained from any service supplier that deleted data for the entity.", "filetype": "PDF", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Third-party deletion requirements", "description": "Clauses in agreements with third parties that store the entity's information requiring its deletion during and when the service ends.", "filetype": "PDF", "covers": [1]},
+      {"name": "Deletion process review", "description": "Periodic review of the deletion process against business requirements, laws and regulations, with the changes made as a result.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T1.4.1": [
+      {"name": "Removable media management procedure", "description": "Procedure covering the whole life cycle of removable storage media: setup, distribution, use and disposal.", "filetype": "PDF", "covers": [1]},
+      {"name": "Removable media protection levels", "description": "Definition of the protection required for removable storage media at each classification level.", "filetype": "PDF", "covers": [2]},
+      {"name": "Removable media register", "description": "Register of issued removable media with owner, classification and status.", "filetype": "XLSX", "covers": [1, 2]},
+      {"name": "Removable media restriction settings", "description": "Configuration or screenshots showing removable media ports and drives are disabled on systems that do not need them, and that auto-run is prevented.", "filetype": "PNG", "covers": [3]},
+      {"name": "Removable media usage monitoring", "description": "Log extract or report of removable media use, with the action taken on unauthorized use.", "filetype": "LOG", "covers": [4], "collection_frequency": "continuous"}
+    ],
+    "T1.4.2": [
+      {"name": "Media reuse and disposal procedure", "description": "Procedure for secure reuse and disposal of media containing classified information, proportionate to the sensitivity of that information.", "filetype": "PDF", "covers": [1]},
+      {"name": "Media sanitization and destruction records", "description": "Records showing media were securely erased or physically destroyed, for example by shredding or incineration, before reuse or disposal.", "filetype": "PDF", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Media disposal log", "description": "Log of disposed storage media with the date, media identifier, disposal method and the person who authorized it.", "filetype": "XLSX", "covers": [3], "collection_frequency": "on-change"}
+    ],
+    "T1.5.1": [
+      {"name": "Endpoint device security requirements", "description": "Documented secure configuration and handling requirements for user endpoint devices: information classification they may handle, registration, software restrictions, updates and network connection rules.", "filetype": "PDF", "covers": [1]},
+      {"name": "Endpoint compliance report", "description": "Report from the endpoint management system showing the security measures applied across user endpoint devices, such as encryption, updates, software restrictions and personal firewall.", "filetype": "CSV", "covers": [1]},
+      {"name": "Automatic lockout configuration", "description": "Configuration export or screenshot showing the lockout time applied to unattended user endpoint devices.", "filetype": "PNG", "covers": [2]},
+      {"name": "Mobile device management enrollment", "description": "List of personal devices used for work that are enrolled in mobile device management, with the settings enforced: encryption, passcode and remote wipe.", "filetype": "CSV", "covers": [3]},
+      {"name": "Work data separation settings", "description": "Configuration showing work data is separated from personal data on personal devices through containerization or an equivalent method.", "filetype": "PNG", "covers": [4]},
+      {"name": "Endpoint logging and monitoring settings", "description": "Evidence that logging and monitoring are enabled on user endpoint devices, such as agent status and a sample of the events collected.", "filetype": "PNG", "covers": [5], "collection_frequency": "continuous"}
+    ],
+    "T2.1.1": [
+      {"name": "Approved physical and environmental security policy", "description": "Documented policy, approved by management, that outlines the roles and responsibilities for physical and environmental security and takes account of asset classification and physical location (storage, processing and transfer).", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Physical and environmental security procedures", "description": "Procedures that implement the policy and its associated physical and environmental protection controls.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Physical security policy approval and review history", "description": "Approval and review history of the physical and environmental security policy, with the date it was last reviewed and updated.", "filetype": "PDF", "covers": [1, 2]}
+    ],
+    "T2.2.1": [
+      {"name": "Security area classification", "description": "Register of the entity's security areas, classified by the assets and information each one holds or handles.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Security perimeter definitions", "description": "Site or floor plans showing the perimeter defined for each security level.", "filetype": "PDF", "covers": [2]},
+      {"name": "Perimeter risk assessment", "description": "Risk assessment that sets the siting and strength of each perimeter according to the assets inside it.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Perimeter protection inspection records", "description": "Inspection records or photographs showing the walls, doors, locks and alarms that protect each area containing information and information systems.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T2.2.2": [
+      {"name": "Secure area entry authentication settings", "description": "Access control system configuration or screenshots showing persons are authenticated at the entrances of secure areas, for example by card plus PIN.", "filetype": "PNG", "covers": [1]},
+      {"name": "Secure area access records", "description": "Records of access to secure areas, including the date and time of entry and departure of visitors and the purpose of the visit.", "filetype": "XLSX", "covers": [2], "collection_frequency": "continuous"},
+      {"name": "Visible identification requirement", "description": "Rule and sample evidence that everyone within the premises wears visible identification, such as the badge types issued and the results of spot checks.", "filetype": "PDF", "covers": [3]},
+      {"name": "Physical access log review", "description": "Access logs from the entry system with evidence that they are updated and monitored, such as review sign-offs and action on anomalies.", "filetype": "LOG", "covers": [4], "collection_frequency": "continuous"},
+      {"name": "Contractor and third-party escort records", "description": "Escort procedure and records showing contractors and third parties are accompanied, with the areas explicitly designated for them without escort.", "filetype": "PDF", "covers": [5]},
+      {"name": "Delivery and loading area access control", "description": "Procedure and evidence, such as door controls and receiving records, that access to delivery and loading and unloading areas is controlled.", "filetype": "PDF", "covers": [6]}
+    ],
+    "T2.2.3": [
+      {"name": "Public access restriction rules", "description": "Rules that prevent access by the public to key facilities, in line with the physical and environmental security policy.", "filetype": "PDF", "covers": [1]},
+      {"name": "Facility signage review", "description": "Inspection records or photographs showing there are no obvious signs, outside or inside, that identify the type of information or activities in secure areas.", "filetype": "PDF", "covers": [2]},
+      {"name": "Offices and facilities inspection records", "description": "Inspection records for offices, rooms and facilities confirming the public access rules are applied and nothing identifies their purpose.", "filetype": "PDF", "covers": [1, 2]}
+    ],
+    "T2.2.4": [
+      {"name": "Physical site risk assessments", "description": "Risk assessments of each physical site covering natural disasters, malicious attack and accidents, performed before critical operations begin and at regular intervals.", "filetype": "PDF", "covers": [1]},
+      {"name": "Physical protection countermeasures", "description": "Record of the countermeasures and procedures chosen from the assessments, such as fire, flood and explosion protection, with their implementation status.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Physical and environmental threat monitoring record", "description": "Record showing changes in the threats to each site, including those from neighboring premises, are monitored and the safeguards adjusted.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T2.2.5": [
+      {"name": "Secure area working guidelines", "description": "Guidelines for working in secure areas, including need-to-know awareness, avoiding unsupervised work and posted emergency procedures.", "filetype": "PDF", "covers": [1]},
+      {"name": "Secure area supervision records", "description": "Records showing activities in secure areas are supervised, including work by third parties, and that vacant secure areas are locked and checked.", "filetype": "PDF", "covers": [2]},
+      {"name": "Recording equipment and device authorization", "description": "Rules and approvals for the devices allowed into secure areas, including recording equipment and mobile device cameras.", "filetype": "PDF", "covers": [3]},
+      {"name": "Surveillance coverage and test records", "description": "Evidence that secure areas are monitored by surveillance systems, such as the camera and intruder alarm layout and the results of periodic tests.", "filetype": "PDF", "covers": [4]}
+    ],
+    "T2.3.1": [
+      {"name": "Equipment siting and protection guidelines", "description": "Guidelines for siting and protecting equipment against unauthorized access and damage, such as positioning to limit unnecessary access and viewing of screens by unauthorized persons.", "filetype": "PDF", "covers": [1]},
+      {"name": "Equipment location inspection records", "description": "Inspection records of sampled equipment locations showing the guidelines are applied.", "filetype": "PDF", "covers": [1]},
+      {"name": "Environmental monitoring configuration", "description": "Configuration of the environmental sensors, such as temperature, humidity, water and smoke, with their alert thresholds and recipients.", "filetype": "PNG", "covers": [2]},
+      {"name": "Environmental alert records", "description": "Records of alerts raised for potential environmental threats and the response to each.", "filetype": "LOG", "covers": [2], "collection_frequency": "on-change"}
+    ],
+    "T2.3.2": [
+      {"name": "Power protection description", "description": "Description of the power protection and uninterrupted supply serving information systems, with its capacity and the equipment it covers.", "filetype": "PDF", "covers": [1]},
+      {"name": "Supporting utilities inspection and test records", "description": "Records of regular inspection and testing of power and other supporting utilities showing they function properly.", "filetype": "PDF", "covers": [1]},
+      {"name": "Emergency lighting test records", "description": "Test records showing emergency lighting operates when the main power fails.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T2.3.3": [
+      {"name": "Cable tamper protection evidence", "description": "Photographs or inspection records showing power and telecommunication cabling is protected against physical tampering, for example by conduits, locked rooms or boxes and controlled access to patch panels.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cable segregation layout", "description": "Cabling layout or inspection record showing power cables are separated from communications cables to prevent interference.", "filetype": "PDF", "covers": [2]},
+      {"name": "Cable labeling and inspection records", "description": "Records of cable labeling at both ends and of physical inspections for unauthorized devices attached to cables.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T2.3.4": [
+      {"name": "Supplier maintenance recommendations", "description": "Suppliers' recommended service intervals and specifications for the equipment, with evidence they are available to maintenance personnel.", "filetype": "PDF", "covers": [1]},
+      {"name": "Equipment commissioning and decommissioning procedure", "description": "Procedure for commissioning and decommissioning equipment that protects classified data.", "filetype": "PDF", "covers": [2]},
+      {"name": "Equipment maintenance log", "description": "Log of preventive and corrective maintenance and of suspected or actual faults for all equipment, with the personnel who carried out each task.", "filetype": "XLSX", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Maintenance personnel authorization and data clearing", "description": "Records showing only authorized personnel serviced equipment and that classified information was cleared, or the personnel were cleared, when equipment left for maintenance.", "filetype": "PDF", "covers": [2, 3]}
+    ],
+    "T2.3.5": [
+      {"name": "Off-site equipment protection rules", "description": "Rules for protecting equipment used outside the premises, such as not leaving it unattended in public places, observing manufacturers' instructions and preventing viewing of screens in public.", "filetype": "PDF", "covers": [1]},
+      {"name": "Off-site equipment authorization and custody records", "description": "Management authorization and removal records for equipment and media used outside the premises, owned by the entity or privately, with a chain-of-custody log of transfers.", "filetype": "XLSX", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Off-premise location risk assessment", "description": "Risk assessment of off-premise locations, such as home-working and temporary sites, with the controls applied as a result.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T2.3.6": [
+      {"name": "Equipment disposal and re-use procedure", "description": "Procedure for secure disposal or re-use of equipment based on the sensitivity of the stored information, including checking whether storage media is present.", "filetype": "PDF", "covers": [1]},
+      {"name": "Data removal and destruction evidence", "description": "Evidence that classified data and licensed software were removed or securely overwritten, or the media destroyed, before disposal or re-use.", "filetype": "PDF", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Disposed equipment register", "description": "Record of disposed equipment with its identifier, the date, the method and the person responsible.", "filetype": "XLSX", "covers": [2], "collection_frequency": "on-change"}
+    ],
+    "T2.3.7": [
+      {"name": "Clear desk and clear screen policy", "description": "Formal policy for papers, removable storage media and screens that is appropriate to the entity's purpose and outlines the responsibilities of users.", "filetype": "PDF", "covers": [1, 2, 3]},
+      {"name": "Policy availability to users", "description": "Evidence the policy is readily available to all users, such as an intranet publication or induction material.", "filetype": "PNG", "covers": [3]},
+      {"name": "Screen lock configuration", "description": "Configuration showing unattended screens lock automatically and need authentication to unlock.", "filetype": "PNG", "covers": [2]},
+      {"name": "Clear desk inspection results", "description": "Results of clear desk and clear screen inspections, with the action taken on findings.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T3.1.1": [
+      {"name": "Minimum security configuration standards", "description": "Documented minimum security configurations for each common product in use, covering hardware, software, cloud services and network devices, based on vendor or independent security guidance.", "filetype": "PDF", "covers": [1]},
+      {"name": "Applied configuration evidence", "description": "Configuration exports from sampled systems showing the minimum security configurations are implemented.", "filetype": "JSON", "covers": [2]},
+      {"name": "Configuration compliance monitoring report", "description": "Report from the configuration monitoring tool comparing systems with the minimum security configurations and listing the deviations found.", "filetype": "CSV", "covers": [2], "collection_frequency": "continuous"},
+      {"name": "Security configuration review records", "description": "Records of periodic reviews of the security configurations and the updates made as a result.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T3.1.2": [
+      {"name": "Approved operating procedures", "description": "Documented and approved operating procedures giving the detailed instructions for each job, such as system owners, secure installation and configuration, information handling, and backup and resilience, in a format that can be shared with stakeholders.", "filetype": "PDF", "covers": [1]},
+      {"name": "Operating procedure review records", "description": "Review log showing the operating procedures are reviewed periodically and updated.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Operating procedure access and awareness", "description": "Evidence stakeholders can access the operating procedures and know about them, such as repository permissions and distribution notices.", "filetype": "PNG", "covers": [3]}
+    ],
+    "T3.1.3": [
+      {"name": "Change management procedure", "description": "Documented change management procedure covering documentation, specification, testing, approval and managed implementation of changes to information systems.", "filetype": "PDF", "covers": [1]},
+      {"name": "Change management scope", "description": "List of the systems to which the change management process applies.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Change log", "description": "Log of all proposed changes with their security impact and the management approval given.", "filetype": "XLSX", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Rollback and communication plans", "description": "Rollback, fallback and recovery procedures and communication plans for sampled approved changes.", "filetype": "PDF", "covers": [4], "collection_frequency": "on-change"}
+    ],
+    "T3.1.4": [
+      {"name": "Environment separation description", "description": "Description of the separation between development, test and operational environments, showing the level chosen and the controls that enforce it.", "filetype": "PDF", "covers": [1]},
+      {"name": "Environment separation settings", "description": "Network, domain and access control settings showing the environments run on separate systems or domains and development tools are not reachable from operational systems.", "filetype": "PNG", "covers": [1]},
+      {"name": "Environment transfer rules", "description": "Rules for access to each environment and for moving information, software and systems between them, built into the system and software development life cycle.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Software promotion records", "description": "Sample records of software moved from development through test to operational status, showing the transfer rules were followed.", "filetype": "XLSX", "covers": [2, 3], "collection_frequency": "on-change"}
+    ],
+    "T3.1.5": [
+      {"name": "Capacity measurements", "description": "Measurements of the current capacity of systems, such as storage, compute and bandwidth use, over time.", "filetype": "CSV", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "Capacity requirements forecast", "description": "Estimate of the capacity needed by planned systems and projected growth, taking account of new business and system requirements.", "filetype": "PDF", "covers": [1]},
+      {"name": "Capacity adjustment and stress test records", "description": "Records of the adjustments made to keep system performance at the required level, and of stress tests confirming capacity meets peak demand.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T3.1.6": [
+      {"name": "Anti-malware coverage report", "description": "Report from the anti-malware console listing the servers, workstations, laptops and other connected devices that are protected and any that are not.", "filetype": "CSV", "covers": [1]},
+      {"name": "Anti-malware update status", "description": "Evidence that the anti-malware tools, their scanning engines and detection definitions are up to date on all protected devices.", "filetype": "CSV", "covers": [2], "collection_frequency": "continuous"},
+      {"name": "Malware scanning configuration", "description": "Settings showing system files and files downloaded from public networks are scanned periodically, email attachments are scanned before reaching the inbox and removable media is scanned each time it is connected.", "filetype": "PNG", "covers": [3, 4, 5]},
+      {"name": "Auto-run disabled configuration", "description": "Configuration of servers, workstations and laptops showing content on removable media is not run automatically.", "filetype": "PNG", "covers": [6]},
+      {"name": "Malware detection events and notifications", "description": "Log extract of malware detection events from the anti-malware tools, with the notifications sent to administrators.", "filetype": "LOG", "covers": [7], "collection_frequency": "continuous"},
+      {"name": "Malware awareness records", "description": "Awareness material and attendance records covering malware risks, behaviors and preventative actions for users.", "filetype": "PDF", "covers": [8]}
+    ],
+    "T3.1.7": [
+      {"name": "Backup requirements", "description": "Record of the information and software that needs backup, how often, and the protection required for the backup copies.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Backup procedures", "description": "Documented backup procedures and system capabilities for each backup requirement, with the restoration procedures.", "filetype": "PDF", "covers": [2]},
+      {"name": "Backup job records", "description": "Backup job reports showing backups run to schedule and complete, forming an accurate record of the copies made.", "filetype": "LOG", "covers": [2]},
+      {"name": "Backup restoration test results", "description": "Results of routine tests showing backed up information and software can be restored reliably.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T3.1.8": [
+      {"name": "Software installation restrictions", "description": "Settings and the list of authorized administrators showing unauthorized software is prohibited and only authorized administrators can install software on operational systems.", "filetype": "PNG", "covers": [1]},
+      {"name": "Software original copy repository", "description": "Listing showing an original copy of every installed software, including previous versions, is kept.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Unauthorized software review records", "description": "Records of regular reviews to detect unauthorized software or amendments, with the corrective action started.", "filetype": "PDF", "covers": [3]},
+      {"name": "Software installation audit log", "description": "Audit log extract of all software installations on operational systems.", "filetype": "LOG", "covers": [4], "collection_frequency": "continuous"}
+    ],
+    "T3.2.1": [
+      {"name": "Approved monitoring policy and procedures", "description": "Documented policy and procedures outlining what system aspects are monitored, how and how often, and who is responsible for the monitoring activities.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Monitoring to incident response procedure", "description": "Procedure defining how information from monitoring activities is taken into the incident response process.", "filetype": "PDF", "covers": [3]},
+      {"name": "Logging requirements", "description": "Defined logging requirements and activities, including the events to capture, the frequency of log reviews and the retention of logs.", "filetype": "PDF", "covers": [4]},
+      {"name": "Clock synchronization requirements", "description": "Defined clock synchronization requirements and related activities.", "filetype": "PDF", "covers": [5]},
+      {"name": "External information sharing requirements", "description": "Record of the Emirate, sector or national requirements on information to be shared with external entities and how the monitoring procedures account for them.", "filetype": "PDF", "covers": [6]},
+      {"name": "Monitoring policy approval and review record", "description": "Approval record and review history of the monitoring policy and procedures, showing they are kept up to date.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T3.2.2": [
+      {"name": "Auditable events list", "description": "List of the activities captured in audit logs for hardware devices, operating systems and installed applications, with the minimum information recorded for each.", "filetype": "XLSX", "covers": [1, 2]},
+      {"name": "Audit log samples", "description": "Log extracts from sampled systems showing the required details are recorded, such as user ID, date and time, event details, device identity and network address.", "filetype": "LOG", "covers": [1, 2]},
+      {"name": "Log review schedule and records", "description": "Defined minimum review frequency for each log source and the records of the reviews carried out.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Log reviewer training and skills", "description": "Training and skills records of the personnel who review logs.", "filetype": "PDF", "covers": [4]},
+      {"name": "Log retention requirements and settings", "description": "Defined minimum retention times for all logs and the settings that enforce them.", "filetype": "PNG", "covers": [5]},
+      {"name": "Critical log protection", "description": "Identification of the critical log information across systems and the access, integrity and storage protections applied in proportion to its sensitivity.", "filetype": "PDF", "covers": [6]}
+    ],
+    "T3.2.3": [
+      {"name": "Monitored system usage list", "description": "List of the types of system usage that are monitored and the minimum information gathered for each monitoring activity.", "filetype": "XLSX", "covers": [1, 2]},
+      {"name": "Monitoring review frequency and records", "description": "Defined minimum frequency for reviewing the information gathered and the records of the reviews carried out.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Monitoring reviewer qualifications", "description": "Qualification and training records of the personnel who review the information gathered from monitoring.", "filetype": "PDF", "covers": [4]},
+      {"name": "Monitoring information retention settings", "description": "Defined minimum time for keeping the information gathered from monitoring and the storage settings that enforce it.", "filetype": "PNG", "covers": [5]},
+      {"name": "Anomaly alerts and evaluation records", "description": "Records of alerts on anomalous behavior in networks, systems and applications and of the evaluation of potential information security incidents.", "filetype": "LOG", "covers": [4], "collection_frequency": "continuous"},
+      {"name": "National, Emirate and sector monitoring capability check", "description": "Assessment showing the security capabilities across the monitored environment meet national, Emirate or sectoral considerations.", "filetype": "PDF", "covers": [6]}
+    ],
+    "T3.2.4": [
+      {"name": "Date and time standard", "description": "Definition of the standardized date and time format and the agreed accurate reference time source used across systems.", "filetype": "PDF", "covers": [1]},
+      {"name": "Time synchronization configuration", "description": "Configuration showing systems use the standard format and synchronize with the agreed time source, from a sample of systems.", "filetype": "PNG", "covers": [1, 2]},
+      {"name": "Clock synchronization check results", "description": "Results of regular checks that the clocks of all relevant systems are synchronized.", "filetype": "CSV", "covers": [2]}
+    ],
+    "T3.3.1": [
+      {"name": "Threat information sources", "description": "List of the external and internal sources selected for threat information, covering strategic, tactical and operational threat intelligence.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Collected threat information", "description": "Samples of threat information gathered from the selected sources, such as advisories and indicator feeds.", "filetype": "PDF", "covers": [1]},
+      {"name": "Threat analysis reports", "description": "Analysis of the gathered threat information showing its relevance to the entity.", "filetype": "PDF", "covers": [2]},
+      {"name": "Actions taken on threat intelligence", "description": "Records of the actions taken because of threat intelligence, such as new detection or blocking rules, patching and warnings to teams.", "filetype": "XLSX", "covers": [2], "collection_frequency": "on-change"}
+    ],
+    "T3.3.2": [
+      {"name": "Vulnerability management procedure", "description": "Procedure defining the roles and responsibilities for vulnerability monitoring, risk assessment, updating and asset tracking.", "filetype": "PDF", "covers": [1, 2, 3]},
+      {"name": "Pre-production vulnerability assessment", "description": "Vulnerability assessment results and the remediation plan for new systems and applications before they enter production.", "filetype": "PDF", "covers": [1]},
+      {"name": "Production vulnerability scan results", "description": "Results of the tests and scans that check for vulnerabilities in production systems.", "filetype": "PDF", "covers": [2]},
+      {"name": "Vulnerability remediation tracker", "description": "Tracker showing the measure taken for each identified vulnerability, with owner, due date and status.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "T3.4.1": [
+      {"name": "Approved cryptographic policy", "description": "Documented policy, approved and enforced, with the governance that supports the implementation of encryption requirements.", "filetype": "PDF", "covers": [1]},
+      {"name": "Encryption requirements register", "description": "Register of the encryption requirements identified to address security and privacy risks, for data at rest and data in motion.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Cryptographic compliance monitoring", "description": "Records of monitoring that the cryptographic practices in use comply with applicable laws, regulations and standards.", "filetype": "PDF", "covers": [3]},
+      {"name": "Weak cipher and algorithm replacement", "description": "Inventory or scan of the ciphers and hashing algorithms in use, with the plan and records for replacing weak or outdated ones.", "filetype": "XLSX", "covers": [4]}
+    ],
+    "T3.4.2": [
+      {"name": "Encryption at rest settings", "description": "Settings showing classified data at rest is encrypted on file servers and storage, with the algorithm and key strength used.", "filetype": "PNG", "covers": [1]},
+      {"name": "End-user device encryption status", "description": "Report from device management showing encryption is enabled on laptops, desktops, smartphones and tablets that hold classified data.", "filetype": "CSV", "covers": [2]},
+      {"name": "Database and portable media encryption settings", "description": "Settings showing databases and portable storage media holding classified data are encrypted.", "filetype": "PNG", "covers": [3]},
+      {"name": "Encryption in motion configuration", "description": "Configuration of the protocols and ciphers protecting data in motion over system interfaces, public networks and electronic messaging.", "filetype": "JSON", "covers": [4, 5]},
+      {"name": "Transmission encryption test results", "description": "Results of scans or tests showing classified data transmissions are encrypted and weak protocols are disabled.", "filetype": "PDF", "covers": [5]}
+    ],
+    "T3.4.3": [
+      {"name": "Key management procedure", "description": "Procedure covering the cryptographic key life cycle: creation, distribution, storage, recovery, disposal and archival.", "filetype": "PDF", "covers": [1]},
+      {"name": "Key storage settings", "description": "Evidence keys are stored securely, such as hardware security module or key vault settings and the access permissions on them.", "filetype": "PNG", "covers": [2]},
+      {"name": "Key recovery test records", "description": "Records of key recovery tests or incidents showing keys can be recovered after loss or corruption.", "filetype": "PDF", "covers": [3]},
+      {"name": "Key management activity records", "description": "Log extract of key management activities such as creation, access, rotation and disposal.", "filetype": "LOG", "covers": [1], "collection_frequency": "continuous"}
+    ],
+    "T3.4.4": [
+      {"name": "Public key cryptography inventory", "description": "Inventory of the systems and applications that use public key cryptography.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Post-quantum transition plan", "description": "Plan for moving systems to quantum-safe cryptography, including the dependency analysis that sets the order of transition.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Post-quantum laboratory test results", "description": "Results of testing the new post-quantum cryptographic standard in a laboratory environment before it is used in production.", "filetype": "PDF", "covers": [2]},
+      {"name": "Post-quantum workforce training records", "description": "Records of the awareness and training given to the workforce on the upcoming transition to post-quantum cryptography.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T4.1.1": [
+      {"name": "Approved network security policy", "description": "Documented policy, approved by management, on the use of network services and devices.", "filetype": "PDF", "covers": [1]},
+      {"name": "Network diagram", "description": "Current network diagram, with version and date, showing all network components, their interconnectivity and their connections to other networks.", "filetype": "PNG", "covers": [2]},
+      {"name": "Network access control configuration", "description": "Configuration showing equipment and devices are detected, restricted and authenticated when they connect to the network, such as port security or network access control settings.", "filetype": "PNG", "covers": [3]},
+      {"name": "Network risk assessment", "description": "Risk assessment of individual network components and of the overall network, identifying the vulnerabilities that need action.", "filetype": "PDF", "covers": [4]},
+      {"name": "Network control implementation record", "description": "Record linking each identified network vulnerability to the specific control implemented to mitigate it.", "filetype": "XLSX", "covers": [5]},
+      {"name": "Traffic control and monitoring configuration", "description": "Configuration of the measures that control and monitor incoming and outgoing network traffic, such as firewall rule sets and traffic monitoring settings.", "filetype": "JSON", "covers": [6]}
+    ],
+    "T4.1.2": [
+      {"name": "Network services security requirements", "description": "List of the network services, in-house or outsourced, that are subject to specific security requirements, with the security features, service levels and management requirements of each.", "filetype": "XLSX", "covers": [1, 2]},
+      {"name": "Network service level agreements", "description": "Service level agreements with network service providers that include the minimum security requirements for each service.", "filetype": "PDF", "covers": [3]},
+      {"name": "Network provider assurance records", "description": "Results of checks that providers deliver the agreed services securely, including exercise of the right to audit and any third-party attestations.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T4.1.3": [
+      {"name": "Network segregation criteria", "description": "Criteria for grouping information services, users and information systems into separate network groups, and the resulting groups or domains.", "filetype": "PDF", "covers": [1]},
+      {"name": "Network segregation configuration", "description": "VLAN, subnet and firewall zone configuration showing the groups are segregated, including the management network.", "filetype": "JSON", "covers": [1]},
+      {"name": "Segregation requirements in the development life cycle", "description": "Extracts from the system and service development life cycle showing the segregation requirements of each group are identified and integrated.", "filetype": "PDF", "covers": [2]},
+      {"name": "Segregation effectiveness evaluation", "description": "Periodic evaluation of how effective the implemented segregation is, such as test results, with the improvements identified.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T4.1.4": [
+      {"name": "Wireless site survey", "description": "Documented site survey determining the best physical locations for wireless equipment so that stray radio coverage does not reach far outside the entity's physical perimeter.", "filetype": "PDF", "covers": [1]},
+      {"name": "Wireless segregation configuration", "description": "Configuration showing guest internet access is separated from corporate wireless access.", "filetype": "PNG", "covers": [2]},
+      {"name": "Wireless security controls by network", "description": "Record of the security controls required for each wireless network, such as authentication and encryption, based on the protection level of the services, users and systems it supports.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Wireless usage and configuration standard", "description": "Document stating the usage restrictions, configuration requirements and implementation guidance for wireless access.", "filetype": "PDF", "covers": [4]}
+    ],
+    "T4.1.5": [
+      {"name": "Website access categories", "description": "Definition of the types of websites personnel should and should not be able to reach, for example sites with upload functions, known malicious sites and command and control servers.", "filetype": "PDF", "covers": [1]},
+      {"name": "Web filter configuration", "description": "Web filtering configuration showing the blocked categories and the blocking of websites with illegal information, viruses or phishing material.", "filetype": "PNG", "covers": [2]},
+      {"name": "Web filter block records", "description": "Log extract of requests blocked because the site holds illegal information, viruses or phishing material.", "filetype": "LOG", "covers": [2], "collection_frequency": "continuous"}
+    ],
+    "T5.1.1": [
+      {"name": "Approved identity and access management policy", "description": "Documented policy, approved by management and based on business and security requirements, covering identity management, user access management, access rights review, privileged access management, secure authentication and password management.", "filetype": "PDF", "covers": [1]},
+      {"name": "Access requirements set by owners", "description": "Record of the business and security requirements for access that information and asset owners have determined, which the policy takes account of.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Access policy communication", "description": "Evidence the policy was communicated to all relevant interested parties.", "filetype": "EML", "covers": [1]}
+    ],
+    "T5.2.1": [
+      {"name": "User identity list", "description": "Export of user accounts showing a unique identifier for each user, a separate account for each individual and no shared accounts.", "filetype": "CSV", "covers": [1, 3]},
+      {"name": "Identity life cycle procedure", "description": "Procedure for creating, changing, disabling and removing identities, including the approval and documentation required for any shared or non-human identity.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Disabled and removed identity records", "description": "Records showing identities were disabled or removed promptly when no longer needed, checked against leaver records.", "filetype": "CSV", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Restricted identity activity records", "description": "Log extract of the activities performed by restricted identities.", "filetype": "LOG", "covers": [4], "collection_frequency": "continuous"}
+    ],
+    "T5.2.2": [
+      {"name": "Access provisioning and de-provisioning procedure", "description": "Formal procedure for granting, changing and removing access rights, including owner authorization and activation of rights only after authorization is complete.", "filetype": "PDF", "covers": [1]},
+      {"name": "Segregation of duties matrix", "description": "Matrix of conflicting roles showing that approval and implementation of access rights are separated.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Access rights records", "description": "Records of the access rights granted for all assets, identifying any special access.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Role change and leaver revocation records", "description": "Records, checked against joiner, mover and leaver data, showing access was revoked immediately when users changed role or left the entity.", "filetype": "CSV", "covers": [4], "collection_frequency": "on-change"},
+      {"name": "Temporary and inactive account review", "description": "Periodic check of temporary and inactive accounts, with the access revoked as a result.", "filetype": "XLSX", "covers": [5]}
+    ],
+    "T5.2.3": [
+      {"name": "Privileged access register", "description": "Record of all allocated privileges by system and account, with the formal authorization for each.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Administrative group membership export", "description": "Export of domain and local administrator group members showing regular users hold no administrative privileges.", "filetype": "CSV", "covers": [2]},
+      {"name": "Administrator account usage rules", "description": "Evidence administrator accounts are used only for system administration, such as separate administrator accounts and the restriction of email and web browsing on them.", "filetype": "PDF", "covers": [3]},
+      {"name": "Administrative multi-factor authentication settings", "description": "Configuration showing multi-factor authentication is required for all administrative access.", "filetype": "PNG", "covers": [4]},
+      {"name": "Local administrator password controls", "description": "Settings showing a different password is used on each local administrator account, such as a local password management tool.", "filetype": "PNG", "covers": [5]},
+      {"name": "Administrative activity logs and reviews", "description": "Logs of all administrative access activity with records of the regular reviews and of the response to suspicious or unauthorized activity.", "filetype": "LOG", "covers": [6], "collection_frequency": "continuous"}
+    ],
+    "T5.2.4": [
+      {"name": "Access rights review procedure", "description": "Procedure for reviewing access rights periodically and after any change in user status, such as promotion, demotion or termination.", "filetype": "PDF", "covers": [1]},
+      {"name": "Completed access rights reviews", "description": "Completed review records with the reviewer's sign-off and the access removed or changed as a result.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Special access validity checks", "description": "Checks of granted special and privileged access, at shorter intervals than general reviews, showing each grant is still valid.", "filetype": "XLSX", "covers": [2]}
+    ],
+    "T5.3.1": [
+      {"name": "Information system authentication configuration", "description": "Authentication settings showing strong techniques are used on information systems, with strength matched to the classification of the information accessed.", "filetype": "PNG", "covers": [1]},
+      {"name": "Secure log-on and log-off settings", "description": "Evidence of the secure log-on and log-off procedure, such as settings that limit failed attempts and end sessions at log-off.", "filetype": "PNG", "covers": [2]},
+      {"name": "Maximum session time settings", "description": "Settings for the maximum session time of authenticated users on sensitive systems and applications.", "filetype": "PNG", "covers": [3]},
+      {"name": "Inactivity timeout settings", "description": "Settings showing inactive sessions are terminated after the predefined period of inactivity.", "filetype": "PNG", "covers": [4]}
+    ],
+    "T5.3.2": [
+      {"name": "Access restriction model", "description": "Description of how access to information and associated assets is restricted by role, including that classified information is not available to anonymous or unknown identities.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Role-based access matrix", "description": "Matrix mapping roles and responsibilities to the access rights granted to information and associated assets.", "filetype": "XLSX", "covers": [2, 3]},
+      {"name": "System access control settings", "description": "Access control settings from sampled systems, applications and services showing who can access what information and at what level.", "filetype": "PNG", "covers": [1, 3]},
+      {"name": "Business-need access adjustments", "description": "Records of access changes made for individual users and support personnel because of specific business needs, with the approval given.", "filetype": "CSV", "covers": [4], "collection_frequency": "on-change"}
+    ],
+    "T5.3.3": [
+      {"name": "Secure remote access configuration", "description": "Configuration showing all remote connections by users and administrators go through secure channels, such as VPN settings.", "filetype": "PNG", "covers": [1]},
+      {"name": "Remote authentication method settings", "description": "Settings showing the authentication methods required of remote users, such as certificates, hardware tokens or multi-factor authentication.", "filetype": "PNG", "covers": [2]},
+      {"name": "Remote administrator access approvals", "description": "Approvals given before remote administrator-level access was granted.", "filetype": "PDF", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Remote administrator access monitoring", "description": "Log extract showing remote administrator-level sessions are controlled and monitored.", "filetype": "LOG", "covers": [3], "collection_frequency": "continuous"}
+    ],
+    "T5.3.4": [
+      {"name": "Utility program authorization list", "description": "List of the utility programs able to override system and application controls and the authorized personnel allowed to use them, with the authorization levels.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Utility access restriction settings", "description": "Settings showing utility programs can be used only by authorized personnel and unnecessary utilities are removed or disabled.", "filetype": "PNG", "covers": [1]},
+      {"name": "Utility program usage records", "description": "Log extract of the use of utility programs.", "filetype": "LOG", "covers": [2], "collection_frequency": "continuous"}
+    ],
+    "T5.4.1": [
+      {"name": "Credential issuance procedure", "description": "Procedure for providing security credentials securely, including identity verification before issue, temporary credentials changed at first use, secure delivery, revocation and re-allocation.", "filetype": "PDF", "covers": [1]},
+      {"name": "Credential issuance records", "description": "Sample records of credentials issued, re-allocated or revoked, with the date and the person who authorized each.", "filetype": "CSV", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Initial credential generation and delivery settings", "description": "Evidence initial credentials are generated as non-guessable, unique values and delivered over a protected channel rather than in clear text email.", "filetype": "PNG", "covers": [1]}
+    ],
+    "T5.4.2": [
+      {"name": "Credential use good practices", "description": "Guidance on good use of security credentials, such as keeping them confidential, not recording them insecurely, changing them after possible compromise and choosing quality passwords.", "filetype": "PDF", "covers": [1]},
+      {"name": "Good practice communication records", "description": "Evidence the good practices were communicated to users, such as notices, induction material or awareness sessions.", "filetype": "EML", "covers": [1]},
+      {"name": "Approved credential storage method", "description": "Record of the approved ways for users to store credentials securely, such as a password vault.", "filetype": "PDF", "covers": [1]}
+    ],
+    "T5.4.3": [
+      {"name": "Credential change automation", "description": "Evidence the credential change procedure is automated and verifies the user's identity before a change, such as self-service reset settings.", "filetype": "PNG", "covers": [1]},
+      {"name": "Credential strength settings", "description": "Settings that validate the strength of changed credentials, such as minimum length and complexity, and that lock accounts after a set number of failed attempts.", "filetype": "PNG", "covers": [2]},
+      {"name": "Credential lifetime and reuse settings", "description": "Settings for the maximum lifetime of credentials and the conditions on reuse, including the history of previous credentials.", "filetype": "PNG", "covers": [3]},
+      {"name": "First access password change enforcement", "description": "Evidence default and temporary passwords must be changed at first access.", "filetype": "PNG", "covers": [4]},
+      {"name": "Credential storage protection", "description": "Evidence credentials are stored hashed with salt or encrypted, such as the hashing settings of the credential store.", "filetype": "PDF", "covers": [5]}
+    ],
+    "T6.1.1": [
+      {"name": "Approved third-party security policy", "description": "Documented policy, approved by management, that provides the framework for third-party risk management.", "filetype": "PDF", "covers": [1]},
+      {"name": "Third-party security governance arrangements", "description": "Governance for third-party security: responsibilities, oversight forum, resources (budget, people and tools) and the communication channels between suppliers, internal departments and partners.", "filetype": "PDF", "covers": [2]},
+      {"name": "Third-party security program mandate", "description": "Senior leadership's mandate establishing the third-party security program, with the resources assigned to it.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T6.2.1": [
+      {"name": "Third-party risk management procedure", "description": "Approved procedure for managing the information security risks of third-party products and services, including cloud services, covering the start and the end of the relationship.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Supplier risk classification register", "description": "Register of third-party suppliers classified by the risk they pose to the entity's systems and data.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Third-party cyber security risk assessments", "description": "Assessments of the cyber security risks of sampled suppliers and of their products or services across the supply chain.", "filetype": "PDF", "covers": [2]},
+      {"name": "Supplier risk mitigation plans", "description": "Strategies and actions to mitigate the identified supplier risks, with owner and status, and the continuous monitoring they put in place.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "T6.2.2": [
+      {"name": "Supplier security assessment criteria", "description": "Assessment template and criteria for judging a supplier's information security posture, covering topics such as governance, secure design and code, physical security, monitoring and auditing, and incident response and recovery.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Completed supplier security assessments", "description": "Assessments of sampled suppliers completed against the criteria during selection, with the results and the decision reached.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Supplier due diligence records", "description": "Records of the due diligence checks that verify a supplier's cyber security posture before onboarding and again at intervals set by its criticality.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T6.2.3": [
+      {"name": "ICT supply chain security procedure", "description": "Approved procedure for managing the information security risks of the ICT products and services supply chain.", "filetype": "PDF", "covers": [1, 2, 3, 4]},
+      {"name": "Procurement security requirements", "description": "Defined security requirements for hardware and software procurement, such as authentication and authorization mechanisms, data encryption and security protocols.", "filetype": "PDF", "covers": [1]},
+      {"name": "Pre-procurement product evaluations", "description": "Evaluations of sampled hardware and software products against the security requirements before they were bought.", "filetype": "PDF", "covers": [2]},
+      {"name": "System acceptance test results", "description": "Test results and sign-off showing tests were completed before new systems were accepted into the operational environment.", "filetype": "PDF", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Supply chain upgrade and maintenance records", "description": "Records showing hardware and software supplied through the ICT supply chain is upgraded and maintained in a timely and secure way.", "filetype": "XLSX", "covers": [4]}
+    ],
+    "T6.2.4": [
+      {"name": "Supplier contract security clause templates", "description": "Standard information security clauses used in supplier contracts, adjusted to the type of relationship with the supplier.", "filetype": "DOCX", "covers": [1]},
+      {"name": "Executed supplier contracts", "description": "Sample signed supplier contracts showing the information security requirements are embedded, including that suppliers pass them on to sub-contractors and step-in rights where relevant.", "filetype": "PDF", "covers": [1]},
+      {"name": "Legal and regulatory compliance clauses", "description": "Contract clauses obliging suppliers to comply with the applicable laws and regulations.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T6.2.5": [
+      {"name": "Supplier monitoring program", "description": "Program describing how supplier adherence to the contractual cyber security requirements is monitored, including logging and auditing of supplier access to the entity's information and critical systems.", "filetype": "PDF", "covers": [1]},
+      {"name": "Supplier access monitoring records", "description": "Log extract of supplier activity on the entity's information and critical systems, retained for investigation and accountability.", "filetype": "LOG", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "Supplier assessments and audit reports", "description": "Assessments, audits or evaluations verifying suppliers comply with the specified security controls and measures.", "filetype": "PDF", "covers": [2]},
+      {"name": "Supplier change management records", "description": "Records of changes in supplier security practices and service delivery, with the entity's assessment and handling of each change.", "filetype": "XLSX", "covers": [3], "collection_frequency": "on-change"}
+    ],
+    "T7.1.1": [
+      {"name": "Approved acquisition, development and maintenance policy", "description": "Documented policy, approved by management, that fits the relationship between the entity and the internal and external parties involved and outlines their roles and responsibilities.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Policy framework for security in the life cycle", "description": "Framework in the policy for integrating information security controls through acquiring, designing, developing, implementing and maintaining systems, in-house or outsourced, including environment separation, secure coding, security in design and testing checkpoints.", "filetype": "PDF", "covers": [3]},
+      {"name": "Policy communication to internal and external parties", "description": "Evidence the policy was shared with the internal and external parties involved, with the sign-off that approved it.", "filetype": "EML", "covers": [1, 2, 3]}
+    ],
+    "T7.2.1": [
+      {"name": "Application security requirements specification", "description": "Information security requirements identified, specified and approved for sampled applications developed or acquired, drawn from a risk assessment.", "filetype": "PDF", "covers": [1]},
+      {"name": "Requirements by application purpose", "description": "Requirements set for the purpose of each application, including controls for transactional services, electronic commerce and payment applications where applicable.", "filetype": "PDF", "covers": [2]},
+      {"name": "Application requirements implementation evidence", "description": "Test results or design reviews showing the application security requirements were implemented in sampled applications.", "filetype": "PDF", "covers": [1, 2]}
+    ],
+    "T7.2.2": [
+      {"name": "Secure engineering principles", "description": "Approved document establishing the principles for engineering secure systems, such as user authentication techniques, secure session control and data validation and sanitization.", "filetype": "PDF", "covers": [1]},
+      {"name": "Principles applied across architecture layers", "description": "Architecture documents showing the principles are applied consistently across the business, data, application and infrastructure layers.", "filetype": "PDF", "covers": [2]},
+      {"name": "Security design reviews", "description": "Reviews of sampled designs against known attack patterns and the security risks of new components.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T7.3.1": [
+      {"name": "Secure coding guidelines", "description": "Documented and approved secure coding practices, with the minimum secure baseline, extended to third-party and open-source components.", "filetype": "PDF", "covers": [1]},
+      {"name": "Secure coding use evidence", "description": "Evidence the practices are used during development, such as code review records and completed checklists.", "filetype": "PDF", "covers": [1]},
+      {"name": "Automated security testing results", "description": "Results of the automated security tests run during and after deployment, with the findings and how they were fixed.", "filetype": "PDF", "covers": [2]},
+      {"name": "Developer security training records", "description": "Records of the application security knowledge and training given to developers.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "T7.3.2": [
+      {"name": "Quality assurance process", "description": "Defined quality assurance process for outsourced development, including acceptance testing of the quality and accuracy of deliverables.", "filetype": "PDF", "covers": [1]},
+      {"name": "Secure coding and QA contract clauses", "description": "Clauses in the software acquisition contract obliging the third party to follow the entity's secure coding policy and quality assurance process.", "filetype": "PDF", "covers": [2]},
+      {"name": "Contractual security requirements", "description": "Requirements and information security functionality specified in the software development contract, together with code ownership and licensing terms.", "filetype": "PDF", "covers": [3]},
+      {"name": "Delivered code checks", "description": "Results of checks of delivered code for vulnerabilities, malicious code or code that does not conform to the required functionality.", "filetype": "PDF", "covers": [4]},
+      {"name": "Outsourced development review records", "description": "Records showing the entity directs, monitors and reviews the outsourced work against the agreed expectations.", "filetype": "PDF", "covers": [1, 2, 3]}
+    ],
+    "T7.3.3": [
+      {"name": "Source code access permissions", "description": "Read and write permissions on source code repositories, development tools and software libraries, aligned with the access control policy.", "filetype": "PNG", "covers": [1]},
+      {"name": "Source code permission reviews", "description": "Records of the periodic reviews of the permissions and the changes made as a result.", "filetype": "XLSX", "covers": [2]},
+      {"name": "Source code access audit log", "description": "Audit log extract of all accesses to source code, development tools and software libraries.", "filetype": "LOG", "covers": [3], "collection_frequency": "continuous"}
+    ],
+    "T7.4.1": [
+      {"name": "Change control procedure for systems and software", "description": "Documented change control procedure for information processing facilities and information systems, integrated for infrastructure and software where practicable.", "filetype": "PDF", "covers": [1]},
+      {"name": "Change track record", "description": "Track record of all changes showing the request, approval, implementation and outcome of each.", "filetype": "XLSX", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Software version archive", "description": "Evidence a copy of every software version is kept, with the integrity verification applied, such as hash checks.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Change rollback procedures", "description": "Rollback procedures defined for sampled changes.", "filetype": "PDF", "covers": [4], "collection_frequency": "on-change"},
+      {"name": "Pre-production change test results", "description": "Results of testing sampled changes in a test environment before they were moved to production.", "filetype": "PDF", "covers": [5], "collection_frequency": "on-change"},
+      {"name": "Change implementation planning", "description": "Plans for sampled changes showing the implementation was scheduled for the right time and the stakeholders were told.", "filetype": "PDF", "covers": [6], "collection_frequency": "on-change"}
+    ],
+    "T7.4.2": [
+      {"name": "Test data selection rules", "description": "Rules for selecting test data, using sample data sets and keeping classified and personal information out of development and test environments.", "filetype": "PDF", "covers": [1]},
+      {"name": "Production data copy authorizations", "description": "Authorization for each transfer of real data from the production environment to a test environment.", "filetype": "PDF", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Test environment access settings", "description": "Access control settings showing test environments that hold copies of operational data are protected as the operational environment is.", "filetype": "PNG", "covers": [2]},
+      {"name": "Test data erasure records", "description": "Records that data was erased from test applications immediately after testing was completed.", "filetype": "PDF", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Test data movement log", "description": "Log of every copy and erasure of data between the production and test environments.", "filetype": "LOG", "covers": [4], "collection_frequency": "on-change"}
+    ],
+    "T7.4.3": [
+      {"name": "Security testing requirements", "description": "Defined requirements for testing the security of new and updated systems before they go live, such as security functions, secure coding and secure configurations.", "filetype": "PDF", "covers": [1]},
+      {"name": "Acceptance parameters for security tests", "description": "Acceptable parameters for each testing requirement, such as pass thresholds.", "filetype": "PDF", "covers": [2]},
+      {"name": "Security test results", "description": "Documented results of the security tests carried out on sampled new or updated systems.", "filetype": "PDF", "covers": [3], "collection_frequency": "on-change"},
+      {"name": "Test completion responsibility assignment", "description": "Formal assignment of responsibility for ensuring security tests are completed before systems are accepted, with the sign-off on sampled acceptances.", "filetype": "PDF", "covers": [4]}
+    ],
+    "T8.1.1": [
+      {"name": "Approved incident management policy", "description": "Documented policy, approved by management, that outlines the roles and responsibilities for incident management and provides the framework for managing incidents, including classification and handling requirements.", "filetype": "PDF", "covers": [1, 2]},
+      {"name": "Incident handling and reporting requirements", "description": "Register of the Emirate, sector and national requirements for handling and reporting incidents, with the policy provision that addresses each.", "filetype": "XLSX", "covers": [3]},
+      {"name": "Incident management policy approval record", "description": "Sign-off showing the policy was approved and which version is in force.", "filetype": "PDF", "covers": [1, 2, 3]}
+    ],
+    "T8.1.2": [
+      {"name": "Event reporting procedure", "description": "Procedure and mechanism for reporting observed or suspected information security events, with the point of contact, designed to be easy to use and always available.", "filetype": "PDF", "covers": [2]},
+      {"name": "Event reporting awareness records", "description": "Evidence employees, contractors and third parties were made aware of their responsibility to report events as quickly as possible, such as awareness material and induction content.", "filetype": "EML", "covers": [1]},
+      {"name": "Reporting channel evidence", "description": "Screenshot or published contact details of the reporting channel, such as a hotline, mailbox or portal, showing the point of contact is accessible.", "filetype": "PNG", "covers": [2]},
+      {"name": "Reported event records", "description": "Sample of events reported through the mechanism, showing it is used and the events reach the point of contact.", "filetype": "XLSX", "covers": [1, 2], "collection_frequency": "on-change"}
+    ],
+    "T8.2.1": [
+      {"name": "Incident response plan", "description": "Plan describing the structure of the incident response capability and the processes and procedures for handling incidents before, during and after an incident.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident communication plan", "description": "Plan for communicating with internal and external parties during an incident.", "filetype": "PDF", "covers": [2]},
+      {"name": "Senior management approval of response plans", "description": "Sign-off by senior management of the incident response plan and all related plans and procedures.", "filetype": "PDF", "covers": [3]},
+      {"name": "Incident response resources and capabilities", "description": "Definition of the resources and capabilities required for incident response and the management support needed to maintain them.", "filetype": "PDF", "covers": [4]},
+      {"name": "Incident Response Team establishment", "description": "Charter or appointment records establishing the Incident Response Team, with its members, roles and contact details.", "filetype": "PDF", "covers": [5]}
+    ],
+    "T8.2.2": [
+      {"name": "Incident classification and prioritization scheme", "description": "Documented scheme for classifying and prioritizing incidents by impact, in line with the incident management policy and the CSC issuances on incident management.", "filetype": "PDF", "covers": [1]},
+      {"name": "National agency reporting criteria", "description": "Criteria identifying the incidents that must be reported to national agencies under Emirate, sector and national requirements, with the notification times by incident level.", "filetype": "PDF", "covers": [2]},
+      {"name": "Classified incident records", "description": "Sample incident records showing the classification and priority assigned and the decision on whether to report to national agencies.", "filetype": "XLSX", "covers": [1, 2], "collection_frequency": "on-change"}
+    ],
+    "T8.2.3": [
+      {"name": "Incident response training needs analysis", "description": "Analysis identifying the training, qualifications and ongoing professional development required for incident response personnel.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident response training program", "description": "Training program for the Incident Response Team, in line with the awareness and training policy and tailored to the audience, from end users to responders.", "filetype": "PDF", "covers": [2]},
+      {"name": "Incident response training records", "description": "Attendance, completion and qualification records for incident response personnel.", "filetype": "XLSX", "covers": [1, 2]}
+    ],
+    "T8.2.4": [
+      {"name": "Incident response test procedures and cases", "description": "Testing procedures and test cases, such as checklists, tabletop and functional exercises, that validate the effectiveness of the incident response capability.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident response test reports", "description": "Reports of the exercises carried out, comparing the outcome with the expected results and listing the gaps and weaknesses found.", "filetype": "PDF", "covers": [2]},
+      {"name": "Test findings remediation tracker", "description": "Tracker of the actions to remediate the gaps and weaknesses found in testing, with owner and status.", "filetype": "XLSX", "covers": [2]}
+    ],
+    "T8.2.5": [
+      {"name": "Incident data collection requirements", "description": "Definition of the data to be collected before, during and after an incident, such as the incident status and the information needed for forensics.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident documentation records", "description": "Documentation for every security incident, with its status and the relevant data collected.", "filetype": "XLSX", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Incident documentation protection", "description": "Access controls and storage protections applied to incident documentation.", "filetype": "PNG", "covers": [3]}
+    ],
+    "T8.2.6": [
+      {"name": "Post-incident reports", "description": "Report on each incident covering its impact and damage assessment, the mitigating measures, the deficiencies identified and confirmation that the incident is closed.", "filetype": "PDF", "covers": [1], "collection_frequency": "on-change"},
+      {"name": "Lessons learned records", "description": "Lessons learned from incidents, with any additional controls identified to avoid similar incidents.", "filetype": "PDF", "covers": [2]},
+      {"name": "Incident trend analysis", "description": "Quantification and monitoring of the types, volumes, costs and impacts of incidents, used to find recurring or high-impact incidents and to inform risk assessment.", "filetype": "XLSX", "covers": [2]}
+    ],
+    "T8.2.7": [
+      {"name": "Jurisdictional evidence requirements", "description": "Record of the requirements of the applicable jurisdictions for handling evidence.", "filetype": "PDF", "covers": [1]},
+      {"name": "Evidence collection procedure", "description": "Procedure for identification, collection, acquisition and preservation of evidence, covering chain of custody, safety of evidence and of personnel, roles, competence, documentation and briefing.", "filetype": "PDF", "covers": [2]},
+      {"name": "Chain of custody records", "description": "Chain-of-custody forms for sampled items of evidence.", "filetype": "PDF", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "Evidence handler competence records", "description": "Records showing the personnel who collect evidence are competent for the task.", "filetype": "PDF", "covers": [2]}
+    ],
+    "T9.1.1": [
+      {"name": "Continuity objectives and ICT requirements", "description": "The business continuity objectives and ICT continuity requirements on which ICT readiness is planned.", "filetype": "PDF", "covers": [3]},
+      {"name": "ICT continuity organizational structure", "description": "Description of the organizational structure that prepares for, mitigates and responds to ICT service disruptions.", "filetype": "PDF", "covers": [1]},
+      {"name": "Continuity roles and competence records", "description": "Role assignments showing the personnel in that structure have the necessary responsibility, authority and competence.", "filetype": "PDF", "covers": [2]},
+      {"name": "ICT continuity plans", "description": "Plans, including response and recovery procedures, for managing an ICT service disruption.", "filetype": "PDF", "covers": [3]}
+    ],
+    "T9.1.2": [
+      {"name": "Security controls in continuity plans", "description": "Business continuity and ICT continuity plans showing the information security controls, supporting systems and tools they include.", "filetype": "PDF", "covers": [1]},
+      {"name": "Disruption security maintenance procedures", "description": "Procedures for keeping existing information security controls in operation during a disruption.", "filetype": "PDF", "covers": [2]},
+      {"name": "Compensating controls register", "description": "Register of the information security controls that cannot be maintained during disruption, with the compensating control for each.", "filetype": "XLSX", "covers": [3]}
+    ],
+    "T9.2.1": [
+      {"name": "Continuity plan test schedule", "description": "Schedule showing how and when each element of the information systems continuity plans is tested.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Continuity plan test reports", "description": "Reports of continuity tests, such as table-top and simulation exercises, showing the effectiveness of the plan and the readiness of the organization to carry it out.", "filetype": "PDF", "covers": [1]},
+      {"name": "Continuity lessons learned and plan updates", "description": "Lessons learned from the tests and the updates made to keep the continuity plans up to date.", "filetype": "PDF", "covers": [2]}
+    ]
+  }
+}
