@@ -3,20 +3,23 @@
 export const dynamic = 'force-dynamic';
 
 /**
- * The AI Studio workspace for one document: the document (rich editor, read-only view, Markdown source, or a redline) beside
+ * The Comply AI Studio workspace for one document: the document (rich editor, read-only view, Markdown source, or a redline) beside
  * the assistant (chat, references, instructions, checks, versions). Your typing is saved as you go; nothing the AI proposes
- * is written into the document until you accept it.
+ * is written into the document until you accept it. Labels, not sentences: a status is a few words and its tooltip, what a banner
+ * used to explain is an (i) (only a consequence a person could miss stays as a line).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, Archive, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Info, Library, ListChecks, Loader2,
+  AlertTriangle, Archive, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
   MessageSquare, Pencil, Save, Send, Settings2, Sparkles, Square, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY, BTN_TEXT } from '@/components/governance/docUi';
 import { isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
 import { ARCHIVED_NOTE, acceptedLine, ago, countPlaceholders, countWords, maySaveToLibrary, num, plural } from '@/lib/studio/text';
 import { proposalHref, sendLabel, sessionProposal } from '@/lib/proposals';
@@ -155,7 +158,7 @@ export default function StudioWorkspacePage() {
       saved.current = fresh.content ?? '';
       qc.setQueryData(['studio', 'session', id], { ...fresh, content: latest.current });
       await doSave();
-      toast({ title: 'Your version was saved over the other one', type: 'success' });
+      toast({ title: 'Your version was kept', type: 'success' });
     } catch (e) { toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); }
   };
 
@@ -203,7 +206,7 @@ export default function StudioWorkspacePage() {
       qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: [...(old?.items ?? []), mine, m] }));
       qc.invalidateQueries({ queryKey: ['studio', 'messages', id] });
     } catch (e) {
-      toast({ title: answers ? 'Your answers were not sent' : 'The request was not sent', message: problemOf(e), type: 'error' });
+      toast({ title: answers ? 'Answers not sent' : 'Request not sent', message: problemOf(e), type: 'error' });
     }
   };
   const answer = (messageId: number, items: AnswerItem[], decide: boolean) => send('', { reply_to: messageId, answers: items, decide });
@@ -215,7 +218,7 @@ export default function StudioWorkspacePage() {
     try {
       setMessage(await studioApi.stop(id, m.id));
     } catch (e) {
-      toast({ title: 'Could not stop it', message: problemOf(e), type: 'error' });      // it may have just finished: the conversation shows it
+      toast({ title: 'Could not stop', message: problemOf(e), type: 'error' });      // it may have just finished: the conversation shows it
     } finally {
       setStopping(false);
       qc.invalidateQueries({ queryKey: ['studio', 'messages', id] });
@@ -241,7 +244,7 @@ export default function StudioWorkspacePage() {
       applyServerContent(r.content, r.revision);
       setMessage(r.message);
       setCompare((c) => (c?.type === 'preview' ? null : c));
-      if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after Comply Agent read it. Ask again, or make the change yourself.', type: 'warning' });
+      if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text was edited after Comply Agent read it. Ask again, or edit it yourself.', type: 'warning' });
       if (r.accepted) {
         // an accept stays in the studio (the user, 2026-10-21): the bar's "not saved to the library yet" (applyServerContent marked
         // the session unsaved) leads to Save to the library, where the person chooses a minor or a major version
@@ -262,8 +265,8 @@ export default function StudioWorkspacePage() {
       qc.invalidateQueries({ queryKey: ['studio', 'changes', id] });
       const v = r.library_version;
       toast({ title: 'Change taken back', type: 'success',
-              message: v?.saved ? `Saved as version ${v.version}; the version before is kept in the history.`
-                : session?.document_id && maySaveToLibrary(session) ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
+              message: v?.saved ? `Saved as v${v.version}; the version before is kept.`
+                : session?.document_id && maySaveToLibrary(session) ? 'Taken back here; save to the library to make it the next version.' : 'Kept as a new revision, so nothing is lost.' });
       void onSessionChanged();
     } catch (e) { toast({ title: 'Could not take it back', message: problemOf(e), type: 'error' }); }
   };
@@ -396,7 +399,7 @@ export default function StudioWorkspacePage() {
   const rename = async (title: string) => {
     if (!session || !title.trim() || title === session.title) return;
     try { const s = await studioApi.patchSession(id, { title }); patchSessionCache({ title: s.title }); }
-    catch (e) { toast({ title: 'Could not rename it', message: problemOf(e), type: 'error' }); }
+    catch (e) { toast({ title: 'Could not rename', message: problemOf(e), type: 'error' }); }
   };
 
   const words = useMemo(() => countWords(text), [text]);
@@ -411,13 +414,20 @@ export default function StudioWorkspacePage() {
   // ── gates ──────────────────────────────────────────────────────────────────
   if (status.isLoading || sessionQuery.isLoading) return <PageLoader />;
   if (status.data && !status.data.enabled) {
-    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The Comply AI Studio is not enabled for your organisation.</p>;
+    return (
+      <div className="mx-auto flex max-w-sm flex-col items-center gap-3 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center">
+        <Sparkles className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+        <p className="text-[15px] font-semibold text-[#1f2933]">Comply AI Studio is not enabled</p>
+        <Link href="/governance/documents" className={BTN}>Back to documents</Link>
+      </div>
+    );
   }
   if (sessionQuery.isError || !session) {
     return (
-      <div className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">
-        <p>{problemOf(sessionQuery.error, 'This document could not be opened.')}</p>
-        <Link href="/governance/documents/studio" className="mt-2 inline-block font-semibold text-[#0b6b58] underline">Back to the Comply AI Studio</Link>
+      <div className="mx-auto flex max-w-sm flex-col items-center gap-3 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center">
+        <AlertTriangle className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+        <p className="text-[15px] font-semibold text-[#1f2933]">{problemOf(sessionQuery.error, 'Could not open this document')}</p>
+        <Link href="/governance/documents/studio" className={BTN} title="Back to the Comply AI Studio">Back to Studio</Link>
       </div>
     );
   }
@@ -439,28 +449,27 @@ export default function StudioWorkspacePage() {
   const pendingCount = items.reduce((n, m) => n + (m.proposal?.ops ?? []).filter((o) => o.status === 'pending').length, 0);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
-  const saveLabel = { saved: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', conflict: 'Not saved', error: 'Not saved' }[saveState];
+  const saveLabel = { saved: 'Saved', dirty: 'Unsaved', saving: 'Saving…', conflict: 'Not saved', error: 'Not saved' }[saveState];
   const proposes = inLibrary && proposalRole.proposes;
   const decider = proposalRole.decider;
 
   return (
     // the whole page under the top bar (3rem): the margins cancel the page's own padding (14px, 16px from lg in compact density)
     <div className="-m-[14px] flex h-[calc(100vh-3rem)] min-h-[560px] flex-col bg-[#f4f6f8] lg:-m-4" data-testid="studio-workspace">
-      {/* top bar */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#d5dbe1] bg-white px-3 py-2 sm:px-4">
-        <Link href="/governance/documents/studio" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]" aria-label="Back to the Comply AI Studio"><ArrowLeft className="h-4 w-4" /> Studio</Link>
+      {/* top bar: the actions as labels; every status is a few words, its long form is the tooltip */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#d5dbe1] bg-[#fff] px-3 py-2 sm:px-4">
+        <Link href="/governance/documents/studio" className={`${BTN_TEXT} inline-flex items-center gap-1`} aria-label="Back to the Comply AI Studio" title="Back to the Comply AI Studio"><ArrowLeft className="h-4 w-4" aria-hidden /> Studio</Link>
         <input
           defaultValue={session.title}
           key={session.title}
           onBlur={(e) => rename(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           aria-label="Document title"
-          className="min-w-[10rem] max-w-[28rem] flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-[#1f2933] hover:border-[#c5ccd3] focus:border-[#0f766e] focus:bg-white focus:outline-none"
+          className="min-w-[10rem] max-w-[28rem] flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-[#1f2933] hover:border-[#c5ccd3] focus:border-[#0f766e] focus:bg-[#fff] focus:outline-none"
         />
-        <button type="button" onClick={() => setDialog('details')}
-          title={inLibrary ? 'The document’s details: title, type, owner, classification, review cycle and dates, frameworks, description, reviewers and approvers' : 'Its title and type; the other details are asked when it moves to the library'}
-          className="inline-flex items-center gap-1 rounded-md border border-[#c5ccd3] bg-white px-2 py-1 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]">
-          <Info className="h-3.5 w-3.5" /> {maySave ? 'Edit details' : 'Details'}
+        <button type="button" onClick={() => setDialog('details')} className={BTN}
+          title={inLibrary ? 'Title, type, owner, classification, review cycle, frameworks, reviewers and approvers' : 'Title and type; the rest is asked when it moves to the library'}>
+          {maySave ? 'Edit details' : 'Details'}
         </button>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#586472]" role="status" aria-live="polite">
           <span className={`inline-flex items-center gap-1 font-medium ${saveState === 'saved' ? 'text-[#0a5a38]' : saveState === 'conflict' || saveState === 'error' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
@@ -468,146 +477,166 @@ export default function StudioWorkspacePage() {
           </span>
           <span title="The studio's revision of this text (each save and each accepted change is one)">rev {session.revision}</span>
           <span>{plural(words, 'word')}</span>
-          {placeholders > 0 && <button type="button" onClick={nextPlaceholder} className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')} to fill in</button>}
+          {placeholders > 0 && <button type="button" onClick={nextPlaceholder} title="Go to the next placeholder to fill in" className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')}</button>}
           {inLibrary ? (
             <>
               <Link href={`/governance/documents/${session.document_id}`} onClick={() => void flush()} title="Open the document in the library: its newest version, with its changes marked"
-                className="inline-flex items-center gap-1 text-[#0b6b58] hover:underline"><Library className="h-3.5 w-3.5" /> In the library{session.document_version ? `, version ${session.document_version}` : ''}</Link>
+                className="inline-flex items-center gap-1 text-[#0f766e] hover:underline"><Library className="h-3.5 w-3.5" /> Library{session.document_version ? ` v${session.document_version}` : ''}</Link>
               {session.unsaved_in_library && maySave && (
                 <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} title="Saved here in the studio; the library still holds the version before"
-                  className="font-semibold text-[#8a6100] hover:underline">{proposes ? `Changes not in the library yet · ${sendLabel(decider)}` : 'Changes not saved to the library yet · Save to the library'}</button>
+                  className="font-semibold text-[#8a6100] hover:underline">Changes not in library</button>
               )}
             </>
-          ) : <span>Not in the library yet</span>}
-          {session.source?.in_place && <span title="Your Word file is edited in place: only your changes are written into it, so its fonts, styles, header and footer stay" className="inline-flex items-center gap-1 rounded-full bg-[#e3f1f1] px-2 py-0.5 font-medium text-[#0f4c5c]"><FileText className="h-3.5 w-3.5" /> Word file kept</span>}
+          ) : <span>Not in library</span>}
+          {session.source?.in_place && <span title="Your Word file is edited in place: only your changes are written into it, so its fonts, styles, header and footer stay" className="inline-flex items-center gap-1 rounded-full bg-[#e6f4f1] px-2 py-0.5 font-medium text-[#0f766e]"><FileText className="h-3.5 w-3.5" /> Word file kept</span>}
           {session.source?.kind === 'pdf' && <span title="A PDF cannot be edited: what you save is a Word copy built from its text" className="inline-flex items-center gap-1 rounded-full bg-[#eef1f4] px-2 py-0.5 font-medium text-[#3f4b58]"><FileText className="h-3.5 w-3.5" /> Read from a PDF</span>}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <div className="inline-flex rounded-lg border border-[#c5ccd3] bg-white p-0.5" role="group" aria-label="Edit or view the document">
+          <div className="inline-flex h-9 items-center rounded-lg border border-[#c3ccd5] bg-[#fff] p-[3px]" role="group" aria-label="Edit or view the document">
             {switchButtons(session.source, maySave).map((b) => {
               const Icon = b.key === 'edit' ? Pencil : Eye;
               return (
                 <button key={b.key} type="button" aria-pressed={shownView === b.key} title={b.title} onClick={() => void show(b.key)}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${shownView === b.key ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
+                  className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-sm font-medium ${shownView === b.key ? 'bg-[#0f766e] text-[#fff]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
                   <Icon className="h-3.5 w-3.5" aria-hidden /> {b.label}
                 </button>
               );
             })}
           </div>
-          <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the version in force (or the original, until the document is published), marked in the document, and who made each"
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${tracking ? 'border-[#0f4c5c] bg-[#0f4c5c] text-white' : 'border-[#b8c4c8] bg-white text-[#26323d] hover:bg-[#f1f3f5]'}`}>
-            <GitCompare className="h-3.5 w-3.5" /> Tracked changes
+          <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="Every change since the version in force (or the original, until the document is published), marked in the document, with who made each"
+            className={`${BTN} ${tracking ? '!border-[#0f766e] !bg-[#0f766e] !text-[#fff] hover:!bg-[#115e59]' : ''}`}>
+            <GitCompare className="h-3.5 w-3.5" aria-hidden /> Tracked changes
           </button>
-          <button type="button" onClick={() => setDialog('export')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]"><Download className="h-3.5 w-3.5" /> Export</button>
+          <button type="button" onClick={() => setDialog('export')} className={BTN}><Download className="h-3.5 w-3.5" aria-hidden /> Export</button>
           {/* everything is in the library already (saved with Save to the library): nothing to save until the text changes */}
           {!maySave ? null : inLibrary && session.unsaved_in_library === false && saveState === 'saved' ? (
             <span title={`Every change is saved in the library${session.document_version ? `, in version ${session.document_version}` : ''}. Change the text and it can be saved again.`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#b9dccb] bg-[#eef8f3] px-2.5 py-1.5 text-xs font-semibold text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved in the library</span>
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#b9dccb] bg-[#eef8f3] px-3 text-sm font-medium text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved in library</span>
           ) : inLibrary ? (
-            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"
+            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className={BTN_PRIMARY}
               title={proposes ? `${decider} accepts or rejects your changes; the library does not change until then` : undefined}>
-              {proposes ? <><Send className="h-3.5 w-3.5" aria-hidden /> {sendLabel(decider)}</> : <><Save className="h-3.5 w-3.5" /> Save to the library</>}
+              {proposes ? <><Send className="h-3.5 w-3.5" aria-hidden /> {sendLabel(decider)}</> : <><Save className="h-3.5 w-3.5" aria-hidden /> Save to library</>}
             </button>
           ) : (
-            <button type="button" onClick={() => setDialog('move')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Library className="h-3.5 w-3.5" /> Move to the library</button>
+            <button type="button" onClick={() => setDialog('move')} className={BTN_PRIMARY}><Library className="h-3.5 w-3.5" aria-hidden /> Move to library</button>
           )}
           <details className="relative">
-            <summary className="flex cursor-pointer list-none items-center gap-0.5 rounded-lg border border-[#b8c4c8] bg-white px-2 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]" aria-label="More">More <ChevronDown className="h-3.5 w-3.5" /></summary>
-            <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[#d5dbe1] bg-white py-1 shadow-lg">
-              <button type="button" onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; setDialog('template'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[#26323d] hover:bg-[#f1f3f5]"><FilePlus2 className="h-4 w-4" /> Save as a template…</button>
+            <summary className={`${BTN} cursor-pointer list-none [&::-webkit-details-marker]:hidden`} aria-label="More">More <ChevronDown className="h-3.5 w-3.5" aria-hidden /></summary>
+            <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-[#d5dbe1] bg-[#fff] p-1 shadow-lg">
+              <button type="button" onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; setDialog('template'); }} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#26323d] hover:bg-[#f3f6f8]"><FilePlus2 className="h-4 w-4" aria-hidden /> Save as a template…</button>
             </div>
           </details>
         </div>
       </div>
 
       {!maySave && (
-        <div className="flex items-center gap-2 border-b border-[#d5dbe1] bg-[#f3f6f8] px-4 py-1.5 text-xs text-[#3f4b58]" role="status">
+        <div className="flex items-center gap-2 border-b border-[#d5dbe1] bg-[#f3f6f8] px-4 py-1.5 text-[13px] text-[#3f4b58]" role="status">
           {archived ? <Archive className="h-4 w-4 shrink-0" aria-hidden /> : <Eye className="h-4 w-4 shrink-0" aria-hidden />}
           {archived ? (
-            <span>{ARCHIVED_NOTE} <Link href={`/governance/documents/${session.document_id}`} className="font-semibold text-[#0b6b58] underline">Open the document</Link></span>
-          ) : <span>You can compare and try changes here; only the document’s owner, author or editors can save them to the library.</span>}
+            <span>
+              <span className="font-semibold text-[#1f2933]">Archived</span> · not saved to the library
+              <InfoTip className="ml-1" label="About archived documents" text={ARCHIVED_NOTE} />
+              {' '}<Link href={`/governance/documents/${session.document_id}`} className="font-semibold text-[#0f766e] underline">Open document</Link>
+            </span>
+          ) : (
+            <span>
+              <span className="font-semibold text-[#1f2933]">Read only</span>
+              <InfoTip className="ml-1" label="About read-only access" text="You can compare and try changes here; only the document’s owner, author or editors can save them to the library." />
+            </span>
+          )}
         </div>
       )}
 
       {/* the changes sent from here to the owner: waiting for the decision, or not accepted (the note, and Propose again) */}
       {sent && session.document_id && (
-        <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-1.5 text-xs ${sent.status === 'rejected' ? 'border-rose-200 bg-rose-50 text-[#7a1616]' : 'border-amber-200 bg-amber-50 text-amber-950'}`} role="status">
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-1.5 text-[13px] ${sent.status === 'rejected' ? 'border-rose-200 bg-rose-50 text-[#7a1616]' : 'border-amber-200 bg-amber-50 text-amber-950'}`} role="status">
           <Send className="h-4 w-4 shrink-0" aria-hidden />
           <span className="min-w-0 flex-1">
             {sent.status === 'rejected'
-              ? <><span className="font-semibold">{sent.decided_by?.name || decider} did not accept your changes</span>{sent.decision_note ? `: “${sent.decision_note}”` : '.'} Change them here and propose them again.</>
-              : <><span className="font-semibold">Waiting for {decider}&apos;s decision</span> on the changes you sent{sent.proposed_at ? ` ${ago(sent.proposed_at)}` : ''}. The library does not change until then.</>}
+              ? <><span className="font-semibold">{sent.decided_by?.name || decider} did not accept your changes</span>{sent.decision_note ? `: “${sent.decision_note}”` : ''}</>
+              : <>
+                  <span className="font-semibold">Waiting for {decider}&apos;s decision</span>{sent.proposed_at ? ` · sent ${ago(sent.proposed_at)}` : ''}
+                  <InfoTip className="ml-1" label="About waiting" text="The library does not change until then." />
+                </>}
           </span>
           {sent.status === 'rejected' && maySave && (
-            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="rounded-md bg-white px-2.5 py-1 font-semibold text-[#7a1616] ring-1 ring-rose-200 hover:bg-rose-100">Propose again</button>
+            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="rounded-md bg-[#fff] px-2.5 py-1 text-xs font-semibold text-[#7a1616] ring-1 ring-rose-200 hover:bg-rose-100" title="Change them here, then propose them again">Propose again</button>
           )}
           <Link href={proposalHref(session.document_id, sent.id)} className="font-semibold underline">See it</Link>
         </div>
       )}
 
       {(saveState === 'conflict' || saveState === 'error') && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-[#f1b5b5] bg-[#fdf3f3] px-4 py-2 text-sm text-[#8a1c1c]" role="alert">
+        <div className="flex flex-wrap items-center gap-3 border-b border-[#f1b5b5] bg-[#fdf3f3] px-4 py-2 text-[13px] text-[#8a1c1c]" role="alert">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{saveState === 'conflict' ? 'This document changed in another window, or a Comply Agent change was accepted there. Your latest typing is not saved yet.' : 'Your latest typing could not be saved.'}</span>
-          {saveState === 'conflict' && <button type="button" onClick={() => reload()} className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#8a1c1c] ring-1 ring-[#f1b5b5] hover:bg-[#fdf3f3]">Load the latest (lose my typing)</button>}
-          {saveState === 'conflict' && <button type="button" onClick={keepMine} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#7f1616]">Keep mine</button>}
-          {saveState === 'error' && <button type="button" onClick={() => flush()} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#7f1616]">Try again</button>}
+          <span className="min-w-0 flex-1">
+            {saveState === 'conflict' ? 'This document changed elsewhere. Your latest typing is not saved.' : 'Your latest typing could not be saved.'}
+            {saveState === 'conflict' && <InfoTip className="ml-1" label="What happened" text="It was changed in another window, or a Comply Agent change was accepted there." />}
+          </span>
+          {saveState === 'conflict' && <button type="button" onClick={() => reload()} className="rounded-md bg-[#fff] px-2.5 py-1 text-xs font-semibold text-[#8a1c1c] ring-1 ring-[#f1b5b5] hover:bg-[#fdf3f3]">Load latest (lose my typing)</button>}
+          {saveState === 'conflict' && <button type="button" onClick={keepMine} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-[#fff] hover:bg-[#7f1616]">Keep mine</button>}
+          {saveState === 'error' && <button type="button" onClick={() => flush()} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-[#fff] hover:bg-[#7f1616]">Try again</button>}
         </div>
       )}
 
       {/* a narrow screen shows one of the two sides */}
-      <div className="flex border-b border-[#d5dbe1] bg-white lg:hidden" role="tablist" aria-label="Show">
+      <div className="flex border-b border-[#d5dbe1] bg-[#fff] lg:hidden" role="tablist" aria-label="Show">
         {(['document', 'assistant'] as const).map((p) => (
-          <button key={p} role="tab" aria-selected={pane === p} type="button" onClick={() => setPane(p)} className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold ${pane === p ? 'border-[#0f766e] text-[#0b6b58]' : 'border-transparent text-[#586472]'}`}>{p === 'document' ? 'Document' : 'Assistant'}</button>
+          <button key={p} role="tab" aria-selected={pane === p} type="button" onClick={() => setPane(p)} className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold ${pane === p ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472]'}`}>{p === 'document' ? 'Document' : 'Assistant'}</button>
         ))}
       </div>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_29rem]">
         <section className={`min-h-0 min-w-0 ${pane === 'document' ? 'flex' : 'hidden'} flex-col lg:flex`} aria-label="Document">
           {proposal && proposalOps.length > 0 && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-xs text-[#0b4f46]" role="region" aria-label="Proposed changes">
-              <Sparkles className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-[13px] text-[#0b4f46]" role="region" aria-label="Proposed changes">
+              <Sparkles className="h-4 w-4 shrink-0 text-[#0f766e]" aria-hidden />
               <span className="min-w-0 flex-1">
                 <span className="font-semibold">Comply Agent proposes {plural(proposalOps.length, 'change')}</span>
                 {pendingAdded || pendingRemoved ? <> · +{num(pendingAdded)} / −{num(pendingRemoved)} words</> : null}
-                {previewing === proposal.id ? ' · nothing changes until you accept' : ''}
+                {previewing === proposal.id ? <span title="Nothing changes until you accept"> · preview only</span> : null}
               </span>
               {(proposal.proposal?.ops ?? []).some((o) => o.status === 'pending' && o.kind !== 'tidy') && (
                 <button type="button" onClick={() => setCompare(previewing === proposal.id ? null : { type: 'preview', messageId: proposal.id })}
-                  className="inline-flex items-center gap-1 rounded-md border border-[#9fd9bd] bg-white px-2 py-1 font-semibold text-[#0b6b58] hover:bg-[#f3fbf6]">
-                  {previewing === proposal.id ? <><EyeOff className="h-3.5 w-3.5" /> Hide preview</> : <><Eye className="h-3.5 w-3.5" /> Preview in document</>}
+                  title={previewing === proposal.id ? 'Hide the preview' : 'Preview the changes in the document'}
+                  className="inline-flex items-center gap-1 rounded-md border border-[#9fd9bd] bg-[#fff] px-2 py-1 text-xs font-semibold text-[#0f766e] hover:bg-[#f3fbf6]">
+                  {previewing === proposal.id ? <><EyeOff className="h-3.5 w-3.5" /> Hide preview</> : <><Eye className="h-3.5 w-3.5" /> Preview</>}
                 </button>
               )}
               <button type="button" onClick={() => decideAll('accept')} disabled={!!bulk}
-                className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-60">
+                className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 text-xs font-semibold text-[#fff] hover:bg-[#115e59] disabled:opacity-60">
                 {bulk === 'accept' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Accept all
               </button>
               <button type="button" onClick={() => decideAll('reject')} disabled={!!bulk}
-                className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2 py-1 font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-60">
+                className="inline-flex items-center gap-1 rounded-md border border-[#c3ccd5] bg-[#fff] px-2 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#f3f6f8] disabled:opacity-60">
                 {bulk === 'reject' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Reject all
               </button>
             </div>
           )}
           {writing && !compare && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-xs text-[#0b4f46]" role="status" aria-label="Comply Agent is writing">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#0b6b58]" aria-hidden />
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-[13px] text-[#0b4f46]" role="status" aria-label="Comply Agent is writing">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#0f766e]" aria-hidden />
               <span className="min-w-0 flex-1">
-                <span className="font-semibold">Comply Agent is writing the document</span>
+                <span className="font-semibold">Comply Agent is writing</span>
                 {draftParts.length > 0 && <> · {draftParts.filter((p) => p.state === 'done' || p.state === 'failed').length} of {draftParts.length} parts</>}
-                {' · '}read it as it is written; you can edit it once it is finished
+                <span title="Read it as it is written; you can edit it once it is finished"> · read-only until finished</span>
               </span>
               <button type="button" onClick={stop} disabled={stopping}
-                className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2 py-1 font-semibold text-[#8a1c1c] hover:bg-[#fdf3f3] disabled:opacity-60">
+                className="inline-flex items-center gap-1 rounded-md border border-[#c3ccd5] bg-[#fff] px-2 py-1 text-xs font-semibold text-[#8a1c1c] hover:bg-[#fdf3f3] disabled:opacity-60">
                 {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3 w-3 fill-current" />} Stop
               </button>
             </div>
           )}
           {justAccepted && !compare && (
-            <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
+            <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-[13px] text-[#0a5a38]" role="status">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1">{justAccepted.line}</span>
-              <button type="button" onClick={() => { setJustAccepted(null); showChanges(justAccepted); }} className="font-semibold underline">Show {justAccepted.n === 1 ? 'it' : 'them'} marked in the document</button>
-              <button type="button" onClick={() => setJustAccepted(null)} aria-label="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
+              <span className="min-w-0 flex-1">
+                {plural(justAccepted.n, 'change')} accepted
+                {/* for a library document, where they are now (the line says it; for a document not in the library it adds nothing) */}
+                {session.document_id ? <InfoTip className="ml-1" label="About accepted changes" text={justAccepted.line} /> : null}
+              </span>
+              <button type="button" onClick={() => { setJustAccepted(null); showChanges(justAccepted); }} className="text-xs font-semibold underline" title={`Show ${justAccepted.n === 1 ? 'it' : 'them'} marked in the document`}>Show in document</button>
+              <button type="button" onClick={() => setJustAccepted(null)} aria-label="Dismiss" title="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
           <div className="min-h-0 flex-1">
@@ -624,15 +653,15 @@ export default function StudioWorkspacePage() {
           </div>
         </section>
         <aside className={`flex min-h-0 min-w-0 flex-col border-l border-[#d5dbe1] bg-[#f8fafb] ${pane === 'assistant' ? 'flex' : 'hidden'} lg:flex`} aria-label="Assistant">
-          <div className="flex border-b border-[#d5dbe1] bg-white" role="tablist" aria-label="Assistant sections">
+          <div className="flex border-b border-[#d5dbe1] bg-[#fff]" role="tablist" aria-label="Assistant sections">
             {TABS.map((t) => {
               const badge = t.key === 'chat' ? (working ? '…' : pendingCount || '') : t.key === 'checks' ? (errorCount + warnCount || '') : t.key === 'references' ? (session.references.length || '') : '';
               return (
                 <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" onClick={() => setTab(t.key)}
-                  className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 border-b-2 px-1 py-2 text-[11px] font-semibold ${tab === t.key ? 'border-[#0f766e] text-[#0b6b58]' : 'border-transparent text-[#586472] hover:text-[#26323d]'}`}>
+                  className={`relative flex min-w-0 flex-1 flex-col items-center gap-0.5 border-b-2 px-1 py-2 text-xs font-semibold ${tab === t.key ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:text-[#26323d]'}`}>
                   <t.icon className="h-4 w-4" />
                   <span className="truncate">{t.label}</span>
-                  {badge !== '' && <span className="absolute right-1 top-1 min-w-[1.1rem] rounded-full bg-[#0f4c5c] px-1 text-center text-[10px] font-bold leading-4 text-white">{badge}</span>}
+                  {badge !== '' && <span className="absolute right-1 top-1 min-w-[1.1rem] rounded-full bg-[#0f766e] px-1 text-center text-[11px] font-bold leading-4 text-[#fff]">{badge}</span>}
                 </button>
               );
             })}
@@ -643,7 +672,7 @@ export default function StudioWorkspacePage() {
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
                 onSend={(t, files) => send(t, undefined, files)} onAnswer={answer} onReferencesChanged={onSessionChanged}
                 onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges} onStop={stop} stopping={stopping}
-                onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
+                onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />
             </div>
             {tab === 'references' && <ReferencesPanel session={session} onChanged={onSessionChanged} focusKey={focusRef} />}

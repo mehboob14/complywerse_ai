@@ -26,3 +26,14 @@ test('the composer button is named apart from the top bar quick ask, also called
   assert.ok(src.includes('aria-label="Send to Comply Agent"'));
   assert.ok(!src.includes('aria-label="Send"'));
 });
+
+test('the empty chat is one line and an (i), not four paragraphs (text diet, 2026-10-26)', () => {
+  assert.ok(src.includes('Ask Comply Agent to write or change this document.'));
+  assert.ok(src.includes("import { InfoTip } from '@/components/ui/InfoTip'"));
+  // what the paragraphs said is in the (i): the accept rule, the paperclip, References and Instructions
+  const note = src.slice(src.indexOf('label="About Comply Agent"'));
+  for (const kept of ['nothing is written into your document until you accept it', 'Attach any file with the paperclip', 'References', 'Instructions']) {
+    assert.ok(note.slice(0, 600).includes(kept), `missing from the (i): ${kept}`);
+  }
+  for (const gone of ['Tell Comply Agent what you want.', 'props.onOpenTab', 'onOpenTab:']) assert.ok(!src.includes(gone), `still in ChatPanel.tsx: ${gone}`);
+});

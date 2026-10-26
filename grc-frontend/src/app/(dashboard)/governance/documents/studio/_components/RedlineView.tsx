@@ -84,7 +84,7 @@ function Row({ row, number, focused }: { row: RedlineRow; number: number; focuse
     <div data-focus={focused ? '1' : undefined}
       className={`rounded-r px-3 py-1.5 text-[0.9375rem] leading-relaxed text-[#1f2933] ${BAR[row.status]} ${focused ? 'relative z-[1] !bg-[#e3f4ef] outline outline-2 outline-offset-2 outline-[#0f766e] shadow-[0_0_0_6px_rgba(15,118,110,0.12)]' : ''}`}>
       {(row.format_only || row.was || row.structure?.length) && (
-        <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#8a6100]">
+        <div className="mb-0.5 text-xs font-semibold text-[#8a6100]">
           {row.structure?.length ? row.structure.join(' · ')
             : row.was ? `Was ${row.was.kind.replace('_', ' ')}${row.was.kind === 'heading' ? ` ${row.was.level}` : ''}` : 'Formatting changed'}
         </div>
@@ -111,15 +111,15 @@ function SideBySide({ row, number, labels }: { row: RedlineRow; number: number; 
   const same = row.status === 'equal';
   const cell = (r: RedlineRow | null, label: string, hideOnPhone: boolean, missing: string) => (
     <div className={`min-w-0 ${hideOnPhone ? 'hidden sm:block' : ''}`}>
-      {!same && <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[#586472] sm:hidden">{label}</p>}
+      {!same && <p className="px-3 pt-1 text-xs font-semibold text-[#586472] sm:hidden">{label}</p>}
       {r ? <Row row={r} number={number} />
-        : <p className="h-full rounded-r border-l-4 border-dashed border-l-[#c5ccd3] bg-[#f8fafb] px-3 py-1.5 text-[11px] italic text-[#586472]">{missing}</p>}
+        : <p className="h-full rounded-r border-l-4 border-dashed border-l-[#c5ccd3] bg-[#f8fafb] px-3 py-1.5 text-xs italic text-[#586472]">{missing}</p>}
     </div>
   );
   return (
     <div className="grid gap-x-3 sm:grid-cols-2">
-      {cell(before, labels.before, false, 'New in the proposed text')}
-      {cell(after, labels.after, same, 'Removed in the proposed text')}
+      {cell(before, labels.before, false, 'Added')}
+      {cell(after, labels.after, same, 'Removed')}
     </div>
   );
 }
@@ -160,26 +160,26 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
         <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${look.node}`} aria-hidden><Icon className="h-3 w-3" /></span>
         <span className="min-w-0 truncate text-xs font-semibold text-[#1f2933]" title={hunk.section}>{hunk.section || 'Top of the document'}</span>
-        {shape ? <span className="rounded-full bg-[#fff8e6] px-2 py-0.5 text-[10px] font-semibold text-[#8a6100] ring-1 ring-inset ring-[#f0d9a0]">{shape}</span> : (
+        {shape ? <span className="rounded-full bg-[#fff8e6] px-2 py-0.5 text-[11px] font-semibold text-[#8a6100] ring-1 ring-inset ring-[#f0d9a0]">{shape}</span> : (
           <>
             <span className="font-mono font-semibold text-[#0a7a43]">+{hunk.words_added}</span>
             <span className="font-mono font-semibold text-[#b42318]">−{hunk.words_removed}</span>
           </>
         )}
-        {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[10px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
+        {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
         {!changes.readOnly && <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c5ccd3] bg-white px-2.5 py-1 font-semibold text-[#3f4b58] hover:border-[#d97706] hover:bg-[#fffbeb] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50">
+          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 py-1 font-semibold text-[#3f4b58] hover:border-[#d97706] hover:bg-[#fffbeb] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50">
           {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Undo2 className="h-3 w-3" aria-hidden />} Take back
         </button>}
       </div>
       {hunk.by
-        ? <div className="border-t border-[#eef2f6] bg-white px-3 py-2"><Attribution by={hunk.by} onShowSource={changes.onShowSource} /></div>
-        : <p className="border-t border-[#eef2f6] bg-white px-3 py-1.5 text-[11px] text-[#586472]">Changed since that version.</p>}
+        ? <div className="border-t border-[#e1e6eb] bg-[#fff] px-3 py-2"><Attribution by={hunk.by} onShowSource={changes.onShowSource} /></div>
+        : <p className="border-t border-[#e1e6eb] bg-[#fff] px-3 py-1.5 text-xs text-[#586472]">Changed since that version</p>}
     </div>
   );
 }
 
-export default function RedlineView({ rows, empty = 'Nothing changed.', changes, focus, sides }: {
+export default function RedlineView({ rows, empty = 'No changes', changes, focus, sides }: {
   rows: RedlineRow[]; empty?: string; changes?: RedlineChanges; focus?: Focus;
   /** two columns instead of one (a proposed change beside the library's text), named so */
   sides?: { before: string; after: string };
@@ -210,7 +210,7 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes,
   }, [rows, all, changed]);
 
   if (!rows.length || !changed) {
-    return <p className="rounded-lg border border-dashed border-[#c5ccd3] p-6 text-center text-sm text-[#586472]">{empty}</p>;
+    return <p className="rounded-lg border border-dashed border-[#c5ccd3] p-6 text-center text-[13px] text-[#586472]">{empty}</p>;
   }
   const out: React.ReactNode[] = [];
   let folded = 0;
@@ -224,7 +224,7 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes,
       const hunk = changes && row.hunk != null ? byId.get(row.hunk) : undefined;
       if (hunk && (i === 0 || rows[i - 1].hunk !== row.hunk || !shown[i - 1])) out.push(<ChangeHeader key={`h${i}`} hunk={hunk} changes={changes!} />);
       if (focused.has(i) && !focused.has(i - 1)) {
-        out.push(<p key={`fl${i}`} className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[#0b6b58]">The change you chose</p>);
+        out.push(<p key={`fl${i}`} className="mt-2 text-xs font-semibold text-[#0f766e]">Selected change</p>);
       }
       out.push(sides ? <SideBySide key={i} row={row} number={numbered[i]} labels={sides} /> : <Row key={i} row={row} number={numbered[i]} focused={focused.has(i)} />);
     } else {
@@ -235,8 +235,8 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes,
   return (
     <div className="space-y-1" ref={box}>
       <div className="flex justify-end">
-        <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-[#0b6b58] hover:underline">
-          {all ? 'Show only what changed' : 'Show the whole document'}
+        <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-[#0f766e] hover:underline">
+          {all ? 'Show changes only' : 'Show whole document'}
         </button>
       </div>
       {sides && (

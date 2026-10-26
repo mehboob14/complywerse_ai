@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Star, Trash2, Upload } from 'lucide-react';
 import { problemOf, studioApi, type LogoPosition, type Session } from '@/lib/studio/api';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import AssetImage from './AssetImage';
 import { Field, One, SavedState, Section, SetupFields, setupInputClass, useInstructionsDraft } from './SetupFields';
@@ -86,38 +87,41 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
   const language = LANGUAGES.find((l) => l.value === draft.language);
 
   return (
-    <div className="h-full space-y-2 overflow-y-auto p-3">
+    <div className="h-full space-y-3 overflow-y-auto p-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[#1f2933]" title="Comply Agent follows these in every answer, and the checks verify them.">Instructions</h3>
+        <div className="flex items-center gap-1">
+          <h3 className="text-[15px] font-semibold text-[#1f2933]">Instructions</h3>
+          <InfoTip label="About the instructions" text="Comply Agent follows these in every answer, and the checks verify them." />
+        </div>
         <SavedState saved={saved} />
       </div>
 
       <SetupFields session={session} draft={draft} change={change} onReferencesChanged={onChanged} />
 
-      <Section title="Writing style" summary={[draft.tone, language?.label ?? draft.language, draft.focus_areas && 'focus set'].filter(Boolean).join(' · ')}>
+      <Section title="Style" summary={[draft.tone, language?.label ?? draft.language, draft.focus_areas && 'focus set'].filter(Boolean).join(' · ')}>
         <div className="grid gap-3 sm:grid-cols-2">
           <One label="Tone" value={String(draft.tone ?? '')} options={TONES.map((t) => ({ value: t, label: t }))} onChange={(v) => change({ tone: v }, true)} />
-          <One label="Language and spelling" hint="As the document is written, when not set." value={String(draft.language ?? '')} options={LANGUAGES}
+          <One label="Language" hint="Language and spelling the document is written in, when not set." value={String(draft.language ?? '')} options={LANGUAGES}
             onChange={(v) => change({ language: v }, true)} />
         </div>
         {focus ? (
-          <Field label="What to focus on">
+          <Field label="Focus">
             <textarea value={draft.focus_areas ?? ''} onChange={(e) => change({ focus_areas: e.target.value })} rows={3} autoFocus={!draft.focus_areas}
               placeholder="e.g. Remote working, third-party access, evidence the auditors will ask for" aria-label="What to focus on" className={setupInputClass} />
           </Field>
         ) : (
-          <button type="button" onClick={() => setFocus(true)} className="text-[11px] font-semibold text-[#0b6b58] hover:underline">+ What to focus on</button>
+          <button type="button" onClick={() => setFocus(true)} className="text-xs font-semibold text-[#0f766e] hover:underline" title="What to focus on">+ Focus</button>
         )}
       </Section>
 
-      <Section title="Exported file" summary={[logoName ? `Logo ${POSITIONS.find((p) => p.value === position)?.label.toLowerCase()}` : 'No logo',
+      <Section title="Export" summary={[logoName ? `Logo ${POSITIONS.find((p) => p.value === position)?.label.toLowerCase()}` : 'No logo',
         watermark === NO_WATERMARK ? 'no watermark' : `watermark ${watermark}`].join(' · ')}>
         <Field label="Logo" hint="On every page of an exported Word or PDF document. PNG or JPEG.">
           <div className="flex flex-wrap gap-1.5">
             {assets.data?.items.map((a) => {
               const on = draft.logo_asset_id === a.id;
               return (
-                <div key={a.id} className={`group relative flex h-12 w-20 items-center justify-center rounded-lg border bg-white p-1 ${on ? 'border-[#0f766e] ring-2 ring-[#1ed4b0]' : 'border-[#c5ccd3]'}`}>
+                <div key={a.id} className={`group relative flex h-12 w-20 items-center justify-center rounded-lg border bg-[#fff] p-1 ${on ? 'border-[#0f766e] ring-2 ring-[#1ed4b0]' : 'border-[#c5ccd3]'}`}>
                   <button type="button" onClick={() => change({ logo_asset_id: on ? null : a.id }, true)} aria-pressed={on} aria-label={`${on ? 'Stop using' : 'Use'} the logo ${a.name}`} className="absolute inset-0 rounded-lg" />
                   <AssetImage id={a.id} alt={a.name} className="max-h-full max-w-full object-contain" />
                   {on && <span className="absolute right-0.5 top-0.5 rounded-full bg-[#0f766e] p-0.5 text-white"><Check className="h-2.5 w-2.5" /></span>}
@@ -139,10 +143,10 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
           <div className="min-w-0 flex-1 space-y-2.5">
             <Field label="Position">
               <select value={position} onChange={(e) => change({ logo_position: e.target.value as LogoPosition }, true)} aria-label="Position" className={`${setupInputClass} py-1.5`}>
-                <optgroup label="Top of the page (header)">
+                <optgroup label="Top (header)">
                   {POSITIONS.filter((p) => p.value.startsWith('header')).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </optgroup>
-                <optgroup label="Foot of the page (footer)">
+                <optgroup label="Bottom (footer)">
                   {POSITIONS.filter((p) => p.value.startsWith('footer')).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </optgroup>
               </select>
@@ -151,7 +155,7 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
               options={WATERMARKS.map((w) => ({ value: w, label: w }))}
               onChange={(v) => (!v.trim() || v === NO_WATERMARK ? change({ watermark: false }, true) : change({ watermark: true, watermark_text: v.trim() }, true))} />
             <label className="flex items-center gap-2 text-xs text-[#26323d]">
-              <input type="checkbox" role="switch" checked={!!draft.logo_required} onChange={(e) => change({ logo_required: e.target.checked }, true)} className="accent-[#0f766e]" /> A logo is required
+              <input type="checkbox" role="switch" checked={!!draft.logo_required} onChange={(e) => change({ logo_required: e.target.checked }, true)} className="accent-[#0f766e]" /> Logo required
             </label>
           </div>
         </div>

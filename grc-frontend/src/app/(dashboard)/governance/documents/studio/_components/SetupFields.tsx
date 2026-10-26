@@ -14,10 +14,11 @@ import { Check, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { problemOf, studioApi, type Instructions, type Session, type SetupOptions } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ComboBoxInput } from '@/components/ui/ComboBoxInput';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown, type MultiSelectDropdownItem } from '@/components/ui/MultiSelectDropdown';
 import { queueFor } from './setupPatch';
 
-export const setupInputClass = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
+export const setupInputClass = 'w-full rounded-lg border border-[#b8c4c8] bg-[#fff] px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 
 /** The lists as this server sends them; the newer fields are optional so an older server still works. */
 type Options = SetupOptions & {
@@ -74,27 +75,28 @@ export function useInstructionsDraft(session: Session, onChanged: () => void | P
 }
 
 export function SavedState({ saved }: { saved: 'idle' | 'saving' | 'saved' }) {
-  return <span className="text-[11px] text-[#586472]" role="status">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? <span className="inline-flex items-center gap-1 text-[#0a5a38]"><Check className="h-3 w-3" /> Saved</span> : ''}</span>;
+  return <span className="text-xs text-[#586472]" role="status">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? <span className="inline-flex items-center gap-1 text-[#0a5a38]"><Check className="h-3 w-3" /> Saved</span> : ''}</span>;
 }
 
 /** A section that folds away to one line of what it holds. */
 export function Section({ title, summary, open, children }: { title: string; summary: string; open?: boolean; children: React.ReactNode }) {
   return (
-    <details open={open} className="group rounded-xl border border-[#d5dbe1] bg-white">
+    <details open={open} className="group rounded-xl border border-[#d5dbe1] bg-[#fff]">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 hover:bg-[#f3f8f7] [&::-webkit-details-marker]:hidden">
         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#586472] transition-transform group-open:rotate-90" aria-hidden />
-        <span className="text-xs font-semibold text-[#26323d]">{title}</span>
-        <span className="min-w-0 flex-1 truncate text-right text-[11px] text-[#586472] group-open:hidden" title={summary}>{summary || 'Not set'}</span>
+        <span className="text-[13px] font-semibold text-[#26323d]">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-right text-xs text-[#586472] group-open:hidden" title={summary}>{summary || 'Not set'}</span>
       </summary>
-      <div className="space-y-3 border-t border-[#e6eaee] px-3 pb-3 pt-2.5">{children}</div>
+      <div className="space-y-3 border-t border-[#e1e6eb] px-3 pb-3 pt-2.5">{children}</div>
     </details>
   );
 }
 
+/** A label over its input; what a label cannot say is `hint`, as an (i) beside it. */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="mb-1 text-xs font-semibold text-[#26323d]" title={hint}>{label}{hint && <span className="ml-1 cursor-help font-normal text-[#7b8794]" aria-label={hint}>ⓘ</span>}</p>
+      <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-[#26323d]">{label}{hint && <InfoTip label={`About ${label.toLowerCase()}`} text={hint} />}</p>
       {children}
     </div>
   );
@@ -114,7 +116,7 @@ function Many({ label, items, value, onChange, create = true, disabled }: {
         forceSearch placeholder="Choose…" searchPlaceholder={create ? 'Search or type your own' : 'Search'} className="w-full" triggerClassName="w-full"
         onCreate={create ? (t) => onChange([...value, t]) : undefined} disabled={disabled} />
       {/* one choice is named on the button; several are counted there and named here */}
-      {chosen.length > 1 && <p className="mt-1 truncate text-[11px] text-[#3f4b58]" title={chosen.join('; ')}>{chosen.join(' · ')}</p>}
+      {chosen.length > 1 && <p className="mt-1 truncate text-xs text-[#3f4b58]" title={chosen.join('; ')}>{chosen.join(' · ')}</p>}
     </Field>
   );
 }
@@ -174,8 +176,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFromDoc]);
 
-  if (options.isLoading) return <p className="text-xs text-[#586472]"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Loading the choices…</p>;
-  if (!o) return <p className="text-xs text-[#8a1c1c]">The choices could not be loaded. {problemOf(options.error)}</p>;
+  if (options.isLoading) return <p role="status" className="relative text-[#586472]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Loading</span></p>;
+  if (!o) return <p className="text-xs text-[#8a1c1c]">Could not load the choices. {problemOf(options.error)}</p>;
 
   const followed = o.regulators_followed.filter((r) => !country || !r.country || r.country === country);
   const regulatorItems: MultiSelectDropdownItem[] = [
@@ -213,26 +215,26 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
 
   const fillButton = Object.keys(fill).length > 0 && (
     <button type="button" onClick={() => change(fill, true)}
-      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f6ee]"
-      title={joined(fill.country as string, fill.entity_type as string, (fill.regulators as string[] | undefined)?.join(', '))}>
-      <Sparkles className="h-3.5 w-3.5" aria-hidden /> Fill in from your organisation
+      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs font-semibold text-[#0f766e] hover:bg-[#e6f6ee]"
+      title={joined('Fill in from your organisation', fill.country as string, fill.entity_type as string, (fill.regulators as string[] | undefined)?.join(', '))}>
+      <Sparkles className="h-3.5 w-3.5" aria-hidden /> Fill from organisation
     </button>
   );
   const countryField = <One label="Country" value={country} options={plain(o.countries)} onChange={(v) => change({ country: v }, true)} />;
-  const regulatorsField = <Many label="Regulators it answers to" items={regulatorItems} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
+  const regulatorsField = <Many label="Regulators" items={regulatorItems} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
   const frameworksField = o.frameworks.length ? (
-    <Many label="Frameworks and standards" create={false} disabled={fwBusy}
+    <Many label="Frameworks" create={false} disabled={fwBusy}
       items={frameworks.map((f) => ({ value: String(f.id), label: f.label, subLabel: f.of_document ? 'This document’s' : undefined, disabled: fwBusy }))}
       value={attachedIds} onChange={(v) => void applyFrameworks(v)} />
-  ) : <p className="text-[11px] text-[#586472]">No framework is available in the platform yet.</p>;
+  ) : <p className="text-xs text-[#586472]">No frameworks available</p>;
   const lengthField = lengthOn && (
     <Field label="Length">
-      <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#b8c4c8] bg-white p-0.5" role="radiogroup" aria-label="Length">
+      <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#b8c4c8] bg-[#fff] p-0.5" role="radiogroup" aria-label="Length">
         {o.lengths.map((l) => {
           const on = length === l.value;
           return (
             <button key={l.value} type="button" role="radio" aria-checked={on} title={l.detail} onClick={() => change({ length: on && session.kind !== 'new' ? '' : l.value }, true)}
-              className={`rounded-md px-2 py-1 text-xs font-semibold ${on ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>{l.label}</button>
+              className={`rounded-md px-2 py-1 text-xs font-semibold ${on ? 'bg-[#0f766e] text-[#fff]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>{l.label}</button>
           );
         })}
       </div>
@@ -251,8 +253,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
           {frameworksField}
           {lengthField}
         </div>
-        <button type="button" onClick={() => setMore(true)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-[11px] hover:bg-[#eef6f3]">
-          <span className="font-semibold text-[#0b6b58]">More options</span>
+        <button type="button" onClick={() => setMore(true)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-xs hover:bg-[#eef6f3]">
+          <span className="font-semibold text-[#0f766e]">More options</span>
           <span className="min-w-0 truncate text-[#586472]">{others || 'organisation, laws, subject areas, reader'}</span>
         </button>
       </div>
@@ -260,12 +262,12 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {doc && (
-        <p className="rounded-lg bg-[#f3f6f8] px-3 py-2 text-[11px] text-[#3f4b58]">
-          <span className="font-semibold text-[#26323d]">This document: </span>
+        <p className="rounded-lg bg-[#f3f6f8] px-3 py-2 text-xs text-[#3f4b58]">
+          <span className="font-semibold text-[#26323d]">Document </span>
           {joined(doc.classification, doc.review_cycle && `reviewed ${doc.review_cycle.toLowerCase()}`, doc.owner && `owner ${doc.owner}`, doc.department) || 'no details yet'}
-          {session.document_id && <> · <Link href={`/governance/documents/${session.document_id}?details=1`} className="font-semibold text-[#0b6b58] underline">Change in Details</Link></>}
+          {session.document_id && <> · <Link href={`/governance/documents/${session.document_id}?details=1`} className="font-semibold text-[#0f766e] underline" title="Change them in the document’s Details" aria-label="Change in Details">Change</Link></>}
         </p>
       )}
       {fillButton}
@@ -274,37 +276,37 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
         {/* the name is typed as the organisation writes it (a list pick would replace a shorter name with the first longer one) */}
         <Field label="Entity name" hint="Used exactly wherever the organisation is named, and checked for.">
           <input value={text('entity_name')} onChange={(e) => change({ entity_name: e.target.value })} list={`entity-names-${session.id}`} aria-label="Entity name"
-            placeholder="The organisation's legal name" className={`${setupInputClass} py-1.5`} />
+            placeholder="Legal name" className={`${setupInputClass} py-1.5`} />
           <datalist id={`entity-names-${session.id}`}>{(o.entity_names ?? []).map((n) => <option key={n} value={n} />)}</datalist>
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <One label="Type of organisation" value={text('entity_type')} options={plain(o.entity_types)} onChange={(v) => change({ entity_type: v }, true)} />
+          <One label="Organisation type" value={text('entity_type')} options={plain(o.entity_types)} onChange={(v) => change({ entity_type: v }, true)} />
           {countryField}
         </div>
-        <Many label="Also applies in" items={plain(o.countries.filter((c) => c !== country && c !== 'Several countries'))} value={list('other_countries')}
+        <Many label="Other countries" items={plain(o.countries.filter((c) => c !== country && c !== 'Several countries'))} value={list('other_countries')}
           onChange={(v) => change({ other_countries: v }, true)} />
       </Section>
 
-      <Section title="Rules it follows" open={open(1)} summary={joined(list('regulators').slice(0, 2).join(', ') + (list('regulators').length > 2 ? ` +${list('regulators').length - 2}` : ''),
+      <Section title="Rules" open={open(1)} summary={joined(list('regulators').slice(0, 2).join(', ') + (list('regulators').length > 2 ? ` +${list('regulators').length - 2}` : ''),
         count(list('regulations').length, 'law'), count(attachedIds.length, 'framework'))}>
         {regulatorsField}
-        <Many label="Laws, regulations and circulars" items={o.regulations.map((r) => ({ value: r.label, label: r.label, subLabel: r.detail || undefined }))}
+        <Many label="Laws and regulations" items={o.regulations.map((r) => ({ value: r.label, label: r.label, subLabel: r.detail || undefined }))}
           value={list('regulations')} onChange={(v) => change({ regulations: v }, true)} />
         {frameworksField}
         {notes ? (
-          <Field label="Other regulatory requirements">
+          <Field label="Other requirements">
             <textarea value={text('regulatory_notes')} onChange={(e) => change({ regulatory_notes: e.target.value })} rows={2} autoFocus={!text('regulatory_notes')}
               placeholder="Licence conditions, an inspection finding, a ruling…" aria-label="Other regulatory requirements" className={setupInputClass} />
           </Field>
         ) : (
-          <button type="button" onClick={() => setNotes(true)} className="text-[11px] font-semibold text-[#0b6b58] hover:underline">+ Add a requirement in your own words</button>
+          <button type="button" onClick={() => setNotes(true)} className="text-xs font-semibold text-[#0f766e] hover:underline" title="Add a requirement in your own words">+ Other requirement</button>
         )}
       </Section>
 
-      <Section title="Scope and reader" open={open(2)} summary={joined(count(list('domains').length, 'subject area'), count(list('departments').length, 'department'),
+      <Section title="Scope" open={open(2)} summary={joined(count(list('domains').length, 'subject area'), count(list('departments').length, 'department'),
         text('audience'), !doc && text('classification'), !doc && text('review_cycle'), lengthOn && o.lengths.find((l) => l.value === length)?.label)}>
-        <Many label="Subject areas it must cover" items={plain(o.domains)} value={list('domains')} onChange={(v) => change({ domains: v }, true)} />
-        <Many label="Departments and units it applies to" items={plain(o.departments)} value={list('departments')} onChange={(v) => change({ departments: v }, true)} />
+        <Many label="Subject areas" items={plain(o.domains)} value={list('domains')} onChange={(v) => change({ domains: v }, true)} />
+        <Many label="Departments" items={plain(o.departments)} value={list('departments')} onChange={(v) => change({ departments: v }, true)} />
         <One label="Audience" value={text('audience')} options={plain(o.audiences)} onChange={(v) => change({ audience: v }, true)} />
         {!doc && (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -314,7 +316,7 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
         )}
         {lengthField}
       </Section>
-      {compact && <button type="button" onClick={() => setMore(false)} className="text-[11px] font-semibold text-[#0b6b58] hover:underline">Fewer options</button>}
+      {compact && <button type="button" onClick={() => setMore(false)} className="text-xs font-semibold text-[#0f766e] hover:underline">Fewer options</button>}
     </div>
   );
 }
@@ -327,12 +329,12 @@ export function SetupCard({ session, onChanged }: { session: Session; onChanged:
   const label = ['policy', 'standard', 'procedure', 'guideline', 'charter'].includes(session.doc_type) ? session.doc_type : 'document';
   if (options.isError) return null;
   return (
-    <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 text-left shadow-sm" aria-label={`Set up this ${label}`}>
-      <div className="mb-2.5 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-[#1f2933]">Set up this {label}</p>
-          <p className="mt-0.5 text-[11px] text-[#586472]">Pick what you know, then tell Comply Agent below what to write. It asks about the rest.</p>
-        </div>
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 text-left" aria-label={`Set up this ${label}`}>
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1 text-sm font-semibold text-[#1f2933]">
+          Set up this {label}
+          <InfoTip label="About the setup" text="Pick what you know, then tell Comply Agent below what to write. It asks about the rest." />
+        </p>
         <SavedState saved={saved} />
       </div>
       <SetupFields session={session} draft={draft} change={change} onReferencesChanged={onChanged} compact firstOpen={false} />

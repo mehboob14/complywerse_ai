@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import WordView from '@/components/governance/WordView';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { problemOfBlob, studioApi, type Session } from '@/lib/studio/api';
 import { fileNote } from './viewSwitch';
 
@@ -34,8 +35,9 @@ export default function FileView({ session, maySave }: { session: Session; maySa
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#e8ecf0]">
-      <p className="shrink-0 border-b border-[#d5dbe1] bg-white px-3 py-1.5 text-xs text-[#3f4b58]">
-        {fileNote(session.source, maySave)}
+      <p className="flex shrink-0 items-center gap-1 border-b border-[#d5dbe1] bg-[#fff] px-3 py-1.5 text-xs font-medium text-[#3f4b58]">
+        {word ? 'Word layout' : 'Original PDF'}
+        <InfoTip label="About this view" text={fileNote(session.source, maySave)} />
       </p>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {error ? (

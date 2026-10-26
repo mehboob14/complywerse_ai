@@ -75,7 +75,7 @@ export default function LiveTurn({ message }: { message: Message }) {
 
   return (
     <div aria-live="off">
-      <div className="rounded-2xl rounded-tl-sm bg-white px-3.5 py-2.5 text-sm text-[#3f4b58] ring-1 ring-[#d5dbe1]" aria-busy="true">
+      <div className="rounded-2xl rounded-tl-sm bg-[#fff] px-3.5 py-2.5 text-sm text-[#3f4b58] ring-1 ring-[#d5dbe1]" aria-busy="true">
         <div className="flex items-center gap-2" role="status">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#0f766e]" aria-hidden />
           <span className="min-w-0 flex-1 font-medium text-[#1f2933]">{message.stage || 'Working'}…</span>
@@ -84,7 +84,7 @@ export default function LiveTurn({ message }: { message: Message }) {
         {active?.detail && <p className="ml-6 mt-0.5 text-xs text-[#586472]">{active.detail}</p>}
 
         {before.length > 0 && (
-          <ul className="mt-2 space-y-0.5 border-t border-[#eef1f4] pt-2">
+          <ul className="mt-2 space-y-0.5 border-t border-[#e1e6eb] pt-2">
             {before.map((s, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-[#52606d]">
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0f766e]" aria-hidden />
@@ -95,15 +95,15 @@ export default function LiveTurn({ message }: { message: Message }) {
         )}
 
         {approach && typed && (
-          <div className="mt-2 border-t border-[#eef1f4] pt-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#586472]">{live?.text_label}</p>
+          <div className="mt-2 border-t border-[#e1e6eb] pt-2">
+            <p className="text-xs font-semibold text-[#586472]">{live?.text_label}</p>
             <p className="mt-0.5 whitespace-pre-wrap text-xs leading-relaxed text-[#26323d]">{typed}<Caret /></p>
           </div>
         )}
 
         {(live?.groups ?? []).map((g) => (
-          <div key={g.label} className="mt-2 border-t border-[#eef1f4] pt-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#586472]">{g.label}</p>
+          <div key={g.label} className="mt-2 border-t border-[#e1e6eb] pt-2">
+            <p className="text-xs font-semibold text-[#586472]">{g.label}</p>
             <ul className="mt-0.5 max-h-36 list-disc space-y-0.5 overflow-y-auto pl-4 text-xs text-[#26323d]">
               {g.items.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
@@ -111,10 +111,10 @@ export default function LiveTurn({ message }: { message: Message }) {
         ))}
 
         {parts.length > 0 && (
-          <div className="mt-2 border-t border-[#eef1f4] pt-2">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[#586472]">
+          <div className="mt-2 border-t border-[#e1e6eb] pt-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[#586472]">
               <span>Parts</span>
-              <span className="tabular-nums normal-case">{finished} of {parts.length} written</span>
+              <span className="font-normal tabular-nums">{finished} of {parts.length}</span>
             </div>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-[#e6ebef]" role="progressbar" aria-valuemin={0} aria-valuemax={parts.length} aria-valuenow={finished} aria-label="Parts written">
               <div className="h-full rounded-full bg-[#0f766e] transition-[width] duration-500" style={{ width: `${Math.round((finished / parts.length) * 100)}%` }} />
@@ -126,7 +126,7 @@ export default function LiveTurn({ message }: { message: Message }) {
         )}
 
         {live?.tail && (
-          <div className="mt-2 border-t border-[#eef1f4] pt-2">
+          <div className="mt-2 border-t border-[#e1e6eb] pt-2">
             {live.tail_label && <p className="mb-1 text-[11px] text-[#586472]">{live.tail_label}</p>}
             <div className="relative h-20 overflow-hidden rounded-md bg-[#f1f5f6] ring-1 ring-[#dde3e7]" aria-hidden>
               <div className="absolute inset-x-0 bottom-0 whitespace-pre-wrap break-words px-2 pb-1.5 font-mono text-[11.5px] leading-snug text-[#3f4b58]">{live.tail}<Caret /></div>
@@ -137,7 +137,7 @@ export default function LiveTurn({ message }: { message: Message }) {
       </div>
 
       {!approach && typed && (
-        <div className="mt-2 whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-white px-3.5 py-2 text-sm leading-relaxed text-[#1f2933] ring-1 ring-[#d5dbe1]">{typed}<Caret /></div>
+        <div className="mt-2 whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-[#fff] px-3.5 py-2 text-sm leading-relaxed text-[#1f2933] ring-1 ring-[#d5dbe1]">{typed}<Caret /></div>
       )}
     </div>
   );

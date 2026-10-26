@@ -101,7 +101,7 @@ function Btn({ title, active, disabled, onClick, children }: { title: string; ac
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={`rounded p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-        active ? 'bg-[#d6f3ec] text-[#0b6b58]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'
+        active ? 'bg-[#d6f3ec] text-[#0f766e]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'
       }`}
     >
       {children}
@@ -140,7 +140,7 @@ function Toolbar({ editor }: { editor: Editor }) {
   const inTable = editor.isActive('table');
   const inHeader = editor.isActive('tableHeader');
   return (
-    <div className="border-b border-[#d5dbe1] bg-white">
+    <div className="border-b border-[#d5dbe1] bg-[#fff]">
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1" role="toolbar" aria-label="Formatting">
         <Btn title="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}><Undo2 className="h-4 w-4" /></Btn>
         <Btn title="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}><Redo2 className="h-4 w-4" /></Btn>
@@ -174,8 +174,8 @@ function Toolbar({ editor }: { editor: Editor }) {
         <Btn title="Insert a table" disabled={inTable} onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="h-4 w-4" /></Btn>
       </div>
       {inTable && (
-        <div className="flex flex-wrap items-center gap-0.5 border-t border-[#e6eaee] bg-[#f6f9f8] px-2 py-1" role="toolbar" aria-label="Table">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-[#586472]">Table</span>
+        <div className="flex flex-wrap items-center gap-0.5 border-t border-[#e1e6eb] bg-[#f6f9f8] px-2 py-1" role="toolbar" aria-label="Table">
+          <span className="mr-1 text-xs font-semibold text-[#586472]">Table</span>
           <TextBtn title="Add a row below" onClick={() => editor.chain().focus().addRowAfter().run()}>Row below</TextBtn>
           <TextBtn title="Delete this row (the header row stays)" disabled={inHeader} onClick={() => editor.chain().focus().deleteRow().run()}>Delete row</TextBtn>
           <Sep />

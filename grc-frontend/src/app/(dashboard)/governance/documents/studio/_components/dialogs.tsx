@@ -1,11 +1,15 @@
 'use client';
 
-/** The studio's dialogs: export, move to the library, save into the library document, save as a template, the document's details. */
+/** The studio's dialogs: export, move to the library, save into the library document, save as a template, the document's details.
+ *  A dialog says what it does in its title; what a title cannot say is an (i) at the right of the header or beside a label, and
+ *  only what prevents a mistake (a version that changes approvals, a file that keeps its own header) stays as a line. */
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2, Send } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
 import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type MoveToLibrary, type Session } from '@/lib/studio/api';
 import { ARCHIVED_NOTE, maySaveToLibrary, nextVersion, saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
@@ -18,30 +22,32 @@ import { ProposeNote, useProposalRole, useProposedAnswer } from '../../[id]/_Pro
 import { sendLabel } from '@/lib/proposals';
 import { titleCase, withCurrent } from '../../_DetailsFields';
 
-const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
-const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
-const secondary = 'rounded-lg border border-[#b8c4c8] bg-white px-3.5 py-2 text-sm font-semibold text-[#3f4b58] hover:bg-[#f1f3f5]';
+const input = 'w-full rounded-lg border border-[#b8c4c8] bg-[#fff] px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
+// the Documents area's own buttons (components/governance/docUi)
+const primary = BTN_PRIMARY;
+const secondary = BTN;
 
 type Change = 'major' | 'minor';
 const CHANGES: { key: Change; label: string; hint: string }[] = [
-  { key: 'minor', label: 'Minor change', hint: 'The meaning stays: wording, clarifications, formatting.' },
-  { key: 'major', label: 'Major change', hint: 'What it requires changes: rules, scope, roles or approvals.' },
+  { key: 'minor', label: 'Minor change', hint: 'Meaning stays: wording, clarity, formatting' },
+  { key: 'major', label: 'Major change', hint: 'Requirements change: rules, scope, roles, approvals' },
 ];
 
 /** Minor or major: the person decides when the work goes into the library (the user, 2026-10-21: "let user decide it"), each option
- *  with the version it makes from `current`; nothing is chosen for them. */
-function VersionChoice({ current, value, onChange, question }: { current: string | null | undefined; value: Change | null; onChange: (c: Change) => void; question: string }) {
+ *  with the version it makes from `current`; nothing is chosen for them. `note`: what it does, as the (i). */
+function VersionChoice({ current, value, onChange, note }: { current: string | null | undefined; value: Change | null; onChange: (c: Change) => void; note: string }) {
   return (
     <fieldset>
-      <legend className="text-xs font-semibold text-[#26323d]">{question}</legend>
+      <legend className="sr-only">Type of change</legend>
+      <div className="flex items-center gap-1 text-xs font-semibold text-[#26323d]"><span aria-hidden>Type of change</span><InfoTip label="About the type of change" text={note} /></div>
       <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
         {CHANGES.map((c) => (
-          <label key={c.key} className={`cursor-pointer rounded-lg border p-2.5 ${value === c.key ? 'border-[#0f766e] bg-[#f3fbf9] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] bg-white hover:bg-[#f8fafb]'}`}>
+          <label key={c.key} className={`cursor-pointer rounded-lg border p-2.5 ${value === c.key ? 'border-[#0f766e] bg-[#f3fbf9] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] bg-[#fff] hover:bg-[#f8fafb]'}`}>
             <span className="flex items-center gap-2 text-sm font-semibold text-[#1f2933]">
               <input type="radio" name="version-change" checked={value === c.key} onChange={() => onChange(c.key)} className="accent-[#0f766e]" />
               {c.label} → v{nextVersion(current, c.key)}
             </span>
-            <span className="mt-0.5 block pl-6 text-[11px] text-[#586472]">{c.hint}</span>
+            <span className="mt-0.5 block pl-6 text-xs text-[#586472]">{c.hint}</span>
           </label>
         ))}
       </div>
@@ -65,10 +71,10 @@ function Notes({ notes }: { notes: ExportNote[] }) {
 
 // ── export ───────────────────────────────────────────────────────────────────
 const FORMATS: { value: ExportOptions['format']; label: string; hint: string }[] = [
-  { value: 'docx', label: 'Word (.docx)', hint: 'Editable. Logo and entity name in the header, document code and page numbers in the footer, placeholders highlighted.' },
-  { value: 'pdf', label: 'PDF', hint: 'For reading and sending. Same header and footer as Word.' },
-  { value: 'md', label: 'Markdown (.md)', hint: 'The text and structure only.' },
-  { value: 'html', label: 'Web page (.html)', hint: 'A single file you can open in a browser.' },
+  { value: 'docx', label: 'Word (.docx)', hint: 'Editable' },
+  { value: 'pdf', label: 'PDF', hint: 'For reading and sending' },
+  { value: 'md', label: 'Markdown (.md)', hint: 'Text and structure only' },
+  { value: 'html', label: 'Web page (.html)', hint: 'One file for a browser' },
 ];
 
 export function ExportDialog({ session, onClose, flush }: { session: Session; onClose: () => void; flush: () => Promise<void> }) {
@@ -99,45 +105,45 @@ export function ExportDialog({ session, onClose, flush }: { session: Session; on
           <legend className="mb-1.5 text-xs font-semibold text-[#26323d]">Format</legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {FORMATS.map((f) => (
-              <label key={f.value} className={`cursor-pointer rounded-lg border p-2.5 ${format === f.value ? 'border-[#0f766e] bg-[#f3fbf9] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] bg-white hover:bg-[#f8fafb]'}`}>
+              <label key={f.value} className={`cursor-pointer rounded-lg border p-2.5 ${format === f.value ? 'border-[#0f766e] bg-[#f3fbf9] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] bg-[#fff] hover:bg-[#f8fafb]'}`}>
                 <span className="flex items-center gap-2 text-sm font-semibold text-[#1f2933]"><input type="radio" name="export-format" checked={format === f.value} onChange={() => setFormat(f.value)} className="accent-[#0f766e]" /> {f.label}</span>
-                <span className="mt-0.5 block pl-6 text-[11px] text-[#586472]">{f.value === 'docx' && session.source.in_place ? 'Your original file, with your changes written into it.' : f.hint}</span>
+                <span className="mt-0.5 block pl-6 text-xs text-[#586472]">{f.value === 'docx' && session.source.in_place ? 'Your original file with your changes' : f.hint}</span>
               </label>
             ))}
           </div>
         </fieldset>
         {format === 'docx' && session.source.in_place && (
-          <p className="rounded-lg border border-[#d5dbe1] bg-[#f8fafb] p-3 text-sm text-[#3f4b58]">
-            This is your original Word file with your changes written into it. Its own header, footer and styles stay as they are, so the logo and entity name from Instructions are not added
+          // what a person would not expect: the file keeps its own header and footer, so no logo or entity name is added
+          <p className="rounded-lg border border-[#d5dbe1] bg-[#f8fafb] p-3 text-[13px] text-[#3f4b58]">
+            Your file keeps its own header, footer and styles, so the logo and entity name are not added
             {watermark ? <>; the watermark <strong>“{watermark}”</strong> is added across its pages.</> : '.'}
           </p>
         )}
         {(format === 'pdf' || format === 'html' || (format === 'docx' && !session.source.in_place)) && (
           <div className="rounded-lg border border-[#d5dbe1] bg-[#f8fafb] p-3 text-sm">
-            <p className="text-xs font-semibold text-[#26323d]">On every page</p>
+            <p className="flex items-center gap-1 text-xs font-semibold text-[#26323d]">On every page <InfoTip label="About the page header and footer" text="Change the logo, where it sits, the entity name or the watermark in Instructions." /></p>
             <dl className="mt-1.5 space-y-1.5 text-xs">
               <div className="flex items-center gap-3">
                 <dt className="w-20 shrink-0 text-[#586472]">Top</dt>
-                <dd className="flex min-w-0 items-center gap-3">{!atFoot && logo}<span className="truncate font-semibold text-[#0f4c5c]">{session.instructions.entity_name || <span className="font-normal text-[#586472]">No entity name</span>}</span></dd>
+                <dd className="flex min-w-0 items-center gap-3">{!atFoot && logo}<span className="truncate font-semibold text-[#0f766e]">{session.instructions.entity_name || <span className="font-normal text-[#586472]">No entity name</span>}</span></dd>
               </div>
               <div className="flex items-center gap-3">
                 <dt className="w-20 shrink-0 text-[#586472]">Foot</dt>
-                <dd className="flex min-w-0 items-center gap-3"><span className="text-[#3f4b58]">Document code, version, page numbers</span>{atFoot && logo}</dd>
+                <dd className="flex min-w-0 items-center gap-3"><span className="text-[#3f4b58]">Code, version, page numbers</span>{atFoot && logo}</dd>
               </div>
               <div className="flex items-center gap-3">
                 <dt className="w-20 shrink-0 text-[#586472]">Watermark</dt>
-                <dd className="text-[#3f4b58]">{watermark ? <strong className="text-[#0f4c5c]">“{watermark}”</strong> : 'None'}</dd>
+                <dd className="text-[#3f4b58]">{watermark ? <strong className="text-[#0f766e]">“{watermark}”</strong> : 'None'}</dd>
               </div>
             </dl>
-            {!logoId && <p className="mt-1.5 text-xs text-[#586472]">No logo is chosen.</p>}
-            {logoId && <label className="mt-2 flex items-center gap-2 text-xs text-[#26323d]"><input type="checkbox" checked={noLogo} onChange={(e) => setNoLogo(e.target.checked)} className="accent-[#0f766e]" /> Leave the logo out of this export</label>}
-            <p className="mt-1 text-[11px] text-[#586472]">Change the logo, where it sits, the entity name or the watermark in Instructions.</p>
+            {!logoId && <p className="mt-1.5 text-xs text-[#586472]">No logo</p>}
+            {logoId && <label className="mt-2 flex items-center gap-2 text-xs text-[#26323d]"><input type="checkbox" checked={noLogo} onChange={(e) => setNoLogo(e.target.checked)} className="accent-[#0f766e]" /> Leave out the logo</label>}
           </div>
         )}
         {(format === 'pdf' || (format === 'docx' && !session.source.in_place)) && (
-          <label className="flex items-center gap-2 text-sm text-[#26323d]"><input type="checkbox" checked={highlight} onChange={(e) => setHighlight(e.target.checked)} className="accent-[#0f766e]" /> Highlight placeholders still to be filled in</label>
+          <label className="flex items-center gap-2 text-sm text-[#26323d]"><input type="checkbox" checked={highlight} onChange={(e) => setHighlight(e.target.checked)} className="accent-[#0f766e]" /> Highlight placeholders</label>
         )}
-        {check.isLoading || !ready ? <p className="text-xs text-[#586472]"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Checking the document…</p> : check.data && <Notes notes={check.data.notes} />}
+        {check.isLoading || !ready ? <p role="status" className="relative text-[#586472]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Checking the document</span></p> : check.data && <Notes notes={check.data.notes} />}
       </div>
     </AnimatedModal>
   );
@@ -176,27 +182,31 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
       }
       return r;
     },
-    onSuccess: (r) => { toast({ title: 'Moved to the document library', message: `${r.title} is a draft, version ${r.version}.`, type: 'success' }); onDone(r.document_id); },
+    onSuccess: (r) => { toast({ title: 'Moved to the library', message: `${r.title} is a draft, v${r.version}.`, type: 'success' }); onDone(r.document_id); },
     onError: (e) => toast({ title: 'Could not move it', message: problemOf(e), type: 'error' }),
   });
+  // what it becomes, in a few words; how, as the (i)
+  const becomes = original ? `Draft; your file stays as v${original}` : session.kind === 'upload' && session.source.name ? 'Draft, at the version your file states' : 'Draft, v1.0';
+  const becomesNote = original ? `It becomes a draft. Your uploaded file ${session.source.name ?? ''} is kept as version ${original}, the original.`
+    : session.kind === 'upload' && session.source.name
+    ? `It becomes a draft: your uploaded file ${session.source.name}, at the version it states. Statements are extracted from it as for any new document.`
+    : 'It becomes a draft, version 1.0. Statements are extracted from it as for any new document.';
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Move to the document library" size="lg"
-      subtitle={original ? `It becomes a draft. Your uploaded file ${session.source.name ?? ''} is kept as version ${original}, the original.`
-        : session.kind === 'upload' && session.source.name
-        ? `It becomes a draft: your uploaded file ${session.source.name}, at the version it states. Statements are extracted from it as for any new document.`
-        : 'It becomes a draft, version 1.0. Statements are extracted from it as for any new document.'}
+    <AnimatedModal isOpen onClose={onClose} title="Move to library" size="lg" subtitle={becomes}
+      headerAccessory={<InfoTip align="end" label="About moving to the library" text={becomesNote} />}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending || (!!original && !change)} onClick={() => move.mutate()}
-          title={original && !change ? 'Choose a minor or a major change first' : undefined}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
+          title={original && !change ? 'Choose a minor or a major change first' : undefined}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to library</button></div>}>
       <div className="space-y-4 p-5">
         {original && <VersionChoice current={original} value={change} onChange={setChange}
-          question={`What you changed here becomes the next version after ${original}. Is it a minor or a major change?`} />}
+          note={`What you changed here becomes the next version after ${original}.`} />}
         <DocumentDetailsFields d={details} />
         <ReviewerApproverFields value={signoff} onChange={setSignoff} />
         {fws.data && fws.data.items.length > 0 && (
           <fieldset>
-            <legend className="text-xs font-semibold text-[#26323d]">Frameworks this document must comply with (optional)</legend>
-            <div className="mt-1 grid max-h-32 gap-0.5 overflow-y-auto rounded border border-[#e1e5e9] p-2 sm:grid-cols-2">
+            <legend className="sr-only">Frameworks (optional)</legend>
+            <div className="flex items-center gap-1 text-xs font-semibold text-[#26323d]"><span aria-hidden>Frameworks (optional)</span><InfoTip label="About the frameworks" text="The frameworks this document must comply with." /></div>
+            <div className="mt-1 grid max-h-32 gap-0.5 overflow-y-auto rounded border border-[#e1e6eb] p-2 sm:grid-cols-2">
               {fws.data.items.map((f) => (
                 <label key={f.id} className="flex items-start gap-2 text-sm text-[#26323d]"><input type="checkbox" checked={frameworks.includes(f.id)} onChange={(e) => setFrameworks(e.target.checked ? [...frameworks, f.id] : frameworks.filter((x) => x !== f.id))} className="mt-1 accent-[#0f766e]" /> {f.name}{f.version ? ` ${f.version}` : ''}</label>
               ))}
@@ -245,19 +255,18 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConfli
   const archived = session.document_status === 'archived';
   const blocked = !change ? 'Choose a minor or a major change first' : proposes && !reason.trim() ? `Write what changed and why for ${decider} first` : undefined;
   return (
-    <AnimatedModal isOpen onClose={onClose} title={proposes ? `Send your changes to ${decider}` : 'Save to the library'}
-      subtitle={proposes ? `${session.title} — ${decider} accepts or rejects them` : `${session.title} — saved as its next version`} size="md"
+    <AnimatedModal isOpen onClose={onClose} title={proposes ? sendLabel(decider) : 'Save to library'} subtitle={session.title} size="md"
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         {!archived && <button type="button" className={primary} disabled={save.isPending || !!blocked} onClick={() => save.mutate(!!conflict)}
-          title={blocked}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : proposes ? <Send className="h-4 w-4" aria-hidden /> : null} {proposes ? (conflict ? 'Send anyway' : sendLabel(decider)) : conflict ? 'Save anyway' : change ? `Save as version ${nextVersion(current, change)}` : 'Save as a new version'}</button>}</div>}>
+          title={blocked}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : proposes ? <Send className="h-4 w-4" aria-hidden /> : null} {proposes ? (conflict ? 'Send anyway' : sendLabel(decider)) : conflict ? 'Save anyway' : change ? `Save as v${nextVersion(current, change)}` : 'Save'}</button>}</div>}>
       {archived ? <p className="p-5 text-sm text-[#26323d]" role="status">{ARCHIVED_NOTE}</p> : <div className="space-y-3 p-5">
         <VersionChoice current={current} value={change} onChange={setChange}
-          question={proposes ? `Accepted, it becomes the next version after ${current ? `v${current}` : 'the one in the library'}. Is it a minor or a major change?`
-            : `It becomes the next version after ${current ? `v${current}` : 'the one in the library'}, and every version before stays. Is it a minor or a major change?`} />
+          note={proposes ? `Accepted, it becomes the next version after ${current ? `v${current}` : 'the one in the library'}.`
+            : `It becomes the next version after ${current ? `v${current}` : 'the one in the library'}, and every version before stays.`} />
         {proposes ? (
-          <ProposeNote id={`studio-send-${session.id}`} decider={decider} value={reason} onChange={setReason} placeholder="e.g. Updated the password rules to match the new standard" />
+          <ProposeNote id={`studio-send-${session.id}`} decider={decider} value={reason} onChange={setReason} placeholder="e.g. Updated the password rules" />
         ) : (
-          <label className="block"><span className="text-xs font-semibold text-[#26323d]">What changed (optional)</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Updated the password rules to match the new standard" className={`${input} mt-1`} /></label>
+          <label className="block"><span className="text-xs font-semibold text-[#26323d]">What changed (optional)</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Updated the password rules" className={`${input} mt-1`} /></label>
         )}
         {warning && !proposes && <p className="flex gap-1.5 rounded-lg bg-[#fffbed] px-2.5 py-2 text-xs text-[#6b4e00]"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> {warning}</p>}
         {conflict && <p className="rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="alert">{conflict}</p>}
@@ -290,8 +299,8 @@ function LibraryDetails({ session, onClose, onChanged }: { session: Session; onC
   if (!docQ.data) {
     return (
       <AnimatedModal isOpen onClose={onClose} title="Details" size="md">
-        <p className="p-5 text-sm text-[#3f4b58]" role="status">
-          {docQ.isError ? problemOf(docQ.error, 'The details could not be read.') : <><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Reading the details…</>}
+        <p className="relative p-5 text-sm text-[#3f4b58]" role="status">
+          {docQ.isError ? problemOf(docQ.error, 'Could not read the details') : <><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Reading the details</span></>}
         </p>
       </AnimatedModal>
     );
@@ -311,6 +320,7 @@ function DraftDetails({ session, onClose, onChanged }: { session: Session; onClo
   const types = withCurrent(Object.entries(DOC_TYPE_LABEL), docType, titleCase);
   return (
     <AnimatedModal isOpen onClose={onClose} title="Details" subtitle={session.title} size="md"
+      headerAccessory={<InfoTip align="end" label="About the other details" text="Its owner, classification, review cycle, dates, description, reviewers and approvers are asked when you move it to the library." />}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         <button type="button" className={primary} disabled={!title.trim() || save.isPending || (title.trim() === session.title && docType === session.doc_type)}
           onClick={() => save.mutate()}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save</button></div>}>
@@ -318,8 +328,6 @@ function DraftDetails({ session, onClose, onChanged }: { session: Session; onClo
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} className={`${input} mt-1`} /></label>
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Type</span>
           <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{types.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-        <p className="flex gap-2 rounded-lg bg-[#f1f5fb] px-2.5 py-2 text-xs text-[#33475e]"><Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Its owner, classification, review cycle, dates, description, reviewers and approvers are asked when you move it to the library (Move to the library).</span></p>
       </div>
     </AnimatedModal>
   );
@@ -344,24 +352,28 @@ export function SaveTemplateDialog({ session, onClose, getContent }: { session: 
     onError: (e) => toast({ title: 'Could not save the template', message: problemOf(e), type: 'error' }),
   });
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Save as a template" subtitle="Your organisation’s own starting point, with its sections checked on every document." size="md"
+    <AnimatedModal isOpen onClose={onClose} title="Save as a template" subtitle={session.title} size="md"
+      headerAccessory={<InfoTip align="end" label="About templates" text="Your organisation’s own starting point, with its sections checked on every document." />}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         <button type="button" className={primary} disabled={!name.trim() || save.isPending} onClick={() => save.mutate()}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save template</button></div>}>
       <div className="space-y-3 p-5">
         {own && (
           <fieldset className="space-y-1">
-            <label className="flex items-center gap-2 text-sm text-[#26323d]"><input type="radio" checked={mode === 'update'} onChange={() => setMode('update')} className="accent-[#0f766e]" /> Update the template this document started from</label>
+            <label className="flex items-center gap-2 text-sm text-[#26323d]"><input type="radio" checked={mode === 'update'} onChange={() => setMode('update')} className="accent-[#0f766e]" /> Update the original template</label>
             <label className="flex items-center gap-2 text-sm text-[#26323d]"><input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} className="accent-[#0f766e]" /> Save as a new template</label>
           </fieldset>
         )}
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Name</span><input value={name} onChange={(e) => setName(e.target.value)} className={`${input} mt-1`} /></label>
-        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Document type</span>
+        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Type</span>
           <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{Object.entries(DOC_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Description (optional)</span><input value={description} onChange={(e) => setDescription(e.target.value)} className={`${input} mt-1`} /></label>
-        <label className={`flex items-start gap-2 text-sm ${admin ? 'text-[#26323d]' : 'text-[#7b8794]'}`}>
-          <input type="checkbox" checked={makeDefault} disabled={!admin} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-1 accent-[#0f766e]" />
-          <span>Use it for every new {DOC_TYPE_LABEL[docType]?.toLowerCase() ?? 'document'} instead of the standard structure{!admin && <span className="block text-[11px]">Only an administrator can make a template the organisation’s default.</span>}</span>
-        </label>
+        <div className="flex items-start gap-1">
+          <label className={`flex min-w-0 flex-1 items-start gap-2 text-sm ${admin ? 'text-[#26323d]' : 'text-[#7b8794]'}`}>
+            <input type="checkbox" checked={makeDefault} disabled={!admin} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-1 accent-[#0f766e]" />
+            <span>Default for every new {DOC_TYPE_LABEL[docType]?.toLowerCase() ?? 'document'}{!admin && <span className="block text-xs">Administrators only</span>}</span>
+          </label>
+          <InfoTip className="mt-0.5" label="About the default" text="Every new document of this type starts from this template instead of the standard structure. Only an administrator can make a template the organisation’s default." />
+        </div>
       </div>
     </AnimatedModal>
   );
