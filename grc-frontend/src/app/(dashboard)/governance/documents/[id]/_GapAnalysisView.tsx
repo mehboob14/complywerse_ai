@@ -11,13 +11,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpDown, BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
-  RotateCcw, Search, ShieldAlert, ShieldCheck, Sparkles, User, Wand2, X,
+  RotateCcw, Search, ShieldAlert, ShieldCheck, Sparkles, User, X,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
 import { parseUtc } from '@/lib/serverTime';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_ICON, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { useLibraryDocuments } from '../_DetailsFields';
 import { versionLabel } from '../_view/versionLabel';
@@ -47,9 +49,10 @@ const REMEDIATION_STATUS_STYLES: Record<string, { bg: string; text: string; labe
 const UNKNOWN = (label: string) => ({ bg: 'bg-slate-100', text: 'text-slate-700', label });
 
 const FIELD = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]';
-const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
-const TH = 'px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#586472]';
+// (the buttons BTN and PRIMARY are the Documents area's shared ones, components/governance/docUi)
+// the table head: the fill is forced on the <th> and the words sit in a <span>, as the platform's `thead th` rule would beat any class on the text
+const TH = 'whitespace-nowrap border-b border-[#d5dbe1] px-3 py-2.5 text-left !bg-[#f3f6f8]';
+const HEAD = 'text-[11px] font-semibold uppercase tracking-wide';
 
 const dedupeFrameworkOptions = (items: any[] = []) => {
   const statusRank: Record<string, number> = { published: 4, completed: 3, classified: 2, parsed: 1 };
@@ -73,9 +76,9 @@ function SortHeader({ field, current, order, onSort, children }: { field: string
   const on = current === field;
   return (
     <th className={TH} aria-sort={on ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" onClick={() => onSort(field)} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-[#1f2933]">
-        {children}
-        <ArrowUpDown className={`h-3 w-3 ${on ? 'text-[#0f766e]' : ''}`} aria-hidden />
+      <button type="button" onClick={() => onSort(field)} className={`inline-flex items-center gap-1 rounded hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${on ? 'text-[#1f2933]' : 'text-[#586472]'}`}>
+        <span className={HEAD}>{children}</span>
+        <ArrowUpDown className={`h-3 w-3 ${on ? 'text-[#0f766e]' : 'text-[#7b8794]'}`} aria-hidden />
       </button>
     </th>
   );
@@ -86,7 +89,7 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
   const frameworks = summary?.frameworks || summary?.framework_summaries || [];
   if (!Array.isArray(frameworks) || frameworks.length === 0) return null;
   return (
-    <section className="space-y-4 rounded-xl border border-[#d5dbe1] bg-white p-5" aria-label="Coverage per framework">
+    <section className="space-y-4 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4" aria-label="Coverage per framework">
       {frameworks.map((fw: any, idx: number) => {
         const pct = fw.compliance_percentage ?? fw.compliance_score ?? 0;
         const color = pct >= 80 ? 'bg-emerald-600' : pct >= 60 ? 'bg-amber-500' : 'bg-rose-600';
@@ -378,33 +381,22 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
 
   return (
     <div className="space-y-4">
-      {/* compare with another document */}
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="shrink-0 rounded-lg bg-white p-2"><GitCompare className="h-5 w-5 text-[#0b4f46]" aria-hidden /></span>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-[#1f2933]">Compare with another document</h3>
-            <p className="text-xs text-[#3f4b58]">Another document of the library, or a reference template, side by side with Comply Agent&apos;s gap analysis.</p>
-          </div>
-        </div>
-        <button type="button" onClick={() => setShowNcaCompareModal(true)} className={BTN}><GitCompare className="h-3.5 w-3.5" /> Compare</button>
-      </section>
-
-      {/* run */}
-      <section className="rounded-xl border border-[#d5dbe1] bg-white p-4">
+      {/* run, and compare with another document */}
+      <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="shrink-0 rounded-lg bg-[#eef1f4] p-2"><Wand2 className="h-5 w-5 text-[#26323d]" aria-hidden /></span>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-[#1f2933]">Gap analysis</h3>
-              <p className="text-xs text-[#586472]">Checks this document against frameworks, clause by clause; each clause it does not cover is a finding.</p>
-            </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <h3 className="text-[15px] font-semibold text-[#1f2933]">Gap analysis</h3>
+            <InfoTip label="About the gap analysis"
+              text="Checks this document against frameworks, clause by clause; each clause it does not cover is a finding. Compare puts another document of the library, or a reference template, side by side with Comply Agent's gap analysis." />
           </div>
-          {canEdit && (
-            <button type="button" onClick={() => setShowGapModal(true)} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>
-              {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Run gap analysis
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => setShowNcaCompareModal(true)} className={BTN} title="Compare with another document"><GitCompare className="h-4 w-4" /> Compare</button>
+            {canEdit && (
+              <button type="button" onClick={() => setShowGapModal(true)} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>
+                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run gap analysis
+              </button>
+            )}
+          </div>
         </div>
         {(runGapAnalysisMutation.isPending || running.length > 0) && (
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2" role="status">
@@ -421,7 +413,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                 <div key={r.id} className="rounded-lg border border-[#d5dbe1] bg-[#f7f9fa] px-3 py-2">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-medium text-[#1f2933]" title={r.framework_name || 'Framework'}>{r.framework_name || `Run ${r.id}`}</span>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#effaf8] px-1.5 py-0.5 text-[10px] font-medium text-[#0b4f46]">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#effaf8] px-1.5 py-0.5 text-[11px] font-medium text-[#0b4f46]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" /> {r.status === 'queued' ? 'Waiting' : total > 0 ? `${pct}%` : 'Running'}
                     </span>
                   </div>
@@ -430,7 +422,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                       ? <div className="h-full rounded-full bg-[#0f766e] transition-all duration-300" style={{ width: `${Math.max(2, pct)}%` }} />
                       : <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-[#0f766e]" />}
                   </div>
-                  {total > 0 && <div className="mt-1 text-[10px] text-[#586472]">{done}/{total} clauses</div>}
+                  {total > 0 && <div className="mt-1 text-xs text-[#586472]">{done}/{total} clauses</div>}
                 </div>
               );
             })}
@@ -449,7 +441,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             </ul>
             {canEdit && (
               <button type="button" onClick={() => runAgain(failed)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
-                {runGapAnalysisMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Run again
+                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Run again
               </button>
             )}
           </div>
@@ -458,12 +450,12 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
 
       {outdated.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <p className="min-w-0 flex-1 text-xs text-amber-900">
-            Made on {versionLabel(outdated[0].document_version)}. The document is now {versionLabel(currentVersion)}. Run it again to check the new version.
+          <p className="min-w-0 flex-1 text-[13px] text-amber-900">
+            Based on {versionLabel(outdated[0].document_version)} · the document is now {versionLabel(currentVersion)}
           </p>
           {canEdit && (
             <button type="button" onClick={() => runAgain(outdated)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
-              {runGapAnalysisMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Run again
+              {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Run again
             </button>
           )}
         </div>
@@ -472,44 +464,44 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
 
       {/* findings */}
-      <section className="overflow-hidden rounded-xl border border-[#d5dbe1] bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d5dbe1] p-4">
-          <h3 className="text-base font-semibold text-[#1f2933]">Findings</h3>
-          <button type="button" onClick={handleExportCSV} className={BTN}><Download className="h-4 w-4" /> Export CSV</button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 border-b border-[#d5dbe1] p-4">
-          <MultiSelectDropdown title="Framework" multiSelect={false} autoApply placeholder="All frameworks" size="md"
+      <section className="overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#e1e6eb] p-3">
+          <h3 className="mr-1 text-[15px] font-semibold text-[#1f2933]">Findings</h3>
+          <MultiSelectDropdown title="Framework" compact multiSelect={false} autoApply placeholder="All frameworks" size="sm"
             items={(complianceSummary?.frameworks || complianceSummary?.framework_summaries || []).map((fw: any) => ({ value: String(fw.framework_name || fw.name), label: String(fw.framework_name || fw.name) }))}
             selectedValues={gapFilters.framework_name ? [gapFilters.framework_name] : []}
             onApply={(v) => setGapFilters((prev) => ({ ...prev, framework_name: v[0] || '', skip: 0 }))} />
-          <MultiSelectDropdown title="Coverage" multiSelect={false} autoApply placeholder="Any coverage" size="md"
+          <MultiSelectDropdown title="Coverage" compact multiSelect={false} autoApply placeholder="Any coverage" size="sm"
             items={Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
             selectedValues={gapFilters.compliance_status ? [gapFilters.compliance_status] : []}
             onApply={(v) => setGapFilters((prev) => ({ ...prev, compliance_status: v[0] || '', skip: 0 }))} />
-          <MultiSelectDropdown title="Risk" multiSelect={false} autoApply placeholder="Any risk" size="md"
+          <MultiSelectDropdown title="Risk" compact multiSelect={false} autoApply placeholder="Any risk" size="sm"
             items={Object.entries(RISK_SEVERITY_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
             selectedValues={gapFilters.risk_severity ? [gapFilters.risk_severity] : []}
             onApply={(v) => setGapFilters((prev) => ({ ...prev, risk_severity: v[0] || '', skip: 0 }))} />
-          <MultiSelectDropdown title="Status" multiSelect={false} autoApply placeholder="Any status" size="md"
+          <MultiSelectDropdown title="Status" compact multiSelect={false} autoApply placeholder="Any status" size="sm"
             items={Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
             selectedValues={gapFilters.remediation_status ? [gapFilters.remediation_status] : []}
             onApply={(v) => setGapFilters((prev) => ({ ...prev, remediation_status: v[0] || '', skip: 0 }))} />
+          <button type="button" onClick={handleExportCSV} className={`${BTN} ml-auto`}><Download className="h-4 w-4" /> Export CSV</button>
         </div>
 
         {findingsLoading ? (
           <div className="flex h-48 items-center justify-center" role="status" aria-label="Loading the findings"><Loader2 className="h-7 w-7 animate-spin text-[#0f766e]" /></div>
         ) : findingsError ? (
-          <p className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">The findings could not be loaded. Reload the page to try again.</p>
+          <p className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Could not load the findings.</p>
         ) : findings.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 px-4 text-center">
-            <BarChart3 className="h-10 w-10 text-[#7b8794]" aria-hidden />
+          <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+            <BarChart3 className="h-8 w-8 text-[#7b8794]" strokeWidth={1.5} aria-hidden />
             {gapFilters.framework_name || gapFilters.compliance_status || gapFilters.risk_severity || gapFilters.remediation_status ? (
-              <p className="text-sm font-medium text-[#1f2933]">No finding matches these filters</p>
+              <p className="text-[13px] font-medium text-[#1f2933]">No findings match</p>
             ) : (
               <>
-                <p className="text-sm font-medium text-[#1f2933]">No findings yet</p>
-                <p className="text-sm text-[#586472]">{failed.length ? 'The last gap analysis did not finish; the reason is above.'
-                  : canEdit ? 'Run a gap analysis to check the document against frameworks.' : 'Its editors run a gap analysis to check it against frameworks.'}</p>
+                <p className="text-[13px] font-medium text-[#1f2933]">No findings yet</p>
+                {failed.length > 0 && <p className="text-xs text-[#586472]">The last run did not finish: see above</p>}
+                {canEdit && (
+                  <button type="button" onClick={() => setShowGapModal(true)} disabled={runGapAnalysisMutation.isPending} className={BTN}><Play className="h-4 w-4" /> Run gap analysis</button>
+                )}
               </>
             )}
           </div>
@@ -517,19 +509,19 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-white">
+                <thead>
                   <tr>
-                    <th className="w-8 px-2 py-3"><span className="sr-only">Details</span></th>
+                    <th className={`${TH} w-8 !px-2`}><span className="sr-only">Details</span></th>
                     <SortHeader field="clause_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Clause</SortHeader>
                     <SortHeader field="policy_section_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>In the document</SortHeader>
                     <SortHeader field="compliance_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Coverage</SortHeader>
-                    <th className={TH}>Gap</th>
+                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Gap</span></th>
                     <SortHeader field="risk_severity" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Risk</SortHeader>
-                    <th className={TH}>Recommendation</th>
-                    <th className={TH}>Owner</th>
+                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Recommendation</span></th>
+                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Owner</span></th>
                     <SortHeader field="target_remediation_date" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Target date</SortHeader>
                     <SortHeader field="remediation_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Status</SortHeader>
-                    <th className={TH}>Evidence</th>
+                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Evidence</span></th>
                     <SortHeader field="updated_at" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Updated</SortHeader>
                   </tr>
                 </thead>
@@ -574,16 +566,15 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               </table>
             </div>
             {totalPages > 1 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#d5dbe1] p-4">
-                <span className="text-sm text-[#586472]">{gapFilters.skip + 1}–{Math.min(gapFilters.skip + gapFilters.limit, totalFindings)} of {totalFindings}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e1e6eb] px-4 py-2.5">
+                <span className="text-[13px] tabular-nums text-[#586472]">{gapFilters.skip + 1}–{Math.min(gapFilters.skip + gapFilters.limit, totalFindings)} of {totalFindings}</span>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setGapFilters((prev) => ({ ...prev, skip: Math.max(0, prev.skip - prev.limit) }))} disabled={currentPage === 0}
-                    className="rounded-lg border border-[#b8c4c8] p-2 text-[#3f4b58] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Previous page">
+                    className={BTN_ICON} aria-label="Previous page" title={`Previous page (${currentPage + 1} of ${totalPages})`}>
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <span className="text-sm text-[#26323d]">Page {currentPage + 1} of {totalPages}</span>
                   <button type="button" onClick={() => setGapFilters((prev) => ({ ...prev, skip: prev.skip + prev.limit }))} disabled={currentPage >= totalPages - 1}
-                    className="rounded-lg border border-[#b8c4c8] p-2 text-[#3f4b58] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-30" aria-label="Next page">
+                    className={BTN_ICON} aria-label="Next page" title={`Next page (${currentPage + 1} of ${totalPages})`}>
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -605,6 +596,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${addressGapMode === 'replace' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
                     {addressGapMode === 'replace' ? 'Replaces a clause' : 'Adds a clause'}
                   </span>
+                  <InfoTip label="About this fix"
+                    text={addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.'
+                      : 'A new clause, added at the end of the document under its own heading.'} />
                 </h3>
                 <p className="mt-0.5 truncate text-xs text-[#586472]">
                   {addressGapFinding.framework_name && <span className="font-medium">{addressGapFinding.framework_name} · </span>}
@@ -618,24 +612,20 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               {addressGapFinding.gap_description && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-amber-900">Gap</span>
+                  <span className="mb-1 block text-xs font-semibold text-amber-900">Gap</span>
                   <p className="text-sm text-amber-950">{addressGapFinding.gap_description}</p>
                 </div>
               )}
               {addressGapFinding.remediation_recommendation && (
                 <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
-                  <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-[#0b4f46]">Recommendation</span>
+                  <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">Recommendation</span>
                   <p className="text-sm text-[#1f2933]">{addressGapFinding.remediation_recommendation}</p>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-[#586472]">
-                  {addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.' : 'A new clause, added at the end of the document under its own heading.'}
-                </p>
-                <button type="button" onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)} disabled={generateGapFixMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[#99d5cc] bg-white px-2.5 py-1 text-xs font-medium text-[#0b4f46] hover:bg-[#effaf8] disabled:opacity-50">
-                  {generateGapFixMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              <div className="flex justify-end">
+                <button type="button" onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)} disabled={generateGapFixMutation.isPending} className={BTN}>
+                  {generateGapFixMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#0f766e]" />}
                   {generateGapFixMutation.isPending ? 'Drafting…' : addressGapDraft ? 'Draft again' : 'Draft with Comply Agent'}
                 </button>
               </div>
@@ -647,7 +637,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                     <textarea value={addressGapOriginal} readOnly rows={14} className={`${FIELD} resize-y bg-[#f7f9fa] font-mono`} />
                   </label>
                   <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New wording <span className="text-xs font-normal text-[#586472]">(you can edit it)</span></span>
+                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New wording</span>
                     <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={14} className={`${FIELD} resize-y`}
                       placeholder="Draft it with Comply Agent, or write it yourself." />
                   </label>
@@ -655,7 +645,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               ) : (
                 <>
                   <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New clause <span className="text-xs font-normal text-[#586472]">(you can edit it)</span></span>
+                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New clause</span>
                     <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={12} className={`${FIELD} resize-y`}
                       placeholder="Draft it with Comply Agent, or write a clause that closes this gap yourself." />
                   </label>
@@ -671,12 +661,16 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                   placeholder="e.g. Closing the gap before the audit" />
               ) : (
                 <>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional, kept in the version history)</span></span>
-                    <input type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
-                  </label>
+                  <div>
+                    {/* the (i) is a button: outside the <label>, which would otherwise label it instead of the field */}
+                    <div className="mb-1.5 flex items-center gap-1">
+                      <label htmlFor={`gap-fix-why-${addressGapFinding.id}`} className="text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional)</span></label>
+                      <InfoTip label="About the reason" text="Kept in the version history." />
+                    </div>
+                    <input id={`gap-fix-why-${addressGapFinding.id}`} type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
+                  </div>
                   <p className="text-xs text-[#586472]">
-                    The fix is saved as the document&apos;s next version; earlier versions are kept, and Override takes it back out.
+                    Saved as the document&apos;s next version; earlier versions are kept.
                   </p>
                 </>
               )}
@@ -712,9 +706,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
           onKeyDown={(e) => { if (e.key === 'Escape') closeGapModal(); }}>
           <div className="w-full max-w-lg rounded-xl border border-[#d5dbe1] bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
+              <div className="flex items-center gap-1">
                 <h3 className="text-base font-semibold text-[#1f2933]">Run gap analysis</h3>
-                <p className="text-sm text-[#586472]">Choose the frameworks; none chosen runs them all.</p>
+                <InfoTip label="About running the analysis" text="Choose the frameworks to check; with none chosen, all of them run." />
               </div>
               <button type="button" autoFocus onClick={closeGapModal} className="rounded-lg p-2 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" aria-label="Close"><X className="h-5 w-5" /></button>
             </div>
@@ -793,9 +787,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   );
 }
 
-const ACTION = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#26323d] hover:bg-[#f3f6f8]';
+const ACTION = 'inline-flex items-center gap-1.5 rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8]';
 const SAVE = 'rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
-const DETAIL_LABEL = 'mb-1 block text-xs font-medium uppercase tracking-wider text-[#586472]';
+const DETAIL_LABEL = 'mb-1 block text-xs font-semibold text-[#586472]';
 
 function GapFindingRow({
   finding, canEdit, isExpanded, isEditing, editAction, cs, rs, rms,
@@ -810,7 +804,7 @@ function GapFindingRow({
   const owner = finding.assigned_owner_name || finding.assigned_owner?.display_name;
   return (
     <>
-      <tr className="cursor-pointer border-b border-[#e3e8ec] bg-white hover:bg-[#f7f9fa]" onClick={onToggleExpand}>
+      <tr className="cursor-pointer border-b border-[#e1e6eb] bg-[#fff] hover:bg-[#f7f9fa]" onClick={onToggleExpand}>
         <td className="px-2 py-2">
           <button type="button" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }} aria-expanded={isExpanded} aria-label={isExpanded ? 'Hide the details' : 'Show the details'}
             className="rounded p-0.5 text-[#586472] hover:bg-[#eef1f4]">
@@ -829,7 +823,7 @@ function GapFindingRow({
         <td className="max-w-[160px] truncate px-3 py-2 text-xs text-[#26323d]">{finding.gap_description || '-'}</td>
         <td className="px-3 py-2">{pill(rs)}</td>
         <td className="max-w-[140px] truncate px-3 py-2 text-xs text-[#26323d]">{finding.remediation_recommendation || '-'}</td>
-        <td className="px-3 py-2 text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="italic text-[#7b8794]">Nobody</span>}</td>
+        <td className="px-3 py-2 text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="text-[#586472]" title="No owner">—<span className="sr-only">No owner</span></span>}</td>
         <td className="px-3 py-2 text-xs text-[#26323d]">{formatDate(finding.target_remediation_date)}</td>
         <td className="px-3 py-2">{pill(rms)}</td>
         <td className="px-3 py-2"><span className="inline-flex items-center justify-center rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#26323d]">{finding.evidence_count || finding.evidence?.length || 0}</span></td>
@@ -843,13 +837,13 @@ function GapFindingRow({
               <div className="space-y-4">
                 {finding.clause_requirement_text && (
                   <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-[#0b4f46]">What the clause requires</span>
+                    <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">What the clause requires</span>
                     <p className="text-sm text-[#26323d]">{finding.clause_requirement_text}</p>
                   </div>
                 )}
                 {finding.policy_section_text && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-emerald-800">What the document says</span>
+                    <span className="mb-1 block text-xs font-semibold text-emerald-800">What the document says</span>
                     <p className="text-sm text-[#26323d]">{finding.policy_section_text}</p>
                   </div>
                 )}
@@ -895,14 +889,14 @@ function GapFindingRow({
                   </span>
                 )}
                 {!canEdit ? (
-                  <p className="text-sm text-[#586472]">The document&apos;s editors work its findings.</p>
+                  <p className="text-sm text-[#586472]">Its editors work the findings.</p>
                 ) : (
                   <>
                     <div className="flex flex-wrap gap-2">
                       {(finding.compliance_status === 'not_addressed' || finding.compliance_status === 'partially_compliant') && finding.remediation_status !== 'closed' && !finding.applied_at && (
                         <button type="button" onClick={(e) => { e.stopPropagation(); onAddressGap(finding); }} title="Comply Agent drafts a clause; you check it and apply it to the document"
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58]">
-                          <Sparkles className="h-3.5 w-3.5" aria-hidden /> Address the gap
+                          className={PRIMARY}>
+                          <Sparkles className="h-4 w-4" aria-hidden /> Address the gap
                         </button>
                       )}
                       <button type="button" onClick={toggle('assign-owner')} aria-expanded={isEditing && editAction === 'assign-owner'} className={ACTION}><User className="h-3.5 w-3.5" aria-hidden /> Owner</button>
@@ -959,8 +953,8 @@ function GapFindingRow({
                       <div className="space-y-3 rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3" onClick={(e) => e.stopPropagation()}>
                         {finding.applied_at && (
                           <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                            Its fix is in the document. Overriding takes that fix back out; every other change to the document stays. If its clause was changed since, the document is left as it is.
-                            {proposeTo ? ` Taking it back out goes to ${proposeTo} to accept or reject, with your “Why”; the document does not change until then.` : ''}
+                            Its fix is in the document. Overriding takes it back out; every other change stays. If its clause was changed since, the document is left as it is.
+                            {proposeTo ? ` This goes to ${proposeTo} to accept or reject, with your “Why”; the document does not change until then.` : ''}
                           </p>
                         )}
                         <label className="block">

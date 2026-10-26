@@ -12,6 +12,8 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Play } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { BTN_PRIMARY } from '@/components/governance/docUi';
 import { apiClient, governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
 import { scopeLine } from './scopeLine';
@@ -87,7 +89,7 @@ export function MappingScope({ documentId, scope, canRun }: {
   const count = own.length + extra.filter((id) => !ownIds.has(id)).length;
   const chip = (f: ScopeEntry, label: string, tone: string) => (
     <span key={`${label}-${f.id}`} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ring-1 ${tone}`}>
-      {f.name}<span className="text-[10px] opacity-70">· {label}</span>
+      {f.name}<span className="text-[11px] opacity-70">· {label}</span>
     </span>
   );
   const last = status.data;
@@ -95,9 +97,14 @@ export function MappingScope({ documentId, scope, canRun }: {
   const line = scopeLine({ running, error, saved, picked: extra.length, last });
 
   return (
-    <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3">
+    <div className="space-y-2.5 rounded-xl border border-[#d5dbe1] bg-[#fff] p-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Mapped against</span>
+        <span className="mr-0.5 inline-flex items-center gap-1 text-xs font-semibold text-[#586472]">
+          Mapped against
+          <InfoTip label="About the frameworks"
+            text={canRun ? 'The applicable and linked frameworks the document was created with. Frameworks added here stay with this document. Links you confirmed are kept when it runs again.'
+              : "Read only: the document's editors choose the frameworks and run the mapping."} />
+        </span>
         {(scope?.applicable || []).map((f) => chip(f, 'Applicable', 'bg-primary-50 text-primary-800 ring-primary-200'))}
         {(scope?.linked || []).filter((f) => !(scope?.applicable || []).some((a) => a.id === f.id))
           .map((f) => chip(f, 'Linked', 'bg-sky-50 text-sky-800 ring-sky-200'))}
@@ -115,8 +122,8 @@ export function MappingScope({ documentId, scope, canRun }: {
             onApply={(v) => { setError(''); setExtra(v.map(Number)); }}
             multiSelect
             triggerVariant="input"
-            placeholder={frameworks.isLoading ? 'Loading frameworks…' : 'Also map against other frameworks…'}
-            searchPlaceholder="Search frameworks…"
+            placeholder={frameworks.isLoading ? 'Loading…' : 'Also map against…'}
+            searchPlaceholder="Search frameworks"
             forceSearch
             showAvatars={false}
             disabled={running}
@@ -125,19 +132,17 @@ export function MappingScope({ documentId, scope, canRun }: {
             triggerClassName="w-full"
           />
         </div>
-        <button onClick={() => run.mutate()} disabled={running || run.isPending || count === 0}
-                className="btn-primary btn-sm shrink-0">
+        <button type="button" onClick={() => run.mutate()} disabled={running || run.isPending || count === 0} className={BTN_PRIMARY}>
           {running || run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          {running ? 'Mapping…' : dirty ? 'Save & run mapping' : 'Run mapping'}
+          {running ? 'Mapping…' : dirty ? 'Save & run' : 'Run mapping'}
         </button>
       </div>
       )}
 
       {/* one line at a time: what is happening, what went wrong, what is missing, then how the last run went */}
       {line === 'running' ? (
-        <p className="text-xs text-slate-600">
-          {last?.message || 'Mapping the statements'} against {count} framework{count === 1 ? '' : 's'}. This can take
-          a few minutes; you can leave this page.
+        <p className="text-xs text-[#26323d]">
+          {last?.message || 'Mapping the statements'} against {count} framework{count === 1 ? '' : 's'} · you can leave this page
         </p>
       ) : line === 'error' ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
@@ -148,27 +153,17 @@ export function MappingScope({ documentId, scope, canRun }: {
         </p>
       ) : line === 'none' ? (
         <p className={`text-xs ${canRun ? 'text-amber-700' : 'text-[#586472]'}`}>
-          {canRun ? 'This document has no applicable or linked frameworks yet. Pick them in "Also map against", then run the mapping.'
-            : 'This document has no frameworks to be mapped against yet.'}
+          {canRun ? 'Pick frameworks above, then run the mapping' : 'No frameworks to map against yet'}
         </p>
       ) : line === 'completed' && last ? (
         <p className="text-xs text-emerald-700">
-          Last run: {last.statements_mapped ?? last.statements} of {last.statements} statement(s) mapped,
-          {' '}{last.control_links ?? 0} control link(s).
+          Last run: {last.statements_mapped ?? last.statements}/{last.statements} statements mapped · {last.control_links ?? 0} control links
         </p>
       ) : line === 'failed' && last ? (
-        <p className="text-xs text-red-700">The last run failed: {last.error || 'unknown error'}.</p>
+        <p className="text-xs text-red-700">Last run failed: {last.error || 'unknown error'}</p>
       ) : line === 'skipped' && last ? (
         <p className="text-xs text-amber-700">{last.message}</p>
       ) : null}
-      {canRun ? (
-        <p className="text-[11px] text-slate-400">
-          A document is mapped against the applicable and linked frameworks it was created with. Frameworks added here
-          stay with this document. Links you confirmed are kept when it runs again.
-        </p>
-      ) : (
-        <p className="text-[11px] text-[#586472]">Read only: the document&apos;s editors choose the frameworks and run the mapping.</p>
-      )}
     </div>
   );
 }

@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { BTN, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import CreateControlDialog from '@/components/soc2/CreateControlDialog';
 import { fieldRows, goesToLine, pendingFor, proposedStatements, sendLabel, type Proposal } from '@/lib/proposals';
 import DocumentSyncPanel from './_DocumentSyncPanel';
@@ -47,8 +49,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 };
 const FIELD = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]';
 const LABEL = 'mb-1 block text-xs font-medium text-[#3f4b58]';
-const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
+// (the buttons BTN and PRIMARY are the Documents area's shared ones, components/governance/docUi; ICON is the small one for a row)
 const ICON = 'rounded p-1 text-[#3f4b58] hover:bg-[#eef1f4] hover:text-[#0b4f46]';
 
 // the AI's one-line summary (statement_summary) is not edited here: it stays as it is and is shown under the statement; why the
@@ -80,7 +81,7 @@ function StatementFields({ form, setForm, autoFocus, idPrefix, proposeTo }: {
           Justification for this change <span className="font-normal text-[#586472]">(required{proposeTo ? `: ${proposeTo} reads it` : ''})</span>
         </label>
         <textarea id={`${idPrefix}-why`} value={form.change_reason} rows={2} maxLength={2000} required aria-required="true" className={FIELD}
-          placeholder="Why the statement changes, e.g. the new password standard asks for 12 characters"
+          placeholder="e.g. The new password standard asks for 12 characters"
           onChange={(e) => setForm((p) => ({ ...p, change_reason: e.target.value }))} />
         {proposeTo && <p className="mt-1 text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>}
       </div>
@@ -495,7 +496,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     return <div className="flex h-48 items-center justify-center" role="status" aria-label="Loading the statements"><Loader2 className="h-7 w-7 animate-spin text-[#0f766e]" /></div>;
   }
   if (statementsError) {
-    return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-[#7a1616]" role="alert">The statements could not be loaded. Reload the page to try again.</p>;
+    return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-[#7a1616]" role="alert">Could not load the statements.</p>;
   }
 
   if (stmts.length === 0) {
@@ -503,23 +504,24 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
       <div className="space-y-4">
         {addPanel}
         {proposedPanel}
-        <section className="rounded-xl border border-[#d5dbe1] bg-white p-8 text-center">
-          <ClipboardList className="mx-auto mb-3 h-10 w-10 text-[#7b8794]" aria-hidden />
-          <p className="text-sm font-medium text-[#1f2933]">This document has no statements yet</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-[#586472]">
-            {canEdit ? 'Parse it: Comply Agent reads the document and lists what it requires, one statement each. Mapping and gap analysis work on them.'
-              : 'Its editors can parse it into statements. Mapping and gap analysis work on them.'}
+        <section className="flex flex-col items-center gap-2 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center">
+          <ClipboardList className="h-8 w-8 text-[#7b8794]" strokeWidth={1.5} aria-hidden />
+          <p className="flex items-center gap-1 text-[13px] font-medium text-[#1f2933]">
+            No statements
+            <InfoTip label="About the statements"
+              text={canEdit ? 'Comply Agent reads the document and lists what it requires, one statement each. Mapping and gap analysis work on them.'
+                : 'Its editors can parse it into statements. Mapping and gap analysis work on them.'} />
           </p>
           {canEdit && (
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
               <button type="button" onClick={() => parsePolicyMutation.mutate()} disabled={parsing} className={PRIMARY}>
                 {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                {isParsing ? 'Parsing…' : 'Parse the document'}
+                {isParsing ? 'Parsing…' : 'Parse document'}
               </button>
-              <button type="button" onClick={() => setShowAddForm(true)} className={BTN}><Plus className="h-4 w-4" /> Add one yourself</button>
+              <button type="button" onClick={() => setShowAddForm(true)} className={BTN}><Plus className="h-4 w-4" /> Add statement</button>
             </div>
           )}
-          <div className="mx-auto mt-4 max-w-md"><ParseProgress isParsing={isParsing} parseStatus={parseStatus} /></div>
+          <div className="w-full max-w-md empty:hidden"><ParseProgress isParsing={isParsing} parseStatus={parseStatus} /></div>
         </section>
       </div>
     );
@@ -533,13 +535,18 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-[#1f2933]">
-            {stmts.length - removed} statement{stmts.length - removed !== 1 ? 's' : ''}
-            {removed > 0 && <span className="font-normal text-[#586472]"> · {removed} no longer in the document</span>}
+          <h3 className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
+            Statements <span className="font-normal text-[#586472]">· {stmts.length - removed}</span>
+            <InfoTip label="About the statements" text="What the document requires, one statement each. Mapping and gap analysis work on them." />
           </h3>
+          {removed > 0 && (
+            <span className="rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#3f4b58]" title="A newer version of the document no longer says them; they are kept with their history">
+              {removed} no longer in the document
+            </span>
+          )}
           {categoryKeys.filter((cat) => inDocument(grouped[cat]) > 0).map((cat) => {
             const colors = CATEGORY_COLORS[cat] || OTHER_COLORS;
-            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)}: {inDocument(grouped[cat])}</span>;
+            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)} {inDocument(grouped[cat])}</span>;
           })}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -561,12 +568,11 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
       {canEdit && pendingProposals.length > 0 && (
         <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <AlertTriangle className="h-5 w-5 shrink-0 text-amber-700" aria-hidden />
-              <div>
-                <h4 className="text-sm font-semibold text-amber-950">Changes to review</h4>
-                <p className="mt-0.5 text-xs text-amber-900">Reading the document again proposes {proposalsData.total} change(s): {proposalsData.update_count} to existing statements, {proposalsData.new_count} new.</p>
-              </div>
+              <h4 className="text-sm font-semibold text-amber-950">Changes to review</h4>
+              <span className="text-xs text-amber-900">{proposalsData.total} · {proposalsData.update_count} changed · {proposalsData.new_count} new</span>
+              <InfoTip label="About the changes to review" text="Reading the document again proposes these changes to the statements. Accept or reject each one, or all at once." />
             </div>
             <div className="flex items-center gap-2">
               <button type="button" disabled={applyProposalsMutation.isPending} className={PRIMARY}
@@ -585,7 +591,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${proposal.type === 'update' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
-                      {proposal.type === 'update' ? 'Change to a statement' : 'New statement'}
+                      {proposal.type === 'update' ? 'Changed' : 'New'}
                     </span>
                     {proposal.similarity_score > 0 && <span className="text-xs text-[#586472]">{Math.round(proposal.similarity_score * 100)}% alike</span>}
                   </div>
@@ -621,20 +627,20 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
         const isExpanded = !collapsed.has(cat);
         const catStmts = grouped[cat];
         return (
-          <section key={cat} className={`overflow-hidden rounded-xl border bg-white ${colors.border}`}>
+          <section key={cat} className="overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
             <button type="button" onClick={() => toggleCategory(cat)} aria-expanded={isExpanded}
               className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f7f9fa]">
               <span className="flex items-center gap-3">
                 <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>{formatCategory(cat)}</span>
-                <span className="text-sm text-[#3f4b58]">
-                  {inDocument(catStmts)} statement{inDocument(catStmts) !== 1 ? 's' : ''}
+                <span className="text-sm text-[#586472]">
+                  {inDocument(catStmts)}<span className="sr-only"> statements</span>
                   {inDocument(catStmts) < catStmts.length && ` · ${catStmts.length - inDocument(catStmts)} no longer in the document`}
                 </span>
               </span>
               {isExpanded ? <ChevronUp className="h-4 w-4 text-[#586472]" aria-hidden /> : <ChevronDown className="h-4 w-4 text-[#586472]" aria-hidden />}
             </button>
             {isExpanded && (
-              <div className="divide-y divide-[#e3e8ec] border-t border-[#e3e8ec]">
+              <div className="divide-y divide-[#e1e6eb] border-t border-[#e1e6eb]">
                 {catStmts.map((stmt: any, idx: number) => {
                   const waiting = pendingFor(changeProposals?.items, stmt.id);
                   return (
@@ -694,7 +700,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                         {canEdit && proposeTo && deleteConfirm === stmt.id && (
                           <div className="mt-2 space-y-2 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
                             <label htmlFor={`statement-${stmt.id}-remove-why`} className="block text-xs font-semibold text-[#26323d]">
-                              Why remove it — {proposeTo} reads this <span className="font-normal text-[#586472]">(required)</span>
+                              Why remove it <span className="font-normal text-[#586472]">(required: {proposeTo} reads it)</span>
                             </label>
                             <textarea id={`statement-${stmt.id}-remove-why`} value={deleteWhy} onChange={(e) => setDeleteWhy(e.target.value)} rows={2} maxLength={2000}
                               required aria-required="true" autoFocus className={FIELD} />
@@ -754,9 +760,9 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                               <div className="flex items-center gap-2">
                                 <button type="button" onClick={() => setCompareVersions({ a: v.id, b: versionData.versions[0].id })} className={BTN}><GitCompare className="h-3.5 w-3.5" /> Compare</button>
                                 {canEdit && (
-                                  <button type="button" disabled={rollbackMutation.isPending} className={BTN}
+                                  <button type="button" disabled={rollbackMutation.isPending} className={BTN} title="Roll back to this version"
                                     onClick={() => (proposeTo ? setRollingBack({ versionId: v.id, why: '' }) : rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id }))}>
-                                    <RotateCcw className="h-3.5 w-3.5" /> {rollbackMutation.isPending ? 'Rolling back…' : 'Roll back to this'}
+                                    <RotateCcw className="h-3.5 w-3.5" /> {rollbackMutation.isPending ? 'Rolling back…' : 'Roll back'}
                                   </button>
                                 )}
                               </div>
@@ -771,7 +777,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                           {proposeTo && rollingBack && rollingBack.versionId === v.id && (
                             <div className="mt-3 space-y-2 rounded-lg border border-[#99d5cc] bg-[#f3fbf9] p-3">
                               <label htmlFor={`statement-rollback-why-${v.id}`} className="block text-xs font-semibold text-[#26323d]">
-                                Justification for this change — {proposeTo} reads it <span className="font-normal text-[#586472]">(required)</span>
+                                Justification for this change <span className="font-normal text-[#586472]">(required: {proposeTo} reads it)</span>
                               </label>
                               <textarea id={`statement-rollback-why-${v.id}`} value={rollingBack.why} rows={2} maxLength={2000} required aria-required="true" autoFocus className={FIELD}
                                 onChange={(e) => setRollingBack({ versionId: v.id, why: e.target.value })} />
@@ -811,13 +817,13 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-[#586472]">These two versions are the same.</p>
+                        <p className="text-sm text-[#586472]">No difference</p>
                       )}
                     </div>
                   )}
                 </>
               ) : (
-                <p className="py-8 text-center text-sm text-[#586472]">This statement has no earlier versions.</p>
+                <p className="py-8 text-center text-sm text-[#586472]">No earlier versions</p>
               )}
             </div>
           </div>

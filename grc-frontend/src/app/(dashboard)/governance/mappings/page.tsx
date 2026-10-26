@@ -24,6 +24,8 @@ import {
   Search,
 } from 'lucide-react';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
 import { MappingScope, type FrameworkScope } from './_scope/MappingScope';
 
 interface DocumentItem {
@@ -310,12 +312,14 @@ const barColor = (pct: number) => (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b'
 // so the framework→clause coverage story leads. Frameworks collapse (first open)
 // with internally-scrolled lists so the page doesn't grow unbounded.
 function RecommendedControlsSection({
-  recs, documentId, canLink, statementText, coverage = [], gapRecs = [],
+  recs, documentId, canLink, statementText, coverage = [], gapRecs = [], heading = 'Framework mappings',
 }: {
   recs: RecommendedControl[]; documentId: number | null; canLink: boolean;
   statementText: StatementTextMap; coverage?: CoverageFramework[];
   /** Gap-analysis recommendations, already converted to RecommendedControl shape. */
   gapRecs?: RecommendedControl[];
+  /** The title above the counts; null where the page already has it (a document's Mappings tab). */
+  heading?: string | null;
 }) {
   const queryClient = useQueryClient();
   const [detail, setDetail] = useState<RecommendedControl | null>(null);
@@ -482,10 +486,14 @@ function RecommendedControlsSection({
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <Sparkles strokeWidth={1.75} className="h-4 w-4 text-primary-600" />
-        <h4 className="text-sm font-semibold text-slate-900">Framework mappings</h4>
+        {heading && (
+          <>
+            <Sparkles strokeWidth={1.75} className="h-4 w-4 text-[#0f766e]" />
+            <h4 className="text-sm font-semibold text-[#1f2933]">{heading}</h4>
+          </>
+        )}
         {(recs.length > 0 || coverage.length > 0 || totalRecommended > 0) && (
-          <span className="text-[11px] text-slate-500">
+          <span className="text-xs text-[#586472]">
             {groups.length} framework{groups.length === 1 ? '' : 's'} · {recs.length} mapped
             {totalRecommended ? ` · ${totalRecommended} recommended` : ''}
             {totalGaps ? ` · ${totalGaps} gaps` : ''}
@@ -494,30 +502,35 @@ function RecommendedControlsSection({
       </div>
 
       {recs.length === 0 && coverage.length === 0 && totalRecommended === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-          No framework clauses matched yet. Recommendations populate automatically after the document is parsed into
-          statements, scoped to this document&apos;s in-scope &amp; referenced frameworks.
-        </p>
+        <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-[#c3ccd5] bg-[#fff] px-3 py-6 text-center">
+          <Layers strokeWidth={1.5} className="h-7 w-7 text-[#7b8794]" aria-hidden />
+          <p className="flex items-center gap-1 text-[13px] font-medium text-[#1f2933]">
+            No clauses matched yet
+            <InfoTip label="About the matches" text="Matches appear after the document is parsed into statements, for the frameworks this document is scoped to." />
+          </p>
+        </div>
       ) : (
         <>
           {showToolbar && (
             <div className="mb-2.5 flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative flex-1">
-                <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#7b8794]" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search frameworks, clauses, titles…"
-                  className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Search"
+                  aria-label="Search frameworks, clauses and titles"
+                  className="h-8 w-full rounded-full border border-[#d5dbe1] bg-[#fff] pl-8 pr-3 text-xs text-[#1f2933] placeholder:text-[#7b8794] focus:border-[#0f766e] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
                 />
               </div>
-              <div className="inline-flex shrink-0 rounded-lg border border-slate-200 p-0.5">
+              <div className="inline-flex shrink-0 rounded-lg bg-[#eef1f4] p-0.5" role="group" aria-label="Show">
                 {(['all', 'mapped', 'gaps'] as const).map((v) => (
                   <button
                     key={v}
                     type="button"
                     onClick={() => setStatusView(v)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors ${statusView === v ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                    aria-pressed={statusView === v}
+                    className={`rounded-md px-2.5 py-1.5 text-xs font-semibold capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${statusView === v ? 'bg-[#fff] text-[#0f766e] shadow-card' : 'text-[#586472] hover:text-[#1f2933]'}`}
                   >
                     {v}
                   </button>
@@ -528,7 +541,7 @@ function RecommendedControlsSection({
 
           <div className="space-y-2">
             {groups.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">No frameworks match your search.</p>
+              <p className="rounded-lg border border-dashed border-[#c3ccd5] bg-[#fff] px-3 py-4 text-center text-[13px] text-[#586472]">No matches</p>
             ) : groups.map((g, idx) => {
               const open = isOpen(g.name, idx);
               const pct = g.cov?.coverage_pct;
@@ -552,8 +565,8 @@ function RecommendedControlsSection({
                     <CheckCircle strokeWidth={1.75} className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} />
                     <span className="shrink-0 text-sm font-semibold text-slate-900">{upperCode(clause) || '—'}</span>
                     <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{r.control_title || ''}</span>
-                    {pctR !== null && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{pctR}%</span>}
-                    {r.statement_count > 0 && <span className="shrink-0 text-[10px] text-slate-400">{r.statement_count} stmt</span>}
+                    {pctR !== null && <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{pctR}%</span>}
+                    {r.statement_count > 0 && <span className="shrink-0 text-[11px] text-[#586472]" title={`Covered by ${r.statement_count} statement${r.statement_count === 1 ? '' : 's'}`}>{r.statement_count} stmt</span>}
                     {canLink && <LinkButton r={r} small />}
                   </div>
                 );
@@ -596,9 +609,9 @@ function RecommendedControlsSection({
                     <div className="border-t border-slate-100">
                       {statusView !== 'gaps' && (
                         <div>
-                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Mapped ({g.mapped.length})</p>
+                          <p className="px-3 pb-1 pt-2 text-xs font-semibold text-[#586472]">Mapped · {g.mapped.length}</p>
                           {g.mapped.length === 0 ? (
-                            <p className="px-3 pb-2 text-xs text-slate-500">No clauses of this framework are mapped by this document yet.</p>
+                            <p className="px-3 pb-2 text-xs text-[#586472]">None mapped yet</p>
                           ) : (
                             <div className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
                               {g.mapped.map((r, i) => renderControlRow(r, i, 'mapped'))}
@@ -609,8 +622,8 @@ function RecommendedControlsSection({
 
                       {statusView !== 'mapped' && g.recommended.length > 0 && (
                         <div className="border-t border-slate-100 bg-primary-50/20">
-                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-primary-600">
-                            Recommended to link ({g.recommended.length})
+                          <p className="px-3 pb-1 pt-2 text-xs font-semibold text-[#0f766e]">
+                            Recommended to link · {g.recommended.length}
                           </p>
                           <div className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
                             {g.recommended.map((r, i) => renderControlRow(r, i, 'recommended'))}
@@ -620,14 +633,14 @@ function RecommendedControlsSection({
 
                       {statusView !== 'mapped' && gaps.length > 0 && (
                         <div className="border-t border-slate-100 bg-rose-50/20">
-                          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-rose-500">Not mapped ({gaps.length})</p>
+                          <p className="px-3 pb-1 pt-2 text-xs font-semibold text-rose-700">Not mapped · {gaps.length}</p>
                           <div className="max-h-72 divide-y divide-rose-100/60 overflow-y-auto">
                             {gaps.map((c) => (
                               <div key={c.id} className="flex items-center gap-2 px-3 py-1.5">
                                 <span className="h-3 w-3 shrink-0 rounded-full border border-rose-300" />
                                 <span className="shrink-0 font-mono text-xs text-rose-600">{upperCode(c.reference)}</span>
                                 <span className="min-w-0 flex-1 truncate text-xs text-slate-600">{c.title}</span>
-                                {c.domain && <span className="shrink-0 text-[10px] text-slate-400">{c.domain}</span>}
+                                {c.domain && <span className="shrink-0 text-[11px] text-[#586472]">{c.domain}</span>}
                               </div>
                             ))}
                           </div>
@@ -716,7 +729,7 @@ function RecommendedControlsSection({
 
             {detail.rationale && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Why it matched</h5>
+                <h5 className="mb-2 text-xs font-semibold text-[#586472]">Why it matched</h5>
                 <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
                   {detail.rationale}
                 </p>
@@ -725,7 +738,7 @@ function RecommendedControlsSection({
 
             {detail.description && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <h5 className="mb-2 text-xs font-semibold text-[#586472]">
                   {detail.source === 'gap' ? 'Clause / control text' : 'Clause text'}
                 </h5>
                 <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
@@ -736,7 +749,7 @@ function RecommendedControlsSection({
 
             {detail.source === 'gap' && detail.gap_description && detail.gap_description !== detail.rationale && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Gap description</h5>
+                <h5 className="mb-2 text-xs font-semibold text-[#586472]">Gap description</h5>
                 <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
                   {detail.gap_description}
                 </p>
@@ -745,7 +758,7 @@ function RecommendedControlsSection({
 
             {detail.source === 'gap' && detail.missing_requirement && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Missing requirement</h5>
+                <h5 className="mb-2 text-xs font-semibold text-[#586472]">Missing requirement</h5>
                 <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
                   {detail.missing_requirement}
                 </p>
@@ -754,7 +767,7 @@ function RecommendedControlsSection({
 
             {detail.source === 'gap' && detail.remediation && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remediation</h5>
+                <h5 className="mb-2 text-xs font-semibold text-[#586472]">Remediation</h5>
                 <p className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800">
                   {detail.remediation}
                 </p>
@@ -763,12 +776,12 @@ function RecommendedControlsSection({
 
             {detail.source !== 'gap' && (
               <div className="border-t border-slate-100 pt-4">
-                <h5 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <h5 className="mb-2.5 text-xs font-semibold text-[#586472]">
                   Covered by {detail.statement_count} statement{detail.statement_count === 1 ? '' : 's'}
                 </h5>
                 <div className="space-y-2">
                   {detail.statements.length === 0 ? (
-                    <p className="text-sm text-slate-500">No statement detail available.</p>
+                    <p className="text-sm text-[#586472]">No detail</p>
                   ) : (
                     detail.statements.map((s) => {
                       const full = statementText.get(s.id);
@@ -792,7 +805,7 @@ function RecommendedControlsSection({
 
             {detail.source === 'gap' && !detail.description && !detail.gap_description && !detail.remediation && !detail.rationale && (
               <div className="border-t border-slate-100 pt-4">
-                <p className="text-sm text-slate-500">No additional gap detail is available for this control.</p>
+                <p className="text-sm text-[#586472]">No more detail</p>
               </div>
             )}
           </div>
@@ -1041,11 +1054,8 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
 
   // Shared: the manually-linked internal-controls list (empty state or list).
   const linkedControlsList = (mappingsData?.control_links?.length ?? 0) === 0 ? (
-    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center">
-      <p className="text-sm text-slate-600">No internal controls linked yet</p>
-      {canCreate && canErm && (
-        <p className="text-xs text-slate-500 mt-0.5">Use &quot;Link internal control&quot; to attach internal (ERM) controls.</p>
-      )}
+    <div className="rounded-lg border border-dashed border-[#c3ccd5] bg-[#fff] px-3 py-4 text-center">
+      <p className="text-[13px] text-[#586472]">None yet</p>
     </div>
   ) : (
     <div className="space-y-1.5 max-h-72 overflow-y-auto">
@@ -1096,8 +1106,8 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
       widthClassName="w-[640px]"
     >
       <div className="space-y-3.5">
-        <p className="text-xs text-slate-600">
-          Search and select an internal control to link to &quot;{selectedDocument?.title || mappingsData?.document_title || 'this document'}&quot;
+        <p className="truncate text-[13px] text-[#586472]" title={selectedDocument?.title || mappingsData?.document_title || undefined}>
+          Linking to &ldquo;{selectedDocument?.title || mappingsData?.document_title || 'this document'}&rdquo;
         </p>
 
         {linkError && (
@@ -1110,14 +1120,14 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
         <SearchInput
           value={controlSearchTerm}
           onChange={setControlSearchTerm}
-          placeholder="Search internal controls by ID or name..."
+          placeholder="Search by ID or name"
           size="md"
           autoFocus
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Link Type</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Link type</label>
             <MultiSelectDropdown
               title="Link Type"
               items={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))}
@@ -1132,7 +1142,6 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
             <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
             <input
               type="text"
-              placeholder="Add notes..."
               value={linkNotes}
               onChange={(e) => setLinkNotes(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
@@ -1147,11 +1156,11 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
             </div>
           ) : filteredControls.length === 0 ? (
             <div className="text-center py-6">
-              <p className="text-slate-600">
-                {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
+              <p className="text-[13px] text-[#586472]">
+                {controlSearchTerm ? 'No matches' : 'None available'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Controls already linked to the selected document are excluded from this list.
+              <p className="text-xs text-[#586472] mt-1">
+                Controls linked to this document are hidden.
               </p>
             </div>
           ) : (
@@ -1176,7 +1185,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
                     )}
                     {control.source_document_id && control.source_document_id !== selectedDocumentId && (
                       <p className="text-xs text-amber-700 mt-1">
-                        Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
+                        Linked to {documentTitleById.get(control.source_document_id) || 'another document'}
                       </p>
                     )}
                   </div>
@@ -1199,8 +1208,8 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
         </div>
 
         {filteredControls.length > 50 && (
-          <p className="text-xs text-slate-500 text-center">
-            Showing first 50 results. Use search to narrow down.
+          <p className="text-xs text-[#586472] text-center">
+            First 50 shown: search to narrow
           </p>
         )}
 
@@ -1236,13 +1245,13 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
     const noFrameworks = mappingsData?.framework_scope_ids != null && frameworkScope.ids.length === 0;
     return (
       <div className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">Framework mappings</h3>
-            <p className="text-xs text-slate-500">How this document&apos;s statements map to its frameworks&apos; clauses.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1">
+            <h3 className="text-[15px] font-semibold text-[#1f2933]">Framework mappings</h3>
+            <InfoTip label="About the mappings" text="How this document's statements map to its frameworks' clauses." />
           </div>
           {canCreate && canErm && (
-            <button onClick={() => setShowLinkModal(true)} className="btn-primary btn-sm shrink-0">
+            <button type="button" onClick={() => setShowLinkModal(true)} className={BTN}>
               <Plus className="h-4 w-4" /> Link internal control
             </button>
           )}
@@ -1264,13 +1273,14 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
             statementText={statementText}
             coverage={coverageFrameworks}
             gapRecs={gapRecs}
+            heading={null}
           />
         )}
 
         <div>
           <div className="mb-2 flex items-center gap-2">
             <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
-            <h4 className="text-sm font-semibold text-slate-900">Linked internal controls</h4>
+            <h4 className="text-sm font-semibold text-[#1f2933]">Internal controls</h4>
             {linkedCount > 0 && (
               <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{linkedCount}</span>
             )}
@@ -1286,25 +1296,25 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Policy-Control Mappings</h2>
-          <p className="text-xs sm:text-sm text-slate-600">Link governance documents to controls</p>
+        <div className="flex items-center gap-1">
+          <h2 className="text-lg font-semibold text-[#1f2933] sm:text-xl">Policy-Control Mappings</h2>
+          <InfoTip label="About the mappings" text="Link governance documents to controls." />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-600">Documents:</span>
-            <span className="font-semibold text-slate-900">{coverageSummary.totalDocs}</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-[#586472]">Documents</span>
+            <span className="font-semibold text-[#1f2933]">{coverageSummary.totalDocs}</span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-600">Policies mapped:</span>
-            <span className="font-semibold text-primary-700">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-[#586472]">Mapped</span>
+            <span className="font-semibold text-[#0f766e]">
               {coverageSummary.docsWithMappings}/{coverageSummary.totalDocs} ({coverageSummary.coveragePct}%)
             </span>
           </div>
           {selectedDocumentId && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-600">Linked Controls:</span>
-              <span className="font-semibold text-primary-700">{mappingsData?.control_links?.length || 0}</span>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-[#586472]">Linked controls</span>
+              <span className="font-semibold text-[#0f766e]">{mappingsData?.control_links?.length || 0}</span>
             </div>
           )}
         </div>
@@ -1315,7 +1325,6 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
           <div className="card-header">
             <div>
               <h3 className="card-title">Documents</h3>
-              <p className="card-description">Select a document to view and manage mappings</p>
             </div>
           </div>
 
@@ -1335,7 +1344,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
                 selectedValues={typeFilter ? [typeFilter] : []}
                 onApply={(values) => setTypeFilter(values[0] || '')}
                 multiSelect={false}
-                placeholder="All Types"
+                placeholder="All types"
               />
             </div>
           </div>
@@ -1344,7 +1353,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
             {documents.length === 0 ? (
               <div className="text-center py-6">
                 <FileText strokeWidth={1.75} className="h-7 w-7 text-slate-400 mx-auto mb-2" />
-                <p className="text-slate-600">No documents found</p>
+                <p className="text-[13px] text-[#586472]">No documents</p>
               </div>
             ) : (
               documents.map((doc) => {
@@ -1387,21 +1396,17 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
 
         <div className="card">
           <div className="card-header">
-            <div>
+            <div className="min-w-0">
               <h3 className="card-title">
-                {selectedDocument ? 'Linked Controls' : 'Control Mappings'}
+                {selectedDocument ? 'Linked controls' : 'Control mappings'}
               </h3>
-              <p className="card-description">
-                {selectedDocument 
-                  ? `Controls linked to "${selectedDocument.title}"`
-                  : 'Select a document to view linked controls'
-                }
-              </p>
+              {selectedDocument && <p className="truncate text-xs text-[#586472]" title={selectedDocument.title}>{selectedDocument.title}</p>}
             </div>
             {selectedDocumentId && canCreate && canErm && (
               <button
+                type="button"
                 onClick={() => setShowLinkModal(true)}
-                className="btn-primary btn-sm"
+                className={BTN_PRIMARY}
               >
                 <Plus className="h-4 w-4" />
                 Link internal control
@@ -1412,8 +1417,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
           {!selectedDocumentId ? (
             <div className="text-center py-8">
               <Link2 strokeWidth={1.75} className="h-7 w-7 text-slate-400 mx-auto mb-2" />
-              <p className="text-xs text-slate-600">Select a document from the left panel</p>
-              <p className="text-xs text-slate-500 mt-0.5">to view and manage control mappings</p>
+              <p className="text-[13px] text-[#586472]">Select a document</p>
             </div>
           ) : mappingsLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -1433,7 +1437,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
               <div>
                 <div className="mb-2 flex items-center gap-2">
                   <Shield strokeWidth={1.75} className="h-4 w-4 text-emerald-600" />
-                  <h4 className="text-sm font-semibold text-slate-900">Linked internal controls</h4>
+                  <h4 className="text-sm font-semibold text-[#1f2933]">Internal controls</h4>
                 </div>
                 {linkedControlsList}
               </div>
