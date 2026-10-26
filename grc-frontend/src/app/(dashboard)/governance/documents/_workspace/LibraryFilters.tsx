@@ -11,11 +11,11 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Bookmark, Check, ChevronDown, Columns3, Download, Plus, Rows3, Rows4, Search, SlidersHorizontal, UserRound, X } from 'lucide-react';
+import { Bookmark, Check, ChevronDown, Columns3, Download, Folder, Plus, Rows3, Rows4, Search, SlidersHorizontal, Table2, UserRound, X } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
 import {
   ATTESTATION_BUCKETS, ATTESTATION_LABEL, NO_FILTERS, REVIEW_BUCKETS, REVIEW_BUCKET_LABEL, filterCount, nextStatuses,
-  type AttestationBucket, type Filters, type ReviewBucket, type SavedView,
+  type AttestationBucket, type Filters, type LibraryViewId, type ReviewBucket, type SavedView,
 } from './libraryModel';
 import type { Density } from './libraryPrefs';
 import { exportTitle, filterChips, removeChip, resultText, validViewName, type FilterOptions } from './libraryFiltersLogic';
@@ -50,6 +50,9 @@ export interface LibraryFiltersProps {
   onExport: () => void;
   /** false when nothing matches */
   canExport: boolean;
+  /** the layout: the register table, or a folder for each department */
+  view: LibraryViewId;
+  onView: (view: LibraryViewId) => void;
 }
 
 const REVIEW_ITEMS = REVIEW_BUCKETS.map((b) => ({ value: b as string, label: REVIEW_BUCKET_LABEL[b] }));
@@ -318,7 +321,7 @@ const ICON_TOOL = `${TOOL} w-8 justify-center px-0`;
 
 export function LibraryFilters({
   filters, onChange, options, canFilterMine, shown, total, views, activeViewId, onApplyView, onSaveView, onDeleteView,
-  columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport,
+  columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport, view, onView,
 }: LibraryFiltersProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const filtering = filterCount(filters) > 0;
@@ -456,6 +459,26 @@ export function LibraryFilters({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* the layout: the register table, or a folder for each department (the same documents, the same filters) */}
+          <div role="group" aria-label="Library layout" className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-[#c3ccd5] bg-[#fff] p-0.5">
+            {([['table', Table2, 'Table'], ['folders', Folder, 'Folders']] as const).map(([value, Icon, name]) => {
+              const on = view === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={on}
+                  title={value === 'table' ? 'One list of documents' : 'Documents in a folder for each department'}
+                  onClick={() => { if (!on) onView(value); }}
+                  className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs ${FOCUS} ${on ? 'bg-[#f0fdfa] font-medium text-[#115e59] ring-1 ring-inset ring-[#99d5cf]' : 'text-[#586472] hover:bg-[#f3f6f8]'}`}
+                >
+                  <Icon aria-hidden strokeWidth={1.75} className="h-4 w-4" />
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+
           <PopoverMenu
             title="Views"
             label={activeView ? `Views, current view ${activeView.name}` : 'Views'}

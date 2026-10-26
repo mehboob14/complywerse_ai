@@ -10,23 +10,35 @@
  * or filter is on (what the person closed belongs to one set of matches), the bulk actions and the per-row rights (the rows get tick
  * boxes only when the bulk bar has something for this person), and no Approve.
  *
+ * The Folders view is this same table: given `folders` (libraryFolders.ts) it draws a header row for each department folder across
+ * the table and, under an open one, the folders inside it and then its documents as the same rows, one level deeper, with the same
+ * columns (minus Department: the folder is the department), versions, nesting, tick boxes, bulk bar and sticky header; the pager gives
+ * way to "Show N more" under each folder. "Move to…" is in the row menu and the bulk bar of both layouts.
+ *
  * The table is a plain <table> in a scroller with a sticky header and a sticky first column (tick box + Document). The dashboard CSS
  * forces 7px on every td/th (!important), zebra-stripes rows, collapses borders and gives th/td 11.5px text, so: the row HEIGHT comes
  * from `h-*` on the row (a table row treats it as a minimum), every cell paints its own opaque background, borders are separate (a
  * collapsed border does not stick), and every text has its own size and colour.
  */
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import {
-  Archive, ArchiveRestore, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, Send, UserPlus,
-  type LucideIcon,
+  Archive, ArchiveRestore, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FolderInput, Send,
+  UserPlus, type LucideIcon,
 } from 'lucide-react';
 import type { GovDoc } from './lib';
 import {
   ActionsCell, AttestationCell, DepartmentCell, DocumentCell, LifecycleCell, OwnerCell, ReviewCell, TypeCell, UpdatedCell, VersionCell,
 } from './cells';
 import { FrameworksCell } from './FrameworksCell';
-import { Versions } from './Versions';
+import { STEP, Versions } from './Versions';
+import { FolderHeadRow, FoldersToolbar, ShowMoreRow } from './FolderRows';
+import { MovePopover } from './MovePopover';
 import { NOTHING_OPEN, buildTree, collapseAll, expandAll, flip, openness, treeEntries, type Fold } from './docTree';
+import {
+  FIRST_SHOWN, allFolders, commonDepartment, expandable, flipFolder, folderEntries, folderIsOpen, matchedIds, planFolders, setAllFolders,
+  showMoreStep, shownLimit,
+  type FoldChange, type FoldView, type FolderNode, type MoveTarget,
+} from './libraryFolders';
 import { clampPage, rangeLabel } from './libraryFormat';
 import { compareDocs, nextSort, type Lookups, type Sort } from './libraryModel';
 import { PAGE_SIZES, type Density } from './libraryPrefs';
@@ -84,9 +96,21 @@ export interface LibraryTableProps {
   loading?: boolean;
   /** what the body shows when nothing matches (the page composes it) */
   emptyState: ReactNode;
+  /** The Folders view: the folders (libraryFolders.buildFolders) the documents are drawn in. Left out or null: the plain table. */
+  folders?: FolderNode<GovDoc>[] | null;
+  /** The folders the person left open or closed (folder key -> open), and how a change is remembered */
+  folderOpen?: Record<string, boolean>;
+  onFolderOpen?: (next: Record<string, boolean>) => void;
+  /** Move to…: where a document can go, and the move itself: it answers with the ids that could NOT be moved (they stay ticked) */
+  moveTargets?: MoveTarget[];
+  onMove?: (ids: number[], to: MoveTarget) => Promise<number[]>;
+  /** per row: the person may change this document (the server decides again) */
+  canMoveRow?: (d: GovDoc) => boolean;
 }
 
 const NONE: ReadonlySet<number> = new Set<number>();
+const NO_KEYS: ReadonlySet<string> = new Set<string>();
+const NO_CHOICES: Readonly<Record<string, boolean>> = {};
 const SKELETON_ROWS = 8;
 const BULK_ICON: Record<BulkId, LucideIcon> = { publish: Send, 'assign-owner': UserPlus, 'set-review': CalendarClock, archive: Archive, restore: ArchiveRestore };
 
@@ -144,8 +168,8 @@ function SortButton({ column, sort, onSort }: { column: Column; sort: Sort; onSo
   );
 }
 
-function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled, fold }: {
-  columns: Column[]; sort: Sort; onSort: (next: Sort) => void; selectable: boolean; tick: TickState; onTickAll: () => void; scrolled: boolean;
+function HeadRow({ columns, sort, onSort, selectable, tick, tickLabel, onTickAll, scrolled, fold }: {
+  columns: Column[]; sort: Sort; onSort: (next: Sort) => void; selectable: boolean; tick: TickState; tickLabel: string; onTickAll: () => void; scrolled: boolean;
   /** the tree's "open all / close all" (only where some document has documents under it) */
   fold: { allOpen: boolean; onToggle: () => void } | null;
 }) {
@@ -163,7 +187,7 @@ function HeadRow({ columns, sort, onSort, selectable, tick, onTickAll, scrolled,
           >
             {first ? (
               <div className="flex items-center gap-2">
-                {selectable && <TickBox label="Select all documents on this page" state={tick} onChange={onTickAll} />}
+                {selectable && <TickBox label={tickLabel} state={tick} onChange={onTickAll} />}
                 <SortButton column={c} sort={sort} onSort={onSort} />
                 {fold && (
                   <button
@@ -194,17 +218,21 @@ export function LibraryTable({
   docs, scope, filtering, lookups, counts, preferFrameworks, sort, onSort, hiddenColumns, density, pageSize, onPageSize, activeId,
   onPeek, onOpenDoc, onPickFramework, onEdit, onDownload, onArchive, onRestore, canEdit = false, canEditRow, canArchiveRow, canRestoreRow,
   showingArchived = false, onBulkPublish, onBulkArchive, onBulkAssignOwner, onBulkSetReviewDate, onBulkRestore, loading = false, emptyState,
+  folders = null, folderOpen = NO_CHOICES, onFolderOpen, moveTargets = [], onMove, canMoveRow,
 }: LibraryTableProps) {
   const compact = density === 'compact';
-  const columns = visibleColumns(hiddenColumns);
+  const uid = useId();
+  // the Folders view has no Department column: the folder is the department
+  const columns = visibleColumns(hiddenColumns).filter((c) => !(folders && c.id === 'department'));
   const hasDepartmentColumn = columns.some((c) => c.id === 'department');
   const rowHeight = compact ? 'h-9' : 'h-14';
 
   // the documents in the order chosen (children follow it), each under its parent; with a search or filter, the matches and the
-  // documents above them (docTree.ts)
-  const ordered = useMemo(() => [...scope].sort(compareDocs({ key: sort.key, dir: sort.dir }, lookups)), [scope, sort.key, sort.dir, lookups]);
-  const roots = useMemo(() => buildTree(ordered, new Set(docs.map((d) => d.id))), [ordered, docs]);
-  const entries = useMemo(() => treeEntries(roots), [roots]);
+  // documents above them (docTree.ts). In the Folders view each folder has its own tree (libraryFolders.ts), the same rules.
+  const ordered = useMemo(() => (folders ? [] : [...scope].sort(compareDocs({ key: sort.key, dir: sort.dir }, lookups))), [folders, scope, sort.key, sort.dir, lookups]);
+  const matchIds = useMemo(() => new Set(docs.map((d) => d.id)), [docs]);
+  const roots = useMemo(() => buildTree(ordered, matchIds), [ordered, matchIds]);
+  const entries = useMemo(() => (folders ? folderEntries(folders) : treeEntries(roots)), [folders, roots]);
   const at = useMemo(() => new Map(entries.map((e) => [e.doc.id, e])), [entries]);
   const top = useMemo(() => roots.map((n) => n.doc), [roots]);
   const parents = entries.filter((e) => e.children.length > 0).map((e) => e.doc.id);
@@ -218,10 +246,25 @@ export function LibraryTable({
   const [fold, setFold] = useState<Fold>(NOTHING_OPEN);
   const [selected, setSelected] = useState<ReadonlySet<number>>(NONE);
   const [pageNo, setPageNo] = useState(1);
+  // Folders view: the folders closed by hand while a search or filter was on, the documents asked for beyond a folder's first ones, and
+  // the "Move to…" popover (the documents it is for, and the box of the button it came from)
+  const [shut, setShut] = useState<ReadonlySet<string>>(NO_KEYS);
+  const [extra, setExtra] = useState<Record<string, number>>({});
+  const [moving, setMoving] = useState<{ ids: number[]; anchor: DOMRect | null } | null>(null);
+  const [moveBusy, setMoveBusy] = useState(false);
+  // The documents a move could not move: they stay ticked through the first change of the list that follows (the refresh after a move
+  // lists the documents that were just updated first, which is a new set of matches as far as the ticks are concerned)
+  const [kept, setKept] = useState<{ ids: number[]; until: number } | null>(null);
   const [seen, setSeen] = useState({ match: matchKey, view: viewKey });
   if (seen.view !== viewKey) {
-    if (seen.match !== matchKey) { setFold((f) => ({ ...f, shut: NONE })); setSelected(NONE); }
+    if (seen.match !== matchKey) {
+      setFold((f) => ({ ...f, shut: NONE }));
+      setSelected(kept && kept.until > Date.now() ? new Set(kept.ids.filter((id) => matchIds.has(id))) : NONE);
+      setKept(null);
+      setShut(NO_KEYS);
+    }
     setPageNo(1);
+    setExtra({});
     setSeen({ match: matchKey, view: viewKey });
   }
   const [scrolled, setScrolled] = useState(false);
@@ -232,9 +275,32 @@ export function LibraryTable({
   // pages hold top-level rows; the documents under an open one follow it
   const page = clampPage(pageNo, pageSize, top.length);
   const pages = Math.max(1, Math.ceil(top.length / pageSize));
-  const rows = drawnRows(pageOf(top, page, pageSize), at, openOf);
+  const pageRows = drawnRows(pageOf(top, page, pageSize), at, openOf);
+
+  // The Folders view draws the folders (each open one: the folders inside it, then the first of its own documents) instead of a page.
+  // The folders open the way libraryFolders.folderIsOpen says; the person's choice is remembered by the page (not while filtering).
+  const foldView: FoldView = { saved: folderOpen, shut, filtering, docCount: docs.length };
+  const plan = folders
+    ? planFolders(folders, {
+        isOpen: (n) => folderIsOpen(foldView, n.key),
+        limit: (n) => shownLimit(extra[n.key]),
+        rowsOf: (n, limit) => drawnRows(n.top.slice(0, limit), at, openOf),
+      })
+    : null;
+  const rows = plan ? plan.reduce<DrawnRow<GovDoc>[]>((all, item) => (item.kind === 'docs' ? all.concat(item.rows) : all), []) : pageRows;
   const tickable = rows.filter((r) => r.match).map((r) => r.doc.id);
   const sizes = PAGE_SIZES.includes(pageSize) ? PAGE_SIZES : [...PAGE_SIZES, pageSize].sort((a, b) => a - b);
+  const everyFolder = folders ? allFolders(folders) : [];
+  const foldable = everyFolder.filter(expandable);
+  const applyFold = (change: FoldChange) => { if (filtering) setShut(change.shut); else onFolderOpen?.(change.saved); };
+  const allFoldersOpen = foldable.every((n) => folderIsOpen(foldView, n.key));
+  const toggleAllFolders = () => {
+    const open = !allFoldersOpen;
+    applyFold(setAllFolders(foldView, foldable.map((n) => n.key), open));
+    setFold((f) => (open ? expandAll(f) : collapseAll(parents)));            // the documents that have documents under them follow
+  };
+  const headId = (n: FolderNode<GovDoc>) => `${uid}-folder-${n.key}`;
+  const docsId = (n: FolderNode<GovDoc>) => `${uid}-docs-${n.key}`;
 
   // the rows get tick boxes only when the bulk bar has something for this person to do; no Approve: a document is approved by its
   // approvers signing it in its review (the server refuses a bulk approval), and Publish publishes only approved documents
@@ -251,6 +317,43 @@ export function LibraryTable({
   };
   const rights = { canEdit, canEditRow, canArchiveRow, canRestoreRow, canRestore: !!onRestore };
 
+  // Move to…: the popover chooses the department; the page moves the documents and says what happened. The documents that moved leave
+  // the selection, the ones that could not be moved stay ticked (also through the list being refreshed under them: `kept`).
+  const moveDocs = moving ? moving.ids.map((id) => at.get(id)?.doc).filter((d): d is GovDoc => !!d) : [];
+  const pickTarget = async (target: MoveTarget) => {
+    if (!moving || !onMove || moveBusy) return;
+    const ids = moving.ids;
+    const ticks = ids.filter((id) => selected.has(id));
+    setMoveBusy(true);
+    let failed: number[] = [];
+    try {
+      failed = await onMove(ids, target);
+    } finally {
+      setMoveBusy(false);
+      setMoving(null);
+    }
+    const stay = ticks.filter((id) => failed.includes(id));
+    setSelected((s) => {
+      const next = new Set(s);
+      ids.forEach((id) => next.delete(id));
+      stay.forEach((id) => next.add(id));
+      return next;
+    });
+    setKept(stay.length > 0 ? { ids: stay, until: Date.now() + 10_000 } : null);
+  };
+  const tickFolder = (node: FolderNode<GovDoc>): ReactNode => {
+    if (bulkActions.length === 0) return null;
+    const mine = matchedIds(node);
+    if (mine.length === 0) return <span className="w-4 shrink-0" aria-hidden />;
+    return (
+      <TickBox
+        label={`Select ${mine.length === 1 ? '1 document' : `all ${mine.length} documents`} in ${node.name}`}
+        state={tickState(selected, mine)}
+        onChange={() => setSelected((s) => toggleAll(s, mine))}
+      />
+    );
+  };
+
   const peek = (e: MouseEvent<HTMLTableRowElement>, id: number) => {
     const target = e.target as HTMLElement;
     if (!e.currentTarget.contains(target) || target.closest(CONTROLS)) return;     // a click on a control, or one that came out of a portal
@@ -262,7 +365,8 @@ export function LibraryTable({
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPeek(id); }
   };
 
-  const renderRow = (r: DrawnRow<GovDoc>) => {
+  // `offset`: how many levels deeper than the table's own the row sits (the Folders view: under its folder)
+  const renderRow = (r: DrawnRow<GovDoc>, offset = 0) => {
     const { doc } = r;
     const active = activeId === doc.id;
     const isTicked = selected.has(doc.id);
@@ -272,14 +376,26 @@ export function LibraryTable({
       switch (id) {
         case 'type': return <TypeCell doc={doc} />;
         case 'lifecycle': return <LifecycleCell doc={doc} />;
-        case 'owner': return <OwnerCell doc={doc} department={hasDepartmentColumn ? undefined : department} compact={compact} />;      // the column says it already
+        case 'owner': return <OwnerCell doc={doc} department={hasDepartmentColumn || folders ? undefined : department} compact={compact} />;      // the column (or the folder) says it already
         case 'department': return <DepartmentCell name={department} />;
         case 'frameworks': return <FrameworksCell doc={doc} info={lookups.frameworks} prefer={preferFrameworks} onPick={onPickFramework} />;
         case 'attestation': return <AttestationCell pct={lookups.coverage[doc.id]} count={counts[doc.id]} compact={compact} />;
         case 'review': return <ReviewCell doc={doc} compact={compact} />;
         case 'version': return <VersionCell doc={doc} compact={compact} />;
         case 'updated': return <UpdatedCell value={doc.updated_at} />;
-        case 'actions': return <ActionsCell doc={doc} rights={rowRights(rights, doc)} onOpenDoc={onOpenDoc} onEdit={onEdit} onDownload={onDownload} onArchive={onArchive} onRestore={onRestore} />;
+        case 'actions': return (
+          <ActionsCell
+            doc={doc}
+            rights={rowRights(rights, doc)}
+            onOpenDoc={onOpenDoc}
+            onEdit={onEdit}
+            onDownload={onDownload}
+            onArchive={onArchive}
+            onRestore={onRestore}
+            canMove={!!onMove && !!canMoveRow?.(doc)}
+            onMove={(d, anchor) => setMoving({ ids: [d.id], anchor: anchor ?? null })}
+          />
+        );
         default: return null;
       }
     };
@@ -304,7 +420,7 @@ export function LibraryTable({
                   : <span className="w-4 shrink-0" aria-hidden />)}
                 <DocumentCell
                   doc={doc}
-                  depth={r.depth}
+                  depth={r.depth + offset}
                   match={r.match}
                   childCount={r.childCount}
                   open={r.open}
@@ -325,7 +441,7 @@ export function LibraryTable({
             <td colSpan={columns.length} className="border-b border-[#e1e6eb] bg-[#fbfcfd] px-[12px]">
               {/* pinned to the left edge, so the versions stay in view when the table has scrolled sideways */}
               <div className="sticky left-[12px] w-[44rem] max-w-[calc(100vw-4rem)] py-[4px]" style={{ paddingLeft: bulkActions.length > 0 ? 24 : 0 }}>
-                <Versions doc={doc} depth={r.depth} />
+                <Versions doc={doc} depth={r.depth + offset} />
               </div>
             </td>
           </tr>
@@ -334,8 +450,22 @@ export function LibraryTable({
     );
   };
 
-  const empty = !loading && top.length === 0;
+  const empty = !loading && (folders ? docs.length === 0 : top.length === 0);
   if (empty && scrolled) setScrolled(false);        // the scroller is gone; the next one starts at the left edge
+  // Move to… in the bulk bar: for the working list (where Archive is), never the Archived list (the server refuses changing those)
+  const bulkMove = (
+    <button
+      key="move"
+      type="button"
+      onClick={(e) => { const anchor = e.currentTarget.getBoundingClientRect(); setMoving((m) => (m ? null : { ids: ticked, anchor })); }}
+      data-move-trigger
+      aria-haspopup="dialog"
+      aria-expanded={!!moving}
+      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 !text-[13px] font-medium text-[#99f6e4] hover:bg-[#2f3d4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99f6e4]"
+    >
+      <FolderInput className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Move to…
+    </button>
+  );
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-[#d5dbe1] bg-white">
       {!loading && ticked.length > 0 && bulkActions.length > 0 && (
@@ -345,14 +475,16 @@ export function LibraryTable({
             {bulkActions.map((a) => {
               const Icon = BULK_ICON[a.id];
               return (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => runBulk(a.id, ticked)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 !text-[13px] font-medium hover:bg-[#2f3d4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99f6e4] ${a.danger ? 'text-[#fda4af]' : 'text-[#99f6e4]'}`}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden /> {a.label}
-                </button>
+                <Fragment key={a.id}>
+                  {a.id === 'archive' && onMove && bulkMove}
+                  <button
+                    type="button"
+                    onClick={() => runBulk(a.id, ticked)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 !text-[13px] font-medium hover:bg-[#2f3d4a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#99f6e4] ${a.danger ? 'text-[#fda4af]' : 'text-[#99f6e4]'}`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden /> {a.label}
+                  </button>
+                </Fragment>
               );
             })}
           </div>
@@ -364,6 +496,10 @@ export function LibraryTable({
             Clear
           </button>
         </div>
+      )}
+
+      {folders && !loading && !empty && (
+        <FoldersToolbar allOpen={allFoldersOpen} canFold={foldable.length > 0} onToggleAll={toggleAllFolders} folders={everyFolder.length} documents={docs.length} />
       )}
 
       {empty ? (
@@ -382,29 +518,69 @@ export function LibraryTable({
                 onSort={onSort}
                 selectable={bulkActions.length > 0}
                 tick={tickState(selected, tickable)}
+                tickLabel={folders ? 'Select all documents shown' : 'Select all documents on this page'}
                 onTickAll={() => setSelected((s) => toggleAll(s, tickable))}
                 scrolled={scrolled}
-                fold={parents.length > 0 ? { allOpen: parents.every((id) => openOf(id) != null), onToggle: () => setFold(parents.every((id) => openOf(id) != null) ? collapseAll(parents) : expandAll) } : null}
+                // the Folders view has Expand all / Collapse all above the table, for the folders and the documents under documents alike
+                fold={!folders && parents.length > 0 ? { allOpen: parents.every((id) => openOf(id) != null), onToggle: () => setFold(parents.every((id) => openOf(id) != null) ? collapseAll(parents) : expandAll) } : null}
               />
             </thead>
-            <tbody aria-busy={loading || undefined}>
-              {loading
-                ? Array.from({ length: SKELETON_ROWS }, (_, i) => (
-                    <tr key={i} aria-hidden className={rowHeight}>
-                      {columns.map((c) => (
-                        <td key={c.id} className={`${CELL} bg-[#fff] ${c.id === 'title' ? `${PINNED} ${scrolled ? EDGE_SHADOW : ''}` : ''}`}>
-                          <span className="block h-3.5 animate-pulse rounded bg-[#e1e6eb] motion-reduce:animate-none" style={{ width: c.id === 'title' ? '65%' : c.id === 'actions' ? '40%' : '70%' }} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                : rows.map(renderRow)}
-            </tbody>
+            {plan && !loading ? (
+              // one <tbody> for each folder's header and one for its documents: the header says which it controls (aria-controls)
+              plan.map((item) => {
+                const node = item.node;
+                if (item.kind === 'folder') {
+                  return (
+                    <tbody key={`head-${node.key}`}>
+                      <FolderHeadRow
+                        node={node}
+                        open={item.open}
+                        colSpan={columns.length}
+                        tick={tickFolder(node)}
+                        headId={headId(node)}
+                        controls={[...node.folders.map(headId), ...(node.top.length > 0 ? [docsId(node)] : [])]}
+                        onToggle={() => applyFold(flipFolder(foldView, node.key))}
+                      />
+                    </tbody>
+                  );
+                }
+                return (
+                  <tbody key={`docs-${node.key}`} id={docsId(node)}>
+                    {item.rows.map((r) => renderRow(r, node.depth + 1))}
+                    {node.top.length > FIRST_SHOWN && (
+                      <ShowMoreRow
+                        colSpan={columns.length}
+                        indent={(bulkActions.length > 0 ? 24 : 0) + (node.depth + 1) * STEP}
+                        hidden={item.remaining}
+                        step={showMoreStep(item.remaining)}
+                        folder={node.name}
+                        onMore={() => setExtra((e) => ({ ...e, [node.key]: (e[node.key] ?? 0) + showMoreStep(item.remaining) }))}
+                        onFewer={() => setExtra((e) => { const next = { ...e }; delete next[node.key]; return next; })}
+                      />
+                    )}
+                  </tbody>
+                );
+              })
+            ) : (
+              <tbody aria-busy={loading || undefined}>
+                {loading
+                  ? Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                      <tr key={i} aria-hidden className={rowHeight}>
+                        {columns.map((c) => (
+                          <td key={c.id} className={`${CELL} bg-[#fff] ${c.id === 'title' ? `${PINNED} ${scrolled ? EDGE_SHADOW : ''}` : ''}`}>
+                            <span className="block h-3.5 animate-pulse rounded bg-[#e1e6eb] motion-reduce:animate-none" style={{ width: c.id === 'title' ? '65%' : c.id === 'actions' ? '40%' : '70%' }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  : rows.map((r) => renderRow(r))}
+              </tbody>
+            )}
           </table>
         </div>
       )}
 
-      {!loading && top.length > 0 && (
+      {!loading && !folders && top.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[#e1e6eb] px-[12px] py-[8px]">
           <p className="text-[13px] text-[#586472]" aria-live="polite">
             {rangeLabel(page, pageSize, top.length)}
@@ -433,6 +609,18 @@ export function LibraryTable({
             </div>
           </div>
         </div>
+      )}
+
+      {moving && onMove && (
+        <MovePopover
+          anchor={moving.anchor}
+          targets={moveTargets}
+          current={commonDepartment(moveDocs)}
+          count={moving.ids.length}
+          busy={moveBusy}
+          onPick={pickTarget}
+          onClose={() => setMoving(null)}
+        />
       )}
     </div>
   );

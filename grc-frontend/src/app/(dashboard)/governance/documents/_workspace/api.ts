@@ -121,6 +121,11 @@ export const bulkArchive = (document_ids: number[]) =>
 /** An archived document back as a draft (its editors only): it is reviewed, approved and published again before it is in force. */
 export const restoreDocument = (id: number) => apiClient.post(`/governance/documents/${id}/restore`);
 
+/** A document into a department (null: none). The server decides who may, refuses an archived document and a department that is
+ *  switched off, and records "Department changed from X to Y" in the Change log: the same request the Details dialog sends. */
+export const moveDocument = (id: number, department_id: number | null) =>
+  apiClient.put(`/governance/documents/${id}`, { department_id });
+
 export const bulkAssignOwner = (document_ids: number[], owner_id: number) =>
   apiClient.post('/governance/documents/bulk-assign-owner', { document_ids, owner_id });
 

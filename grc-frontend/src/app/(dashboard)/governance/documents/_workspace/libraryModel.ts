@@ -476,16 +476,28 @@ export function fromParams(p: URLSearchParams): LibraryState {
   return { filters: f, sort };
 }
 
-/** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
- *  `open` is the document peeked at in the drawer. */
-export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'sort', 'open', 'id'];
+/** How the library is laid out: the register table, or a folder for each department. Not part of LibraryState: a saved view is the
+ *  same view in either layout, so views are matched without it. */
+export type LibraryViewId = 'table' | 'folders';
 
-/** The address with the library's keys replaced by this state (and the open document); every other key is kept as it was. */
-export function withLibraryParams(current: URLSearchParams, state: LibraryState, openId: number | null): URLSearchParams {
+/** The layout an address asks for (`?view=folders`); null when it says none, so a link without it behaves as it always did. */
+export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
+  const v = p.get('view');
+  return v === 'table' || v === 'folders' ? v : null;
+}
+
+/** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
+ *  `open` is the document peeked at in the drawer; `view` the layout. */
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'sort', 'open', 'id', 'view'];
+
+/** The address with the library's keys replaced by this state (and the open document, and the layout when the person has chosen
+ *  one); every other key is kept as it was. */
+export function withLibraryParams(current: URLSearchParams, state: LibraryState, openId: number | null, view: LibraryViewId | null = null): URLSearchParams {
   const out = new URLSearchParams();
   current.forEach((value, key) => { if (!PARAM_KEYS.includes(key)) out.append(key, value); });
   toParams(state).forEach((value, key) => out.set(key, value));
   if (openId != null) out.set('open', String(openId));
+  if (view) out.set('view', view);
   return out;
 }
 

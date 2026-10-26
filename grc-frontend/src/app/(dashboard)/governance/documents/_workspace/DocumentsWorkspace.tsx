@@ -6,6 +6,8 @@
  * read, how frameworks are cut for a cell and how the page lives in the address are rules in libraryModel.ts (tested); the parts
  * only draw. The page's state (filters, sort, the document peeked at) is in the address, so a link opens the same view; the
  * person's own columns, density and saved views are kept in their browser (libraryPrefs.ts).
+ * The register has two layouts, the table and a folder for each department (libraryFolders.ts); the layout is in the address
+ * (?view=) and remembered, and "Move to…" files documents under a department from either.
  * The existing create/upload/AI-draft/templates modals stay in page.tsx and are opened via the callbacks passed in.
  */
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,22 +24,25 @@ import type { GovDoc } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel, useDepartmentNames, useFrameworkInfo } from './lib';
 import {
   fetchDocuments, fetchCoverage,
-  bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
+  bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, moveDocument, restoreDocument,
 } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
 import { creation, departmentFilterOptions } from './library';
+import { buildFolders, chooseView, displayOrder, moveAll, moveMessage, moveTargets, type MoveTarget } from './libraryFolders';
 import {
   BUILT_IN_VIEWS, NO_FILTERS, NO_OWNER,
   classificationOptions, compareDocs, exportColumnsFor, frameworkOptions, fromParams, isFiltering, kpis, matchesFilters, openFromParams,
-  toCsv, viewMatching, withLibraryParams,
-  type Filters, type LibraryState, type Lookups, type MatchContext, type Option, type SavedView, type Sort,
+  toCsv, viewFromParams, viewMatching, withLibraryParams,
+  type Filters, type LibraryState, type LibraryViewId, type Lookups, type MatchContext, type Option, type SavedView, type Sort,
 } from './libraryModel';
 import {
-  DEFAULT_PREFS, OPTIONAL_COLUMNS, browserStore, loadPrefs, loadViews, newViewId, prefsKey, savePrefs, saveViews, viewsKey,
-  type Density, type Prefs,
+  DEFAULT_PREFS, OPTIONAL_COLUMNS, browserStore, foldersKey, loadFolderPrefs, loadPrefs, loadViews, newViewId, prefsKey, savePrefs,
+  saveFolderPrefs, saveViews, viewsKey,
+  type Density, type FolderPrefs, type Prefs,
 } from './libraryPrefs';
 import { LibraryKpis } from './LibraryKpis';
 import { LibraryFilters, type ColumnChoice, type FilterOptions } from './LibraryFilters';
+import { DepartmentsFailed, NoDepartments } from './FolderRows';
 import { LibraryTable } from './LibraryTable';
 import { DocumentDrawer } from './DocumentDrawer';
 import DetailsDialog from '../[id]/_DetailsDialog';
@@ -92,6 +97,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // ── the page's state: in the address, so a link opens the same view ──
   const [state, setState] = useState<LibraryState>(() => fromParams(new URLSearchParams(searchParams?.toString() ?? '')));
   const [openId, setOpenId] = useState<number | null>(() => openFromParams(new URLSearchParams(searchParams?.toString() ?? '')));
+  // the layout the address asks for (?view=): null until the address says one or the person picks one; a link without it is as it was
+  const [viewParam, setViewParam] = useState<LibraryViewId | null>(() => viewFromParams(new URLSearchParams(searchParams?.toString() ?? '')));
   const { filters, sort } = state;
   const setFilters = useCallback((next: Filters) => setState((s) => ({ ...s, filters: next })), []);
   const setSort = useCallback((next: Sort) => setState((s) => ({ ...s, sort: next })), []);
@@ -102,10 +109,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     if (!synced.current) { synced.current = true; return; }
     // history.replaceState (not router.replace): no navigation, no history entries. With `null` as its state Next folds the new address
     // into its router (usePathname/useSearchParams, and the address it returns to after a refresh); passing history.state would skip that
-    const next = withLibraryParams(new URLSearchParams(window.location.search), state, openId).toString();
+    const next = withLibraryParams(new URLSearchParams(window.location.search), state, openId, viewParam).toString();
     const url = window.location.pathname + (next ? `?${next}` : '') + window.location.hash;
     if (url !== window.location.pathname + window.location.search + window.location.hash) window.history.replaceState(null, '', url);
-  }, [state, openId]);
+  }, [state, openId, viewParam]);
 
   // ── what this person keeps in their browser: columns, density, rows per page, saved views ──
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
@@ -127,6 +134,15 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     const next = saved.filter((v) => v.id !== id);
     setSaved(next);
     saveViews(browserStore(), viewsKey(currentUserId), next);
+  };
+
+  // what the Folders view keeps in this browser: the layout the person chose, and the folders they left open or closed (null: not read yet)
+  const [folderPrefs, setFolderPrefs] = useState<FolderPrefs | null>(null);
+  useEffect(() => { setFolderPrefs(loadFolderPrefs(browserStore(), foldersKey(currentUserId))); }, [currentUserId]);
+  const changeFolderPrefs = (next: FolderPrefs) => { setFolderPrefs(next); saveFolderPrefs(browserStore(), foldersKey(currentUserId), next); };
+  const changeView = (next: LibraryViewId) => {
+    setViewParam(next);
+    changeFolderPrefs({ view: next, open: folderPrefs?.open ?? {} });
   };
 
   // bulk side-panels
@@ -164,6 +180,20 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   // ── the options the filters offer ──
   const departmentsQ = useOrgDepartments();
+
+  // ── the layout: the register table, or a folder for each department ──
+  // The address wins, then what the person chose before, then Folders where a department is in use and the table where none is. Until
+  // that is known the body waits as a skeleton, so a library that opens in Folders never flashes the table first.
+  const departments = useMemo(() => departmentsQ.data ?? [], [departmentsQ.data]);
+  const noDepartments = !departments.some((d) => d.is_active !== false);
+  const view: LibraryViewId = chooseView({ address: viewParam, remembered: folderPrefs?.view ?? null, departments });
+  const deciding = viewParam == null && (folderPrefs == null || (folderPrefs.view == null && departmentsQ.isLoading));
+  const inFolders = view === 'folders';
+  const waiting = docsLoading || deciding || (inFolders && departmentsQ.isLoading);
+  // Folders chosen but there is nothing to group by (no department in use), or the departments could not be read (the folders cannot be
+  // told from "No department" without them): the body says so instead of drawing folders
+  const foldersBlocked = inFolders && !waiting && (departmentsQ.isError || noDepartments);
+  const targets = useMemo(() => moveTargets(departments), [departments]);
   const options: FilterOptions = useMemo(() => {
     const knownTypes = Object.keys(DOC_TYPE_STYLE);
     const otherTypes = Array.from(new Set(allDocs.map((d) => d.doc_type))).filter((t) => t && !knownTypes.includes(t));
@@ -195,8 +225,19 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const filteredDocs = useMemo(() => scope.filter((d) => matchesFilters(d, applied, ctx)), [scope, applied, ctx]);
   const archivedList = filters.statuses.length === 1 && filters.statuses[0] === 'archived';
   const openDocRow = openId != null ? allDocs.find((d) => d.id === openId) ?? null : null;
-  // the next / previous document of the list as it is sorted (the order the CSV has)
-  const ordered = useMemo(() => [...filteredDocs].sort(compareDocs(sort, lookups)), [filteredDocs, sort, lookups]);
+  // The folders (Folders view): a folder for each department, each with the documents of the scope that belong to it in the order
+  // chosen, and which of them match. Built only while they are drawn.
+  const folders = useMemo(() => {
+    if (!inFolders || foldersBlocked || waiting) return null;
+    return buildFolders({
+      scope: [...scope].sort(compareDocs(sort, lookups)), matches: new Set(filteredDocs.map((d) => d.id)), departments, filtering, now,
+    });
+  }, [inFolders, foldersBlocked, waiting, scope, sort, lookups, filteredDocs, departments, filtering, now]);
+  // the next / previous document of the list as it is shown (the order the CSV has): sorted, or folder by folder in the Folders view
+  const ordered = useMemo(
+    () => (folders ? displayOrder(folders) : [...filteredDocs].sort(compareDocs(sort, lookups))),
+    [folders, filteredDocs, sort, lookups],
+  );
   const at = openDocRow ? ordered.findIndex((d) => d.id === openDocRow.id) : -1;
 
   const pickFramework = (id: number) => {
@@ -220,6 +261,21 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const onBulkPublish = (ids: number[]) => runBulk(() => bulkPublish(ids), `Publish requested for ${ids.length}`);
   const onBulkArchive = (ids: number[]) => runBulk(() => bulkArchive(ids), `${ids.length} archived`);
   const onBulkRestore = (ids: number[]) => runBulk(async () => { for (const id of ids) await restoreDocument(id); }, `${ids.length} restored as drafts`);
+
+  // Move to…: one request for each document (the server checks who may change it, an archived document and a department that is
+  // switched off, and writes "Department changed" in the Change log); ONE toast says what happened. Answers with the ids not moved.
+  const onMove = async (ids: number[], to: MoveTarget): Promise<number[]> => {
+    const byId = new Map(allDocs.map((d) => [d.id, d] as [number, GovDoc]));
+    const outcome = await moveAll(ids, to.id, {
+      departmentOf: (id) => byId.get(id)?.department_id,
+      move: (id, department) => moveDocument(id, department),
+      reason: (e) => problemOf(e, 'The server did not accept it.'),
+    });
+    toast(moveMessage(outcome, to.label));
+    refreshAll();
+    ['governance-document', 'document-chain'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    return outcome.failed.map((f) => f.id);
+  };
 
   const doAssignOwner = async () => {
     if (!assignOwnerFor || !assignOwnerId) return;
@@ -295,7 +351,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     return `updated ${Math.round(hrs / 24)} d ago`;
   }, [allDocs]);
 
-  const columns: ColumnChoice[] = OPTIONAL_COLUMNS.map((id) => ({ id, label: COLUMN_LABEL[id], visible: !prefs.hidden.includes(id) }));
+  // the Folders view has no Department column (the folder is the department), so the list of columns does not offer it there
+  const columns: ColumnChoice[] = OPTIONAL_COLUMNS
+    .filter((id) => !(folders && id === 'department'))
+    .map((id) => ({ id, label: COLUMN_LABEL[id], visible: !prefs.hidden.includes(id) }));
 
   // what the table says when it has no rows: no documents yet, nothing archived, or nothing matches
   const empty = (
@@ -371,6 +430,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         onDensity={(density: Density) => changePrefs({ ...prefs, density })}
         onExport={exportCsv}
         canExport={filteredDocs.length > 0}
+        view={view}
+        onView={changeView}
       />
 
       {listFailed && (
@@ -388,41 +449,53 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       )}
 
       <section className="min-w-0">
-        <LibraryTable
-          // the documents above a match come from the same archived-aware scope as the list: no archived parent in the working list
-          scope={scope}
-          filtering={filtering}
-          docs={filteredDocs}
-          lookups={lookups}
-          counts={counts}
-          preferFrameworks={filters.frameworks}
-          sort={sort}
-          onSort={setSort}
-          hiddenColumns={prefs.hidden}
-          density={prefs.density}
-          pageSize={prefs.pageSize}
-          onPageSize={(pageSize) => changePrefs({ ...prefs, pageSize })}
-          activeId={openId}
-          onPeek={setOpenId}
-          onOpenDoc={openDoc}
-          onPickFramework={pickFramework}
-          onEdit={onEditDoc}
-          onDownload={onDownloadDoc}
-          onArchive={onArchiveDoc}
-          onBulkPublish={onBulkPublish}
-          onBulkArchive={onBulkArchive}
-          onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
-          onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
-          canEdit={canEdit}
-          canEditRow={mayChange}
-          canArchiveRow={mayChange}
-          onRestore={onRestoreDoc}
-          canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
-          showingArchived={archivedList}
-          onBulkRestore={onBulkRestore}
-          loading={docsLoading}
-          emptyState={empty}
-        />
+        {foldersBlocked ? (
+          <div className="rounded-xl border border-[#d5dbe1] bg-white">
+            {departmentsQ.isError ? <DepartmentsFailed onRetry={() => departmentsQ.refetch()} /> : <NoDepartments />}
+          </div>
+        ) : (
+          <LibraryTable
+            // the documents above a match come from the same archived-aware scope as the list: no archived parent in the working list
+            scope={scope}
+            filtering={filtering}
+            docs={filteredDocs}
+            lookups={lookups}
+            counts={counts}
+            preferFrameworks={filters.frameworks}
+            sort={sort}
+            onSort={setSort}
+            hiddenColumns={prefs.hidden}
+            density={prefs.density}
+            pageSize={prefs.pageSize}
+            onPageSize={(pageSize) => changePrefs({ ...prefs, pageSize })}
+            activeId={openId}
+            onPeek={setOpenId}
+            onOpenDoc={openDoc}
+            onPickFramework={pickFramework}
+            onEdit={onEditDoc}
+            onDownload={onDownloadDoc}
+            onArchive={onArchiveDoc}
+            onBulkPublish={onBulkPublish}
+            onBulkArchive={onBulkArchive}
+            onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
+            onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
+            canEdit={canEdit}
+            canEditRow={mayChange}
+            canArchiveRow={mayChange}
+            onRestore={onRestoreDoc}
+            canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
+            showingArchived={archivedList}
+            onBulkRestore={onBulkRestore}
+            loading={waiting}
+            emptyState={empty}
+            folders={folders}
+            folderOpen={folderPrefs?.open}
+            onFolderOpen={(open) => changeFolderPrefs({ view: folderPrefs?.view ?? null, open })}
+            moveTargets={targets}
+            onMove={onMove}
+            canMoveRow={mayChange}
+          />
+        )}
       </section>
 
       <DocumentDrawer

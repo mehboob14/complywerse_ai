@@ -1,7 +1,7 @@
 // What the library remembers for one person on one browser: which columns, how dense, how many rows a page, and the views they saved.
 // A convenience, never state that matters: storage can be missing, blocked or full, so every read and write is guarded and the page
 // works the same without it. Pure (the store is passed in), so `node --test` runs libraryPrefs.test.ts against it.
-import { DEFAULT_STATE, fromParams, toParams, type SavedView } from './libraryModel.ts';
+import { DEFAULT_STATE, fromParams, toParams, type LibraryViewId, type SavedView } from './libraryModel.ts';
 
 export type Density = 'comfortable' | 'compact';
 export interface Prefs { hidden: string[]; density: Density; pageSize: number }
@@ -76,6 +76,27 @@ export function loadViews(store: KeyValueStore | null, key: string): SavedView[]
 export function saveViews(store: KeyValueStore | null, key: string, views: readonly SavedView[]): void {
   write(store, key, views.filter((v) => !v.builtIn).map((v) => ({ id: v.id, name: v.name, query: toParams(v.state).toString() })));
 }
+
+/** What the Folders view keeps for a person: the layout they chose (null: not chosen, so the default applies) and which folders they
+ *  left open (true) or closed (false), by folder key. A separate key from the columns: it holds nothing the table needs. */
+export interface FolderPrefs { view: LibraryViewId | null; open: Record<string, boolean> }
+const FOLDERS_KEY = 'gov-docs-library:folders:v1';
+export const foldersKey = (userId: number | null | undefined) => `${FOLDERS_KEY}:${userId ?? 'anon'}`;
+/** More folders than this are never kept (a deleted department's key would otherwise stay for ever). */
+const FOLDERS_KEPT = 500;
+
+export function loadFolderPrefs(store: KeyValueStore | null, key: string): FolderPrefs {
+  const out: FolderPrefs = { view: null, open: {} };
+  const raw = read(store, key) as { view?: unknown; open?: unknown } | null;
+  if (!raw || typeof raw !== 'object') return out;
+  if (raw.view === 'table' || raw.view === 'folders') out.view = raw.view;
+  if (raw.open && typeof raw.open === 'object' && !Array.isArray(raw.open)) {
+    const open = raw.open as Record<string, unknown>;
+    Object.keys(open).filter((k) => /^(d\d+|none)$/.test(k)).slice(0, FOLDERS_KEPT).forEach((k) => { if (typeof open[k] === 'boolean') out.open[k] = open[k] as boolean; });
+  }
+  return out;
+}
+export const saveFolderPrefs = (store: KeyValueStore | null, key: string, prefs: FolderPrefs) => write(store, key, prefs);
 
 /** A view's id: the name plus a counter, so a view saved twice under one name is still two. */
 export function newViewId(existing: readonly SavedView[]): string {
