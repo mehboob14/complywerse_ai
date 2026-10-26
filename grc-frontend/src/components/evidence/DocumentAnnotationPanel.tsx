@@ -152,34 +152,32 @@ export default function DocumentAnnotationPanel({
 
   return (
     <div className={page ? 'flex flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-white' : 'flex h-full flex-col border-l border-slate-200 bg-slate-50/50'}>
-      {/* Header */}
+      {/* Header: the title and the counts (only the ones there are) */}
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2.5">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-slate-500" />
           <p className="text-sm font-semibold text-slate-900">{page ? 'Comments' : 'Remarks'}</p>
-          <span className="text-[10px] text-slate-500 uppercase tracking-wide">
-            {openCount} open · {resolvedCount} resolved
-          </span>
+          {openCount > 0 && <span className="rounded-full border border-[#f2d98c] bg-[#fffbeb] px-2 py-px text-[11px] font-medium text-[#7a4a00]">{openCount} open</span>}
+          {resolvedCount > 0 && <span className="rounded-full border border-[#d5dbe1] bg-[#eef1f4] px-2 py-px text-[11px] font-medium text-[#3f4b58]">{resolvedCount} resolved</span>}
         </div>
       </div>
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {isLoading && (
-          <div className="flex items-center justify-center py-8 text-slate-500 text-xs">
-            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-            Loading remarks…
+          <div className="flex items-center justify-center py-8 text-slate-500" role="status" aria-label={page ? 'Loading comments' : 'Loading remarks'}>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           </div>
         )}
         {error && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700 flex items-center gap-1.5">
             <AlertCircle className="h-3 w-3" />
-            Couldn&apos;t load remarks.
+            Couldn&apos;t load {page ? 'comments' : 'remarks'}.
           </div>
         )}
         {!isLoading && !error && items.length === 0 && (
           <div className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">
-            {page ? 'No comments yet. Write the first one below.' : 'No remarks yet. Select a passage in the document or type below to add one.'}
+            {page ? 'No comments yet' : 'No remarks yet'}
           </div>
         )}
 
@@ -207,7 +205,7 @@ export default function DocumentAnnotationPanel({
         {grouped.general.length > 0 && (
           <div className="space-y-2">
             {grouped.textRange.length > 0 && (
-              <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold px-1 pt-2">
+              <p className="text-[11px] text-slate-500 font-semibold px-1 pt-2">
                 General comments
               </p>
             )}
@@ -251,11 +249,13 @@ export default function DocumentAnnotationPanel({
           onChange={(e) => setNewComment(e.target.value)}
           rows={3}
           placeholder={pendingAnchor ? 'Comment on the selected passage…' : page ? 'Write a comment for everyone working on this document…' : 'Add a general remark…'}
+          title={page ? 'Everyone who can open this document reads it.' : undefined}
           className={`w-full rounded-md border border-slate-300 p-2 ${page ? 'text-sm' : 'text-xs'} focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/20`}
         />
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] text-slate-500">
-            {pendingAnchor ? 'Anchored to selection' : page ? 'Everyone who can open this document reads it.' : 'No anchor — posted as a general comment'}
+          {/* the page's comments are for everyone who can open the document: the box's placeholder and title say so */}
+          <p className="text-[11px] text-slate-500">
+            {pendingAnchor ? 'Anchored to selection' : page ? '' : 'General remark · select text to anchor one'}
           </p>
           <button
             type="submit"

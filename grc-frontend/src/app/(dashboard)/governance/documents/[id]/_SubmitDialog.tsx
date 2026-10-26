@@ -10,7 +10,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Loader2, Plus, Send, X } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
 import { sentToast } from '@/lib/signoffTargets';
 import {
   KIND_OPTIONS, blankStage, isDefaultShape, moved, picked, routeProblem, routeSummary, stagesOf, toApi, used,
@@ -109,31 +111,26 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
       onClose={onClose}
       size="xl"
       title="Submit for review"
-      subtitle={[doc?.title, version ? `version ${version}` : ''].filter(Boolean).join(' · ')}
+      subtitle={[doc?.title, version ? `v${version}` : ''].filter(Boolean).join(' · ')}
+      headerAccessory={(
+        <InfoTip align="end" label="About submitting for review"
+          text="Each stage is asked in order; the next one starts when it is signed. Anyone whose turn it is can ask for changes, which waits for you to make them and resubmit. A role or a department is signed by its first member." />
+      )}
       className="max-sm:max-h-[100dvh] max-sm:h-[100dvh] max-sm:rounded-none"
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <p className={`mr-auto min-w-0 flex-1 text-xs ${problem ? 'text-[#9b1c1c]' : 'text-[#26323d]'}`} role={problem ? 'alert' : undefined}>
             {problem || summary}
           </p>
-          <button type="button" onClick={onClose}
-            className="rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#26323d] hover:bg-[#f3f6f8]">
-            Cancel
-          </button>
-          <button type="button" onClick={() => send.mutate()} disabled={send.isPending || !!problem || !data}
-            title={problem || undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
+          <button type="button" onClick={onClose} className={BTN}>Cancel</button>
+          <button type="button" onClick={() => send.mutate()} disabled={send.isPending || !!problem || !data} title={problem || undefined} className={BTN_PRIMARY}>
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
-            Send for review
+            Submit
           </button>
         </div>
       }
     >
       <div className="max-h-[65vh] space-y-3 overflow-y-auto px-5 py-4 max-sm:max-h-none">
-        <p className="text-xs text-[#586472]">
-          Each stage is asked in order; the next one starts when it is signed. Anyone whose turn it is can ask for changes, which waits for you to make them and resubmit.
-          A role or a department is signed by its first member.
-        </p>
         <ol className="space-y-3">
           {stages.map((s, i) => (
             <li key={s.key} className="rounded-xl border border-[#d5dbe1] bg-white p-3">
@@ -183,7 +180,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
                   )}
                   {s.people.length > 1 && s.order === 'together' && (
                     <label className="text-xs text-[#26323d]">
-                      <span className="mb-0.5 block font-medium">Who has to sign</span>
+                      <span className="mb-0.5 block font-medium">Who signs</span>
                       <span className="flex items-center gap-1.5">
                         <select value={s.rule} onChange={(e) => update(i, { rule: e.target.value as DraftStage['rule'] })} className={FIELD}>
                           <option value="all">Everyone</option>
@@ -208,9 +205,8 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
             </li>
           ))}
         </ol>
-        <button type="button" onClick={addStage}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#99a7b3] px-3 py-1.5 text-sm font-medium text-[#0b4f46] hover:bg-[#f3f6f8]">
-          <Plus className="h-4 w-4" aria-hidden /> Add a stage
+        <button type="button" onClick={addStage} className={`${BTN} !border-dashed !border-[#99a7b3] !text-[#0b4f46]`}>
+          <Plus className="h-4 w-4" aria-hidden /> Add stage
         </button>
       </div>
     </AnimatedModal>

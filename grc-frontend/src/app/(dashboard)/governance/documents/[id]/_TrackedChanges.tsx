@@ -10,7 +10,9 @@ import { GitCompare, Loader2, Undo2 } from 'lucide-react';
 import { documentChainApi, type ChainHunk } from '@/lib/documentChain';
 import { problemOf } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
 import RedlineView from '../studio/_components/RedlineView';
 import { originLook } from '../studio/_components/ChangeAttribution';
 import { dateTime, day } from '@/lib/documentLifecycle';
@@ -23,12 +25,15 @@ const MUTED = 'text-[#586472]';
 
 /** Nothing to compare yet: say so, and when changes start to show. */
 function FirstVersion({ number, fileName, at }: { number: string; fileName?: string; at?: string | null }) {
-  const how = at || fileName ? ` (${fileName ? `uploaded ${fileName}` : 'created'}${at ? ` on ${day(at)}` : ''})` : '';
+  const how = at || fileName ? [fileName ? `uploaded ${fileName}` : 'created', at ? day(at) : ''].filter(Boolean).join(' · ') : '';
   return (
-    <div className="rounded-xl border border-dashed border-[#b8c4c8] bg-white p-6 text-center">
+    <div className="rounded-xl border border-dashed border-[#b8c4c8] bg-[#fff] p-6 text-center">
       <GitCompare className="mx-auto h-5 w-5 text-[#0f766e]" aria-hidden />
-      <p className="mt-2 text-sm font-semibold text-[#1f2933]">Version {number} is the first version{how}.</p>
-      <p className="mt-1 text-xs text-[#586472]">Changes made by hand, by Comply Agent, taken back or restored are marked here from the next version on.</p>
+      <p className="mt-2 flex items-center justify-center gap-1 text-sm font-semibold text-[#1f2933]">
+        v{number} is the first version
+        <InfoTip label="About tracked changes" text="Changes made by hand, by Comply Agent, taken back or restored are marked here from the next version on." />
+      </p>
+      {how && <p className="mt-0.5 text-xs text-[#586472]">{how}</p>}
     </div>
   );
 }
@@ -107,7 +112,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card">
+      <div className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 shadow-card">
         {line && <p className="mb-2 text-sm font-semibold text-[#1f2933]">{line}</p>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex min-w-0 items-center gap-2 text-sm">
@@ -145,7 +150,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
         <p className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${MUTED}`}>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" aria-hidden /> added</span>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200" aria-hidden /> removed</span>
-          <span>Each change says who made it, on whose request and from which sources.</span>
+          <InfoTip label="About the changes" text="Each change says who made it, on whose request and from which sources." />
           {data && !data.can_revert && data.why_not && <span className="text-amber-800">{data.why_not}</span>}
         </p>
         {range.length > 0 && (
@@ -172,14 +177,14 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Take back the change in “{asking.section || 'the top of the document'}”?</p>
               <p className="mt-0.5 text-xs text-amber-900">
-                It becomes a new version{proposes ? '' : ' made by you'}; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
-                {resets ? ' This document is approved, so it goes back to review.' : ''}
+                Becomes a new version{proposes ? '' : ' by you'}; the text returns to v{redline.data?.from.number}. Nothing else changes.
+                {resets ? ' The document goes back to review.' : ''}
               </p>
               {proposes ? (
                 <div className="mt-3"><ProposeNote id="take-back-why" decider={decider} value={reason} onChange={setReason} autoFocus placeholder="e.g. This wording was agreed with Legal" /></div>
               ) : (
                 <label className="mt-3 block">
-                  <span className="text-xs font-semibold text-amber-950">Why <span className="font-normal">(optional, kept with the new version)</span></span>
+                  <span className="text-xs font-semibold text-amber-950">Why <span className="font-normal">(optional)</span></span>
                   <input type="text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="e.g. This wording was agreed with Legal" autoFocus
                     className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
                 </label>
@@ -187,18 +192,18 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
               {takeBack.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs text-rose-800" role="alert">Not taken back: {problemOf(takeBack.error)}</p>}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button type="button" disabled={takeBack.isPending || (proposes && !reason.trim())} onClick={() => takeBack.mutate()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
+                  className={`${BTN_PRIMARY} !bg-amber-700 hover:!bg-amber-800`}>
                   {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} {proposes ? sendLabel(decider) : 'Take it back'}
                 </button>
-                <button type="button" onClick={() => ask(null)} className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]">Cancel</button>
+                <button type="button" onClick={() => ask(null)} className={BTN}>Cancel</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
-        {redline.isLoading && <p className={`text-sm ${MUTED}`}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
+      <div className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 shadow-card sm:p-4">
+        {redline.isLoading && <div className="flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
         {redline.isError && <p className="text-sm text-rose-700" role="alert">{problemOf(redline.error, 'These versions could not be compared.')}</p>}
         {onlyStamp && <p className="mb-2 text-xs font-semibold text-[#26323d]">Only the sign-off record changed.</p>}
         {data && (
@@ -231,13 +236,12 @@ export function SinceApproved({ documentId, onShow }: { documentId: number; onSh
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary-100 bg-primary-50/60 px-3 py-2.5 text-xs text-[#1f2933]" role="note">
       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0b6b58] ring-1 ring-inset ring-primary-100"><GitCompare className="h-4 w-4" aria-hidden /></span>
       <span className="min-w-0 flex-1">
-        <span className="font-semibold">Since {info.approved ? 'the last approved version' : 'the original'} (v{info.base.number}):</span>{' '}
-        {plural(info.changes, 'change')} in {plural(info.versions, 'version')}{info.ai ? `, ${info.ai} by Comply Agent` : ''}
+        <span className="font-semibold">Since {info.approved ? 'approved' : 'original'} v{info.base.number}:</span>{' '}
+        {plural(info.changes, 'change')} · {plural(info.versions, 'version')}{info.ai ? ` · ${info.ai} by Comply Agent` : ''}
         <span className="ml-2 inline-flex translate-y-0.5 items-center align-middle">{info.people.slice(0, 4).map((p, i) => <span key={p} className={i ? '-ml-1.5' : ''}><InitialsAvatar name={p} size="sm" /></span>)}</span>
       </span>
-      <button type="button" onClick={() => onShow(info.base.id)}
-        className="inline-flex items-center gap-1 rounded-lg border border-primary-600 bg-white px-2.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-primary-50">
-        See them marked in the document
+      <button type="button" onClick={() => onShow(info.base.id)} title="See them marked in the document" className={BTN}>
+        Show changes
       </button>
     </div>
   );

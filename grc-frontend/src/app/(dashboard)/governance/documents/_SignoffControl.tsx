@@ -11,7 +11,9 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY, BTN_TEXT } from '@/components/governance/docUi';
 import { parseUtc } from '@/lib/serverTime';
 import { day } from '@/lib/documentLifecycle';
 import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
@@ -21,7 +23,7 @@ import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
 import {
-  Loader2, Send, CheckCircle, XCircle, Clock, Users as UsersIcon, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
+  Loader2, Send, CheckCircle, XCircle, Clock, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
 } from 'lucide-react';
 
 export type Participant = { target_type: string; target_id: number; display?: string; stage_position?: number | null; position?: number | null };
@@ -102,9 +104,11 @@ export function AssigneeMultiSelect({
 }: { label: string; hint?: string; value: Participant[]; onChange: (p: Participant[]) => void; options: Option[] }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-gray-800">
-        {label}{hint && <span className="ml-1 font-normal text-gray-500">— {hint}</span>}
-      </label>
+      <div className="mb-1 flex items-center gap-1">
+        <label className="text-xs font-semibold text-[#26323d]">{label}</label>
+        {/* the hint is a note beside the label, not a clause in it */}
+        {hint && <InfoTip label={`About ${label}`} text={hint} />}
+      </div>
       <MultiSelectDropdown
         title={label}
         items={withChosen(options, value)}
@@ -124,19 +128,20 @@ export function AssigneeMultiSelect({
 export type SignoffChoice = { reviewers: Participant[]; approvers: Participant[] };
 export const NO_SIGNOFF: SignoffChoice = { reviewers: [], approvers: [] };
 
-/** Who reviews and who approves a document, chosen while it is uploaded or moved into the library. */
-export function ReviewerApproverFields({ value, onChange, tenantId, note = 'They are asked when the document is sent for review (Submit for review), not before.' }: {
+/** Who reviews and who approves a document, chosen while it is uploaded or moved into the library. `note`: what the (i) says. */
+export function ReviewerApproverFields({ value, onChange, tenantId, note = 'They are asked when you submit the document for review, not before.' }: {
   value: SignoffChoice; onChange: (v: SignoffChoice) => void; tenantId?: number; note?: string;
 }) {
   const options = useAssigneeOptions(tenantId);
   return (
     <fieldset className="space-y-2">
-      <legend className="text-xs font-semibold text-[#26323d]">Who reviews and approves it</legend>
+      <legend className="text-xs font-semibold text-[#26323d]">
+        <span className="inline-flex items-center gap-1">Sign-off{note && <InfoTip label="About sign-off" text={note} />}</span>
+      </legend>
       <div className="grid gap-3 sm:grid-cols-2">
         <AssigneeMultiSelect label="Reviewers" value={value.reviewers} onChange={(reviewers) => onChange({ ...value, reviewers })} options={options} />
         <AssigneeMultiSelect label="Approvers" value={value.approvers} onChange={(approvers) => onChange({ ...value, approvers })} options={options} />
       </div>
-      <p className="text-[11px] text-[#586472]">{note}</p>
     </fieldset>
   );
 }
@@ -214,114 +219,114 @@ export function SignoffAction({ documentId, due, version: shown }: {
   const again = step?.again ?? null;
   const changesHref = seeChangesHref(documentId, again);
 
+  // what the step is, in one line: its stage (a route's own), whether it is in turn, whom it is for (a delegate)
+  const meta = [
+    step && data?.route?.custom ? `${step.stage_name}${step.in_turn ? ' · in turn' : ''}` : '',
+    step?.on_behalf_of ? `For ${step.on_behalf_of} (delegated)` : '',
+  ].filter(Boolean).join(' · ');
+  const howItWorks = asIs
+    ? 'Your change was not accepted. Your signature counts and the others stand, as nothing changed. Or propose another change from Proposed changes.'
+    : `Read the document, then draw your signature and sign it. Or ask for changes: the author makes them and it comes back to you${canReject ? '; reject it with a reason to send it back to draft' : ''}.`;
+  const ACTION = 'w-full justify-center';
+
   return (
-    <section className="rounded-xl border-2 border-primary-300 bg-white p-4 shadow-sm" aria-label={`Your ${STEP_NOUN[kind]}`}>
+    <section className="rounded-xl border-2 border-primary-300 bg-[#fff] p-4 shadow-sm" aria-label={`Your ${STEP_NOUN[kind]}`}>
       {again && (
         <div className="mb-3 flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2" role="note">
-          <p className="min-w-[14rem] flex-1 text-sm text-amber-950">
+          <p className="min-w-[14rem] flex-1 text-[13px] text-amber-950">
             {againLine(again, day)}
             {again.note && <span className="mt-0.5 block text-xs text-amber-900">{again.by || 'The author'} wrote: “{again.note}”</span>}
           </p>
           {changesHref && (
-            <Link href={changesHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100">
+            <Link href={changesHref} className={BTN}>
               <GitCompare className="h-3.5 w-3.5" aria-hidden /> See what changed
             </Link>
           )}
         </div>
       )}
-      <div className="flex items-start gap-3">
-        <span className="rounded-full bg-primary-50 p-2">{review ? <UserCheck className="h-5 w-5 text-primary-700" /> : <ShieldCheck className="h-5 w-5 text-primary-700" />}</span>
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">{asIs ? 'Sign it as it is' : <>Your {STEP_NOUN[kind]} is needed{again ? ' again' : ''}{dueText ? ` by ${dueText}` : ''}</>}</h3>
-          <p className="text-xs text-gray-600">
-            {step && data?.route?.custom ? `${step.stage_name}${step.in_turn ? ', in turn' : ''}. ` : ''}
-            {step?.on_behalf_of ? `For ${step.on_behalf_of}, who handed it to you. ` : ''}
-            {asIs ? 'Your change was not accepted. Sign the document as it is: your signature counts and the others stand, as nothing changed. Or propose another change from Proposed changes.'
-              : <>Read the document, then draw your signature and sign it. Or ask for changes: the author makes them and it comes back to you
-                {canReject ? '; reject it with a reason to send it back to draft' : ''}.</>}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="rounded-full bg-primary-50 p-1.5">{review ? <UserCheck className="h-4 w-4 text-primary-700" /> : <ShieldCheck className="h-4 w-4 text-primary-700" />}</span>
+        <h3 className="text-sm font-semibold text-gray-900">{asIs ? 'Sign as it is' : <>Your {STEP_NOUN[kind]}{again ? ' again' : ''}</>}</h3>
+        <InfoTip label="About this step" text={howItWorks} />
+        {meta && <span className="text-xs text-[#586472]">{meta}</span>}
+        {dueText && !asIs && <span className="ml-auto text-xs font-medium text-[#26323d]">Due {dueText}</span>}
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <SignaturePad onChange={setSignature} height={120} />
+        <div>
+          <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-[#26323d]">
+            Signature
+            <InfoTip label="What signing records" text="Your drawn signature is kept with this sign-off, with your name, the time, your IP address and a fingerprint (hash) of the document, and added to the audit trail. Signing stamps your name, date and the signature fingerprint into the document's Approval Signoff table and moves the document to its next stage." />
+          </p>
+          <SignaturePad onChange={setSignature} height={120} />
+        </div>
         <div className="flex flex-col gap-2">
           {mode === 'sign' && (
             <>
               <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)" rows={3}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               <button type="button" onClick={() => sign.mutate()} disabled={sign.isPending || !signature} title={signature ? '' : 'Draw your signature first'}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                className={`${BTN_PRIMARY} ${ACTION}`}>
                 {sign.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {SIGN_LABEL[kind]}
               </button>
               {!asIs && (
-                <button type="button" onClick={() => setMode('changes')}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50">
+                <button type="button" onClick={() => setMode('changes')} className={`${BTN} ${ACTION} !border-amber-300 !text-amber-900 hover:!bg-amber-50`}>
                   <MessageSquareWarning className="h-4 w-4" /> Ask for changes
                 </button>
               )}
               {canReject && !asIs && (
-                <button type="button" onClick={() => setMode('reject')}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50">
+                <button type="button" onClick={() => setMode('reject')} title="Send it back to draft with a reason"
+                  className={`${BTN} ${ACTION} !border-rose-300 !text-[#9b1c1c] hover:!bg-rose-50`}>
                   <XCircle className="h-4 w-4" /> Reject
                 </button>
               )}
               {canDelegate && !asIs && (
-                <button type="button" onClick={() => setMode('delegate')} className="inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100">
-                  <UserRoundPlus className="h-3.5 w-3.5" /> Delegate to someone else
+                <button type="button" onClick={() => setMode('delegate')} title="Delegate to someone else" className={`${BTN_TEXT} ${ACTION} inline-flex items-center gap-1.5`}>
+                  <UserRoundPlus className="h-3.5 w-3.5" /> Delegate
                 </button>
               )}
             </>
           )}
           {mode === 'changes' && (
             <>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What should change? (required: the author reads it)" rows={4} autoFocus
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What should change? (required)" rows={4} autoFocus
                 className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none" />
-              <p className="text-[11px] text-gray-600">Nobody else signs until the author makes the changes and resubmits; then it comes back to you.</p>
+              <p className="text-xs text-[#586472]">The review pauses until the author resubmits.</p>
               <button type="button" onClick={() => askChanges.mutate()} disabled={askChanges.isPending || !reason.trim()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+                className={`${BTN_PRIMARY} ${ACTION} !bg-amber-600 hover:!bg-amber-700`}>
                 {askChanges.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareWarning className="h-4 w-4" />} Ask for changes
               </button>
-              <button type="button" onClick={back} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
             </>
           )}
           {mode === 'reject' && (
             <>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it rejected? (required — the author sees it)" rows={4} autoFocus
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" rows={4} autoFocus
                 className="w-full rounded-lg border border-rose-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none" />
               <button type="button" onClick={() => reject.mutate()} disabled={reject.isPending || !reason.trim()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50">
+                className={`${BTN_PRIMARY} ${ACTION} !bg-[#b42318] hover:!bg-[#912018]`}>
                 {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Reject and send back
               </button>
-              <button type="button" onClick={back} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
             </>
           )}
           {mode === 'delegate' && (
             <>
-              <label className="text-xs font-medium text-gray-800" htmlFor={`delegate-${documentId}`}>Who signs in your place</label>
+              <label className="text-xs font-semibold text-[#26323d]" htmlFor={`delegate-${documentId}`}>Delegate to</label>
               <select id={`delegate-${documentId}`} value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none">
                 <option value="">Choose a person…</option>
                 {people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="A note for them (optional)" rows={2}
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Note (optional)" rows={2}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              <button type="button" onClick={() => delegate.mutate()} disabled={delegate.isPending || !delegateTo}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+              <button type="button" onClick={() => delegate.mutate()} disabled={delegate.isPending || !delegateTo} className={`${BTN_PRIMARY} ${ACTION}`}>
                 {delegate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundPlus className="h-4 w-4" />} Delegate
               </button>
-              <button type="button" onClick={back} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
             </>
           )}
         </div>
       </div>
-      <details className="mt-2 text-[11px] text-gray-500">
-        <summary className="cursor-pointer select-none hover:text-gray-700">What signing records</summary>
-        <p className="mt-1">
-          Your drawn signature is kept with this sign-off together with your name, the time, your IP address and a fingerprint (hash) of the document,
-          and added to the audit trail. Signing stamps your name, date and the signature fingerprint into the document&apos;s Approval Signoff table and
-          moves the document to its next stage.
-        </p>
-      </details>
     </section>
   );
 }
@@ -368,13 +373,13 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
   const canSend = status === 'draft' && !nobody;
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <UsersIcon className="h-4 w-4 text-primary-600" />
-        <h3 className="text-sm font-semibold text-gray-900">Who reviews and approves</h3>
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <h3 className="text-sm font-semibold text-gray-900">Participants</h3>
+        <InfoTip label="About participants" text="Choose people, a role or a department. With a role or a department, the first member to sign signs for all of them." />
         {editable && !open && (
-          <button type="button" onClick={() => setEditing(true)} className="ml-auto inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
-            <Pencil className="h-3.5 w-3.5" /> Change
+          <button type="button" onClick={() => setEditing(true)} className={`${BTN_TEXT} ml-auto inline-flex items-center gap-1`}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden /> Change
           </button>
         )}
       </div>
@@ -383,35 +388,32 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
           {ROLES.map(({ key, label, icon: Icon }) => {
             const list = (data.participants?.[key] || []) as Participant[];
             return (
-              <div key={key} className="rounded-lg border border-gray-200 px-3 py-2">
-                <dt className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500"><Icon className="h-3.5 w-3.5" /> {label}</dt>
-                <dd className="mt-1 text-sm text-gray-900">{list.length ? list.map((p) => p.display).join(', ') : <span className="text-gray-500">Nobody yet</span>}</dd>
+              <div key={key} className="rounded-lg border border-[#e1e6eb] px-3 py-2">
+                <dt className="flex items-center gap-1.5 text-xs font-medium text-[#586472]"><Icon className="h-3.5 w-3.5" /> {label}</dt>
+                <dd className="mt-1 text-sm text-gray-900">{list.length ? list.map((p) => p.display).join(', ') : <span className="text-[#586472]">Nobody yet</span>}</dd>
               </div>
             );
           })}
         </dl>
       ) : (
         <div className="mt-3 space-y-3">
-          <p className="text-xs text-gray-600">Choose people, a role or a department. With a role or a department, the first member to sign signs for all of them.</p>
           <div className="grid gap-3 md:grid-cols-3">
-            <AssigneeMultiSelect label="Prepared by" hint="the author when left empty" value={prepared} onChange={setPrepared} options={options} />
+            <AssigneeMultiSelect label="Prepared by" hint="The author, when left empty." value={prepared} onChange={setPrepared} options={options} />
             <AssigneeMultiSelect label="Reviewers" value={reviewers} onChange={setReviewers} options={options} />
             <AssigneeMultiSelect label="Approvers" value={approvers} onChange={setApprovers} options={options} />
           </div>
           <div className="flex justify-end gap-2">
-            {editing && <button type="button" onClick={() => setEditing(false)} className="rounded-lg px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>}
-            <button type="button" onClick={() => save.mutate()} disabled={save.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            {editing && <button type="button" onClick={() => setEditing(false)} className={BTN}>Cancel</button>}
+            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className={BTN_PRIMARY}>
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save
             </button>
           </div>
         </div>
       )}
       {status === 'draft' && !open && !readOnly && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary-50 px-3 py-2">
-          <p className="text-xs text-primary-900">Ready? The reviewers are asked first, then the approvers. Each gets it in their Task Management.</p>
-          <button type="button" onClick={() => send.mutate()} disabled={!canSend || send.isPending} title={canSend ? '' : 'Add a reviewer or an approver first'}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+        <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-[#e1e6eb] pt-3">
+          <InfoTip align="end" label="About sending for review" text="The reviewers are asked first, then the approvers. Each gets it in their Task Management." />
+          <button type="button" onClick={() => send.mutate()} disabled={!canSend || send.isPending} title={canSend ? '' : 'Add a reviewer or an approver first'} className={BTN_PRIMARY}>
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send for review
           </button>
         </div>
@@ -420,31 +422,37 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
   );
 }
 
-const ORDER_WORDS = { together: 'all at once', in_turn: 'one after another' } as const;
 const RULE_WORDS = (s: { rule: string; min_count: number | null }) => (s.rule === 'any' ? 'any one signs' : s.rule === 'at_least' ? `at least ${s.min_count} sign` : 'everyone signs');
+const CHIP = 'rounded-full border border-[#d5dbe1] bg-[#f3f6f8] px-2 py-px text-[11px] text-[#3f4b58]';
 
 /** A route of its own: its stages and their people, in order (changed in Submit for review while it is a draft). */
 function RouteSummaryCard({ data }: { data: Signoff }) {
   const prepared = (data.participants?.prepared_by || []).map((p) => p.display).join(', ');
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <UsersIcon className="h-4 w-4 text-primary-600" />
-        <h3 className="text-sm font-semibold text-gray-900">Its approval route</h3>
-        {prepared && <span className="text-xs text-gray-600">prepared by {prepared}</span>}
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <h3 className="text-sm font-semibold text-gray-900">Approval route</h3>
+        {data.status === 'draft' && <InfoTip label="About the route" text="Change it in Submit for review." />}
+        {prepared && <span className="text-xs text-[#586472]">prepared by {prepared}</span>}
       </div>
       <ol className="mt-3 space-y-1.5">
-        {data.route!.stages.map((s) => (
-          <li key={s.position} className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <span className="font-medium text-gray-900">{s.position}. {s.name}</span>
-            <span className="text-gray-700">{s.people.map((p) => p.display).join(s.order === 'in_turn' ? ', then ' : ', ')}</span>
-            {s.kind !== 'information' && (
-              <span className="text-[11px] text-gray-500">{s.people.length > 1 ? `${ORDER_WORDS[s.order]}, ${s.order === 'in_turn' ? 'everyone signs' : RULE_WORDS(s)}` : ''}{s.due_days ? `${s.people.length > 1 ? ' · ' : ''}${s.due_days} days` : ''}</span>
-            )}
-          </li>
-        ))}
+        {data.route!.stages.map((s) => {
+          // one person: nothing to say about how they sign; in turn: everyone signs, one after another
+          const rule = s.people.length > 1 ? (s.order === 'in_turn' ? 'one after another' : RULE_WORDS(s)) : '';
+          return (
+            <li key={s.position} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+              <span className="font-medium text-gray-900">{s.position}. {s.name}</span>
+              <span className="text-[#26323d]">{s.people.map((p) => p.display).join(s.order === 'in_turn' ? ', then ' : ', ')}</span>
+              {s.kind !== 'information' && (!!rule || !!s.due_days) && (
+                <span className="inline-flex items-center gap-1.5">
+                  {rule && <span className={CHIP}>{rule}</span>}
+                  {s.due_days ? <span className="text-[11px] text-[#586472]" title={`${s.due_days} days to act`}>{s.due_days} d</span> : null}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ol>
-      {data.status === 'draft' && <p className="mt-2 text-[11px] text-gray-500">Change it in Submit for review.</p>}
     </section>
   );
 }
@@ -454,10 +462,10 @@ export function SignoffTrail({ documentId }: { documentId: number }) {
   const { data } = useSignoff(documentId);
   const signatures = data?.signatures || [];
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
       <h3 className="mb-3 text-sm font-semibold text-gray-900">Signatures</h3>
       {signatures.length === 0 ? (
-        <p className="text-sm text-gray-500">Nobody has signed yet.</p>
+        <p className="text-sm text-[#586472]">No signatures yet</p>
       ) : (
         <ol className="space-y-2">
           {signatures.map((s) => (
@@ -493,16 +501,16 @@ export function SignOffControlTab({ documentId, doc, canEdit = true, version }: 
   const progress = data?.progress || {};
   return (
     <div className="space-y-4">
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-gray-900">Status</span>
           <StatusChip status={status} />
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-600">
+        <div className="flex items-center gap-4 text-xs text-[#586472]">
           {(['reviewer', 'approver'] as const).map((rt) => (progress[rt]?.required ?? 0) > 0 && (
             <span key={rt} className="inline-flex items-center gap-1">
               {rt === 'reviewer' ? <UserCheck className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-              {rt === 'reviewer' ? 'Reviews' : 'Approvals'}: <span className="font-semibold text-gray-900">{progress[rt]!.signed}/{progress[rt]!.required}</span>
+              {rt === 'reviewer' ? 'Reviews' : 'Approvals'} <span className="font-semibold text-gray-900">{progress[rt]!.signed}/{progress[rt]!.required}</span>
             </span>
           ))}
         </div>

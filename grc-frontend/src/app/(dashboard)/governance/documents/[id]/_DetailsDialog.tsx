@@ -12,6 +12,7 @@ import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN as SECONDARY, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import { departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
@@ -21,8 +22,7 @@ import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoic
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const TRIGGER = 'w-full !h-[34px] !border-[#b8c4c8] !text-sm';
-const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
-const SECONDARY = 'rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#26323d] hover:bg-[#f3f6f8]';
+// (the buttons are the Documents area's shared ones, components/governance/docUi: SECONDARY = BTN, PRIMARY = BTN_PRIMARY)
 
 type Form = {
   title: string; doc_type: string; classification: string;
@@ -138,7 +138,7 @@ function TagField({ value, onChange, text, onText, used, labelledBy }: {
         ))}
         {!full && (
           <input ref={box} type="text" value={text} onChange={(e) => onText(e.target.value)} onKeyDown={onKeyDown}
-            aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Type a tag and press Enter'}
+            aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Add a tag, press Enter'} title="Press Enter or a comma to add"
             className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-0" />
         )}
       </div>
@@ -146,7 +146,7 @@ function TagField({ value, onChange, text, onText, used, labelledBy }: {
       <div role="status" className="text-xs text-[#586472]">
         {full && (
           <span className="mt-1.5 block break-words">
-            {left.length ? `Not added, as a document has up to ${MAX_TAGS} tags: ${left.join(', ')}. ` : `Up to ${MAX_TAGS} tags. `}Remove one to add another.
+            {left.length ? `Not added (up to ${MAX_TAGS} tags): ${left.join(', ')}. ` : `Up to ${MAX_TAGS} tags. `}Remove one to add more.
           </span>
         )}
       </div>
@@ -158,7 +158,7 @@ function TagField({ value, onChange, text, onText, used, labelledBy }: {
               + Add “{parts.join(', ')}”
             </button>
           )}
-          {hints.length > 0 && <span className="text-xs text-[#586472]">{text.trim() ? 'Matching tags:' : 'Used on other documents:'}</span>}
+          {hints.length > 0 && <span className="text-xs text-[#586472]">{text.trim() ? 'Matching:' : 'Used elsewhere:'}</span>}
           {hints.map((h) => (
             <button key={h} type="button" onClick={() => add([h])} aria-label={`Add tag ${h}`}
               className="max-w-full truncate rounded-full border border-dashed border-[#9fb3b8] bg-white px-2 py-0.5 text-xs text-[#26323d] hover:border-[#0f766e] hover:bg-[#ecf8f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
@@ -294,7 +294,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
       onSaved?.(patch);
       const notAdded = leftOut(saveTags, typed);                              // typed past the limit
       toast({ type: 'success', title: 'Details saved',
-              message: notAdded.length ? `Not added, as a document has up to ${MAX_TAGS} tags: ${notAdded.join(', ')}.` : undefined });
+              message: notAdded.length ? `Not added (up to ${MAX_TAGS} tags): ${notAdded.join(', ')}.` : undefined });
       onClose();
     },
     onError: (e: any) => {
@@ -385,6 +385,8 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
       <div key="people" className="sm:col-span-2">
         <ReviewerApproverFields value={people ?? serverPeople} onChange={setPeople} tenantId={tenantId}
           note={doc?.status === 'draft' ? undefined : 'Saving asks anyone you add at the current step, and cancels the request of anyone you remove.'} />
+        {/* a consequence, not an explanation: it stays on the page */}
+        {doc?.status !== 'draft' && <p className="mt-1 text-[12px] text-[#586472]">Removing someone cancels their open request.</p>}
       </div>
     ) : ownRoute ? (
       <Value key="route" label="Approval route">

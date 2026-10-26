@@ -17,12 +17,14 @@ import { problemOf } from '@/lib/studio/api';
 import { dateTime, day } from '@/lib/documentLifecycle';
 import type { RouteHold } from '@/lib/approvalRoutes';
 import {
-  STATUS_LABEL, acceptLine, compareTitles, deciderName, fieldRows, goesToLine, holdLine, isMine, mayProposeAgain, messageLabel, pageBanner,
+  acceptLine, compareTitles, deciderName, fieldRows, holdLine, isMine, mayProposeAgain, pageBanner,
   pick, proposalHref, proposalsApi, proposalsKey, proposedOf, proposedToast, rejectLine, staleLine, staleOf, whatLine,
   type DocumentCompare, type Proposal, type ProposalStatus,
 } from '@/lib/proposals';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import WordView from '@/components/governance/WordView';
 import { useMyUserId } from '@/components/governance/DocumentTaskActions';
 import RedlineView, { StatsLine } from '../studio/_components/RedlineView';
@@ -30,10 +32,9 @@ import { InitialsAvatar } from '../_workspace/lib';
 import { useSignoff } from '../_SignoffControl';
 import { retryUnlessRefused } from '../_view/docRoute';
 
-const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
-const DANGER = 'inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50';
-const REJECT = 'inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-[#9b1c1c] hover:bg-rose-50 disabled:opacity-50';
+// (the buttons are the Documents area's shared ones, components/governance/docUi: BTN, PRIMARY = BTN_PRIMARY)
+const DANGER = `${PRIMARY} !bg-[#b42318] hover:!bg-[#912018]`;
+const REJECT = `${BTN} !border-rose-300 !text-[#9b1c1c] hover:!bg-rose-50`;
 const FIELD = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]';
 const MUTED = 'text-[#586472]';
 const NONE: Proposal[] = [];
@@ -42,6 +43,7 @@ const PILL: Record<ProposalStatus, string> = {
   pending: 'border-amber-300 bg-amber-50 text-amber-900', accepted: 'border-emerald-300 bg-emerald-50 text-emerald-800',
   rejected: 'border-rose-300 bg-rose-50 text-rose-800', withdrawn: 'border-[#c3ccd5] bg-[#eef1f4] text-[#3f4b58]',
 };
+const PILL_LABEL: Record<ProposalStatus, string> = { pending: 'Waiting', accepted: 'Accepted', rejected: 'Not accepted', withdrawn: 'Withdrawn' };
 // after an Accept, a Reject or a Withdraw: the document, its versions, statements, review and tasks may all have moved
 const AFTER_DECISION = ['document-proposals', 'document-proposal-compare', 'governance-document', 'document-access', 'doc-signoff', 'document-lifecycle',
   'document-chain', 'document-chain-redline', 'document-versions', 'document-view-html', 'governance-documents', 'document-policy-statements',
@@ -85,17 +87,19 @@ export function useProposedAnswer() {
 }
 
 // ── the proposer's note in a writer's dialog ─────────────────────────────────
-/** "This goes to <owner> to accept or reject…" and the required message the owner reads. */
+/** "Goes to <owner> to accept or reject" and the required message the owner reads. */
 export function ProposeNote({ id, decider, value, onChange, placeholder, autoFocus }: {
   id: string; decider: string; value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="flex gap-1.5 rounded-lg border border-[#99d5cc] bg-[#effaf8] px-2.5 py-2 text-xs text-[#0b3f38]">
-        <Send className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#0b4f46]" aria-hidden /> {goesToLine(decider)}
+      <p className="flex items-center gap-1.5 rounded-lg border border-[#99d5cc] bg-[#effaf8] px-2.5 py-1.5 text-xs font-medium text-[#0b3f38]">
+        <Send className="h-3.5 w-3.5 shrink-0 text-[#0b4f46]" aria-hidden />
+        <span className="min-w-0 flex-1">Goes to {decider} to accept or reject</span>
+        <InfoTip align="end" label="About proposing a change" text="The document does not change until then." />
       </p>
       <label htmlFor={id} className="block text-xs font-semibold text-[#26323d]">
-        {messageLabel(decider)} <span className="font-normal text-[#586472]">(required)</span>
+        What changed and why <span className="font-normal text-[#586472]">(required)</span>
       </label>
       <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} maxLength={2000} required aria-required="true" autoFocus={autoFocus}
         placeholder={placeholder ?? 'e.g. Section 2 now names who approves exceptions, as Legal asked'} className={FIELD} />
@@ -107,7 +111,7 @@ export function ProposeNote({ id, decider, value, onChange, placeholder, autoFoc
 function StatusPill({ status, stale }: { status: ProposalStatus; stale?: boolean }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${PILL[status] ?? PILL.withdrawn}`}>
-      {STATUS_LABEL[status] ?? status}{stale && status === 'pending' ? ' · out of date' : ''}
+      {PILL_LABEL[status] ?? status}{stale && status === 'pending' ? ' · out of date' : ''}
     </span>
   );
 }
@@ -117,7 +121,7 @@ function Layout({ value, onChange }: { value: 'sides' | 'redline'; onChange: (v:
     <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="group" aria-label="Show the change">
       {(['sides', 'redline'] as const).map((k) => (
         <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
-          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${value === k ? 'bg-white text-[#0b4f46] shadow-card' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${value === k ? 'bg-[#fff] text-[#0b4f46] shadow-card' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
           {k === 'sides' ? 'Side by side' : 'One column'}
         </button>
       ))}
@@ -137,7 +141,6 @@ function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; 
   const [note, setNote] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const proposer = p.proposed_by?.name || 'The proposer';
-  const decider = deciderName(doc);
   const at = route?.hold?.stage_position ?? route?.current;
   const stage = route?.stages.find((s) => s.position === at)?.name ?? null;
   const run = useMutation({
@@ -177,12 +180,12 @@ function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; 
         <p className="text-sm text-[#26323d]">
           {mode === 'accept' ? acceptLine(p, { status: doc?.status ?? '', current: doc?.current_version, inForce: doc?.version_in_force }, stage)
             : mode === 'reject' ? rejectLine(proposer, doc?.status ?? '')
-            : `It no longer waits for ${decider}'s decision, and the document stays as it is.`}
+            : 'The document stays as it is.'}
         </p>
         {mode !== 'withdraw' && (
           <label htmlFor={noteId} className="block">
             <span className="text-xs font-semibold text-[#26323d]">
-              {mode === 'reject' ? `Why — ${proposer} reads this` : `A note for ${proposer}`}{' '}
+              {mode === 'reject' ? 'Reason' : `Note for ${proposer}`}{' '}
               <span className="font-normal text-[#586472]">({mode === 'reject' ? 'required' : 'optional'})</span>
             </span>
             <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} autoFocus
@@ -208,7 +211,7 @@ export function ProposalActions({ documentId, p, onProposeAgain, small = false }
   const again = !!onProposeAgain && mayProposeAgain(p, meId);
   const withdraw = p.may_withdraw && (p.status === 'pending' || p.status === 'rejected');
   if (!accept && !reject && !again && !withdraw) return null;
-  const size = small ? ' !px-2.5 !py-1 !text-xs' : '';
+  const size = small ? ' !h-7 !px-2.5 !text-xs' : '';
   return (
     <div className="flex flex-wrap items-center gap-2">
       {accept && <button type="button" onClick={() => setMode('accept')} className={PRIMARY + size}><Check className="h-4 w-4" aria-hidden /> Accept</button>}
@@ -230,9 +233,9 @@ export function ProposalsBanner({ documentId, doc, onOpen }: { documentId: numbe
   if (!b) return null;
   const rose = b.kind === 'rejected';
   return (
-    <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5 ${rose ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'}`} role="status">
+    <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2 ${rose ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'}`} role="status">
       <GitPullRequest className={`h-4 w-4 shrink-0 ${rose ? 'text-[#9b1c1c]' : 'text-amber-700'}`} aria-hidden />
-      <span className={`min-w-0 flex-1 text-sm font-medium ${rose ? 'text-[#7a1616]' : 'text-amber-950'}`}>{b.text}</span>
+      <span className={`min-w-0 flex-1 text-[13px] font-medium ${rose ? 'text-[#7a1616]' : 'text-amber-950'}`}>{b.text}</span>
       <button type="button" onClick={() => onOpen(b.proposalId)} className={b.kind === 'decide' ? PRIMARY : BTN}>{b.action}</button>
     </div>
   );
@@ -256,20 +259,20 @@ export function ProposalHold({ documentId, hold, stage, onProposeAgain }: {
   const href = proposalHref(documentId, hold.proposal_id);
   const rejected = status === 'rejected';
   const message = p?.message || hold.comment;
+  // what the review waits for: the third line this banner used to print, now behind its (i)
+  const waitsFor = rejected ? `Nobody signs until ${me === 'proposer' ? 'you sign it as it is or propose another change' : `${proposer} signs it as it is or proposes another change`}.`
+    : `Nobody signs until ${me === 'decider' ? 'you decide' : `${decider} decides`}. Accepted, it becomes the next version and everyone at this stage reviews again; a major change starts again from the first stage.`;
   return (
-    <section className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3" role="status">
+    <section className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
       <GitPullRequest className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
-      <div className="min-w-[14rem] flex-1 text-sm text-amber-950">
-        <p><span className="font-semibold">{holdLine({ proposer, decider, status, me })}</span>{stage ? ` (at ${stage})` : ''}.</p>
+      <div className="min-w-[14rem] flex-1 text-[13px] text-amber-950">
+        <p><span className="font-semibold">{holdLine({ proposer, decider, status, me })}</span>{stage ? ` (at ${stage})` : ''}</p>
         {rejected && p?.decision_note ? (
           <p className="mt-0.5">{me === 'decider' ? 'Your note' : `${p.decided_by?.name || decider} wrote`}: “{p.decision_note}”</p>
         ) : message ? <p className="mt-0.5 italic">“{message}”</p> : null}
-        <p className="mt-0.5 text-xs text-amber-900">
-          {rejected ? `Nobody signs until ${me === 'proposer' ? 'you sign it as it is or propose another change' : `${proposer} signs it as it is or proposes another change`}.`
-            : `Nobody signs until ${me === 'decider' ? 'you decide' : `${decider} decides`}. Accepted, it becomes the next version and everyone at this stage reviews again; a major change starts again from the first stage.`}
-        </p>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        <InfoTip align="end" label="About this hold" text={waitsFor} />
         {me === 'decider' && !rejected && <Link href={href} className={PRIMARY}>Review it</Link>}
         {me === 'proposer' && rejected && signoff?.my_step?.may_sign_as_is && <Link href={`/governance/documents/${documentId}?act=sign`} className={PRIMARY}>Sign it as it is</Link>}
         {me === 'proposer' && rejected && (onProposeAgain && p
@@ -285,7 +288,7 @@ export function ProposalHold({ documentId, hold, stage, onProposeAgain }: {
 function StatementChange({ p }: { p: Proposal }) {
   const rows = fieldRows(p.statement?.before, p.statement?.after);
   return (
-    <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 sm:p-4" aria-label="The statement before and after">
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 sm:p-4" aria-label="The statement before and after">
       <h4 className="text-sm font-semibold text-[#1f2933]">
         {p.statement?.code ? `Statement ${p.statement.code}` : 'A new statement'}{p.source === 'statement_delete' ? ': removed' : ''}
       </h4>
@@ -319,12 +322,12 @@ const CHANGE_KIND: Record<string, string> = { inserted: 'Added', deleted: 'Remov
 function ChangeList({ q, className = '' }: { q: UseQueryResult<DocumentCompare, unknown>; className?: string }) {
   const changes = q.data?.changes ?? [];
   return (
-    <section className={`min-w-0 rounded-xl border border-[#d5dbe1] bg-white p-3 ${className}`} aria-label="What changed">
+    <section className={`min-w-0 rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 ${className}`} aria-label="What changed">
       <h4 className="text-sm font-semibold text-[#1f2933]">What changed</h4>
       {q.data && <p className={`text-xs ${MUTED}`}><StatsLine stats={q.data.stats} /></p>}
-      {q.isLoading && <p className={`mt-2 text-sm ${MUTED}`} role="status"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden /> Comparing…</p>}
-      {q.isError && <p className="mt-2 text-sm text-[#7a1616]" role="alert">{problemOf(q.error, 'The two files could not be compared as text.')}</p>}
-      {q.data && !changes.length && <p className={`mt-2 text-sm ${MUTED}`}>No words changed: only the file did.</p>}
+      {q.isLoading && <div className="mt-2 flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
+      {q.isError && <p className="mt-2 text-sm text-[#7a1616]" role="alert">{problemOf(q.error, 'Could not compare the files.')}</p>}
+      {q.data && !changes.length && <p className={`mt-2 text-sm ${MUTED}`}>No text changes</p>}
       {changes.length > 0 && (
         <ol className="mt-2 space-y-2 2xl:max-h-[70vh] 2xl:overflow-y-auto">
           {changes.map((h) => (
@@ -335,13 +338,13 @@ function ChangeList({ q, className = '' }: { q: UseQueryResult<DocumentCompare, 
               </p>
               {h.status !== 'inserted' && h.before_text && (
                 <div className="mt-1 rounded border-l-[3px] border-l-rose-500 bg-rose-50/60 px-2 py-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#7a1616]">Now</p>
+                  <p className="text-[11px] font-semibold text-[#7a1616]">Now</p>
                   <p className="whitespace-pre-wrap break-words text-[12px] text-rose-950">{h.before_text}</p>
                 </div>
               )}
               {h.status !== 'deleted' && h.after_text && (
                 <div className="mt-1 rounded border-l-[3px] border-l-emerald-500 bg-emerald-50/60 px-2 py-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">Proposed</p>
+                  <p className="text-[11px] font-semibold text-emerald-800">Proposed</p>
                   <p className="whitespace-pre-wrap break-words text-[12px] text-emerald-950">{h.after_text}</p>
                 </div>
               )}
@@ -365,13 +368,13 @@ function FilePane({ label, q, name }: { label: string; q: UseQueryResult<Blob, u
     return () => URL.revokeObjectURL(u);
   }, [blob, pdf]);
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-white" aria-label={label}>
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]" aria-label={label}>
       <h4 className="border-b border-[#e3e8ec] px-3 py-2 text-xs font-semibold text-[#1f2933]">{label}</h4>
       <div className="h-[70vh] min-h-[320px] overflow-y-auto bg-[#e8ecf0]">
-        {q.isError ? <p className="p-4 text-sm text-[#7a1616]" role="alert">This file could not be read. Try again later, or download it from the document.</p>
+        {q.isError ? <p className="p-4 text-sm text-[#7a1616]" role="alert">Could not read this file.</p>
           : pdf ? (url ? <iframe src={url} title={label} className="h-full w-full" /> : null)
           : <WordView file={blob} label={label} />}
-        {q.isLoading && <p className={`p-4 text-sm ${MUTED}`} role="status"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden /> Reading the file…</p>}
+        {q.isLoading && <div className="flex justify-center p-4" role="status" aria-label="Reading the file"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
       </div>
     </section>
   );
@@ -397,15 +400,20 @@ function DocumentChange({ documentId, doc, p }: { documentId: number; doc: any; 
     );
   }
   return (
-    <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 sm:p-4" aria-label="The library's text and the proposed text">
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 sm:p-4" aria-label="The library's text and the proposed text">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className={`text-xs ${MUTED}`}>{compareQ.data ? <StatsLine stats={compareQ.data.stats} /> : null}{compareQ.data ? ' · ' : ''}Green is added, red is removed.</p>
+        {/* the legend: green is added, red is removed */}
+        <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED}`}>
+          {compareQ.data ? <StatsLine stats={compareQ.data.stats} /> : null}
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" aria-hidden /> added</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200" aria-hidden /> removed</span>
+        </p>
         <Layout value={layout} onChange={setLayout} />
       </div>
-      {compareQ.isLoading && <p className={`text-sm ${MUTED}`} role="status"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden /> Comparing…</p>}
-      {compareQ.isError && <p className="text-sm text-[#7a1616]" role="alert">{problemOf(compareQ.error, 'The change could not be compared with the library.')}</p>}
+      {compareQ.isLoading && <div className="flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
+      {compareQ.isError && <p className="text-sm text-[#7a1616]" role="alert">{problemOf(compareQ.error, 'Could not compare with the library.')}</p>}
       {compareQ.data && (
-        <RedlineView rows={compareQ.data.rows} empty="The proposed text is the same as the library's." sides={layout === 'sides' ? titles : undefined} />
+        <RedlineView rows={compareQ.data.rows} empty="No text changes" sides={layout === 'sides' ? titles : undefined} />
       )}
     </section>
   );
@@ -415,7 +423,7 @@ function DocumentChange({ documentId, doc, p }: { documentId: number; doc: any; 
 function ProposalCard({ p, on, onPick, mine }: { p: Proposal; on: boolean; onPick: () => void; mine: boolean }) {
   return (
     <button type="button" onClick={onPick} aria-current={on ? 'true' : undefined}
-      className={`w-full rounded-xl border px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${on ? 'border-[#0f766e] bg-[#effaf8] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-white hover:bg-[#f7f9fa]'}`}>
+      className={`w-full rounded-xl border px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${on ? 'border-[#0f766e] bg-[#effaf8] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-[#fff] hover:bg-[#f7f9fa]'}`}>
       <span className="flex items-center gap-2">
         <InitialsAvatar name={p.proposed_by?.name} size="sm" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1f2933]">{p.proposed_by?.name}{mine ? ' (you)' : ''}</span>
@@ -436,40 +444,38 @@ function ProposalDetail({ documentId, doc, p, meId, canDecide, onProposeAgain }:
   const clause = p.finding ? [p.finding.clause_reference, p.finding.clause_title].filter(Boolean).join(' ') : '';
   return (
     <article className="min-w-0 space-y-3" aria-labelledby={`proposal-${p.id}`}>
-      <header className="rounded-xl border border-[#d5dbe1] bg-white p-4">
+      <header className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
         <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
           <div className="min-w-0 flex-1">
             <h3 id={`proposal-${p.id}`} className="break-words text-base font-semibold text-[#1f2933]">{whatLine(p)}</h3>
             <p className={`mt-0.5 text-xs ${MUTED}`}>
-              Proposed by {p.proposed_by?.name}{mine ? ' (you)' : ''} · {dateTime(p.proposed_at)}{p.base?.number ? ` · on v${p.base.number}` : ''}
+              {p.proposed_by?.name}{mine ? ' (you)' : ''} · {dateTime(p.proposed_at)}{p.base?.number ? ` · on v${p.base.number}` : ''}
             </p>
           </div>
           <StatusPill status={p.status} stale={p.stale} />
         </div>
         <blockquote className="mt-3 rounded-lg border-l-4 border-[#0f766e] bg-[#f3fbf9] px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0b4f46]">
-            {p.kind === 'statement' ? 'Justification for this change' : mine ? 'Your message' : `${p.proposed_by?.name}'s message`}
-          </p>
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[#1f2933]">{p.message || 'No message was given.'}</p>
+          <p className="text-xs font-semibold text-[#0b4f46]">{p.kind === 'statement' ? 'Justification' : 'Message'}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[#1f2933]">{p.message || 'No message'}</p>
         </blockquote>
-        {clause && <p className="mt-2 text-xs text-[#26323d]">Closes the gap in <span className="font-semibold">{clause}</span>.</p>}
+        {clause && <p className="mt-2 text-xs text-[#26323d]">Closes gap in <span className="font-semibold">{clause}</span></p>}
         {p.status === 'pending' && p.stale && (
-          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note">{staleLine(p, doc?.current_version, mine)}</p>
+          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950" role="note">{staleLine(p, doc?.current_version, mine)}</p>
         )}
         {p.status === 'accepted' && (
-          <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-            Accepted by {p.decided_by?.name || decider}{p.decided_at ? ` on ${day(p.decided_at)}` : ''}{p.applied_version ? `: it is version ${p.applied_version.number}` : ''}.
-            {p.decision_note ? ` “${p.decision_note}”` : ''}
+          <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] text-emerald-900">
+            <span className="font-semibold">Accepted by {p.decided_by?.name || decider}{p.decided_at ? ` · ${day(p.decided_at)}` : ''}{p.applied_version ? ` · v${p.applied_version.number}` : ''}</span>
+            {p.decision_note ? <span className="block italic">“{p.decision_note}”</span> : null}
           </p>
         )}
         {p.status === 'rejected' && (
-          <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">
-            <span className="font-semibold">Not accepted by {p.decided_by?.name || decider}{p.decided_at ? ` on ${day(p.decided_at)}` : ''}</span>
-            {p.decision_note ? `: “${p.decision_note}”` : '.'}
+          <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[13px] text-[#7a1616]">
+            <span className="font-semibold">Not accepted by {p.decided_by?.name || decider}{p.decided_at ? ` · ${day(p.decided_at)}` : ''}</span>
+            {p.decision_note ? <span className="block italic">“{p.decision_note}”</span> : null}
           </p>
         )}
-        {p.status === 'withdrawn' && <p className={`mt-2 text-sm ${MUTED}`}>Withdrawn{p.decided_at ? ` on ${day(p.decided_at)}` : ''}; the document stayed as it was.</p>}
-        {p.status === 'pending' && !canDecide && !mine && <p className={`mt-2 text-sm ${MUTED}`}>Waiting for {decider}&apos;s decision.</p>}
+        {p.status === 'withdrawn' && <p className={`mt-2 text-[13px] ${MUTED}`}>Withdrawn{p.decided_at ? ` · ${day(p.decided_at)}` : ''}</p>}
+        {p.status === 'pending' && !canDecide && !mine && <p className={`mt-2 text-[13px] ${MUTED}`}>Waiting for {decider}</p>}
         <div className="mt-3"><ProposalActions documentId={documentId} p={p} onProposeAgain={onProposeAgain} /></div>
       </header>
       {p.kind === 'statement' ? <StatementChange p={p} /> : <DocumentChange documentId={documentId} doc={doc} p={p} />}
@@ -491,23 +497,29 @@ export default function ProposalsView({ documentId, doc, asked, onPick, onPropos
   const chosen = pick(items, asked);
   const decider = deciderName(doc);
   if (listQ.isLoading) return <div className="flex h-40 items-center justify-center" role="status" aria-label="Reading the proposed changes"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>;
-  if (listQ.isError) return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-[#7a1616]" role="alert">{problemOf(listQ.error, 'The proposed changes could not be read.')}</p>;
+  if (listQ.isError) return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-[#7a1616]" role="alert">{problemOf(listQ.error, 'Could not load the proposed changes.')}</p>;
   const canDecide = !!listQ.data?.can_decide;
   return (
     <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
-      <section className="min-w-0 space-y-2 lg:sticky lg:top-0 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto lg:pr-1" aria-labelledby="proposals-title">
-        <h2 id="proposals-title" className="text-sm font-semibold text-[#1f2933]">Proposed changes</h2>
-        <p className={`text-xs ${MUTED}`}>
-          {canDecide ? 'Changes others made to this document wait here for your decision: accepted, a change becomes the next version, credited to them; rejected, they are told your note.'
-            : `Changes by people who are not its owner or author wait here for ${decider}'s decision.`}
-        </p>
-        {items.length === 0 ? (
-          <p className={`rounded-xl border border-dashed border-[#b8c4c8] bg-white p-4 text-sm ${MUTED}`}>No changes have been proposed for this document.</p>
-        ) : (
-          <ul className="space-y-2">
-            {items.map((p) => <li key={p.id}><ProposalCard p={p} on={p.id === chosen?.id} mine={isMine(p, meId)} onPick={() => onPick(p.id)} /></li>)}
-          </ul>
-        )}
+      <section className="min-w-0 space-y-2 lg:sticky lg:top-0" aria-labelledby="proposals-title">
+        {/* the heading and its (i) stay outside the part that scrolls, so the note is never cut off by it */}
+        <div className="flex items-center justify-between gap-1">
+          <h2 id="proposals-title" className="text-sm font-semibold text-[#1f2933]">Proposed changes</h2>
+          <InfoTip align="end" label="About proposed changes"
+            text={canDecide ? 'Changes others made to this document wait here for your decision: accepted, a change becomes the next version, credited to them; rejected, they are told your note.'
+              : `Changes by people who are not its owner or author wait here for ${decider}'s decision.`} />
+        </div>
+        <div className="lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto lg:pr-1">
+          {items.length === 0 ? (
+            <p className={`flex items-center gap-2 rounded-xl border border-dashed border-[#b8c4c8] bg-[#fff] p-4 text-sm ${MUTED}`}>
+              <GitPullRequest className="h-4 w-4 shrink-0" aria-hidden /> No proposed changes
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((p) => <li key={p.id}><ProposalCard p={p} on={p.id === chosen?.id} mine={isMine(p, meId)} onPick={() => onPick(p.id)} /></li>)}
+            </ul>
+          )}
+        </div>
       </section>
       {chosen && <ProposalDetail key={chosen.id} documentId={documentId} doc={doc} p={chosen} meId={meId} canDecide={canDecide} onProposeAgain={onProposeAgain} />}
     </div>

@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
+import { BTN, BTN_PRIMARY, BTN_TEXT } from '@/components/governance/docUi';
 import { parseUtc } from '@/lib/serverTime';
 
 type ReviewEvent = {
@@ -74,15 +75,10 @@ export default function ReviewHistory({ documentId, doc, canEdit }: { documentId
   const shown = all ? events : events.slice(0, 5);
 
   return (
-    <section className="rounded-xl border border-[#d5dbe1] bg-white p-4" aria-label="Periodic review">
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4" aria-label="Periodic review">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-[#1f2933]">Periodic review</h3>
-        {canEdit && (
-          <button type="button" onClick={() => setOpen(true)}
-            className="ml-auto rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f3f6f8]">
-            Record a review
-          </button>
-        )}
+        {canEdit && <button type="button" onClick={() => setOpen(true)} className={`${BTN_TEXT} ml-auto`}>Record review</button>}
       </div>
 
       <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -103,13 +99,13 @@ export default function ReviewHistory({ documentId, doc, canEdit }: { documentId
         </div>
       </dl>
 
-      <div className="mt-3 border-t border-[#e6eaee] pt-3">
+      <div className="mt-3 border-t border-[#e1e6eb] pt-3">
         {isLoading ? (
-          <p className="flex items-center gap-1.5 text-xs text-[#586472]"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Loading…</p>
+          <div role="status" aria-label="Loading"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>
         ) : isError ? (
-          <p className="text-xs text-rose-700">Could not load the review history.</p>
+          <p className="text-xs text-rose-700">Could not load history</p>
         ) : events.length === 0 ? (
-          <p className="text-xs text-[#586472]">No periodic review recorded yet.</p>
+          <p className="text-xs text-[#586472]">No reviews yet</p>
         ) : (
           <ol className="space-y-2">
             {shown.map((e) => (
@@ -133,17 +129,13 @@ export default function ReviewHistory({ documentId, doc, canEdit }: { documentId
         isOpen={open}
         onClose={() => setOpen(false)}
         size="md"
-        title="Record a review"
+        title="Record review"
         subtitle={doc?.title}
         className="max-sm:max-h-[100dvh] max-sm:h-[100dvh] max-sm:rounded-none"
         footer={
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setOpen(false)}
-              className="rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#26323d] hover:bg-[#f3f6f8]">
-              Cancel
-            </button>
-            <button type="button" onClick={() => save.mutate()} disabled={save.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
+            <button type="button" onClick={() => setOpen(false)} className={BTN}>Cancel</button>
+            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className={BTN_PRIMARY}>
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Save
             </button>
           </div>

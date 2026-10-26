@@ -9,6 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import apiClient, { departmentsApi, governanceApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
 import { EMPTY_DETAILS, applyRead, change, type DetailKey, type Details, type Origin, type ReadResult } from './_detailsRead';
@@ -78,7 +79,7 @@ export function ParentPicker({ value, onChange, exclude, title, enabled = true }
       .filter((d) => !exclude?.has(d.id))
       .map((d) => ({ value: String(d.id), label: d.title || `Document ${d.id}`, subLabel: d.doc_type ? titleCase(d.doc_type) : undefined }));
     if (value != null && !out.some((i) => i.value === String(value))) out.unshift({ value: String(value), label: title || `Document ${value}` });
-    if (value != null) out.unshift({ value: '', label: 'None', subLabel: 'At the top, under no other document' });   // to undo a choice
+    if (value != null) out.unshift({ value: '', label: 'None', subLabel: 'At the top' });   // to undo a choice
     return out;
   }, [docsQ.data, exclude, value, title]);
   return (
@@ -146,13 +147,16 @@ export type DocumentDetails = ReturnType<typeof useDocumentDetails>;
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const TRIGGER = 'w-full !h-[34px] !border-[#b8c4c8] !text-sm';
 
-function Field({ label, wide, note, children }: { label: string; wide?: boolean; note?: React.ReactNode; children: React.ReactNode }) {
+/** `info`: what the field's (i) says. It sits at the right end of the label's line, outside the <label>, so a screen reader does not
+ *  read it as part of the field's name. */
+function Field({ label, wide, note, info, children }: { label: string; wide?: boolean; note?: React.ReactNode; info?: string; children: React.ReactNode }) {
   return (
-    <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
+    <div className={`relative min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
       <label className="block">
         <span className="mb-1 block text-xs font-semibold text-[#26323d]">{label}</span>
         {children}
       </label>
+      {info && <span className="absolute -top-0.5 right-0"><InfoTip align="end" label={`About ${label.toLowerCase()}`} text={info} /></span>}
       {note}
     </div>
   );
@@ -177,7 +181,6 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
     if (form.department_id != null && !deptQ.isLoading && !out.some((i) => i.value === String(form.department_id))) out.unshift({ value: String(form.department_id), label: `Department ${form.department_id}` });
     return out;
   }, [deptQ.data, deptQ.isLoading, form.department_id]);
-  const noDepartments = !deptQ.isLoading && !deptQ.isError && deptItems.length === 0;
 
   const tag = (key: DetailKey) => (from[key]
     ? <span className="mt-0.5 block text-[11px] text-[#586472]">{from[key] === 'ai' ? 'By Comply Agent' : 'From the file'}</span>
@@ -192,10 +195,10 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {d.reading && (
         <span className="flex items-center gap-1.5 text-xs text-[#586472] sm:col-span-2" role="status">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Reading the file to fill in its details…
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Reading the file…
         </span>
       )}
-      {d.readFailed && <span className="text-xs text-[#8a1c1c] sm:col-span-2" role="status">The details could not be read from the file. Fill them in below.</span>}
+      {d.readFailed && <span className="text-xs text-[#8a1c1c] sm:col-span-2" role="status">Could not read the file&apos;s details</span>}
       <Field label="Title" wide note={tag('title')}>
         <input type="text" value={form.title} onChange={(e) => set({ title: e.target.value })} required aria-invalid={!form.title.trim()} className={INPUT} />
       </Field>
@@ -209,11 +212,12 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
           {classes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </Field>
-      <Field label="Owner" note={<>{tag('owner_id')}{d.ownerStated && <span className="mt-0.5 block text-[11px] text-[#586472]">The file names the owner: {d.ownerStated}</span>}</>}>
+      <Field label="Owner" note={<>{tag('owner_id')}{d.ownerStated && <span className="mt-0.5 block text-[11px] text-[#586472]">Owner in the file: {d.ownerStated}</span>}</>}>
         <MultiSelectDropdown title="Owner" items={ownerItems} selectedValues={one(form.owner_id)} onApply={(v) => set({ owner_id: toId(v) })}
           multiSelect={false} autoApply triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />
       </Field>
-      <Field label="Department" note={tag('department_id') || (noDepartments && <span className="mt-0.5 block text-[11px] text-[#586472]">Departments are added by an administrator in Administration → Departments.</span>)}>
+      {/* with none to choose from, the field's own placeholder says who adds them (lib/departments.ts) */}
+      <Field label="Department" note={tag('department_id')}>
         <MultiSelectDropdown title="Department" items={deptItems} selectedValues={one(form.department_id)} onApply={(v) => set({ department_id: toId(v) })}
           multiSelect={false} autoApply triggerVariant="input" size="sm" forceSearch showAvatars={false}
           placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />
@@ -226,10 +230,10 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
       <Field label="Effective date" note={tag('effective_date')}>
         <input type="date" value={form.effective_date} onChange={(e) => set({ effective_date: e.target.value })} className={INPUT} />
       </Field>
-      <Field label="Next review" note={tag('next_review_date') || (!form.next_review_date && <span className="mt-0.5 block text-[11px] text-[#586472]">Left empty: today plus the review cycle</span>)}>
+      <Field label="Next review" note={tag('next_review_date')} info="Left empty, it is today plus the review cycle.">
         <input type="date" value={form.next_review_date} onChange={(e) => set({ next_review_date: e.target.value })} className={INPUT} />
       </Field>
-      <Field label="Parent document (optional)">
+      <Field label="Parent document">
         <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} />
       </Field>
       <Field label="Description" wide note={tag('description')}>
