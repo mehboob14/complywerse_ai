@@ -10313,7 +10313,10 @@
         "mandatory": true,
         "description": "Top-management-approved policy that sets the framework for security objectives and commits to legal and regulatory compliance and continual improvement.",
         "format": "DOCX",
-        "owner": "CISO"
+        "owner": "CISO",
+        "evidence": [
+          "Approved information security policy"
+        ]
       },
       {
         "artifact_id": "UAEIA-002",
@@ -10324,7 +10327,11 @@
         "mandatory": true,
         "description": "Documented, approved and measurable (where practicable) objectives at relevant functions and levels, consistent with the policy and informed by risk assessment and treatment results.",
         "format": "DOCX",
-        "owner": "CISO"
+        "owner": "CISO",
+        "evidence": [
+          "Documented information security objectives",
+          "Objectives basis record"
+        ]
       },
       {
         "artifact_id": "UAEIA-003",
@@ -10335,7 +10342,11 @@
         "mandatory": true,
         "description": "Establishes the Information Security Committee and assigns and communicates security responsibilities and authorities, including the leadership member with overall responsibility.",
         "format": "DOCX",
-        "owner": "Top Management"
+        "owner": "Top Management",
+        "evidence": [
+          "Assignment of responsibility and authority",
+          "Information Security Committee charter"
+        ]
       },
       {
         "artifact_id": "UAEIA-004",
@@ -10346,7 +10357,10 @@
         "mandatory": true,
         "description": "Documents what is communicated, when, with whom, by whom and how, including communication with the designated UAE lead entities for cyber security.",
         "format": "DOCX",
-        "owner": "CISO"
+        "owner": "CISO",
+        "evidence": [
+          "Communication plan"
+        ]
       },
       {
         "artifact_id": "UAEIA-005",
@@ -10357,7 +10371,23 @@
         "mandatory": false,
         "description": "Register of the statutory, regulatory and contractual information security requirements that apply to the entity, with the responsibilities and controls in place to meet them.",
         "format": "XLSX",
-        "owner": "Compliance Officer"
+        "owner": "Compliance Officer",
+        "also_controls": [
+          "M5.1.4",
+          "T3.2.1",
+          "T8.1.1",
+          "T8.2.7"
+        ],
+        "evidence": [
+          "Legal, regulatory and contractual requirements register",
+          "System requirements from compliance obligations",
+          "Compliance requirement to control mapping",
+          "Applicable data protection laws register",
+          "Privacy control implementation",
+          "External information sharing requirements",
+          "Incident handling and reporting requirements",
+          "Jurisdictional evidence requirements"
+        ]
       },
       {
         "artifact_id": "UAEIA-006",
@@ -10368,7 +10398,17 @@
         "mandatory": true,
         "description": "Formal policy that sets the risk acceptance, likelihood, impact and evaluation criteria and the treatment, monitoring and review strategy, so repeated assessments give consistent and comparable results.",
         "format": "DOCX",
-        "owner": "Risk Manager"
+        "owner": "Risk Manager",
+        "also_controls": [
+          "M2.4.1"
+        ],
+        "evidence": [
+          "Approved risk management policy",
+          "Risk criteria definitions",
+          "Risk treatment and monitoring strategy",
+          "Risk assessment approach",
+          "Risk review and update procedure"
+        ]
       },
       {
         "artifact_id": "UAEIA-007",
@@ -10379,7 +10419,11 @@
         "mandatory": true,
         "description": "Up-to-date inventory of information assets, consistent with other inventories, with an owner holding management responsibility for each asset.",
         "format": "XLSX",
-        "owner": "Asset Owner"
+        "owner": "Asset Owner",
+        "evidence": [
+          "Information asset inventory",
+          "Asset ownership listing"
+        ]
       },
       {
         "artifact_id": "UAEIA-008",
@@ -10390,7 +10434,11 @@
         "mandatory": true,
         "description": "Register of identified risks to the confidentiality, integrity and availability of information, with named risk owners and the documented results of risk identification.",
         "format": "XLSX",
-        "owner": "Risk Manager"
+        "owner": "Risk Manager",
+        "evidence": [
+          "Risk identification results",
+          "Risk owner assignments"
+        ]
       },
       {
         "artifact_id": "UAEIA-009",
@@ -10401,7 +10449,17 @@
         "mandatory": true,
         "description": "Documented results of risk analysis and evaluation against the risk criteria, with treatment priorities, shared with the designated UAE lead entities as required.",
         "format": "PDF",
-        "owner": "Risk Manager"
+        "owner": "Risk Manager",
+        "also_controls": [
+          "M2.2.2"
+        ],
+        "evidence": [
+          "Risk evaluation results",
+          "Treatment priorities",
+          "Consequence assessment",
+          "Likelihood assessment",
+          "Risk analysis results"
+        ]
       },
       {
         "artifact_id": "UAEIA-010",
@@ -10412,7 +10470,11 @@
         "mandatory": true,
         "description": "Documented plan of management actions, resources, responsibilities, priorities and target dates for implementing the controls that treat the assessed risks.",
         "format": "XLSX",
-        "owner": "Risk Manager"
+        "owner": "Risk Manager",
+        "evidence": [
+          "Risk treatment plan",
+          "Treatment implementation schedule"
+        ]
       },
       {
         "artifact_id": "UAEIA-011",
@@ -10423,7 +10485,15 @@
         "mandatory": true,
         "description": "Lists the controls identified as necessary with the reasons and their implementation status, and justifies any exclusion of a risk-based control.",
         "format": "XLSX",
-        "owner": "CISO"
+        "owner": "CISO",
+        "also_controls": [
+          "M2.3.2"
+        ],
+        "evidence": [
+          "Statement of Applicability",
+          "Control exclusion justifications",
+          "Entity-specific additional controls"
+        ]
       },
       {
         "artifact_id": "UAEIA-012",
@@ -10434,7 +10504,10 @@
         "mandatory": true,
         "description": "Approved and published set of supporting policies covering the areas of the standard that the risk assessment requires, communicated to and acknowledged by relevant personnel.",
         "format": "DOCX",
-        "owner": "CISO"
+        "owner": "CISO",
+        "evidence": [
+          "Approved supporting policy set"
+        ]
       },
       {
         "artifact_id": "UAEIA-013",
@@ -10445,7 +10518,10 @@
         "mandatory": true,
         "description": "Classification scheme based on information value, legal requirements, sensitivity and criticality, communicated across the entity and kept up to date.",
         "format": "DOCX",
-        "owner": "Information Security Manager"
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Information classification scheme"
+        ]
       },
       {
         "artifact_id": "UAEIA-014",
@@ -10456,7 +10532,10 @@
         "mandatory": true,
         "description": "Approved policy that identifies encryption requirements, keeps cryptographic practice compliant with applicable laws and standards, and replaces weak ciphers and hashing algorithms in good time.",
         "format": "DOCX",
-        "owner": "Security Architect"
+        "owner": "Security Architect",
+        "evidence": [
+          "Approved cryptographic policy"
+        ]
       },
       {
         "artifact_id": "UAEIA-015",
@@ -10467,7 +10546,11 @@
         "mandatory": true,
         "description": "Approved policy on the use of network services and devices, with a maintained network diagram of all components and their interconnections.",
         "format": "DOCX",
-        "owner": "Network Security Lead"
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Approved network security policy",
+          "Network diagram"
+        ]
       },
       {
         "artifact_id": "UAEIA-016",
@@ -10478,7 +10561,10 @@
         "mandatory": true,
         "description": "Approved policy outlining roles and responsibilities for physical and environmental security, taking asset classification and physical location into account.",
         "format": "DOCX",
-        "owner": "Physical Security Manager"
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Approved physical and environmental security policy"
+        ]
       },
       {
         "artifact_id": "UAEIA-017",
@@ -10489,7 +10575,10 @@
         "mandatory": true,
         "description": "Approved program that informs personnel of the security policy, their contribution and the implications of non-conformity, with training effectiveness evaluated and records kept.",
         "format": "DOCX",
-        "owner": "HR / Training Lead"
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Approved awareness and training program"
+        ]
       },
       {
         "artifact_id": "UAEIA-018",
@@ -10500,7 +10589,32 @@
         "mandatory": true,
         "description": "Records of the education, training, skills, experience and qualifications of personnel doing security-relevant work, kept as evidence of competence.",
         "format": "XLSX",
-        "owner": "HR / Training Lead"
+        "owner": "HR / Training Lead",
+        "also_controls": [
+          "M1.3.1",
+          "M3.3.3",
+          "M3.3.5",
+          "T3.2.2",
+          "T3.2.3",
+          "T3.4.4",
+          "T7.3.1",
+          "T8.2.3",
+          "T8.2.7"
+        ],
+        "evidence": [
+          "Awareness delivery records",
+          "Training and other actions delivered",
+          "Education, skills and qualification records",
+          "Staff competence records",
+          "Training delivery records",
+          "Individual training records",
+          "Log reviewer training and skills",
+          "Monitoring reviewer qualifications",
+          "Post-quantum workforce training records",
+          "Developer security training records",
+          "Incident response training records",
+          "Evidence handler competence records"
+        ]
       },
       {
         "artifact_id": "UAEIA-019",
@@ -10511,7 +10625,10 @@
         "mandatory": true,
         "description": "Standard information security terms for employees, contractors and third parties, included in their contracts and signed to confirm they understand and agree.",
         "format": "DOCX",
-        "owner": "HR Director"
+        "owner": "HR Director",
+        "evidence": [
+          "Standard information security terms and conditions"
+        ]
       },
       {
         "artifact_id": "UAEIA-020",
@@ -10522,7 +10639,10 @@
         "mandatory": true,
         "description": "Minimum security configurations defined for common technology products, implemented, monitored and reviewed periodically.",
         "format": "DOCX",
-        "owner": "Security Operations Lead"
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Minimum security configuration standards"
+        ]
       },
       {
         "artifact_id": "UAEIA-021",
@@ -10533,7 +10653,11 @@
         "mandatory": true,
         "description": "Documented backup procedures stating what is backed up and how often, how backups are protected, and how their reliability is tested routinely.",
         "format": "DOCX",
-        "owner": "IT Operations Manager"
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Backup requirements",
+          "Backup procedures"
+        ]
       },
       {
         "artifact_id": "UAEIA-022",
@@ -10544,7 +10668,10 @@
         "mandatory": true,
         "description": "Formal procedure for provisioning and de-provisioning access rights, with segregation of duties, records of access granted and immediate revocation on role change or exit.",
         "format": "DOCX",
-        "owner": "IAM Lead"
+        "owner": "IAM Lead",
+        "evidence": [
+          "Access provisioning and de-provisioning procedure"
+        ]
       },
       {
         "artifact_id": "UAEIA-023",
@@ -10555,7 +10682,14 @@
         "mandatory": true,
         "description": "Documented and approved procedure that classifies suppliers by risk, assesses supply-chain security risks and applies mitigation with continuous monitoring.",
         "format": "DOCX",
-        "owner": "Vendor Risk Manager"
+        "owner": "Vendor Risk Manager",
+        "also_controls": [
+          "T6.2.3"
+        ],
+        "evidence": [
+          "Third-party risk management procedure",
+          "ICT supply chain security procedure"
+        ]
       },
       {
         "artifact_id": "UAEIA-024",
@@ -10566,7 +10700,11 @@
         "mandatory": true,
         "description": "Approved information security requirements for applications that are developed or acquired, including transactional, e-commerce and payment applications where applicable.",
         "format": "DOCX",
-        "owner": "Head of Application Security"
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Application security requirements specification",
+          "Requirements by application purpose"
+        ]
       },
       {
         "artifact_id": "UAEIA-025",
@@ -10577,7 +10715,11 @@
         "mandatory": true,
         "description": "Results of vulnerability testing of new and existing systems and applications, with the remediation plan and the measures taken to address the vulnerabilities found.",
         "format": "PDF",
-        "owner": "Security Operations Lead"
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Pre-production vulnerability assessment",
+          "Production vulnerability scan results"
+        ]
       },
       {
         "artifact_id": "UAEIA-026",
@@ -10588,7 +10730,10 @@
         "mandatory": true,
         "description": "Record of all privileged access rights allocated, kept to restrict and control their allocation and to support review of how they are used.",
         "format": "XLSX",
-        "owner": "IAM Lead"
+        "owner": "IAM Lead",
+        "evidence": [
+          "Privileged access register"
+        ]
       },
       {
         "artifact_id": "UAEIA-027",
@@ -10599,7 +10744,13 @@
         "mandatory": true,
         "description": "Plan for handling incidents before, during and after they occur, with a communication plan, defined resources, an Incident Response Team and senior management approval.",
         "format": "DOCX",
-        "owner": "Incident Response Lead"
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident response plan",
+          "Incident communication plan",
+          "Incident response resources and capabilities",
+          "Incident Response Team establishment"
+        ]
       },
       {
         "artifact_id": "UAEIA-028",
@@ -10610,7 +10761,11 @@
         "mandatory": true,
         "description": "Record of every information security incident with the data collected before, during and after it, protected as incident documentation.",
         "format": "XLSX",
-        "owner": "Incident Response Lead"
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident data collection requirements",
+          "Incident documentation records"
+        ]
       },
       {
         "artifact_id": "UAEIA-029",
@@ -10621,7 +10776,12 @@
         "mandatory": true,
         "description": "ICT continuity plan with response and recovery procedures for service disruptions, planned, maintained and tested against business continuity objectives.",
         "format": "DOCX",
-        "owner": "BCM Manager"
+        "owner": "BCM Manager",
+        "evidence": [
+          "Continuity objectives and ICT requirements",
+          "ICT continuity organizational structure",
+          "ICT continuity plans"
+        ]
       },
       {
         "artifact_id": "UAEIA-030",
@@ -10632,7 +10792,10 @@
         "mandatory": true,
         "description": "Results of routine compliance checks against security policies and standards, reviewed by authorized personnel, with non-compliance reported for remediation.",
         "format": "PDF",
-        "owner": "Head of Compliance"
+        "owner": "Head of Compliance",
+        "evidence": [
+          "Compliance check results"
+        ]
       },
       {
         "artifact_id": "UAEIA-031",
@@ -10643,7 +10806,12 @@
         "mandatory": true,
         "description": "Documents the audit program, criteria, scope, plan and results of each internal information security audit, reported to relevant management.",
         "format": "PDF",
-        "owner": "Head of Internal Audit"
+        "owner": "Head of Internal Audit",
+        "evidence": [
+          "Internal audit program",
+          "Audit plan, criteria and scope",
+          "Internal audit reports"
+        ]
       },
       {
         "artifact_id": "UAEIA-032",
@@ -10654,7 +10822,15 @@
         "mandatory": true,
         "description": "Documented top-management review of the information security program at planned intervals, with decisions on continual improvement and any needed change.",
         "format": "PDF",
-        "owner": "Top Management"
+        "owner": "Top Management",
+        "also_controls": [
+          "M1.1.2"
+        ],
+        "evidence": [
+          "Management review inputs",
+          "Management review minutes",
+          "Top management review of information security"
+        ]
       },
       {
         "artifact_id": "UAEIA-033",
@@ -10665,7 +10841,1531 @@
         "mandatory": true,
         "description": "Register of nonconformities with their causes, the corrective actions taken and the review of their effectiveness.",
         "format": "XLSX",
-        "owner": "Compliance Officer"
+        "owner": "Compliance Officer",
+        "also_controls": [
+          "M5.2.1",
+          "T8.2.4"
+        ],
+        "evidence": [
+          "Nonconformity register",
+          "Corrective action implementation records",
+          "Non-compliance tracking",
+          "Test findings remediation tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-034",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Interested Parties and Requirements Register",
+        "type": "Register",
+        "control_ref": "M1.1.1",
+        "mandatory": true,
+        "description": "Register of the internal and external parties relevant to information security, the security requirements each one places on the entity, who raised each requirement and who owns the relationship.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Interested parties register",
+          "Requirements of interested parties"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-035",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Entity Context Analysis",
+        "type": "Assessment",
+        "control_ref": "M1.1.1",
+        "mandatory": true,
+        "description": "Analysis of the external factors (sector, national, legal, regulatory and threat environment) and internal factors (capabilities, funding, skills, systems and organizational structure) that affect the information security program.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "External context analysis",
+          "Internal capabilities assessment",
+          "Organization chart"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-036",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Policy Coverage Matrix",
+        "type": "Matrix",
+        "control_ref": "M1.2.3",
+        "mandatory": true,
+        "description": "Matrix mapping every aspect of the standard that applies after the risk assessment, and every national, Emirate and sector requirement, to the supporting policy that addresses it.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Policy coverage matrix"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-037",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Information Security Resource Plan",
+        "type": "Plan",
+        "control_ref": "M1.3.1",
+        "mandatory": true,
+        "description": "Budget and staffing plan stating the human and financial resources allocated to the information security program and why they are adequate for the work.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Information security budget and staffing plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-038",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Security Role Competence Requirements",
+        "type": "Matrix",
+        "control_ref": "M1.3.1",
+        "mandatory": true,
+        "description": "Matrix of the education, training and experience required for each role whose work affects information security performance.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Competence requirements for security roles"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-039",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Authority and Lead Entity Contact List",
+        "type": "Register",
+        "control_ref": "M1.3.2",
+        "mandatory": true,
+        "description": "Current contact details and communication channels for the relevant authorities, including the UAE lead entities for cyber security.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Authority and lead entity contact list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-040",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Document Control Procedure",
+        "type": "Procedure",
+        "control_ref": "M1.3.3",
+        "mandatory": true,
+        "description": "Procedure for the control of documented information covering approval before issue, review and update, revision identification, legibility, storage, availability, distribution, disposal, documents of external origin and obsolete versions.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Document control procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-041",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Controlled Document Register",
+        "type": "Register",
+        "control_ref": "M1.3.3",
+        "mandatory": true,
+        "description": "Register of controlled documents showing owner, version, approval date, classification, review date, external origin and retention identification.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Controlled document register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-042",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Mandatory Controls Compliance Record",
+        "type": "Matrix",
+        "control_ref": "M1.3.3",
+        "mandatory": true,
+        "description": "Record of the entity's compliance with each mandatory control of the standard, with a reference to the supporting evidence.",
+        "format": "XLSX",
+        "owner": "Head of Compliance",
+        "evidence": [
+          "Mandatory controls compliance record"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-043",
+        "stage": "Stage 4: Implementation",
+        "name": "Project Information Security Procedure",
+        "type": "Procedure",
+        "control_ref": "M1.3.4",
+        "mandatory": false,
+        "description": "Project management procedure that builds information security risk assessment and requirement identification into every stage of the project life cycle.",
+        "format": "DOCX",
+        "owner": "Project Management Lead",
+        "evidence": [
+          "Project management procedure with security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-044",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Special Interest Groups Register",
+        "type": "Register",
+        "control_ref": "M1.3.5",
+        "mandatory": false,
+        "description": "List of the relevant national and international interest groups, working groups, security forums and professional associations with the entity's membership status and contact.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Special interest groups register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-045",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Special Interest Group Participation Guidelines",
+        "type": "Standard",
+        "control_ref": "M1.3.5",
+        "mandatory": false,
+        "description": "Guidance defining what employees taking part in special interest groups, forums and associations are allowed to share.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Rules on what participants may share"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-046",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Risk Treatment Options and Control Selection Register",
+        "type": "Register",
+        "control_ref": "M2.3.1",
+        "mandatory": true,
+        "description": "Register of the treatment option selected for each assessed risk (modification, retention, avoidance or sharing) with the reasons, the controls selected for it and the risk each control addresses.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "also_controls": [
+          "M2.3.2",
+          "M2.3.4"
+        ],
+        "evidence": [
+          "Treatment option decisions",
+          "Control selection record",
+          "Risk-to-control traceability"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-047",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Risk Communication and Consultation Plan",
+        "type": "Plan",
+        "control_ref": "M2.4.2",
+        "mandatory": true,
+        "description": "Plan for communicating and consulting on risk information with key stakeholders, including decision-makers, at every stage of risk management.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Risk communication plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-048",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Awareness and Training Policy",
+        "type": "Policy",
+        "control_ref": "M3.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy that sets the objectives and framework for information security awareness and training and the roles and responsibilities of those who provide it and those who receive it.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Approved awareness and training policy",
+          "Awareness and training objectives",
+          "Provider and recipient role assignments"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-049",
+        "stage": "Stage 4: Implementation",
+        "name": "Training Needs Analysis",
+        "type": "Assessment",
+        "control_ref": "M3.3.1",
+        "mandatory": false,
+        "description": "Analysis of the information security skills the entity needs, the skills currently in place and the gaps between them, which give the training needs.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Required information security skills",
+          "Current skills assessment",
+          "Skills gap analysis"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-050",
+        "stage": "Stage 4: Implementation",
+        "name": "Training Implementation Plan",
+        "type": "Plan",
+        "control_ref": "M3.3.2",
+        "mandatory": true,
+        "description": "Plan giving the training solution, medium and target audience for each training need and the timeline for delivering each solution, kept up to date as delivery progresses.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "also_controls": [
+          "M3.3.3"
+        ],
+        "evidence": [
+          "Training solution per need",
+          "Training implementation plan",
+          "Updated training implementation plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-051",
+        "stage": "Stage 4: Implementation",
+        "name": "Awareness Campaign Plan and Register",
+        "type": "Plan",
+        "control_ref": "M3.4.1",
+        "mandatory": false,
+        "description": "Plan and register of awareness campaigns giving, for each one, its audience and content (based on the security risks of users' activities), its timeline and, once it has run, the date, reach and participation.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Awareness campaign scope",
+          "Awareness campaign timeline",
+          "Awareness campaign records"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-052",
+        "stage": "Stage 4: Implementation",
+        "name": "Background Verification Procedure",
+        "type": "Procedure",
+        "control_ref": "M4.1.1",
+        "mandatory": true,
+        "description": "Procedure defining the background verification checks for candidates, contractors and third-party personnel, in line with relevant laws and ethics and proportionate to business requirements, information classification and perceived risk.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "evidence": [
+          "Background verification procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-053",
+        "stage": "Stage 4: Implementation",
+        "name": "Information Security Disciplinary Process",
+        "type": "Procedure",
+        "control_ref": "M4.2.2",
+        "mandatory": false,
+        "description": "Formal disciplinary process for information security policy violations by employees, contractors and third-party users.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "evidence": [
+          "Formal disciplinary process"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-054",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Security Breach Register",
+        "type": "Register",
+        "control_ref": "M4.2.2",
+        "mandatory": false,
+        "description": "Register of the information security breaches committed, with the date, the people involved and the outcome, protecting identities as required.",
+        "format": "XLSX",
+        "owner": "HR Director",
+        "evidence": [
+          "Security breach register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-055",
+        "stage": "Stage 4: Implementation",
+        "name": "Termination, Change of Employment and Asset Return Procedure",
+        "type": "Procedure",
+        "control_ref": "M4.3.2",
+        "mandatory": true,
+        "description": "Procedure stating the information security responsibilities and duties that remain valid after termination or change of employment, including confidentiality and intellectual property rights, and the steps to recover all issued software, documents, equipment and other assets.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "also_controls": [
+          "M4.3.1"
+        ],
+        "evidence": [
+          "Asset return procedure",
+          "Termination and change of employment procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-056",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Compliance Requirements Identification Procedure",
+        "type": "Procedure",
+        "control_ref": "M5.1.1",
+        "mandatory": false,
+        "description": "Procedure, with assigned responsibility, for identifying on an ongoing basis the statutory, regulatory, contractual and intellectual property requirements that apply to the entity.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "also_controls": [
+          "M5.1.2"
+        ],
+        "evidence": [
+          "Compliance requirements identification procedure",
+          "Intellectual property requirements identification"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-057",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Intellectual Property Rights Policy",
+        "type": "Policy",
+        "control_ref": "M5.1.2",
+        "mandatory": false,
+        "description": "Policy defining the legal use of software and information products and the entity's obligations to protect intellectual property rights.",
+        "format": "DOCX",
+        "owner": "Legal Counsel",
+        "evidence": [
+          "Intellectual property rights policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-058",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Software License and Ownership Register",
+        "type": "Register",
+        "control_ref": "M5.1.2",
+        "mandatory": false,
+        "description": "Register of licensed products with proof of ownership of licenses, master disks and manuals, the system requirements the licenses impose such as limits on licensed users, and the checks that only authorized and licensed software is installed.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Intellectual property system requirements",
+          "License and ownership register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-059",
+        "stage": "Stage 4: Implementation",
+        "name": "Records Identification Procedure",
+        "type": "Procedure",
+        "control_ref": "M5.1.3",
+        "mandatory": false,
+        "description": "Procedure for identifying the organizational records that carry compliance requirements on loss, destruction, falsification, unauthorized access and unauthorized release.",
+        "format": "DOCX",
+        "owner": "Records Manager",
+        "evidence": [
+          "Record identification procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-060",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Records Inventory and Retention Schedule",
+        "type": "Register",
+        "control_ref": "M5.1.3",
+        "mandatory": false,
+        "description": "Inventory of record types, such as accounting and database records, each with its retention period, storage medium and protection requirements.",
+        "format": "XLSX",
+        "owner": "Records Manager",
+        "evidence": [
+          "Records inventory and retention schedule"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-061",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Data Privacy and Protection Policy",
+        "type": "Policy",
+        "control_ref": "M5.1.4",
+        "mandatory": false,
+        "description": "Policy covering data handling, security, breach management and the rights of data subjects for personal and sensitive personal information.",
+        "format": "DOCX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Data privacy and protection policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-062",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Personal Data Handling Inventory",
+        "type": "Register",
+        "control_ref": "M5.1.4",
+        "mandatory": false,
+        "description": "Inventory of the critical business activities that handle personally identifiable or sensitive personal information, with the owner of each.",
+        "format": "XLSX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Personal data handling inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-063",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Privacy Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "M5.1.4",
+        "mandatory": false,
+        "description": "Privacy risk assessment carried out for each critical activity that handles personally identifiable or sensitive personal information.",
+        "format": "DOCX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Privacy risk assessments"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-064",
+        "stage": "Stage 4: Implementation",
+        "name": "Data Breach Detection and Response Procedure",
+        "type": "Procedure",
+        "control_ref": "M5.1.4",
+        "mandatory": false,
+        "description": "Procedure for detecting, responding to and reporting data breaches, particularly those affecting personally identifiable and sensitive personal information.",
+        "format": "DOCX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Data breach detection and response procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-065",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Compliance Checking Procedure",
+        "type": "Procedure",
+        "control_ref": "M5.2.1",
+        "mandatory": true,
+        "description": "Procedure for routinely checking compliance with security policies and standards, stating the schedule and who performs and who reviews the checks.",
+        "format": "DOCX",
+        "owner": "Head of Compliance",
+        "evidence": [
+          "Compliance checking procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-066",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Performance Evaluation Policy",
+        "type": "Policy",
+        "control_ref": "M6.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy that sets the overall framework for performance evaluation, including how results are reported to management and how detailed control measurements are combined with higher-level measures.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Approved performance evaluation policy",
+          "Performance results reporting methods",
+          "Measurement integration model"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-067",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Monitoring and Measurement Plan",
+        "type": "Plan",
+        "control_ref": "M6.2.1",
+        "mandatory": true,
+        "description": "Plan stating which information security processes and controls are monitored and measured, the methods that ensure valid results, when and by whom, and the recorded results such as performance indicator values.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Monitoring and measurement plan",
+          "Monitoring and measurement methods",
+          "Monitoring and measurement results"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-068",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Information Security Performance Report",
+        "type": "Report",
+        "control_ref": "M6.2.1",
+        "mandatory": true,
+        "description": "Periodic evaluation of information security performance and program effectiveness against the monitoring results, reported by the assigned role to top management.",
+        "format": "PDF",
+        "owner": "CISO",
+        "also_controls": [
+          "M1.1.3"
+        ],
+        "evidence": [
+          "Performance and effectiveness evaluation",
+          "Information security performance report"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-069",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Management Review Schedule and Action Tracker",
+        "type": "Plan",
+        "control_ref": "M6.2.3",
+        "mandatory": true,
+        "description": "Schedule of the planned management reviews with the agenda showing the required inputs, and tracker of the actions arising from each review and their status, used as an input to the next review.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Management review schedule",
+          "Management review action tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-070",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Nonconformity and Corrective Action Procedure",
+        "type": "Procedure",
+        "control_ref": "M6.3.1",
+        "mandatory": true,
+        "description": "Procedure for reacting to and correcting nonconformities, determining their causes and reviewing the effectiveness of corrective action.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Nonconformity and corrective action procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-071",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Continual Improvement Plan",
+        "type": "Plan",
+        "control_ref": "M6.3.2",
+        "mandatory": true,
+        "description": "Plan of improvements to the suitability, adequacy and effectiveness of the information security controls, with owners, target dates and the monitoring and review results and incidents that prompted each decision.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Improvement plan",
+          "Improvement decisions from monitoring and review"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-072",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Information Asset Management Policy",
+        "type": "Policy",
+        "control_ref": "T1.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy giving the framework for managing information assets, including the assignment of owners and the arrangements for personal devices used for work.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Approved information asset management policy",
+          "Bring-your-own-device arrangements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-073",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Acceptable Use Policy",
+        "type": "Policy",
+        "control_ref": "T1.2.2",
+        "mandatory": false,
+        "description": "Documented and approved rules for the acceptable use of information and associated assets, including personal assets used within the entity's environment.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Acceptable use rules"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-074",
+        "stage": "Stage 4: Implementation",
+        "name": "Information Labeling and Handling Procedure",
+        "type": "Procedure",
+        "control_ref": "T1.3.2",
+        "mandatory": true,
+        "description": "Procedure for labeling information and related assets to reflect their classification in physical and electronic formats and for processing, storing and communicating information consistently with its classification and label.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "also_controls": [
+          "T1.3.3"
+        ],
+        "evidence": [
+          "Information labeling procedure",
+          "Information handling procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-075",
+        "stage": "Stage 4: Implementation",
+        "name": "Information Transfer Rules",
+        "type": "Procedure",
+        "control_ref": "T1.3.4",
+        "mandatory": false,
+        "description": "Documented rules and procedures for each type of internal and external transfer facility, reflecting the information classification and the regulatory and business obligations.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Information transfer rules"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-076",
+        "stage": "Stage 4: Implementation",
+        "name": "Secure Deletion and Disposal Procedure",
+        "type": "Procedure",
+        "control_ref": "T1.3.6",
+        "mandatory": true,
+        "description": "Procedure for securely deleting information by classification level and for the secure re-use or disposal of storage media and equipment, naming the sanitization and destruction methods and the point at which information is no longer needed.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "also_controls": [
+          "T1.4.2",
+          "T2.3.6"
+        ],
+        "evidence": [
+          "Information deletion procedure",
+          "Media reuse and disposal procedure",
+          "Equipment disposal and re-use procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-077",
+        "stage": "Stage 4: Implementation",
+        "name": "Removable Media Management Procedure",
+        "type": "Procedure",
+        "control_ref": "T1.4.1",
+        "mandatory": false,
+        "description": "Procedure covering the whole life cycle of removable storage media, setup, distribution, use and disposal, with the protection required at each classification level.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Removable media management procedure",
+          "Removable media protection levels"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-078",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Removable Media Register",
+        "type": "Register",
+        "control_ref": "T1.4.1",
+        "mandatory": false,
+        "description": "Register of issued removable storage media with owner, classification and status.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Removable media register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-079",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Media and Equipment Disposal Register",
+        "type": "Register",
+        "control_ref": "T1.4.2",
+        "mandatory": false,
+        "description": "Register of disposed storage media and equipment with the date, identifier, disposal method and the person who authorized and carried out the disposal.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "also_controls": [
+          "T2.3.6"
+        ],
+        "evidence": [
+          "Media disposal log",
+          "Disposed equipment register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-080",
+        "stage": "Stage 4: Implementation",
+        "name": "Endpoint Device Security Standard",
+        "type": "Standard",
+        "control_ref": "T1.5.1",
+        "mandatory": true,
+        "description": "Documented secure configuration and handling requirements for user endpoint devices, including the information classification they may handle, registration, software restrictions, updates and network connection rules.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Endpoint device security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-081",
+        "stage": "Stage 4: Implementation",
+        "name": "Physical and Environmental Security Procedures",
+        "type": "Procedure",
+        "control_ref": "T2.1.1",
+        "mandatory": true,
+        "description": "Procedures that implement the physical and environmental security policy for secure areas, covering visible identification, delivery and loading areas, public access to key facilities, working in secure areas and the recording devices allowed into them.",
+        "format": "DOCX",
+        "owner": "Physical Security Manager",
+        "also_controls": [
+          "T2.2.2",
+          "T2.2.3",
+          "T2.2.5"
+        ],
+        "evidence": [
+          "Physical and environmental security procedures",
+          "Visible identification requirement",
+          "Delivery and loading area access control",
+          "Public access restriction rules",
+          "Secure area working guidelines",
+          "Recording equipment and device authorization"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-082",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Secure Area Register",
+        "type": "Register",
+        "control_ref": "T2.2.1",
+        "mandatory": false,
+        "description": "Register of the entity's security areas, classified by the assets and information each one holds or handles, with the perimeter defined for each security level.",
+        "format": "XLSX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Security area classification",
+          "Security perimeter definitions"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-083",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Physical and Environmental Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "T2.2.4",
+        "mandatory": false,
+        "description": "Risk assessment of each physical site, perimeter and off-premise location covering natural disasters, malicious attack and accidents, with the countermeasures chosen and their implementation status.",
+        "format": "DOCX",
+        "owner": "Physical Security Manager",
+        "also_controls": [
+          "T2.2.1",
+          "T2.3.5"
+        ],
+        "evidence": [
+          "Physical site risk assessments",
+          "Physical protection countermeasures",
+          "Perimeter risk assessment",
+          "Off-premise location risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-084",
+        "stage": "Stage 4: Implementation",
+        "name": "Equipment Security Procedure",
+        "type": "Procedure",
+        "control_ref": "T2.3.1",
+        "mandatory": false,
+        "description": "Procedure for siting and protecting equipment, supporting power and utilities, equipment commissioning, maintenance and decommissioning, and the protection of equipment used outside the premises.",
+        "format": "DOCX",
+        "owner": "Facilities Manager",
+        "also_controls": [
+          "T2.3.2",
+          "T2.3.4",
+          "T2.3.5"
+        ],
+        "evidence": [
+          "Equipment siting and protection guidelines",
+          "Power protection description",
+          "Equipment commissioning and decommissioning procedure",
+          "Off-site equipment protection rules"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-085",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Equipment Maintenance Log",
+        "type": "Log",
+        "control_ref": "T2.3.4",
+        "mandatory": false,
+        "description": "Log of preventive and corrective maintenance and of suspected or actual faults for all equipment, with the personnel who carried out each task.",
+        "format": "XLSX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Equipment maintenance log"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-086",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Clear Desk and Clear Screen Policy",
+        "type": "Policy",
+        "control_ref": "T2.3.7",
+        "mandatory": false,
+        "description": "Formal policy for papers, removable storage media and screens that is appropriate to the entity's purpose and outlines the responsibilities of users.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Clear desk and clear screen policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-087",
+        "stage": "Stage 4: Implementation",
+        "name": "Documented Operating Procedures",
+        "type": "Procedure",
+        "control_ref": "T3.1.2",
+        "mandatory": false,
+        "description": "Approved operating procedures giving the detailed instructions for each job, such as system owners, secure installation and configuration, information handling, and backup and resilience, in a format that can be shared with stakeholders.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Approved operating procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-088",
+        "stage": "Stage 4: Implementation",
+        "name": "Change Management Procedure",
+        "type": "Procedure",
+        "control_ref": "T3.1.3",
+        "mandatory": true,
+        "description": "Procedure for the documentation, specification, testing, approval and managed implementation of changes to information systems and software, with the list of systems it applies to.",
+        "format": "DOCX",
+        "owner": "Change Manager",
+        "also_controls": [
+          "T7.4.1"
+        ],
+        "evidence": [
+          "Change management procedure",
+          "Change management scope",
+          "Change control procedure for systems and software"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-089",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Change Log",
+        "type": "Log",
+        "control_ref": "T3.1.3",
+        "mandatory": true,
+        "description": "Log of all proposed changes showing the request, security impact, management approval, implementation and outcome of each.",
+        "format": "XLSX",
+        "owner": "Change Manager",
+        "also_controls": [
+          "T7.4.1"
+        ],
+        "evidence": [
+          "Change log",
+          "Change track record"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-090",
+        "stage": "Stage 4: Implementation",
+        "name": "Development, Test and Operational Environment Standard",
+        "type": "Standard",
+        "control_ref": "T3.1.4",
+        "mandatory": false,
+        "description": "Standard describing the separation between development, test and operational environments, the rules for access to each and for moving information, software and systems between them, and the rules for selecting and protecting test data.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "also_controls": [
+          "T7.4.2"
+        ],
+        "evidence": [
+          "Environment separation description",
+          "Environment transfer rules",
+          "Test data selection rules"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-091",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Capacity Management Plan",
+        "type": "Plan",
+        "control_ref": "T3.1.5",
+        "mandatory": false,
+        "description": "Plan estimating the capacity needed by planned systems and projected growth, taking account of new business and system requirements.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Capacity requirements forecast"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-092",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Software Version Archive Register",
+        "type": "Register",
+        "control_ref": "T3.1.8",
+        "mandatory": false,
+        "description": "Listing showing that an original copy of every installed software and of its previous versions is kept, with the integrity verification applied, such as hash checks.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "also_controls": [
+          "T7.4.1"
+        ],
+        "evidence": [
+          "Software original copy repository",
+          "Software version archive"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-093",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Monitoring Policy and Procedures",
+        "type": "Policy",
+        "control_ref": "T3.2.1",
+        "mandatory": false,
+        "description": "Documented policy and procedures stating what system aspects are monitored, how, how often and by whom, how monitoring information feeds incident response, and the logging and clock synchronization requirements.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "also_controls": [
+          "T3.2.4"
+        ],
+        "evidence": [
+          "Approved monitoring policy and procedures",
+          "Monitoring to incident response procedure",
+          "Logging requirements",
+          "Clock synchronization requirements",
+          "Date and time standard"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-094",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Logging and Monitoring Register",
+        "type": "Register",
+        "control_ref": "T3.2.2",
+        "mandatory": true,
+        "description": "Register of the auditable events captured for each log source, the types of system use monitored, the minimum information recorded, the review frequency and the protection applied to critical logs.",
+        "format": "XLSX",
+        "owner": "Security Operations Lead",
+        "also_controls": [
+          "T3.2.3"
+        ],
+        "evidence": [
+          "Auditable events list",
+          "Log review schedule and records",
+          "Critical log protection",
+          "Monitored system usage list",
+          "Monitoring review frequency and records"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-095",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Threat Intelligence Register",
+        "type": "Register",
+        "control_ref": "T3.3.1",
+        "mandatory": false,
+        "description": "Register of the external and internal sources selected for strategic, tactical and operational threat information and of the actions taken because of threat intelligence.",
+        "format": "XLSX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Threat information sources",
+          "Actions taken on threat intelligence"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-096",
+        "stage": "Stage 4: Implementation",
+        "name": "Vulnerability Management Procedure",
+        "type": "Procedure",
+        "control_ref": "T3.3.2",
+        "mandatory": true,
+        "description": "Procedure defining the roles and responsibilities for vulnerability monitoring, vulnerability risk assessment, updating and asset tracking.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Vulnerability management procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-097",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Vulnerability Remediation Tracker",
+        "type": "Register",
+        "control_ref": "T3.3.2",
+        "mandatory": true,
+        "description": "Tracker of the measure taken for each identified vulnerability, with owner, due date and status.",
+        "format": "XLSX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Vulnerability remediation tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-098",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cryptographic Register",
+        "type": "Register",
+        "control_ref": "T3.4.1",
+        "mandatory": true,
+        "description": "Register of the encryption requirements for data at rest and in motion, the ciphers, hashing algorithms and public key cryptography in use, and the plan and records for replacing weak or outdated ones.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "also_controls": [
+          "T3.4.4"
+        ],
+        "evidence": [
+          "Encryption requirements register",
+          "Weak cipher and algorithm replacement",
+          "Public key cryptography inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-099",
+        "stage": "Stage 4: Implementation",
+        "name": "Cryptographic Key Management Procedure",
+        "type": "Procedure",
+        "control_ref": "T3.4.3",
+        "mandatory": true,
+        "description": "Procedure covering the cryptographic key life cycle of creation, distribution, storage, recovery, disposal and archival.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Key management procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-100",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Post-Quantum Cryptography Transition Plan",
+        "type": "Plan",
+        "control_ref": "T3.4.4",
+        "mandatory": false,
+        "description": "Plan for moving systems to quantum-safe cryptography, including the dependency analysis that sets the order of transition.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Post-quantum transition plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-101",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Network Security Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "T4.1.1",
+        "mandatory": true,
+        "description": "Risk assessment of individual network components and of the overall network that identifies the vulnerabilities needing action and links each one to the control implemented to mitigate it.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Network risk assessment",
+          "Network control implementation record"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-102",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Services Security Requirements Register",
+        "type": "Register",
+        "control_ref": "T4.1.2",
+        "mandatory": false,
+        "description": "List of the network services, in-house or outsourced, that are subject to specific security requirements, with the security features, service levels and management requirements of each.",
+        "format": "XLSX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Network services security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-103",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Security Standard",
+        "type": "Standard",
+        "control_ref": "T4.1.3",
+        "mandatory": false,
+        "description": "Standard setting the criteria for grouping information services, users and systems into separate network groups, the usage restrictions and security controls for each wireless network, and the types of website personnel should and should not be able to reach.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "also_controls": [
+          "T4.1.4",
+          "T4.1.5"
+        ],
+        "evidence": [
+          "Network segregation criteria",
+          "Wireless security controls by network",
+          "Wireless usage and configuration standard",
+          "Website access categories"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-104",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Identity and Access Management Policy",
+        "type": "Policy",
+        "control_ref": "T5.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy, based on business and security requirements, covering identity management, user access management, access rights review, privileged access management, secure authentication and password management, and how access is restricted by role.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "also_controls": [
+          "T5.3.2"
+        ],
+        "evidence": [
+          "Approved identity and access management policy",
+          "Access restriction model"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-105",
+        "stage": "Stage 4: Implementation",
+        "name": "Identity Life Cycle Procedure",
+        "type": "Procedure",
+        "control_ref": "T5.2.1",
+        "mandatory": true,
+        "description": "Procedure for creating, changing, disabling and removing identities, including the approval and documentation required for any shared or non-human identity.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Identity life cycle procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-106",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Role-Based Access and Segregation of Duties Matrix",
+        "type": "Matrix",
+        "control_ref": "T5.2.2",
+        "mandatory": true,
+        "description": "Matrix mapping roles and responsibilities to the access rights granted to information and associated assets, the access requirements set by owners, and the conflicting roles that must be kept separate.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "also_controls": [
+          "T5.1.1",
+          "T5.3.2"
+        ],
+        "evidence": [
+          "Segregation of duties matrix",
+          "Access requirements set by owners",
+          "Role-based access matrix"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-107",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Access Rights Register",
+        "type": "Register",
+        "control_ref": "T5.2.2",
+        "mandatory": true,
+        "description": "Register of the access rights granted for all assets, identifying any special access, and of the authorized recipients of classified information and other associated assets.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "also_controls": [
+          "T1.3.3"
+        ],
+        "evidence": [
+          "Access rights records",
+          "Authorized recipients record"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-108",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Access Rights Review Procedure",
+        "type": "Procedure",
+        "control_ref": "T5.2.4",
+        "mandatory": true,
+        "description": "Procedure for reviewing access rights periodically and after any change in user status, such as promotion, demotion or termination.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Access rights review procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-109",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Privileged Utility Programs Register",
+        "type": "Register",
+        "control_ref": "T5.3.4",
+        "mandatory": false,
+        "description": "List of the utility programs able to override system and application controls and the authorized personnel allowed to use them, with the authorization levels.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Utility program authorization list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-110",
+        "stage": "Stage 4: Implementation",
+        "name": "Authentication Credential Management Standard",
+        "type": "Standard",
+        "control_ref": "T5.4.1",
+        "mandatory": false,
+        "description": "Standard for providing security credentials securely, covering identity verification before issue, temporary credentials, secure delivery, revocation and re-allocation, and the good practices and approved storage methods users must follow.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "also_controls": [
+          "T5.4.2"
+        ],
+        "evidence": [
+          "Credential issuance procedure",
+          "Credential use good practices",
+          "Approved credential storage method"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-111",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Third Party Security Policy",
+        "type": "Policy",
+        "control_ref": "T6.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy that provides the framework for third-party risk management, including responsibilities, the oversight forum, resources and the communication channels between suppliers, internal departments and partners.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Approved third-party security policy",
+          "Third-party security governance arrangements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-112",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Supplier Risk Classification Register",
+        "type": "Register",
+        "control_ref": "T6.2.1",
+        "mandatory": true,
+        "description": "Register of third-party suppliers classified by the risk they pose to the entity's systems and data, with the strategies and actions to mitigate each supplier risk, their owner and status.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier risk classification register",
+          "Supplier risk mitigation plans"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-113",
+        "stage": "Stage 4: Implementation",
+        "name": "Supplier Security Assessment Questionnaire",
+        "type": "Form/Template",
+        "control_ref": "T6.2.2",
+        "mandatory": true,
+        "description": "Assessment template and criteria for judging a supplier's information security posture, covering governance, secure design and code, physical security, monitoring and auditing, and incident response and recovery.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier security assessment criteria"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-114",
+        "stage": "Stage 4: Implementation",
+        "name": "ICT Procurement Security Requirements",
+        "type": "Standard",
+        "control_ref": "T6.2.3",
+        "mandatory": true,
+        "description": "Defined security requirements for hardware and software procurement, such as authentication and authorization mechanisms, data encryption and security protocols.",
+        "format": "DOCX",
+        "owner": "Procurement Manager",
+        "evidence": [
+          "Procurement security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-115",
+        "stage": "Stage 4: Implementation",
+        "name": "Supplier Contract Security Clause Template",
+        "type": "Agreement",
+        "control_ref": "T6.2.4",
+        "mandatory": true,
+        "description": "Standard information security clauses for supplier contracts, adjusted to the type of relationship, covering legal and regulatory compliance, deletion of the entity's information, secure coding and quality assurance, and code ownership and licensing.",
+        "format": "DOCX",
+        "owner": "Legal Counsel",
+        "also_controls": [
+          "T1.3.6",
+          "T7.3.2"
+        ],
+        "evidence": [
+          "Supplier contract security clause templates",
+          "Legal and regulatory compliance clauses",
+          "Third-party deletion requirements",
+          "Secure coding and QA contract clauses",
+          "Contractual security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-116",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Monitoring Program",
+        "type": "Plan",
+        "control_ref": "T6.2.5",
+        "mandatory": true,
+        "description": "Program describing how supplier adherence to the contractual cyber security requirements is monitored, including logging and auditing of supplier access to the entity's information and critical systems.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier monitoring program"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-117",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Systems Acquisition, Development and Maintenance Policy",
+        "type": "Policy",
+        "control_ref": "T7.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy outlining the roles of the internal and external parties involved and the framework for integrating information security controls through acquiring, designing, developing, implementing and maintaining systems.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Approved acquisition, development and maintenance policy",
+          "Policy framework for security in the life cycle"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-118",
+        "stage": "Stage 4: Implementation",
+        "name": "Secure Engineering and Coding Standard",
+        "type": "Standard",
+        "control_ref": "T7.2.2",
+        "mandatory": false,
+        "description": "Approved document establishing the principles for engineering secure systems, such as authentication, secure session control and data validation, and the secure coding practices with a minimum baseline extended to third-party and open-source components.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "also_controls": [
+          "T7.3.1"
+        ],
+        "evidence": [
+          "Secure engineering principles",
+          "Secure coding guidelines"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-119",
+        "stage": "Stage 4: Implementation",
+        "name": "Outsourced Development Quality Assurance Procedure",
+        "type": "Procedure",
+        "control_ref": "T7.3.2",
+        "mandatory": false,
+        "description": "Defined quality assurance process for outsourced software development, including acceptance testing of the quality and accuracy of deliverables.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Quality assurance process"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-120",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Testing and Acceptance Standard",
+        "type": "Standard",
+        "control_ref": "T7.4.3",
+        "mandatory": false,
+        "description": "Defined requirements for testing the security of new and updated systems before they go live, with the acceptable parameters, such as pass thresholds, for each requirement.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Security testing requirements",
+          "Acceptance parameters for security tests"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-121",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Information Security Incident Management Policy",
+        "type": "Policy",
+        "control_ref": "T8.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy outlining the roles and responsibilities for incident management and the framework for managing incidents, including classification and handling requirements.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Approved incident management policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-122",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Event Reporting Procedure",
+        "type": "Procedure",
+        "control_ref": "T8.1.2",
+        "mandatory": true,
+        "description": "Procedure and mechanism for reporting observed or suspected information security events, with the point of contact, designed to be easy to use and always available.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Event reporting procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-123",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Incident Classification and Prioritization Scheme",
+        "type": "Standard",
+        "control_ref": "T8.2.2",
+        "mandatory": true,
+        "description": "Scheme for classifying and prioritizing incidents by impact, with the criteria identifying the incidents that must be reported to national agencies and the notification times by incident level.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident classification and prioritization scheme",
+          "National agency reporting criteria"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-124",
+        "stage": "Stage 4: Implementation",
+        "name": "Incident Response Training Program",
+        "type": "Plan",
+        "control_ref": "T8.2.3",
+        "mandatory": true,
+        "description": "Analysis of the training, qualifications and ongoing professional development required for incident response personnel and the training program for the Incident Response Team, tailored to the audience from end users to responders.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident response training needs analysis",
+          "Incident response training program"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-125",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Incident Response Test Plan",
+        "type": "Plan",
+        "control_ref": "T8.2.4",
+        "mandatory": true,
+        "description": "Testing procedures and test cases, such as checklists, tabletop and functional exercises, that validate the effectiveness of the incident response capability.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident response test procedures and cases"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-126",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Lessons Learned Register",
+        "type": "Register",
+        "control_ref": "T8.2.6",
+        "mandatory": false,
+        "description": "Register of lessons learned from incidents and continuity tests, with the additional controls identified to avoid similar incidents and the updates made to the continuity plans.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "also_controls": [
+          "T9.2.1"
+        ],
+        "evidence": [
+          "Lessons learned records",
+          "Continuity lessons learned and plan updates"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-127",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Evidence Collection Procedure",
+        "type": "Procedure",
+        "control_ref": "T8.2.7",
+        "mandatory": false,
+        "description": "Procedure for identification, collection, acquisition and preservation of evidence covering chain of custody, safety of evidence and personnel, roles, competence, documentation and briefing.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Evidence collection procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-128",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Information Security Continuity Procedure",
+        "type": "Procedure",
+        "control_ref": "T9.1.2",
+        "mandatory": false,
+        "description": "Procedure for keeping existing information security controls in operation during a disruption, listing the controls included in the continuity plans and the compensating control for each control that cannot be maintained.",
+        "format": "DOCX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Security controls in continuity plans",
+          "Disruption security maintenance procedures",
+          "Compensating controls register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-129",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Continuity Plan Test Schedule",
+        "type": "Plan",
+        "control_ref": "T9.2.1",
+        "mandatory": false,
+        "description": "Schedule showing how and when each element of the information systems continuity plans is tested.",
+        "format": "XLSX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Continuity plan test schedule"
+        ]
       }
     ]
   }

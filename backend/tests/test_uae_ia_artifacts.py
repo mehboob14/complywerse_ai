@@ -5,10 +5,21 @@ QCB ...), every artifact hangs on a real control of the library with the control
 (seed_data/artifact_resolution.json) are what artifact_resolver produces, the standard's name reaches the catalogue key through
 the function the API uses, and the journey flow in the framework page's data file matches the library's name and no other.
 The PDF is not needed here. On in-memory SQLite.
+
+The artifacts follow the evidence recommendations (seed_data/uae_ia_evidence.json, 527 items on 134 controls). Every item is
+classified once, in CLASSIFICATION at the end of this file:
+  class A, an authored document: a policy, standard, procedure, plan, register, matrix, schedule, template, report, or a section
+          of one, that the entity writes and maintains. The value is the id of the artifact that provides it, and that artifact
+          lists the item's name in its `evidence`.
+  class B, a record or an output of operating the control or of a system. The value is one reason code (REASONS). No artifact
+          lists it: it is uploaded or generated, not authored.
+An artifact's `control_ref` is its primary control; `also_controls` are the other controls whose items it provides.
 """
+import collections
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +37,28 @@ FLOWS_TS = ROOT.parent / "grc-frontend" / "src" / "app" / "(dashboard)" / "frame
 KEY = "uae_ia"
 NAME = "UAE Information Assurance Standard"
 FAMILIES = [f"M{i}" for i in range(1, 7)] + [f"T{i}" for i in range(1, 10)]
+EVIDENCE = SEED / "uae_ia_evidence.json"
+# the artifact types the content generator builds a document skeleton from (scripts/generate_artifact_content.py)
+TYPE_WORDS = {"policy", "standard", "guideline", "procedure", "process", "charter", "register", "plan", "report", "record",
+              "log", "assessment", "form", "template", "matrix", "attestation", "strategy", "agreement", "training", "evidence"}
+STAGES = {"Stage 1: Governance & Scoping", "Stage 2: Risk Assessment", "Stage 3: Policy & Control Design",
+          "Stage 4: Implementation", "Stage 5: Operation & Monitoring", "Stage 6: Audit & Regulatory Reporting"}
+REASONS = {
+    "approval": "approval, sign-off, appointment, authorization or decision record; the approval or review history of a document",
+    "minutes": "minutes of a meeting",
+    "notice": "notification, circulation, awareness or availability evidence (a message, notice or publication)",
+    "export": "screenshot, configuration or settings export, or a report from a system or tool",
+    "log": "system log, monitoring or event extract",
+    "test": "test, scan, inspection, check, review, reconciliation, survey or evaluation result",
+    "signed": "signed acknowledgement or acceptance, executed contract or agreement",
+    "sample": "sample of events, records, documents or extracts produced by operating the control",
+    "record": "operating record kept while running the control (return, disposal, deletion, custody, access, change, training)",
+}
+
+
+def _natural(cid):
+    """M1.2.10 sorts after M1.2.9."""
+    return [int(p) if p.isdigit() else p for p in re.findall(r"\d+|\D+", cid)]
 
 
 def _json(path):
@@ -52,6 +85,12 @@ def controls(library):
     return {c["control_id"]: c for c in library["controls"]}
 
 
+@pytest.fixture(scope="module")
+def layer():
+    """control id -> the names of its evidence items, in the layer's order."""
+    return {c: [i["name"] for i in items] for c, items in _json(EVIDENCE)["controls"].items()}
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -71,15 +110,15 @@ def test_the_entry_has_the_shape_of_its_peers(catalog, entry, library):
 
     keys = tuple(catalog["adhics"]["artifacts"][0])           # the key order of the regional peers
     assert {frozenset(a) for v in others.values() for a in v["artifacts"]} == {frozenset(keys)}      # every peer has these keys
-    peer_types = {a["type"] for v in others.values() for a in v["artifacts"]}
-    peer_formats = {a["format"] for v in others.values() for a in v["artifacts"]}
-    peer_stages = {a["stage"] for v in others.values() for a in v["artifacts"]}
 
     arts = entry["artifacts"]
-    assert len(arts) >= 16                                   # the shortest peer list
+    assert len(arts) >= 100                                  # one artifact per authored document the evidence asks for
     for a in arts:
-        assert tuple(a) == keys, a["artifact_id"]
-        assert a["type"] in peer_types and a["format"] in peer_formats and a["stage"] in peer_stages, a["artifact_id"]
+        # the peers' nine keys in the peers' order, then the two this entry adds: also_controls (optional) and evidence
+        assert tuple(a)[:len(keys)] == keys, a["artifact_id"]
+        assert list(a)[len(keys):] in (["evidence"], ["also_controls", "evidence"]), a["artifact_id"]
+        assert {w.lower() for w in a["type"].split("/")} <= TYPE_WORDS, a["artifact_id"]
+        assert a["format"] in {"DOCX", "XLSX", "PDF"} and a["stage"] in STAGES, a["artifact_id"]
         assert isinstance(a["mandatory"], bool)
         assert all(isinstance(a[k], str) and a[k].strip() for k in keys if k != "mandatory"), a["artifact_id"]
         # one sentence, grounded in the control: the catalogue description is also the focus a Studio draft starts from
@@ -96,7 +135,7 @@ def test_ids_stages_and_lengths_follow_the_catalogue_conventions(catalog, entry)
     assert not set(ids) & other_ids
 
     numbers = [int(a["stage"].split()[1].rstrip(":")) for a in arts]            # how _ensure_catalog_seeded reads the stage
-    assert numbers == sorted(numbers) and set(numbers) == {1, 2, 3, 4, 5, 6}
+    assert set(numbers) == {1, 2, 3, 4, 5, 6}                                   # (new ones are numbered in control order, so the list is not stage-sorted)
 
     table = m.ArtifactCatalogItem.__table__.c
     columns = {"artifact_id": "artifact_id", "stage": "stage", "name": "name", "type": "artifact_type",
@@ -126,6 +165,9 @@ def test_every_artifact_hangs_on_a_real_control_and_follows_its_applicability(en
         assert a["mandatory"] is control["is_mandatory"] is (control["applicability"] == "Always applicable"), a["artifact_id"]
         # the matcher the framework page's per-requirement "Compliance Artifacts" section uses
         assert _ref_matches_any(ref, [ref]) and not _ref_matches_any(ref, [ref.rsplit(".", 1)[0]])
+        # a document that serves several controls hangs on its primary one and names the others, in control order
+        also = a.get("also_controls", [])
+        assert all(c in controls and c != ref for c in also) and also == sorted(set(also), key=_natural), a["artifact_id"]
 
 
 def test_every_control_family_has_a_document_and_the_foundation_documents_are_there(entry, controls):
@@ -143,6 +185,56 @@ def test_every_control_family_has_a_document_and_the_foundation_documents_are_th
     for ref, name in must.items():
         assert name in by_ref.get(ref, []), (ref, name)
         assert controls[ref]["is_mandatory"] is True
+
+
+# -- the evidence the artifacts follow ---------------------------------------------------------------------------------------
+
+def test_each_artifacts_evidence_comes_from_the_evidence_layer(entry, layer):
+    seen = {}
+    for a in entry["artifacts"]:
+        names = a["evidence"]
+        assert names and len(set(names)) == len(names) and all(isinstance(n, str) and n for n in names), a["artifact_id"]
+        controls = [a["control_ref"]] + a.get("also_controls", [])
+        carried = set()
+        for name in names:
+            owners = [c for c in controls if name in layer[c]]                     # exact names, under the artifact's controls
+            assert len(owners) == 1, (a["artifact_id"], name)
+            carried.add(owners[0])
+            assert name not in seen, (name, seen.get(name), a["artifact_id"])      # an item is provided by one artifact only
+            seen[name] = a["artifact_id"]
+        assert carried == set(controls), a["artifact_id"]                          # the primary control and every other one carry an item
+
+
+def test_every_evidence_item_is_classified_and_every_authored_one_has_an_artifact(entry, layer):
+    assert set(CLASSIFICATION) == set(layer)
+    by_id = {a["artifact_id"]: a for a in entry["artifacts"]}
+    provided = {n: a["artifact_id"] for a in entry["artifacts"] for n in a["evidence"]}
+    authored, records = 0, collections.Counter()
+    for control, row in CLASSIFICATION.items():
+        assert list(row) == layer[control], control                                # the same items in the same order, none missing
+        for name, value in row.items():
+            if value in REASONS:                                                   # class B: a record or an output
+                records[value] += 1
+                assert name not in provided, name
+            else:                                                                  # class A: an authored document
+                authored += 1
+                a = by_id[value]
+                assert provided.get(name) == value, (control, name)
+                assert control == a["control_ref"] or control in a.get("also_controls", []), (control, name)
+    assert authored + sum(records.values()) == sum(len(v) for v in layer.values())
+    assert authored == len(provided)                                               # nothing is provided that is not authored
+    assert set(records) == set(REASONS)                                            # every reason code is used
+
+
+def test_the_other_frameworks_entries_are_untouched(catalog):
+    """A guard for the commit that adds the evidence: no entry other than uae_ia differs from the committed catalogue."""
+    try:
+        out = subprocess.run(["git", "show", "HEAD:backend/grc/seed_data/artifact_catalog.json"], cwd=ROOT.parent,
+                             capture_output=True, check=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("no git history to compare with")
+    head = json.loads(out.decode("utf-8"))
+    assert [k for k in head if k != KEY and catalog.get(k) != head[k]] == []
 
 
 # -- the resolution rows ---------------------------------------------------------------------------------------------------
@@ -202,7 +294,9 @@ def test_seeding_and_the_api_serve_the_catalogue_by_the_standards_name(db, entry
 
     got = get_catalog(framework_key=None, assessment_type=NAME, db=db, current_user=None)
     assert got["framework_key"] == KEY and got["framework_name"] == NAME
-    assert [i["artifact_id"] for i in got["items"]] == [a["artifact_id"] for a in entry["artifacts"]]
+    # the API lists the stages in order and each stage by artifact id (new artifacts are numbered in control order, not stage order)
+    in_api_order = sorted(entry["artifacts"], key=lambda a: (int(a["stage"].split()[1].rstrip(":")), a["artifact_id"]))
+    assert [i["artifact_id"] for i in got["items"]] == [a["artifact_id"] for a in in_api_order]
     assert got["stages"] == sorted({a["stage"] for a in entry["artifacts"]})
     by_slug = get_catalog(framework_key=None, assessment_type="uae_ia", db=db, current_user=None)
     assert by_slug["framework_key"] == KEY and len(by_slug["items"]) == len(entry["artifacts"])
@@ -216,6 +310,8 @@ def test_seeding_and_the_api_serve_the_catalogue_by_the_standards_name(db, entry
     assert names_for("m2.3.4") == {"Statement of Applicability"}
     assert names_for("M1.1.3") == {"Information Security Governance Charter"}
     assert names_for("M2.3") == set() and names_for("M2.3.40") == set()          # token-equal, not a prefix
+    assert names_for("M1.3.3") == {"Document Control Procedure", "Controlled Document Register",
+                                   "Mandatory Controls Compliance Record"}
 
 
 # -- the journey flow on the framework page -----------------------------------------------------------------------------
@@ -263,3 +359,804 @@ def test_the_journey_flow_follows_the_pattern_and_matches_only_the_standard(libr
     assert [n for n in sorted(others) if _match_flow(n, flows) == "uaeia"] == []
     assert _match_flow("Abu Dhabi Healthcare Information and Cyber Security Standard", flows) == "adhics"
     assert _match_flow("SAMA Cyber Security Framework", flows) == "sama"
+
+
+# -- the classification of the evidence layer ---------------------------------------------------------------------------------
+# control id -> {evidence item name: id of the artifact that provides it (class A) | reason code (class B, see REASONS)}
+CLASSIFICATION = {
+    "M1.1.1": {
+        "Interested parties register": "UAEIA-034",
+        "Requirements of interested parties": "UAEIA-034",
+        "External context analysis": "UAEIA-035",
+        "Internal capabilities assessment": "UAEIA-035",
+        "Organization chart": "UAEIA-035",
+    },
+    "M1.1.2": {
+        "Top management approval of security direction": "approval",
+        "Security requirements built into business processes": "sample",
+        "Resource commitment approvals": "approval",
+        "Top management communications on information security": "notice",
+        "Top management review of information security": "UAEIA-032",
+        "Continual improvement and management support record": "record",
+    },
+    "M1.1.3": {
+        "Assignment of responsibility and authority": "UAEIA-003",
+        "Information security performance report": "UAEIA-068",
+        "Appointment of the information security lead": "approval",
+        "Information Security Committee charter": "UAEIA-003",
+        "Information Security Committee minutes": "minutes",
+    },
+    "M1.2.1": {
+        "Approved information security policy": "UAEIA-001",
+        "Top management approval of the policy": "approval",
+        "Policy review and revision record": "approval",
+        "Policy communication to staff": "notice",
+        "Policy availability to interested parties": "notice",
+    },
+    "M1.2.2": {
+        "Documented information security objectives": "UAEIA-002",
+        "Objectives basis record": "UAEIA-002",
+        "Approval of the objectives": "approval",
+        "Objectives communication record": "notice",
+        "Objectives update record": "approval",
+    },
+    "M1.2.3": {
+        "Approved supporting policy set": "UAEIA-012",
+        "Policy coverage matrix": "UAEIA-036",
+        "Policy-to-practice consistency review": "test",
+        "Policy publication and communication record": "notice",
+        "Personnel acknowledgement records": "signed",
+        "Supporting policy review log": "approval",
+    },
+    "M1.3.1": {
+        "Information security budget and staffing plan": "UAEIA-037",
+        "Competence requirements for security roles": "UAEIA-038",
+        "Staff competence records": "UAEIA-018",
+        "Competence gap actions and effectiveness evaluation": "record",
+    },
+    "M1.3.2": {
+        "Communication plan": "UAEIA-004",
+        "Authority and lead entity contact list": "UAEIA-039",
+        "Correspondence with authorities": "sample",
+    },
+    "M1.3.3": {
+        "Document control procedure": "UAEIA-040",
+        "Controlled document register": "UAEIA-041",
+        "Document approval records": "approval",
+        "Repository access and distribution settings": "export",
+        "Document disposal records": "record",
+        "Mandatory controls compliance record": "UAEIA-042",
+    },
+    "M1.3.4": {
+        "Project management procedure with security requirements": "UAEIA-043",
+        "Project information security risk assessments": "sample",
+        "Project security requirements": "sample",
+        "Risk treatment progress and effectiveness review": "test",
+    },
+    "M1.3.5": {
+        "Special interest groups register": "UAEIA-044",
+        "Rules on what participants may share": "UAEIA-045",
+        "Circulated interest group information": "notice",
+    },
+    "M2.1.1": {
+        "Approved risk management policy": "UAEIA-006",
+        "Risk criteria definitions": "UAEIA-006",
+        "Risk treatment and monitoring strategy": "UAEIA-006",
+        "Risk assessment approach": "UAEIA-006",
+        "Risk assessment consistency check": "test",
+        "Risk management policy approval and version history": "approval",
+    },
+    "M2.2.1": {
+        "Risk identification results": "UAEIA-008",
+        "Risk owner assignments": "UAEIA-008",
+        "Level of detail decision": "approval",
+    },
+    "M2.2.2": {
+        "Consequence assessment": "UAEIA-009",
+        "Likelihood assessment": "UAEIA-009",
+        "Threat and vulnerability inputs": "sample",
+        "Risk analysis results": "UAEIA-009",
+    },
+    "M2.2.3": {
+        "Risk evaluation results": "UAEIA-009",
+        "Treatment priorities": "UAEIA-009",
+        "Evaluation results shared with lead entities": "notice",
+    },
+    "M2.3.1": {
+        "Treatment option decisions": "UAEIA-046",
+        "Risk acceptance approvals": "approval",
+        "Residual risk and treatment effectiveness review": "test",
+    },
+    "M2.3.2": {
+        "Control selection record": "UAEIA-046",
+        "Control omission check": "test",
+        "Entity-specific additional controls": "UAEIA-011",
+        "Control selection criteria review": "test",
+    },
+    "M2.3.3": {
+        "Risk treatment plan": "UAEIA-010",
+        "Treatment implementation schedule": "UAEIA-010",
+        "Treatment plan approval": "approval",
+    },
+    "M2.3.4": {
+        "Statement of Applicability": "UAEIA-011",
+        "Risk-to-control traceability": "UAEIA-046",
+        "Implementation status evidence": "test",
+        "Control exclusion justifications": "UAEIA-011",
+    },
+    "M2.4.1": {
+        "Risk review and update procedure": "UAEIA-006",
+        "Risk factor monitoring records": "record",
+        "Risk review records": "record",
+        "Risk management improvement record": "record",
+    },
+    "M2.4.2": {
+        "Risk communication plan": "UAEIA-047",
+        "Risk communication records": "notice",
+        "Decision-maker risk briefings": "sample",
+    },
+    "M3.1.1": {
+        "Approved awareness and training policy": "UAEIA-048",
+        "Awareness and training objectives": "UAEIA-048",
+        "Provider and recipient role assignments": "UAEIA-048",
+        "Awareness and training policy approval and review history": "approval",
+    },
+    "M3.2.1": {
+        "Approved awareness and training program": "UAEIA-017",
+        "Awareness delivery records": "UAEIA-018",
+        "Training and other actions delivered": "UAEIA-018",
+        "Effectiveness evaluation of actions taken": "test",
+        "Education, skills and qualification records": "UAEIA-018",
+    },
+    "M3.3.1": {
+        "Required information security skills": "UAEIA-049",
+        "Current skills assessment": "UAEIA-049",
+        "Skills gap analysis": "UAEIA-049",
+    },
+    "M3.3.2": {
+        "Training solution per need": "UAEIA-050",
+        "Training implementation plan": "UAEIA-050",
+        "Training resource allocation": "approval",
+    },
+    "M3.3.3": {
+        "Training delivery records": "UAEIA-018",
+        "Plan variance and alternative solutions record": "record",
+        "Updated training implementation plan": "UAEIA-050",
+    },
+    "M3.3.4": {
+        "Before and after knowledge measurements": "test",
+        "Training outcome evaluation": "test",
+        "Training corrective actions": "record",
+    },
+    "M3.3.5": {
+        "Individual training records": "UAEIA-018",
+        "Training records periodic check": "test",
+        "Training record retention evidence": "test",
+    },
+    "M3.4.1": {
+        "Awareness campaign scope": "UAEIA-051",
+        "Awareness campaign timeline": "UAEIA-051",
+        "Campaign delivery evidence": "sample",
+        "Campaign adjustment record": "record",
+        "Awareness campaign records": "UAEIA-051",
+    },
+    "M4.1.1": {
+        "Background verification procedure": "UAEIA-052",
+        "Completed verification check reports": "sample",
+        "Verification coverage review": "test",
+        "Verification document handling": "export",
+    },
+    "M4.1.2": {
+        "Standard information security terms and conditions": "UAEIA-019",
+        "Contracts containing information security terms": "signed",
+        "Understanding and acceptance records": "signed",
+        "Contract review and amendment record": "record",
+    },
+    "M4.2.1": {
+        "Security policy notification records": "notice",
+        "First-access acceptance screen": "export",
+        "User acceptance records": "signed",
+    },
+    "M4.2.2": {
+        "Formal disciplinary process": "UAEIA-053",
+        "Disciplinary process awareness evidence": "notice",
+        "Disciplinary action records": "record",
+        "Security breach register": "UAEIA-054",
+    },
+    "M4.3.1": {
+        "Termination and change of employment procedure": "UAEIA-055",
+        "Continuing duties in contracts": "signed",
+        "Communication of continuing responsibilities": "notice",
+    },
+    "M4.3.2": {
+        "Asset return procedure": "UAEIA-055",
+        "Asset return records": "record",
+        "Leaver asset reconciliation": "test",
+    },
+    "M5.1.1": {
+        "Compliance requirements identification procedure": "UAEIA-056",
+        "Legal, regulatory and contractual requirements register": "UAEIA-005",
+        "System requirements from compliance obligations": "UAEIA-005",
+        "Compliance requirement to control mapping": "UAEIA-005",
+        "Periodic review of compliance requirements": "test",
+    },
+    "M5.1.2": {
+        "Intellectual property rights policy": "UAEIA-057",
+        "Intellectual property requirements identification": "UAEIA-056",
+        "Intellectual property system requirements": "UAEIA-058",
+        "License and ownership register": "UAEIA-058",
+        "Intellectual property controls review": "test",
+    },
+    "M5.1.3": {
+        "Record identification procedure": "UAEIA-059",
+        "Records inventory and retention schedule": "UAEIA-060",
+        "Record protection controls": "export",
+        "Record protection requirements review": "test",
+    },
+    "M5.1.4": {
+        "Data privacy and protection policy": "UAEIA-061",
+        "Applicable data protection laws register": "UAEIA-005",
+        "Personal data handling inventory": "UAEIA-062",
+        "Privacy risk assessments": "UAEIA-063",
+        "Privacy control implementation": "UAEIA-005",
+        "Data breach detection and response procedure": "UAEIA-064",
+    },
+    "M5.2.1": {
+        "Compliance checking procedure": "UAEIA-065",
+        "Compliance check results": "UAEIA-030",
+        "Checker and reviewer authorization": "approval",
+        "Non-compliance tracking": "UAEIA-033",
+    },
+    "M5.3.1": {
+        "Approved audit access requests": "approval",
+        "Technical audit test scope agreement": "approval",
+        "Audit access restrictions and clean-up": "record",
+    },
+    "M6.1.1": {
+        "Approved performance evaluation policy": "UAEIA-066",
+        "Performance results reporting methods": "UAEIA-066",
+        "Measurement integration model": "UAEIA-066",
+        "Performance evaluation output sample": "sample",
+    },
+    "M6.2.1": {
+        "Monitoring and measurement plan": "UAEIA-067",
+        "Monitoring and measurement methods": "UAEIA-067",
+        "Monitoring and measurement results": "UAEIA-067",
+        "Performance and effectiveness evaluation": "UAEIA-068",
+    },
+    "M6.2.2": {
+        "Internal audit program": "UAEIA-031",
+        "Audit plan, criteria and scope": "UAEIA-031",
+        "Auditor selection and impartiality record": "approval",
+        "Internal audit reports": "UAEIA-031",
+        "Audit results reported to management": "notice",
+    },
+    "M6.2.3": {
+        "Management review schedule": "UAEIA-069",
+        "Management review inputs": "UAEIA-032",
+        "Management review minutes": "UAEIA-032",
+        "Management review action tracker": "UAEIA-069",
+    },
+    "M6.3.1": {
+        "Nonconformity and corrective action procedure": "UAEIA-070",
+        "Nonconformity register": "UAEIA-033",
+        "Root cause analyses": "sample",
+        "Corrective action implementation records": "UAEIA-033",
+        "Corrective action effectiveness reviews": "test",
+    },
+    "M6.3.2": {
+        "Improvement plan": "UAEIA-071",
+        "Improvement decisions from monitoring and review": "UAEIA-071",
+        "Improvement implementation evidence": "sample",
+    },
+    "T1.1.1": {
+        "Approved information asset management policy": "UAEIA-072",
+        "Bring-your-own-device arrangements": "UAEIA-072",
+        "Asset management policy approval and version record": "approval",
+    },
+    "T1.2.1": {
+        "Information asset inventory": "UAEIA-007",
+        "Inventory reconciliation with other inventories": "test",
+        "Asset ownership listing": "UAEIA-007",
+        "Inventory update records": "record",
+    },
+    "T1.2.2": {
+        "Acceptable use rules": "UAEIA-073",
+        "Acceptable use rules circulation record": "notice",
+        "Signed acceptance of the rules": "signed",
+        "Acceptable use compliance checks": "test",
+    },
+    "T1.3.1": {
+        "Information classification scheme": "UAEIA-013",
+        "Classified information sample": "sample",
+        "Classification scheme communication": "notice",
+        "Classification review records": "record",
+    },
+    "T1.3.2": {
+        "Information labeling procedure": "UAEIA-074",
+        "Labeled information samples": "sample",
+        "Labeling exceptions": "record",
+    },
+    "T1.3.3": {
+        "Information handling procedures": "UAEIA-074",
+        "Access restrictions by classification": "export",
+        "Authorized recipients record": "UAEIA-107",
+    },
+    "T1.3.4": {
+        "Information transfer rules": "UAEIA-075",
+        "Information transfer agreements": "signed",
+        "Public platform sharing controls": "export",
+    },
+    "T1.3.5": {
+        "Data leak prevention configuration": "export",
+        "Leakage monitoring and detection records": "log",
+        "Blocked transmission records": "log",
+    },
+    "T1.3.6": {
+        "Information deletion procedure": "UAEIA-076",
+        "Deletion records": "record",
+        "Third-party deletion requirements": "UAEIA-115",
+        "Deletion process review": "test",
+    },
+    "T1.4.1": {
+        "Removable media management procedure": "UAEIA-077",
+        "Removable media protection levels": "UAEIA-077",
+        "Removable media register": "UAEIA-078",
+        "Removable media restriction settings": "export",
+        "Removable media usage monitoring": "log",
+    },
+    "T1.4.2": {
+        "Media reuse and disposal procedure": "UAEIA-076",
+        "Media sanitization and destruction records": "record",
+        "Media disposal log": "UAEIA-079",
+    },
+    "T1.5.1": {
+        "Endpoint device security requirements": "UAEIA-080",
+        "Endpoint compliance report": "export",
+        "Automatic lockout configuration": "export",
+        "Mobile device management enrollment": "export",
+        "Work data separation settings": "export",
+        "Endpoint logging and monitoring settings": "export",
+    },
+    "T2.1.1": {
+        "Approved physical and environmental security policy": "UAEIA-016",
+        "Physical and environmental security procedures": "UAEIA-081",
+        "Physical security policy approval and review history": "approval",
+    },
+    "T2.2.1": {
+        "Security area classification": "UAEIA-082",
+        "Security perimeter definitions": "UAEIA-082",
+        "Perimeter risk assessment": "UAEIA-083",
+        "Perimeter protection inspection records": "test",
+    },
+    "T2.2.2": {
+        "Secure area entry authentication settings": "export",
+        "Secure area access records": "log",
+        "Visible identification requirement": "UAEIA-081",
+        "Physical access log review": "log",
+        "Contractor and third-party escort records": "record",
+        "Delivery and loading area access control": "UAEIA-081",
+    },
+    "T2.2.3": {
+        "Public access restriction rules": "UAEIA-081",
+        "Facility signage review": "test",
+        "Offices and facilities inspection records": "test",
+    },
+    "T2.2.4": {
+        "Physical site risk assessments": "UAEIA-083",
+        "Physical protection countermeasures": "UAEIA-083",
+        "Physical and environmental threat monitoring record": "record",
+    },
+    "T2.2.5": {
+        "Secure area working guidelines": "UAEIA-081",
+        "Secure area supervision records": "record",
+        "Recording equipment and device authorization": "UAEIA-081",
+        "Surveillance coverage and test records": "test",
+    },
+    "T2.3.1": {
+        "Equipment siting and protection guidelines": "UAEIA-084",
+        "Equipment location inspection records": "test",
+        "Environmental monitoring configuration": "export",
+        "Environmental alert records": "log",
+    },
+    "T2.3.2": {
+        "Power protection description": "UAEIA-084",
+        "Supporting utilities inspection and test records": "test",
+        "Emergency lighting test records": "test",
+    },
+    "T2.3.3": {
+        "Cable tamper protection evidence": "test",
+        "Cable segregation layout": "test",
+        "Cable labeling and inspection records": "test",
+    },
+    "T2.3.4": {
+        "Supplier maintenance recommendations": "sample",
+        "Equipment commissioning and decommissioning procedure": "UAEIA-084",
+        "Equipment maintenance log": "UAEIA-085",
+        "Maintenance personnel authorization and data clearing": "record",
+    },
+    "T2.3.5": {
+        "Off-site equipment protection rules": "UAEIA-084",
+        "Off-site equipment authorization and custody records": "record",
+        "Off-premise location risk assessment": "UAEIA-083",
+    },
+    "T2.3.6": {
+        "Equipment disposal and re-use procedure": "UAEIA-076",
+        "Data removal and destruction evidence": "record",
+        "Disposed equipment register": "UAEIA-079",
+    },
+    "T2.3.7": {
+        "Clear desk and clear screen policy": "UAEIA-086",
+        "Policy availability to users": "notice",
+        "Screen lock configuration": "export",
+        "Clear desk inspection results": "test",
+    },
+    "T3.1.1": {
+        "Minimum security configuration standards": "UAEIA-020",
+        "Applied configuration evidence": "export",
+        "Configuration compliance monitoring report": "export",
+        "Security configuration review records": "test",
+    },
+    "T3.1.2": {
+        "Approved operating procedures": "UAEIA-087",
+        "Operating procedure review records": "approval",
+        "Operating procedure access and awareness": "notice",
+    },
+    "T3.1.3": {
+        "Change management procedure": "UAEIA-088",
+        "Change management scope": "UAEIA-088",
+        "Change log": "UAEIA-089",
+        "Rollback and communication plans": "sample",
+    },
+    "T3.1.4": {
+        "Environment separation description": "UAEIA-090",
+        "Environment separation settings": "export",
+        "Environment transfer rules": "UAEIA-090",
+        "Software promotion records": "sample",
+    },
+    "T3.1.5": {
+        "Capacity measurements": "export",
+        "Capacity requirements forecast": "UAEIA-091",
+        "Capacity adjustment and stress test records": "test",
+    },
+    "T3.1.6": {
+        "Anti-malware coverage report": "export",
+        "Anti-malware update status": "export",
+        "Malware scanning configuration": "export",
+        "Auto-run disabled configuration": "export",
+        "Malware detection events and notifications": "log",
+        "Malware awareness records": "notice",
+    },
+    "T3.1.7": {
+        "Backup requirements": "UAEIA-021",
+        "Backup procedures": "UAEIA-021",
+        "Backup job records": "log",
+        "Backup restoration test results": "test",
+    },
+    "T3.1.8": {
+        "Software installation restrictions": "export",
+        "Software original copy repository": "UAEIA-092",
+        "Unauthorized software review records": "test",
+        "Software installation audit log": "log",
+    },
+    "T3.2.1": {
+        "Approved monitoring policy and procedures": "UAEIA-093",
+        "Monitoring to incident response procedure": "UAEIA-093",
+        "Logging requirements": "UAEIA-093",
+        "Clock synchronization requirements": "UAEIA-093",
+        "External information sharing requirements": "UAEIA-005",
+        "Monitoring policy approval and review record": "approval",
+    },
+    "T3.2.2": {
+        "Auditable events list": "UAEIA-094",
+        "Audit log samples": "sample",
+        "Log review schedule and records": "UAEIA-094",
+        "Log reviewer training and skills": "UAEIA-018",
+        "Log retention requirements and settings": "export",
+        "Critical log protection": "UAEIA-094",
+    },
+    "T3.2.3": {
+        "Monitored system usage list": "UAEIA-094",
+        "Monitoring review frequency and records": "UAEIA-094",
+        "Monitoring reviewer qualifications": "UAEIA-018",
+        "Monitoring information retention settings": "export",
+        "Anomaly alerts and evaluation records": "log",
+        "National, Emirate and sector monitoring capability check": "test",
+    },
+    "T3.2.4": {
+        "Date and time standard": "UAEIA-093",
+        "Time synchronization configuration": "export",
+        "Clock synchronization check results": "test",
+    },
+    "T3.3.1": {
+        "Threat information sources": "UAEIA-095",
+        "Collected threat information": "sample",
+        "Threat analysis reports": "test",
+        "Actions taken on threat intelligence": "UAEIA-095",
+    },
+    "T3.3.2": {
+        "Vulnerability management procedure": "UAEIA-096",
+        "Pre-production vulnerability assessment": "UAEIA-025",
+        "Production vulnerability scan results": "UAEIA-025",
+        "Vulnerability remediation tracker": "UAEIA-097",
+    },
+    "T3.4.1": {
+        "Approved cryptographic policy": "UAEIA-014",
+        "Encryption requirements register": "UAEIA-098",
+        "Cryptographic compliance monitoring": "test",
+        "Weak cipher and algorithm replacement": "UAEIA-098",
+    },
+    "T3.4.2": {
+        "Encryption at rest settings": "export",
+        "End-user device encryption status": "export",
+        "Database and portable media encryption settings": "export",
+        "Encryption in motion configuration": "export",
+        "Transmission encryption test results": "test",
+    },
+    "T3.4.3": {
+        "Key management procedure": "UAEIA-099",
+        "Key storage settings": "export",
+        "Key recovery test records": "test",
+        "Key management activity records": "log",
+    },
+    "T3.4.4": {
+        "Public key cryptography inventory": "UAEIA-098",
+        "Post-quantum transition plan": "UAEIA-100",
+        "Post-quantum laboratory test results": "test",
+        "Post-quantum workforce training records": "UAEIA-018",
+    },
+    "T4.1.1": {
+        "Approved network security policy": "UAEIA-015",
+        "Network diagram": "UAEIA-015",
+        "Network access control configuration": "export",
+        "Network risk assessment": "UAEIA-101",
+        "Network control implementation record": "UAEIA-101",
+        "Traffic control and monitoring configuration": "export",
+    },
+    "T4.1.2": {
+        "Network services security requirements": "UAEIA-102",
+        "Network service level agreements": "signed",
+        "Network provider assurance records": "test",
+    },
+    "T4.1.3": {
+        "Network segregation criteria": "UAEIA-103",
+        "Network segregation configuration": "export",
+        "Segregation requirements in the development life cycle": "sample",
+        "Segregation effectiveness evaluation": "test",
+    },
+    "T4.1.4": {
+        "Wireless site survey": "test",
+        "Wireless segregation configuration": "export",
+        "Wireless security controls by network": "UAEIA-103",
+        "Wireless usage and configuration standard": "UAEIA-103",
+    },
+    "T4.1.5": {
+        "Website access categories": "UAEIA-103",
+        "Web filter configuration": "export",
+        "Web filter block records": "log",
+    },
+    "T5.1.1": {
+        "Approved identity and access management policy": "UAEIA-104",
+        "Access requirements set by owners": "UAEIA-106",
+        "Access policy communication": "notice",
+    },
+    "T5.2.1": {
+        "User identity list": "export",
+        "Identity life cycle procedure": "UAEIA-105",
+        "Disabled and removed identity records": "record",
+        "Restricted identity activity records": "log",
+    },
+    "T5.2.2": {
+        "Access provisioning and de-provisioning procedure": "UAEIA-022",
+        "Segregation of duties matrix": "UAEIA-106",
+        "Access rights records": "UAEIA-107",
+        "Role change and leaver revocation records": "record",
+        "Temporary and inactive account review": "test",
+    },
+    "T5.2.3": {
+        "Privileged access register": "UAEIA-026",
+        "Administrative group membership export": "export",
+        "Administrator account usage rules": "export",
+        "Administrative multi-factor authentication settings": "export",
+        "Local administrator password controls": "export",
+        "Administrative activity logs and reviews": "log",
+    },
+    "T5.2.4": {
+        "Access rights review procedure": "UAEIA-108",
+        "Completed access rights reviews": "record",
+        "Special access validity checks": "test",
+    },
+    "T5.3.1": {
+        "Information system authentication configuration": "export",
+        "Secure log-on and log-off settings": "export",
+        "Maximum session time settings": "export",
+        "Inactivity timeout settings": "export",
+    },
+    "T5.3.2": {
+        "Access restriction model": "UAEIA-104",
+        "Role-based access matrix": "UAEIA-106",
+        "System access control settings": "export",
+        "Business-need access adjustments": "record",
+    },
+    "T5.3.3": {
+        "Secure remote access configuration": "export",
+        "Remote authentication method settings": "export",
+        "Remote administrator access approvals": "approval",
+        "Remote administrator access monitoring": "log",
+    },
+    "T5.3.4": {
+        "Utility program authorization list": "UAEIA-109",
+        "Utility access restriction settings": "export",
+        "Utility program usage records": "log",
+    },
+    "T5.4.1": {
+        "Credential issuance procedure": "UAEIA-110",
+        "Credential issuance records": "record",
+        "Initial credential generation and delivery settings": "export",
+    },
+    "T5.4.2": {
+        "Credential use good practices": "UAEIA-110",
+        "Good practice communication records": "notice",
+        "Approved credential storage method": "UAEIA-110",
+    },
+    "T5.4.3": {
+        "Credential change automation": "export",
+        "Credential strength settings": "export",
+        "Credential lifetime and reuse settings": "export",
+        "First access password change enforcement": "export",
+        "Credential storage protection": "export",
+    },
+    "T6.1.1": {
+        "Approved third-party security policy": "UAEIA-111",
+        "Third-party security governance arrangements": "UAEIA-111",
+        "Third-party security program mandate": "approval",
+    },
+    "T6.2.1": {
+        "Third-party risk management procedure": "UAEIA-023",
+        "Supplier risk classification register": "UAEIA-112",
+        "Third-party cyber security risk assessments": "sample",
+        "Supplier risk mitigation plans": "UAEIA-112",
+    },
+    "T6.2.2": {
+        "Supplier security assessment criteria": "UAEIA-113",
+        "Completed supplier security assessments": "sample",
+        "Supplier due diligence records": "record",
+    },
+    "T6.2.3": {
+        "ICT supply chain security procedure": "UAEIA-023",
+        "Procurement security requirements": "UAEIA-114",
+        "Pre-procurement product evaluations": "sample",
+        "System acceptance test results": "test",
+        "Supply chain upgrade and maintenance records": "record",
+    },
+    "T6.2.4": {
+        "Supplier contract security clause templates": "UAEIA-115",
+        "Executed supplier contracts": "signed",
+        "Legal and regulatory compliance clauses": "UAEIA-115",
+    },
+    "T6.2.5": {
+        "Supplier monitoring program": "UAEIA-116",
+        "Supplier access monitoring records": "log",
+        "Supplier assessments and audit reports": "test",
+        "Supplier change management records": "record",
+    },
+    "T7.1.1": {
+        "Approved acquisition, development and maintenance policy": "UAEIA-117",
+        "Policy framework for security in the life cycle": "UAEIA-117",
+        "Policy communication to internal and external parties": "notice",
+    },
+    "T7.2.1": {
+        "Application security requirements specification": "UAEIA-024",
+        "Requirements by application purpose": "UAEIA-024",
+        "Application requirements implementation evidence": "test",
+    },
+    "T7.2.2": {
+        "Secure engineering principles": "UAEIA-118",
+        "Principles applied across architecture layers": "sample",
+        "Security design reviews": "test",
+    },
+    "T7.3.1": {
+        "Secure coding guidelines": "UAEIA-118",
+        "Secure coding use evidence": "sample",
+        "Automated security testing results": "test",
+        "Developer security training records": "UAEIA-018",
+    },
+    "T7.3.2": {
+        "Quality assurance process": "UAEIA-119",
+        "Secure coding and QA contract clauses": "UAEIA-115",
+        "Contractual security requirements": "UAEIA-115",
+        "Delivered code checks": "test",
+        "Outsourced development review records": "record",
+    },
+    "T7.3.3": {
+        "Source code access permissions": "export",
+        "Source code permission reviews": "test",
+        "Source code access audit log": "log",
+    },
+    "T7.4.1": {
+        "Change control procedure for systems and software": "UAEIA-088",
+        "Change track record": "UAEIA-089",
+        "Software version archive": "UAEIA-092",
+        "Change rollback procedures": "sample",
+        "Pre-production change test results": "test",
+        "Change implementation planning": "sample",
+    },
+    "T7.4.2": {
+        "Test data selection rules": "UAEIA-090",
+        "Production data copy authorizations": "approval",
+        "Test environment access settings": "export",
+        "Test data erasure records": "record",
+        "Test data movement log": "log",
+    },
+    "T7.4.3": {
+        "Security testing requirements": "UAEIA-120",
+        "Acceptance parameters for security tests": "UAEIA-120",
+        "Security test results": "test",
+        "Test completion responsibility assignment": "approval",
+    },
+    "T8.1.1": {
+        "Approved incident management policy": "UAEIA-121",
+        "Incident handling and reporting requirements": "UAEIA-005",
+        "Incident management policy approval record": "approval",
+    },
+    "T8.1.2": {
+        "Event reporting procedure": "UAEIA-122",
+        "Event reporting awareness records": "notice",
+        "Reporting channel evidence": "export",
+        "Reported event records": "sample",
+    },
+    "T8.2.1": {
+        "Incident response plan": "UAEIA-027",
+        "Incident communication plan": "UAEIA-027",
+        "Senior management approval of response plans": "approval",
+        "Incident response resources and capabilities": "UAEIA-027",
+        "Incident Response Team establishment": "UAEIA-027",
+    },
+    "T8.2.2": {
+        "Incident classification and prioritization scheme": "UAEIA-123",
+        "National agency reporting criteria": "UAEIA-123",
+        "Classified incident records": "sample",
+    },
+    "T8.2.3": {
+        "Incident response training needs analysis": "UAEIA-124",
+        "Incident response training program": "UAEIA-124",
+        "Incident response training records": "UAEIA-018",
+    },
+    "T8.2.4": {
+        "Incident response test procedures and cases": "UAEIA-125",
+        "Incident response test reports": "test",
+        "Test findings remediation tracker": "UAEIA-033",
+    },
+    "T8.2.5": {
+        "Incident data collection requirements": "UAEIA-028",
+        "Incident documentation records": "UAEIA-028",
+        "Incident documentation protection": "export",
+    },
+    "T8.2.6": {
+        "Post-incident reports": "record",
+        "Lessons learned records": "UAEIA-126",
+        "Incident trend analysis": "test",
+    },
+    "T8.2.7": {
+        "Jurisdictional evidence requirements": "UAEIA-005",
+        "Evidence collection procedure": "UAEIA-127",
+        "Chain of custody records": "record",
+        "Evidence handler competence records": "UAEIA-018",
+    },
+    "T9.1.1": {
+        "Continuity objectives and ICT requirements": "UAEIA-029",
+        "ICT continuity organizational structure": "UAEIA-029",
+        "Continuity roles and competence records": "record",
+        "ICT continuity plans": "UAEIA-029",
+    },
+    "T9.1.2": {
+        "Security controls in continuity plans": "UAEIA-128",
+        "Disruption security maintenance procedures": "UAEIA-128",
+        "Compensating controls register": "UAEIA-128",
+    },
+    "T9.2.1": {
+        "Continuity plan test schedule": "UAEIA-129",
+        "Continuity plan test reports": "test",
+        "Continuity lessons learned and plan updates": "UAEIA-126",
+    },
+}
