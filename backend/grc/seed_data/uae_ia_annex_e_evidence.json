@@ -1,0 +1,311 @@
+{
+  "about": "Evidence recommendations for the national technology security policies of Annex E of the UAE Information Assurance Standard v2.1, as extra rows of the UAE IA library (rows E1-*, E2-* and E3-* of uae_ia_annex_e_rows.json): E1 National Cloud Security Policy (Table 10), E2 National Cyber Security Policy for Artificial Intelligence (Table 11) and E3 National IoT Security Policy (Table 12). Authored for this library: the annex names no evidence. Every item is grounded in the row's own statements and bullets, and 'covers' lists the numbered obligations (the row's `obligations`, 1-based) it helps to evidence; every obligation of every row is covered by at least one item. build_uae_ia_annex_e_rows.py merges this file into the generated rows as evidence_requirements {name, description, filetype} and drops 'covers'; collection_frequency is kept where the item is event-driven or continuous (the seeder reads it from dict entries and otherwise defaults to annually).",
+  "standard": "UAE Information Assurance Standard",
+  "version": "2.1",
+  "controls": {
+    "E1-2.1.1": [
+      {"name": "Approved cloud security policy", "description": "Policy document approved by management that sets out the entity's cloud security requirements, with its owner, version and approval date.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud security policy review record", "description": "Record of the periodic review of the cloud security policy, showing who reviewed it, when, and what was changed or confirmed.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud usage analysis", "description": "Analysis of what the entity keeps and runs in the cloud: the information and application assets held, the multi-tenant virtualized services used, the users and the privileged administrators.", "filetype": "PDF", "covers": [3, 4, 5, 6]},
+      {"name": "Provider access and data location analysis", "description": "Analysis of the access the cloud service provider has to the entity's information and of the countries where the provider is based and may store its data, even temporarily.", "filetype": "PDF", "covers": [2, 7]}
+    ],
+    "E1-2.1.2": [
+      {"name": "Cloud risk register", "description": "Register of the security and privacy risks of the cloud environment, with the owner, rating and treatment status of each.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Cloud risk assessment", "description": "Assessment that identifies and rates the security and privacy risks of the cloud environment, with the method used and the date performed.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud risk treatment plan", "description": "Plan recording the mitigation chosen for each cloud risk, with its owner, due date and progress.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Cloud risk communication record", "description": "Evidence that cloud risks were communicated to management and other stakeholders, such as committee minutes or briefing notes.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E1-2.1.3": [
+      {"name": "Cloud provider contract personnel clauses", "description": "Extracts of the executed contracts with each cloud service provider (CSP) showing clauses for background screening of its personnel, regular user awareness and training, disciplinary measures and an orderly exit, including contract termination.", "filetype": "PDF", "covers": [1, 3, 4, 5]},
+      {"name": "Shared responsibility matrix", "description": "Matrix that allocates each security responsibility to the entity or to the CSP and shows how duties are segregated between them.", "filetype": "XLSX", "covers": [2]},
+      {"name": "CSP contract clause checklist", "description": "Checklist completed for each CSP contract confirming it includes personnel screening, a responsibilities matrix with segregation of duties, awareness and training, a disciplinary measure and an orderly exit.", "filetype": "XLSX", "covers": [1, 2, 3, 4, 5]}
+    ],
+    "E1-2.1.4": [
+      {"name": "CSP onboarding risk assessment", "description": "Risk assessment completed before a CSP is onboarded, showing the risks identified and the decision taken.", "filetype": "PDF", "covers": [1]},
+      {"name": "Subcontracting risk assessment", "description": "Assessment of the risks created when a CSP relies on other providers to deliver the service, with the approval or refusal of each one.", "filetype": "PDF", "covers": [1]},
+      {"name": "CSP risk treatment record", "description": "Record of the mitigations agreed for each risk found when onboarding a CSP or when it relies on other providers, with owners and status.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Approved CSP register", "description": "Register of approved CSPs and the third parties each one relies on to deliver the service, with approval date and approver.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.1.5": [
+      {"name": "Independent assurance reports from the CSP", "description": "Latest independent third-party test results and audit reports for the CSP service, as obtained from the provider.", "filetype": "PDF", "covers": [1]},
+      {"name": "Review of CSP assurance reports", "description": "Record of the entity's review of the provider's independent reports, noting scope, findings and any gaps for follow-up.", "filetype": "PDF", "covers": [1]},
+      {"name": "CSP security certifications", "description": "Certificates held by the CSP that cover the service in use, with their scope and expiry dates.", "filetype": "PDF", "covers": [1]},
+      {"name": "Assurance gap follow-up actions", "description": "Actions raised with the CSP for gaps found in its independent assurance, with owner and status.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.2.1": [
+      {"name": "CSP due diligence questionnaire", "description": "Completed security questionnaire for the CSP, answered before onboarding, covering its security posture and compliance.", "filetype": "XLSX", "covers": [1]},
+      {"name": "CSP due diligence assessment report", "description": "Report of the pre-onboarding assessment of the CSP's security posture and compliance, with findings and the onboarding decision.", "filetype": "PDF", "covers": [1]},
+      {"name": "Onboarding approval record", "description": "Approval to onboard the CSP that refers to the due diligence outcome and records any conditions set.", "filetype": "PDF", "covers": [1]},
+      {"name": "Non-disclosure agreement with the CSP", "description": "Non-disclosure agreement drafted for the CSP and acknowledged by it, with the dates of drafting and acknowledgement.", "filetype": "PDF", "covers": [2]}
+    ],
+    "E1-2.2.2": [
+      {"name": "Executed CSP contract", "description": "Signed contract with the CSP containing the non-disclosure, service level, and security and privacy terms agreed.", "filetype": "PDF", "covers": [1, 2, 3]},
+      {"name": "Service level agreement with availability terms", "description": "Service level agreement that sets the availability commitments agreed for the service.", "filetype": "PDF", "covers": [2, 5]},
+      {"name": "Sovereignty, data ownership and location clauses", "description": "Contract clauses stating the sovereignty requirements, who owns the entity's data and where it may be held.", "filetype": "PDF", "covers": [4, 10, 11]},
+      {"name": "Incident, change and audit rights clauses", "description": "Contract clauses covering how incidents are notified to the entity, change management and the entity's right to audit the CSP.", "filetype": "PDF", "covers": [6, 8, 9]},
+      {"name": "Exit, vendor lock-in and dispute clauses", "description": "Contract clauses on service exit, minimizing vendor lock-in and the arbitration and dispute resolution mechanism.", "filetype": "PDF", "covers": [7, 12, 13]}
+    ],
+    "E1-2.3.1": [
+      {"name": "Data classification policy", "description": "Approved policy setting the classification levels, labeling rules and handling requirements for data throughout its lifecycle.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud data handling procedure", "description": "Procedure for handling data held in cloud applications, infrastructure, networks and systems and data shared with third parties.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud data obligations analysis", "description": "Analysis of the regulatory, statutory and supply chain obligations that apply to data wherever it resides in the cloud or is shared with third parties.", "filetype": "PDF", "covers": [1]},
+      {"name": "Pre-migration data classification record", "description": "Classification of each data set, recorded before it is moved to the cloud, based on the impact of its compromise on operations, reputation, finances and regulatory compliance.", "filetype": "XLSX", "covers": [2]},
+      {"name": "National cloud classification level mapping", "description": "Mapping of the entity's classification levels to the classification levels of the national cloud requirements.", "filetype": "XLSX", "covers": [2]}
+    ],
+    "E1-2.3.2": [
+      {"name": "Encryption policy", "description": "Approved policy setting when and how encryption protects sensitive data in storage and in transmission, tied to the legal and regulatory obligations that apply.", "filetype": "PDF", "covers": [1]},
+      {"name": "Encryption configuration evidence", "description": "Screenshots of the encryption settings for cloud storage and for data in transit.", "filetype": "PNG", "covers": [1]},
+      {"name": "Cloud encryption key management procedure", "description": "Procedure for secure key management, with the roles that manage keys and how keys are protected through their lifecycle.", "filetype": "PDF", "covers": [2]},
+      {"name": "Hold your own key risk assessment", "description": "Risk assessment recording whether Hold Your Own Key (HYOK) capabilities are required, with the decision and who approved it.", "filetype": "PDF", "covers": [3]},
+      {"name": "Key custody and independence evidence", "description": "Evidence of who holds and can use the encryption keys and, where HYOK is implemented, that key access, revocation and audit do not depend on the CSP.", "filetype": "PDF", "covers": [2, 3]}
+    ],
+    "E1-2.4.1": [
+      {"name": "CSP jurisdiction and data location assessment", "description": "Assessment of the jurisdictions where the CSP operates and stores data, checked against the UAE laws, regulations, standards and frameworks on data location and sovereignty.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud data location register", "description": "Register of where each cloud service stores the entity's data, by country and region.", "filetype": "XLSX", "covers": [1, 2, 3]},
+      {"name": "Classified data hosting matrix", "description": "Matrix of each classification level with the cloud environment it requires, Partial Sovereign Cloud or Sovereign Cloud, and the environment actually used.", "filetype": "XLSX", "covers": [2, 3]},
+      {"name": "Sovereign cloud hosting confirmation", "description": "Confirmation from the CSP or tenancy details showing that data classified above Confidential/Restricted is stored and handled only in a Sovereign Cloud environment.", "filetype": "PDF", "covers": [3]}
+    ],
+    "E1-2.5.1": [
+      {"name": "Interoperability needs evaluation", "description": "Evaluation of the integration needs between the cloud services in use and the entity's data and cloud environments.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud integration architecture diagram", "description": "Diagram of how the cloud services and data environments connect, showing the industry standards and APIs used.", "filetype": "PDF", "covers": [1]},
+      {"name": "Integration standards and API register", "description": "Register of the industry standards and APIs applied across cloud integrations, with the owner of each.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.5.2": [
+      {"name": "CSP contract data portability clauses", "description": "Contract clauses giving access to all structured and unstructured data in an industry-standard format when the contract ends.", "filetype": "PDF", "covers": [1]},
+      {"name": "CSP data portability commitment", "description": "Commitment from the CSP on data portability, stating how long data is stored, the protection controls applied and how data is deleted.", "filetype": "PDF", "covers": [2]},
+      {"name": "Data export test result", "description": "Result of a test exporting the entity's structured and unstructured data from the service in an industry-standard format.", "filetype": "PDF", "covers": [1]},
+      {"name": "Data deletion terms and confirmation", "description": "Terms for deleting the entity's data after exit, with the CSP's confirmation that deletion was carried out.", "filetype": "PDF", "covers": [2]}
+    ],
+    "E1-2.6.1": [
+      {"name": "CSP change management evidence", "description": "Evidence obtained during procurement of the CSP's change management controls for tracking its service components.", "filetype": "PDF", "covers": [1]},
+      {"name": "Procurement check of CSP change controls", "description": "Completed procurement check confirming the CSP tracks the status, location and configuration of service components throughout their lifecycle.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Service component tracking sample", "description": "Sample extract from the CSP showing the tracked status, location and configuration of service components.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E1-2.6.2": [
+      {"name": "CSP data center physical security assessment", "description": "Assessment of the physical security controls at the CSP data centers, made before data is hosted or services are procured, with its conclusion.", "filetype": "PDF", "covers": [1]},
+      {"name": "Independent data center security reports", "description": "Third-party reports or attestations from the CSP on the physical security of its data centers.", "filetype": "PDF", "covers": [1]},
+      {"name": "Data classification to physical security mapping", "description": "Record linking the classification of the data to be hosted to the level of physical security required and found at the data centers.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.6.3": [
+      {"name": "Cloud asset inventory", "description": "Inventory of all information and associated assets stored in the cloud environment, each with an owner and a classification.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Asset to cloud service mapping", "description": "Records showing for each asset where it is maintained, including the cloud service used.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Inventory reconciliation record", "description": "Record of the comparison of the inventory with what is actually stored in the cloud, with corrections made.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E1-2.6.4": [
+      {"name": "CSP application security assurance", "description": "Provider documentation or independent evidence of the application security controls in place for the service.", "filetype": "PDF", "covers": [1]},
+      {"name": "CSP secure coding evidence", "description": "Evidence of the provider's secure coding practices for the service.", "filetype": "PDF", "covers": [2]},
+      {"name": "CSP security testing results", "description": "Results or summaries of the provider's application security testing, such as penetration tests.", "filetype": "PDF", "covers": [3]},
+      {"name": "Procurement check of application security", "description": "Completed procurement check that the CSP has adequate application security controls, including secure coding and security testing, before the service is procured.", "filetype": "XLSX", "covers": [1, 2, 3]}
+    ],
+    "E1-2.6.5": [
+      {"name": "Cloud system hardening guidelines", "description": "Hardening guidelines for each type of cloud system: operating systems, virtual machines, hypervisors, IoT sensors, and network and security devices.", "filetype": "PDF", "covers": [1]},
+      {"name": "Hardening implementation evidence", "description": "Screenshots or scan outputs showing the hardening guidelines are applied to cloud systems.", "filetype": "PNG", "covers": [1]},
+      {"name": "Hardening compliance results", "description": "Results of checks comparing deployed cloud systems with the hardening guidelines, with deviations and follow-up.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.7.1": [
+      {"name": "Cloud identity lifecycle procedure", "description": "Procedure for creating, changing, reviewing and removing the identities that access the cloud environment.", "filetype": "PDF", "covers": [1]},
+      {"name": "Identity lifecycle sample records", "description": "Sample of identity creation, change and removal requests with their approvals, showing the lifecycle is followed.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Privileged account creation procedure", "description": "Procedure under which privileged and root accounts are created centrally, with approval and a record of each creation.", "filetype": "PDF", "covers": [2]},
+      {"name": "Privileged account restrictions", "description": "Evidence of the limits placed on what privileged and root accounts can do, such as role permissions or restrictive guardrails.", "filetype": "PNG", "covers": [2]},
+      {"name": "Privileged access MFA settings", "description": "Screenshots of the multi-factor authentication settings applied to privileged and root accounts in the cloud environment.", "filetype": "PNG", "covers": [3]}
+    ],
+    "E1-2.7.2": [
+      {"name": "Cloud access control policy", "description": "Entity's identity and access management control policy, which governs access to cloud resources.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud resource permissions export", "description": "Export of the permissions granted on cloud resources, showing access is limited to what the entity's identity and access management controls allow.", "filetype": "CSV", "covers": [1]},
+      {"name": "Authentication settings evidence", "description": "Screenshots of the authentication settings for cloud systems, applications and data assets.", "filetype": "PNG", "covers": [2]},
+      {"name": "Authentication methods and procedures", "description": "Document setting out the secure authentication technologies and procedures used to access systems, applications and data assets in the cloud.", "filetype": "PDF", "covers": [2]},
+      {"name": "Privileged access MFA enforcement test", "description": "Test record or configuration export showing privileged access to cloud resources is refused without a second authentication factor.", "filetype": "PDF", "covers": [3]}
+    ],
+    "E1-2.7.3": [
+      {"name": "Cloud access control procedure", "description": "Approved procedure that governs how access rights to cloud resources are requested, approved, modified, reviewed and revoked.", "filetype": "PDF", "covers": [1]},
+      {"name": "Access request and approval records", "description": "Sample of requests to grant or change access rights, each with its approval.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Cloud access review results", "description": "Results of the review of access rights to the cloud environment, with the rights revoked or changed.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Access removal records", "description": "Records showing access rights were removed when staff left or changed role.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E1-2.8.1": [
+      {"name": "Cloud incident management procedure", "description": "Procedure covering detection, handling and closure of security incidents that affect cloud services.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident management test results", "description": "Results of tests or exercises of how incidents affecting cloud services are managed, with the actions raised.", "filetype": "PDF", "covers": [1]},
+      {"name": "Cloud incident records", "description": "Records of security incidents handled for cloud services, showing how each was managed in response.", "filetype": "XLSX", "covers": [1], "collection_frequency": "on-change"}
+    ],
+    "E1-2.8.2": [
+      {"name": "External incident notification procedure", "description": "Procedure defining how and how quickly incidents are reported to external entities, regulatory authorities and law enforcement.", "filetype": "PDF", "covers": [1]},
+      {"name": "Incident notification contact list", "description": "List of the external entities, regulatory authorities and law enforcement contacts to notify, with the channel and owner for each.", "filetype": "XLSX", "covers": [1]},
+      {"name": "External incident notification records", "description": "Records of incidents reported externally, showing who was notified and when.", "filetype": "XLSX", "covers": [1], "collection_frequency": "on-change"}
+    ],
+    "E1-2.8.3": [
+      {"name": "Cloud incident response plan", "description": "Approved plan for responding to incidents in the cloud environment, in line with the Cyber Security Incident Response Plan issued by the CSC.", "filetype": "PDF", "covers": [1]},
+      {"name": "Alignment to the national incident response plan", "description": "Record showing how each part of the entity's plan follows the Cyber Security Incident Response Plan issued by the CSC.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Incident response test report", "description": "Report of the latest test of the cloud incident response plan, with findings and follow-up actions.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E1-2.8.4": [
+      {"name": "E-discovery and forensics personnel appointment", "description": "Appointment of the personnel who oversee the setup and ongoing supervision of e-discovery and cloud forensic capabilities, with their responsibilities.", "filetype": "PDF", "covers": [1]},
+      {"name": "Forensic capability metrics", "description": "Clear and measurable metrics set for the e-discovery and cloud forensic capabilities, with the latest measurements.", "filetype": "XLSX", "covers": [1]},
+      {"name": "E-forensic protocols", "description": "Protocols for handling digital evidence that follow UAE law enforcement procedures.", "filetype": "PDF", "covers": [2]},
+      {"name": "CSP forensic protocol compliance evidence", "description": "Evidence that CSPs comply with the entity's e-forensic protocols, such as contract clauses or written confirmations.", "filetype": "PDF", "covers": [2]}
+    ],
+    "E1-2.9.1": [
+      {"name": "Cloud backup requirements", "description": "Approved requirements for the regular backup of information held in cloud environments.", "filetype": "PDF", "covers": [1]},
+      {"name": "Backup restoration testing schedule", "description": "Schedule of the planned backup restoration tests for information held in the cloud.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Cloud backup restoration test results", "description": "Results of the latest restoration test, showing data was recovered and any issues found.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E1-2.9.2": [
+      {"name": "Continuity requirements in CSP contracts", "description": "Contract clauses stating the uptime, redundancy, high availability and recovery priority requirements for the cloud service.", "filetype": "PDF", "covers": [1]},
+      {"name": "Continuity requirements test results", "description": "Results of tests showing the continuity requirements for cloud services are met.", "filetype": "PDF", "covers": [1]},
+      {"name": "Business continuity and disaster recovery plans", "description": "Approved plans that cover the entity's cloud services.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "Plan communication records", "description": "Records showing the plans were communicated to all relevant parties, including third parties.", "filetype": "PDF", "covers": [2]},
+      {"name": "Recovery objectives and responsibilities", "description": "Document defining the Maximum Tolerable Period of Disruption, Recovery Time Objective and Recovery Point Objective for each cloud service and the roles and responsibilities of the relevant parties.", "filetype": "PDF", "covers": [3]}
+    ],
+    "E2-2.1": [
+      {"name": "AI/ML security policy", "description": "Approved policy for the secure design, development and operation of AI/ML systems, with its owner, version and approval date.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML secure development and operation procedures", "description": "Step-by-step procedures followed when AI/ML systems are designed, developed and operated, with the owner of each procedure.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML cyber security risk register", "description": "Register of the cyber security risks of AI/ML systems, kept current, with the owner, rating, treatment and last update date of each.", "filetype": "XLSX", "covers": [2]},
+      {"name": "AI/ML supply chain risk assessment", "description": "Assessment of the cyber security risks in the supply chain of AI/ML systems, such as model, data and component providers, with the mitigations agreed.", "filetype": "PDF", "covers": [3]},
+      {"name": "AI/ML change management records", "description": "Change requests for AI/ML systems showing the security check and approval made before each change went live.", "filetype": "XLSX", "covers": [4], "collection_frequency": "on-change"}
+    ],
+    "E2-2.2": [
+      {"name": "AI/ML asset inventory", "description": "Inventory of AI/ML assets, such as models, datasets, pipelines and hosting infrastructure, with the sensitivity, criticality and value of each and the controls applied.", "filetype": "XLSX", "covers": [1]},
+      {"name": "AI/ML security baselines and compliance results", "description": "Approved security baselines and configuration standards for AI/ML systems, with results showing deployed systems match them.", "filetype": "PDF", "covers": [2]},
+      {"name": "AI/ML patch and vulnerability management records", "description": "Records of vulnerability scans, of patches and updates identified, tested and applied, and of weaknesses found and remediated in AI/ML systems.", "filetype": "XLSX", "covers": [3, 4]},
+      {"name": "AI/ML secure development and testing evidence", "description": "Evidence that AI/ML applications are developed, tested and maintained under established secure coding and development practices, such as code review and test results.", "filetype": "PDF", "covers": [5]},
+      {"name": "AI/ML environment network security evidence", "description": "Network diagrams and firewall or segmentation settings that protect the confidentiality, integrity and availability of the AI/ML environments.", "filetype": "PNG", "covers": [6]}
+    ],
+    "E2-2.3": [
+      {"name": "AI/ML model security requirements", "description": "Security requirements and threat considerations recorded at the start of each model's development and carried through to deployment.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML model protection measures", "description": "Evidence of the measures that protect models from compromise of their integrity, confidentiality or availability, such as access limits and integrity checks.", "filetype": "PDF", "covers": [2]},
+      {"name": "Inference data safeguards", "description": "Evidence of the safeguards for inference inputs and outputs that maintain their integrity and confidentiality.", "filetype": "PDF", "covers": [3]},
+      {"name": "Model data access controls", "description": "Access rights to the data used to train AI/ML models and the records of who accessed it, showing confidentiality, integrity, privacy and auditability are preserved.", "filetype": "XLSX", "covers": [4]},
+      {"name": "AI/ML data protection settings", "description": "Screenshots of the settings that protect AI/ML data at rest and in motion, such as encryption and integrity controls.", "filetype": "PNG", "covers": [5]}
+    ],
+    "E2-2.4": [
+      {"name": "AI/ML application domain security analysis", "description": "Analysis showing how cyber security measures were tailored to the specific application domain of each AI/ML system.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML availability architecture", "description": "Diagram or description of the redundancy and failover measures that keep AI/ML systems available during disruptions.", "filetype": "PDF", "covers": [2]},
+      {"name": "AI/ML continuity and recovery plans", "description": "Business continuity and disaster recovery plans that include AI/ML systems.", "filetype": "PDF", "covers": [3]},
+      {"name": "AI/ML restoration and continuity test results", "description": "Results of regular tests of restoration capabilities and continuity scenarios for AI/ML systems.", "filetype": "PDF", "covers": [3]},
+      {"name": "AI/ML security testing and validation report", "description": "Report of the security testing and validation of AI/ML systems, verifying their security and resilience against potential threats.", "filetype": "PDF", "covers": [4]}
+    ],
+    "E2-2.5": [
+      {"name": "AI/ML attack awareness material", "description": "Education and training material on AI/ML attack scenarios and on responding to them.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML attack awareness attendance records", "description": "Records of the staff who took part in AI/ML attack awareness and preparedness activities.", "filetype": "XLSX", "covers": [1]},
+      {"name": "AI/ML defense strategy", "description": "Documented strategy for defending AI/ML systems against adversarial attacks through proactive measures, continuous monitoring, regular testing and incident response.", "filetype": "PDF", "covers": [2]},
+      {"name": "Adversarial attack testing results", "description": "Results of regular testing of AI/ML systems against adversarial attacks, with the issues found and fixed.", "filetype": "PDF", "covers": [2]}
+    ],
+    "E2-2.6": [
+      {"name": "AI/ML security analytics framework", "description": "Document describing the data sources and analytics used for real-time threat detection, historical analysis and predictive insights on AI/ML systems.", "filetype": "PDF", "covers": [1]},
+      {"name": "AI/ML detection and alert samples", "description": "Sample of detections and alerts raised on AI/ML systems by the analytics, with how each was handled.", "filetype": "XLSX", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "AI/ML incident reporting and management procedure", "description": "Procedure for reporting and managing cyber security incidents that involve AI/ML systems.", "filetype": "PDF", "covers": [2]},
+      {"name": "AI/ML incident records", "description": "Records of AI/ML cyber security incidents raised and handled through the entity's incident management system, with the outcome of each.", "filetype": "XLSX", "covers": [2], "collection_frequency": "on-change"},
+      {"name": "AI/ML digital forensics framework", "description": "Framework for collecting and analyzing digital evidence from AI/ML incidents, tailored to AI/ML systems.", "filetype": "PDF", "covers": [3]}
+    ],
+    "E3-2.1.1": [
+      {"name": "Approved IoT security policy", "description": "Current IoT security policy covering the devices and services in the ecosystem, showing its version history and the manager who approved it.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT security policy review record", "description": "Minutes or revision history of the latest regular review of the IoT security policy, with the reviewer's findings and any amendments.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT governance model", "description": "Document describing how the IoT components and services in the ecosystem are managed and controlled.", "filetype": "PDF", "covers": [2]},
+      {"name": "IoT roles and responsibilities matrix", "description": "Matrix of the roles and responsibilities for managing IoT devices and services.", "filetype": "XLSX", "covers": [3]},
+      {"name": "IoT device security requirements", "description": "Approved security requirements for IoT devices, with the owner of the requirements.", "filetype": "PDF", "covers": [4]}
+    ],
+    "E3-2.1.2": [
+      {"name": "IoT risk assessment", "description": "Assessment that identifies and rates the risks that are unique to the IoT ecosystem, with the method used and the date performed.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT risk register", "description": "Register of the IoT ecosystem risks, with the owner, rating and treatment status of each.", "filetype": "XLSX", "covers": [1]},
+      {"name": "IoT risk treatment plan", "description": "Plan setting out how each IoT ecosystem risk will be mitigated, who is responsible and by when.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E3-2.1.3": [
+      {"name": "IoT security training plan", "description": "Plan for specialized IoT security training for all personnel who manage, implement and monitor IoT devices and services.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT security training content", "description": "Training material for the specialized IoT security training given to employees and outsourced staff.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT training completion records", "description": "Records showing the personnel who manage, implement or monitor IoT devices and services, including outsourced staff, completed the specialized training.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E3-2.1.4": [
+      {"name": "IoT third-party security policy", "description": "Documented third-party security policy that facilitates execution of the relevant IoT controls and requires external stakeholders to adhere to the organization's IoT security requirements.", "filetype": "PDF", "covers": [1]},
+      {"name": "Third-party adherence acknowledgements", "description": "Signed acknowledgements from external stakeholders that they will adhere to the organization's IoT security requirements.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT supplier contract terms", "description": "Executed third-party contracts that include non-disclosure agreements, service level agreements and IoT security, availability and privacy requirements in line with applicable standards, laws and regulations.", "filetype": "PDF", "covers": [2, 3, 4]},
+      {"name": "Third-party IoT access rights", "description": "List of third-party access to IoT devices with the privileges granted and the end date of each, showing least privilege and a limited timeframe.", "filetype": "XLSX", "covers": [5, 6]},
+      {"name": "Third-party IoT access review results", "description": "Results of the periodic review of third-party access to IoT devices, with the access removed or changed.", "filetype": "XLSX", "covers": [7]}
+    ],
+    "E3-2.1.5": [
+      {"name": "IoT compliance policy and program", "description": "Compliance policy and program that ensure IoT solutions comply with applicable laws and regulations and with the enforced standards of the TDRA and the Cyber Security Council.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT legal and regulatory requirements register", "description": "Register of the laws, regulations and the TDRA and Cyber Security Council standards and requirements that apply to the entity's IoT solutions.", "filetype": "XLSX", "covers": [1]},
+      {"name": "IoT compliance assessment results", "description": "Results of assessments of each IoT solution against the applicable laws, regulations and standards, with gaps and follow-up.", "filetype": "XLSX", "covers": [1]}
+    ],
+    "E3-2.2.1": [
+      {"name": "IoT data inventory and classification", "description": "Inventory of the data collected across the IoT ecosystem, with the classification of each type of data.", "filetype": "XLSX", "covers": [1]},
+      {"name": "IoT data use and rights contract terms", "description": "Contract terms that give clear and transparent information on how data is used, by whom and for what purposes for each IoT device and service, and let the entity exercise its rights over its data, such as access, erasure, rectification and portability.", "filetype": "PDF", "covers": [2, 3]},
+      {"name": "IoT data protection and access restriction evidence", "description": "Evidence that the confidentiality, integrity and availability of IoT data, including personally identifiable information (PII), is protected and that access to the physical and digital locations of data is restricted to authorized individuals.", "filetype": "PDF", "covers": [4, 16]},
+      {"name": "CSP contract clauses for IoT data", "description": "Executed contracts with cloud service providers (CSPs) that include non-disclosure agreements, service level agreements, and security, privacy, sovereignty, availability, incident notification, service exit, change management and right to audit requirements.", "filetype": "PDF", "covers": [5, 6, 7, 8, 9, 10, 11, 12, 13]},
+      {"name": "Data minimization and collection evidence", "description": "Evidence that the collection of sensitive data is avoided and the data collected and retained is minimized, such as data collection justifications and retention limits.", "filetype": "PDF", "covers": [14, 15]}
+    ],
+    "E3-2.2.2": [
+      {"name": "IoT encryption policy and procedures", "description": "Policy and procedures that govern the encryption protocols used for IoT data held in storage and sent between systems, with the legal and regulatory obligations they respond to.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT encryption configuration evidence", "description": "Screenshots of the encryption settings applied to IoT data at rest and while it moves between systems.", "filetype": "PNG", "covers": [1]},
+      {"name": "Key hierarchy certificate chain", "description": "Certificate chain extract showing the root private key at the top of the key hierarchy and the keys issued beneath it.", "filetype": "PDF", "covers": [2]},
+      {"name": "Root private key protection evidence", "description": "Evidence of how the root private key is held and its use controlled, such as its storage location and access list.", "filetype": "PDF", "covers": [2]}
+    ],
+    "E3-2.2.3": [
+      {"name": "Session management settings", "description": "Settings showing active sessions are unique, non-essential sessions are timed out and invalidated, and sessions expire after a fixed time of inactivity.", "filetype": "PNG", "covers": [1, 2, 4]},
+      {"name": "Session token strength test result", "description": "Result of a test showing session tokens are unique, cannot be predicted or shared and have a minimum level of entropy.", "filetype": "PDF", "covers": [1, 3]},
+      {"name": "IoT communication protocol specification", "description": "Specification of the communication protocols between IoT systems, showing encrypted channels, integrity protection and authenticated connections.", "filetype": "PDF", "covers": [5]},
+      {"name": "Encrypted channel verification results", "description": "Scan or capture results showing connections between IoT systems use encrypted and authenticated channels.", "filetype": "PDF", "covers": [5]},
+      {"name": "Approved encryption techniques list", "description": "List of the encryption techniques used to protect data within IoT systems and their underlying infrastructure, with evidence that each is proven.", "filetype": "XLSX", "covers": [5]}
+    ],
+    "E3-2.3.1": [
+      {"name": "IoT access rights listing", "description": "List of the identities with access to IoT resources, each uniquely identified, with the privileges granted and the person accountable.", "filetype": "XLSX", "covers": [1]},
+      {"name": "IoT authentication and MFA settings", "description": "Screenshots of the authentication settings for IoT systems, including multi-factor authentication.", "filetype": "PNG", "covers": [2]},
+      {"name": "IoT credential storage and hard-coding checks", "description": "Results of checks showing credentials are stored securely and that hard-coded credentials are not present in IoT software or devices.", "filetype": "PDF", "covers": [3]},
+      {"name": "IoT access review results", "description": "Results of the regular review of permissions to IoT resources, with the compensating controls put in place where needed.", "filetype": "XLSX", "covers": [4]},
+      {"name": "IoT password rules configuration", "description": "Configured password complexity and periodic update requirements for IoT systems.", "filetype": "PNG", "covers": [5]}
+    ],
+    "E3-2.3.2": [
+      {"name": "IoT location access control list", "description": "List of the people authorized to enter IoT environments, buildings, locations and rooms.", "filetype": "XLSX", "covers": [1]},
+      {"name": "Physical access control evidence", "description": "Screenshots or photographs of the controls on physical access to IoT locations, such as badge reader settings or locks.", "filetype": "PNG", "covers": [1]},
+      {"name": "Physical access monitoring records", "description": "Access records, such as door logs or visitor logs, showing physical access to IoT locations is monitored.", "filetype": "LOG", "covers": [1], "collection_frequency": "continuous"}
+    ],
+    "E3-2.4.1": [
+      {"name": "IoT incident response procedure", "description": "Procedure for identifying, responding to, containing and recovering from IoT incidents, with the incident response plan, reporting, classification and recovery steps.", "filetype": "PDF", "covers": [1, 2, 3, 4]},
+      {"name": "IoT incident records", "description": "Records of IoT incidents showing how each was reported, classified and recovered from.", "filetype": "XLSX", "covers": [2, 3, 4], "collection_frequency": "on-change"},
+      {"name": "Post-incident analysis report", "description": "Report of the post-incident analysis of an IoT incident, with the lessons learned.", "filetype": "PDF", "covers": [5]},
+      {"name": "Incident evidence collection records", "description": "Records of the evidence collected during IoT incidents, with who collected it and when.", "filetype": "PDF", "covers": [6]},
+      {"name": "Threat intelligence resourcing and outputs", "description": "Allocation of resources to monitor and track security threats using threat intelligence, with examples of the threat information tracked.", "filetype": "PDF", "covers": [7]}
+    ],
+    "E3-2.5.1": [
+      {"name": "IoT backup schedule and settings", "description": "Schedule and settings for the periodic backup of user and configuration data from IoT systems.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT backup job logs", "description": "Backup logs showing the periodic backups of user and configuration data completed.", "filetype": "LOG", "covers": [1], "collection_frequency": "continuous"},
+      {"name": "IoT backup restoration test results", "description": "Outcome of a trial restoration of IoT backups, with the time taken and any problems met.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E3-2.5.2": [
+      {"name": "IoT continuity plan", "description": "Approved plan that sets out how the entity continues IoT services through a disruption.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT response and recovery procedures", "description": "Procedures that detail how the entity manages disruptions to IoT services, including response and recovery.", "filetype": "PDF", "covers": [1]},
+      {"name": "IoT continuity test results", "description": "Results of the periodic test of the IoT continuity plans, with the actions raised.", "filetype": "PDF", "covers": [1]}
+    ],
+    "E3-2.6.1": [
+      {"name": "IoT asset inventory", "description": "Inventory of IoT systems, including devices, software and firmware, with owner and location.", "filetype": "XLSX", "covers": [1]},
+      {"name": "IoT device handling procedure", "description": "Procedure for the appropriate handling of IoT devices.", "filetype": "PDF", "covers": [2]},
+      {"name": "IoT device maintenance records", "description": "Records of the maintenance performed on IoT devices, with dates and who carried it out.", "filetype": "XLSX", "covers": [3]},
+      {"name": "IoT device disposal records", "description": "Records showing IoT devices were properly disposed of, with the date and method.", "filetype": "PDF", "covers": [4]}
+    ],
+    "E3-2.6.2": [
+      {"name": "IoT component authentication and encryption settings", "description": "Settings for IoT applications, middleware, APIs and devices showing secure authentication and information exchange over encrypted channels.", "filetype": "PNG", "covers": [1]},
+      {"name": "IoT application security architecture", "description": "Architecture document showing the end-to-end security controls and availability aspects across the IoT solution.", "filetype": "PDF", "covers": [2]},
+      {"name": "Trusted service layer access control rules", "description": "Export of the access control rules enforced on the trusted service layer.", "filetype": "PDF", "covers": [2]},
+      {"name": "Dedicated IoT gateway evidence", "description": "Evidence that a secure and dedicated gateway is used for normalizing and handling data within IoT networks, such as its network placement and settings.", "filetype": "PNG", "covers": [3]}
+    ],
+    "E3-2.6.3": [
+      {"name": "IoT device installation and setup baseline", "description": "Baseline for installing and setting up IoT devices and sensors so unauthorized access is prevented, with a sample of devices checked against it.", "filetype": "PDF", "covers": [1]},
+      {"name": "Remote management evidence", "description": "Screenshots showing IoT devices are managed remotely over encrypted channels and that security event recording is enabled.", "filetype": "PNG", "covers": [2]},
+      {"name": "IoT device management strategy", "description": "Documented strategy for the periodic update and maintenance of IoT devices.", "filetype": "PDF", "covers": [3]},
+      {"name": "IoT patch and update records", "description": "Records of security patches from authentic sources, their compatibility testing and the risk and impact assessment made before each update was deployed.", "filetype": "XLSX", "covers": [4, 5]},
+      {"name": "End-of-life device compensating measures", "description": "Compensatory measures applied to IoT devices that have reached end-of-life, with the devices covered.", "filetype": "PDF", "covers": [6]}
+    ],
+    "E3-2.7.1": [
+      {"name": "IoT network architecture diagram", "description": "Diagram showing IoT networks segregated from the corporate network with micro-segmentation, a separate management network and the routing networks they cross.", "filetype": "PDF", "covers": [2, 3, 6]},
+      {"name": "Segmentation and traffic restriction rules", "description": "Firewall or segmentation rules that restrict and control information exchange and infrastructure management of IoT devices and applications.", "filetype": "PDF", "covers": [3, 4]},
+      {"name": "Secure ports and protocols settings", "description": "Settings showing IoT networks use secure ports and protocols with authentication and encryption enabled.", "filetype": "PNG", "covers": [1]},
+      {"name": "Unused and default service scan results", "description": "Scan results showing unused and default network services, protocols and ports are disabled.", "filetype": "PDF", "covers": [5]},
+      {"name": "Consumer IoT device cryptography evidence", "description": "Evidence that consumer IoT devices use best practice cryptography for secure communications.", "filetype": "PDF", "covers": [7]}
+    ],
+    "E3-2.8.1": [
+      {"name": "IoT logging settings", "description": "Screenshots of the logging settings that show which events are recorded for IoT devices, systems and applications.", "filetype": "PNG", "covers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]},
+      {"name": "Authentication and access event log extracts", "description": "Extracts of IoT logs showing user logins, logouts, unsuccessful authentication, connection and authorization attempts, and changes in access privileges.", "filetype": "LOG", "covers": [1, 2, 3, 6], "collection_frequency": "continuous"},
+      {"name": "Data and operation event log extracts", "description": "Extracts of IoT logs showing access to sensitive data, import and export from removable media, creation, modification and deletion of data, impactful operations and remote operations.", "filetype": "LOG", "covers": [4, 5, 7, 8, 9], "collection_frequency": "continuous"},
+      {"name": "Update failure and physical access event logs", "description": "Logs of security update failures and, where possible, physical access attempts and emergency access attempts.", "filetype": "LOG", "covers": [10, 11, 12], "collection_frequency": "continuous"},
+      {"name": "Log storage, protection and analysis records", "description": "Evidence that IoT logs are stored, protected from tampering and analyzed, such as retention settings, access restrictions and analysis reports.", "filetype": "PDF", "covers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
+    ]
+  }
+}
