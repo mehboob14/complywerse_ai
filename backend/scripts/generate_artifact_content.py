@@ -229,7 +229,8 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "exactly what to record, including expected format, units, or allowed values (e.g. dates as YYYY-MM-DD, "
         "a RAG status, a control ref).\n"
         "- example_rows: ONE or TWO illustrative rows ONLY, and wrap EVERY cell value like `[EXAMPLE: ...]` so it "
-        "is obviously placeholder text the user must replace.\n"
+        "is obviously placeholder text the user must replace. Example values are invented: never put the framework's own "
+        "control, clause or annex numbers (or the control given above) in an example cell.\n"
         "- maintenance: 1-2 sentences (owner role, update cadence, source system)."
     )
 
@@ -335,7 +336,9 @@ def _grounding(evidence_items: list, requirement: str) -> str:
         lines = [f"- {e.get('name', '')}: {e.get('description', '')}".strip() for e in evidence_items]
         parts.append("The organisation must be able to show these pieces of evidence with this document (they are the evidence "
                      "recommendations for this area). Make each one a clearly identifiable part of what you write - a section, an "
-                     "appendix, a form, a record template or a register column - and do not add requirements beyond them:\n"
+                     "appendix, a form, a record template or a register column - and do not add requirements beyond them. In a "
+                     "document, the final section \"Evidence Provided\" is a markdown table with two columns, \"Evidence item\" (each "
+                     "item name exactly as written below, without its description) and \"Where this document provides it\":\n"
                      + "\n".join(lines))
     return ("\n\n" + "\n\n".join(parts)) if parts else ""
 
@@ -400,7 +403,7 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
             desc = (f"{desc} Follow the outline of NIST's official {tpl['name']} ({tpl['publication']}), "
                     "keeping its section numbers and headings.").strip()
     if evidence_items:
-        sections = list(sections) + ["Evidence Provided (a markdown table: Evidence item | Where this document provides it)"]
+        sections = list(sections) + ["Evidence Provided"]
     prompt = _prompt(fw_name, name, atype, cref, desc, sections)
     return {"content": _sanitize(_call_md(client, model, _SYS, prompt, max_toks)), "content_format": "markdown", "table": None}
 
