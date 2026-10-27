@@ -1,0 +1,3754 @@
+{
+  "about": "Rows F1-*, F2-*, F3-* and F4-* for the UAE Information Assurance Standard library (frameworks/uae_ia.json): the four national security policies of its Annex F, one row per numbered policy section (sub-domain), in the shape of the library's own rows. F1 = Table 13 National Encryption Policy, F2 = Table 14 National Secure Remote Work Policy, F3 = Table 15 National Third Party Security Policy, F4 = Table 16 National Data Exchange Security Policy; control_id = the annex prefix, a dash and the sub-domain's printed number. Built from the standard's PDF by backend/grc/tools/build_uae_ia_annex_f_rows.py; text verbatim, evidence_requirements from uae_ia_annex_f_evidence.json. Staging only, to be merged into the library: the seeder does not read this file.",
+  "standard": "UAE Information Assurance Standard",
+  "version": "2.1",
+  "source": "UAE Information Assurance Standard, Version 2.1, November 2025 (UAE Cyber Security Council, classification Open)",
+  "source_pdf_sha256": "1d938d327a9dc09dbe0724d4b5ca3bf51e959fb014a93c780aceef7570426466",
+  "controls": [
+    {
+      "control_id": "F1-2.1",
+      "original_reference": "2.1",
+      "title": "General Requirements",
+      "description": "To establish the necessary policies and governance to initiate and support the implementation of encryption requirements.",
+      "full_text": "To establish the necessary policies and governance to initiate and support the implementation of encryption requirements.\nMapped UAE IA v2.1 controls: T3.4.1, T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F1-2.1",
+      "parent_section": "F1-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.1, T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "National encryption conformance review",
+          "description": "Review comparing the entity's cryptographic standards and practices with each section of the national encryption requirements, listing the gaps found with their owners and target dates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved cryptographic algorithms and key lengths",
+          "description": "Standard listing the algorithms, modes and key lengths approved for each use, such as storage, transmission and hashing, and those prohibited, with its owner, version and approval date.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.1",
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.1",
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish the necessary policies and governance to initiate and support the implementation of encryption requirements."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-2.2",
+      "original_reference": "2.2",
+      "title": "Risk Management",
+      "description": "To proactively identify requirements for encryption and remediate security and privacy risks promptly.",
+      "full_text": "To proactively identify requirements for encryption and remediate security and privacy risks promptly.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F1-2.2",
+      "parent_section": "F1-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Encryption risk assessment",
+          "description": "Assessment of the security and privacy risks that arise where data is not encrypted or only weakly encrypted, with the rating, owner and treatment chosen for each risk.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Encryption risk remediation tracker",
+          "description": "Tracker of the actions that remove the encryption weaknesses found, with the owner, the due date and the completion date of each, so the time taken to fix them can be seen.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "M2.1.1",
+        "M2.2.1",
+        "M2.2.2",
+        "M2.2.3",
+        "M2.3.1",
+        "M2.3.2",
+        "M2.3.3",
+        "M2.3.4",
+        "M2.4.1",
+        "M2.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "M2.1.1",
+            "M2.2.1",
+            "M2.2.2",
+            "M2.2.3",
+            "M2.3.1",
+            "M2.3.2",
+            "M2.3.3",
+            "M2.3.4",
+            "M2.4.1",
+            "M2.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To proactively identify requirements for encryption and remediate security and privacy risks promptly."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-2.3",
+      "original_reference": "2.3",
+      "title": "Compliance",
+      "description": "To ensure that the adopted cryptographic solution is compliant with the applicable laws, regulations, and standards.",
+      "full_text": "To ensure that the adopted cryptographic solution is compliant with the applicable laws, regulations, and standards.\nMapped UAE IA v2.1 controls: M5.1.1",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F1-2.3",
+      "parent_section": "F1-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: M5.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Encryption legal and regulatory requirements map",
+          "description": "Map of each law, regulation or standard that applies to the entity's use of encryption to the feature of the cryptographic solution that meets it, with the owner and the date last checked.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "M5.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "M5.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure that the adopted cryptographic solution is compliant with the applicable laws, regulations, and standards."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-2.4",
+      "original_reference": "2.4",
+      "title": "Data Classification and Handling",
+      "description": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.",
+      "full_text": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.\nMapped UAE IA v2.1 controls: T1.3.1, T1.3.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F1-2.4",
+      "parent_section": "F1-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T1.3.1, T1.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Encryption requirements by classification level",
+          "description": "Table that states, for each classification level, whether data must be encrypted at rest and in motion, the minimum algorithm and key length, and who may approve an exception.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T1.3.1",
+        "T1.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T1.3.1",
+            "T1.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.1",
+      "original_reference": "3.1",
+      "title": "General Requirements",
+      "description": "To protect the data at rest from unauthorized disclosure and modification",
+      "full_text": "To protect the data at rest from unauthorized disclosure and modification\nMapped UAE IA v2.1 controls: T3.4.2, T3.3.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.1",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2, T3.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data at rest encryption coverage register",
+          "description": "Register of the places that hold classified data, such as file shares, databases, backups and endpoints, with the encryption method in use and whether each place is covered.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Encryption exceptions register",
+          "description": "Register of stores of classified data that are not encrypted, with the reason, the compensating control, the approver and the date the exception expires.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Encryption software patch status report",
+          "description": "Report of the version and patch level of disk, database and file encryption tools and key management systems, with the known vulnerabilities still open and the date each will be fixed.",
+          "filetype": "CSV"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2",
+        "T3.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2",
+            "T3.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect the data at rest from unauthorized disclosure and modification"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.2",
+      "original_reference": "3.2",
+      "title": "Laptop and Desktop computers",
+      "description": "To protect confidential data stored in laptops and desktop computers.",
+      "full_text": "To protect confidential data stored in laptops and desktop computers.\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.2",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Laptop and desktop encryption spot checks",
+          "description": "Results of checks on sampled laptops and desktops confirming that full-disk encryption is on, that the device cannot start without pre-boot authentication and that the recovery key is escrowed.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect confidential data stored in laptops and desktop computers."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.3",
+      "original_reference": "3.3",
+      "title": "Mobile Devices",
+      "description": "To protect non-open data stored in smartphones and tablets",
+      "full_text": "To protect non-open data stored in smartphones and tablets\nMapped UAE IA v2.1 controls: T1.4.1, T1.5.1",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.3",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T1.4.1, T1.5.1.",
+      "evidence_requirements": [
+        {
+          "name": "Lost and stolen mobile device records",
+          "description": "Records of each lost or stolen smartphone or tablet, showing the date it was raised, whether the device was encrypted, the lock or wipe action taken and when it was confirmed.",
+          "filetype": "XLSX",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T1.4.1",
+        "T1.5.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T1.4.1",
+            "T1.5.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect non-open data stored in smartphones and tablets"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.4",
+      "original_reference": "3.4",
+      "title": "Portable Storage Media",
+      "description": "To protect non-open data stored in portable storage media",
+      "full_text": "To protect non-open data stored in portable storage media\nMapped UAE IA v2.1 controls: T1.4.1, T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.4",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T1.4.1, T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Unencrypted portable media block test",
+          "description": "Test results showing that writing classified data to an unencrypted portable drive is blocked or forces encryption, with the date, the tester and the device used.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T1.4.1",
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T1.4.1",
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect non-open data stored in portable storage media"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.5",
+      "original_reference": "3.5",
+      "title": "Database",
+      "description": "To protect non-open data stored in databases.",
+      "full_text": "To protect non-open data stored in databases.\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.5",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Database encryption inventory",
+          "description": "Inventory of the databases that hold classified data, with the encryption method used, who owns the keys and whether backups and replicas are encrypted too.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect non-open data stored in databases."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-3.6",
+      "original_reference": "3.6",
+      "title": "System / User credentials",
+      "description": "To protect system/user credentials from unauthorized disclosure",
+      "full_text": "To protect system/user credentials from unauthorized disclosure\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "3. Data at Rest",
+      "section_number": "F1-3.6",
+      "parent_section": "F1-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "System secrets protection register",
+          "description": "Register of the application keys, service passwords and tokens used by systems, showing where each is held, how that store is protected and the date it was last rotated.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Clear-text credential scan results",
+          "description": "Results of scans of file shares, code repositories and scripts for credentials held in clear text, with the findings and the date each was fixed.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect system/user credentials from unauthorized disclosure"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-4.1",
+      "original_reference": "4.1",
+      "title": "General Requirements",
+      "description": "To protect data during motion from unauthorized access and modification.",
+      "full_text": "To protect data during motion from unauthorized access and modification.\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "4. Data in Motion",
+      "section_number": "F1-4.1",
+      "parent_section": "F1-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Approved secure transport protocols",
+          "description": "Document naming the protocols and versions allowed for web, file transfer, remote administration and wireless traffic that carries non-open data, and the older ones that are banned, with its owner and version.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect data during motion from unauthorized access and modification."
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-4.2",
+      "original_reference": "4.2",
+      "title": "Email Encryption",
+      "description": "To protect non-open data transmission through email",
+      "full_text": "To protect non-open data transmission through email\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "4. Data in Motion",
+      "section_number": "F1-4.2",
+      "parent_section": "F1-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Mail transport encryption settings",
+          "description": "Mail gateway and server settings showing that encrypted transport is required with other organizations, and what happens when the receiving server cannot support it.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Email encryption rule settings",
+          "description": "Settings of the rules that encrypt, or require the sender to encrypt, messages and attachments that carry non-open data, with a sample of messages that triggered them.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect non-open data transmission through email"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-4.3",
+      "original_reference": "4.3",
+      "title": "Network Encryption",
+      "description": "To protect non-open data transmission through the network",
+      "full_text": "To protect non-open data transmission through the network\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "4. Data in Motion",
+      "section_number": "F1-4.3",
+      "parent_section": "F1-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Network path encryption review",
+          "description": "Review of the network paths that carry non-open data, such as internal segments, wireless, branch and remote links, showing which are encrypted, which rely on segmentation alone and the risk accepted for each.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect non-open data transmission through the network"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-5.1",
+      "original_reference": "5.1",
+      "title": "General Requirements",
+      "description": "To ensure secure management of cryptographic keys",
+      "full_text": "To ensure secure management of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.1",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 214. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Cryptographic key inventory",
+          "description": "Inventory of the cryptographic keys in use, with their purpose, algorithm, key length, owner, storage location and creation and expiry dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Key custodian appointments",
+          "description": "Signed appointments naming the people who may generate, use, back up and destroy keys, with the separation between these roles and each custodian's acceptance.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            218
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure secure management of cryptographic keys"
+      ],
+      "pdf_page": 218
+    },
+    {
+      "control_id": "F1-5.2",
+      "original_reference": "5.2",
+      "title": "Key generation",
+      "description": "To ensure secure creation of cryptographic keys",
+      "full_text": "To ensure secure creation of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.2",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key generation settings",
+          "description": "Settings of the hardware security module or key service that creates keys, showing the approved algorithms and key lengths, the random number source and the roles allowed to generate keys.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Key generation ceremony record",
+          "description": "Record of the creation of a high-value key, showing the date, the approved tool or module used, the people present and the checks made, signed by the witnesses.",
+          "filetype": "PDF",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure secure creation of cryptographic keys"
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-5.3",
+      "original_reference": "5.3",
+      "title": "Key Distribution",
+      "description": "To ensure secure distribution of cryptographic keys",
+      "full_text": "To ensure secure distribution of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.3",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key distribution and receipt records",
+          "description": "Records of each key or key component handed over, showing the sender, the receiver, the method used, the date and the receiver's confirmation of receipt.",
+          "filetype": "XLSX",
+          "collection_frequency": "on-change"
+        },
+        {
+          "name": "Key transport protection settings",
+          "description": "Settings of the key exchange and key wrapping used to send keys between systems and people, showing they travel only over protected channels and never in clear text.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure secure distribution of cryptographic keys"
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-5.4",
+      "original_reference": "5.4",
+      "title": "Key Storage",
+      "description": "To ensure secure storage of cryptographic keys",
+      "full_text": "To ensure secure storage of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.4",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key store access review results",
+          "description": "Results of the review of who can read, export or administer each key store, confirmed by the key owner, with access removed where it is no longer needed.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure secure storage of cryptographic keys"
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-5.5",
+      "original_reference": "5.5",
+      "title": "Key Recovery",
+      "description": "To ensure availability and recovery in the event of key loss or corruption",
+      "full_text": "To ensure availability and recovery in the event of key loss or corruption\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.5",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key backup and escrow arrangements",
+          "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and the dual control needed to do so.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure availability and recovery in the event of key loss or corruption"
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-5.6",
+      "original_reference": "5.6",
+      "title": "Key Disposal",
+      "description": "To ensure timely and secure disposal of cryptographic keys.",
+      "full_text": "To ensure timely and secure disposal of cryptographic keys.\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.6",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key destruction records",
+          "description": "Records of keys destroyed, showing the key identifier, the reason, the method, the date due and the date done, and the person who carried out and witnessed the destruction.",
+          "filetype": "PDF",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure timely and secure disposal of cryptographic keys."
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-5.7",
+      "original_reference": "5.7",
+      "title": "Key Archival",
+      "description": "To ensure timely and secure archival of cryptographic keys",
+      "full_text": "To ensure timely and secure archival of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "5. Key Management",
+      "section_number": "F1-5.7",
+      "parent_section": "F1-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Key archive register",
+          "description": "Register of keys moved to the archive, with the reason each is kept, such as reading old encrypted data, its archive location, retention period and who approved access.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure timely and secure archival of cryptographic keys"
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F1-6.1",
+      "original_reference": "6.1",
+      "title": "General Requirements",
+      "description": "To ensure that entities are prepared to protect their non-open information against future threat posed by quantum computers.",
+      "full_text": "To ensure that entities are prepared to protect their non-open information against future threat posed by quantum computers.\nMapped UAE IA v2.1 controls: T3.4.4",
+      "domain": "F1 National Encryption Policy mapping (Annex F)",
+      "category": "6. Post Quantum Cryptography",
+      "section_number": "F1-6.1",
+      "parent_section": "F1-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 13 (National Encryption Policy), printed page 215. Maps to UAE IA v2.1 controls: T3.4.4.",
+      "evidence_requirements": [
+        {
+          "name": "Long-term data exposure assessment",
+          "description": "Assessment of which non-open data must stay confidential for many years and could be copied now and decrypted later, used to set the order in which systems move to quantum-safe cryptography.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cryptographic agility assessment",
+          "description": "Assessment of whether each system can change algorithms and key sizes without being rebuilt, with the dependencies and vendor support that limit the change.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Encryption Policy to UAE IA v2.1 controls",
+      "annex": "F1",
+      "uae_ia_controls": [
+        "T3.4.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            219
+          ],
+          "uae_ia_controls": [
+            "T3.4.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure that entities are prepared to protect their non-open information against future threat posed by quantum computers."
+      ],
+      "pdf_page": 219
+    },
+    {
+      "control_id": "F2-2.1",
+      "original_reference": "2.1",
+      "title": "Policies & Procedures",
+      "description": "To establish the necessary governance to initiate and support the implementation of secure remote work requirements.",
+      "full_text": "To establish the necessary governance to initiate and support the implementation of secure remote work requirements.\nMapped UAE IA v2.1 controls: M1.2.3",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F2-2.1",
+      "parent_section": "F2-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: M1.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Remote work security policy",
+          "description": "Approved policy for secure remote work that says who may work remotely, from where, on which devices and under which controls, with its owner, version and approval date.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote work security procedures",
+          "description": "Step-by-step procedures for authorizing a remote worker, issuing and returning equipment, reporting a lost device and ending remote access, with the owner of each.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "National remote work conformance review",
+          "description": "Review of how well the entity's remote work rules, access methods and device controls meet each section of the national remote work requirements, with the shortfalls found, who owns each and when it will be closed.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "M1.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220
+          ],
+          "uae_ia_controls": [
+            "M1.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish the necessary governance to initiate and support the implementation of secure remote work requirements."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-2.2",
+      "original_reference": "2.2",
+      "title": "Risk Management",
+      "description": "To identify, assess, mitigate, and monitor secure remote work risks by integrating them into the entity’s overall risk management program.",
+      "full_text": "To identify, assess, mitigate, and monitor secure remote work risks by integrating them into the entity’s overall risk management program.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F2-2.2",
+      "parent_section": "F2-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Remote work risk assessment",
+          "description": "Assessment of the security risks of remote work, such as unmanaged networks, lost devices and shared workspaces, with the rating, owner and treatment of each and its place in the entity's main risk register.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote work risk monitoring report",
+          "description": "Periodic report to management on remote work risks, covering new risks, treatment progress, remote work incidents and indicators such as unmanaged devices and failed authentication attempts.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "M2.1.1",
+        "M2.2.1",
+        "M2.2.2",
+        "M2.2.3",
+        "M2.3.1",
+        "M2.3.2",
+        "M2.3.3",
+        "M2.3.4",
+        "M2.4.1",
+        "M2.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220
+          ],
+          "uae_ia_controls": [
+            "M2.1.1",
+            "M2.2.1",
+            "M2.2.2",
+            "M2.2.3",
+            "M2.3.1",
+            "M2.3.2",
+            "M2.3.3",
+            "M2.3.4",
+            "M2.4.1",
+            "M2.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To identify, assess, mitigate, and monitor secure remote work risks by integrating them into the entity’s overall risk management program."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-2.3",
+      "original_reference": "2.3",
+      "title": "Training and Awareness",
+      "description": "To ensure a minimum baseline of cyber security and remote working risk awareness among remote workers.",
+      "full_text": "To ensure a minimum baseline of cyber security and remote working risk awareness among remote workers.\nMapped UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F2-2.3",
+      "parent_section": "F2-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1.",
+      "evidence_requirements": [
+        {
+          "name": "Remote worker awareness material",
+          "description": "Awareness material for remote workers covering safe use of home and public networks, device handling, phishing, protecting data away from the office and how to raise an incident.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote worker baseline completion report",
+          "description": "Report showing each remote worker completed the baseline awareness before remote access was granted, with follow-up on anyone who has not.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "M3.1.1",
+        "M3.2.1",
+        "M3.3.1",
+        "M3.3.2",
+        "M3.3.3",
+        "M3.3.4",
+        "M3.3.5",
+        "M3.4.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220
+          ],
+          "uae_ia_controls": [
+            "M3.1.1",
+            "M3.2.1",
+            "M3.3.1",
+            "M3.3.2",
+            "M3.3.3",
+            "M3.3.4",
+            "M3.3.5",
+            "M3.4.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure a minimum baseline of cyber security and remote working risk awareness among remote workers."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-3.1",
+      "original_reference": "3.1",
+      "title": "Secure Remote Access Methods",
+      "description": "To ensure a secure remote access environment by adopting a Zero Trust approach, implementing and maintaining a robust infrastructure, promoting secure practices, and establishing effective monitoring and auditing mechanisms.",
+      "full_text": "To ensure a secure remote access environment by adopting a Zero Trust approach, implementing and maintaining a robust infrastructure, promoting secure practices, and establishing effective monitoring and auditing mechanisms.\nMapped UAE IA v2.1 controls: T3.1.1, T7.2.2, T4.1.1, T5.3.3, T3.2.2, T3.3.2",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "3. Organization Remote Access security",
+      "section_number": "F2-3.1",
+      "parent_section": "F2-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: T3.1.1, T7.2.2, T4.1.1, T5.3.3, T3.2.2, T3.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Zero Trust remote access model",
+          "description": "Document showing how remote access applies Zero Trust: every user and device is verified on each request, access is limited to named applications, and trust is re-evaluated during the session.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote device posture check settings",
+          "description": "Settings showing a device must be managed, encrypted, patched and protected by endpoint security tools before it reaches the entity's applications, and is blocked or limited otherwise.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Remote access session logs",
+          "description": "Extracts of the remote access gateway logs showing, for each session, the user, device, time, source, applications reached and result, kept for the period the entity has set.",
+          "filetype": "LOG",
+          "collection_frequency": "continuous"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T3.1.1",
+        "T7.2.2",
+        "T4.1.1",
+        "T5.3.3",
+        "T3.2.2",
+        "T3.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220
+          ],
+          "uae_ia_controls": [
+            "T3.1.1",
+            "T7.2.2",
+            "T4.1.1",
+            "T5.3.3",
+            "T3.2.2",
+            "T3.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure a secure remote access environment by adopting a Zero Trust approach, implementing and maintaining a robust infrastructure, promoting secure practices, and establishing effective monitoring and auditing mechanisms."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-3.2",
+      "original_reference": "3.2",
+      "title": "Authentication and Authorization",
+      "description": "To ensure secure authentication and authorization of remote workers when accessing the entity’s systems.",
+      "full_text": "To ensure secure authentication and authorization of remote workers when accessing the entity’s systems.\nMapped UAE IA v2.1 controls: T5.2.1, T5.3.1, T5.1.1, T5.2.3, T5.2.4, T5.3.3",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "3. Organization Remote Access security",
+      "section_number": "F2-3.2",
+      "parent_section": "F2-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: T5.2.1, T5.3.1, T5.1.1, T5.2.3, T5.2.4, T5.3.3.",
+      "evidence_requirements": [
+        {
+          "name": "Remote access entitlement list",
+          "description": "Export of the accounts allowed to connect remotely, with the systems each can reach, the approver and the date approved.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Remote multi-factor enforcement test",
+          "description": "Test showing that a remote connection attempt without the second factor is refused for ordinary users, with the date, the tester and the systems tested.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T5.2.1",
+        "T5.3.1",
+        "T5.1.1",
+        "T5.2.3",
+        "T5.2.4",
+        "T5.3.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220
+          ],
+          "uae_ia_controls": [
+            "T5.2.1",
+            "T5.3.1",
+            "T5.1.1",
+            "T5.2.3",
+            "T5.2.4",
+            "T5.3.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure secure authentication and authorization of remote workers when accessing the entity’s systems."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-3.3",
+      "original_reference": "3.3",
+      "title": "Remote Access Lifecycle",
+      "description": "To establish and maintain robust procedures and controls to effectively manage remote worker access across the entire lifecycle.",
+      "full_text": "To establish and maintain robust procedures and controls to effectively manage remote worker access across the entire lifecycle.\nMapped UAE IA v2.1 controls: M4.1.1, T1.2.2, T5.2.4, T5.2.2, M4.3.2, T1.3.6, T1.2.1",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "3. Organization Remote Access security",
+      "section_number": "F2-3.3",
+      "parent_section": "F2-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 216. Maps to UAE IA v2.1 controls: M4.1.1, T1.2.2, T5.2.4, T5.2.2, M4.3.2, T1.3.6, T1.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Remote worker onboarding checklists",
+          "description": "Completed checklists for sampled new remote workers showing screening, equipment issue, acceptance of the rules, induction and access approval were completed in that order, with dates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote worker offboarding checklists",
+          "description": "Completed checklists for sampled leavers showing remote access was removed, equipment was returned and work data was deleted from any personal device, with the dates.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "M4.1.1",
+        "T1.2.2",
+        "T5.2.4",
+        "T5.2.2",
+        "M4.3.2",
+        "T1.3.6",
+        "T1.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            220,
+            221
+          ],
+          "uae_ia_controls": [
+            "M4.1.1",
+            "T1.2.2",
+            "T5.2.4",
+            "T5.2.2",
+            "M4.3.2",
+            "T1.3.6",
+            "T1.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish and maintain robust procedures and controls to effectively manage remote worker access across the entire lifecycle."
+      ],
+      "pdf_page": 220
+    },
+    {
+      "control_id": "F2-4.1",
+      "original_reference": "4.1",
+      "title": "Organization device security",
+      "description": "To ensure the appropriate security controls are implemented on entity provided devices.",
+      "full_text": "To ensure the appropriate security controls are implemented on entity provided devices.\nMapped UAE IA v2.1 controls: T1.5.1, T3.4.2, T1.2.1, T3.1.1, T3.3.2",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "4. Client Device Security",
+      "section_number": "F2-4.1",
+      "parent_section": "F2-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: T1.5.1, T3.4.2, T1.2.1, T3.1.1, T3.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Off-network device compliance report",
+          "description": "Report showing that entity provided devices used outside the office receive updates and security tool definitions while off the corporate network, and listing those that are out of date.",
+          "filetype": "CSV"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T1.5.1",
+        "T3.4.2",
+        "T1.2.1",
+        "T3.1.1",
+        "T3.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "T1.5.1",
+            "T3.4.2",
+            "T1.2.1",
+            "T3.1.1",
+            "T3.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the appropriate security controls are implemented on entity provided devices."
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F2-4.2",
+      "original_reference": "4.2",
+      "title": "Mobile Device Security",
+      "description": "To ensure the appropriate security controls are implemented on mobile devices",
+      "full_text": "To ensure the appropriate security controls are implemented on mobile devices\nMapped UAE IA v2.1 controls: T1.5.1, T3.4.2",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "4. Client Device Security",
+      "section_number": "F2-4.2",
+      "parent_section": "F2-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: T1.5.1, T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Mobile device compliance rule settings",
+          "description": "Settings in the mobile device management tool that block or quarantine devices that are rooted or jailbroken, run an unsupported system version or have no screen lock.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Approved mobile application list",
+          "description": "List of the applications approved for managed mobile devices, with the owner and the date approved, and the application types that are blocked.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T1.5.1",
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "T1.5.1",
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the appropriate security controls are implemented on mobile devices"
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F2-4.3",
+      "original_reference": "4.3",
+      "title": "Third Party & BYOD Devices",
+      "description": "To ensure the appropriate security controls are implemented on third parties and Bring Your Own Device (BYOD) devices.",
+      "full_text": "To ensure the appropriate security controls are implemented on third parties and Bring Your Own Device (BYOD) devices.\nMapped UAE IA v2.1 controls: T1.5.1, T5.3.3",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "4. Client Device Security",
+      "section_number": "F2-4.3",
+      "parent_section": "F2-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: T1.5.1, T5.3.3.",
+      "evidence_requirements": [
+        {
+          "name": "Signed BYOD agreements",
+          "description": "Agreements signed by users of personal devices accepting that the entity may apply security controls, keep work data apart from personal data and wipe the work data if the device is lost or the user leaves.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party device access restrictions",
+          "description": "Settings that limit third-party devices to a virtual desktop or browser-only access to named applications, with downloads and local storage turned off.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T1.5.1",
+        "T5.3.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "T1.5.1",
+            "T5.3.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the appropriate security controls are implemented on third parties and Bring Your Own Device (BYOD) devices."
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F2-5.1",
+      "original_reference": "5.1",
+      "title": "Data Residency & Sovereignty",
+      "description": "To protect the residency and sovereignty of organization data during remote work",
+      "full_text": "To protect the residency and sovereignty of organization data during remote work\nMapped UAE IA v2.1 controls: T5.3.2, T1.3.3, T1.3.4, T5.3.3",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "5. Data Security during Remote work",
+      "section_number": "F2-5.1",
+      "parent_section": "F2-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: T5.3.2, T1.3.3, T1.3.4, T5.3.3.",
+      "evidence_requirements": [
+        {
+          "name": "Remote work data location rules",
+          "description": "Rules stating in which countries, and on which systems and devices, organization data may be accessed, stored and handled during remote work, and whether working from abroad is allowed.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote access country restriction settings",
+          "description": "Gateway or conditional access settings that block connections from countries and networks where remote work is not allowed.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Remote work abroad approvals",
+          "description": "Approvals for working from outside the country, showing the worker, the country, the dates, the data allowed and the approver.",
+          "filetype": "XLSX",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T5.3.2",
+        "T1.3.3",
+        "T1.3.4",
+        "T5.3.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "T5.3.2",
+            "T1.3.3",
+            "T1.3.4",
+            "T5.3.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect the residency and sovereignty of organization data during remote work"
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F2-5.2",
+      "original_reference": "5.2",
+      "title": "Secure Data transfer methods",
+      "description": "To ensure organization data is protected during transfer.",
+      "full_text": "To ensure organization data is protected during transfer.\nMapped UAE IA v2.1 controls: T1.3.4",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "5. Data Security during Remote work",
+      "section_number": "F2-5.2",
+      "parent_section": "F2-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: T1.3.4.",
+      "evidence_requirements": [
+        {
+          "name": "Approved remote data transfer methods",
+          "description": "List of the ways remote workers may send or share organization data, such as the managed file share and encrypted email, with the classification each may carry, and the channels that are prohibited.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote upload restriction settings",
+          "description": "Settings on remote worker devices and the access gateway that stop organization data being copied to personal storage, printed or sent through unapproved tools.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "T1.3.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "T1.3.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure organization data is protected during transfer."
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F2-5.3",
+      "original_reference": "5.3",
+      "title": "Regulatory Compliance",
+      "description": "To adhere to all relevant legal, regulatory, and contractual obligations in the context of remote work.",
+      "full_text": "To adhere to all relevant legal, regulatory, and contractual obligations in the context of remote work.\nMapped UAE IA v2.1 controls: M5.1.1",
+      "domain": "F2 National Secure Remote Work Policy mapping (Annex F)",
+      "category": "5. Data Security during Remote work",
+      "section_number": "F2-5.3",
+      "parent_section": "F2-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 14 (National Secure Remote Work Policy), printed page 217. Maps to UAE IA v2.1 controls: M5.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Remote work obligations register",
+          "description": "Register of the obligations that apply when work is done remotely, from laws, regulations and client terms, such as data protection, confidentiality and data location, each with its owner and the control that meets it.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Secure Remote Work Policy to UAE IA v2.1 controls",
+      "annex": "F2",
+      "uae_ia_controls": [
+        "M5.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            221
+          ],
+          "uae_ia_controls": [
+            "M5.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To adhere to all relevant legal, regulatory, and contractual obligations in the context of remote work."
+      ],
+      "pdf_page": 221
+    },
+    {
+      "control_id": "F3-2.1",
+      "original_reference": "2.1",
+      "title": "General Requirements",
+      "description": "To establish the necessary governance to support the implementation of third-party security requirements.",
+      "full_text": "To establish the necessary governance to support the implementation of third-party security requirements.\nMapped UAE IA v2.1 controls: T6.1.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F3-2.1",
+      "parent_section": "F3-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "National third-party security conformance review",
+          "description": "Review of how the entity selects, onboards and monitors suppliers against each section of the national third-party security requirements, recording where it falls short and who is responsible for each fix.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish the necessary governance to support the implementation of third-party security requirements."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-2.2",
+      "original_reference": "2.2",
+      "title": "Training and Awareness",
+      "description": "To ensure all relevant employees are sufficiently aware of third-party cyber security risks and how to mitigate them.",
+      "full_text": "To ensure all relevant employees are sufficiently aware of third-party cyber security risks and how to mitigate them.\nMapped UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F3-2.2",
+      "parent_section": "F3-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1.",
+      "evidence_requirements": [
+        {
+          "name": "Third-party risk awareness material",
+          "description": "Awareness material for staff who select, buy from or manage suppliers, covering supplier cyber security risks, how to reduce them and how to raise a supplier problem.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier-facing staff training completion report",
+          "description": "Report of the staff in procurement, contract management and business ownership roles who completed the supplier risk training, with follow-up on those who have not.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "M3.1.1",
+        "M3.2.1",
+        "M3.3.1",
+        "M3.3.2",
+        "M3.3.3",
+        "M3.3.4",
+        "M3.3.5",
+        "M3.4.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "M3.1.1",
+            "M3.2.1",
+            "M3.3.1",
+            "M3.3.2",
+            "M3.3.3",
+            "M3.3.4",
+            "M3.3.5",
+            "M3.4.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure all relevant employees are sufficiently aware of third-party cyber security risks and how to mitigate them."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-3.1",
+      "original_reference": "3.1",
+      "title": "Identification of Suppliers",
+      "description": "To maintain a register of third-party suppliers based on their criticality.",
+      "full_text": "To maintain a register of third-party suppliers based on their criticality.\nMapped UAE IA v2.1 controls: T6.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "3. Risk Management",
+      "section_number": "F3-3.1",
+      "parent_section": "F3-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier criticality criteria",
+          "description": "Criteria used to rate how critical each supplier is, such as the data it handles, the systems it supports, how hard it is to replace and the impact if it fails.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier register completeness check",
+          "description": "Reconciliation of the supplier register with payment records, purchase orders and system access lists, showing no active supplier is missing and the additions made.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To maintain a register of third-party suppliers based on their criticality."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-3.2",
+      "original_reference": "3.2",
+      "title": "Classification of Suppliers",
+      "description": "To classify the entity’s third party suppliers based on risk they pose to its systems and data.",
+      "full_text": "To classify the entity’s third party suppliers based on risk they pose to its systems and data.\nMapped UAE IA v2.1 controls: T6.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "3. Risk Management",
+      "section_number": "F3-3.2",
+      "parent_section": "F3-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier classification worksheets",
+          "description": "Worksheets for sampled suppliers showing the inputs used, such as data handled, access held and system dependency, the tier given, the approver and the date, and any later reclassification.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To classify the entity’s third party suppliers based on risk they pose to its systems and data."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-3.3",
+      "original_reference": "3.3",
+      "title": "Risk Identification",
+      "description": "To identify and assess the cyber security risks associated with the use of third-party suppliers and their products or services throughout the supply chain.",
+      "full_text": "To identify and assess the cyber security risks associated with the use of third-party suppliers and their products or services throughout the supply chain.\nMapped UAE IA v2.1 controls: T6.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "3. Risk Management",
+      "section_number": "F3-3.3",
+      "parent_section": "F3-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Supply chain dependency map",
+          "description": "Map of the entity's key suppliers and of the sub-suppliers, products and services behind them, showing the dependencies and the single points of failure.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-party risk register",
+          "description": "Register of the cyber security risks that suppliers and their products or services bring, with the supplier concerned, the rating, the owner and the treatment status.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To identify and assess the cyber security risks associated with the use of third-party suppliers and their products or services throughout the supply chain."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-3.4",
+      "original_reference": "3.4",
+      "title": "Risk Mitigation and Monitoring",
+      "description": "To develop and implement strategies to mitigate the risks identified as part of the risk assessment and enable continuous monitoring.",
+      "full_text": "To develop and implement strategies to mitigate the risks identified as part of the risk assessment and enable continuous monitoring.\nMapped UAE IA v2.1 controls: T6.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "3. Risk Management",
+      "section_number": "F3-3.4",
+      "parent_section": "F3-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier risk status report",
+          "description": "Periodic report to management on the risk position of critical suppliers, covering changes in rating, open findings, incidents and the progress of the mitigation agreed.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To develop and implement strategies to mitigate the risks identified as part of the risk assessment and enable continuous monitoring."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-4.1",
+      "original_reference": "4.1",
+      "title": "Supplier Evaluation and Selection Criteria",
+      "description": "To establish reliable criteria for assessing the security and selecting third party suppliers.",
+      "full_text": "To establish reliable criteria for assessing the security and selecting third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.2",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "4. Supplier Assessment",
+      "section_number": "F3-4.1",
+      "parent_section": "F3-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.2.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier selection scoring sheet",
+          "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with the minimum security score a supplier must reach and the scores of sampled bids.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish reliable criteria for assessing the security and selecting third party suppliers."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-4.2",
+      "original_reference": "4.2",
+      "title": "Supplier Cyber Security Posture Due Diligence and Verification",
+      "description": "To verify the cyber security posture of the vendor in accordance with the responses from the Supplier Evaluation.",
+      "full_text": "To verify the cyber security posture of the vendor in accordance with the responses from the Supplier Evaluation.\nMapped UAE IA v2.1 controls: T6.2.2",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "4. Supplier Assessment",
+      "section_number": "F3-4.2",
+      "parent_section": "F3-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.2.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier response verification records",
+          "description": "Records showing a supplier's answers were checked against proof, such as independent audit reports, test results or a visit, with the differences found and how they were resolved.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To verify the cyber security posture of the vendor in accordance with the responses from the Supplier Evaluation."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.1",
+      "original_reference": "5.1",
+      "title": "Requirements Definition",
+      "description": "To define and establish clear security requirements for hardware and software procurement.",
+      "full_text": "To define and establish clear security requirements for hardware and software procurement.\nMapped UAE IA v2.1 controls: T6.2.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.1",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Tender security requirement extracts",
+          "description": "Extracts of tender or purchase request documents for sampled hardware and software purchases, showing the security requirements were included and who approved them.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To define and establish clear security requirements for hardware and software procurement."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.2",
+      "original_reference": "5.2",
+      "title": "Product Evaluation",
+      "description": "To ensure thorough evaluation of hardware and software products prior to procurements.",
+      "full_text": "To ensure thorough evaluation of hardware and software products prior to procurements.\nMapped UAE IA v2.1 controls: T6.2.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.2",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Vendor product security documentation",
+          "description": "Security documents gathered for sampled products before purchase, such as the vendor's security statement, independent test results and the list of software components, with the evaluator's notes.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure thorough evaluation of hardware and software products prior to procurements."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.3",
+      "original_reference": "5.3",
+      "title": "Acceptance and Testing",
+      "description": "To ensure comprehensive acceptance and testing procedures so that software and hardware meet the organization's security requirements.",
+      "full_text": "To ensure comprehensive acceptance and testing procedures so that software and hardware meet the organization's security requirements.\nMapped UAE IA v2.1 controls: T6.2.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.3",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Hardware receipt inspection records",
+          "description": "Records of the checks made on delivered hardware before use, such as packaging seals, serial numbers against the order, firmware version and factory accounts.",
+          "filetype": "XLSX",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure comprehensive acceptance and testing procedures so that software and hardware meet the organization's security requirements."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.4",
+      "original_reference": "5.4",
+      "title": "Upgrades & Maintenance",
+      "description": "To ensure timely and secure upgrades and maintenance of software and hardware.",
+      "full_text": "To ensure timely and secure upgrades and maintenance of software and hardware.\nMapped UAE IA v2.1 controls: T6.2.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.4",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier maintenance and support terms",
+          "description": "Extracts of the terms with suppliers for patches, upgrades and maintenance, showing the response times, the security update commitment and the conditions for remote maintenance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier maintenance session records",
+          "description": "Record of each remote or on-site maintenance session by a supplier, showing who took part, when, what was done, who approved and supervised it, and when access ended.",
+          "filetype": "XLSX",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure timely and secure upgrades and maintenance of software and hardware."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.5",
+      "original_reference": "5.5",
+      "title": "End of Life",
+      "description": "To protect the entity’s data after software and hardware end of life.",
+      "full_text": "To protect the entity’s data after software and hardware end of life.\nMapped UAE IA v2.1 controls: T6.2.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.5",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "End-of-support register",
+          "description": "Register of software and hardware with the date the vendor ends support, the planned replacement or compensating control, and the owner.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Retired hardware data erasure records",
+          "description": "Records showing data was erased or media destroyed when hardware was retired or returned to the supplier, with the asset, the method, the date and the person who confirmed it.",
+          "filetype": "PDF",
+          "collection_frequency": "on-change"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            222
+          ],
+          "uae_ia_controls": [
+            "T6.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To protect the entity’s data after software and hardware end of life."
+      ],
+      "pdf_page": 222
+    },
+    {
+      "control_id": "F3-5.6",
+      "original_reference": "5.6",
+      "title": "Considerations for Internally Developed Software",
+      "description": "To establish and maintain cyber security practices for the entity’s internal supply chain.",
+      "full_text": "To establish and maintain cyber security practices for the entity’s internal supply chain.\nMapped UAE IA v2.1 controls: T7.2.1, T7.2.2, T7.3.1, T7.3.3, T7.4.2, T7.4.3",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "5. Software and Hardware Supply chain",
+      "section_number": "F3-5.6",
+      "parent_section": "F3-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T7.2.1, T7.2.2, T7.3.1, T7.3.3, T7.4.2, T7.4.3.",
+      "evidence_requirements": [
+        {
+          "name": "Software component inventory",
+          "description": "Inventory of the open-source and third-party components used in the entity's own applications, with their versions, source and any known vulnerabilities.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Build and release pipeline controls",
+          "description": "Settings of the build and release pipeline showing that builds are produced from approved source only, need approval before release and keep their secrets in a protected store.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T7.2.1",
+        "T7.2.2",
+        "T7.3.1",
+        "T7.3.3",
+        "T7.4.2",
+        "T7.4.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T7.2.1",
+            "T7.2.2",
+            "T7.3.1",
+            "T7.3.3",
+            "T7.4.2",
+            "T7.4.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish and maintain cyber security practices for the entity’s internal supply chain."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-6.1",
+      "original_reference": "6.1",
+      "title": "Supplier Cyber-Posture Requirements",
+      "description": "To define the minimum cyber security posture requirements for third party suppliers.",
+      "full_text": "To define the minimum cyber security posture requirements for third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.4",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "6. Contracts and Legal",
+      "section_number": "F3-6.1",
+      "parent_section": "F3-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.4.",
+      "evidence_requirements": [
+        {
+          "name": "Minimum supplier security requirements",
+          "description": "Document that sets the minimum security posture each supplier must meet, by supplier tier, such as access control, encryption, incident notification and audit rights.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To define the minimum cyber security posture requirements for third party suppliers."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-6.2",
+      "original_reference": "6.2",
+      "title": "Contracts & Agreements",
+      "description": "To embed cyber security requirements in contracts with third party suppliers.",
+      "full_text": "To embed cyber security requirements in contracts with third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.4",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "6. Contracts and Legal",
+      "section_number": "F3-6.2",
+      "parent_section": "F3-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.4.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier contract clause coverage review",
+          "description": "Review of the contracts with critical suppliers against the required security clauses, showing which clauses are missing and the amendment planned.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To embed cyber security requirements in contracts with third party suppliers."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-6.3",
+      "original_reference": "6.3",
+      "title": "Compliance Requirements",
+      "description": "To ensure third party suppliers are compliant with applicable laws and regulation through contractual obligation.",
+      "full_text": "To ensure third party suppliers are compliant with applicable laws and regulation through contractual obligation.\nMapped UAE IA v2.1 controls: T6.2.4",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "6. Contracts and Legal",
+      "section_number": "F3-6.3",
+      "parent_section": "F3-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.4.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier legal compliance statements",
+          "description": "Statements signed by suppliers confirming they comply with the laws and regulations that apply to the service, with any exception explained.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure third party suppliers are compliant with applicable laws and regulation through contractual obligation."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-7.1",
+      "original_reference": "7.1",
+      "title": "Continuous Monitoring",
+      "description": "To ensure and verify that third party suppliers adhere to contractual requirements.",
+      "full_text": "To ensure and verify that third party suppliers adhere to contractual requirements.\nMapped UAE IA v2.1 controls: T6.2.5",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "7. Monitoring and Audit",
+      "section_number": "F3-7.1",
+      "parent_section": "F3-7",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.5.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier performance review minutes",
+          "description": "Minutes of periodic meetings with critical suppliers on service levels, security findings and incidents, with the actions agreed and their owners.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier non-compliance tracker",
+          "description": "Tracker of supplier failures to meet the agreed security terms, with the action requested, the dates raised and closed, and any escalation.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.5"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.5"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure and verify that third party suppliers adhere to contractual requirements."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-7.2",
+      "original_reference": "7.2",
+      "title": "Logging, Auditing and Accountability",
+      "description": "To establish clear accountability through tamper-proof and auditable trails.",
+      "full_text": "To establish clear accountability through tamper-proof and auditable trails.\nMapped UAE IA v2.1 controls: T6.2.5",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "7. Monitoring and Audit",
+      "section_number": "F3-7.2",
+      "parent_section": "F3-7",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.5.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier log tamper protection settings",
+          "description": "Settings showing the logs of supplier activity are kept where the supplier cannot change or delete them, with integrity protection and the retention period.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.5"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.5"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish clear accountability through tamper-proof and auditable trails."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-7.3",
+      "original_reference": "7.3",
+      "title": "High Risk Supplier Considerations",
+      "description": "To ensure a higher level of cyber security for high risk third party suppliers.",
+      "full_text": "To ensure a higher level of cyber security for high risk third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.5",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "7. Monitoring and Audit",
+      "section_number": "F3-7.3",
+      "parent_section": "F3-7",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.5.",
+      "evidence_requirements": [
+        {
+          "name": "Enhanced controls for high-risk suppliers",
+          "description": "Document setting the extra controls required of suppliers rated high risk, such as more frequent checks, tighter access and on-site audits, and the schedule applied.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "High-risk supplier assurance schedule",
+          "description": "Schedule of the suppliers rated high risk, with the date of the last and next enhanced assessment, the findings still open and the owner.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.5"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.5"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure a higher level of cyber security for high risk third party suppliers."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-8.1",
+      "original_reference": "8.1",
+      "title": "Incident Response",
+      "description": "To ensure the entity is well prepared to deal with and respond to cyber security incidents within its supply chain.",
+      "full_text": "To ensure the entity is well prepared to deal with and respond to cyber security incidents within its supply chain.\nMapped UAE IA v2.1 controls: T8.1.1, T8.1.2, T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "8. Supply Chain Resilience",
+      "section_number": "F3-8.1",
+      "parent_section": "F3-8",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T8.1.1, T8.1.2, T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier incident notification requirements",
+          "description": "Extracts of the terms and procedures that require suppliers to tell the entity about incidents within set times, naming the contact points and what must be reported.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier incident contact list",
+          "description": "List of the incident contacts at each critical supplier, with their roles and numbers, and the date each contact was last confirmed.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier incident response playbook",
+          "description": "Playbook for an incident that starts at or affects a supplier, such as a breach or an outage, with the steps, the decision makers, the messages to the supplier and the evidence to collect.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T8.1.1",
+        "T8.1.2",
+        "T8.2.1",
+        "T8.2.2",
+        "T8.2.3",
+        "T8.2.4",
+        "T8.2.5",
+        "T8.2.6"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T8.1.1",
+            "T8.1.2",
+            "T8.2.1",
+            "T8.2.2",
+            "T8.2.3",
+            "T8.2.4",
+            "T8.2.5",
+            "T8.2.6"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the entity is well prepared to deal with and respond to cyber security incidents within its supply chain."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-8.2",
+      "original_reference": "8.2",
+      "title": "Alternate Suppliers",
+      "description": "To strengthen supply chain resilience.",
+      "full_text": "To strengthen supply chain resilience.\nMapped UAE IA v2.1 controls: T6.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "8. Supply Chain Resilience",
+      "section_number": "F3-8.2",
+      "parent_section": "F3-8",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Alternate supplier register",
+          "description": "Register giving, for each critical supplier, the alternate supplier or in-house fallback, the time needed to switch and the date the option was last checked.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier exit and substitution plans",
+          "description": "Plans for replacing a critical supplier, with the steps, the return or deletion of the entity's data, the timeline and the owner.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T6.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T6.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To strengthen supply chain resilience."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-8.3",
+      "original_reference": "8.3",
+      "title": "Business Continuity Management & Disaster Recovery",
+      "description": "To ensure third party supplier risks are included in the entity’s resilience planning process.",
+      "full_text": "To ensure third party supplier risks are included in the entity’s resilience planning process.\nMapped UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "8. Supply Chain Resilience",
+      "section_number": "F3-8.3",
+      "parent_section": "F3-8",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Critical supplier failure impact analysis",
+          "description": "Analysis of the effect on each critical service if a supplier fails, with the recovery time the entity needs from that supplier.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier continuity assurance records",
+          "description": "Continuity plans or test summaries obtained from critical suppliers and the entity's notes on whether they meet its recovery needs.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T9.1.1",
+        "T9.1.2",
+        "T9.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T9.1.1",
+            "T9.1.2",
+            "T9.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure third party supplier risks are included in the entity’s resilience planning process."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F3-8.4",
+      "original_reference": "8.4",
+      "title": "IR/BCM/DR Collaboration",
+      "description": "To promote and require, as necessary, cyber security collaboration across the supply chain.",
+      "full_text": "To promote and require, as necessary, cyber security collaboration across the supply chain.\nMapped UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1",
+      "domain": "F3 National Third Party Security Policy mapping (Annex F)",
+      "category": "8. Supply Chain Resilience",
+      "section_number": "F3-8.4",
+      "parent_section": "F3-8",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Supplier collaboration requirements",
+          "description": "Extracts of supplier terms and communications that require suppliers to join the entity's exercises and to share threat and incident information, with the contact route.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Joint exercise report",
+          "description": "Report of an incident or continuity exercise held with suppliers, showing who took part, the scenario, the results and the actions agreed.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Third Party Security Policy to UAE IA v2.1 controls",
+      "annex": "F3",
+      "uae_ia_controls": [
+        "T9.1.1",
+        "T9.1.2",
+        "T9.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            223
+          ],
+          "uae_ia_controls": [
+            "T9.1.1",
+            "T9.1.2",
+            "T9.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To promote and require, as necessary, cyber security collaboration across the supply chain."
+      ],
+      "pdf_page": 223
+    },
+    {
+      "control_id": "F4-2.1",
+      "original_reference": "2.1",
+      "title": "General Requirements",
+      "description": "To establish leadership and governance to initiate and support the implementation of data exchange security requirements.",
+      "full_text": "To establish leadership and governance to initiate and support the implementation of data exchange security requirements.\nMapped UAE IA v2.1 controls: M1.1.2, M1.1.3, M1.2.3, M1.3.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F4-2.1",
+      "parent_section": "F4-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: M1.1.2, M1.1.3, M1.2.3, M1.3.1.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange security policy",
+          "description": "Approved policy for the secure exchange of data inside the entity and with other parties, with its owner, version and approval date.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data exchange roles and owners",
+          "description": "Document naming the executive sponsor, the owner of each data exchange and the people who approve new exchanges, with their authority and the resources given.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "National data exchange conformance review",
+          "description": "Review of the entity's data exchange channels, controls and approvals against each section of the national data exchange requirements, with the shortfalls found, their owners and closing dates.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "M1.1.2",
+        "M1.1.3",
+        "M1.2.3",
+        "M1.3.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "M1.1.2",
+            "M1.1.3",
+            "M1.2.3",
+            "M1.3.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To establish leadership and governance to initiate and support the implementation of data exchange security requirements."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-2.2",
+      "original_reference": "2.2",
+      "title": "Risk Management",
+      "description": "To proactively identify and remediate data exchange security and privacy risks in a timely manner.",
+      "full_text": "To proactively identify and remediate data exchange security and privacy risks in a timely manner.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F4-2.2",
+      "parent_section": "F4-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange risk assessment",
+          "description": "Assessment of the security and privacy risks of each way data is exchanged, covering the data, the partners and the channel, with the rating, owner and treatment chosen.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data exchange risk treatment tracker",
+          "description": "Tracker of the actions that reduce data exchange risks, with the owner, the date each risk was raised and the date it was closed.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "M2.1.1",
+        "M2.2.1",
+        "M2.2.2",
+        "M2.2.3",
+        "M2.3.1",
+        "M2.3.2",
+        "M2.3.3",
+        "M2.3.4",
+        "M2.4.1",
+        "M2.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "M2.1.1",
+            "M2.2.1",
+            "M2.2.2",
+            "M2.2.3",
+            "M2.3.1",
+            "M2.3.2",
+            "M2.3.3",
+            "M2.3.4",
+            "M2.4.1",
+            "M2.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To proactively identify and remediate data exchange security and privacy risks in a timely manner."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-2.3",
+      "original_reference": "2.3",
+      "title": "Compliance",
+      "description": "To avoid breaches of any information security legal, statutory, regulatory obligations",
+      "full_text": "To avoid breaches of any information security legal, statutory, regulatory obligations\nMapped UAE IA v2.1 controls: M5.1.1, M5.2.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F4-2.3",
+      "parent_section": "F4-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: M5.1.1, M5.2.1.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange obligations register",
+          "description": "Register of the laws, regulations and sector rules that apply to exchanging data, each with its owner, the exchanges it affects and the control that meets it.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "M5.1.1",
+        "M5.2.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "M5.1.1",
+            "M5.2.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To avoid breaches of any information security legal, statutory, regulatory obligations"
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-2.4",
+      "original_reference": "2.4",
+      "title": "Data Classification and Handling",
+      "description": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.",
+      "full_text": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.\nMapped UAE IA v2.1 controls: T1.3.1, T1.3.2, T1.3.3",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F4-2.4",
+      "parent_section": "F4-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T1.3.1, T1.3.2, T1.3.3.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange handling rules by classification",
+          "description": "Rules stating which classification levels may be exchanged, over which channels, with what approval and protection, and how exchanged files must be labeled.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Exchange integrity protection settings",
+          "description": "Settings showing exchanged files and messages are protected against alteration, such as digital signatures or checksum verification, and what happens when a check fails.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T1.3.1",
+        "T1.3.2",
+        "T1.3.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T1.3.1",
+            "T1.3.2",
+            "T1.3.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-2.5",
+      "original_reference": "2.5",
+      "title": "Data Privacy Considerations for Data Exchange",
+      "description": "To safeguard individual privacy and promote responsible data exchange.",
+      "full_text": "To safeguard individual privacy and promote responsible data exchange.\nMapped UAE IA v2.1 controls: M5.1.4",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "2. Governance",
+      "section_number": "F4-2.5",
+      "parent_section": "F4-2",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: M5.1.4.",
+      "evidence_requirements": [
+        {
+          "name": "Personal data exchange register",
+          "description": "Register of the exchanges that include personal or sensitive personal information, with the purpose, the recipient, the legal basis and the data fields shared.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data minimization check results",
+          "description": "Results of checks on sampled exchanges showing only the personal data needed for the stated purpose is shared, with fields removed or masked where it is not.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "M5.1.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "M5.1.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To safeguard individual privacy and promote responsible data exchange."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-3.1",
+      "original_reference": "3.1",
+      "title": "Authentication",
+      "description": "To prevent unauthorized access and alteration of organizational resources, applications, and data while using data exchange services",
+      "full_text": "To prevent unauthorized access and alteration of organizational resources, applications, and data while using data exchange services\nMapped UAE IA v2.1 controls: T5.2.1, T5.3.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "3. Identity and Access Management",
+      "section_number": "F4-3.1",
+      "parent_section": "F4-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T5.2.1, T5.3.1.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange authentication settings",
+          "description": "Settings of the data exchange services showing how users and systems authenticate, such as multi-factor authentication for people and certificates or keys for systems, with no shared or anonymous access.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Partner and service account register",
+          "description": "Register of the partner and non-human accounts that connect to data exchange services, with the owner, purpose, type of credential and date it was last changed.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T5.2.1",
+        "T5.3.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T5.2.1",
+            "T5.3.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To prevent unauthorized access and alteration of organizational resources, applications, and data while using data exchange services"
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-3.2",
+      "original_reference": "3.2",
+      "title": "Authorization",
+      "description": "To minimize risks associated with the processes used to request, approve, grant, manage, and audit access.",
+      "full_text": "To minimize risks associated with the processes used to request, approve, grant, manage, and audit access.\nMapped UAE IA v2.1 controls: T5.2.2, T5.2.3, T5.2.4, T5.3.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "3. Identity and Access Management",
+      "section_number": "F4-3.2",
+      "parent_section": "F4-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T5.2.2, T5.2.3, T5.2.4, T5.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange access approval records",
+          "description": "Sampled requests for access to data exchange services, showing the request, the data owner's approval, the access granted and the date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data exchange access review results",
+          "description": "Results of the periodic review of who and what can use the data exchange services, confirmed by the data owner, with the access removed or changed.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T5.2.2",
+        "T5.2.3",
+        "T5.2.4",
+        "T5.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T5.2.2",
+            "T5.2.3",
+            "T5.2.4",
+            "T5.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To minimize risks associated with the processes used to request, approve, grant, manage, and audit access."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-3.3",
+      "original_reference": "3.3",
+      "title": "Accounting",
+      "description": "To track and record user activities and resource access within the data exchange system.",
+      "full_text": "To track and record user activities and resource access within the data exchange system.\nMapped UAE IA v2.1 controls: T3.2.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "3. Identity and Access Management",
+      "section_number": "F4-3.3",
+      "parent_section": "F4-3",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T3.2.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange user activity logs",
+          "description": "Extracts of logs showing, for sampled transfers, who sent, received, opened or downloaded the data, from where and when.",
+          "filetype": "LOG",
+          "collection_frequency": "continuous"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.2.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T3.2.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To track and record user activities and resource access within the data exchange system."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-4.1",
+      "original_reference": "4.1",
+      "title": "Encryption",
+      "description": "To ensure protection of sensitive data transmitting through data exchange mechanisms.",
+      "full_text": "To ensure protection of sensitive data transmitting through data exchange mechanisms.\nMapped UAE IA v2.1 controls: T3.4.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "4. Cryptographic Controls",
+      "section_number": "F4-4.1",
+      "parent_section": "F4-4",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T3.4.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange channel encryption register",
+          "description": "Register of each data exchange mechanism, such as file transfer, application interface, messaging and portal, with the encryption protocol and version in use and the partner it serves.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Partner connection encryption test results",
+          "description": "Test results showing partner connections accept only approved protocols and strengths and that connections offering weak protection are refused.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.4.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T3.4.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure protection of sensitive data transmitting through data exchange mechanisms."
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-5.1",
+      "original_reference": "5.1",
+      "title": "Redundant Network Infrastructure",
+      "description": "To ensure high availability and minimize potential service disruption",
+      "full_text": "To ensure high availability and minimize potential service disruption\nMapped UAE IA v2.1 controls: T4.1.1, T4.1.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.1",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 220. Maps to UAE IA v2.1 controls: T4.1.1, T4.1.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange network redundancy diagram",
+          "description": "Diagram of the duplicated links, devices and providers behind the data exchange services, showing how traffic moves to the standby path on failure.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Network failover test results",
+          "description": "Results of tests that moved traffic to the standby link or device, with the date, the time taken to recover and the issues found.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T4.1.1",
+        "T4.1.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            224
+          ],
+          "uae_ia_controls": [
+            "T4.1.1",
+            "T4.1.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure high availability and minimize potential service disruption"
+      ],
+      "pdf_page": 224
+    },
+    {
+      "control_id": "F4-5.2",
+      "original_reference": "5.2",
+      "title": "Firewall Protection",
+      "description": "To control and monitor network traffic to protect against unauthorized access and cyber threats.",
+      "full_text": "To control and monitor network traffic to protect against unauthorized access and cyber threats.\nMapped UAE IA v2.1 controls: T4.1.1, T4.1.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.2",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T4.1.1, T4.1.2.",
+      "evidence_requirements": [
+        {
+          "name": "Firewall rule review results",
+          "description": "Results of the periodic review of the rules protecting data exchange systems, showing unused or overly broad rules removed and an owner and business reason for each rule kept.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T4.1.1",
+        "T4.1.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T4.1.1",
+            "T4.1.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To control and monitor network traffic to protect against unauthorized access and cyber threats."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-5.3",
+      "original_reference": "5.3",
+      "title": "VPN Access",
+      "description": "To minimize the risk of unauthorized access from external networks",
+      "full_text": "To minimize the risk of unauthorized access from external networks\nMapped UAE IA v2.1 controls: T5.3.3",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.3",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T5.3.3.",
+      "evidence_requirements": [
+        {
+          "name": "VPN connection register",
+          "description": "Register of the VPN tunnels and user groups that reach data exchange systems, with the owner, the networks reachable, the encryption used and the date last checked.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T5.3.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T5.3.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To minimize the risk of unauthorized access from external networks"
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-5.4",
+      "original_reference": "5.4",
+      "title": "DMZ Configurations",
+      "description": "To minimize the risk of unauthorized access and protection of sensitive data",
+      "full_text": "To minimize the risk of unauthorized access and protection of sensitive data\nMapped UAE IA v2.1 controls: T4.1.3",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.4",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T4.1.3.",
+      "evidence_requirements": [
+        {
+          "name": "DMZ architecture diagram",
+          "description": "Diagram of the DMZ showing the systems placed in it and the firewall rules between the internet, the DMZ and the internal network.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "DMZ stored data check",
+          "description": "Check of the hosts in the DMZ showing no sensitive data is stored on them, with the method used, the date and the findings removed.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T4.1.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T4.1.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To minimize the risk of unauthorized access and protection of sensitive data"
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-5.5",
+      "original_reference": "5.5",
+      "title": "Secure Communication Protocols",
+      "description": "To ensure use of secure and robust communication protocols, safeguarding sensitive information from interception, tampering and unauthorized access.",
+      "full_text": "To ensure use of secure and robust communication protocols, safeguarding sensitive information from interception, tampering and unauthorized access.\nMapped UAE IA v2.1 controls: T1.3.4, T4.1.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.5",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T1.3.4, T4.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Exchange endpoint certificate inventory",
+          "description": "Inventory of the certificates securing the data exchange endpoints, with the issuer, expiry date, key size and owner, and the alerts set for coming expiry.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T1.3.4",
+        "T4.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T1.3.4",
+            "T4.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure use of secure and robust communication protocols, safeguarding sensitive information from interception, tampering and unauthorized access."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-5.6",
+      "original_reference": "5.6",
+      "title": "Intrusion Detection and Prevention",
+      "description": "To detect and prevent intrusions by unauthorized party during data exchanges.",
+      "full_text": "To detect and prevent intrusions by unauthorized party during data exchanges.\nMapped UAE IA v2.1 controls: T4.1.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.6",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T4.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Intrusion prevention sensor settings",
+          "description": "Settings of the sensors that watch data exchange traffic, showing the segments covered, whether they block or only alert, and the date signatures were last updated.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Intrusion alert handling records",
+          "description": "Sample alerts raised on data exchange traffic, with how each was triaged, escalated or closed and the time taken.",
+          "filetype": "XLSX",
+          "collection_frequency": "continuous"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T4.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T4.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To detect and prevent intrusions by unauthorized party during data exchanges."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-5.7",
+      "original_reference": "5.7",
+      "title": "Data Loss Prevention",
+      "description": "To detect and prevent unauthorized data transmission",
+      "full_text": "To detect and prevent unauthorized data transmission\nMapped UAE IA v2.1 controls: T1.3.4",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "5. Network Security",
+      "section_number": "F4-5.7",
+      "parent_section": "F4-5",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T1.3.4.",
+      "evidence_requirements": [
+        {
+          "name": "Data loss prevention rule settings",
+          "description": "Settings of the rules that detect and block classified or personal data leaving through email, web upload and file transfer, showing the channels covered.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Data loss prevention alert records",
+          "description": "Sample alerts and blocked transmissions, with how each was investigated and closed and the cases found to be false alarms.",
+          "filetype": "XLSX",
+          "collection_frequency": "continuous"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T1.3.4"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T1.3.4"
+          ]
+        }
+      ],
+      "obligations": [
+        "To detect and prevent unauthorized data transmission"
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-6.1",
+      "original_reference": "6.1",
+      "title": "System Hardening",
+      "description": "To ensure the correct and secure operation of data exchange systems.",
+      "full_text": "To ensure the correct and secure operation of data exchange systems.\nMapped UAE IA v2.1 controls: T3.1.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "6. System Hardening and Security Assessment",
+      "section_number": "F4-6.1",
+      "parent_section": "F4-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange system inventory",
+          "description": "Inventory of the systems that make up the data exchange service, such as gateways, transfer servers and message brokers, with the owner, version and security baseline applied.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Completed hardening checklists",
+          "description": "Checklists completed for sampled data exchange systems showing default accounts removed and unneeded services and ports closed, with the date and the person who did it.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T3.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the correct and secure operation of data exchange systems."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-6.2",
+      "original_reference": "6.2",
+      "title": "Secure Configuration Reviews",
+      "description": "To ensure the correct and secure operation of data exchange systems.",
+      "full_text": "To ensure the correct and secure operation of data exchange systems.\nMapped UAE IA v2.1 controls: T3.1.1",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "6. System Hardening and Security Assessment",
+      "section_number": "F4-6.2",
+      "parent_section": "F4-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.1.1.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange configuration drift report",
+          "description": "Report of changes made to data exchange system configurations outside change control, with the investigation made and the fix applied.",
+          "filetype": "CSV",
+          "collection_frequency": "continuous"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.1.1"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T3.1.1"
+          ]
+        }
+      ],
+      "obligations": [
+        "To ensure the correct and secure operation of data exchange systems."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-6.3",
+      "original_reference": "6.3",
+      "title": "Security Assessments",
+      "description": "To reduce and address the vulnerabilities in data exchange systems.",
+      "full_text": "To reduce and address the vulnerabilities in data exchange systems.\nMapped UAE IA v2.1 controls: T3.3.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "6. System Hardening and Security Assessment",
+      "section_number": "F4-6.3",
+      "parent_section": "F4-6",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.3.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange penetration test report",
+          "description": "Report of a penetration test of the data exchange systems and their interfaces, with the date, scope, findings by severity and the status of each fix.",
+          "filetype": "PDF"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.3.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T3.3.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To reduce and address the vulnerabilities in data exchange systems."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-7.1",
+      "original_reference": "7.1",
+      "title": "Audit Logging",
+      "description": "To track and record activities and events in the data exchange systems.",
+      "full_text": "To track and record activities and events in the data exchange systems.\nMapped UAE IA v2.1 controls: T3.2.2",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "7. Logging and Monitoring",
+      "section_number": "F4-7.1",
+      "parent_section": "F4-7",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.2.2.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange logging coverage matrix",
+          "description": "Matrix of the data exchange components against the events each one logs, such as authentication, transfers, configuration changes and errors, showing all send logs to central storage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Log forwarding and retention settings",
+          "description": "Settings showing the logs of each data exchange component are forwarded to a central store that administrators of the system cannot alter, and the retention period.",
+          "filetype": "PNG"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.2.2"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T3.2.2"
+          ]
+        }
+      ],
+      "obligations": [
+        "To track and record activities and events in the data exchange systems."
+      ],
+      "pdf_page": 225
+    },
+    {
+      "control_id": "F4-7.2",
+      "original_reference": "7.2",
+      "title": "Monitoring and Analysis",
+      "description": "To identify, detect, and remediate inappropriate access, use of data exchange systems.",
+      "full_text": "To identify, detect, and remediate inappropriate access, use of data exchange systems.\nMapped UAE IA v2.1 controls: T3.2.3",
+      "domain": "F4 National Data Exchange Security Policy mapping (Annex F)",
+      "category": "7. Logging and Monitoring",
+      "section_number": "F4-7.2",
+      "parent_section": "F4-7",
+      "is_mandatory": false,
+      "priority": "medium",
+      "assessment_criteria": [],
+      "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.2.3.",
+      "evidence_requirements": [
+        {
+          "name": "Data exchange anomaly detection rules",
+          "description": "Settings of the rules that flag unusual exchange activity, such as large or off-hours transfers, new recipients and repeated failures.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Inappropriate use case records",
+          "description": "Cases where monitoring found inappropriate access to or use of data exchange systems, with the investigation outcome, the action taken and the time taken to remediate.",
+          "filetype": "XLSX"
+        }
+      ],
+      "priority_tier": null,
+      "applicability": "Mapping of the National Data Exchange Security Policy to UAE IA v2.1 controls",
+      "annex": "F4",
+      "uae_ia_controls": [
+        "T3.2.3"
+      ],
+      "statements": [
+        {
+          "pdf_pages": [
+            225
+          ],
+          "uae_ia_controls": [
+            "T3.2.3"
+          ]
+        }
+      ],
+      "obligations": [
+        "To identify, detect, and remediate inappropriate access, use of data exchange systems."
+      ],
+      "pdf_page": 225
+    }
+  ]
+}
