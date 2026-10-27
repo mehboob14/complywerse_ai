@@ -257,7 +257,10 @@ def test_the_annex_rows_are_the_staging_rows_but_for_their_evidence_entries(cata
     assert len(got) == len(staged) == 128
     for g, s in zip(got, staged):
         assert list(g) == list(s), g["control_id"]                                       # every key, in the staged order
-        assert {k: v for k, v in g.items() if k != "evidence_requirements"} == {k: v for k, v in s.items() if k != "evidence_requirements"}
+        assert {k: v for k, v in g.items() if k not in ("evidence_requirements", "original_reference")} == {
+            k: v for k, v in s.items() if k not in ("evidence_requirements", "original_reference")}
+        # the printed number repeats across the policies, so the library's reference is the policy-qualified id that carries it
+        assert g["original_reference"] == g["control_id"] == f"{g['annex']}-{s['original_reference']}", g["control_id"]
         assert len(g["evidence_requirements"]) == len(s["evidence_requirements"]) >= 1, g["control_id"]
         for e, entry in zip(g["evidence_requirements"], s["evidence_requirements"]):
             # the staged entry as it was, then the keys the core entries carry (see test_uae_ia_evidence.py)

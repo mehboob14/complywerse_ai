@@ -471,7 +471,9 @@ def annex_controls(annexes: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]], pd
                    core: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """The Annex E and F rows, to follow the `core` rows in the order of ANNEX. Nothing is parsed here: each row is copied as its
     annex builder staged it (every key, in order) from `annexes` = {"E": (staging file, evidence layer), "F": (...)}, except its
-    evidence entries. Those get the keys the core entries carry: is_mandatory (evidences_a_shall), retention_period and
+    `original_reference` and its evidence entries. The reference becomes the policy-qualified id (E1-2.1.1): the number as printed
+    repeats across the policies, and the platform lists a control by its reference. The evidence entries get the keys the core
+    entries carry: is_mandatory (evidences_a_shall), retention_period and
     ai_confidence null because no model generated the item, and ai_reasoning; no `type` and no `covers` (the seeder infers the
     type, and the annex builders tuned the wording for that). Stops unless the staging files were built from this PDF and agree
     with their evidence layers, hold the rows the builders found, have ids that meet no other id of the library, map only to
@@ -487,7 +489,7 @@ def annex_controls(annexes: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]], pd
             items = layer["controls"][r["control_id"]]
             if [e["name"] for e in r["evidence_requirements"]] != [i["name"] for i in items]:
                 fail(f"{r['control_id']}: the evidence items in {file} are not those of {layer_file}")
-            rows.append({**r, "evidence_requirements": [
+            rows.append({**r, "original_reference": r["control_id"], "evidence_requirements": [
                 {**e, "is_mandatory": evidences_a_shall(letter, r, i), "retention_period": None, "ai_confidence": None,
                  "ai_reasoning": ANNEX_REASONING[letter]} for e, i in zip(r["evidence_requirements"], items)]})
     want = {a: n for a, (n, _) in ANNEX.items()}

@@ -11925,7 +11925,7 @@
     },
     {
       "control_id": "E1-2.1.1",
-      "original_reference": "2.1.1",
+      "original_reference": "E1-2.1.1",
       "title": "Governance Framework",
       "description": "The entity shall establish, implement, and regularly review a cloud security policy that addresses key aspects of cloud security.",
       "full_text": "The entity shall establish, implement, and regularly review a cloud security policy that addresses key aspects of cloud security. When defining the information security policy for cloud computing, the cloud service customer shall take the following into account:\n• information stored in the cloud computing environment can be subject to access and management by the cloud service provider.\n• assets can be maintained in the cloud computing environment, e.g. application programs.\n• processes can run on a multi-tenant, virtualized cloud service.\n• the cloud service users and the context in which they use the cloud service.\n• the cloud service administrators of the cloud service customer who have privileged access.\n• the geographical locations of the cloud service provider's organization and the countries where the cloud service provider can store the cloud service customer data (even temporarily).",
@@ -12019,7 +12019,7 @@
     },
     {
       "control_id": "E1-2.1.2",
-      "original_reference": "2.1.2",
+      "original_reference": "E1-2.1.2",
       "title": "Risk Management",
       "description": "The entity shall identify, assess, mitigate and communicate the unique security and privacy risks associated with cloud environment.",
       "full_text": "The entity shall identify, assess, mitigate and communicate the unique security and privacy risks associated with cloud environment.",
@@ -12111,7 +12111,7 @@
     },
     {
       "control_id": "E1-2.1.3",
-      "original_reference": "2.1.3",
+      "original_reference": "E1-2.1.3",
       "title": "Personnel Security",
       "description": "The entity shall ensure contractual clauses with CSP’s include:",
       "full_text": "The entity shall ensure contractual clauses with CSP’s include:\n• background screening of CSP personnel.\n• clearly defined roles, and responsibilities matrix with segregation of duties in a shared responsibility model/\n• regular user awareness and training program.\n• a disciplinary process.\n• orderly exit process, including contract termination.",
@@ -12213,7 +12213,7 @@
     },
     {
       "control_id": "E1-2.1.4",
-      "original_reference": "2.1.4",
+      "original_reference": "E1-2.1.4",
       "title": "Third Party and Supply Chain Security",
       "description": "The entity shall identify and mitigate the risks associated with onboarding or subcontracting CSPs.",
       "full_text": "The entity shall identify and mitigate the risks associated with onboarding or subcontracting CSPs.",
@@ -12297,7 +12297,7 @@
     },
     {
       "control_id": "E1-2.1.5",
-      "original_reference": "2.1.5",
+      "original_reference": "E1-2.1.5",
       "title": "Assurance and Independent Testing",
       "description": "The entity shall seek assurance regarding the security of service design and components by validating the existence of independent third-party testing and assessments performed by the cloud service provider, in lieu of conducting direct in-depth testing.",
       "full_text": "The entity shall seek assurance regarding the security of service design and components by validating the existence of independent third-party testing and assessments performed by the cloud service provider, in lieu of conducting direct in-depth testing.",
@@ -12373,7 +12373,7 @@
     },
     {
       "control_id": "E1-2.2.1",
-      "original_reference": "2.2.1",
+      "original_reference": "E1-2.2.1",
       "title": "Due Diligence",
       "description": "The entity shall conduct security due diligence on the cloud service provider (CSP) prior to onboarding to assess their security posture and compliance with relevant requirements.",
       "full_text": "The entity shall conduct security due diligence on the cloud service provider (CSP) prior to onboarding to assess their security posture and compliance with relevant requirements.\n\nThe entity shall ensure that a Non-Disclosure agreement is drafted and acknowledged by the CSP.",
@@ -12463,7 +12463,7 @@
     },
     {
       "control_id": "E1-2.2.2",
-      "original_reference": "2.2.2",
+      "original_reference": "E1-2.2.2",
       "title": "Service Level Agreements",
       "description": "The entity shall ensure that contractual requirements with cloud service providers (CSPs) are formalized and agreed upon, including:",
       "full_text": "The entity shall ensure that contractual requirements with cloud service providers (CSPs) are formalized and agreed upon, including:\n• Non-disclosure agreements.\n• Service level agreements.\n• Security and privacy requirements.\n• Sovereignty requirements.\n• Availability requirements.\n• Incident reporting requirements.\n• Service exit requirements.\n• Change management requirements\n• Right to audit.\n• Data ownership\n• Data location\n• Minimizing vendor lock-in requirements\n• Arbitration and dispute resolution mechanism",
@@ -12572,7 +12572,7 @@
     },
     {
       "control_id": "E1-2.3.1",
-      "original_reference": "2.3.1",
+      "original_reference": "E1-2.3.1",
       "title": "Data Governance",
       "description": "The entity shall implement policies and procedures for data classification, labelling and handling throughout its’ lifecycle to secure the data that is resident (permanently or temporarily) within the service’s geographically distributed (physical and virtual) applications, infrastructure, network and systems components and shared with other third parties to ascertain any regulatory, statutory, or supply chain agreement (SLA) compliance impact.",
       "full_text": "The entity shall implement policies and procedures for data classification, labelling and handling throughout its’ lifecycle to secure the data that is resident (permanently or temporarily) within the service’s geographically distributed (physical and virtual) applications, infrastructure, network and systems components and shared with other third parties to ascertain any regulatory, statutory, or supply chain agreement (SLA) compliance impact.\n\nThe entity shall classify their data before migrating to the cloud, based on the potential impact of its compromise on operations, reputation, financial stability, and regulatory compliance and align this classification with the levels outlined in the National Cloud Security Policy.",
@@ -12680,7 +12680,7 @@
     },
     {
       "control_id": "E1-2.3.2",
-      "original_reference": "2.3.2",
+      "original_reference": "E1-2.3.2",
       "title": "Encryption and Cryptography",
       "description": "The entity shall establish and implement policies and procedures for the use of encryption protocols for the protection of sensitive data in storage and data in transmission as per applicable legal, statutory, and regulatory compliance obligations.",
       "full_text": "The entity shall establish and implement policies and procedures for the use of encryption protocols for the protection of sensitive data in storage and data in transmission as per applicable legal, statutory, and regulatory compliance obligations.\n\nThe entity shall ensure secure key management practices are implemented.\n\nPartial Sovereign Cloud Requirements\nConsumers shall conduct a risk assessment to determine whether Hold Your Own Key (HYOK) capabilities are required to be implemented. If the risk assessment indicates that HYOK is necessary, consumers shall implement it to retain exclusive control over encryption keys and mitigate the risk of unauthorized access to data. In cases where HYOK is implemented, consumers shall ensure that key access, revocation, and auditability are supported without dependency on the CSP.",
@@ -12795,7 +12795,7 @@
     },
     {
       "control_id": "E1-2.4.1",
-      "original_reference": "2.4.1",
+      "original_reference": "E1-2.4.1",
       "title": "Data Location Awareness",
       "description": "The entity shall ensure that the CSP operate within acceptable legal jurisdiction(s) and as per the applicable laws, regulations, standards, and frameworks published within the UAE pertaining to data location and sovereignty.",
       "full_text": "The entity shall ensure that the CSP operate within acceptable legal jurisdiction(s) and as per the applicable laws, regulations, standards, and frameworks published within the UAE pertaining to data location and sovereignty.\n\nThe entity shall ensure that data classified as Confidential/Restricted are stored in a Partial Sovereign Cloud or Sovereign Cloud environment.\n\nThe entity shall ensure that data classified above Confidential/Restricted are strictly stored and processed in Sovereign Cloud environment.",
@@ -12888,7 +12888,7 @@
     },
     {
       "control_id": "E1-2.5.1",
-      "original_reference": "2.5.1",
+      "original_reference": "E1-2.5.1",
       "title": "Interoperability",
       "description": "The entity shall conduct a thorough evaluation of their interoperability needs when using multiple cloud services and ensure the consistent application of industry standards and APIs to facilitate seamless integration across their data and cloud environments.",
       "full_text": "The entity shall conduct a thorough evaluation of their interoperability needs when using multiple cloud services and ensure the consistent application of industry standards and APIs to facilitate seamless integration across their data and cloud environments.",
@@ -12950,7 +12950,7 @@
     },
     {
       "control_id": "E1-2.5.2",
-      "original_reference": "2.5.2",
+      "original_reference": "E1-2.5.2",
       "title": "Portability",
       "description": "The entity shall ensure that contractual agreements with cloud service providers (CSPs) include provisions for:",
       "full_text": "The entity shall ensure that contractual agreements with cloud service providers (CSPs) include provisions for:\n• Access to all structured and unstructured data in an industry-standard format upon contract termination.\n• Demonstrated commitment to data portability, covering:\n   - Duration of data storage\n   - Data protection controls\n   - Data deletion processes",
@@ -13026,7 +13026,7 @@
     },
     {
       "control_id": "E1-2.6.1",
-      "original_reference": "2.6.1",
+      "original_reference": "E1-2.6.1",
       "title": "Change Control and Configuration",
       "description": "The entity, when procuring cloud services, shall verify that the CSP has implemented sufficient change management controls to track the status, location, and configuration of service components throughout their lifecycle within the service.",
       "full_text": "The entity, when procuring cloud services, shall verify that the CSP has implemented sufficient change management controls to track the status, location, and configuration of service components throughout their lifecycle within the service.",
@@ -13093,7 +13093,7 @@
     },
     {
       "control_id": "E1-2.6.2",
-      "original_reference": "2.6.2",
+      "original_reference": "E1-2.6.2",
       "title": "Data Center Security",
       "description": "The entity shall validate the effectiveness of the physical security controls at the CSP data centers before hosting data or procuring any services (the level of security controls applied should take into consideration the classification of data to be hosted).",
       "full_text": "The entity shall validate the effectiveness of the physical security controls at the CSP data centers before hosting data or procuring any services (the level of security controls applied should take into consideration the classification of data to be hosted).",
@@ -13155,7 +13155,7 @@
     },
     {
       "control_id": "E1-2.6.3",
-      "original_reference": "2.6.3",
+      "original_reference": "E1-2.6.3",
       "title": "Asset and Endpoint Management",
       "description": "The entity shall maintain an inventory of assets that accounts for all information and associated assets stored in the cloud computing environment, including records that indicate where these assets are maintained, such as the identification of the cloud service used.",
       "full_text": "The entity shall maintain an inventory of assets that accounts for all information and associated assets stored in the cloud computing environment, including records that indicate where these assets are maintained, such as the identification of the cloud service used.",
@@ -13217,7 +13217,7 @@
     },
     {
       "control_id": "E1-2.6.4",
-      "original_reference": "2.6.4",
+      "original_reference": "E1-2.6.4",
       "title": "Application Security",
       "description": "The entity, when procuring cloud services, shall ensure CSP has adequate application security controls in place including:",
       "full_text": "The entity, when procuring cloud services, shall ensure CSP has adequate application security controls in place including:\n• application security controls\n• secure coding\n• security testing",
@@ -13305,7 +13305,7 @@
     },
     {
       "control_id": "E1-2.6.5",
-      "original_reference": "2.6.5",
+      "original_reference": "E1-2.6.5",
       "title": "Device Hardening",
       "description": "The entity shall ensure hardening guidelines are developed and implemented for all cloud systems (physical and virtual), including but not limited to operating systems, virtual machines, hypervisors, Internet of Things sensors and network and security devices.",
       "full_text": "The entity shall ensure hardening guidelines are developed and implemented for all cloud systems (physical and virtual), including but not limited to operating systems, virtual machines, hypervisors, Internet of Things sensors and network and security devices.",
@@ -13370,7 +13370,7 @@
     },
     {
       "control_id": "E1-2.7.1",
-      "original_reference": "2.7.1",
+      "original_reference": "E1-2.7.1",
       "title": "Cloud Identities",
       "description": "The entity shall manage the full lifecycle of the identities accessing the cloud environment.",
       "full_text": "The entity shall manage the full lifecycle of the identities accessing the cloud environment.\n\nEntity shall implement centralized processes for privileged account (root accounts) creation and strictly control & limit the activities that can be performed through the account.\n\nThe entity shall implement multi-factor authentication (MFA) for all privileged access to cloud environments",
@@ -13485,7 +13485,7 @@
     },
     {
       "control_id": "E1-2.7.2",
-      "original_reference": "2.7.2",
+      "original_reference": "E1-2.7.2",
       "title": "Cloud Authentication & Authorization",
       "description": "The entity shall restrict access to cloud resources in accordance with the entity's identity and access management control policy.",
       "full_text": "The entity shall restrict access to cloud resources in accordance with the entity's identity and access management control policy.\n\nThe entity shall implement secure authentication technologies and procedures for authenticating access to systems, applications, and data assets in the cloud environment.\n\nThe entity shall implement multi-factor authentication (MFA) for all privileged access to cloud environments.",
@@ -13593,7 +13593,7 @@
     },
     {
       "control_id": "E1-2.7.3",
-      "original_reference": "2.7.3",
+      "original_reference": "E1-2.7.3",
       "title": "Access governance",
       "description": "The entity shall implement a formal access control procedure to manage the provision, modification, review, and removal of access rights to the cloud environment.",
       "full_text": "The entity shall implement a formal access control procedure to manage the provision, modification, review, and removal of access rights to the cloud environment.",
@@ -13671,7 +13671,7 @@
     },
     {
       "control_id": "E1-2.8.1",
-      "original_reference": "2.8.1",
+      "original_reference": "E1-2.8.1",
       "title": "Incident Management Process",
       "description": "Cloud consumers shall establish incident management processes for the cloud services, which shall be regularly tested and enacted in response to security incidents.",
       "full_text": "Cloud consumers shall establish incident management processes for the cloud services, which shall be regularly tested and enacted in response to security incidents.",
@@ -13747,7 +13747,7 @@
     },
     {
       "control_id": "E1-2.8.2",
-      "original_reference": "2.8.2",
+      "original_reference": "E1-2.8.2",
       "title": "Incident Reporting",
       "description": "The entity shall establish a timely incident reporting mechanism to report incidents to relevant external entities, applicable regulatory authorities, national and local law enforcement, and other legal jurisdictions.",
       "full_text": "The entity shall establish a timely incident reporting mechanism to report incidents to relevant external entities, applicable regulatory authorities, national and local law enforcement, and other legal jurisdictions.",
@@ -13813,7 +13813,7 @@
     },
     {
       "control_id": "E1-2.8.3",
-      "original_reference": "2.8.3",
+      "original_reference": "E1-2.8.3",
       "title": "Incident Response",
       "description": "The entity shall set up and test clear incident response plan for incidents related to cloud environment in line with the Cyber Security Incident Response Plan issued by the CSC.",
       "full_text": "The entity shall set up and test clear incident response plan for incidents related to cloud environment in line with the Cyber Security Incident Response Plan issued by the CSC.",
@@ -13880,7 +13880,7 @@
     },
     {
       "control_id": "E1-2.8.4",
-      "original_reference": "2.8.4",
+      "original_reference": "E1-2.8.4",
       "title": "E-discovery and Cloud Forensics",
       "description": "The entity shall identify suitable personnel to oversee the setup and ongoing supervision of e-Discovery/Cloud Forensic capabilities with clear and measurable metrics.",
       "full_text": "The entity shall identify suitable personnel to oversee the setup and ongoing supervision of e-Discovery/Cloud Forensic capabilities with clear and measurable metrics.\n\nThe entity shall establish e-Forensic protocols coherent with UAE law enforcement procedures in digital evidence handling and ensure CSPs comply with such protocols.",
@@ -13967,7 +13967,7 @@
     },
     {
       "control_id": "E1-2.9.1",
-      "original_reference": "2.9.1",
+      "original_reference": "E1-2.9.1",
       "title": "Secure Backup",
       "description": "Cloud consumers shall establish the requirements for regular backups of information within the cloud environments and the backup restoration testing schedule.",
       "full_text": "Cloud consumers shall establish the requirements for regular backups of information within the cloud environments and the backup restoration testing schedule.",
@@ -14032,7 +14032,7 @@
     },
     {
       "control_id": "E1-2.9.2",
-      "original_reference": "2.9.2",
+      "original_reference": "E1-2.9.2",
       "title": "Business Continuity and Disaster Recovery",
       "description": "The entity shall communicate requirements for operational continuity, including uptime, redundancy, high availability, and recovery priorities, as part of its cloud service contracts, and are these requirements are regularly tested for its cloud services.",
       "full_text": "The entity shall communicate requirements for operational continuity, including uptime, redundancy, high availability, and recovery priorities, as part of its cloud service contracts, and are these requirements are regularly tested for its cloud services.\n\nThe entity shall formalize and communicate its business continuity and disaster recovery plans to all relevant parties, including third parties.\n\nThe entity shall define the Maximum Tolerable Period of Disruption (MTPD), Recovery Time Objective (RTO), Recovery Point Objective (RPO), and the roles and responsibilities of all relevant parties in its recovery plans.",
@@ -14139,7 +14139,7 @@
     },
     {
       "control_id": "E2-2.1",
-      "original_reference": "2.1",
+      "original_reference": "E2-2.1",
       "title": "AI Cyber Security Governance",
       "description": "The entity shall establish governance mechanisms to ensure the secure lifecycle management of AI/ML systems, including:",
       "full_text": "The entity shall establish governance mechanisms to ensure the secure lifecycle management of AI/ML systems, including:\n• Policies and procedures for secure design, development, and operation of AI/ML systems.\n• Continuous identification and mitigation of AI/ML-related cyber security risks.\n• Identification, assessment and mitigation of cyber security risks associated with the supply chain of AI/ML systems.\n• Secure change management for AI/ML systems.",
@@ -14266,7 +14266,7 @@
     },
     {
       "control_id": "E2-2.2",
-      "original_reference": "2.2",
+      "original_reference": "E2-2.2",
       "title": "Infrastructure & Application Security",
       "description": "The entity shall implement and maintain effective measures to ensure the secure design, configuration, and operation of AI/ML infrastructure and applications throughout their lifecycle, including:",
       "full_text": "The entity shall implement and maintain effective measures to ensure the secure design, configuration, and operation of AI/ML infrastructure and applications throughout their lifecycle, including:\n• Maintaining an up-to-date inventory of AI/ML assets and applying cyber security controls appropriate to their sensitivity, criticality, and value.\n• Ensuring AI/ML systems are securely configured in line with approved security baselines and configuration standards.\n• Identifying, testing, and applying patches and updates in a timely manner to maintain system integrity and resilience.\n• Implementing a systematic vulnerability management process to detect, assess, and remediate weaknesses in AI/ML systems.\n• Ensuring secure development, testing, and maintenance of AI/ML applications in accordance with established secure coding and development practices.\n• Applying robust network and infrastructure security controls to safeguard the confidentiality, integrity, and availability of AI/ML environments.",
@@ -14390,7 +14390,7 @@
     },
     {
       "control_id": "E2-2.3",
-      "original_reference": "2.3",
+      "original_reference": "E2-2.3",
       "title": "Algorithm Security",
       "description": "The entity shall establish and maintain controls to ensure the secure design, development, and protection of AI/ML algorithms and models throughout their lifecycle, including:",
       "full_text": "The entity shall establish and maintain controls to ensure the secure design, development, and protection of AI/ML algorithms and models throughout their lifecycle, including:\n• Integrating cyber security considerations into the design and development of AI/ML models from the earliest stages to proactively mitigate risks and avoid retrofitting controls post-deployment.\n• Implementing security measures to protect AI/ML models from threats that could compromise their integrity, confidentiality, or availability.\n• Ensuring the security of AI/ML inference processes by safeguarding inference data and maintaining its integrity and confidentiality.\n• Enforcing robust access controls over AI/ML training data to preserve confidentiality, integrity, privacy, and auditability.\n• Applying stringent data protection controls for AI/ML data both at rest and in motion to ensure its confidentiality and integrity.",
@@ -14497,7 +14497,7 @@
     },
     {
       "control_id": "E2-2.4",
-      "original_reference": "2.4",
+      "original_reference": "E2-2.4",
       "title": "Operational Security",
       "description": "The entity shall implement and maintain operational controls to ensure the resilience, reliability, and secure functioning of AI/ML systems, including:",
       "full_text": "The entity shall implement and maintain operational controls to ensure the resilience, reliability, and secure functioning of AI/ML systems, including:\n• Tailoring cyber security measures to the specific application domains of AI/ML systems.\n• Incorporation of redundancy, failover mechanisms, and other measures to maintain availability during disruptions.\n• Integrating AI/ML systems into business continuity and disaster recovery planning, with regular testing of restoration capabilities and continuity scenarios.\n• Conducting comprehensive security testing and validation to verify the security and resilience of AI/ML systems against potential threats.",
@@ -14595,7 +14595,7 @@
     },
     {
       "control_id": "E2-2.5",
-      "original_reference": "2.5",
+      "original_reference": "E2-2.5",
       "title": "Adversarial AI Attacks",
       "description": "The entity shall establish measures to protect AI/ML systems against adversarial attacks through proactive defense, awareness, and preparedness activities, including:",
       "full_text": "The entity shall establish measures to protect AI/ML systems against adversarial attacks through proactive defense, awareness, and preparedness activities, including:\n• Promoting awareness of AI/ML attack scenarios through education, training, and preparedness for effective incident response.\n• Implementing comprehensive defense strategies, including proactive security measures, continuous monitoring, regular testing, and robust incident response capabilities.",
@@ -14684,7 +14684,7 @@
     },
     {
       "control_id": "E2-2.6",
-      "original_reference": "2.6",
+      "original_reference": "E2-2.6",
       "title": "AI Monitoring & Response",
       "description": "The entity shall implement monitoring, detection, and response controls to ensure timely identification, investigation, and mitigation of AI/ML cyber security incidents, including:",
       "full_text": "The entity shall implement monitoring, detection, and response controls to ensure timely identification, investigation, and mitigation of AI/ML cyber security incidents, including:\n• Establishing a security analytics framework leveraging advanced technologies and diverse data sources for real-time threat detection, historical analysis, and predictive insights.\n• Implementing a robust incident reporting and management system.\n• Developing a comprehensive digital forensics framework tailored to AI/ML incidents.",
@@ -14794,7 +14794,7 @@
     },
     {
       "control_id": "E3-2.1.1",
-      "original_reference": "2.1.1",
+      "original_reference": "E3-2.1.1",
       "title": "Governance Framework",
       "description": "The entity shall establish, implement, and regularly review an IoT security policy that addresses key aspects of IoT security.",
       "full_text": "The entity shall establish, implement, and regularly review an IoT security policy that addresses key aspects of IoT security. When defining the information security policy for IoT, the entity shall take the following into account:\n• governance model to manage and control IoT components and services used in the related ecosystem.\n• roles and responsibilities for managing IoT devices and services.\n• security requirements for IoT devices.",
@@ -14883,7 +14883,7 @@
     },
     {
       "control_id": "E3-2.1.2",
-      "original_reference": "2.1.2",
+      "original_reference": "E3-2.1.2",
       "title": "Risk Management",
       "description": "The entity shall identify, assess, and mitigate the unique risks associated with IoT ecosystem",
       "full_text": "The entity shall identify, assess, and mitigate the unique risks associated with IoT ecosystem",
@@ -14965,7 +14965,7 @@
     },
     {
       "control_id": "E3-2.1.3",
-      "original_reference": "2.1.3",
+      "original_reference": "E3-2.1.3",
       "title": "Awareness and Training",
       "description": "An awareness and training plan shall be developed to provide specialized IoT security training to all personnel (employees, contractors, and outsourced staff) managing, implementing, and monitoring IoT devices and/or services.",
       "full_text": "An awareness and training plan shall be developed to provide specialized IoT security training to all personnel (employees, contractors, and outsourced staff) managing, implementing, and monitoring IoT devices and/or services.",
@@ -15043,7 +15043,7 @@
     },
     {
       "control_id": "E3-2.1.4",
-      "original_reference": "2.1.4",
+      "original_reference": "E3-2.1.4",
       "title": "Third-Party Security",
       "description": "The entity shall document and implement a third-party security policy to facilitate the execution of relevant controls and ensure that external stakeholders adhere to the organization's IoT security policies.",
       "full_text": "The entity shall document and implement a third-party security policy to facilitate the execution of relevant controls and ensure that external stakeholders adhere to the organization's IoT security policies.\n\nThe entity shall include in the contracts:\n• Non-disclosure agreements.\n• Service level agreements.\n• IoT security, availability, and privacy requirements in line with all applicable standards, laws, and regulations.\n\nThe entity shall ensure third party access to IoT devices:\n• are granted based on the least privileged principle.\n• are granted for a limited timeframe.\n• are reviewed periodically.",
@@ -15161,7 +15161,7 @@
     },
     {
       "control_id": "E3-2.1.5",
-      "original_reference": "2.1.5",
+      "original_reference": "E3-2.1.5",
       "title": "Compliance",
       "description": "Entity shall establish compliance policies and programs to ensure IoT solutions are compliant with applicable laws and regulations and enforced standards and policies of the Telecommunications Regulatory Authority and Digital Government (TDRA) and the Cyber Security Council.",
       "full_text": "Entity shall establish compliance policies and programs to ensure IoT solutions are compliant with applicable laws and regulations and enforced standards and policies of the Telecommunications Regulatory Authority and Digital Government (TDRA) and the Cyber Security Council.",
@@ -15225,7 +15225,7 @@
     },
     {
       "control_id": "E3-2.2.1",
-      "original_reference": "2.2.1",
+      "original_reference": "E3-2.2.1",
       "title": "Data Privacy and Governance",
       "description": "The entity shall: identify and classify data collected throughout the IoT ecosystem.",
       "full_text": "The entity shall:\n• identify and classify data collected throughout the IoT ecosystem.\n• ensure, through contracts, that they are provided with clear and transparent information about how their data is being used, by whom, and for what purposes for each IoT device and service.\n• ensure, through contracts, that it can exercise its rights to information, access, erasure, rectification, data portability, restriction of processing, objection to processing, and its right not to be evaluated based on automated processing; and\n• protect the confidentiality, integrity, and/or availability of data, including personally identifiable information (PII), collected by, stored on, processed by, or transmitted to or from the IoT device.\n\nThe entity shall ensure that contractual requirements with cloud service providers (CSPs) are formalized and agreed upon, including:\n• Non-disclosure agreements.\n• Service level agreements.\n• Security and privacy requirements.\n• Sovereignty requirements.\n• Availability requirements.\n• Incident reporting requirements.\n• service exit requirements.\n• change management requirements.\n• right to audit.\n\nEntity shall:\n• avoid the collection of sensitive data.\n• minimize the data collected and retained.\n• restrict access to the physical and logical location of data only to authorized individuals",
@@ -15359,7 +15359,7 @@
     },
     {
       "control_id": "E3-2.2.2",
-      "original_reference": "2.2.2",
+      "original_reference": "E3-2.2.2",
       "title": "Encryption and Cryptography",
       "description": "The entity shall establish policies and procedures for the use of encryption protocols for the protection of sensitive data in storage and data in transmission as per applicable legal, statutory, and regulatory compliance obligations.",
       "full_text": "The entity shall establish policies and procedures for the use of encryption protocols for the protection of sensitive data in storage and data in transmission as per applicable legal, statutory, and regulatory compliance obligations.\n\nThe entity shall use a root private key, either symmetric or asymmetric, to digitally sign other keys used in the hierarchy.",
@@ -15447,7 +15447,7 @@
     },
     {
       "control_id": "E3-2.2.3",
-      "original_reference": "2.2.3",
+      "original_reference": "E3-2.2.3",
       "title": "Secure and trusted communications",
       "description": "The entity shall implement secure sessions ensuring:",
       "full_text": "The entity shall implement secure sessions ensuring:\n• active sessions are unique and cannot be shared or predicted.\n• non-essential sessions are timed out and invalidated.\n• session tokens are unique with a minimum level of entropy.\n• sessions are expired after fixed time of inactivity\n\nThe entity shall ensure that communication protocols employ encrypted channels, integrity protection, and authenticated connections to share information between IoT systems. Proven encryption techniques shall be used to protect data within all IoT systems and their underlying infrastructure.",
@@ -15548,7 +15548,7 @@
     },
     {
       "control_id": "E3-2.3.1",
-      "original_reference": "2.3.1",
+      "original_reference": "E3-2.3.1",
       "title": "Access Control",
       "description": "Entity shall implement identity and access management controls to :",
       "full_text": "Entity shall implement identity and access management controls to :\n• enforce least privilege with unique identification and accountability for access to IoT resources.\n• implement strong authentication mechanisms, including multi-factor authentication, for all IoT systems.\n• manage access throughout the resource lifecycle, ensuring secure storage of credentials and prohibiting hard-coded credentials.\n• conduct regular access reviews to verify permissions and implement compensating controls as needed.\n• align password policies with complexity standards, requiring periodic updates.",
@@ -15649,7 +15649,7 @@
     },
     {
       "control_id": "E3-2.3.2",
-      "original_reference": "2.3.2",
+      "original_reference": "E3-2.3.2",
       "title": "Physical access",
       "description": "Entity shall ensure physical access to IoT environments, buildings, locations, and rooms are controlled and monitored.",
       "full_text": "Entity shall ensure physical access to IoT environments, buildings, locations, and rooms are controlled and monitored.",
@@ -15716,7 +15716,7 @@
     },
     {
       "control_id": "E3-2.4.1",
-      "original_reference": "2.4.1",
+      "original_reference": "E3-2.4.1",
       "title": "Incident Management",
       "description": "Entity shall establish an incident response procedure to identify, respond to, contain, and recover from incidents pertaining to the IoT ecosystem, including:",
       "full_text": "Entity shall establish an incident response procedure to identify, respond to, contain, and recover from incidents pertaining to the IoT ecosystem, including:\n• incident response plan.\n• incident reporting.\n• incident classification.\n• incident recovery.\n• post-incident analysis and lessons learned.\n• collection of evidence.\n\nThe entity shall allocate resources to monitor, and track security threats using threat intelligence.",
@@ -15836,7 +15836,7 @@
     },
     {
       "control_id": "E3-2.5.1",
-      "original_reference": "2.5.1",
+      "original_reference": "E3-2.5.1",
       "title": "Secure backup",
       "description": "The entity shall perform periodic user and configuration data backups and undertake backup restoration testing.",
       "full_text": "The entity shall perform periodic user and configuration data backups and undertake backup restoration testing.",
@@ -15901,7 +15901,7 @@
     },
     {
       "control_id": "E3-2.5.2",
-      "original_reference": "2.5.2",
+      "original_reference": "E3-2.5.2",
       "title": "Disaster recovery",
       "description": "The entity shall ensure that IoT continuity plans are established and periodically tested, including response and recovery procedures that detail how the entity plans to manage disruptions to IoT services.",
       "full_text": "The entity shall ensure that IoT continuity plans are established and periodically tested, including response and recovery procedures that detail how the entity plans to manage disruptions to IoT services.",
@@ -15969,7 +15969,7 @@
     },
     {
       "control_id": "E3-2.6.1",
-      "original_reference": "2.6.1",
+      "original_reference": "E3-2.6.1",
       "title": "Asset Management",
       "description": "Entity shall ensure that asset management procedures are established by:",
       "full_text": "Entity shall ensure that asset management procedures are established by:\n• maintaining an inventory of IoT systems, including devices, software, and firmware.\n• handling IoT devices appropriately.\n• performing maintenance on IoT devices.\n• implementing the proper disposal of IoT devices.",
@@ -16060,7 +16060,7 @@
     },
     {
       "control_id": "E3-2.6.2",
-      "original_reference": "2.6.2",
+      "original_reference": "E3-2.6.2",
       "title": "Application Security",
       "description": "IoT solution components such as applications, middleware, APIs, and devices shall be configured for secure authentication and information exchange over encrypted channels.",
       "full_text": "IoT solution components such as applications, middleware, APIs, and devices shall be configured for secure authentication and information exchange over encrypted channels.\n\nEntity shall ensure that applications are implemented with end-to-end security controls and availability aspects across the IoT solution and shall enforce access control rules on the trusted service layer.\n\nEntity shall utilize a secure and dedicated gateway for data normalization and processing within IoT networks.",
@@ -16155,7 +16155,7 @@
     },
     {
       "control_id": "E3-2.6.3",
-      "original_reference": "2.6.3",
+      "original_reference": "E3-2.6.3",
       "title": "Device Security",
       "description": "Entity shall ensure that: IoT devices and sensors are securely installed and configured to prevent unauthorized access.",
       "full_text": "Entity shall ensure that:\n• IoT devices and sensors are securely installed and configured to prevent unauthorized access.\n• IoT devices are managed remotely over encrypted channels with security logs enabled.\n• A documented device management strategy is in place for periodic updates and maintenance.\n• Security patches from authentic sources are applied securely and tested for compatibility.\n• All updates are assessed for risk and impact before deployment.\n• Compensatory measures are applied for devices at end-of-life.",
@@ -16257,7 +16257,7 @@
     },
     {
       "control_id": "E3-2.7.1",
-      "original_reference": "2.7.1",
+      "original_reference": "E3-2.7.1",
       "title": "Network Management",
       "description": "Entity shall ensure IoT networks are secured by:",
       "full_text": "Entity shall ensure IoT networks are secured by:\n• utilizing secure ports and protocols with authentication and encryption enabled.\n• considering security controls and interoperability across different routing networks.\n• segregating IoT networks from the corporate network and implementing micro-segmentation for controlled access.\n• restricting and controlling information exchange and infrastructure management of IoT devices and applications.\n• disabling unused and default network services, protocols, and ports.\n• conducting IoT solution administration and management via a separate, segregated network.\n• employing best practice cryptography for secure communications in consumer IoT devices.",
@@ -16358,7 +16358,7 @@
     },
     {
       "control_id": "E3-2.8.1",
-      "original_reference": "2.8.1",
+      "original_reference": "E3-2.8.1",
       "title": "Audit Logging",
       "description": "The entity shall produce, store, protect, and analyze logs for IoT devices, systems, and applications for events such as:",
       "full_text": "The entity shall produce, store, protect, and analyze logs for IoT devices, systems, and applications for events such as:\n• User logins, logouts, and unsuccessful authentication attempts.\n• Connection and disconnection attempts, including unsuccessful connection attempts.\n• Unsuccessful authorization attempts.\n• Access to sensitive data.\n• Importing and exporting data from removable media.\n• Any changes in access privileges.\n• Creation, modification, and deletion of data by users.\n• Impactful operations.\n• Remote operations.\n• Security update failures.\n• Physical access attempts, where possible.\n• Emergency access attempts, where possible.",
@@ -16469,7 +16469,7 @@
     },
     {
       "control_id": "F1-2.1",
-      "original_reference": "2.1",
+      "original_reference": "F1-2.1",
       "title": "General Requirements",
       "description": "To establish the necessary policies and governance to initiate and support the implementation of encryption requirements.",
       "full_text": "To establish the necessary policies and governance to initiate and support the implementation of encryption requirements.\nMapped UAE IA v2.1 controls: T3.4.1, T3.4.2",
@@ -16526,7 +16526,7 @@
     },
     {
       "control_id": "F1-2.2",
-      "original_reference": "2.2",
+      "original_reference": "F1-2.2",
       "title": "Risk Management",
       "description": "To proactively identify requirements for encryption and remediate security and privacy risks promptly.",
       "full_text": "To proactively identify requirements for encryption and remediate security and privacy risks promptly.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
@@ -16599,7 +16599,7 @@
     },
     {
       "control_id": "F1-2.3",
-      "original_reference": "2.3",
+      "original_reference": "F1-2.3",
       "title": "Compliance",
       "description": "To ensure that the adopted cryptographic solution is compliant with the applicable laws, regulations, and standards.",
       "full_text": "To ensure that the adopted cryptographic solution is compliant with the applicable laws, regulations, and standards.\nMapped UAE IA v2.1 controls: M5.1.1",
@@ -16645,7 +16645,7 @@
     },
     {
       "control_id": "F1-2.4",
-      "original_reference": "2.4",
+      "original_reference": "F1-2.4",
       "title": "Data Classification and Handling",
       "description": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.",
       "full_text": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.\nMapped UAE IA v2.1 controls: T1.3.1, T1.3.2",
@@ -16693,7 +16693,7 @@
     },
     {
       "control_id": "F1-3.1",
-      "original_reference": "3.1",
+      "original_reference": "F1-3.1",
       "title": "General Requirements",
       "description": "To protect the data at rest from unauthorized disclosure and modification",
       "full_text": "To protect the data at rest from unauthorized disclosure and modification\nMapped UAE IA v2.1 controls: T3.4.2, T3.3.2",
@@ -16759,7 +16759,7 @@
     },
     {
       "control_id": "F1-3.2",
-      "original_reference": "3.2",
+      "original_reference": "F1-3.2",
       "title": "Laptop and Desktop computers",
       "description": "To protect confidential data stored in laptops and desktop computers.",
       "full_text": "To protect confidential data stored in laptops and desktop computers.\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -16805,7 +16805,7 @@
     },
     {
       "control_id": "F1-3.3",
-      "original_reference": "3.3",
+      "original_reference": "F1-3.3",
       "title": "Mobile Devices",
       "description": "To protect non-open data stored in smartphones and tablets",
       "full_text": "To protect non-open data stored in smartphones and tablets\nMapped UAE IA v2.1 controls: T1.4.1, T1.5.1",
@@ -16854,7 +16854,7 @@
     },
     {
       "control_id": "F1-3.4",
-      "original_reference": "3.4",
+      "original_reference": "F1-3.4",
       "title": "Portable Storage Media",
       "description": "To protect non-open data stored in portable storage media",
       "full_text": "To protect non-open data stored in portable storage media\nMapped UAE IA v2.1 controls: T1.4.1, T3.4.2",
@@ -16902,7 +16902,7 @@
     },
     {
       "control_id": "F1-3.5",
-      "original_reference": "3.5",
+      "original_reference": "F1-3.5",
       "title": "Database",
       "description": "To protect non-open data stored in databases.",
       "full_text": "To protect non-open data stored in databases.\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -16948,7 +16948,7 @@
     },
     {
       "control_id": "F1-3.6",
-      "original_reference": "3.6",
+      "original_reference": "F1-3.6",
       "title": "System / User credentials",
       "description": "To protect system/user credentials from unauthorized disclosure",
       "full_text": "To protect system/user credentials from unauthorized disclosure\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -17003,7 +17003,7 @@
     },
     {
       "control_id": "F1-4.1",
-      "original_reference": "4.1",
+      "original_reference": "F1-4.1",
       "title": "General Requirements",
       "description": "To protect data during motion from unauthorized access and modification.",
       "full_text": "To protect data during motion from unauthorized access and modification.\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -17049,7 +17049,7 @@
     },
     {
       "control_id": "F1-4.2",
-      "original_reference": "4.2",
+      "original_reference": "F1-4.2",
       "title": "Email Encryption",
       "description": "To protect non-open data transmission through email",
       "full_text": "To protect non-open data transmission through email\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -17104,7 +17104,7 @@
     },
     {
       "control_id": "F1-4.3",
-      "original_reference": "4.3",
+      "original_reference": "F1-4.3",
       "title": "Network Encryption",
       "description": "To protect non-open data transmission through the network",
       "full_text": "To protect non-open data transmission through the network\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -17150,7 +17150,7 @@
     },
     {
       "control_id": "F1-5.1",
-      "original_reference": "5.1",
+      "original_reference": "F1-5.1",
       "title": "General Requirements",
       "description": "To ensure secure management of cryptographic keys",
       "full_text": "To ensure secure management of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17205,7 +17205,7 @@
     },
     {
       "control_id": "F1-5.2",
-      "original_reference": "5.2",
+      "original_reference": "F1-5.2",
       "title": "Key generation",
       "description": "To ensure secure creation of cryptographic keys",
       "full_text": "To ensure secure creation of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17261,7 +17261,7 @@
     },
     {
       "control_id": "F1-5.3",
-      "original_reference": "5.3",
+      "original_reference": "F1-5.3",
       "title": "Key Distribution",
       "description": "To ensure secure distribution of cryptographic keys",
       "full_text": "To ensure secure distribution of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17317,7 +17317,7 @@
     },
     {
       "control_id": "F1-5.4",
-      "original_reference": "5.4",
+      "original_reference": "F1-5.4",
       "title": "Key Storage",
       "description": "To ensure secure storage of cryptographic keys",
       "full_text": "To ensure secure storage of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17363,7 +17363,7 @@
     },
     {
       "control_id": "F1-5.5",
-      "original_reference": "5.5",
+      "original_reference": "F1-5.5",
       "title": "Key Recovery",
       "description": "To ensure availability and recovery in the event of key loss or corruption",
       "full_text": "To ensure availability and recovery in the event of key loss or corruption\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17409,7 +17409,7 @@
     },
     {
       "control_id": "F1-5.6",
-      "original_reference": "5.6",
+      "original_reference": "F1-5.6",
       "title": "Key Disposal",
       "description": "To ensure timely and secure disposal of cryptographic keys.",
       "full_text": "To ensure timely and secure disposal of cryptographic keys.\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17456,7 +17456,7 @@
     },
     {
       "control_id": "F1-5.7",
-      "original_reference": "5.7",
+      "original_reference": "F1-5.7",
       "title": "Key Archival",
       "description": "To ensure timely and secure archival of cryptographic keys",
       "full_text": "To ensure timely and secure archival of cryptographic keys\nMapped UAE IA v2.1 controls: T3.4.3",
@@ -17502,7 +17502,7 @@
     },
     {
       "control_id": "F1-6.1",
-      "original_reference": "6.1",
+      "original_reference": "F1-6.1",
       "title": "General Requirements",
       "description": "To ensure that entities are prepared to protect their non-open information against future threat posed by quantum computers.",
       "full_text": "To ensure that entities are prepared to protect their non-open information against future threat posed by quantum computers.\nMapped UAE IA v2.1 controls: T3.4.4",
@@ -17557,7 +17557,7 @@
     },
     {
       "control_id": "F2-2.1",
-      "original_reference": "2.1",
+      "original_reference": "F2-2.1",
       "title": "Policies & Procedures",
       "description": "To establish the necessary governance to initiate and support the implementation of secure remote work requirements.",
       "full_text": "To establish the necessary governance to initiate and support the implementation of secure remote work requirements.\nMapped UAE IA v2.1 controls: M1.2.3",
@@ -17621,7 +17621,7 @@
     },
     {
       "control_id": "F2-2.2",
-      "original_reference": "2.2",
+      "original_reference": "F2-2.2",
       "title": "Risk Management",
       "description": "To identify, assess, mitigate, and monitor secure remote work risks by integrating them into the entity’s overall risk management program.",
       "full_text": "To identify, assess, mitigate, and monitor secure remote work risks by integrating them into the entity’s overall risk management program.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
@@ -17694,7 +17694,7 @@
     },
     {
       "control_id": "F2-2.3",
-      "original_reference": "2.3",
+      "original_reference": "F2-2.3",
       "title": "Training and Awareness",
       "description": "To ensure a minimum baseline of cyber security and remote working risk awareness among remote workers.",
       "full_text": "To ensure a minimum baseline of cyber security and remote working risk awareness among remote workers.\nMapped UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1",
@@ -17763,7 +17763,7 @@
     },
     {
       "control_id": "F2-3.1",
-      "original_reference": "3.1",
+      "original_reference": "F2-3.1",
       "title": "Secure Remote Access Methods",
       "description": "To ensure a secure remote access environment by adopting a Zero Trust approach, implementing and maintaining a robust infrastructure, promoting secure practices, and establishing effective monitoring and auditing mechanisms.",
       "full_text": "To ensure a secure remote access environment by adopting a Zero Trust approach, implementing and maintaining a robust infrastructure, promoting secure practices, and establishing effective monitoring and auditing mechanisms.\nMapped UAE IA v2.1 controls: T3.1.1, T7.2.2, T4.1.1, T5.3.3, T3.2.2, T3.3.2",
@@ -17838,7 +17838,7 @@
     },
     {
       "control_id": "F2-3.2",
-      "original_reference": "3.2",
+      "original_reference": "F2-3.2",
       "title": "Authentication and Authorization",
       "description": "To ensure secure authentication and authorization of remote workers when accessing the entity’s systems.",
       "full_text": "To ensure secure authentication and authorization of remote workers when accessing the entity’s systems.\nMapped UAE IA v2.1 controls: T5.2.1, T5.3.1, T5.1.1, T5.2.3, T5.2.4, T5.3.3",
@@ -17903,7 +17903,7 @@
     },
     {
       "control_id": "F2-3.3",
-      "original_reference": "3.3",
+      "original_reference": "F2-3.3",
       "title": "Remote Access Lifecycle",
       "description": "To establish and maintain robust procedures and controls to effectively manage remote worker access across the entire lifecycle.",
       "full_text": "To establish and maintain robust procedures and controls to effectively manage remote worker access across the entire lifecycle.\nMapped UAE IA v2.1 controls: M4.1.1, T1.2.2, T5.2.4, T5.2.2, M4.3.2, T1.3.6, T1.2.1",
@@ -17971,7 +17971,7 @@
     },
     {
       "control_id": "F2-4.1",
-      "original_reference": "4.1",
+      "original_reference": "F2-4.1",
       "title": "Organization device security",
       "description": "To ensure the appropriate security controls are implemented on entity provided devices.",
       "full_text": "To ensure the appropriate security controls are implemented on entity provided devices.\nMapped UAE IA v2.1 controls: T1.5.1, T3.4.2, T1.2.1, T3.1.1, T3.3.2",
@@ -18025,7 +18025,7 @@
     },
     {
       "control_id": "F2-4.2",
-      "original_reference": "4.2",
+      "original_reference": "F2-4.2",
       "title": "Mobile Device Security",
       "description": "To ensure the appropriate security controls are implemented on mobile devices",
       "full_text": "To ensure the appropriate security controls are implemented on mobile devices\nMapped UAE IA v2.1 controls: T1.5.1, T3.4.2",
@@ -18082,7 +18082,7 @@
     },
     {
       "control_id": "F2-4.3",
-      "original_reference": "4.3",
+      "original_reference": "F2-4.3",
       "title": "Third Party & BYOD Devices",
       "description": "To ensure the appropriate security controls are implemented on third parties and Bring Your Own Device (BYOD) devices.",
       "full_text": "To ensure the appropriate security controls are implemented on third parties and Bring Your Own Device (BYOD) devices.\nMapped UAE IA v2.1 controls: T1.5.1, T5.3.3",
@@ -18139,7 +18139,7 @@
     },
     {
       "control_id": "F2-5.1",
-      "original_reference": "5.1",
+      "original_reference": "F2-5.1",
       "title": "Data Residency & Sovereignty",
       "description": "To protect the residency and sovereignty of organization data during remote work",
       "full_text": "To protect the residency and sovereignty of organization data during remote work\nMapped UAE IA v2.1 controls: T5.3.2, T1.3.3, T1.3.4, T5.3.3",
@@ -18210,7 +18210,7 @@
     },
     {
       "control_id": "F2-5.2",
-      "original_reference": "5.2",
+      "original_reference": "F2-5.2",
       "title": "Secure Data transfer methods",
       "description": "To ensure organization data is protected during transfer.",
       "full_text": "To ensure organization data is protected during transfer.\nMapped UAE IA v2.1 controls: T1.3.4",
@@ -18265,7 +18265,7 @@
     },
     {
       "control_id": "F2-5.3",
-      "original_reference": "5.3",
+      "original_reference": "F2-5.3",
       "title": "Regulatory Compliance",
       "description": "To adhere to all relevant legal, regulatory, and contractual obligations in the context of remote work.",
       "full_text": "To adhere to all relevant legal, regulatory, and contractual obligations in the context of remote work.\nMapped UAE IA v2.1 controls: M5.1.1",
@@ -18311,7 +18311,7 @@
     },
     {
       "control_id": "F3-2.1",
-      "original_reference": "2.1",
+      "original_reference": "F3-2.1",
       "title": "General Requirements",
       "description": "To establish the necessary governance to support the implementation of third-party security requirements.",
       "full_text": "To establish the necessary governance to support the implementation of third-party security requirements.\nMapped UAE IA v2.1 controls: T6.1.1",
@@ -18357,7 +18357,7 @@
     },
     {
       "control_id": "F3-2.2",
-      "original_reference": "2.2",
+      "original_reference": "F3-2.2",
       "title": "Training and Awareness",
       "description": "To ensure all relevant employees are sufficiently aware of third-party cyber security risks and how to mitigate them.",
       "full_text": "To ensure all relevant employees are sufficiently aware of third-party cyber security risks and how to mitigate them.\nMapped UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1",
@@ -18426,7 +18426,7 @@
     },
     {
       "control_id": "F3-3.1",
-      "original_reference": "3.1",
+      "original_reference": "F3-3.1",
       "title": "Identification of Suppliers",
       "description": "To maintain a register of third-party suppliers based on their criticality.",
       "full_text": "To maintain a register of third-party suppliers based on their criticality.\nMapped UAE IA v2.1 controls: T6.2.1",
@@ -18481,7 +18481,7 @@
     },
     {
       "control_id": "F3-3.2",
-      "original_reference": "3.2",
+      "original_reference": "F3-3.2",
       "title": "Classification of Suppliers",
       "description": "To classify the entity’s third party suppliers based on risk they pose to its systems and data.",
       "full_text": "To classify the entity’s third party suppliers based on risk they pose to its systems and data.\nMapped UAE IA v2.1 controls: T6.2.1",
@@ -18527,7 +18527,7 @@
     },
     {
       "control_id": "F3-3.3",
-      "original_reference": "3.3",
+      "original_reference": "F3-3.3",
       "title": "Risk Identification",
       "description": "To identify and assess the cyber security risks associated with the use of third-party suppliers and their products or services throughout the supply chain.",
       "full_text": "To identify and assess the cyber security risks associated with the use of third-party suppliers and their products or services throughout the supply chain.\nMapped UAE IA v2.1 controls: T6.2.1",
@@ -18582,7 +18582,7 @@
     },
     {
       "control_id": "F3-3.4",
-      "original_reference": "3.4",
+      "original_reference": "F3-3.4",
       "title": "Risk Mitigation and Monitoring",
       "description": "To develop and implement strategies to mitigate the risks identified as part of the risk assessment and enable continuous monitoring.",
       "full_text": "To develop and implement strategies to mitigate the risks identified as part of the risk assessment and enable continuous monitoring.\nMapped UAE IA v2.1 controls: T6.2.1",
@@ -18628,7 +18628,7 @@
     },
     {
       "control_id": "F3-4.1",
-      "original_reference": "4.1",
+      "original_reference": "F3-4.1",
       "title": "Supplier Evaluation and Selection Criteria",
       "description": "To establish reliable criteria for assessing the security and selecting third party suppliers.",
       "full_text": "To establish reliable criteria for assessing the security and selecting third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.2",
@@ -18674,7 +18674,7 @@
     },
     {
       "control_id": "F3-4.2",
-      "original_reference": "4.2",
+      "original_reference": "F3-4.2",
       "title": "Supplier Cyber Security Posture Due Diligence and Verification",
       "description": "To verify the cyber security posture of the vendor in accordance with the responses from the Supplier Evaluation.",
       "full_text": "To verify the cyber security posture of the vendor in accordance with the responses from the Supplier Evaluation.\nMapped UAE IA v2.1 controls: T6.2.2",
@@ -18720,7 +18720,7 @@
     },
     {
       "control_id": "F3-5.1",
-      "original_reference": "5.1",
+      "original_reference": "F3-5.1",
       "title": "Requirements Definition",
       "description": "To define and establish clear security requirements for hardware and software procurement.",
       "full_text": "To define and establish clear security requirements for hardware and software procurement.\nMapped UAE IA v2.1 controls: T6.2.3",
@@ -18766,7 +18766,7 @@
     },
     {
       "control_id": "F3-5.2",
-      "original_reference": "5.2",
+      "original_reference": "F3-5.2",
       "title": "Product Evaluation",
       "description": "To ensure thorough evaluation of hardware and software products prior to procurements.",
       "full_text": "To ensure thorough evaluation of hardware and software products prior to procurements.\nMapped UAE IA v2.1 controls: T6.2.3",
@@ -18812,7 +18812,7 @@
     },
     {
       "control_id": "F3-5.3",
-      "original_reference": "5.3",
+      "original_reference": "F3-5.3",
       "title": "Acceptance and Testing",
       "description": "To ensure comprehensive acceptance and testing procedures so that software and hardware meet the organization's security requirements.",
       "full_text": "To ensure comprehensive acceptance and testing procedures so that software and hardware meet the organization's security requirements.\nMapped UAE IA v2.1 controls: T6.2.3",
@@ -18859,7 +18859,7 @@
     },
     {
       "control_id": "F3-5.4",
-      "original_reference": "5.4",
+      "original_reference": "F3-5.4",
       "title": "Upgrades & Maintenance",
       "description": "To ensure timely and secure upgrades and maintenance of software and hardware.",
       "full_text": "To ensure timely and secure upgrades and maintenance of software and hardware.\nMapped UAE IA v2.1 controls: T6.2.3",
@@ -18915,7 +18915,7 @@
     },
     {
       "control_id": "F3-5.5",
-      "original_reference": "5.5",
+      "original_reference": "F3-5.5",
       "title": "End of Life",
       "description": "To protect the entity’s data after software and hardware end of life.",
       "full_text": "To protect the entity’s data after software and hardware end of life.\nMapped UAE IA v2.1 controls: T6.2.3",
@@ -18971,7 +18971,7 @@
     },
     {
       "control_id": "F3-5.6",
-      "original_reference": "5.6",
+      "original_reference": "F3-5.6",
       "title": "Considerations for Internally Developed Software",
       "description": "To establish and maintain cyber security practices for the entity’s internal supply chain.",
       "full_text": "To establish and maintain cyber security practices for the entity’s internal supply chain.\nMapped UAE IA v2.1 controls: T7.2.1, T7.2.2, T7.3.1, T7.3.3, T7.4.2, T7.4.3",
@@ -19036,7 +19036,7 @@
     },
     {
       "control_id": "F3-6.1",
-      "original_reference": "6.1",
+      "original_reference": "F3-6.1",
       "title": "Supplier Cyber-Posture Requirements",
       "description": "To define the minimum cyber security posture requirements for third party suppliers.",
       "full_text": "To define the minimum cyber security posture requirements for third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.4",
@@ -19082,7 +19082,7 @@
     },
     {
       "control_id": "F3-6.2",
-      "original_reference": "6.2",
+      "original_reference": "F3-6.2",
       "title": "Contracts & Agreements",
       "description": "To embed cyber security requirements in contracts with third party suppliers.",
       "full_text": "To embed cyber security requirements in contracts with third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.4",
@@ -19128,7 +19128,7 @@
     },
     {
       "control_id": "F3-6.3",
-      "original_reference": "6.3",
+      "original_reference": "F3-6.3",
       "title": "Compliance Requirements",
       "description": "To ensure third party suppliers are compliant with applicable laws and regulation through contractual obligation.",
       "full_text": "To ensure third party suppliers are compliant with applicable laws and regulation through contractual obligation.\nMapped UAE IA v2.1 controls: T6.2.4",
@@ -19174,7 +19174,7 @@
     },
     {
       "control_id": "F3-7.1",
-      "original_reference": "7.1",
+      "original_reference": "F3-7.1",
       "title": "Continuous Monitoring",
       "description": "To ensure and verify that third party suppliers adhere to contractual requirements.",
       "full_text": "To ensure and verify that third party suppliers adhere to contractual requirements.\nMapped UAE IA v2.1 controls: T6.2.5",
@@ -19229,7 +19229,7 @@
     },
     {
       "control_id": "F3-7.2",
-      "original_reference": "7.2",
+      "original_reference": "F3-7.2",
       "title": "Logging, Auditing and Accountability",
       "description": "To establish clear accountability through tamper-proof and auditable trails.",
       "full_text": "To establish clear accountability through tamper-proof and auditable trails.\nMapped UAE IA v2.1 controls: T6.2.5",
@@ -19275,7 +19275,7 @@
     },
     {
       "control_id": "F3-7.3",
-      "original_reference": "7.3",
+      "original_reference": "F3-7.3",
       "title": "High Risk Supplier Considerations",
       "description": "To ensure a higher level of cyber security for high risk third party suppliers.",
       "full_text": "To ensure a higher level of cyber security for high risk third party suppliers.\nMapped UAE IA v2.1 controls: T6.2.5",
@@ -19330,7 +19330,7 @@
     },
     {
       "control_id": "F3-8.1",
-      "original_reference": "8.1",
+      "original_reference": "F3-8.1",
       "title": "Incident Response",
       "description": "To ensure the entity is well prepared to deal with and respond to cyber security incidents within its supply chain.",
       "full_text": "To ensure the entity is well prepared to deal with and respond to cyber security incidents within its supply chain.\nMapped UAE IA v2.1 controls: T8.1.1, T8.1.2, T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6",
@@ -19408,7 +19408,7 @@
     },
     {
       "control_id": "F3-8.2",
-      "original_reference": "8.2",
+      "original_reference": "F3-8.2",
       "title": "Alternate Suppliers",
       "description": "To strengthen supply chain resilience.",
       "full_text": "To strengthen supply chain resilience.\nMapped UAE IA v2.1 controls: T6.2.1",
@@ -19463,7 +19463,7 @@
     },
     {
       "control_id": "F3-8.3",
-      "original_reference": "8.3",
+      "original_reference": "F3-8.3",
       "title": "Business Continuity Management & Disaster Recovery",
       "description": "To ensure third party supplier risks are included in the entity’s resilience planning process.",
       "full_text": "To ensure third party supplier risks are included in the entity’s resilience planning process.\nMapped UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1",
@@ -19522,7 +19522,7 @@
     },
     {
       "control_id": "F3-8.4",
-      "original_reference": "8.4",
+      "original_reference": "F3-8.4",
       "title": "IR/BCM/DR Collaboration",
       "description": "To promote and require, as necessary, cyber security collaboration across the supply chain.",
       "full_text": "To promote and require, as necessary, cyber security collaboration across the supply chain.\nMapped UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1",
@@ -19581,7 +19581,7 @@
     },
     {
       "control_id": "F4-2.1",
-      "original_reference": "2.1",
+      "original_reference": "F4-2.1",
       "title": "General Requirements",
       "description": "To establish leadership and governance to initiate and support the implementation of data exchange security requirements.",
       "full_text": "To establish leadership and governance to initiate and support the implementation of data exchange security requirements.\nMapped UAE IA v2.1 controls: M1.1.2, M1.1.3, M1.2.3, M1.3.1",
@@ -19651,7 +19651,7 @@
     },
     {
       "control_id": "F4-2.2",
-      "original_reference": "2.2",
+      "original_reference": "F4-2.2",
       "title": "Risk Management",
       "description": "To proactively identify and remediate data exchange security and privacy risks in a timely manner.",
       "full_text": "To proactively identify and remediate data exchange security and privacy risks in a timely manner.\nMapped UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2",
@@ -19724,7 +19724,7 @@
     },
     {
       "control_id": "F4-2.3",
-      "original_reference": "2.3",
+      "original_reference": "F4-2.3",
       "title": "Compliance",
       "description": "To avoid breaches of any information security legal, statutory, regulatory obligations",
       "full_text": "To avoid breaches of any information security legal, statutory, regulatory obligations\nMapped UAE IA v2.1 controls: M5.1.1, M5.2.1",
@@ -19772,7 +19772,7 @@
     },
     {
       "control_id": "F4-2.4",
-      "original_reference": "2.4",
+      "original_reference": "F4-2.4",
       "title": "Data Classification and Handling",
       "description": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.",
       "full_text": "To ensure data classification and protection from unauthorized use, access, loss, destruction, and falsification.\nMapped UAE IA v2.1 controls: T1.3.1, T1.3.2, T1.3.3",
@@ -19831,7 +19831,7 @@
     },
     {
       "control_id": "F4-2.5",
-      "original_reference": "2.5",
+      "original_reference": "F4-2.5",
       "title": "Data Privacy Considerations for Data Exchange",
       "description": "To safeguard individual privacy and promote responsible data exchange.",
       "full_text": "To safeguard individual privacy and promote responsible data exchange.\nMapped UAE IA v2.1 controls: M5.1.4",
@@ -19886,7 +19886,7 @@
     },
     {
       "control_id": "F4-3.1",
-      "original_reference": "3.1",
+      "original_reference": "F4-3.1",
       "title": "Authentication",
       "description": "To prevent unauthorized access and alteration of organizational resources, applications, and data while using data exchange services",
       "full_text": "To prevent unauthorized access and alteration of organizational resources, applications, and data while using data exchange services\nMapped UAE IA v2.1 controls: T5.2.1, T5.3.1",
@@ -19943,7 +19943,7 @@
     },
     {
       "control_id": "F4-3.2",
-      "original_reference": "3.2",
+      "original_reference": "F4-3.2",
       "title": "Authorization",
       "description": "To minimize risks associated with the processes used to request, approve, grant, manage, and audit access.",
       "full_text": "To minimize risks associated with the processes used to request, approve, grant, manage, and audit access.\nMapped UAE IA v2.1 controls: T5.2.2, T5.2.3, T5.2.4, T5.3.2",
@@ -20004,7 +20004,7 @@
     },
     {
       "control_id": "F4-3.3",
-      "original_reference": "3.3",
+      "original_reference": "F4-3.3",
       "title": "Accounting",
       "description": "To track and record user activities and resource access within the data exchange system.",
       "full_text": "To track and record user activities and resource access within the data exchange system.\nMapped UAE IA v2.1 controls: T3.2.2",
@@ -20051,7 +20051,7 @@
     },
     {
       "control_id": "F4-4.1",
-      "original_reference": "4.1",
+      "original_reference": "F4-4.1",
       "title": "Encryption",
       "description": "To ensure protection of sensitive data transmitting through data exchange mechanisms.",
       "full_text": "To ensure protection of sensitive data transmitting through data exchange mechanisms.\nMapped UAE IA v2.1 controls: T3.4.2",
@@ -20106,7 +20106,7 @@
     },
     {
       "control_id": "F4-5.1",
-      "original_reference": "5.1",
+      "original_reference": "F4-5.1",
       "title": "Redundant Network Infrastructure",
       "description": "To ensure high availability and minimize potential service disruption",
       "full_text": "To ensure high availability and minimize potential service disruption\nMapped UAE IA v2.1 controls: T4.1.1, T4.1.2",
@@ -20163,7 +20163,7 @@
     },
     {
       "control_id": "F4-5.2",
-      "original_reference": "5.2",
+      "original_reference": "F4-5.2",
       "title": "Firewall Protection",
       "description": "To control and monitor network traffic to protect against unauthorized access and cyber threats.",
       "full_text": "To control and monitor network traffic to protect against unauthorized access and cyber threats.\nMapped UAE IA v2.1 controls: T4.1.1, T4.1.2",
@@ -20211,7 +20211,7 @@
     },
     {
       "control_id": "F4-5.3",
-      "original_reference": "5.3",
+      "original_reference": "F4-5.3",
       "title": "VPN Access",
       "description": "To minimize the risk of unauthorized access from external networks",
       "full_text": "To minimize the risk of unauthorized access from external networks\nMapped UAE IA v2.1 controls: T5.3.3",
@@ -20257,7 +20257,7 @@
     },
     {
       "control_id": "F4-5.4",
-      "original_reference": "5.4",
+      "original_reference": "F4-5.4",
       "title": "DMZ Configurations",
       "description": "To minimize the risk of unauthorized access and protection of sensitive data",
       "full_text": "To minimize the risk of unauthorized access and protection of sensitive data\nMapped UAE IA v2.1 controls: T4.1.3",
@@ -20312,7 +20312,7 @@
     },
     {
       "control_id": "F4-5.5",
-      "original_reference": "5.5",
+      "original_reference": "F4-5.5",
       "title": "Secure Communication Protocols",
       "description": "To ensure use of secure and robust communication protocols, safeguarding sensitive information from interception, tampering and unauthorized access.",
       "full_text": "To ensure use of secure and robust communication protocols, safeguarding sensitive information from interception, tampering and unauthorized access.\nMapped UAE IA v2.1 controls: T1.3.4, T4.1.1",
@@ -20360,7 +20360,7 @@
     },
     {
       "control_id": "F4-5.6",
-      "original_reference": "5.6",
+      "original_reference": "F4-5.6",
       "title": "Intrusion Detection and Prevention",
       "description": "To detect and prevent intrusions by unauthorized party during data exchanges.",
       "full_text": "To detect and prevent intrusions by unauthorized party during data exchanges.\nMapped UAE IA v2.1 controls: T4.1.1",
@@ -20416,7 +20416,7 @@
     },
     {
       "control_id": "F4-5.7",
-      "original_reference": "5.7",
+      "original_reference": "F4-5.7",
       "title": "Data Loss Prevention",
       "description": "To detect and prevent unauthorized data transmission",
       "full_text": "To detect and prevent unauthorized data transmission\nMapped UAE IA v2.1 controls: T1.3.4",
@@ -20472,7 +20472,7 @@
     },
     {
       "control_id": "F4-6.1",
-      "original_reference": "6.1",
+      "original_reference": "F4-6.1",
       "title": "System Hardening",
       "description": "To ensure the correct and secure operation of data exchange systems.",
       "full_text": "To ensure the correct and secure operation of data exchange systems.\nMapped UAE IA v2.1 controls: T3.1.1",
@@ -20527,7 +20527,7 @@
     },
     {
       "control_id": "F4-6.2",
-      "original_reference": "6.2",
+      "original_reference": "F4-6.2",
       "title": "Secure Configuration Reviews",
       "description": "To ensure the correct and secure operation of data exchange systems.",
       "full_text": "To ensure the correct and secure operation of data exchange systems.\nMapped UAE IA v2.1 controls: T3.1.1",
@@ -20574,7 +20574,7 @@
     },
     {
       "control_id": "F4-6.3",
-      "original_reference": "6.3",
+      "original_reference": "F4-6.3",
       "title": "Security Assessments",
       "description": "To reduce and address the vulnerabilities in data exchange systems.",
       "full_text": "To reduce and address the vulnerabilities in data exchange systems.\nMapped UAE IA v2.1 controls: T3.3.2",
@@ -20620,7 +20620,7 @@
     },
     {
       "control_id": "F4-7.1",
-      "original_reference": "7.1",
+      "original_reference": "F4-7.1",
       "title": "Audit Logging",
       "description": "To track and record activities and events in the data exchange systems.",
       "full_text": "To track and record activities and events in the data exchange systems.\nMapped UAE IA v2.1 controls: T3.2.2",
@@ -20675,7 +20675,7 @@
     },
     {
       "control_id": "F4-7.2",
-      "original_reference": "7.2",
+      "original_reference": "F4-7.2",
       "title": "Monitoring and Analysis",
       "description": "To identify, detect, and remediate inappropriate access, use of data exchange systems.",
       "full_text": "To identify, detect, and remediate inappropriate access, use of data exchange systems.\nMapped UAE IA v2.1 controls: T3.2.3",
