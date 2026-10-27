@@ -48,7 +48,8 @@ How a row lands in the seeder's fields (grc/seed_frameworks.py reads only the ke
   priority            "medium": the annex carries no priority (priority_tier is null)
   assessment_criteria each enumerated obligation as one sentence (lead-in + bullet); none where the control enumerates fewer
                       than two, and "take the following into account" bullets are considerations, not criteria
-  ai_notes            applicability, source page and, as the last sentence, the UAE IA v2.1 controls the row maps to
+  ai_notes            applicability, source page (for the AI and IoT tables, which print no Applicability column, a sentence saying
+                      the applicability is this library's) and, as the last sentence, the UAE IA v2.1 controls the row maps to
 Keys the seeder does not read (priority_tier, applicability, annex, uae_ia_controls, statements, obligations, pdf_page) stay
 in the JSON for reviewers and the crosswalk tools.
 
@@ -583,8 +584,11 @@ def applicability_of(policy: Dict[str, Any], c: Dict[str, Any]) -> str:
 def notes_of(policy: Dict[str, Any], c: Dict[str, Any], printed: int) -> str:
     ids = mapped_ids(c)
     na = next((st["na"] for st in c["statements"] if st["na"]), "NA")
+    # Tables 11 and 12 print no Applicability column: say so, so the library's own wording is not read as the standard's
+    own = ("" if policy["applicability"] else
+           " The annex table prints no Applicability column; the applicability stated above is set by this library.")
     return (f"Applicability: {applicability_of(policy, c)}. Source: UAE IA v2.1 (November 2025), Annex E, Table {policy['table']} "
-            f"({policy['heading']}), printed page {printed}. Maps to UAE IA v2.1 controls: "
+            f"({policy['heading']}), printed page {printed}.{own} Maps to UAE IA v2.1 controls: "
             + (", ".join(ids) if ids else f"none (the annex prints {na})") + ".")
 
 

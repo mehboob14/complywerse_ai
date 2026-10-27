@@ -40,7 +40,7 @@ STOP = {"the", "a", "an", "of", "and", "or", "for", "to", "in", "on", "with", "b
 PER_ANNEX = {"F1": (31, {1: 12, 2: 8, 3: 1}), "F2": (25, {1: 2, 2: 7, 3: 3}), "F3": (37, {1: 12, 2: 11, 3: 1}), "F4": (36, {1: 7, 2: 13, 3: 1})}
 EVENT_DRIVEN = {"on-change": {"Key generation ceremony record", "Key distribution and receipt records", "Key destruction records",
                               "Lost and stolen mobile device records", "Remote work abroad approvals",
-                              "Hardware receipt inspection records", "Supplier maintenance session records",
+                              "Delivery acceptance check records", "Supplier maintenance session records",
                               "Retired hardware data erasure records"},
                 "continuous": {"Remote access session logs", "Data exchange user activity logs", "Intrusion alert handling records",
                                "Data loss prevention alert records", "Data exchange configuration drift report"}}

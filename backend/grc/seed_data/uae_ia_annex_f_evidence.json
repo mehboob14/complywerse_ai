@@ -15,7 +15,7 @@
       {"name": "Encryption legal and regulatory requirements map", "description": "Map of each law, regulation or standard that applies to the entity's use of encryption to the feature of the cryptographic solution that meets it, with the owner and the date last checked.", "filetype": "XLSX"}
     ],
     "F1-2.4": [
-      {"name": "Encryption requirements by classification level", "description": "Table that states, for each classification level, whether data must be encrypted at rest and in motion, the minimum algorithm and key length, and who may approve an exception.", "filetype": "XLSX"}
+      {"name": "Encryption requirements by classification level", "description": "Table that states, for each classification level, the encryption the entity applies to data at rest and in motion, the algorithm and key length it uses, and who may approve an exception.", "filetype": "XLSX"}
     ],
     "F1-3.1": [
       {"name": "Data at rest encryption coverage register", "description": "Register of the places that hold classified data, such as file shares, databases, backups and endpoints, with the encryption method in use and whether each place is covered.", "filetype": "XLSX"},
@@ -23,10 +23,10 @@
       {"name": "Encryption software patch status report", "description": "Report of the version and patch level of disk, database and file encryption tools and key management systems, with the known vulnerabilities still open and the date each will be fixed.", "filetype": "CSV"}
     ],
     "F1-3.2": [
-      {"name": "Laptop and desktop encryption spot checks", "description": "Results of checks on sampled laptops and desktops confirming that full-disk encryption is on, that the device cannot start without pre-boot authentication and that the recovery key is escrowed.", "filetype": "XLSX"}
+      {"name": "Laptop and desktop encryption spot checks", "description": "Results of checks on sampled laptops and desktops showing that disk encryption is on, how the device is protected before the system starts and where the recovery key is held.", "filetype": "XLSX"}
     ],
     "F1-3.3": [
-      {"name": "Lost and stolen mobile device records", "description": "Records of each lost or stolen smartphone or tablet, showing the date it was raised, whether the device was encrypted, the lock or wipe action taken and when it was confirmed.", "filetype": "XLSX", "collection_frequency": "on-change"}
+      {"name": "Lost and stolen mobile device records", "description": "Records of each lost or stolen smartphone or tablet, or a nil return for the period, showing the date it was raised, whether the device was encrypted, the lock or wipe action taken and when it was confirmed.", "filetype": "XLSX", "collection_frequency": "on-change"}
     ],
     "F1-3.4": [
       {"name": "Unencrypted portable media block test", "description": "Test results showing that writing classified data to an unencrypted portable drive is blocked or forces encryption, with the date, the tester and the device used.", "filetype": "PDF"}
@@ -42,7 +42,7 @@
       {"name": "Approved secure transport protocols", "description": "Document naming the protocols and versions allowed for web, file transfer, remote administration and wireless traffic that carries non-open data, and the older ones that are banned, with its owner and version.", "filetype": "PDF"}
     ],
     "F1-4.2": [
-      {"name": "Mail transport encryption settings", "description": "Mail gateway and server settings showing that encrypted transport is required with other organizations, and what happens when the receiving server cannot support it.", "filetype": "PNG"},
+      {"name": "Mail transport encryption settings", "description": "Mail gateway and server settings showing how encrypted transport is applied to mail exchanged with other organizations, and what happens when the receiving server cannot support it.", "filetype": "PNG"},
       {"name": "Email encryption rule settings", "description": "Settings of the rules that encrypt, or require the sender to encrypt, messages and attachments that carry non-open data, with a sample of messages that triggered them.", "filetype": "PNG"}
     ],
     "F1-4.3": [
@@ -50,11 +50,11 @@
     ],
     "F1-5.1": [
       {"name": "Cryptographic key inventory", "description": "Inventory of the cryptographic keys in use, with their purpose, algorithm, key length, owner, storage location and creation and expiry dates.", "filetype": "XLSX"},
-      {"name": "Key custodian appointments", "description": "Signed appointments naming the people who may generate, use, back up and destroy keys, with the separation between these roles and each custodian's acceptance.", "filetype": "PDF"}
+      {"name": "Key custodian appointments", "description": "Signed appointments naming the people who may generate, use, back up and destroy keys, with the separation between these roles, each custodian's acceptance and, where a hardware security module is used, the administrator roles and the quorum needed for key operations.", "filetype": "PDF"}
     ],
     "F1-5.2": [
       {"name": "Key generation settings", "description": "Settings of the hardware security module or key service that creates keys, showing the approved algorithms and key lengths, the random number source and the roles allowed to generate keys.", "filetype": "PNG"},
-      {"name": "Key generation ceremony record", "description": "Record of the creation of a high-value key, showing the date, the approved tool or module used, the people present and the checks made, signed by the witnesses.", "filetype": "PDF", "collection_frequency": "on-change"}
+      {"name": "Key generation ceremony record", "description": "Record of the creation of a high-value key, such as a master or root key, showing the date, the approved tool or module used, who requested and approved it and, where a ceremony is held, who attended and the checks made.", "filetype": "PDF", "collection_frequency": "on-change"}
     ],
     "F1-5.3": [
       {"name": "Key distribution and receipt records", "description": "Records of each key or key component handed over, showing the sender, the receiver, the method used, the date and the receiver's confirmation of receipt.", "filetype": "XLSX", "collection_frequency": "on-change"},
@@ -64,10 +64,10 @@
       {"name": "Key store access review results", "description": "Results of the review of who can read, export or administer each key store, confirmed by the key owner, with access removed where it is no longer needed.", "filetype": "XLSX"}
     ],
     "F1-5.5": [
-      {"name": "Key backup and escrow arrangements", "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and the dual control needed to do so.", "filetype": "PDF"}
+      {"name": "Key backup and escrow arrangements", "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and any dual control or split knowledge applied to retrieval.", "filetype": "PDF"}
     ],
     "F1-5.6": [
-      {"name": "Key destruction records", "description": "Records of keys destroyed, showing the key identifier, the reason, the method, the date due and the date done, and the person who carried out and witnessed the destruction.", "filetype": "PDF", "collection_frequency": "on-change"}
+      {"name": "Key destruction records", "description": "Records of keys destroyed, showing the key identifier, the reason, the method, the date due and the date done, and who carried out the destruction and, where the entity's rules ask for it, who witnessed it.", "filetype": "PDF", "collection_frequency": "on-change"}
     ],
     "F1-5.7": [
       {"name": "Key archive register", "description": "Register of keys moved to the archive, with the reason each is kept, such as reading old encrypted data, its archive location, retention period and who approved access.", "filetype": "XLSX"}
@@ -87,31 +87,31 @@
     ],
     "F2-2.3": [
       {"name": "Remote worker awareness material", "description": "Awareness material for remote workers covering safe use of home and public networks, device handling, phishing, protecting data away from the office and how to raise an incident.", "filetype": "PDF"},
-      {"name": "Remote worker baseline completion report", "description": "Report showing each remote worker completed the baseline awareness before remote access was granted, with follow-up on anyone who has not.", "filetype": "XLSX"}
+      {"name": "Remote worker baseline completion report", "description": "Report showing each remote worker completed the baseline awareness, with the completion date, and the follow-up on anyone who has not.", "filetype": "XLSX"}
     ],
     "F2-3.1": [
       {"name": "Zero Trust remote access model", "description": "Document showing how remote access applies Zero Trust: every user and device is verified on each request, access is limited to named applications, and trust is re-evaluated during the session.", "filetype": "PDF"},
-      {"name": "Remote device posture check settings", "description": "Settings showing a device must be managed, encrypted, patched and protected by endpoint security tools before it reaches the entity's applications, and is blocked or limited otherwise.", "filetype": "PNG"},
+      {"name": "Remote device posture check settings", "description": "Settings that check the state of a device before it reaches the entity's applications, such as whether it is managed, encrypted, patched and protected by endpoint security tools, and block or limit it if a check fails.", "filetype": "PNG"},
       {"name": "Remote access session logs", "description": "Extracts of the remote access gateway logs showing, for each session, the user, device, time, source, applications reached and result, kept for the period the entity has set.", "filetype": "LOG", "collection_frequency": "continuous"}
     ],
     "F2-3.2": [
       {"name": "Remote access entitlement list", "description": "Export of the accounts allowed to connect remotely, with the systems each can reach, the approver and the date approved.", "filetype": "CSV"},
-      {"name": "Remote multi-factor enforcement test", "description": "Test showing that a remote connection attempt without the second factor is refused for ordinary users, with the date, the tester and the systems tested.", "filetype": "PDF"}
+      {"name": "Remote multi-factor enforcement test", "description": "Test showing that a remote connection attempt without the second factor is refused, for each type of user allowed to connect remotely, with the date, the tester and the systems tested.", "filetype": "PDF"}
     ],
     "F2-3.3": [
-      {"name": "Remote worker onboarding checklists", "description": "Completed checklists for sampled new remote workers showing screening, equipment issue, acceptance of the rules, induction and access approval were completed in that order, with dates.", "filetype": "PDF"},
+      {"name": "Remote worker onboarding checklists", "description": "Completed checklists for sampled new remote workers showing screening, equipment issue, acceptance of the rules, induction and access approval were completed, with the dates.", "filetype": "PDF"},
       {"name": "Remote worker offboarding checklists", "description": "Completed checklists for sampled leavers showing remote access was removed, equipment was returned and work data was deleted from any personal device, with the dates.", "filetype": "PDF"}
     ],
     "F2-4.1": [
       {"name": "Off-network device compliance report", "description": "Report showing that entity provided devices used outside the office receive updates and security tool definitions while off the corporate network, and listing those that are out of date.", "filetype": "CSV"}
     ],
     "F2-4.2": [
-      {"name": "Mobile device compliance rule settings", "description": "Settings in the mobile device management tool that block or quarantine devices that are rooted or jailbroken, run an unsupported system version or have no screen lock.", "filetype": "PNG"},
+      {"name": "Mobile device compliance rule settings", "description": "Settings in the mobile device management tool that block or quarantine non-compliant devices, such as those that are rooted or jailbroken, run an unsupported system version or have no screen lock.", "filetype": "PNG"},
       {"name": "Approved mobile application list", "description": "List of the applications approved for managed mobile devices, with the owner and the date approved, and the application types that are blocked.", "filetype": "XLSX"}
     ],
     "F2-4.3": [
-      {"name": "Signed BYOD agreements", "description": "Agreements signed by users of personal devices accepting that the entity may apply security controls, keep work data apart from personal data and wipe the work data if the device is lost or the user leaves.", "filetype": "PDF"},
-      {"name": "Third-party device access restrictions", "description": "Settings that limit third-party devices to a virtual desktop or browser-only access to named applications, with downloads and local storage turned off.", "filetype": "PNG"}
+      {"name": "Signed BYOD agreements", "description": "Agreements signed by users of personal devices accepting that the entity may apply security controls to them, such as keeping work data apart from personal data and wiping the work data if the device is lost or the user leaves.", "filetype": "PDF"},
+      {"name": "Third-party device access restrictions", "description": "Settings that limit what third-party devices can reach, such as a virtual desktop or browser-only access to named applications, with downloads and local storage turned off.", "filetype": "PNG"}
     ],
     "F2-5.1": [
       {"name": "Remote work data location rules", "description": "Rules stating in which countries, and on which systems and devices, organization data may be accessed, stored and handled during remote work, and whether working from abroad is allowed.", "filetype": "PDF"},
@@ -147,7 +147,7 @@
       {"name": "Supplier risk status report", "description": "Periodic report to management on the risk position of critical suppliers, covering changes in rating, open findings, incidents and the progress of the mitigation agreed.", "filetype": "PDF"}
     ],
     "F3-4.1": [
-      {"name": "Supplier selection scoring sheet", "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with the minimum security score a supplier must reach and the scores of sampled bids.", "filetype": "XLSX"}
+      {"name": "Supplier selection scoring sheet", "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with any minimum security score the entity sets and the scores of sampled bids.", "filetype": "XLSX"}
     ],
     "F3-4.2": [
       {"name": "Supplier response verification records", "description": "Records showing a supplier's answers were checked against proof, such as independent audit reports, test results or a visit, with the differences found and how they were resolved.", "filetype": "PDF"}
@@ -159,7 +159,7 @@
       {"name": "Vendor product security documentation", "description": "Security documents gathered for sampled products before purchase, such as the vendor's security statement, independent test results and the list of software components, with the evaluator's notes.", "filetype": "PDF"}
     ],
     "F3-5.3": [
-      {"name": "Hardware receipt inspection records", "description": "Records of the checks made on delivered hardware before use, such as packaging seals, serial numbers against the order, firmware version and factory accounts.", "filetype": "XLSX", "collection_frequency": "on-change"}
+      {"name": "Delivery acceptance check records", "description": "Records of the acceptance checks made on delivered hardware and software before use, such as packaging seals, serial numbers against the order, firmware or software version, factory accounts and security tests.", "filetype": "XLSX", "collection_frequency": "on-change"}
     ],
     "F3-5.4": [
       {"name": "Supplier maintenance and support terms", "description": "Extracts of the terms with suppliers for patches, upgrades and maintenance, showing the response times, the security update commitment and the conditions for remote maintenance.", "filetype": "PDF"},
@@ -171,7 +171,7 @@
     ],
     "F3-5.6": [
       {"name": "Software component inventory", "description": "Inventory of the open-source and third-party components used in the entity's own applications, with their versions, source and any known vulnerabilities.", "filetype": "XLSX"},
-      {"name": "Build and release pipeline controls", "description": "Settings of the build and release pipeline showing that builds are produced from approved source only, need approval before release and keep their secrets in a protected store.", "filetype": "PNG"}
+      {"name": "Build and release pipeline controls", "description": "Settings of the build and release pipeline, such as builds produced from approved source only, approval needed before release and secrets kept in a protected store.", "filetype": "PNG"}
     ],
     "F3-6.1": [
       {"name": "Minimum supplier security requirements", "description": "Document that sets the minimum security posture each supplier must meet, by supplier tier, such as access control, encryption, incident notification and audit rights.", "filetype": "PDF"}
@@ -180,14 +180,14 @@
       {"name": "Supplier contract clause coverage review", "description": "Review of the contracts with critical suppliers against the required security clauses, showing which clauses are missing and the amendment planned.", "filetype": "XLSX"}
     ],
     "F3-6.3": [
-      {"name": "Supplier legal compliance statements", "description": "Statements signed by suppliers confirming they comply with the laws and regulations that apply to the service, with any exception explained.", "filetype": "PDF"}
+      {"name": "Supplier legal compliance statements", "description": "Statements signed by suppliers confirming they comply with the laws and regulations that apply to the service, as their obligation under the entity's terms, with any exception explained.", "filetype": "PDF"}
     ],
     "F3-7.1": [
       {"name": "Supplier performance review minutes", "description": "Minutes of periodic meetings with critical suppliers on service levels, security findings and incidents, with the actions agreed and their owners.", "filetype": "PDF"},
       {"name": "Supplier non-compliance tracker", "description": "Tracker of supplier failures to meet the agreed security terms, with the action requested, the dates raised and closed, and any escalation.", "filetype": "XLSX"}
     ],
     "F3-7.2": [
-      {"name": "Supplier log tamper protection settings", "description": "Settings showing the logs of supplier activity are kept where the supplier cannot change or delete them, with integrity protection and the retention period.", "filetype": "PNG"}
+      {"name": "Supplier activity record tamper protection settings", "description": "Settings showing the records of supplier activity are kept where the supplier cannot change or delete them, with integrity protection and the retention period.", "filetype": "PNG"}
     ],
     "F3-7.3": [
       {"name": "Enhanced controls for high-risk suppliers", "description": "Document setting the extra controls required of suppliers rated high risk, such as more frequent checks, tighter access and on-site audits, and the schedule applied.", "filetype": "PDF"},
@@ -236,7 +236,7 @@
     ],
     "F4-3.2": [
       {"name": "Data exchange access approval records", "description": "Sampled requests for access to data exchange services, showing the request, the data owner's approval, the access granted and the date.", "filetype": "XLSX"},
-      {"name": "Data exchange access review results", "description": "Results of the periodic review of who and what can use the data exchange services, confirmed by the data owner, with the access removed or changed.", "filetype": "XLSX"}
+      {"name": "Data exchange access review results", "description": "Extract of the completed access rights reviews covering the data exchange services, confirmed by the data owner, with the access removed or changed.", "filetype": "XLSX"}
     ],
     "F4-3.3": [
       {"name": "Data exchange user activity logs", "description": "Extracts of logs showing, for sampled transfers, who sent, received, opened or downloaded the data, from where and when.", "filetype": "LOG", "collection_frequency": "continuous"}
@@ -257,22 +257,22 @@
     ],
     "F4-5.4": [
       {"name": "DMZ architecture diagram", "description": "Diagram of the DMZ showing the systems placed in it and the firewall rules between the internet, the DMZ and the internal network.", "filetype": "PNG"},
-      {"name": "DMZ stored data check", "description": "Check of the hosts in the DMZ showing no sensitive data is stored on them, with the method used, the date and the findings removed.", "filetype": "PDF"}
+      {"name": "DMZ stored data check", "description": "Check of the hosts in the DMZ for sensitive data stored on them, with the method used, the date, the findings and what was removed or protected.", "filetype": "PDF"}
     ],
     "F4-5.5": [
       {"name": "Exchange endpoint certificate inventory", "description": "Inventory of the certificates securing the data exchange endpoints, with the issuer, expiry date, key size and owner, and the alerts set for coming expiry.", "filetype": "XLSX"}
     ],
     "F4-5.6": [
       {"name": "Intrusion prevention sensor settings", "description": "Settings of the sensors that watch data exchange traffic, showing the segments covered, whether they block or only alert, and the date signatures were last updated.", "filetype": "PNG"},
-      {"name": "Intrusion alert handling records", "description": "Sample alerts raised on data exchange traffic, with how each was triaged, escalated or closed and the time taken.", "filetype": "XLSX", "collection_frequency": "continuous"}
+      {"name": "Intrusion alert handling records", "description": "Sample alerts raised on data exchange traffic, with how each was triaged, escalated or closed and the time taken.", "filetype": "CSV", "collection_frequency": "continuous"}
     ],
     "F4-5.7": [
-      {"name": "Data loss prevention rule settings", "description": "Settings of the rules that detect and block classified or personal data leaving through email, web upload and file transfer, showing the channels covered.", "filetype": "PNG"},
-      {"name": "Data loss prevention alert records", "description": "Sample alerts and blocked transmissions, with how each was investigated and closed and the cases found to be false alarms.", "filetype": "XLSX", "collection_frequency": "continuous"}
+      {"name": "Data loss prevention rule settings", "description": "Extract of the data leak prevention configuration showing the rules that detect and block classified or personal data leaving through email, web upload and file transfer, with the channels covered.", "filetype": "PNG"},
+      {"name": "Data loss prevention alert records", "description": "Extract of the leakage monitoring and blocked transmission records: sample alerts and blocked transmissions, with how each was investigated and closed and the cases found to be false alarms.", "filetype": "CSV", "collection_frequency": "continuous"}
     ],
     "F4-6.1": [
       {"name": "Data exchange system inventory", "description": "Inventory of the systems that make up the data exchange service, such as gateways, transfer servers and message brokers, with the owner, version and security baseline applied.", "filetype": "XLSX"},
-      {"name": "Completed hardening checklists", "description": "Checklists completed for sampled data exchange systems showing default accounts removed and unneeded services and ports closed, with the date and the person who did it.", "filetype": "PDF"}
+      {"name": "Completed hardening checklists", "description": "Checklists completed for sampled data exchange systems showing the hardening steps were done, such as default accounts removed and unneeded services and ports closed, with the date and the person who did it.", "filetype": "PDF"}
     ],
     "F4-6.2": [
       {"name": "Data exchange configuration drift report", "description": "Report of changes made to data exchange system configurations outside change control, with the investigation made and the fix applied.", "filetype": "CSV", "collection_frequency": "continuous"}
@@ -281,8 +281,8 @@
       {"name": "Data exchange penetration test report", "description": "Report of a penetration test of the data exchange systems and their interfaces, with the date, scope, findings by severity and the status of each fix.", "filetype": "PDF"}
     ],
     "F4-7.1": [
-      {"name": "Data exchange logging coverage matrix", "description": "Matrix of the data exchange components against the events each one logs, such as authentication, transfers, configuration changes and errors, showing all send logs to central storage.", "filetype": "XLSX"},
-      {"name": "Log forwarding and retention settings", "description": "Settings showing the logs of each data exchange component are forwarded to a central store that administrators of the system cannot alter, and the retention period.", "filetype": "PNG"}
+      {"name": "Data exchange event recording coverage matrix", "description": "Matrix of the data exchange components against the events each one records, such as authentication, transfers, system changes and errors, showing all send their event records to central storage.", "filetype": "XLSX"},
+      {"name": "Event forwarding and retention settings", "description": "Settings showing the event records of each data exchange component are forwarded to a central store, who can change or delete them there, and the retention period.", "filetype": "PNG"}
     ],
     "F4-7.2": [
       {"name": "Data exchange anomaly detection rules", "description": "Settings of the rules that flag unusual exchange activity, such as large or off-hours transfers, new recipients and repeated failures.", "filetype": "PNG"},

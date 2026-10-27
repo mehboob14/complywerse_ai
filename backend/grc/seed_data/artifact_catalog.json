@@ -12497,11 +12497,11 @@
       {
         "artifact_id": "UAEIA-139",
         "stage": "Stage 5: Operation & Monitoring",
-        "name": "CSP Risk and Assurance Action Register",
+        "name": "CSP Risk Treatment and Independent Assessment Register",
         "type": "Register",
         "control_ref": "E1-2.1.4",
         "mandatory": false,
-        "description": "Register of the mitigations agreed for the risks found when onboarding a cloud service provider or when it relies on other providers, and of the actions raised for gaps in the provider's independent assurance, each with owner and status.",
+        "description": "Register of the mitigations agreed for the risks found when onboarding a cloud service provider or when it relies on other providers, each with owner and status, and of the independent third-party tests and assessments performed for each service in use, with the assessor, date, scope and next due date.",
         "format": "XLSX",
         "owner": "Vendor Risk Manager",
         "also_controls": [
@@ -12509,7 +12509,7 @@
         ],
         "evidence": [
           "CSP risk treatment record",
-          "Assurance gap follow-up actions"
+          "CSP independent assessment register"
         ]
       },
       {
@@ -13555,7 +13555,7 @@
         "type": "Matrix",
         "control_ref": "F1-2.4",
         "mandatory": false,
-        "description": "Matrix stating, for each classification level, whether data is encrypted at rest and in motion, the minimum algorithm and key length, and who may approve an exception.",
+        "description": "Matrix stating, for each classification level, whether data is encrypted at rest and in motion, the algorithm and key length used, and who may approve an exception.",
         "format": "XLSX",
         "owner": "Security Architect",
         "evidence": [
@@ -13633,7 +13633,7 @@
         "type": "Procedure",
         "control_ref": "F1-5.5",
         "mandatory": false,
-        "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and the dual control needed to do so.",
+        "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and any dual control or split knowledge applied to retrieval.",
         "format": "DOCX",
         "owner": "Security Architect",
         "evidence": [
@@ -13834,7 +13834,7 @@
         "type": "Matrix",
         "control_ref": "F3-4.1",
         "mandatory": false,
-        "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with the minimum security score a supplier needs to reach.",
+        "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with any minimum security score the entity sets.",
         "format": "XLSX",
         "owner": "Procurement Manager",
         "evidence": [
@@ -14184,15 +14184,15 @@
       {
         "artifact_id": "UAEIA-256",
         "stage": "Stage 5: Operation & Monitoring",
-        "name": "Data Exchange Logging Coverage Matrix",
+        "name": "Data Exchange Event Recording Coverage Matrix",
         "type": "Matrix",
         "control_ref": "F4-7.1",
         "mandatory": false,
-        "description": "Matrix of the data exchange components against the events each one logs, such as authentication, transfers, configuration changes and errors, showing that all of them send their logs to central storage.",
+        "description": "Matrix of the data exchange components against the events each one records, such as authentication, transfers, system changes and errors, showing that all of them send their event records to central storage.",
         "format": "XLSX",
         "owner": "Security Operations Lead",
         "evidence": [
-          "Data exchange logging coverage matrix"
+          "Data exchange event recording coverage matrix"
         ]
       }
     ]

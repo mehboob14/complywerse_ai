@@ -1201,7 +1201,7 @@ CLASSIFICATION = {
         "Independent assurance reports from the CSP": "test",
         "Review of CSP assurance reports": "test",
         "CSP security certifications": "test",
-        "Assurance gap follow-up actions": "UAEIA-139",
+        "CSP independent assessment register": "UAEIA-139",
     },
     "E1-2.2.1": {
         "CSP due diligence questionnaire": "sample",
@@ -1228,7 +1228,7 @@ CLASSIFICATION = {
         "Encryption configuration evidence": "export",
         "Cloud encryption key management procedure": "UAEIA-146",
         "Hold your own key risk assessment": "UAEIA-147",
-        "Key custody and independence evidence": "export",
+        "Key custody and CSP independence records": "record",
     },
     "E1-2.4.1": {
         "CSP jurisdiction and data location assessment": "UAEIA-148",
@@ -1248,7 +1248,7 @@ CLASSIFICATION = {
         "Data deletion terms and confirmation": "signed",
     },
     "E1-2.6.1": {
-        "CSP change management evidence": "sample",
+        "CSP change management documentation": "sample",
         "Procurement check of CSP change controls": "test",
         "Service component tracking sample": "sample",
     },
@@ -1264,13 +1264,13 @@ CLASSIFICATION = {
     },
     "E1-2.6.4": {
         "CSP application security assurance": "test",
-        "CSP secure coding evidence": "sample",
+        "CSP secure coding documentation": "sample",
         "CSP security testing results": "test",
         "Procurement check of application security": "test",
     },
     "E1-2.6.5": {
         "Cloud system hardening guidelines": "UAEIA-154",
-        "Hardening implementation evidence": "export",
+        "Hardening implementation samples": "export",
         "Hardening compliance results": "test",
     },
     "E1-2.7.1": {
@@ -1283,7 +1283,7 @@ CLASSIFICATION = {
     "E1-2.7.2": {
         "Cloud access control policy": "UAEIA-156",
         "Cloud resource permissions export": "export",
-        "Authentication settings evidence": "export",
+        "Cloud authentication settings": "export",
         "Authentication methods and procedures": "UAEIA-157",
         "Privileged access MFA enforcement test": "test",
     },
@@ -1312,7 +1312,7 @@ CLASSIFICATION = {
         "E-discovery and forensics personnel appointment": "approval",
         "Forensic capability metrics": "UAEIA-163",
         "E-forensic protocols": "UAEIA-164",
-        "CSP forensic protocol compliance evidence": "signed",
+        "CSP forensic protocol compliance confirmations": "signed",
     },
     "E1-2.9.1": {
         "Cloud backup requirements": "UAEIA-165",
@@ -1337,8 +1337,8 @@ CLASSIFICATION = {
         "AI/ML asset inventory": "UAEIA-172",
         "AI/ML security baselines and compliance results": "UAEIA-173",
         "AI/ML patch and vulnerability management records": "record",
-        "AI/ML secure development and testing evidence": "sample",
-        "AI/ML environment network security evidence": "export",
+        "AI/ML secure development and testing records": "sample",
+        "AI/ML environment network security settings": "export",
     },
     "E2-2.3": {
         "AI/ML model security requirements": "sample",
@@ -1399,15 +1399,15 @@ CLASSIFICATION = {
     "E3-2.2.1": {
         "IoT data inventory and classification": "UAEIA-192",
         "IoT data use and rights contract terms": "signed",
-        "IoT data protection and access restriction evidence": "export",
+        "IoT data protection and location access controls": "export",
         "CSP contract clauses for IoT data": "signed",
-        "Data minimization and collection evidence": "sample",
+        "Data collection justifications and retention limits": "sample",
     },
     "E3-2.2.2": {
         "IoT encryption policy and procedures": "UAEIA-193",
-        "IoT encryption configuration evidence": "export",
+        "IoT encryption settings": "export",
         "Key hierarchy certificate chain": "export",
-        "Root private key protection evidence": "export",
+        "Root key issuing records": "record",
     },
     "E3-2.2.3": {
         "Session management settings": "export",
@@ -1425,7 +1425,7 @@ CLASSIFICATION = {
     },
     "E3-2.3.2": {
         "IoT location access control list": "UAEIA-197",
-        "Physical access control evidence": "export",
+        "Physical access control photographs and settings": "export",
         "Physical access monitoring records": "log",
     },
     "E3-2.4.1": {
@@ -1455,11 +1455,11 @@ CLASSIFICATION = {
         "IoT component authentication and encryption settings": "export",
         "IoT application security architecture": "UAEIA-203",
         "Trusted service layer access control rules": "export",
-        "Dedicated IoT gateway evidence": "export",
+        "Dedicated IoT gateway placement and settings": "export",
     },
     "E3-2.6.3": {
         "IoT device installation and setup baseline": "UAEIA-204",
-        "Remote management evidence": "export",
+        "Remote management settings": "export",
         "IoT device management strategy": "UAEIA-205",
         "IoT patch and update records": "record",
         "End-of-life device compensating measures": "UAEIA-206",
@@ -1469,10 +1469,10 @@ CLASSIFICATION = {
         "Segmentation and traffic restriction rules": "export",
         "Secure ports and protocols settings": "export",
         "Unused and default service scan results": "test",
-        "Consumer IoT device cryptography evidence": "export",
+        "Consumer IoT device cryptography documentation": "sample",
     },
     "E3-2.8.1": {
-        "IoT logging settings": "export",
+        "IoT event recording settings": "export",
         "Authentication and access event log extracts": "log",
         "Data and operation event log extracts": "log",
         "Update failure and physical access event logs": "log",
@@ -1634,7 +1634,7 @@ CLASSIFICATION = {
         "Vendor product security documentation": "sample",
     },
     "F3-5.3": {
-        "Hardware receipt inspection records": "test",
+        "Delivery acceptance check records": "test",
     },
     "F3-5.4": {
         "Supplier maintenance and support terms": "signed",
@@ -1662,7 +1662,7 @@ CLASSIFICATION = {
         "Supplier non-compliance tracker": "UAEIA-235",
     },
     "F3-7.2": {
-        "Supplier log tamper protection settings": "export",
+        "Supplier activity record tamper protection settings": "export",
     },
     "F3-7.3": {
         "Enhanced controls for high-risk suppliers": "UAEIA-236",
@@ -1756,8 +1756,8 @@ CLASSIFICATION = {
         "Data exchange penetration test report": "test",
     },
     "F4-7.1": {
-        "Data exchange logging coverage matrix": "UAEIA-256",
-        "Log forwarding and retention settings": "export",
+        "Data exchange event recording coverage matrix": "UAEIA-256",
+        "Event forwarding and retention settings": "export",
     },
     "F4-7.2": {
         "Data exchange anomaly detection rules": "export",

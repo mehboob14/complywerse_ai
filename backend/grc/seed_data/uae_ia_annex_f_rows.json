@@ -178,7 +178,7 @@
       "evidence_requirements": [
         {
           "name": "Encryption requirements by classification level",
-          "description": "Table that states, for each classification level, whether data must be encrypted at rest and in motion, the minimum algorithm and key length, and who may approve an exception.",
+          "description": "Table that states, for each classification level, the encryption the entity applies to data at rest and in motion, the algorithm and key length it uses, and who may approve an exception.",
           "filetype": "XLSX"
         }
       ],
@@ -276,7 +276,7 @@
       "evidence_requirements": [
         {
           "name": "Laptop and desktop encryption spot checks",
-          "description": "Results of checks on sampled laptops and desktops confirming that full-disk encryption is on, that the device cannot start without pre-boot authentication and that the recovery key is escrowed.",
+          "description": "Results of checks on sampled laptops and desktops showing that disk encryption is on, how the device is protected before the system starts and where the recovery key is held.",
           "filetype": "XLSX"
         }
       ],
@@ -318,7 +318,7 @@
       "evidence_requirements": [
         {
           "name": "Lost and stolen mobile device records",
-          "description": "Records of each lost or stolen smartphone or tablet, showing the date it was raised, whether the device was encrypted, the lock or wipe action taken and when it was confirmed.",
+          "description": "Records of each lost or stolen smartphone or tablet, or a nil return for the period, showing the date it was raised, whether the device was encrypted, the lock or wipe action taken and when it was confirmed.",
           "filetype": "XLSX",
           "collection_frequency": "on-change"
         }
@@ -538,7 +538,7 @@
       "evidence_requirements": [
         {
           "name": "Mail transport encryption settings",
-          "description": "Mail gateway and server settings showing that encrypted transport is required with other organizations, and what happens when the receiving server cannot support it.",
+          "description": "Mail gateway and server settings showing how encrypted transport is applied to mail exchanged with other organizations, and what happens when the receiving server cannot support it.",
           "filetype": "PNG"
         },
         {
@@ -632,7 +632,7 @@
         },
         {
           "name": "Key custodian appointments",
-          "description": "Signed appointments naming the people who may generate, use, back up and destroy keys, with the separation between these roles and each custodian's acceptance.",
+          "description": "Signed appointments naming the people who may generate, use, back up and destroy keys, with the separation between these roles, each custodian's acceptance and, where a hardware security module is used, the administrator roles and the quorum needed for key operations.",
           "filetype": "PDF"
         }
       ],
@@ -679,7 +679,7 @@
         },
         {
           "name": "Key generation ceremony record",
-          "description": "Record of the creation of a high-value key, showing the date, the approved tool or module used, the people present and the checks made, signed by the witnesses.",
+          "description": "Record of the creation of a high-value key, such as a master or root key, showing the date, the approved tool or module used, who requested and approved it and, where a ceremony is held, who attended and the checks made.",
           "filetype": "PDF",
           "collection_frequency": "on-change"
         }
@@ -812,7 +812,7 @@
       "evidence_requirements": [
         {
           "name": "Key backup and escrow arrangements",
-          "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and the dual control needed to do so.",
+          "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and any dual control or split knowledge applied to retrieval.",
           "filetype": "PDF"
         }
       ],
@@ -854,7 +854,7 @@
       "evidence_requirements": [
         {
           "name": "Key destruction records",
-          "description": "Records of keys destroyed, showing the key identifier, the reason, the method, the date due and the date done, and the person who carried out and witnessed the destruction.",
+          "description": "Records of keys destroyed, showing the key identifier, the reason, the method, the date due and the date done, and who carried out the destruction and, where the entity's rules ask for it, who witnessed it.",
           "filetype": "PDF",
           "collection_frequency": "on-change"
         }
@@ -1108,7 +1108,7 @@
         },
         {
           "name": "Remote worker baseline completion report",
-          "description": "Report showing each remote worker completed the baseline awareness before remote access was granted, with follow-up on anyone who has not.",
+          "description": "Report showing each remote worker completed the baseline awareness, with the completion date, and the follow-up on anyone who has not.",
           "filetype": "XLSX"
         }
       ],
@@ -1169,7 +1169,7 @@
         },
         {
           "name": "Remote device posture check settings",
-          "description": "Settings showing a device must be managed, encrypted, patched and protected by endpoint security tools before it reaches the entity's applications, and is blocked or limited otherwise.",
+          "description": "Settings that check the state of a device before it reaches the entity's applications, such as whether it is managed, encrypted, patched and protected by endpoint security tools, and block or limit it if a check fails.",
           "filetype": "PNG"
         },
         {
@@ -1232,7 +1232,7 @@
         },
         {
           "name": "Remote multi-factor enforcement test",
-          "description": "Test showing that a remote connection attempt without the second factor is refused for ordinary users, with the date, the tester and the systems tested.",
+          "description": "Test showing that a remote connection attempt without the second factor is refused, for each type of user allowed to connect remotely, with the date, the tester and the systems tested.",
           "filetype": "PDF"
         }
       ],
@@ -1284,7 +1284,7 @@
       "evidence_requirements": [
         {
           "name": "Remote worker onboarding checklists",
-          "description": "Completed checklists for sampled new remote workers showing screening, equipment issue, acceptance of the rules, induction and access approval were completed in that order, with dates.",
+          "description": "Completed checklists for sampled new remote workers showing screening, equipment issue, acceptance of the rules, induction and access approval were completed, with the dates.",
           "filetype": "PDF"
         },
         {
@@ -1394,7 +1394,7 @@
       "evidence_requirements": [
         {
           "name": "Mobile device compliance rule settings",
-          "description": "Settings in the mobile device management tool that block or quarantine devices that are rooted or jailbroken, run an unsupported system version or have no screen lock.",
+          "description": "Settings in the mobile device management tool that block or quarantine non-compliant devices, such as those that are rooted or jailbroken, run an unsupported system version or have no screen lock.",
           "filetype": "PNG"
         },
         {
@@ -1443,12 +1443,12 @@
       "evidence_requirements": [
         {
           "name": "Signed BYOD agreements",
-          "description": "Agreements signed by users of personal devices accepting that the entity may apply security controls, keep work data apart from personal data and wipe the work data if the device is lost or the user leaves.",
+          "description": "Agreements signed by users of personal devices accepting that the entity may apply security controls to them, such as keeping work data apart from personal data and wiping the work data if the device is lost or the user leaves.",
           "filetype": "PDF"
         },
         {
           "name": "Third-party device access restrictions",
-          "description": "Settings that limit third-party devices to a virtual desktop or browser-only access to named applications, with downloads and local storage turned off.",
+          "description": "Settings that limit what third-party devices can reach, such as a virtual desktop or browser-only access to named applications, with downloads and local storage turned off.",
           "filetype": "PNG"
         }
       ],
@@ -1921,7 +1921,7 @@
       "evidence_requirements": [
         {
           "name": "Supplier selection scoring sheet",
-          "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with the minimum security score a supplier must reach and the scores of sampled bids.",
+          "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with any minimum security score the entity sets and the scores of sampled bids.",
           "filetype": "XLSX"
         }
       ],
@@ -2088,8 +2088,8 @@
       "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 218. Maps to UAE IA v2.1 controls: T6.2.3.",
       "evidence_requirements": [
         {
-          "name": "Hardware receipt inspection records",
-          "description": "Records of the checks made on delivered hardware before use, such as packaging seals, serial numbers against the order, firmware version and factory accounts.",
+          "name": "Delivery acceptance check records",
+          "description": "Records of the acceptance checks made on delivered hardware and software before use, such as packaging seals, serial numbers against the order, firmware or software version, factory accounts and security tests.",
           "filetype": "XLSX",
           "collection_frequency": "on-change"
         }
@@ -2233,7 +2233,7 @@
         },
         {
           "name": "Build and release pipeline controls",
-          "description": "Settings of the build and release pipeline showing that builds are produced from approved source only, need approval before release and keep their secrets in a protected store.",
+          "description": "Settings of the build and release pipeline, such as builds produced from approved source only, approval needed before release and secrets kept in a protected store.",
           "filetype": "PNG"
         }
       ],
@@ -2369,7 +2369,7 @@
       "evidence_requirements": [
         {
           "name": "Supplier legal compliance statements",
-          "description": "Statements signed by suppliers confirming they comply with the laws and regulations that apply to the service, with any exception explained.",
+          "description": "Statements signed by suppliers confirming they comply with the laws and regulations that apply to the service, as their obligation under the entity's terms, with any exception explained.",
           "filetype": "PDF"
         }
       ],
@@ -2457,8 +2457,8 @@
       "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 15 (National Third Party Security Policy), printed page 219. Maps to UAE IA v2.1 controls: T6.2.5.",
       "evidence_requirements": [
         {
-          "name": "Supplier log tamper protection settings",
-          "description": "Settings showing the logs of supplier activity are kept where the supplier cannot change or delete them, with integrity protection and the retention period.",
+          "name": "Supplier activity record tamper protection settings",
+          "description": "Settings showing the records of supplier activity are kept where the supplier cannot change or delete them, with integrity protection and the retention period.",
           "filetype": "PNG"
         }
       ],
@@ -3081,7 +3081,7 @@
         },
         {
           "name": "Data exchange access review results",
-          "description": "Results of the periodic review of who and what can use the data exchange services, confirmed by the data owner, with the access removed or changed.",
+          "description": "Extract of the completed access rights reviews covering the data exchange services, confirmed by the data owner, with the access removed or changed.",
           "filetype": "XLSX"
         }
       ],
@@ -3359,7 +3359,7 @@
         },
         {
           "name": "DMZ stored data check",
-          "description": "Check of the hosts in the DMZ showing no sensitive data is stored on them, with the method used, the date and the findings removed.",
+          "description": "Check of the hosts in the DMZ for sensitive data stored on them, with the method used, the date, the findings and what was removed or protected.",
           "filetype": "PDF"
         }
       ],
@@ -3451,7 +3451,7 @@
         {
           "name": "Intrusion alert handling records",
           "description": "Sample alerts raised on data exchange traffic, with how each was triaged, escalated or closed and the time taken.",
-          "filetype": "XLSX",
+          "filetype": "CSV",
           "collection_frequency": "continuous"
         }
       ],
@@ -3493,13 +3493,13 @@
       "evidence_requirements": [
         {
           "name": "Data loss prevention rule settings",
-          "description": "Settings of the rules that detect and block classified or personal data leaving through email, web upload and file transfer, showing the channels covered.",
+          "description": "Extract of the data leak prevention configuration showing the rules that detect and block classified or personal data leaving through email, web upload and file transfer, with the channels covered.",
           "filetype": "PNG"
         },
         {
           "name": "Data loss prevention alert records",
-          "description": "Sample alerts and blocked transmissions, with how each was investigated and closed and the cases found to be false alarms.",
-          "filetype": "XLSX",
+          "description": "Extract of the leakage monitoring and blocked transmission records: sample alerts and blocked transmissions, with how each was investigated and closed and the cases found to be false alarms.",
+          "filetype": "CSV",
           "collection_frequency": "continuous"
         }
       ],
@@ -3546,7 +3546,7 @@
         },
         {
           "name": "Completed hardening checklists",
-          "description": "Checklists completed for sampled data exchange systems showing default accounts removed and unneeded services and ports closed, with the date and the person who did it.",
+          "description": "Checklists completed for sampled data exchange systems showing the hardening steps were done, such as default accounts removed and unneeded services and ports closed, with the date and the person who did it.",
           "filetype": "PDF"
         }
       ],
@@ -3672,13 +3672,13 @@
       "ai_notes": "Source: UAE IA v2.1 (November 2025), Annex F, Table 16 (National Data Exchange Security Policy), printed page 221. Maps to UAE IA v2.1 controls: T3.2.2.",
       "evidence_requirements": [
         {
-          "name": "Data exchange logging coverage matrix",
-          "description": "Matrix of the data exchange components against the events each one logs, such as authentication, transfers, configuration changes and errors, showing all send logs to central storage.",
+          "name": "Data exchange event recording coverage matrix",
+          "description": "Matrix of the data exchange components against the events each one records, such as authentication, transfers, system changes and errors, showing all send their event records to central storage.",
           "filetype": "XLSX"
         },
         {
-          "name": "Log forwarding and retention settings",
-          "description": "Settings showing the logs of each data exchange component are forwarded to a central store that administrators of the system cannot alter, and the retention period.",
+          "name": "Event forwarding and retention settings",
+          "description": "Settings showing the event records of each data exchange component are forwarded to a central store, who can change or delete them there, and the retention period.",
           "filetype": "PNG"
         }
       ],

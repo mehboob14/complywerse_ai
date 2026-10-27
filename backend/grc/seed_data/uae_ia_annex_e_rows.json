@@ -115,7 +115,7 @@
         },
         {
           "name": "Cloud risk communication record",
-          "description": "Evidence that cloud risks were communicated to management and other stakeholders, such as committee minutes or briefing notes.",
+          "description": "Committee minutes, briefing notes or similar records showing the cloud risks were communicated to management and other stakeholders.",
           "filetype": "PDF"
         }
       ],
@@ -187,12 +187,12 @@
         },
         {
           "name": "Shared responsibility matrix",
-          "description": "Matrix that allocates each security responsibility to the entity or to the CSP and shows how duties are segregated between them.",
+          "description": "Matrix that forms part of the CSP terms, allocating each security responsibility to the entity or to the CSP and showing how duties are segregated between them.",
           "filetype": "XLSX"
         },
         {
           "name": "CSP contract clause checklist",
-          "description": "Checklist completed for each CSP contract confirming it includes personnel screening, a responsibilities matrix with segregation of duties, awareness and training, a disciplinary measure and an orderly exit.",
+          "description": "Record of the review of each CSP contract for the screening, responsibilities matrix, awareness and training, disciplinary and exit clauses, showing any clause missing, the reviewer, the date and the action taken.",
           "filetype": "XLSX"
         }
       ],
@@ -266,7 +266,7 @@
       "evidence_requirements": [
         {
           "name": "CSP onboarding risk assessment",
-          "description": "Risk assessment completed before a CSP is onboarded, showing the risks identified and the decision taken.",
+          "description": "Risk assessment completed before a CSP is onboarded, showing the risks identified, their rating and the mitigations required.",
           "filetype": "PDF"
         },
         {
@@ -348,8 +348,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "Assurance gap follow-up actions",
-          "description": "Actions raised with the CSP for gaps found in its independent assurance, with owner and status.",
+          "name": "CSP independent assessment register",
+          "description": "Register of the independent third-party tests and assessments performed for each CSP service in use, with the assessor, the date, the scope and the date the next one is due.",
           "filetype": "XLSX"
         }
       ],
@@ -402,7 +402,7 @@
         },
         {
           "name": "CSP due diligence assessment report",
-          "description": "Report of the pre-onboarding assessment of the CSP's security posture and compliance, with findings and the onboarding decision.",
+          "description": "Report of the checks made on the CSP's questionnaire answers and supporting documents before onboarding, covering its security posture and compliance, with the findings.",
           "filetype": "PDF"
         },
         {
@@ -649,7 +649,7 @@
       "evidence_requirements": [
         {
           "name": "Encryption policy",
-          "description": "Approved policy setting when and how encryption protects sensitive data in storage and in transmission, tied to the legal and regulatory obligations that apply.",
+          "description": "Approved policy and supporting procedures setting when and how encryption protects sensitive data in storage and in transmission, tied to the legal and regulatory obligations that apply.",
           "filetype": "PDF"
         },
         {
@@ -668,8 +668,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "Key custody and independence evidence",
-          "description": "Evidence of who holds and can use the encryption keys and, where HYOK is implemented, that key access, revocation and audit do not depend on the CSP.",
+          "name": "Key custody and CSP independence records",
+          "description": "Records of who holds and can use the encryption keys and, where HYOK is implemented, of key access, revocation and audit that work without depending on the CSP.",
           "filetype": "PDF"
         }
       ],
@@ -749,7 +749,7 @@
         },
         {
           "name": "Cloud data location register",
-          "description": "Register of where each cloud service stores the entity's data, by country and region.",
+          "description": "Register of where each cloud service stores the entity's data, by country and region, with the highest classification of the data held there.",
           "filetype": "XLSX"
         },
         {
@@ -885,7 +885,7 @@
         },
         {
           "name": "Data deletion terms and confirmation",
-          "description": "Terms for deleting the entity's data after exit, with the CSP's confirmation that deletion was carried out.",
+          "description": "Terms for deleting the entity's data after exit and, once a service has ended, the CSP's confirmation that the deletion was carried out.",
           "filetype": "PDF"
         }
       ],
@@ -926,8 +926,8 @@
       "ai_notes": "Applicability: Applicable to IaaS, PaaS and SaaS. Source: UAE IA v2.1 (November 2025), Annex E, Table 10 (National Cloud Security Policy), printed page 206. Maps to UAE IA v2.1 controls: T3.1.3, T3.1.1.",
       "evidence_requirements": [
         {
-          "name": "CSP change management evidence",
-          "description": "Evidence obtained during procurement of the CSP's change management controls for tracking its service components.",
+          "name": "CSP change management documentation",
+          "description": "Documents obtained from the CSP during procurement that describe its change management controls for tracking its service components, including their status and location.",
           "filetype": "PDF"
         },
         {
@@ -1090,8 +1090,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "CSP secure coding evidence",
-          "description": "Evidence of the provider's secure coding practices for the service.",
+          "name": "CSP secure coding documentation",
+          "description": "Provider documents or independent statements describing the secure coding practices applied to the service.",
           "filetype": "PDF"
         },
         {
@@ -1154,17 +1154,17 @@
       "evidence_requirements": [
         {
           "name": "Cloud system hardening guidelines",
-          "description": "Hardening guidelines for each type of cloud system: operating systems, virtual machines, hypervisors, IoT sensors, and network and security devices.",
+          "description": "Section of the entity's minimum security baselines, or separate hardening guidelines, for each type of cloud system: operating systems, virtual machines, hypervisors, IoT sensors, and network and security devices.",
           "filetype": "PDF"
         },
         {
-          "name": "Hardening implementation evidence",
-          "description": "Screenshots or scan outputs showing the hardening guidelines are applied to cloud systems.",
+          "name": "Hardening implementation samples",
+          "description": "Extract of the applied configuration exports, or screenshots or scan outputs, for sampled cloud systems showing the hardening guidelines are applied.",
           "filetype": "PNG"
         },
         {
           "name": "Hardening compliance results",
-          "description": "Results of checks comparing deployed cloud systems with the hardening guidelines, with deviations and follow-up.",
+          "description": "Extract of the compliance monitoring report for cloud systems, comparing them with the hardening guidelines and listing the deviations and the follow-up.",
           "filetype": "XLSX"
         }
       ],
@@ -1226,7 +1226,7 @@
         },
         {
           "name": "Privileged account restrictions",
-          "description": "Evidence of the limits placed on what privileged and root accounts can do, such as role permissions or restrictive guardrails.",
+          "description": "Screenshots of the limits placed on what privileged and root accounts can do, such as role permissions or restrictive guardrails.",
           "filetype": "PNG"
         },
         {
@@ -1315,7 +1315,7 @@
           "filetype": "CSV"
         },
         {
-          "name": "Authentication settings evidence",
+          "name": "Cloud authentication settings",
           "description": "Screenshots of the authentication settings for cloud systems, applications and data assets.",
           "filetype": "PNG"
         },
@@ -1400,7 +1400,7 @@
         },
         {
           "name": "Cloud access review results",
-          "description": "Results of the review of access rights to the cloud environment, with the rights revoked or changed.",
+          "description": "Extract of the completed access rights reviews covering the cloud environment, with the rights revoked or changed.",
           "filetype": "XLSX"
         },
         {
@@ -1642,8 +1642,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "CSP forensic protocol compliance evidence",
-          "description": "Evidence that CSPs comply with the entity's e-forensic protocols, such as contract clauses or written confirmations.",
+          "name": "CSP forensic protocol compliance confirmations",
+          "description": "Contract clauses or written confirmations from the CSPs showing they comply with the entity's e-forensic protocols.",
           "filetype": "PDF"
         }
       ],
@@ -1696,7 +1696,7 @@
       "evidence_requirements": [
         {
           "name": "Cloud backup requirements",
-          "description": "Approved requirements for the regular backup of information held in cloud environments.",
+          "description": "Section of the backup requirements that covers information held in cloud environments: what is backed up, how often and how the copies are protected.",
           "filetype": "PDF"
         },
         {
@@ -1706,7 +1706,7 @@
         },
         {
           "name": "Cloud backup restoration test results",
-          "description": "Results of the latest restoration test, showing data was recovered and any issues found.",
+          "description": "Extract of the backup restoration test results for information held in the cloud, showing data was recovered and any issues found.",
           "filetype": "PDF"
         }
       ],
@@ -1763,7 +1763,7 @@
         },
         {
           "name": "Business continuity and disaster recovery plans",
-          "description": "Approved plans that cover the entity's cloud services.",
+          "description": "Approved business continuity and disaster recovery plans that cover the entity's cloud services, with their owner, version and approval date.",
           "filetype": "PDF"
         },
         {
@@ -1837,7 +1837,7 @@
         "The entity shall establish governance mechanisms to ensure the secure lifecycle management of AI/ML systems, including: Identification, assessment and mitigation of cyber security risks associated with the supply chain of AI/ML systems.",
         "The entity shall establish governance mechanisms to ensure the secure lifecycle management of AI/ML systems, including: Secure change management for AI/ML systems."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. Maps to UAE IA v2.1 controls: M1.1.3, M1.2.3, M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2, T3.1.3, T6.1.1, T6.2.1, T6.2.2, T6.2.3, T6.2.4, T6.2.5.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M1.1.3, M1.2.3, M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2, T3.1.3, T6.1.1, T6.2.1, T6.2.2, T6.2.3, T6.2.4, T6.2.5.",
       "evidence_requirements": [
         {
           "name": "AI/ML security policy",
@@ -1861,7 +1861,7 @@
         },
         {
           "name": "AI/ML change management records",
-          "description": "Change requests for AI/ML systems showing the security check and approval made before each change went live.",
+          "description": "Change requests for AI/ML systems showing the security check and the approval, by the change advisory board or an equivalent body, made before each change went live.",
           "filetype": "XLSX",
           "collection_frequency": "on-change"
         }
@@ -1946,7 +1946,7 @@
         "The entity shall implement and maintain effective measures to ensure the secure design, configuration, and operation of AI/ML infrastructure and applications throughout their lifecycle, including: Ensuring secure development, testing, and maintenance of AI/ML applications in accordance with established secure coding and development practices.",
         "The entity shall implement and maintain effective measures to ensure the secure design, configuration, and operation of AI/ML infrastructure and applications throughout their lifecycle, including: Applying robust network and infrastructure security controls to safeguard the confidentiality, integrity, and availability of AI/ML environments."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. Maps to UAE IA v2.1 controls: T1.2.1, T1.4.2, T3.1.1, T3.1.3, T3.3.2, T4.1.1, T4.1.3, T7.1.1, T7.2.1, T7.2.2, T7.3.1, T7.3.2, T7.3.3, T7.4.1, T7.4.2, T7.4.3.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T1.2.1, T1.4.2, T3.1.1, T3.1.3, T3.3.2, T4.1.1, T4.1.3, T7.1.1, T7.2.1, T7.2.2, T7.3.1, T7.3.2, T7.3.3, T7.4.1, T7.4.2, T7.4.3.",
       "evidence_requirements": [
         {
           "name": "AI/ML asset inventory",
@@ -1964,12 +1964,12 @@
           "filetype": "XLSX"
         },
         {
-          "name": "AI/ML secure development and testing evidence",
-          "description": "Evidence that AI/ML applications are developed, tested and maintained under established secure coding and development practices, such as code review and test results.",
+          "name": "AI/ML secure development and testing records",
+          "description": "Code review records, test results and similar documents showing AI/ML applications are developed, tested and maintained under established secure coding and development practices.",
           "filetype": "PDF"
         },
         {
-          "name": "AI/ML environment network security evidence",
+          "name": "AI/ML environment network security settings",
           "description": "Network diagrams and firewall or segmentation settings that protect the confidentiality, integrity and availability of the AI/ML environments.",
           "filetype": "PNG"
         }
@@ -2049,7 +2049,7 @@
         "The entity shall establish and maintain controls to ensure the secure design, development, and protection of AI/ML algorithms and models throughout their lifecycle, including: Enforcing robust access controls over AI/ML training data to preserve confidentiality, integrity, privacy, and auditability.",
         "The entity shall establish and maintain controls to ensure the secure design, development, and protection of AI/ML algorithms and models throughout their lifecycle, including: Applying stringent data protection controls for AI/ML data both at rest and in motion to ensure its confidentiality and integrity."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. Maps to UAE IA v2.1 controls: M5.1.4, T3.4.2, T5.2.2, T5.2.3, T5.3.1, T5.3.2, T7.2.1, T7.2.2.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 208. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M5.1.4, T3.4.2, T5.2.2, T5.2.3, T5.3.1, T5.3.2, T7.2.1, T7.2.2.",
       "evidence_requirements": [
         {
           "name": "AI/ML model security requirements",
@@ -2058,12 +2058,12 @@
         },
         {
           "name": "AI/ML model protection measures",
-          "description": "Evidence of the measures that protect models from compromise of their integrity, confidentiality or availability, such as access limits and integrity checks.",
+          "description": "Documents describing the measures that protect models from compromise of their integrity, confidentiality or availability, such as access limits and integrity checks.",
           "filetype": "PDF"
         },
         {
           "name": "Inference data safeguards",
-          "description": "Evidence of the safeguards for inference inputs and outputs that maintain their integrity and confidentiality.",
+          "description": "Documents describing the safeguards that maintain the integrity and confidentiality of inference inputs and outputs.",
           "filetype": "PDF"
         },
         {
@@ -2135,7 +2135,7 @@
         "The entity shall implement and maintain operational controls to ensure the resilience, reliability, and secure functioning of AI/ML systems, including: Integrating AI/ML systems into business continuity and disaster recovery planning, with regular testing of restoration capabilities and continuity scenarios.",
         "The entity shall implement and maintain operational controls to ensure the resilience, reliability, and secure functioning of AI/ML systems, including: Conducting comprehensive security testing and validation to verify the security and resilience of AI/ML systems against potential threats."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. Maps to UAE IA v2.1 controls: T3.1.7, T7.4.3, T9.1.1, T9.1.2, T9.2.1.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T3.1.7, T7.4.3, T9.1.1, T9.1.2, T9.2.1.",
       "evidence_requirements": [
         {
           "name": "AI/ML application domain security analysis",
@@ -2149,12 +2149,12 @@
         },
         {
           "name": "AI/ML continuity and recovery plans",
-          "description": "Business continuity and disaster recovery plans that include AI/ML systems.",
+          "description": "Section of the ICT continuity plans, or separate business continuity and disaster recovery plans, that include AI/ML systems, with owner, version and approval date.",
           "filetype": "PDF"
         },
         {
           "name": "AI/ML restoration and continuity test results",
-          "description": "Results of regular tests of restoration capabilities and continuity scenarios for AI/ML systems.",
+          "description": "Extract of the backup restoration and continuity plan test results for AI/ML systems, from the regular tests of restoration capabilities and continuity scenarios.",
           "filetype": "PDF"
         },
         {
@@ -2211,7 +2211,7 @@
         "The entity shall establish measures to protect AI/ML systems against adversarial attacks through proactive defense, awareness, and preparedness activities, including: Promoting awareness of AI/ML attack scenarios through education, training, and preparedness for effective incident response.",
         "The entity shall establish measures to protect AI/ML systems against adversarial attacks through proactive defense, awareness, and preparedness activities, including: Implementing comprehensive defense strategies, including proactive security measures, continuous monitoring, regular testing, and robust incident response capabilities."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. Maps to UAE IA v2.1 controls: M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, T3.3.1.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, T3.3.1.",
       "evidence_requirements": [
         {
           "name": "AI/ML attack awareness material",
@@ -2285,7 +2285,7 @@
         "The entity shall implement monitoring, detection, and response controls to ensure timely identification, investigation, and mitigation of AI/ML cyber security incidents, including: Implementing a robust incident reporting and management system.",
         "The entity shall implement monitoring, detection, and response controls to ensure timely identification, investigation, and mitigation of AI/ML cyber security incidents, including: Developing a comprehensive digital forensics framework tailored to AI/ML incidents."
       ],
-      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. Maps to UAE IA v2.1 controls: T3.2.1, T3.2.2, T3.2.3, T8.1.2, T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6, T8.2.7.",
+      "ai_notes": "Applicability: When the entity uses AI/ML systems. Source: UAE IA v2.1 (November 2025), Annex E, Table 11 (National Cyber Security Policy for Artificial Intelligence), printed page 209. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T3.2.1, T3.2.2, T3.2.3, T8.1.2, T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6, T8.2.7.",
       "evidence_requirements": [
         {
           "name": "AI/ML security analytics framework",
@@ -2295,7 +2295,7 @@
         {
           "name": "AI/ML detection and alert samples",
           "description": "Sample of detections and alerts raised on AI/ML systems by the analytics, with how each was handled.",
-          "filetype": "XLSX",
+          "filetype": "CSV",
           "collection_frequency": "continuous"
         },
         {
@@ -2371,7 +2371,7 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: M1.1.3, M1.2.1, M1.2.3.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M1.1.3, M1.2.1, M1.2.3.",
       "evidence_requirements": [
         {
           "name": "Approved IoT security policy",
@@ -2440,7 +2440,7 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M2.1.1, M2.2.1, M2.2.2, M2.2.3, M2.3.1, M2.3.2, M2.3.3, M2.3.4, M2.4.1, M2.4.2.",
       "evidence_requirements": [
         {
           "name": "IoT risk assessment",
@@ -2510,7 +2510,7 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M3.1.1, M3.2.1, M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5, M3.4.1.",
       "evidence_requirements": [
         {
           "name": "IoT security training plan",
@@ -2519,7 +2519,7 @@
         },
         {
           "name": "IoT security training content",
-          "description": "Training material for the specialized IoT security training given to employees and outsourced staff.",
+          "description": "Training material for the specialized IoT security training given to all personnel, including external and outsourced staff.",
           "filetype": "PDF"
         },
         {
@@ -2584,7 +2584,7 @@
         "The entity shall ensure third party access to IoT devices: are granted for a limited timeframe.",
         "The entity shall ensure third party access to IoT devices: are reviewed periodically."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: T6.1.1, T6.2.4, T6.2.1, T5.2.2, T5.2.4.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T6.1.1, T6.2.4, T6.2.1, T5.2.2, T5.2.4.",
       "evidence_requirements": [
         {
           "name": "IoT third-party security policy",
@@ -2608,7 +2608,7 @@
         },
         {
           "name": "Third-party IoT access review results",
-          "description": "Results of the periodic review of third-party access to IoT devices, with the access removed or changed.",
+          "description": "Extract of the completed access rights reviews covering third-party access to IoT devices, with the access removed or changed.",
           "filetype": "XLSX"
         }
       ],
@@ -2674,7 +2674,7 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: M5.1.1.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: M5.1.1.",
       "evidence_requirements": [
         {
           "name": "IoT compliance policy and program",
@@ -2743,7 +2743,7 @@
         "Entity shall: minimize the data collected and retained.",
         "Entity shall: restrict access to the physical and logical location of data only to authorized individuals"
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. Maps to UAE IA v2.1 controls: T1.3.1, M5.1.4, T6.2.4.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 210. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T1.3.1, M5.1.4, T6.2.4.",
       "evidence_requirements": [
         {
           "name": "IoT data inventory and classification",
@@ -2756,18 +2756,18 @@
           "filetype": "PDF"
         },
         {
-          "name": "IoT data protection and access restriction evidence",
-          "description": "Evidence that the confidentiality, integrity and availability of IoT data, including personally identifiable information (PII), is protected and that access to the physical and digital locations of data is restricted to authorized individuals.",
+          "name": "IoT data protection and location access controls",
+          "description": "Descriptions of the controls that protect IoT data, including personally identifiable information (PII), where it is collected, stored, handled and transmitted, with the lists of who may enter the physical and digital locations where it is held.",
           "filetype": "PDF"
         },
         {
           "name": "CSP contract clauses for IoT data",
-          "description": "Executed contracts with cloud service providers (CSPs) that include non-disclosure agreements, service level agreements, and security, privacy, sovereignty, availability, incident notification, service exit, change management and right to audit requirements.",
+          "description": "Extracts of the executed contracts with the cloud service providers (CSPs) that hold or handle IoT data, showing the non-disclosure, service level, security, privacy, sovereignty, availability, incident notification, service exit, change management and right to audit terms.",
           "filetype": "PDF"
         },
         {
-          "name": "Data minimization and collection evidence",
-          "description": "Evidence that the collection of sensitive data is avoided and the data collected and retained is minimized, such as data collection justifications and retention limits.",
+          "name": "Data collection justifications and retention limits",
+          "description": "Data collection justifications and retention limits showing the collection of sensitive data is avoided and the data collected and retained is kept to what is needed.",
           "filetype": "PDF"
         }
       ],
@@ -2843,7 +2843,7 @@
         "The entity shall establish policies and procedures for the use of encryption protocols for the protection of sensitive data in storage and data in transmission as per applicable legal, statutory, and regulatory compliance obligations.",
         "The entity shall use a root private key, either symmetric or asymmetric, to digitally sign other keys used in the hierarchy."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. Maps to UAE IA v2.1 controls: T3.4.1, T3.4.2, T3.4.3.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T3.4.1, T3.4.2, T3.4.3.",
       "evidence_requirements": [
         {
           "name": "IoT encryption policy and procedures",
@@ -2851,18 +2851,18 @@
           "filetype": "PDF"
         },
         {
-          "name": "IoT encryption configuration evidence",
+          "name": "IoT encryption settings",
           "description": "Screenshots of the encryption settings applied to IoT data at rest and while it moves between systems.",
           "filetype": "PNG"
         },
         {
           "name": "Key hierarchy certificate chain",
-          "description": "Certificate chain extract showing the root private key at the top of the key hierarchy and the keys issued beneath it.",
+          "description": "Extract of the certificate chain, public certificates only, showing each key issued beneath the root key in the key hierarchy and the key that issued it.",
           "filetype": "PDF"
         },
         {
-          "name": "Root private key protection evidence",
-          "description": "Evidence of how the root private key is held and its use controlled, such as its storage location and access list.",
+          "name": "Root key issuing records",
+          "description": "Records of the operations in which the root private key was used to issue other keys in the hierarchy, with the date and the person who authorized each.",
           "filetype": "PDF"
         }
       ],
@@ -2918,7 +2918,7 @@
         "The entity shall implement secure sessions ensuring: sessions are expired after fixed time of inactivity",
         "The entity shall ensure that communication protocols employ encrypted channels, integrity protection, and authenticated connections to share information between IoT systems. Proven encryption techniques shall be used to protect data within all IoT systems and their underlying infrastructure."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. Maps to UAE IA v2.1 controls: T5.3.1, T3.4.2.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T5.3.1, T3.4.2.",
       "evidence_requirements": [
         {
           "name": "Session management settings",
@@ -2999,11 +2999,11 @@
         "Entity shall implement identity and access management controls to : conduct regular access reviews to verify permissions and implement compensating controls as needed.",
         "Entity shall implement identity and access management controls to : align password policies with complexity standards, requiring periodic updates."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. Maps to UAE IA v2.1 controls: T5.1.1, T5.2.1, T5.2.2, T5.2.3, T5.2.4.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 211. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T5.1.1, T5.2.1, T5.2.2, T5.2.3, T5.2.4.",
       "evidence_requirements": [
         {
           "name": "IoT access rights listing",
-          "description": "List of the identities with access to IoT resources, each uniquely identified, with the privileges granted and the person accountable.",
+          "description": "List of the identities with access to IoT resources, each uniquely identified, with the privileges granted, the person accountable and the dates access was granted, changed and removed.",
           "filetype": "XLSX"
         },
         {
@@ -3018,12 +3018,12 @@
         },
         {
           "name": "IoT access review results",
-          "description": "Results of the regular review of permissions to IoT resources, with the compensating controls put in place where needed.",
+          "description": "Extract of the regular access rights reviews covering IoT resources, with the compensating controls put in place where needed.",
           "filetype": "XLSX"
         },
         {
           "name": "IoT password rules configuration",
-          "description": "Configured password complexity and periodic update requirements for IoT systems.",
+          "description": "Screenshots of the password complexity and periodic update settings configured for IoT systems.",
           "filetype": "PNG"
         }
       ],
@@ -3074,15 +3074,15 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T2.2.1, T2.2.2.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T2.2.1, T2.2.2.",
       "evidence_requirements": [
         {
           "name": "IoT location access control list",
-          "description": "List of the people authorized to enter IoT environments, buildings, locations and rooms.",
+          "description": "List of the people authorized to enter IoT environments, buildings, locations and rooms, such as data center halls, plant rooms and vaults, with the visitor escort arrangements for them.",
           "filetype": "XLSX"
         },
         {
-          "name": "Physical access control evidence",
+          "name": "Physical access control photographs and settings",
           "description": "Screenshots or photographs of the controls on physical access to IoT locations, such as badge reader settings or locks.",
           "filetype": "PNG"
         },
@@ -3137,7 +3137,7 @@
         "Entity shall establish an incident response procedure to identify, respond to, contain, and recover from incidents pertaining to the IoT ecosystem, including: collection of evidence.",
         "The entity shall allocate resources to monitor, and track security threats using threat intelligence."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T8.1.1, T8.1.2, T8.2.1, T8.2.2, T8.2.4, T8.2.5, T8.2.6, T8.2.7, T3.3.1.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T8.1.1, T8.1.2, T8.2.1, T8.2.2, T8.2.4, T8.2.5, T8.2.6, T8.2.7, T3.3.1.",
       "evidence_requirements": [
         {
           "name": "IoT incident response procedure",
@@ -3229,7 +3229,7 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T3.1.7.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T3.1.7.",
       "evidence_requirements": [
         {
           "name": "IoT backup schedule and settings",
@@ -3238,13 +3238,13 @@
         },
         {
           "name": "IoT backup job logs",
-          "description": "Backup logs showing the periodic backups of user and configuration data completed.",
+          "description": "Extract of the backup job records for IoT systems showing the periodic backups of user and configuration data completed.",
           "filetype": "LOG",
           "collection_frequency": "continuous"
         },
         {
           "name": "IoT backup restoration test results",
-          "description": "Outcome of a trial restoration of IoT backups, with the time taken and any problems met.",
+          "description": "Extract of the backup restoration test results for IoT backups, with the time taken and any problems met.",
           "filetype": "PDF"
         }
       ],
@@ -3282,21 +3282,21 @@
       "is_mandatory": false,
       "priority": "medium",
       "assessment_criteria": [],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T9.1.1, T9.1.2, T9.2.1.",
       "evidence_requirements": [
         {
           "name": "IoT continuity plan",
-          "description": "Approved plan that sets out how the entity continues IoT services through a disruption.",
+          "description": "Section of the ICT continuity plans, or a separate plan, that sets out how the entity continues IoT services through a disruption, with its owner, version and approval date.",
           "filetype": "PDF"
         },
         {
           "name": "IoT response and recovery procedures",
-          "description": "Procedures that detail how the entity manages disruptions to IoT services, including response and recovery.",
+          "description": "Step-by-step response and recovery procedures for each IoT service, naming who acts, in what order and with which contacts, held with or referenced by the IoT continuity plan.",
           "filetype": "PDF"
         },
         {
           "name": "IoT continuity test results",
-          "description": "Results of the periodic test of the IoT continuity plans, with the actions raised.",
+          "description": "Extract of the continuity plan test reports that cover the IoT continuity plans, with the actions raised.",
           "filetype": "PDF"
         }
       ],
@@ -3343,7 +3343,7 @@
         "Entity shall ensure that asset management procedures are established by: performing maintenance on IoT devices.",
         "Entity shall ensure that asset management procedures are established by: implementing the proper disposal of IoT devices."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T1.2.1, T1.2.2, T1.3.3, T1.4.2, T2.3.4, T2.3.6.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T1.2.1, T1.2.2, T1.3.3, T1.4.2, T2.3.4, T2.3.6.",
       "evidence_requirements": [
         {
           "name": "IoT asset inventory",
@@ -3352,7 +3352,7 @@
         },
         {
           "name": "IoT device handling procedure",
-          "description": "Procedure for the appropriate handling of IoT devices.",
+          "description": "Procedure for handling IoT devices appropriately through their life, such as receiving, storing, issuing, moving and returning them.",
           "filetype": "PDF"
         },
         {
@@ -3417,7 +3417,7 @@
         "Entity shall ensure that applications are implemented with end-to-end security controls and availability aspects across the IoT solution and shall enforce access control rules on the trusted service layer.",
         "Entity shall utilize a secure and dedicated gateway for data normalization and processing within IoT networks."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T7.2.1, T5.3.2.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T7.2.1, T5.3.2.",
       "evidence_requirements": [
         {
           "name": "IoT component authentication and encryption settings",
@@ -3435,8 +3435,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "Dedicated IoT gateway evidence",
-          "description": "Evidence that a secure and dedicated gateway is used for normalizing and handling data within IoT networks, such as its network placement and settings.",
+          "name": "Dedicated IoT gateway placement and settings",
+          "description": "Network placement and settings of the secure and dedicated gateway used to normalize and handle data within IoT networks.",
           "filetype": "PNG"
         }
       ],
@@ -3499,7 +3499,7 @@
         "Entity shall ensure that: All updates are assessed for risk and impact before deployment.",
         "Entity shall ensure that: Compensatory measures are applied for devices at end-of-life."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T2.3.1, T3.1.8, T5.3.3, T3.3.2, T7.4.3.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T2.3.1, T3.1.8, T5.3.3, T3.3.2, T7.4.3.",
       "evidence_requirements": [
         {
           "name": "IoT device installation and setup baseline",
@@ -3507,7 +3507,7 @@
           "filetype": "PDF"
         },
         {
-          "name": "Remote management evidence",
+          "name": "Remote management settings",
           "description": "Screenshots showing IoT devices are managed remotely over encrypted channels and that security event recording is enabled.",
           "filetype": "PNG"
         },
@@ -3582,11 +3582,11 @@
         "Entity shall ensure IoT networks are secured by: conducting IoT solution administration and management via a separate, segregated network.",
         "Entity shall ensure IoT networks are secured by: employing best practice cryptography for secure communications in consumer IoT devices."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. Maps to UAE IA v2.1 controls: T4.1.1, T4.1.2, T4.1.3.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 212. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T4.1.1, T4.1.2, T4.1.3.",
       "evidence_requirements": [
         {
           "name": "IoT network architecture diagram",
-          "description": "Diagram showing IoT networks segregated from the corporate network with micro-segmentation, a separate management network and the routing networks they cross.",
+          "description": "Diagram showing IoT networks segregated from the corporate network with micro-segmentation, a separate management network and the routing networks they cross, with the security controls and interoperability considered across them.",
           "filetype": "PDF"
         },
         {
@@ -3605,8 +3605,8 @@
           "filetype": "PDF"
         },
         {
-          "name": "Consumer IoT device cryptography evidence",
-          "description": "Evidence that consumer IoT devices use best practice cryptography for secure communications.",
+          "name": "Consumer IoT device cryptography documentation",
+          "description": "Specifications or test results showing the cryptography that consumer IoT devices use for secure communications and that it follows best practice.",
           "filetype": "PDF"
         }
       ],
@@ -3668,11 +3668,11 @@
         "The entity shall produce, store, protect, and analyze logs for IoT devices, systems, and applications for events such as: Physical access attempts, where possible.",
         "The entity shall produce, store, protect, and analyze logs for IoT devices, systems, and applications for events such as: Emergency access attempts, where possible."
       ],
-      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 213. Maps to UAE IA v2.1 controls: T3.2.2, T3.2.3.",
+      "ai_notes": "Applicability: When the entity uses IoT devices and services. Source: UAE IA v2.1 (November 2025), Annex E, Table 12 (National Internet of Things (IoT) Security Policy), printed page 213. The annex table prints no Applicability column; the applicability stated above is set by this library. Maps to UAE IA v2.1 controls: T3.2.2, T3.2.3.",
       "evidence_requirements": [
         {
-          "name": "IoT logging settings",
-          "description": "Screenshots of the logging settings that show which events are recorded for IoT devices, systems and applications.",
+          "name": "IoT event recording settings",
+          "description": "Screenshots of the settings that show which events are recorded for IoT devices, systems and applications.",
           "filetype": "PNG"
         },
         {
@@ -3695,7 +3695,7 @@
         },
         {
           "name": "Log storage, protection and analysis records",
-          "description": "Evidence that IoT logs are stored, protected from tampering and analyzed, such as retention settings, access restrictions and analysis reports.",
+          "description": "Retention settings, access restrictions and analysis reports showing IoT logs are stored, protected from tampering and analyzed.",
           "filetype": "PDF"
         }
       ],

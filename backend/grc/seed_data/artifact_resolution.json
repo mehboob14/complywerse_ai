@@ -19674,7 +19674,7 @@
    "framework_key": "uae_ia",
    "slug": "uae_ia",
    "artifact_id": "UAEIA-139",
-   "name": "CSP Risk and Assurance Action Register",
+   "name": "CSP Risk Treatment and Independent Assessment Register",
    "control_ref": "E1-2.1.4",
    "codes": [
     "E1-2.1.4"
@@ -21195,7 +21195,7 @@
    "framework_key": "uae_ia",
    "slug": "uae_ia",
    "artifact_id": "UAEIA-256",
-   "name": "Data Exchange Logging Coverage Matrix",
+   "name": "Data Exchange Event Recording Coverage Matrix",
    "control_ref": "F4-7.1",
    "codes": [
     "F4-7.1"
