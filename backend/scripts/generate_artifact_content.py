@@ -230,7 +230,7 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "a RAG status, a control ref).\n"
         "- example_rows: ONE or TWO illustrative rows ONLY, and wrap EVERY cell value like `[EXAMPLE: ...]` so it "
         "is obviously placeholder text the user must replace. Example values are invented: never put the framework's own "
-        "control, clause or annex numbers (or the control given above) in an example cell.\n"
+        "control, clause or annex numbers (or the control given above) in an example cell, a column name or the guidance.\n"
         "- maintenance: 1-2 sentences (owner role, update cadence, source system)."
     )
 
