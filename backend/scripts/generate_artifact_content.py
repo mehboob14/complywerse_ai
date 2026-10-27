@@ -323,6 +323,23 @@ def _sanitize(content: str) -> str:
     return s
 
 
+def _grounding(evidence_items: list, requirement: str) -> str:
+    """Optional extra intent for frameworks whose artifacts are built from their evidence recommendations (UAE IA):
+    what the standard requires in this area, and the evidence the document must let the organisation show. Absent
+    (no `evidence_items`/`requirement` on the artifact) it adds nothing, so every other framework is generated as before."""
+    parts = []
+    if requirement:
+        parts.append("What the standard requires in this area (paraphrase it in your own words; do not quote its numbering):\n"
+                     + requirement.strip())
+    if evidence_items:
+        lines = [f"- {e.get('name', '')}: {e.get('description', '')}".strip() for e in evidence_items]
+        parts.append("The organisation must be able to show these pieces of evidence with this document (they are the evidence "
+                     "recommendations for this area). Make each one a clearly identifiable part of what you write - a section, an "
+                     "appendix, a form, a record template or a register column - and do not add requirements beyond them:\n"
+                     + "\n".join(lines))
+    return ("\n\n" + "\n\n".join(parts)) if parts else ""
+
+
 def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
     """Generate one artifact in the mode that suits its catalog `format`.
 
@@ -334,6 +351,8 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
     name = art.get("name", "")
     cref = art.get("control_ref", "")
     desc = art.get("description", "")
+    evidence_items = art.get("evidence_items") or []
+    desc = (desc + _grounding(evidence_items, art.get("requirement") or "")).strip()
     mode = _content_mode(fmt, atype)
     is_reasoning = model.lower().startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
     max_toks = 16000 if is_reasoning else 4000
@@ -380,6 +399,8 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
                         for line in tpl["outline"]]
             desc = (f"{desc} Follow the outline of NIST's official {tpl['name']} ({tpl['publication']}), "
                     "keeping its section numbers and headings.").strip()
+    if evidence_items:
+        sections = list(sections) + ["Evidence Provided (a markdown table: Evidence item | Where this document provides it)"]
     prompt = _prompt(fw_name, name, atype, cref, desc, sections)
     return {"content": _sanitize(_call_md(client, model, _SYS, prompt, max_toks)), "content_format": "markdown", "table": None}
 
