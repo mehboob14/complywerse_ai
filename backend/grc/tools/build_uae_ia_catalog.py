@@ -11,7 +11,8 @@ copied verbatim (line wraps and hyphenated line breaks repaired, page headers an
 Evidence recommendations are the one part that does not come from the PDF: the standard names no evidence. They are an
 authored layer, to be reviewed like code (seed_data/uae_ia_evidence.json, outside seed_data/frameworks/ because the loader
 globs *.json there) that this script merges in as each control's evidence_requirements. Every item lists the sub-controls it
-evidences in `covers`; the script stops unless every control has items and every sub-control is covered by at least one.
+evidences in `covers` (an empty list marks evidence of the statement itself: an approval, a communication, an inspection); the
+script stops unless every control has items and every sub-control is covered by at least one.
 `covers` is review traceability and is not shipped. So the PDF plus the layer reproduce the committed catalog byte for byte.
 
 Where each fact comes from (PDF page numbers; printed page = PDF page - 4):
@@ -36,9 +37,12 @@ How a control lands in the seeder's fields (grc/seed_frameworks.py reads only th
                       analysis reads); the certification API serves it as `implementation_guidance`
   is_mandatory        true = Always applicable; false = Based on risk assessment (applicable unless excluded)
   evidence_requirements  the authored layer above: {name, description, filetype} like ADHICS and PISF, plus
-                      collection_frequency on the few items that are event-driven or continuous. The seeder reads a
-                      frequency only from the entry itself (a dict entry otherwise defaults to annually) and infers the
-                      evidence type from the name and description, so the wording avoids misleading keywords
+                      collection_frequency on the few items that are event-driven or continuous, and the keys SEEDER_KEYS
+                      lists (is_mandatory = "evidences a shall sub-control"; retention_period and ai_confidence null because
+                      no model generated the item; ai_reasoning; type on the items the loader would mistype). The seeder reads
+                      each of them only from the entry itself (a dict entry otherwise defaults to annually, 3 years, 85%,
+                      required) and infers the evidence type from the name and description when the entry has no type, so
+                      the wording avoids misleading keywords
   priority            P1 high, P2 medium, P3/P4 low. priority_level is deliberately NOT written: the
                       framework page turns any framework with P1-P3 levels into NDMO's "3-year roadmap"
                       (Year 1/2/3, P4 ignored). The exact level is kept in the extra key `priority_tier`
@@ -413,10 +417,15 @@ def check_evidence_layer(layer: Dict[str, Any], controls: List[Dict[str, Any]]) 
             fail(f"{c['id']}: evidence items cover sub-controls {sorted(covered)}, the control has 1..{len(numbered(c))}")
 
 
+# The layer's other keys the seeder reads (ev_req.get(key, default)), in output order. A key that is present goes on as it is,
+# a null included: a present null beats the seeder's default (annually, 3 years, 85%, "Generated from framework seeding").
+SEEDER_KEYS = ("collection_frequency", "is_mandatory", "type", "retention_period", "ai_confidence", "ai_reasoning")
+
+
 def evidence_items(layer: Dict[str, Any], c: Dict[str, Any]) -> List[Dict[str, Any]]:
     """A control's authored items as the seeder's dict entries (as in ADHICS and PISF). `covers` stays in the layer."""
     return [{"name": it["name"], "description": it["description"], "filetype": it["filetype"],
-             **({"collection_frequency": it["collection_frequency"]} if "collection_frequency" in it else {})}
+             **{k: it[k] for k in SEEDER_KEYS if k in it}}
             for it in layer["controls"][c["id"]]]
 
 
@@ -427,7 +436,7 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
         "description": (
             "The UAE Information Assurance (UAE IA) Standard, issued by the UAE Cyber Security Council as a key "
             "component of the National Information Assurance Framework (NIAF), sets the minimum information "
-            f"assurance requirements for entities in the UAE. It organises {len(controls)} controls and "
+            f"assurance requirements for entities in the UAE. It organizes {len(controls)} controls and "
             f"{sum(len(numbered(c)) for c in controls)} sub-controls into {len(families)} families "
             f"({n_sub} sub-families): six management and nine technical. Each control is either always applicable or "
             "applicable based on the entity's risk assessment, and carries an implementation priority from P1 (first) to P4."),
@@ -446,7 +455,7 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
             "implementing entities in the UAE, and to serve as the national standard they demonstrate compliance with."),
         "framework_scope": (
             "Applies to Ministries and Federal Authorities and to non-government Critical Information Infrastructure (CII) "
-            "entities. Where an Emirate CIIP programme exists, its Emirate Lead assesses applicability and enforces and "
+            "entities. Where an Emirate CIIP program exists, its Emirate Lead assesses applicability and enforces and "
             "monitors the standard for Emirate government entities and non-government CII entities; without one, the "
             "standard applies to Emirate government entities."),
         "framework_objectives": [

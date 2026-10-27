@@ -3,10 +3,12 @@
 The standard names no evidence, so the catalog's evidence_requirements are an authored layer
 (seed_data/uae_ia_evidence.json) that grc/tools/build_uae_ia_catalog.py merges into the PDF-derived catalog
 (seed_data/frameworks/uae_ia.json). These tests hold the layer to what makes it trustworthy, without the PDF:
-3-6 well-formed items per control, every one of the 449 sub-controls covered by at least one item (`covers` is
-review traceability and is not shipped), nothing repeated across controls, no vendor names or other frameworks' ids,
-the committed catalog is exactly the layer merged in, and the real seeder turns each entry into one
-ControlEvidenceRequirement row with an inferred type and a collection frequency. On in-memory SQLite.
+3-6 well-formed items per control (2-6 where it has at most two sub-controls), every one of the 449 sub-controls
+covered by at least one item (`covers` is review traceability and is not shipped; an empty `covers` marks evidence of the
+statement itself), nothing repeated across controls, no vendor names or other frameworks' ids, the committed catalog is
+exactly the layer merged in, and the real seeder turns each entry into one ControlEvidenceRequirement row with its own or an
+inferred type, a collection frequency and the layer's flags (required or not, no retention period or confidence claimed,
+who wrote it). On in-memory SQLite.
 """
 import itertools
 import json
@@ -31,7 +33,8 @@ CATALOG = FRAMEWORKS / "uae_ia.json"
 LAYER = SEED / "uae_ia_evidence.json"
 NAME = "UAE Information Assurance Standard"
 
-ENTRY_KEYS = {"name", "description", "filetype", "collection_frequency"}      # what the seeder reads from a dict entry
+ENTRY_KEYS = {"name", "description", "filetype", "collection_frequency", "is_mandatory", "retention_period", "ai_confidence",
+              "ai_reasoning", "type"}      # what the seeder reads from a dict entry
 LAYER_KEYS = ENTRY_KEYS | {"covers"}
 FREQUENCIES = {"annually", "on-change", "continuous"}      # the seeder's default, plus the two the layer sets
 STOP = {"the", "a", "an", "of", "and", "or", "for", "to", "in", "on", "with", "by", "that", "is", "are", "as", "at", "be",
@@ -74,7 +77,7 @@ def test_every_control_has_three_to_six_well_formed_items(catalog, layer):
     for x in catalog["controls"]:
         cid, n = x["control_id"], x["sub_control_count"]
         items = layer[cid]
-        assert max(3, min(6, math.ceil(n / 2))) <= len(items) <= 6, (cid, len(items), n)       # grows with the sub-controls
+        assert max(2 if n <= 2 else 3, min(6, math.ceil(n / 2))) <= len(items) <= 6, (cid, len(items), n)       # grows with the sub-controls
         names = [i["name"].lower() for i in items]
         assert len(set(names)) == len(names), cid
         for i in items:
@@ -90,7 +93,7 @@ def test_every_sub_control_is_covered_by_at_least_one_item(catalog, layer):
     for x in catalog["controls"]:
         cid, n = x["control_id"], x["sub_control_count"]
         for i in layer[cid]:
-            assert i["covers"] == sorted(set(i["covers"])) and i["covers"], (cid, i["name"])
+            assert i["covers"] == sorted(set(i["covers"])), (cid, i["name"])       # [] is valid: evidence of the statement itself
             assert all(isinstance(k, int) and 1 <= k <= n for k in i["covers"]), (cid, i["name"], i["covers"], n)
         covered = {k for i in layer[cid] for k in i["covers"]}
         assert covered == set(range(1, n + 1)), (cid, sorted(set(range(1, n + 1)) - covered))
@@ -137,10 +140,10 @@ def test_nothing_is_repeated_across_controls(layer):
 
 
 def test_the_committed_catalog_is_the_layer_merged_in(catalog, layer):
-    """What build_uae_ia_catalog.py writes: {name, description, filetype} like ADHICS and PISF, plus collection_frequency
-    where the layer sets one; `covers` stays in the layer."""
+    """What build_uae_ia_catalog.py writes: {name, description, filetype} like ADHICS and PISF, plus the other keys of ENTRY_KEYS
+    where the layer sets them (a null included); `covers` stays in the layer."""
     for x in catalog["controls"]:
-        want = [{k: i[k] for k in ("name", "description", "filetype", "collection_frequency") if k in i} for i in layer[x["control_id"]]]
+        want = [{k: i[k] for k in ENTRY_KEYS if k in i} for i in layer[x["control_id"]]]
         assert x["evidence_requirements"] == want, x["control_id"]
         assert all(set(e) <= ENTRY_KEYS and "covers" not in e for e in x["evidence_requirements"])
     assert "uae_ia_evidence.json" in catalog["metadata"]["source_note"]
@@ -166,14 +169,18 @@ def test_the_seeder_creates_one_requirement_per_entry_with_a_type_and_a_frequenc
         assert len(got) == len(x["evidence_requirements"]), x["control_id"]
         for idx, (r, e) in enumerate(zip(got, x["evidence_requirements"]), start=1):
             assert (r.evidence_title, r.evidence_description, r.evidence_format) == (e["name"], e["description"], e["filetype"])
-            assert r.display_order == idx and r.is_mandatory is True and r.is_active is True and r.status == "draft"
-            assert r.evidence_type == _infer_evidence_type(f"{e['name']} {e['description']}") and r.evidence_type in allowed_types
+            assert r.display_order == idx and r.is_mandatory == e.get("is_mandatory", True) and r.is_active is True and r.status == "draft"
+            # nothing was generated by a model: no retention period or confidence is claimed, and the reasoning says who wrote it
+            assert r.retention_period is None and r.ai_confidence is None and r.ai_reasoning == e["ai_reasoning"]
+            assert r.evidence_type == (e.get("type") or _infer_evidence_type(f"{e['name']} {e['description']}")) and r.evidence_type in allowed_types
             assert r.priority == x["priority"]
             assert r.collection_frequency == e.get("collection_frequency", "annually")      # a dict entry is not inferred from its text
     assert {r.collection_frequency for r in rows} == FREQUENCIES
     # the loader's keyword match is a substring match ("technology" and "methodology" contain "log"): none is typed log by accident
+    # (an entry with an explicit type is typed by the layer, not by the match)
+    explicit = {(x["control_id"], e["name"]) for x in catalog["controls"] for e in x["evidence_requirements"] if e.get("type")}
     assert all(re.search(r"\blog(s|ging|ged)?\b|audit trail|\blog-(on|off)\b", f"{r.evidence_title} {r.evidence_description}", re.I)
-               for r in rows if r.evidence_type == "log")
+               for r in rows if r.evidence_type == "log" and (controls[r.parsed_control_id].control_id, r.evidence_title) not in explicit)
     # the types people filter by come out sensibly, and event-driven or continuous items carry their own frequency
     row = {(controls[r.parsed_control_id].control_id, r.evidence_title): r for r in rows}
     assert row["M1.3.3", "Document control procedure"].evidence_type == "procedure"
@@ -214,3 +221,10 @@ def test_the_builder_stops_on_an_uncovered_sub_control_and_ships_no_covers():
     assert b.evidence_items(layer, control) == [{"name": "Register", "description": "A register.", "filetype": "XLSX"},
                                                 {"name": "Log", "description": "A register.", "filetype": "XLSX",
                                                  "collection_frequency": "continuous"}]
+    # statement-level evidence (covers=[]) is accepted, and the flags the layer sets go on in a fixed order, a null included
+    layer["controls"]["M9.9.9"].append({**item, "name": "Approval", "covers": [], "ai_reasoning": "Written.", "retention_period": None,
+                                        "ai_confidence": None, "type": "attestation", "is_mandatory": False})
+    b.check_evidence_layer(layer, [control])
+    assert list(b.evidence_items(layer, control)[2].items()) == [
+        ("name", "Approval"), ("description", "A register."), ("filetype", "XLSX"), ("is_mandatory", False), ("type", "attestation"),
+        ("retention_period", None), ("ai_confidence", None), ("ai_reasoning", "Written.")]

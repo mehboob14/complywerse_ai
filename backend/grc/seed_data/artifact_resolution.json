@@ -18270,7 +18270,7 @@
    "framework_key": "uae_ia",
    "slug": "uae_ia",
    "artifact_id": "UAEIA-031",
-   "name": "Internal Audit Report",
+   "name": "Internal Audit Program, Plan and Report",
    "control_ref": "M6.2.2",
    "codes": [
     "M6.2.2"
@@ -18921,9 +18921,9 @@
    "slug": "uae_ia",
    "artifact_id": "UAEIA-081",
    "name": "Physical and Environmental Security Procedures",
-   "control_ref": "T2.1.1",
+   "control_ref": "T2.2.2",
    "codes": [
-    "T2.1.1"
+    "T2.2.2"
    ],
    "scf_ids": [],
    "match_mode": "exact",
@@ -19141,7 +19141,7 @@
    "framework_key": "uae_ia",
    "slug": "uae_ia",
    "artifact_id": "UAEIA-098",
-   "name": "Cryptographic Register",
+   "name": "Cryptographic Inventory and Requirements Register",
    "control_ref": "T3.4.1",
    "codes": [
     "T3.4.1"
@@ -19206,7 +19206,7 @@
    "framework_key": "uae_ia",
    "slug": "uae_ia",
    "artifact_id": "UAEIA-103",
-   "name": "Network Security Standard",
+   "name": "Network Segregation, Wireless and Web Filtering Standard",
    "control_ref": "T4.1.3",
    "codes": [
     "T4.1.3"
@@ -19548,6 +19548,58 @@
    "control_ref": "T9.2.1",
    "codes": [
     "T9.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-130",
+   "name": "Risk Assessment Review Procedure",
+   "control_ref": "M2.4.1",
+   "codes": [
+    "M2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-131",
+   "name": "Network Diagram",
+   "control_ref": "T4.1.1",
+   "codes": [
+    "T4.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-132",
+   "name": "Compliance Progress Report",
+   "control_ref": "M1.3.2",
+   "codes": [
+    "M1.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-133",
+   "name": "Off-site Equipment Register",
+   "control_ref": "T2.3.5",
+   "codes": [
+    "T2.3.5"
    ],
    "scf_ids": [],
    "match_mode": "exact",

@@ -31,6 +31,10 @@ import {
   Loader2,
 } from 'lucide-react';
 
+// UAE IA marks a document Mandatory when its control is always applicable, not because the standard names the document.
+const mandatoryNote = (frameworkKey: string) =>
+  frameworkKey === 'uae_ia' ? 'Its control always applies; the standard does not name the document itself' : undefined;
+
 // ─── Native-format download helpers (server-rendered xlsx/csv/docx/pdf/md) ────
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -499,7 +503,7 @@ export function CreateArtifactModal({
           {/* Meta chips */}
           <div className="flex flex-wrap gap-2">
             {item.control_ref && <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded font-mono">{item.control_ref}</span>}
-            {item.mandatory   && <span className="px-2 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">Mandatory</span>}
+            {item.mandatory   && <span title={mandatoryNote(frameworkKey)} className="px-2 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">Mandatory</span>}
             {item.is_platform_native && <span className="px-2 py-0.5 text-xs bg-purple-50 text-purple-700 rounded flex items-center gap-1"><Database className="h-3 w-3" /> Platform Data</span>}
             {item.format && <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">{item.format}</span>}
           </div>
@@ -1089,7 +1093,7 @@ export default function ArtifactsTab({
                                   {item.name}
                                 </button>
                                 {item.mandatory && (
-                                  <span className="px-1.5 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">M</span>
+                                  <span title={mandatoryNote(frameworkKey)} className="px-1.5 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">M</span>
                                 )}
                                 {item.is_platform_native && (
                                   <span className="px-1.5 py-0.5 text-xs bg-purple-50 text-purple-600 rounded flex items-center gap-1">

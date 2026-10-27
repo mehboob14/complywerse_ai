@@ -425,6 +425,7 @@ CLASSIFICATION = {
         "Communication plan": "UAEIA-004",
         "Authority and lead entity contact list": "UAEIA-039",
         "Correspondence with authorities": "sample",
+        "Compliance progress report to the lead entity": "UAEIA-132",
     },
     "M1.3.3": {
         "Document control procedure": "UAEIA-040",
@@ -456,7 +457,7 @@ CLASSIFICATION = {
     "M2.2.1": {
         "Risk identification results": "UAEIA-008",
         "Risk owner assignments": "UAEIA-008",
-        "Level of detail decision": "approval",
+        "Level of detail decision": "UAEIA-006",
     },
     "M2.2.2": {
         "Consequence assessment": "UAEIA-009",
@@ -476,7 +477,7 @@ CLASSIFICATION = {
     },
     "M2.3.2": {
         "Control selection record": "UAEIA-046",
-        "Control omission check": "test",
+        "Control coverage in the Statement of Applicability": "UAEIA-011",
         "Entity-specific additional controls": "UAEIA-011",
         "Control selection criteria review": "test",
     },
@@ -492,7 +493,7 @@ CLASSIFICATION = {
         "Control exclusion justifications": "UAEIA-011",
     },
     "M2.4.1": {
-        "Risk review and update procedure": "UAEIA-006",
+        "Risk review and update procedure": "UAEIA-130",
         "Risk factor monitoring records": "record",
         "Risk review records": "record",
         "Risk management improvement record": "record",
@@ -500,7 +501,6 @@ CLASSIFICATION = {
     "M2.4.2": {
         "Risk communication plan": "UAEIA-047",
         "Risk communication records": "notice",
-        "Decision-maker risk briefings": "sample",
     },
     "M3.1.1": {
         "Approved awareness and training policy": "UAEIA-048",
@@ -549,7 +549,7 @@ CLASSIFICATION = {
     },
     "M4.1.1": {
         "Background verification procedure": "UAEIA-052",
-        "Completed verification check reports": "sample",
+        "Verification check completion records": "sample",
         "Verification coverage review": "test",
         "Verification document handling": "export",
     },
@@ -605,7 +605,7 @@ CLASSIFICATION = {
         "Applicable data protection laws register": "UAEIA-005",
         "Personal data handling inventory": "UAEIA-062",
         "Privacy risk assessments": "UAEIA-063",
-        "Privacy control implementation": "UAEIA-005",
+        "Data protection control implementation record": "UAEIA-005",
         "Data breach detection and response procedure": "UAEIA-064",
     },
     "M5.2.1": {
@@ -670,7 +670,7 @@ CLASSIFICATION = {
     "T1.2.2": {
         "Acceptable use rules": "UAEIA-073",
         "Acceptable use rules circulation record": "notice",
-        "Signed acceptance of the rules": "signed",
+        "Acceptance records for the rules": "signed",
         "Acceptable use compliance checks": "test",
     },
     "T1.3.1": {
@@ -728,7 +728,7 @@ CLASSIFICATION = {
     "T2.1.1": {
         "Approved physical and environmental security policy": "UAEIA-016",
         "Physical and environmental security procedures": "UAEIA-081",
-        "Physical security policy approval and review history": "approval",
+        "Physical and environmental security policy approval and review history": "approval",
     },
     "T2.2.1": {
         "Security area classification": "UAEIA-082",
@@ -740,8 +740,8 @@ CLASSIFICATION = {
         "Secure area entry authentication settings": "export",
         "Secure area access records": "log",
         "Visible identification requirement": "UAEIA-081",
-        "Physical access log review": "log",
-        "Contractor and third-party escort records": "record",
+        "Physical access log review records": "log",
+        "Contractor and third-party escort records": "UAEIA-081",
         "Delivery and loading area access control": "UAEIA-081",
     },
     "T2.2.3": {
@@ -784,7 +784,7 @@ CLASSIFICATION = {
     },
     "T2.3.5": {
         "Off-site equipment protection rules": "UAEIA-084",
-        "Off-site equipment authorization and custody records": "record",
+        "Off-site equipment authorization and custody records": "UAEIA-133",
         "Off-premise location risk assessment": "UAEIA-083",
     },
     "T2.3.6": {
@@ -859,14 +859,14 @@ CLASSIFICATION = {
         "Audit log samples": "sample",
         "Log review schedule and records": "UAEIA-094",
         "Log reviewer training and skills": "UAEIA-018",
-        "Log retention requirements and settings": "export",
+        "Log retention requirements": "UAEIA-094",
         "Critical log protection": "UAEIA-094",
     },
     "T3.2.3": {
         "Monitored system usage list": "UAEIA-094",
         "Monitoring review frequency and records": "UAEIA-094",
         "Monitoring reviewer qualifications": "UAEIA-018",
-        "Monitoring information retention settings": "export",
+        "Monitoring information retention requirements": "UAEIA-094",
         "Anomaly alerts and evaluation records": "log",
         "National, Emirate and sector monitoring capability check": "test",
     },
@@ -914,7 +914,7 @@ CLASSIFICATION = {
     },
     "T4.1.1": {
         "Approved network security policy": "UAEIA-015",
-        "Network diagram": "UAEIA-015",
+        "Network diagram": "UAEIA-131",
         "Network access control configuration": "export",
         "Network risk assessment": "UAEIA-101",
         "Network control implementation record": "UAEIA-101",
@@ -963,7 +963,7 @@ CLASSIFICATION = {
     "T5.2.3": {
         "Privileged access register": "UAEIA-026",
         "Administrative group membership export": "export",
-        "Administrator account usage rules": "export",
+        "Administrator account usage controls": "export",
         "Administrative multi-factor authentication settings": "export",
         "Local administrator password controls": "export",
         "Administrative activity logs and reviews": "log",
@@ -1016,7 +1016,6 @@ CLASSIFICATION = {
     "T6.1.1": {
         "Approved third-party security policy": "UAEIA-111",
         "Third-party security governance arrangements": "UAEIA-111",
-        "Third-party security program mandate": "approval",
     },
     "T6.2.1": {
         "Third-party risk management procedure": "UAEIA-023",
@@ -1155,6 +1154,7 @@ CLASSIFICATION = {
         "ICT continuity organizational structure": "UAEIA-029",
         "Continuity roles and competence records": "record",
         "ICT continuity plans": "UAEIA-029",
+        "ICT continuity test and review results": "test",
     },
     "T9.1.2": {
         "Security controls in continuity plans": "UAEIA-128",
@@ -1164,6 +1164,6 @@ CLASSIFICATION = {
     "T9.2.1": {
         "Continuity plan test schedule": "UAEIA-129",
         "Continuity plan test reports": "test",
-        "Continuity lessons learned and plan updates": "UAEIA-126",
+        "Continuity lessons learned and plan updates": "UAEIA-129",
     },
 }

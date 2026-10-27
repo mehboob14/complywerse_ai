@@ -10369,7 +10369,7 @@
         "type": "Register",
         "control_ref": "M5.1.1",
         "mandatory": false,
-        "description": "Register of the statutory, regulatory and contractual information security requirements that apply to the entity, with the responsibilities and controls in place to meet them.",
+        "description": "Register of the statutory, regulatory and contractual requirements that apply to the information security of the entity, including data protection, monitoring information sharing, incident handling and evidence handling, each with its responsible individual and the controls in place; required unless the risk assessment justifies excluding M5.1.1.",
         "format": "XLSX",
         "owner": "Compliance Officer",
         "also_controls": [
@@ -10383,7 +10383,7 @@
           "System requirements from compliance obligations",
           "Compliance requirement to control mapping",
           "Applicable data protection laws register",
-          "Privacy control implementation",
+          "Data protection control implementation record",
           "External information sharing requirements",
           "Incident handling and reporting requirements",
           "Jurisdictional evidence requirements"
@@ -10400,14 +10400,14 @@
         "format": "DOCX",
         "owner": "Risk Manager",
         "also_controls": [
-          "M2.4.1"
+          "M2.2.1"
         ],
         "evidence": [
           "Approved risk management policy",
           "Risk criteria definitions",
           "Risk treatment and monitoring strategy",
           "Risk assessment approach",
-          "Risk review and update procedure"
+          "Level of detail decision"
         ]
       },
       {
@@ -10419,7 +10419,7 @@
         "mandatory": true,
         "description": "Up-to-date inventory of information assets, consistent with other inventories, with an owner holding management responsibility for each asset.",
         "format": "XLSX",
-        "owner": "Asset Owner",
+        "owner": "IT Asset Manager",
         "evidence": [
           "Information asset inventory",
           "Asset ownership listing"
@@ -10447,8 +10447,8 @@
         "type": "Assessment",
         "control_ref": "M2.2.3",
         "mandatory": true,
-        "description": "Documented results of risk analysis and evaluation against the risk criteria, with treatment priorities, shared with the designated UAE lead entities as required.",
-        "format": "PDF",
+        "description": "Documented results of risk analysis (consequences, likelihood and risk levels) and risk evaluation against the risk criteria, with treatment priorities, shared with the designated UAE lead entities as required.",
+        "format": "XLSX",
         "owner": "Risk Manager",
         "also_controls": [
           "M2.2.2"
@@ -10468,7 +10468,7 @@
         "type": "Plan",
         "control_ref": "M2.3.3",
         "mandatory": true,
-        "description": "Documented plan of management actions, resources, responsibilities, priorities and target dates for implementing the controls that treat the assessed risks.",
+        "description": "Documented plan of management actions, resources, responsibilities, priorities and target dates for implementing the controls that treat the assessed risks, starting with the P1 controls.",
         "format": "XLSX",
         "owner": "Risk Manager",
         "evidence": [
@@ -10492,7 +10492,8 @@
         "evidence": [
           "Statement of Applicability",
           "Control exclusion justifications",
-          "Entity-specific additional controls"
+          "Entity-specific additional controls",
+          "Control coverage in the Statement of Applicability"
         ]
       },
       {
@@ -10530,9 +10531,9 @@
         "type": "Policy",
         "control_ref": "T3.4.1",
         "mandatory": true,
-        "description": "Approved policy that identifies encryption requirements, keeps cryptographic practice compliant with applicable laws and standards, and replaces weak ciphers and hashing algorithms in good time.",
+        "description": "Approved cryptographic policy, enforced by the entity, that identifies and addresses security and privacy risks through its encryption requirements and supports compliant cryptographic techniques, including the timely replacement of weak or outdated ciphers and hashing algorithms.",
         "format": "DOCX",
-        "owner": "Security Architect",
+        "owner": "CISO",
         "evidence": [
           "Approved cryptographic policy"
         ]
@@ -10544,12 +10545,11 @@
         "type": "Policy",
         "control_ref": "T4.1.1",
         "mandatory": true,
-        "description": "Approved policy on the use of network services and devices, with a maintained network diagram of all components and their interconnections.",
+        "description": "Approved policy on the use of network services and devices.",
         "format": "DOCX",
         "owner": "Network Security Lead",
         "evidence": [
-          "Approved network security policy",
-          "Network diagram"
+          "Approved network security policy"
         ]
       },
       {
@@ -10584,10 +10584,10 @@
         "artifact_id": "UAEIA-018",
         "stage": "Stage 4: Implementation",
         "name": "Information Security Training and Competence Records",
-        "type": "Record",
+        "type": "Register",
         "control_ref": "M3.2.1",
         "mandatory": true,
-        "description": "Records of the education, training, skills, experience and qualifications of personnel doing security-relevant work, kept as evidence of competence.",
+        "description": "Register with one row per person recording the education, training, skills, experience and qualifications of personnel doing security-relevant work, including log reviewers, developers, incident responders and evidence handlers, kept as evidence of competence.",
         "format": "XLSX",
         "owner": "HR / Training Lead",
         "also_controls": [
@@ -10637,7 +10637,7 @@
         "type": "Standard",
         "control_ref": "T3.1.1",
         "mandatory": true,
-        "description": "Minimum security configurations defined for common technology products, implemented, monitored and reviewed periodically.",
+        "description": "Minimum security configurations defined for the common technology products in use, with how they are implemented, monitored and reviewed.",
         "format": "DOCX",
         "owner": "Security Operations Lead",
         "evidence": [
@@ -10666,7 +10666,7 @@
         "type": "Procedure",
         "control_ref": "T5.2.2",
         "mandatory": true,
-        "description": "Formal procedure for provisioning and de-provisioning access rights, with segregation of duties, records of access granted and immediate revocation on role change or exit.",
+        "description": "Formal procedure for provisioning and de-provisioning access rights, with segregation of duties and immediate revocation on role change or exit.",
         "format": "DOCX",
         "owner": "IAM Lead",
         "evidence": [
@@ -10713,7 +10713,7 @@
         "type": "Report",
         "control_ref": "T3.3.2",
         "mandatory": true,
-        "description": "Results of vulnerability testing of new and existing systems and applications, with the remediation plan and the measures taken to address the vulnerabilities found.",
+        "description": "Results of vulnerability testing of new and existing systems and applications, with the remediation plan for new systems before they enter production.",
         "format": "PDF",
         "owner": "Security Operations Lead",
         "evidence": [
@@ -10728,7 +10728,7 @@
         "type": "Register",
         "control_ref": "T5.2.3",
         "mandatory": true,
-        "description": "Record of all privileged access rights allocated, kept to restrict and control their allocation and to support review of how they are used.",
+        "description": "Record of all privileged access rights allocated, by system and account, with the authorization for each.",
         "format": "XLSX",
         "owner": "IAM Lead",
         "evidence": [
@@ -10756,7 +10756,7 @@
         "artifact_id": "UAEIA-028",
         "stage": "Stage 5: Operation & Monitoring",
         "name": "Information Security Incident Register",
-        "type": "Log",
+        "type": "Register",
         "control_ref": "T8.2.5",
         "mandatory": true,
         "description": "Record of every information security incident with the data collected before, during and after it, protected as incident documentation.",
@@ -10792,7 +10792,7 @@
         "mandatory": true,
         "description": "Results of routine compliance checks against security policies and standards, reviewed by authorized personnel, with non-compliance reported for remediation.",
         "format": "PDF",
-        "owner": "Head of Compliance",
+        "owner": "Compliance Officer",
         "evidence": [
           "Compliance check results"
         ]
@@ -10800,11 +10800,11 @@
       {
         "artifact_id": "UAEIA-031",
         "stage": "Stage 6: Audit & Regulatory Reporting",
-        "name": "Internal Audit Report",
+        "name": "Internal Audit Program, Plan and Report",
         "type": "Report",
         "control_ref": "M6.2.2",
         "mandatory": true,
-        "description": "Documents the audit program, criteria, scope, plan and results of each internal information security audit, reported to relevant management.",
+        "description": "Audit program, criteria, scope and plan for each internal information security audit, and its results, reported to relevant management.",
         "format": "PDF",
         "owner": "Head of Internal Audit",
         "evidence": [
@@ -10860,7 +10860,7 @@
         "type": "Register",
         "control_ref": "M1.1.1",
         "mandatory": true,
-        "description": "Register of the internal and external parties relevant to information security, the security requirements each one places on the entity, who raised each requirement and who owns the relationship.",
+        "description": "Register of the internal and external parties relevant to information security, the security requirements each one places on the entity and who raised each requirement.",
         "format": "XLSX",
         "owner": "CISO",
         "evidence": [
@@ -10977,7 +10977,7 @@
         "mandatory": true,
         "description": "Record of the entity's compliance with each mandatory control of the standard, with a reference to the supporting evidence.",
         "format": "XLSX",
-        "owner": "Head of Compliance",
+        "owner": "Compliance Officer",
         "evidence": [
           "Mandatory controls compliance record"
         ]
@@ -10989,7 +10989,7 @@
         "type": "Procedure",
         "control_ref": "M1.3.4",
         "mandatory": false,
-        "description": "Project management procedure that builds information security risk assessment and requirement identification into every stage of the project life cycle.",
+        "description": "Project management procedure that builds information security risk assessment and requirement identification into the early stages of projects and repeats the risk assessment through the project life cycle.",
         "format": "DOCX",
         "owner": "Project Management Lead",
         "evidence": [
@@ -11014,7 +11014,7 @@
         "artifact_id": "UAEIA-045",
         "stage": "Stage 1: Governance & Scoping",
         "name": "Special Interest Group Participation Guidelines",
-        "type": "Standard",
+        "type": "Guideline",
         "control_ref": "M1.3.5",
         "mandatory": false,
         "description": "Guidance defining what employees taking part in special interest groups, forums and associations are allowed to share.",
@@ -11160,7 +11160,7 @@
         "type": "Register",
         "control_ref": "M4.2.2",
         "mandatory": false,
-        "description": "Register of the information security breaches committed, with the date, the people involved and the outcome, protecting identities as required.",
+        "description": "Register of the information security breaches committed, with the date, the role or unit involved and the outcome, protecting identities as required.",
         "format": "XLSX",
         "owner": "HR Director",
         "evidence": [
@@ -11325,7 +11325,7 @@
         "mandatory": true,
         "description": "Procedure for routinely checking compliance with security policies and standards, stating the schedule and who performs and who reviews the checks.",
         "format": "DOCX",
-        "owner": "Head of Compliance",
+        "owner": "Compliance Officer",
         "evidence": [
           "Compliance checking procedure"
         ]
@@ -11559,7 +11559,7 @@
         "type": "Standard",
         "control_ref": "T1.5.1",
         "mandatory": true,
-        "description": "Documented secure configuration and handling requirements for user endpoint devices, including the information classification they may handle, registration, software restrictions, updates and network connection rules.",
+        "description": "Documented rules for secure setup and handling of user endpoint devices: what each device type may hold, how devices are registered, who may install software, how updates are applied and when devices may connect to other networks.",
         "format": "DOCX",
         "owner": "Security Operations Lead",
         "evidence": [
@@ -11571,19 +11571,20 @@
         "stage": "Stage 4: Implementation",
         "name": "Physical and Environmental Security Procedures",
         "type": "Procedure",
-        "control_ref": "T2.1.1",
-        "mandatory": true,
-        "description": "Procedures that implement the physical and environmental security policy for secure areas, covering visible identification, delivery and loading areas, public access to key facilities, working in secure areas and the recording devices allowed into them.",
+        "control_ref": "T2.2.2",
+        "mandatory": false,
+        "description": "Procedures that implement the physical and environmental security policy for secure areas, covering visible identification, escorting of contractors and third parties, delivery and loading areas, public access to key facilities, working in secure areas and the recording devices allowed into them.",
         "format": "DOCX",
         "owner": "Physical Security Manager",
         "also_controls": [
-          "T2.2.2",
+          "T2.1.1",
           "T2.2.3",
           "T2.2.5"
         ],
         "evidence": [
           "Physical and environmental security procedures",
           "Visible identification requirement",
+          "Contractor and third-party escort records",
           "Delivery and loading area access control",
           "Public access restriction rules",
           "Secure area working guidelines",
@@ -11683,7 +11684,7 @@
         "type": "Procedure",
         "control_ref": "T3.1.2",
         "mandatory": false,
-        "description": "Approved operating procedures giving the detailed instructions for each job, such as system owners, secure installation and configuration, information handling, and backup and resilience, in a format that can be shared with stakeholders.",
+        "description": "Approved operating procedures giving the detailed instructions for each job, such as secure installation and configuration, information handling, and backup and resilience, in a format that can be shared with stakeholders.",
         "format": "DOCX",
         "owner": "IT Operations Manager",
         "evidence": [
@@ -11806,7 +11807,7 @@
         "type": "Register",
         "control_ref": "T3.2.2",
         "mandatory": true,
-        "description": "Register of the auditable events captured for each log source, the types of system use monitored, the minimum information recorded, the review frequency and the protection applied to critical logs.",
+        "description": "Register of the auditable events captured for each log source, the types of system use monitored, the minimum information recorded, the review frequency, the minimum retention time and the protection applied to critical logs.",
         "format": "XLSX",
         "owner": "Security Operations Lead",
         "also_controls": [
@@ -11815,9 +11816,11 @@
         "evidence": [
           "Auditable events list",
           "Log review schedule and records",
+          "Log retention requirements",
           "Critical log protection",
           "Monitored system usage list",
-          "Monitoring review frequency and records"
+          "Monitoring review frequency and records",
+          "Monitoring information retention requirements"
         ]
       },
       {
@@ -11842,7 +11845,7 @@
         "type": "Procedure",
         "control_ref": "T3.3.2",
         "mandatory": true,
-        "description": "Procedure defining the roles and responsibilities for vulnerability monitoring, vulnerability risk assessment, updating and asset tracking.",
+        "description": "Procedure naming who is responsible for tracking vulnerabilities, assessing their risk, applying updates and keeping the asset list used to find affected systems.",
         "format": "DOCX",
         "owner": "Security Operations Lead",
         "evidence": [
@@ -11866,7 +11869,7 @@
       {
         "artifact_id": "UAEIA-098",
         "stage": "Stage 5: Operation & Monitoring",
-        "name": "Cryptographic Register",
+        "name": "Cryptographic Inventory and Requirements Register",
         "type": "Register",
         "control_ref": "T3.4.1",
         "mandatory": true,
@@ -11903,7 +11906,7 @@
         "type": "Plan",
         "control_ref": "T3.4.4",
         "mandatory": false,
-        "description": "Plan for moving systems to quantum-safe cryptography, including the dependency analysis that sets the order of transition.",
+        "description": "Plan for moving systems to quantum-safe cryptography, including an analysis of the dependencies that may affect the order of transition.",
         "format": "DOCX",
         "owner": "Security Architect",
         "evidence": [
@@ -11942,7 +11945,7 @@
       {
         "artifact_id": "UAEIA-103",
         "stage": "Stage 4: Implementation",
-        "name": "Network Security Standard",
+        "name": "Network Segregation, Wireless and Web Filtering Standard",
         "type": "Standard",
         "control_ref": "T4.1.3",
         "mandatory": false,
@@ -11999,7 +12002,7 @@
         "type": "Matrix",
         "control_ref": "T5.2.2",
         "mandatory": true,
-        "description": "Matrix mapping roles and responsibilities to the access rights granted to information and associated assets, the access requirements set by owners, and the conflicting roles that must be kept separate.",
+        "description": "Matrix mapping roles and responsibilities to the access rights granted to information and associated assets, the access requirements set by owners, and the conflicting roles that are kept separate.",
         "format": "XLSX",
         "owner": "IAM Lead",
         "also_controls": [
@@ -12065,7 +12068,7 @@
         "type": "Standard",
         "control_ref": "T5.4.1",
         "mandatory": false,
-        "description": "Standard for providing security credentials securely, covering identity verification before issue, temporary credentials, secure delivery, revocation and re-allocation, and the good practices and approved storage methods users must follow.",
+        "description": "Standard for providing security credentials securely, covering identity verification before issue, temporary credentials, secure delivery, revocation and re-allocation, and the good practices and approved storage methods users are asked to follow.",
         "format": "DOCX",
         "owner": "IAM Lead",
         "also_controls": [
@@ -12254,7 +12257,7 @@
         "type": "Procedure",
         "control_ref": "T8.1.2",
         "mandatory": true,
-        "description": "Procedure and mechanism for reporting observed or suspected information security events, with the point of contact, designed to be easy to use and always available.",
+        "description": "Procedure and mechanism for reporting observed or suspected information security events, with the point of contact, designed to be easy to use and available when needed.",
         "format": "DOCX",
         "owner": "Incident Response Lead",
         "evidence": [
@@ -12268,7 +12271,7 @@
         "type": "Standard",
         "control_ref": "T8.2.2",
         "mandatory": true,
-        "description": "Scheme for classifying and prioritizing incidents by impact, with the criteria identifying the incidents that must be reported to national agencies and the notification times by incident level.",
+        "description": "Scheme for classifying and prioritizing incidents by impact, with the criteria identifying the incidents to be reported to national agencies and the notification times by incident level.",
         "format": "DOCX",
         "owner": "Incident Response Lead",
         "evidence": [
@@ -12312,15 +12315,11 @@
         "type": "Register",
         "control_ref": "T8.2.6",
         "mandatory": false,
-        "description": "Register of lessons learned from incidents and continuity tests, with the additional controls identified to avoid similar incidents and the updates made to the continuity plans.",
+        "description": "Register of lessons learned from incidents, with the additional controls identified to avoid similar incidents in the future.",
         "format": "XLSX",
         "owner": "Incident Response Lead",
-        "also_controls": [
-          "T9.2.1"
-        ],
         "evidence": [
-          "Lessons learned records",
-          "Continuity lessons learned and plan updates"
+          "Lessons learned records"
         ]
       },
       {
@@ -12360,11 +12359,68 @@
         "type": "Plan",
         "control_ref": "T9.2.1",
         "mandatory": false,
-        "description": "Schedule showing how and when each element of the information systems continuity plans is tested.",
+        "description": "Schedule showing how and when each element of the information systems continuity plans is tested, with the lessons learned from the tests and the updates made to the plans.",
         "format": "XLSX",
         "owner": "BCM Manager",
         "evidence": [
-          "Continuity plan test schedule"
+          "Continuity plan test schedule",
+          "Continuity lessons learned and plan updates"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-130",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Risk Assessment Review Procedure",
+        "type": "Procedure",
+        "control_ref": "M2.4.1",
+        "mandatory": true,
+        "description": "Documented process for the planned and ad hoc review and update of the risk assessment and treatment, with the defined review periodicity and the major changes that trigger a review.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Risk review and update procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-131",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Diagram",
+        "type": "Record",
+        "control_ref": "T4.1.1",
+        "mandatory": true,
+        "description": "Current diagram of all network components, their interconnectivity and their connections, identified, documented and kept up to date.",
+        "format": "PDF",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Network diagram"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-132",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Compliance Progress Report",
+        "type": "Report",
+        "control_ref": "M1.3.2",
+        "mandatory": true,
+        "description": "Periodic report to the relevant lead entity or sector regulator, or to the Cyber Security Council where there is none, on the progress of implementing the standard and on the compliance position.",
+        "format": "PDF",
+        "owner": "CISO",
+        "evidence": [
+          "Compliance progress report to the lead entity"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-133",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Off-site Equipment Register",
+        "type": "Register",
+        "control_ref": "T2.3.5",
+        "mandatory": false,
+        "description": "Register of the authorization and removal of equipment and media used outside the premises, whether owned by the entity or privately, with a chain-of-custody log of transfers.",
+        "format": "XLSX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Off-site equipment authorization and custody records"
         ]
       }
     ]
