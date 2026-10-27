@@ -328,6 +328,23 @@ def test_seeding_and_the_api_serve_the_catalogue_by_the_standards_name(db, entry
     assert all(stored[a["artifact_id"]] == ", ".join([a["control_ref"], *(a.get("also_controls") or [])]) for a in entry["artifacts"])
 
 
+def test_the_requirement_section_says_which_evidence_each_artifact_provides(db, entry):
+    """The page adds a suggestion for every evidence item no artifact is NAMED after; the response therefore lists what each
+    artifact provides, so the page can leave out the items a curated artifact already covers. Other frameworks only gain an empty list."""
+    from grc.routers.artifacts_router import _ensure_catalog_seeded, list_artifacts_by_control
+
+    _ensure_catalog_seeded(db)
+    want = {a["artifact_id"]: a["evidence"] for a in entry["artifacts"]}
+    for code in ("M2.3.4", "T2.3.5", "E1-2.1.1", "E1-2.4.1", "F1-5.7"):
+        out = list_artifacts_by_control(framework_key=None, assessment_type=NAME, control_ref=code, db=db, current_user=None)
+        assert out["catalog"], code
+        assert all(i["provides"] == want[i["artifact_id"]] and i["provides"] for i in out["catalog"]), code
+    row = db.query(m.ArtifactCatalogItem).filter(m.ArtifactCatalogItem.framework_key == "iso_27001_2022",
+                                                 m.ArtifactCatalogItem.control_ref.isnot(None)).first()
+    out = list_artifacts_by_control(framework_key="iso_27001_2022", assessment_type=None, control_ref=row.control_ref, db=db, current_user=None)
+    assert out["catalog"] and all(i["provides"] == [] for i in out["catalog"])
+
+
 # -- the journey flow on the framework page -----------------------------------------------------------------------------
 
 def _flows():

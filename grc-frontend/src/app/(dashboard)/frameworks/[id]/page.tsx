@@ -336,6 +336,10 @@ function RequirementArtifactsSection({
   const realNames = new Set(
     realCatalog.map((c) => (c.name || '').toLowerCase().trim()).filter(Boolean),
   );
+  // Evidence items a curated artifact already provides need no suggestion of their own.
+  const providedNames = new Set(
+    realCatalog.flatMap((c) => c.provides || []).map((n) => n.toLowerCase().trim()),
+  );
   const refForVirtual = refTokens[0] || null;
   // Infer the artifact's logical type (Policy / Procedure / Register / ...)
   // from whatever signal we have — explicit `type`, the document name, or
@@ -367,7 +371,7 @@ function RequirementArtifactsSection({
   const virtualCatalog: ArtifactCatalogItemT[] = evidenceReqs
     .filter((ev) => {
       const name = ((ev.name ?? ev.title) || '').toLowerCase().trim();
-      return name && !realNames.has(name);
+      return name && !realNames.has(name) && !providedNames.has(name);
     })
     .map((ev, idx) => {
       const fileType = (ev.filetype || ev.format || 'DOCX').toUpperCase();

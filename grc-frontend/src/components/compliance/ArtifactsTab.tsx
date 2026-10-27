@@ -78,6 +78,8 @@ export interface CatalogItem {
   owner: string | null;
   is_platform_native: boolean;
   platform_data_type: string | null;
+  // Evidence items this artifact provides (only the per-requirement list returns it, for catalogs built from evidence, e.g. UAE IA).
+  provides?: string[];
   // Ready = pre-generated body exists (served from artifact_content.json, which
   // the backend hot-reloads by mtime). content_format = markdown|table|guide.
   has_content?: boolean;

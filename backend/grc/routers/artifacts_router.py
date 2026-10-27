@@ -56,6 +56,25 @@ def _load_artifact_content() -> dict:
         logger.warning("could not load artifact_content.json", exc_info=True)
         return {}
 
+
+_provides_cache: dict = {"mtime": None, "data": {}}
+
+
+def _provides_by_artifact(framework_key: str) -> dict:
+    """{artifact_id: [evidence item names it provides]} from the curated catalog file, for the frameworks whose artifacts follow
+    their evidence recommendations (UAE IA); {} for the others. The database rows do not carry the list. Cached by mtime."""
+    try:
+        mtime = _CATALOG_PATH.stat().st_mtime
+        if _provides_cache["mtime"] != mtime:
+            raw = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+            _provides_cache["data"] = {k: {a["artifact_id"]: a["evidence"] for a in v.get("artifacts", []) if a.get("evidence")}
+                                       for k, v in raw.items()}
+            _provides_cache["mtime"] = mtime
+        return _provides_cache["data"].get(framework_key, {})
+    except Exception:  # noqa: BLE001 — an optional enhancement of the per-requirement list
+        logger.warning("could not read the evidence lists of artifact_catalog.json", exc_info=True)
+        return {}
+
 # Map assessment_type strings → catalog framework_key
 ASSESSMENT_TYPE_MAP: dict[str, str] = {
     # ISO 27001
@@ -1033,6 +1052,7 @@ def list_artifacts_by_control(
         if _ref_matches_any(a.control_ref, requirement_codes)
     ]
 
+    provides = _provides_by_artifact(resolved_key)
     return {
         "framework_key": resolved_key,
         "control_ref": control_ref,
@@ -1051,6 +1071,7 @@ def list_artifacts_by_control(
                 "owner": i.owner,
                 "is_platform_native": i.is_platform_native,
                 "platform_data_type": i.platform_data_type,
+                "provides": provides.get(i.artifact_id, []),
             }
             for i in matched_catalog
         ],
