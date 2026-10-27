@@ -92,7 +92,7 @@ def test_the_staging_file_has_the_totals_the_parse_found(rows):
 
 
 def test_ids_follow_the_scheme_and_do_not_meet_the_core_ids(rows, core):
-    core_ids = {c["control_id"] for c in core["controls"] if not c["control_id"].startswith("E")}
+    core_ids = {c["control_id"] for c in core["controls"] if not re.match(r"[EF]\d-", c["control_id"])}      # the catalog holds the F rows too
     assert len(core_ids) == 134
     for r in rows:
         number = r["original_reference"]
@@ -142,7 +142,7 @@ def test_every_row_has_the_librarys_shape_and_fits_the_seeder_columns(rows):
 
 
 def test_mapped_controls_are_real_core_controls_in_print_order(rows, core):
-    core_ids = {c["control_id"] for c in core["controls"] if not c["control_id"].startswith("E")}
+    core_ids = {c["control_id"] for c in core["controls"] if not re.match(r"[EF]\d-", c["control_id"])}      # the catalog holds the F rows too
     for r in rows:
         ids = r["uae_ia_controls"]
         assert len(set(ids)) == len(ids) and set(ids) <= core_ids, (r["control_id"], sorted(set(ids) - core_ids))
@@ -266,9 +266,8 @@ def test_the_rows_sit_beside_the_core_controls_in_one_framework(rows, core, db, 
     """What the merge will be: the library's own controls and these rows in one controls list, through the same loader."""
     from grc.seed_frameworks import seed_framework_from_json
 
-    ids = {r["control_id"] for r in rows}
-    own = [c for c in core["controls"] if c["control_id"] not in ids]
-    assert len(own) == 134 and all(re.fullmatch(r"[MT]\d\.\d\.\d+", c["control_id"]) for c in own)
+    own = [c for c in core["controls"] if re.fullmatch(r"[MT]\d\.\d\.\d+", c["control_id"])]       # the library's own 134, merged or not
+    assert len(own) == 134
     fw = seed_framework_from_json(db, {"metadata": core["metadata"], "controls": own + rows}, tenant_id=1)
     db.commit()
     out = capsys.readouterr().out.lower()

@@ -3947,7 +3947,7 @@ export const FRAMEWORK_FLOWS: FrameworkFlow[] = [
     "id": "uaeia",
     "name": "UAE IA — UAE Information Assurance Standard",
     "version": "2.1",
-    "controls": 134,
+    "controls": 262,
     "group": "UAE & Qatar",
     "region": "United Arab Emirates",
     "authority": "UAE Cyber Security Council (CSC) — national standard that implementing entities demonstrate compliance with",
@@ -3960,7 +3960,8 @@ export const FRAMEWORK_FLOWS: FrameworkFlow[] = [
         "coverage": "Confirm the entity is an implementing entity (Ministry or Federal Authority, non-government CII entity, or Emirate government entity where no Emirate CIIP programme exists; the Emirate Lead assesses applicability where one does); identify the lead entity / sector regulator to report to (Ch. 1.2, 3.6)",
         "deliverables": [
           "Applicability determination (implementing entity status)",
-          "Lead entity / sector regulator (or CSC) identified as the reporting line"
+          "Lead entity / sector regulator (or CSC) identified as the reporting line",
+          "National policies that apply (cloud, AI, IoT, encryption, remote work, third party, data exchange)"
         ],
         "evidence": [
           "Confirmation from the Emirate Lead or lead entity, where one exists",

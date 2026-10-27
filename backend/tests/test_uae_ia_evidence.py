@@ -9,6 +9,11 @@ statement itself), nothing repeated across controls, no vendor names or other fr
 exactly the layer merged in, and the real seeder turns each entry into one ControlEvidenceRequirement row with its own or an
 inferred type, a collection frequency and the layer's flags (required or not, no retention period or confidence claimed,
 who wrote it). On in-memory SQLite.
+
+The catalog also carries the 128 Annex E and F rows after the 134 controls (rows with an `annex` key). Their 333 evidence items
+come from the annex layers (seed_data/uae_ia_annex_e_evidence.json, uae_ia_annex_f_evidence.json) through the staging files of the
+annex builders, and get the same flags as the controls' items; the last tests hold them to the rule behind `is_mandatory`
+and to the library-wide rules (no name twice in 262 controls, 860 items in all). The oracles above hold the 134 controls (`core`).
 """
 import itertools
 import json
@@ -16,6 +21,7 @@ import math
 import os
 import re
 import shutil
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -56,6 +62,12 @@ def catalog():
 
 
 @pytest.fixture(scope="module")
+def core(catalog):
+    """The standard's own 134 controls: the rows that are not an annex row."""
+    return [x for x in catalog["controls"] if "annex" not in x]
+
+
+@pytest.fixture(scope="module")
 def layer():
     return json.loads(LAYER.read_text(encoding="utf-8"))["controls"]
 
@@ -69,12 +81,12 @@ def db():
     session.close()
 
 
-def test_the_layer_lists_exactly_the_catalogs_controls(catalog, layer):
-    assert list(layer) == [x["control_id"] for x in catalog["controls"]]       # 134 controls, in the standard's order
+def test_the_layer_lists_exactly_the_catalogs_controls(core, layer):
+    assert list(layer) == [x["control_id"] for x in core]       # 134 controls, in the standard's order
 
 
-def test_every_control_has_three_to_six_well_formed_items(catalog, layer):
-    for x in catalog["controls"]:
+def test_every_control_has_three_to_six_well_formed_items(core, layer):
+    for x in core:
         cid, n = x["control_id"], x["sub_control_count"]
         items = layer[cid]
         assert max(2 if n <= 2 else 3, min(6, math.ceil(n / 2))) <= len(items) <= 6, (cid, len(items), n)       # grows with the sub-controls
@@ -88,9 +100,9 @@ def test_every_control_has_three_to_six_well_formed_items(catalog, layer):
             assert i.get("collection_frequency", "on-change") in ("on-change", "continuous"), (cid, i["name"])
 
 
-def test_every_sub_control_is_covered_by_at_least_one_item(catalog, layer):
+def test_every_sub_control_is_covered_by_at_least_one_item(core, layer):
     covered_total = 0
-    for x in catalog["controls"]:
+    for x in core:
         cid, n = x["control_id"], x["sub_control_count"]
         for i in layer[cid]:
             assert i["covers"] == sorted(set(i["covers"])), (cid, i["name"])       # [] is valid: evidence of the statement itself
@@ -98,7 +110,7 @@ def test_every_sub_control_is_covered_by_at_least_one_item(catalog, layer):
         covered = {k for i in layer[cid] for k in i["covers"]}
         assert covered == set(range(1, n + 1)), (cid, sorted(set(range(1, n + 1)) - covered))
         covered_total += len(covered)
-    assert covered_total == 449 == sum(x["sub_control_count"] for x in catalog["controls"])       # the standard's own total
+    assert covered_total == 449 == sum(x["sub_control_count"] for x in core)       # the standard's own total
 
 
 def test_filetypes_use_the_vocabulary_of_the_other_catalogs(layer):
@@ -139,15 +151,15 @@ def test_nothing_is_repeated_across_controls(layer):
     assert closest[0] < 0.7, (closest[0], flat[closest[1]][1]["name"], flat[closest[2]][1]["name"])
 
 
-def test_the_committed_catalog_is_the_layer_merged_in(catalog, layer):
+def test_the_committed_catalog_is_the_layer_merged_in(catalog, core, layer):
     """What build_uae_ia_catalog.py writes: {name, description, filetype} like ADHICS and PISF, plus the other keys of ENTRY_KEYS
     where the layer sets them (a null included); `covers` stays in the layer."""
-    for x in catalog["controls"]:
+    for x in core:
         want = [{k: i[k] for k in ENTRY_KEYS if k in i} for i in layer[x["control_id"]]]
         assert x["evidence_requirements"] == want, x["control_id"]
         assert all(set(e) <= ENTRY_KEYS and "covers" not in e for e in x["evidence_requirements"])
     assert "uae_ia_evidence.json" in catalog["metadata"]["source_note"]
-    assert sum(len(x["evidence_requirements"]) for x in catalog["controls"]) == sum(len(v) for v in layer.values())
+    assert sum(len(x["evidence_requirements"]) for x in core) == sum(len(v) for v in layer.values())
 
 
 def test_the_seeder_creates_one_requirement_per_entry_with_a_type_and_a_frequency(catalog, db):
@@ -228,3 +240,91 @@ def test_the_builder_stops_on_an_uncovered_sub_control_and_ships_no_covers():
     assert list(b.evidence_items(layer, control)[2].items()) == [
         ("name", "Approval"), ("description", "A register."), ("filetype", "XLSX"), ("is_mandatory", False), ("type", "attestation"),
         ("retention_period", None), ("ai_confidence", None), ("ai_reasoning", "Written.")]
+
+
+# ── the evidence of the Annex E and F rows ───────────────────────────────────────────────────────
+
+E_LAYER = SEED / "uae_ia_annex_e_evidence.json"
+REASONING = {"E": "Written for this library from the statements of the national policy; the standard names no evidence.",
+             "F": "Written for this library from the objective of the national policy section and the controls it maps to; "
+                  "the standard names no evidence."}
+# the only annex items that are not "Required", written by hand: each evidences nothing but bullets of its row that sit under
+# "take the following into account" (considerations), and no obligation the entity shall carry out
+NOT_REQUIRED = {("E1-2.1.1", "Cloud usage analysis"), ("E1-2.1.1", "Provider access and data location analysis"),
+                ("E3-2.1.1", "IoT governance model"), ("E3-2.1.1", "IoT roles and responsibilities matrix"),
+                ("E3-2.1.1", "IoT device security requirements")}
+
+
+@pytest.fixture(scope="module")
+def annex(catalog):
+    """The 128 Annex E and F rows."""
+    return [x for x in catalog["controls"] if "annex" in x]
+
+
+def test_annex_items_carry_the_flags_of_the_core_items_and_no_type_or_covers(core, annex):
+    assert len(annex) == 128 and sum(len(x["evidence_requirements"]) for x in annex) == 333 == 204 + 129
+    core_reasoning = {e["ai_reasoning"] for x in core for e in x["evidence_requirements"]}
+    assert core_reasoning == {"Written for this library from the control statement, sub-controls and guidance; the standard names no evidence."}
+    for x in annex:
+        for e in x["evidence_requirements"]:
+            # the keys of a core entry, in a core entry's order; the seeder infers the type, and `covers` stays in the layer
+            assert list(e)[-4:] == ["is_mandatory", "retention_period", "ai_confidence", "ai_reasoning"], (x["control_id"], e["name"])
+            assert set(e) <= ENTRY_KEYS and "type" not in e and "covers" not in e, (x["control_id"], e["name"])
+            assert isinstance(e["is_mandatory"], bool)
+            assert e["retention_period"] is None and e["ai_confidence"] is None          # no model generated the item
+            assert e["ai_reasoning"] == REASONING[x["annex"][0]], (x["control_id"], e["name"])
+            assert e["ai_reasoning"].startswith("Written for this library from the ") and e["ai_reasoning"].endswith("; the standard names no evidence.")
+
+
+def test_required_means_the_item_evidences_a_shall(annex):
+    """Annex F states objectives and no shall: no item is required. Annex E: an item is required when it covers at least one
+    obligation of its row that is not a "take the following into account" bullet (a consideration)."""
+    layer = json.loads(E_LAYER.read_text(encoding="utf-8"))["controls"]
+    required = {}
+    for x in annex:
+        for e in x["evidence_requirements"]:
+            required[x["control_id"], e["name"]] = e["is_mandatory"]
+            if x["annex"][0] == "E":
+                covers = next(i["covers"] for i in layer[x["control_id"]] if i["name"] == e["name"])
+                considerations = [bool(re.search(r"take the following into account", x["obligations"][k - 1], re.I)) for k in covers]
+                assert e["is_mandatory"] is (not all(considerations)), (x["control_id"], e["name"], covers)
+    assert Counter(v for (cid, _), v in required.items() if cid.startswith("E")) == {True: 199, False: 5}
+    assert Counter(v for (cid, _), v in required.items() if cid.startswith("F")) == {False: 129}
+    assert {k for k, v in required.items() if not v and k[0].startswith("E")} == NOT_REQUIRED
+    # E1-2.1.1: the first obligation is the policy itself, the six after it are bullets to take into account
+    row = next(x for x in annex if x["control_id"] == "E1-2.1.1")
+    assert len(row["obligations"]) == 7 and "take the following into account" not in row["obligations"][0]
+    assert all("take the following into account" in o for o in row["obligations"][1:])
+    covers = {i["name"]: i["covers"] for i in layer["E1-2.1.1"]}
+    assert covers["Approved cloud security policy"] == [1] and covers["Cloud usage analysis"] == [3, 4, 5, 6]
+    assert required["E1-2.1.1", "Approved cloud security policy"] is True            # evidences the policy the entity shall establish
+    assert required["E1-2.1.1", "Cloud usage analysis"] is False                       # evidences considerations only
+
+
+def test_evidence_names_are_unique_over_the_whole_library(catalog):
+    flat = [(x["control_id"], e) for x in catalog["controls"] for e in x["evidence_requirements"]]
+    assert len(catalog["controls"]) == 262 and len(flat) == 860 == 527 + 204 + 129
+    assert len({e["name"].lower() for _, e in flat}) == 860               # no two items share a name, in any of the 262 controls
+    assert len({e["description"].lower() for _, e in flat}) == 860
+
+
+def test_the_seeder_creates_the_annex_requirements_with_the_flags_of_their_entries(catalog, db):
+    from grc.seed_frameworks import seed_framework_from_json
+
+    fw = seed_framework_from_json(db, catalog, tenant_id=1)
+    db.commit()
+    controls = {c.id: c.control_id for c in db.query(m.ParsedFrameworkControl).filter_by(uploaded_framework_id=fw.id)}
+    rows = db.query(m.ControlEvidenceRequirement).filter_by(framework_id=fw.id).all()
+    assert len(controls) == 262 and len(rows) == 860
+    part = lambda r: "E" if controls[r.parsed_control_id].startswith("E") else "F" if controls[r.parsed_control_id].startswith("F") else "core"  # noqa: E731
+    assert Counter(part(r) for r in rows) == {"core": 527, "E": 204, "F": 129}
+    for r in rows:
+        if part(r) != "core":
+            assert r.retention_period is None and r.ai_confidence is None and r.is_active is True and r.status == "draft", r.evidence_title
+            assert r.ai_reasoning == REASONING[part(r)], r.evidence_title
+    assert Counter(r.is_mandatory for r in rows if part(r) == "E") == {True: 199, False: 5}
+    assert Counter(r.is_mandatory for r in rows if part(r) == "F") == {False: 129}
+    row = {(controls[r.parsed_control_id], r.evidence_title): r for r in rows}
+    assert row["E1-2.1.1", "Approved cloud security policy"].is_mandatory is True
+    assert row["E1-2.1.1", "Cloud usage analysis"].is_mandatory is False
+    assert row["F1-5.6", "Key destruction records"].collection_frequency == "on-change" and row["F1-5.6", "Key destruction records"].is_mandatory is False

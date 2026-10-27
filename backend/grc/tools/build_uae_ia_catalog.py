@@ -13,7 +13,8 @@ authored layer, to be reviewed like code (seed_data/uae_ia_evidence.json, outsid
 globs *.json there) that this script merges in as each control's evidence_requirements. Every item lists the sub-controls it
 evidences in `covers` (an empty list marks evidence of the statement itself: an approval, a communication, an inspection); the
 script stops unless every control has items and every sub-control is covered by at least one.
-`covers` is review traceability and is not shipped. So the PDF plus the layer reproduce the committed catalog byte for byte.
+`covers` is review traceability and is not shipped. So the PDF plus the layer (and the annex staging files, below) reproduce the
+committed catalog byte for byte.
 
 Where each fact comes from (PDF page numbers; printed page = PDF page - 4):
   Chapter 2 (13-182)  families, sub-families, controls. The priority legend "P1 P2 P3 P4" is printed
@@ -25,8 +26,9 @@ Where each fact comes from (PDF page numbers; printed page = PDF page - 4):
   Annex D  (201-206)  mapping to ISO 27001/27002:2022, NIST 800-53 r5, ISRv3   kept on each control
   Annex G  (226-230)  mapping to UAE IA v1.1                          kept on each control
   Annex H  (231-235)  control type (preventive/detective/corrective)  kept on each control
-Annex E/F (national cloud/AI/IoT/encryption policy controls and their mapping) are not part of the
-control set and are not read.
+Annex E and F (the national cloud, AI and IoT policies; four more national policies mapped to the controls) are not read from the
+PDF here. Their 128 rows follow the 134 controls (E1 26, E2 6, E3 18, F1 21, F2 12, F3 24, F4 21): build_uae_ia_annex_e_rows.py
+and build_uae_ia_annex_f_rows.py read them from the same PDF into staging files, and annex_controls below copies those in.
 
 How a control lands in the seeder's fields (grc/seed_frameworks.py reads only the keys below):
   description         the control statement                     full_text   statement + numbered sub-controls
@@ -63,6 +65,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 EVIDENCE_LAYER = Path(__file__).resolve().parents[1] / "seed_data" / "uae_ia_evidence.json"
+# the annex builders' staging files and their evidence layers (E: cloud, AI, IoT; F: four mapped policies), beside the core layer
+ANNEX_ROWS = {a: EVIDENCE_LAYER.with_name(f"uae_ia_annex_{a.lower()}_rows.json") for a in "EF"}
+ANNEX_LAYERS = {a: EVIDENCE_LAYER.with_name(f"uae_ia_annex_{a.lower()}_evidence.json") for a in "EF"}
 CHAPTER2 = range(13, 183)                     # PDF pages holding M1..T9
 ANNEX_A = 192
 ANNEX_B, ANNEX_C, ANNEX_D, ANNEX_G, ANNEX_H = range(193, 196), range(196, 201), range(201, 207), range(226, 231), range(231, 236)
@@ -70,6 +75,21 @@ ANNEX_B, ANNEX_C, ANNEX_D, ANNEX_G, ANNEX_H = range(193, 196), range(196, 201), 
 # the standard's own totals (Annex A tables 4-5, Annex C table 7)
 EXPECT = {"Family": 15, "Sub-Family": 47, "Control": 134, "Sub-Control": 449,
           "Always Applicable": 70, "Risk Based": 64, "P1": 39, "P2": 60, "P3": 24, "P4": 11}
+
+# the annex builders' oracles, in the order the rows follow the 134 controls: annex prefix -> (rows, the section's description)
+ANNEX = {
+    "E1": (26, "Annex E, the National Cloud Security Policy: its policy controls and the UAE IA controls they map to."),
+    "E2": (6, "Annex E, the National Cyber Security Policy for Artificial Intelligence: its policy controls and the UAE IA "
+              "controls they map to."),
+    "E3": (18, "Annex E, the National IoT Security Policy: its policy controls and the UAE IA controls they map to."),
+    "F1": (21, "Annex F, the National Encryption Policy: its sections and the UAE IA controls they correspond to."),
+    "F2": (12, "Annex F, the National Secure Remote Work Policy: its sections and the UAE IA controls they correspond to."),
+    "F3": (24, "Annex F, the National Third Party Security Policy: its sections and the UAE IA controls they correspond to."),
+    "F4": (21, "Annex F, the National Data Exchange Security Policy: its sections and the UAE IA controls they correspond to.")}
+ANNEX_REASONING = {"E": "Written for this library from the statements of the national policy; the standard names no evidence.",
+                   "F": "Written for this library from the objective of the national policy section and the controls it maps to; "
+                        "the standard names no evidence."}
+CONSIDERATION = re.compile(r"\btake the following into account\b", re.I)      # as in build_uae_ia_annex_e_rows.py: weighed, not done
 
 ID = re.compile(r"[MT]\d+(\.\d+){0,2}")
 CONTROL_ID = re.compile(r"[MT]\d+\.\d+\.\d+")
@@ -429,7 +449,77 @@ def evidence_items(layer: Dict[str, Any], c: Dict[str, Any]) -> List[Dict[str, A
             for it in layer["controls"][c["id"]]]
 
 
-def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf_sha256: str) -> Dict[str, Any]:
+def read_annexes() -> Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]]:
+    """{"E": (staging file, evidence layer), "F": (...)}, as the annex builders wrote them."""
+    return {a: (json.loads(ANNEX_ROWS[a].read_text(encoding="utf-8")), json.loads(ANNEX_LAYERS[a].read_text(encoding="utf-8")))
+            for a in ANNEX_ROWS}
+
+
+def evidences_a_shall(letter: str, row: Dict[str, Any], item: Dict[str, Any]) -> bool:
+    """Does the item evidence a shall obligation ("Required" in the UI)? Annex F states objectives and no shall: never. Annex E:
+    when the item covers (1-based, into the row's `obligations`) at least one obligation that is not a consideration, a bullet
+    under "take the following into account"."""
+    if letter == "F":
+        return False
+    covers, n = item["covers"], len(row["obligations"])
+    if not covers or not all(isinstance(k, int) and 1 <= k <= n for k in covers):
+        fail(f"{row['control_id']}: {item['name']!r} covers {covers}, the row has obligations 1..{n}")
+    return any(not CONSIDERATION.search(row["obligations"][k - 1]) for k in covers)
+
+
+def annex_controls(annexes: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]], pdf_sha256: str,
+                   core: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The Annex E and F rows, to follow the `core` rows in the order of ANNEX. Nothing is parsed here: each row is copied as its
+    annex builder staged it (every key, in order) from `annexes` = {"E": (staging file, evidence layer), "F": (...)}, except its
+    evidence entries. Those get the keys the core entries carry: is_mandatory (evidences_a_shall), retention_period and
+    ai_confidence null because no model generated the item, and ai_reasoning; no `type` and no `covers` (the seeder infers the
+    type, and the annex builders tuned the wording for that). Stops unless the staging files were built from this PDF and agree
+    with their evidence layers, hold the rows the builders found, have ids that meet no other id of the library, map only to
+    controls of the standard, carry evidence on every row, and repeat no evidence name anywhere in the library."""
+    rows: List[Dict[str, Any]] = []
+    for letter, (staged, layer) in annexes.items():
+        file, layer_file = ANNEX_ROWS[letter].name, ANNEX_LAYERS[letter].name
+        if staged["source_pdf_sha256"] != pdf_sha256:
+            fail(f"{file} was built from another PDF than this one; rebuild it with build_uae_ia_annex_{letter.lower()}_rows.py")
+        if list(layer["controls"]) != [r["control_id"] for r in staged["controls"]]:
+            fail(f"{layer_file} and {file} list different rows")
+        for r in staged["controls"]:
+            items = layer["controls"][r["control_id"]]
+            if [e["name"] for e in r["evidence_requirements"]] != [i["name"] for i in items]:
+                fail(f"{r['control_id']}: the evidence items in {file} are not those of {layer_file}")
+            rows.append({**r, "evidence_requirements": [
+                {**e, "is_mandatory": evidences_a_shall(letter, r, i), "retention_period": None, "ai_confidence": None,
+                 "ai_reasoning": ANNEX_REASONING[letter]} for e, i in zip(r["evidence_requirements"], items)]})
+    want = {a: n for a, (n, _) in ANNEX.items()}
+    if [r["annex"] for r in rows] != [a for a, n in want.items() for _ in range(n)]:
+        fail(f"the staging files hold {dict(Counter(r['annex'] for r in rows))}, the annex builders found {want}")
+    ids = Counter(r["control_id"] for r in core + rows)
+    if max(ids.values()) > 1:
+        fail(f"control ids repeat: {sorted(i for i, n in ids.items() if n > 1)[:5]}")
+    known = {r["control_id"] for r in core}
+    for r in rows:
+        if not r["evidence_requirements"]:
+            fail(f"{r['control_id']} has no evidence item")
+        if set(r["uae_ia_controls"]) - known:
+            fail(f"{r['control_id']} maps to {sorted(set(r['uae_ia_controls']) - known)}, which are not controls of the standard")
+    names = Counter(e["name"].lower() for r in core + rows for e in r["evidence_requirements"])
+    if max(names.values()) > 1:
+        fail(f"evidence names repeat across the library: {sorted(n for n, k in names.items() if k > 1)[:5]}")
+    return rows
+
+
+def annex_sections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The document_structure sections of the annex rows, one per annex domain, after the 15 family sections: number = the annex
+    prefix, name = the domain label the rows carry, sub_families = the parts of the policy (the rows' categories) in print order
+    as {id, name}. The annexes state no objective or performance indicator, so the sections carry none."""
+    return [{"number": a, "name": next(r["domain"] for r in rows if r["annex"] == a), "description": ANNEX[a][1],
+             "sub_families": [{"id": part, "name": category.split(" ", 1)[1]}
+                              for part, category in dict.fromkeys((r["parent_section"], r["category"]) for r in rows if r["annex"] == a)]}
+            for a in ANNEX]
+
+
+def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf_sha256: str,
+             annex: List[Dict[str, Any]]) -> Dict[str, Any]:
     n_sub = sum(len(f["sub_families"]) for f in families)
     return {
         "name": "UAE Information Assurance Standard",
@@ -439,7 +529,9 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
             f"assurance requirements for entities in the UAE. It organizes {len(controls)} controls and "
             f"{sum(len(numbered(c)) for c in controls)} sub-controls into {len(families)} families "
             f"({n_sub} sub-families): six management and nine technical. Each control is either always applicable or "
-            "applicable based on the entity's risk assessment, and carries an implementation priority from P1 (first) to P4."),
+            "applicable based on the entity's risk assessment, and carries an implementation priority from P1 (first) to P4. "
+            "The library also carries the standard's national technology policies (Annex E: cloud, artificial intelligence and "
+            "IoT) and the mapping of four national security policies (Annex F) as extra sections."),
         "version": "2.1",
         "source_organization": "UAE Cyber Security Council (CSC)",
         "jurisdiction": "United Arab Emirates",
@@ -489,15 +581,21 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
             "P2 to medium and P3 and P4 to low; the exact level is kept on the control",
             "In this library `is_mandatory` is true for Always Applicable controls and false for the controls that are "
             "Based on risk assessment. The standard treats both kinds as mandatory unless the risk assessment excludes the control",
+            "The Annex E and F rows are not mandatory in this library (`is_mandatory` is false). Annex E policy controls apply when "
+            "the entity uses that technology (cloud, AI or IoT) and Annex F rows when it adopts the national policy. The standard "
+            "states no obligation of its own for Annex F: it only maps each part of a policy to UAE IA controls",
             "Report progress to the lead entity or sector regulator (or to the CSC where there is none) and support its "
             "audit and testing (section 3.6)"],
         "hierarchy_structure": {
             "levels": ["Family", "Sub-family", "Control", "Sub-control"],
             "numbering_pattern": "M1.1.1 = management family M1, sub-family M1.1, control M1.1.1 (T1.1.1 for technical "
-                                 "families); sub-controls are numbered 1), 2) ... inside the control"},
+                                 "families); sub-controls are numbered 1), 2) ... inside the control; E1-2.1.1 = Annex E policy "
+                                 "control (policy E1, the policy's own number 2.1.1); F1-2.1 = Annex F mapping row (policy F1, "
+                                 "section 2.1)"},
         "document_structure": {"sections": [
             {"number": f["id"], "name": f"{f['id']} {f['name']}", "description": f["objective"],
-             "performance_indicator": f["performance_indicator"], "sub_families": f["sub_families"]} for f in families]},
+             "performance_indicator": f["performance_indicator"], "sub_families": f["sub_families"]} for f in families
+        ] + annex_sections(annex)},
         "source_framework_id": "UAE-IA-2.1",
         "source_pdf_sha256": pdf_sha256,
         "source_note": (
@@ -506,9 +604,12 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
             "statements, sub-controls and guidance are verbatim. Implementation guidance is informational in the standard "
             "and is kept in ai_notes, apart from the requirement text. Evidence requirements are not in the standard: they are "
             "recommendations authored for this library (backend/grc/seed_data/uae_ia_evidence.json), each grounded in the "
-            "control's own statement, sub-controls or guidance and merged in by the same script. Annexes E and F are not part "
-            "of this library."),
-        "total_controls": len(controls),
+            "control's own statement, sub-controls or guidance and merged in by the same script. Annexes E and F are carried as "
+            "extra rows after the 134 controls. Their own builders read them from the standard into "
+            "backend/grc/seed_data/uae_ia_annex_e_rows.json and backend/grc/seed_data/uae_ia_annex_f_rows.json, and the same script "
+            "copies them in. Their evidence is authored for this library like the controls' (uae_ia_annex_e_evidence.json and "
+            "uae_ia_annex_f_evidence.json)."),
+        "total_controls": len(controls) + len(annex),
     }
 
 
@@ -570,24 +671,27 @@ def build(pdf: Path, layer: Dict[str, Any]) -> Dict[str, Any]:
             # not read by the seeder; kept so the crosswalk tools and reviewers need not re-read the PDF
             "priority_tier": c["priority"], "applicability": c["applicability"], "control_type": types,
             "mappings": ref, "uae_ia_v1_1": v1, "sub_control_count": len(crit), "pdf_page": c["page"]})
-    return {"metadata": metadata(families, controls, hashlib.sha256(pdf.read_bytes()).hexdigest()), "controls": out}
+    sha256 = hashlib.sha256(pdf.read_bytes()).hexdigest()
+    annex = annex_controls(read_annexes(), sha256, out)
+    return {"metadata": metadata(families, controls, sha256, annex), "controls": out + annex}
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pdf", type=Path, help="the standard's PDF")
     ap.add_argument("out", type=Path, help="the catalog to write")
     ap.add_argument("--evidence", type=Path, default=EVIDENCE_LAYER, help="authored evidence layer (default: %(default)s)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     payload = build(args.pdf, json.loads(args.evidence.read_text(encoding="utf-8")))
     out = args.out
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
         f.write("\n")
     c = payload["controls"]
-    print(f"wrote {out} ({out.stat().st_size:,} bytes): {len(c)} controls, "
-          f"{sum(x['sub_control_count'] for x in c)} sub-controls, {sum(len(x['evidence_requirements']) for x in c)} evidence items, "
-          f"{sum(x['is_mandatory'] for x in c)} always applicable, {Counter(x['priority_tier'] for x in c)}")
+    core = [x for x in c if "annex" not in x]
+    print(f"wrote {out} ({out.stat().st_size:,} bytes): {len(core)} controls and {len(c) - len(core)} annex rows, "
+          f"{sum(x['sub_control_count'] for x in core)} sub-controls, {sum(len(x['evidence_requirements']) for x in c)} evidence items, "
+          f"{sum(x['is_mandatory'] for x in core)} always applicable, {Counter(x['priority_tier'] for x in core)}")
     return 0
 
 

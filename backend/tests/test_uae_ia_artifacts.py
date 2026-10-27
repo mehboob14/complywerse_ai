@@ -351,7 +351,7 @@ def test_the_journey_flow_follows_the_pattern_and_matches_only_the_standard(libr
 
     assert list(flow) == list(peer)
     assert all(list(p) == list(peer["phases"][0]) for p in flow["phases"])
-    assert flow["controls"] == len(controls) == 134 and flow["version"] == library["metadata"]["version"] == "2.1"
+    assert flow["controls"] == len(controls) == 262 and flow["version"] == library["metadata"]["version"] == "2.1"
     assert (flow["group"], flow["region"]) == ("UAE & Qatar", "United Arab Emirates")
     assert [p["n"] for p in flow["phases"]] == list(range(1, len(flow["phases"]) + 1))
     for p in flow["phases"]:
