@@ -12422,6 +12422,1778 @@
         "evidence": [
           "Off-site equipment authorization and custody records"
         ]
+      },
+      {
+        "artifact_id": "UAEIA-134",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Security Policy",
+        "type": "Policy",
+        "control_ref": "E1-2.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy that sets out the entity's cloud security requirements, with its owner, version and approval date.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Approved cloud security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-135",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Cloud Usage Analysis",
+        "type": "Assessment",
+        "control_ref": "E1-2.1.1",
+        "mandatory": false,
+        "description": "Analysis of the information and application assets the entity keeps and runs in the cloud, the multi-tenant virtualized services it uses and the users and privileged administrators of those services.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Cloud usage analysis"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-136",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Cloud Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "E1-2.1.2",
+        "mandatory": false,
+        "description": "Assessment that identifies and rates the security and privacy risks of the cloud environment, with the method used and the date performed.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Cloud risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-137",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Cloud Risk and Treatment Register",
+        "type": "Register",
+        "control_ref": "E1-2.1.2",
+        "mandatory": false,
+        "description": "Register of the security and privacy risks of the cloud environment, each with its owner, rating, treatment status, chosen mitigation, due date and progress.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Cloud risk register",
+          "Cloud risk treatment plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-138",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Shared Responsibility Matrix",
+        "type": "Matrix",
+        "control_ref": "E1-2.1.3",
+        "mandatory": false,
+        "description": "Matrix that allocates each security responsibility to the entity or to the cloud service provider and shows how duties are segregated between them.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Shared responsibility matrix"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-139",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "CSP Risk and Assurance Action Register",
+        "type": "Register",
+        "control_ref": "E1-2.1.4",
+        "mandatory": false,
+        "description": "Register of the mitigations agreed for the risks found when onboarding a cloud service provider or when it relies on other providers, and of the actions raised for gaps in the provider's independent assurance, each with owner and status.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "also_controls": [
+          "E1-2.1.5"
+        ],
+        "evidence": [
+          "CSP risk treatment record",
+          "Assurance gap follow-up actions"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-140",
+        "stage": "Stage 4: Implementation",
+        "name": "Approved CSP Register",
+        "type": "Register",
+        "control_ref": "E1-2.1.4",
+        "mandatory": false,
+        "description": "Register of the approved cloud service providers and the third parties each one relies on to deliver the service, with the approval date and approver.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Approved CSP register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-141",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Cloud Data Obligations Analysis",
+        "type": "Assessment",
+        "control_ref": "E1-2.3.1",
+        "mandatory": false,
+        "description": "Analysis of the regulatory, statutory and supply chain agreement obligations that apply to data wherever it resides in the cloud or is shared with third parties.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Cloud data obligations analysis"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-142",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Data Classification Policy",
+        "type": "Policy",
+        "control_ref": "E1-2.3.1",
+        "mandatory": false,
+        "description": "Approved policy that sets the classification levels, labeling rules and handling requirements for data throughout its lifecycle in the cloud.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Data classification policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-143",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Data Handling Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.3.1",
+        "mandatory": false,
+        "description": "Procedure for handling data held in cloud applications, infrastructure, networks and systems and data shared with third parties.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Cloud data handling procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-144",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Data Classification Mapping Matrix",
+        "type": "Matrix",
+        "control_ref": "E1-2.3.1",
+        "mandatory": false,
+        "description": "Matrix that maps each of the entity's classification levels to the national cloud classification level, to the cloud environment the level requires (Partial Sovereign Cloud or Sovereign Cloud) and the one in use, and to the physical security level required and found at the data centers.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "also_controls": [
+          "E1-2.4.1",
+          "E1-2.6.2"
+        ],
+        "evidence": [
+          "National cloud classification level mapping",
+          "Classified data hosting matrix",
+          "Data classification to physical security mapping"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-145",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Encryption Policy",
+        "type": "Policy",
+        "control_ref": "E1-2.3.2",
+        "mandatory": false,
+        "description": "Approved policy that sets when and how encryption protects sensitive data in storage and in transmission in the cloud, tied to the legal and regulatory obligations that apply.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Encryption policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-146",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Encryption Key Management Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.3.2",
+        "mandatory": false,
+        "description": "Procedure for secure key management in the cloud, naming the roles that manage keys and how keys are protected through their lifecycle.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Cloud encryption key management procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-147",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Hold Your Own Key Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "E1-2.3.2",
+        "mandatory": false,
+        "description": "Risk assessment recording whether Hold Your Own Key capabilities are required for the cloud services, with the decision and who approved it.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Hold your own key risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-148",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "CSP Jurisdiction and Data Location Assessment",
+        "type": "Assessment",
+        "control_ref": "E1-2.4.1",
+        "mandatory": false,
+        "description": "Assessment of the access each cloud service provider has to the entity's information and of the countries where it is based, operates and may store data, checked against the UAE laws, regulations, standards and frameworks on data location and sovereignty.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "also_controls": [
+          "E1-2.1.1"
+        ],
+        "evidence": [
+          "Provider access and data location analysis",
+          "CSP jurisdiction and data location assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-149",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Data Location Register",
+        "type": "Register",
+        "control_ref": "E1-2.4.1",
+        "mandatory": false,
+        "description": "Register of where each cloud service stores the entity's data, by country and region.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Cloud data location register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-150",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Cloud Interoperability Needs Evaluation",
+        "type": "Assessment",
+        "control_ref": "E1-2.5.1",
+        "mandatory": false,
+        "description": "Evaluation of the integration needs between the cloud services in use and the entity's data and cloud environments.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Interoperability needs evaluation"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-151",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Integration Architecture Diagram",
+        "type": "Record",
+        "control_ref": "E1-2.5.1",
+        "mandatory": false,
+        "description": "Diagram of how the cloud services and data environments connect, showing the industry standards and APIs used.",
+        "format": "PDF",
+        "owner": "Security Architect",
+        "evidence": [
+          "Cloud integration architecture diagram"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-152",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Integration Standards and API Register",
+        "type": "Register",
+        "control_ref": "E1-2.5.1",
+        "mandatory": false,
+        "description": "Register of the industry standards and APIs applied across cloud integrations, with the owner of each.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Integration standards and API register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-153",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Cloud Hosted Assets Inventory",
+        "type": "Register",
+        "control_ref": "E1-2.6.3",
+        "mandatory": false,
+        "description": "Inventory of all information and associated assets stored in the cloud environment, each with an owner, a classification and the cloud service where it is maintained.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "Cloud asset inventory",
+          "Asset to cloud service mapping"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-154",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud System Hardening Guidelines",
+        "type": "Guideline",
+        "control_ref": "E1-2.6.5",
+        "mandatory": false,
+        "description": "Hardening guidelines for each type of cloud system: operating systems, virtual machines, hypervisors, Internet of Things sensors, and network and security devices.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Cloud system hardening guidelines"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-155",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Identity and Privileged Account Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.7.1",
+        "mandatory": false,
+        "description": "Procedure for creating, changing, reviewing and removing the identities that access the cloud environment, with privileged and root accounts created centrally under approval and with a record of each creation.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Cloud identity lifecycle procedure",
+          "Privileged account creation procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-156",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Cloud Access Control Policy",
+        "type": "Policy",
+        "control_ref": "E1-2.7.2",
+        "mandatory": false,
+        "description": "Approved policy that governs access to cloud resources under the entity's identity and access management controls.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Cloud access control policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-157",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Authentication Standard",
+        "type": "Standard",
+        "control_ref": "E1-2.7.2",
+        "mandatory": false,
+        "description": "Standard setting out the secure authentication technologies and procedures used to access systems, applications and data assets in the cloud.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Authentication methods and procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-158",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Access Control Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.7.3",
+        "mandatory": false,
+        "description": "Approved procedure for requesting, approving, modifying, reviewing and revoking access rights to cloud resources.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Cloud access control procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-159",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Incident Management and Reporting Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.8.1",
+        "mandatory": false,
+        "description": "Procedure for the detection, handling and closure of security incidents that affect cloud services and for reporting them to external entities, regulatory authorities and law enforcement, with how quickly each report is made.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "also_controls": [
+          "E1-2.8.2"
+        ],
+        "evidence": [
+          "Cloud incident management procedure",
+          "External incident notification procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-160",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Incident Notification Contact List",
+        "type": "Register",
+        "control_ref": "E1-2.8.2",
+        "mandatory": false,
+        "description": "List of the external entities, regulatory authorities and law enforcement contacts to notify of cloud incidents, with the channel and owner for each.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident notification contact list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-161",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Incident Response Plan",
+        "type": "Plan",
+        "control_ref": "E1-2.8.3",
+        "mandatory": false,
+        "description": "Approved plan for responding to incidents in the cloud environment, in line with the Cyber Security Incident Response Plan issued by the CSC.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Cloud incident response plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-162",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Incident Response Plan Alignment Matrix",
+        "type": "Matrix",
+        "control_ref": "E1-2.8.3",
+        "mandatory": false,
+        "description": "Matrix showing how each part of the entity's cloud incident response plan follows the Cyber Security Incident Response Plan issued by the CSC.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Alignment to the national incident response plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-163",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Forensics Metrics Register",
+        "type": "Register",
+        "control_ref": "E1-2.8.4",
+        "mandatory": false,
+        "description": "Register of the clear and measurable metrics set for the e-discovery and cloud forensic capabilities, with the latest measurements.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Forensic capability metrics"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-164",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Forensic Evidence Handling Procedure",
+        "type": "Procedure",
+        "control_ref": "E1-2.8.4",
+        "mandatory": false,
+        "description": "Procedure for handling digital evidence in e-discovery and cloud forensics in line with UAE law enforcement procedures.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "E-forensic protocols"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-165",
+        "stage": "Stage 4: Implementation",
+        "name": "Cloud Backup Requirements Standard",
+        "type": "Standard",
+        "control_ref": "E1-2.9.1",
+        "mandatory": false,
+        "description": "Approved requirements for the regular backup of information held in cloud environments.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Cloud backup requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-166",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Backup Restoration Test Schedule",
+        "type": "Plan",
+        "control_ref": "E1-2.9.1",
+        "mandatory": false,
+        "description": "Schedule of the planned backup restoration tests for information held in the cloud.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Backup restoration testing schedule"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-167",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cloud Continuity and Disaster Recovery Plan",
+        "type": "Plan",
+        "control_ref": "E1-2.9.2",
+        "mandatory": false,
+        "description": "Approved business continuity and disaster recovery plan for the entity's cloud services, with the Maximum Tolerable Period of Disruption, Recovery Time Objective and Recovery Point Objective of each service and the roles and responsibilities of the relevant parties.",
+        "format": "DOCX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Business continuity and disaster recovery plans",
+          "Recovery objectives and responsibilities"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-168",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "AI/ML Security Policy",
+        "type": "Policy",
+        "control_ref": "E2-2.1",
+        "mandatory": false,
+        "description": "Approved policy for the secure design, development and operation of AI/ML systems, with its owner, version and approval date.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "AI/ML security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-169",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Secure Development and Operation Procedure",
+        "type": "Procedure",
+        "control_ref": "E2-2.1",
+        "mandatory": false,
+        "description": "Step-by-step procedures followed when AI/ML systems are designed, developed and operated, with the owner of each procedure.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "AI/ML secure development and operation procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-170",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "AI/ML Cyber Security Risk and Treatment Register",
+        "type": "Register",
+        "control_ref": "E2-2.1",
+        "mandatory": false,
+        "description": "Register of the cyber security risks of AI/ML systems, each with its owner, rating, treatment and last update date.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "AI/ML cyber security risk register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-171",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "AI/ML Supply Chain Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "E2-2.1",
+        "mandatory": false,
+        "description": "Assessment of the cyber security risks in the supply chain of AI/ML systems, such as model, data and component providers, with the mitigations agreed.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "AI/ML supply chain risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-172",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "AI/ML Systems Inventory",
+        "type": "Register",
+        "control_ref": "E2-2.2",
+        "mandatory": false,
+        "description": "Inventory of AI/ML assets, such as models, datasets, pipelines and hosting infrastructure, with the sensitivity, criticality and value of each and the controls applied.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "AI/ML asset inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-173",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Security Baseline Standard",
+        "type": "Standard",
+        "control_ref": "E2-2.2",
+        "mandatory": false,
+        "description": "Approved security baselines and configuration standards for AI/ML systems.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "AI/ML security baselines and compliance results"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-174",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "AI/ML Application Domain Security Analysis",
+        "type": "Assessment",
+        "control_ref": "E2-2.4",
+        "mandatory": false,
+        "description": "Analysis of how cyber security measures are tailored to the application domain of each AI/ML system.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "AI/ML application domain security analysis"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-175",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Availability Architecture",
+        "type": "Record",
+        "control_ref": "E2-2.4",
+        "mandatory": false,
+        "description": "Diagram or description of the redundancy and failover measures that keep AI/ML systems available during disruptions.",
+        "format": "PDF",
+        "owner": "Security Architect",
+        "evidence": [
+          "AI/ML availability architecture"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-176",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Continuity and Recovery Plan",
+        "type": "Plan",
+        "control_ref": "E2-2.4",
+        "mandatory": false,
+        "description": "Business continuity and disaster recovery plan that covers AI/ML systems.",
+        "format": "DOCX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "AI/ML continuity and recovery plans"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-177",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Attack Awareness Guidelines",
+        "type": "Guideline",
+        "control_ref": "E2-2.5",
+        "mandatory": false,
+        "description": "Education and training material on AI/ML attack scenarios and on responding to them.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "AI/ML attack awareness material"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-178",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "AI/ML Adversarial Attack Defense Plan",
+        "type": "Plan",
+        "control_ref": "E2-2.5",
+        "mandatory": false,
+        "description": "Documented strategy for defending AI/ML systems against adversarial attacks through proactive measures, continuous monitoring, regular testing and incident response.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "AI/ML defense strategy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-179",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Security Monitoring and Analytics Plan",
+        "type": "Plan",
+        "control_ref": "E2-2.6",
+        "mandatory": false,
+        "description": "Description of the data sources and analytics used for real-time threat detection, historical analysis and predictive insights on AI/ML systems.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "AI/ML security analytics framework"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-180",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Incident Reporting and Management Procedure",
+        "type": "Procedure",
+        "control_ref": "E2-2.6",
+        "mandatory": false,
+        "description": "Procedure for reporting and managing cyber security incidents that involve AI/ML systems.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "AI/ML incident reporting and management procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-181",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Digital Forensics Procedure",
+        "type": "Procedure",
+        "control_ref": "E2-2.6",
+        "mandatory": false,
+        "description": "Framework for collecting and analyzing digital evidence from AI/ML incidents, tailored to AI/ML systems.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "AI/ML digital forensics framework"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-182",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Security Policy",
+        "type": "Policy",
+        "control_ref": "E3-2.1.1",
+        "mandatory": false,
+        "description": "Management-approved policy covering the IoT devices and services in the ecosystem, with its version history and the manager who approved it.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Approved IoT security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-183",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "IoT Governance Charter",
+        "type": "Charter",
+        "control_ref": "E3-2.1.1",
+        "mandatory": false,
+        "description": "Describes how the IoT components and services in the ecosystem are managed and controlled and assigns the roles and responsibilities for managing IoT devices and services.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "IoT governance model",
+          "IoT roles and responsibilities matrix"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-184",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Device Security Requirements Standard",
+        "type": "Standard",
+        "control_ref": "E3-2.1.1",
+        "mandatory": false,
+        "description": "Approved security requirements for IoT devices, with the owner of the requirements.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "IoT device security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-185",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "IoT Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "E3-2.1.2",
+        "mandatory": false,
+        "description": "Assessment that identifies and rates the risks that are unique to the IoT ecosystem, with the method used and the date performed.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "IoT risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-186",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "IoT Risk and Treatment Register",
+        "type": "Register",
+        "control_ref": "E3-2.1.2",
+        "mandatory": false,
+        "description": "Register of the IoT ecosystem risks, each with its owner, rating, treatment status, the mitigation chosen and the date it is due.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "IoT risk register",
+          "IoT risk treatment plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-187",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Security Training Plan",
+        "type": "Plan",
+        "control_ref": "E3-2.1.3",
+        "mandatory": false,
+        "description": "Plan for specialized IoT security training for all personnel who manage, implement and monitor IoT devices and services.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "IoT security training plan"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-188",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Security Training Guidelines",
+        "type": "Guideline",
+        "control_ref": "E3-2.1.3",
+        "mandatory": false,
+        "description": "Training material for the specialized IoT security training given to employees and outsourced staff.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "IoT security training content"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-189",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Third-Party Security Policy",
+        "type": "Policy",
+        "control_ref": "E3-2.1.4",
+        "mandatory": false,
+        "description": "Third-party security policy for the IoT ecosystem, covering the execution of the relevant IoT controls and the adherence of external stakeholders to the organization's IoT security requirements.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "IoT third-party security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-190",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Compliance Policy and Program",
+        "type": "Policy",
+        "control_ref": "E3-2.1.5",
+        "mandatory": false,
+        "description": "Compliance policy and program for IoT solutions, covering the applicable laws and regulations and the enforced standards of the TDRA and the Cyber Security Council.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "IoT compliance policy and program"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-191",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "IoT Legal and Regulatory Requirements Register",
+        "type": "Register",
+        "control_ref": "E3-2.1.5",
+        "mandatory": false,
+        "description": "Register of the laws, regulations and the TDRA and Cyber Security Council standards and requirements that apply to the entity's IoT solutions.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "IoT legal and regulatory requirements register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-192",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "IoT Data Inventory and Classification Register",
+        "type": "Register",
+        "control_ref": "E3-2.2.1",
+        "mandatory": false,
+        "description": "Inventory of the data collected across the IoT ecosystem, with the classification of each type of data.",
+        "format": "XLSX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "IoT data inventory and classification"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-193",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Encryption Policy and Procedures",
+        "type": "Policy",
+        "control_ref": "E3-2.2.2",
+        "mandatory": false,
+        "description": "Policy and procedures that govern the encryption protocols used for IoT data held in storage and sent between systems, with the legal and regulatory obligations they respond to.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "IoT encryption policy and procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-194",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Communication Protocol Specification",
+        "type": "Standard",
+        "control_ref": "E3-2.2.3",
+        "mandatory": false,
+        "description": "Specification of the communication protocols between IoT systems, showing encrypted channels, integrity protection and authenticated connections.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "IoT communication protocol specification"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-195",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Approved Encryption Techniques List",
+        "type": "Register",
+        "control_ref": "E3-2.2.3",
+        "mandatory": false,
+        "description": "List of the encryption techniques used to protect data within IoT systems and their underlying infrastructure, with the evidence that each is proven.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Approved encryption techniques list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-196",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Access Rights Register",
+        "type": "Register",
+        "control_ref": "E3-2.3.1",
+        "mandatory": false,
+        "description": "Register of the identities with access to IoT resources, including third parties, each uniquely identified, with the privileges granted, the end date of third-party access and the person accountable.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "also_controls": [
+          "E3-2.1.4"
+        ],
+        "evidence": [
+          "Third-party IoT access rights",
+          "IoT access rights listing"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-197",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Location Access Register",
+        "type": "Register",
+        "control_ref": "E3-2.3.2",
+        "mandatory": false,
+        "description": "List of the people authorized to enter IoT environments, buildings, locations and rooms.",
+        "format": "XLSX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "IoT location access control list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-198",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Incident Response Procedure",
+        "type": "Procedure",
+        "control_ref": "E3-2.4.1",
+        "mandatory": false,
+        "description": "Procedure for identifying, responding to, containing and recovering from IoT incidents, with the incident response plan, reporting, classification and recovery steps.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "IoT incident response procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-199",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Backup Schedule",
+        "type": "Plan",
+        "control_ref": "E3-2.5.1",
+        "mandatory": false,
+        "description": "Schedule and settings for the periodic backup of user and configuration data from IoT systems.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "IoT backup schedule and settings"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-200",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Continuity Plan",
+        "type": "Plan",
+        "control_ref": "E3-2.5.2",
+        "mandatory": false,
+        "description": "Approved plan that sets out how the entity continues IoT services through a disruption, with the response and recovery procedures that detail how disruptions are managed.",
+        "format": "DOCX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "IoT continuity plan",
+          "IoT response and recovery procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-201",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "IoT Device and Software Inventory",
+        "type": "Register",
+        "control_ref": "E3-2.6.1",
+        "mandatory": false,
+        "description": "Inventory of IoT systems, including devices, software and firmware, with owner and location.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "IoT asset inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-202",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Device Handling Procedure",
+        "type": "Procedure",
+        "control_ref": "E3-2.6.1",
+        "mandatory": false,
+        "description": "Procedure for the appropriate handling of IoT devices.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "IoT device handling procedure"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-203",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Application Security Architecture",
+        "type": "Record",
+        "control_ref": "E3-2.6.2",
+        "mandatory": false,
+        "description": "Architecture document showing the end-to-end security controls and availability aspects across the IoT solution.",
+        "format": "PDF",
+        "owner": "Security Architect",
+        "evidence": [
+          "IoT application security architecture"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-204",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Device Secure Setup Baseline",
+        "type": "Standard",
+        "control_ref": "E3-2.6.3",
+        "mandatory": false,
+        "description": "Baseline for the secure installation and set-up of IoT devices and sensors.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "IoT device installation and setup baseline"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-205",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Device Update and Maintenance Plan",
+        "type": "Plan",
+        "control_ref": "E3-2.6.3",
+        "mandatory": false,
+        "description": "Documented strategy for the periodic update and maintenance of IoT devices.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "IoT device management strategy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-206",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT End-of-Life Device Register",
+        "type": "Register",
+        "control_ref": "E3-2.6.3",
+        "mandatory": false,
+        "description": "Register of the IoT devices that have reached end-of-life, with the compensatory measures applied to each.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "End-of-life device compensating measures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-207",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Network Architecture Diagram",
+        "type": "Record",
+        "control_ref": "E3-2.7.1",
+        "mandatory": false,
+        "description": "Diagram of the IoT networks segregated from the corporate network with micro-segmentation, a separate management network and the routing networks they cross.",
+        "format": "PDF",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "IoT network architecture diagram"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-208",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Approved Cryptographic Algorithms and Protocols Standard",
+        "type": "Standard",
+        "control_ref": "F1-2.1",
+        "mandatory": false,
+        "description": "Standard listing the algorithms, modes and key lengths approved for each use, such as storage, transmission and hashing, and the protocols and versions allowed for web, file transfer, remote administration and wireless traffic, with the prohibited and banned ones, its owner, version and approval date.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "also_controls": [
+          "F1-4.1"
+        ],
+        "evidence": [
+          "Approved cryptographic algorithms and key lengths",
+          "Approved secure transport protocols"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-209",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Encryption Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "F1-2.2",
+        "mandatory": false,
+        "description": "Assessment of the security and privacy risks that arise where data is not encrypted or only weakly encrypted, with the rating, owner and treatment chosen for each risk.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Encryption risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-210",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Encryption Risk Remediation Register",
+        "type": "Register",
+        "control_ref": "F1-2.2",
+        "mandatory": false,
+        "description": "Register of the actions that remove the encryption weaknesses found, with the owner, the due date and the completion date of each.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Encryption risk remediation tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-211",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Encryption Legal and Regulatory Requirements Matrix",
+        "type": "Matrix",
+        "control_ref": "F1-2.3",
+        "mandatory": false,
+        "description": "Matrix mapping each law, regulation or standard that applies to the entity's use of encryption to the feature of the cryptographic solution that meets it, with the owner and the date last checked.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Encryption legal and regulatory requirements map"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-212",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Encryption Requirements by Classification Matrix",
+        "type": "Matrix",
+        "control_ref": "F1-2.4",
+        "mandatory": false,
+        "description": "Matrix stating, for each classification level, whether data is encrypted at rest and in motion, the minimum algorithm and key length, and who may approve an exception.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Encryption requirements by classification level"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-213",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data at Rest Encryption Register",
+        "type": "Register",
+        "control_ref": "F1-3.1",
+        "mandatory": false,
+        "description": "Register of the places that hold classified data, such as file shares, databases, backups and endpoints, with the encryption method in use, whether each place is covered and, for databases, who owns the keys and whether backups and replicas are encrypted.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "also_controls": [
+          "F1-3.5"
+        ],
+        "evidence": [
+          "Data at rest encryption coverage register",
+          "Database encryption inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-214",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Encryption Exceptions Register",
+        "type": "Register",
+        "control_ref": "F1-3.1",
+        "mandatory": false,
+        "description": "Register of stores of classified data that are not encrypted, with the reason, the compensating control, the approver and the date the exception expires.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Encryption exceptions register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-215",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "System Secrets Protection Register",
+        "type": "Register",
+        "control_ref": "F1-3.6",
+        "mandatory": false,
+        "description": "Register of the application keys, service passwords and tokens used by systems, showing where each is held, how that store is protected and the date it was last rotated.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "System secrets protection register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-216",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cryptographic Key Inventory and Archive Register",
+        "type": "Register",
+        "control_ref": "F1-5.1",
+        "mandatory": false,
+        "description": "Inventory of the cryptographic keys in use, with purpose, algorithm, key length, owner, storage location and creation and expiry dates, and of the keys moved to the archive, with the reason each is kept, its archive location, retention period and who approved access.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "also_controls": [
+          "F1-5.7"
+        ],
+        "evidence": [
+          "Cryptographic key inventory",
+          "Key archive register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-217",
+        "stage": "Stage 4: Implementation",
+        "name": "Key Backup and Escrow Procedure",
+        "type": "Procedure",
+        "control_ref": "F1-5.5",
+        "mandatory": false,
+        "description": "Description of where key backups and escrowed copies are held, how they are protected, who can retrieve them and the dual control needed to do so.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Key backup and escrow arrangements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-218",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Post-Quantum Readiness Assessment",
+        "type": "Assessment",
+        "control_ref": "F1-6.1",
+        "mandatory": false,
+        "description": "Assessment of which non-open data stays confidential for many years and could be copied now and decrypted later, and of whether each system can change algorithms and key sizes without being rebuilt.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Long-term data exposure assessment",
+          "Cryptographic agility assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-219",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Remote Work Security Policy",
+        "type": "Policy",
+        "control_ref": "F2-2.1",
+        "mandatory": false,
+        "description": "Approved policy for secure remote work that says who may work remotely, from where, on which devices and under which controls, with its owner, version and approval date.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Remote work security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-220",
+        "stage": "Stage 4: Implementation",
+        "name": "Remote Work Security Procedure",
+        "type": "Procedure",
+        "control_ref": "F2-2.1",
+        "mandatory": false,
+        "description": "Step-by-step procedures for authorizing a remote worker, issuing and returning equipment, reporting a lost device and ending remote access, with the owner of each.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Remote work security procedures"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-221",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Remote Work Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "F2-2.2",
+        "mandatory": false,
+        "description": "Assessment of the security risks of remote work, such as unmanaged networks, lost devices and shared workspaces, with the rating, owner and treatment of each and its place in the entity's main risk register.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Remote work risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-222",
+        "stage": "Stage 4: Implementation",
+        "name": "Remote Worker Security Awareness Guidelines",
+        "type": "Guideline",
+        "control_ref": "F2-2.3",
+        "mandatory": false,
+        "description": "Awareness material for remote workers covering safe use of home and public networks, device handling, phishing, protecting data away from the office and how to raise an incident.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Remote worker awareness material"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-223",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Zero Trust Remote Access Standard",
+        "type": "Standard",
+        "control_ref": "F2-3.1",
+        "mandatory": false,
+        "description": "Document showing how remote access applies Zero Trust: every user and device is verified on each request, access is limited to named applications, and trust is re-evaluated during the session.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Zero Trust remote access model"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-224",
+        "stage": "Stage 4: Implementation",
+        "name": "Approved Mobile Application List",
+        "type": "Register",
+        "control_ref": "F2-4.2",
+        "mandatory": false,
+        "description": "List of the applications approved for managed mobile devices, with the owner and the date approved, and the application types that are blocked.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Approved mobile application list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-225",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Remote Work Data Handling Standard",
+        "type": "Standard",
+        "control_ref": "F2-5.1",
+        "mandatory": false,
+        "description": "Rules stating in which countries and on which systems and devices organization data may be accessed, stored and handled during remote work, whether working from abroad is allowed, and the ways remote workers may send or share data, with the classification each may carry and the channels that are prohibited.",
+        "format": "DOCX",
+        "owner": "Data Protection Officer",
+        "also_controls": [
+          "F2-5.2"
+        ],
+        "evidence": [
+          "Remote work data location rules",
+          "Approved remote data transfer methods"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-226",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Remote Work Obligations Register",
+        "type": "Register",
+        "control_ref": "F2-5.3",
+        "mandatory": false,
+        "description": "Register of the obligations that apply when work is done remotely, from laws, regulations and client terms, each with its owner and the control that meets it.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Remote work obligations register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-227",
+        "stage": "Stage 4: Implementation",
+        "name": "Third-Party Risk Awareness Guidelines",
+        "type": "Guideline",
+        "control_ref": "F3-2.2",
+        "mandatory": false,
+        "description": "Awareness material for staff who select, buy from or manage suppliers, covering supplier cyber security risks, how to reduce them and how to raise a supplier problem.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Third-party risk awareness material"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-228",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Supplier Criticality Rating Standard",
+        "type": "Standard",
+        "control_ref": "F3-3.1",
+        "mandatory": false,
+        "description": "Criteria used to rate how critical each supplier is, such as the data it handles, the systems it supports, how hard it is to replace and the impact if it fails.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier criticality criteria"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-229",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Supply Chain Dependency Map",
+        "type": "Record",
+        "control_ref": "F3-3.3",
+        "mandatory": false,
+        "description": "Map of the entity's key suppliers and of the sub-suppliers, products and services behind them, showing the dependencies and the single points of failure.",
+        "format": "PDF",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supply chain dependency map"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-230",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Third-Party Risk and Treatment Register",
+        "type": "Register",
+        "control_ref": "F3-3.3",
+        "mandatory": false,
+        "description": "Register of the cyber security risks that suppliers and their products or services bring, with the supplier concerned, the rating, the owner and the treatment status.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Third-party risk register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-231",
+        "stage": "Stage 4: Implementation",
+        "name": "Supplier Selection Scoring Matrix",
+        "type": "Matrix",
+        "control_ref": "F3-4.1",
+        "mandatory": false,
+        "description": "Scoring sheet used in tenders that weighs the security criteria next to cost and capability, with the minimum security score a supplier needs to reach.",
+        "format": "XLSX",
+        "owner": "Procurement Manager",
+        "evidence": [
+          "Supplier selection scoring sheet"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-232",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "End-of-Support Register",
+        "type": "Register",
+        "control_ref": "F3-5.5",
+        "mandatory": false,
+        "description": "Register of software and hardware with the date the vendor ends support, the planned replacement or compensating control, and the owner.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "End-of-support register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-233",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Software Component Inventory",
+        "type": "Register",
+        "control_ref": "F3-5.6",
+        "mandatory": false,
+        "description": "Inventory of the open-source and third-party components used in the entity's own applications, with their versions, source and any known vulnerabilities.",
+        "format": "XLSX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Software component inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-234",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Minimum Supplier Security Requirements Standard",
+        "type": "Standard",
+        "control_ref": "F3-6.1",
+        "mandatory": false,
+        "description": "Document that sets the minimum security posture of a supplier, by supplier tier, such as access control, encryption, incident notification and audit rights.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Minimum supplier security requirements"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-235",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Non-Compliance Register",
+        "type": "Register",
+        "control_ref": "F3-7.1",
+        "mandatory": false,
+        "description": "Register of supplier failures to meet the agreed security terms, with the action requested, the dates raised and closed, and any escalation.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier non-compliance tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-236",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "High-Risk Supplier Controls Standard",
+        "type": "Standard",
+        "control_ref": "F3-7.3",
+        "mandatory": false,
+        "description": "Document setting the extra controls required of suppliers rated high risk, such as more frequent checks, tighter access and on-site audits, and the schedule applied.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Enhanced controls for high-risk suppliers"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-237",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "High-Risk Supplier Assurance Schedule",
+        "type": "Plan",
+        "control_ref": "F3-7.3",
+        "mandatory": false,
+        "description": "Schedule of the suppliers rated high risk, with the date of the last and next enhanced assessment, the findings still open and the owner.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "High-risk supplier assurance schedule"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-238",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Incident Contact List",
+        "type": "Register",
+        "control_ref": "F3-8.1",
+        "mandatory": false,
+        "description": "List of the incident contacts at each critical supplier, with their roles and numbers, and the date each contact was last confirmed.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Supplier incident contact list"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-239",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Incident Response Playbook",
+        "type": "Procedure",
+        "control_ref": "F3-8.1",
+        "mandatory": false,
+        "description": "Playbook for an incident that starts at or affects a supplier, such as a breach or an outage, with the steps, the decision makers, the messages to the supplier and the evidence to collect.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Supplier incident response playbook"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-240",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Alternate Supplier Register",
+        "type": "Register",
+        "control_ref": "F3-8.2",
+        "mandatory": false,
+        "description": "Register giving, for each critical supplier, the alternate supplier or in-house fallback, the time needed to switch and the date the option was last checked.",
+        "format": "XLSX",
+        "owner": "Procurement Manager",
+        "evidence": [
+          "Alternate supplier register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-241",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Exit and Substitution Plan",
+        "type": "Plan",
+        "control_ref": "F3-8.2",
+        "mandatory": false,
+        "description": "Plans for replacing a critical supplier, with the steps, the return or deletion of the entity's data, the timeline and the owner.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier exit and substitution plans"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-242",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Critical Supplier Failure Impact Analysis",
+        "type": "Assessment",
+        "control_ref": "F3-8.3",
+        "mandatory": false,
+        "description": "Analysis of the effect on each critical service if a supplier fails, with the recovery time the entity needs from that supplier.",
+        "format": "XLSX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Critical supplier failure impact analysis"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-243",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Data Exchange Security Policy",
+        "type": "Policy",
+        "control_ref": "F4-2.1",
+        "mandatory": false,
+        "description": "Approved policy for the secure exchange of data inside the entity and with other parties, with its owner, version and approval date.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Data exchange security policy"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-244",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Data Exchange Roles and Owners Matrix",
+        "type": "Matrix",
+        "control_ref": "F4-2.1",
+        "mandatory": false,
+        "description": "Matrix naming the executive sponsor, the owner of each data exchange and the people who approve new exchanges, with their authority and the resources given.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Data exchange roles and owners"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-245",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Data Exchange Risk Assessment",
+        "type": "Assessment",
+        "control_ref": "F4-2.2",
+        "mandatory": false,
+        "description": "Assessment of the security and privacy risks of each way data is exchanged, covering the data, the partners and the channel, with the rating, owner and treatment chosen.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Data exchange risk assessment"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-246",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Exchange Risk Treatment Register",
+        "type": "Register",
+        "control_ref": "F4-2.2",
+        "mandatory": false,
+        "description": "Register of the actions that reduce data exchange risks, with the owner, the date each risk was raised and the date it was closed.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Data exchange risk treatment tracker"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-247",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Data Exchange Obligations Register",
+        "type": "Register",
+        "control_ref": "F4-2.3",
+        "mandatory": false,
+        "description": "Register of the laws, regulations and sector rules that apply to exchanging data, each with its owner, the exchanges it affects and the control that meets it.",
+        "format": "XLSX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Data exchange obligations register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-248",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Data Exchange Handling Standard",
+        "type": "Standard",
+        "control_ref": "F4-2.4",
+        "mandatory": false,
+        "description": "Rules stating which classification levels may be exchanged, over which channels, with what approval and protection, and how exchanged files are labeled.",
+        "format": "DOCX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Data exchange handling rules by classification"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-249",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Personal Data Exchange Register",
+        "type": "Register",
+        "control_ref": "F4-2.5",
+        "mandatory": false,
+        "description": "Register of the exchanges that include personal or sensitive personal information, with the purpose, the recipient, the legal basis and the data fields shared.",
+        "format": "XLSX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Personal data exchange register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-250",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Partner and Service Account Register",
+        "type": "Register",
+        "control_ref": "F4-3.1",
+        "mandatory": false,
+        "description": "Register of the partner and non-human accounts that connect to data exchange services, with the owner, purpose, type of credential and date it was last changed.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Partner and service account register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-251",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Exchange Channel Encryption Register",
+        "type": "Register",
+        "control_ref": "F4-4.1",
+        "mandatory": false,
+        "description": "Register of each data exchange mechanism, such as file transfer, application interface, messaging and portal, with the encryption protocol and version in use and the partner it serves.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Data exchange channel encryption register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-252",
+        "stage": "Stage 4: Implementation",
+        "name": "Data Exchange Network Diagram",
+        "type": "Record",
+        "control_ref": "F4-5.1",
+        "mandatory": false,
+        "description": "Diagrams of the duplicated links, devices and providers behind the data exchange services with the path used on failure, and of the DMZ with the systems placed in it and the firewall rules between the internet, the DMZ and the internal network.",
+        "format": "PDF",
+        "owner": "Network Security Lead",
+        "also_controls": [
+          "F4-5.4"
+        ],
+        "evidence": [
+          "Data exchange network redundancy diagram",
+          "DMZ architecture diagram"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-253",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Exchange VPN Connection Register",
+        "type": "Register",
+        "control_ref": "F4-5.3",
+        "mandatory": false,
+        "description": "Register of the VPN tunnels and user groups that reach data exchange systems, with the owner, the networks reachable, the encryption used and the date last checked.",
+        "format": "XLSX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "VPN connection register"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-254",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Exchange Endpoint Certificate Inventory",
+        "type": "Register",
+        "control_ref": "F4-5.5",
+        "mandatory": false,
+        "description": "Inventory of the certificates securing the data exchange endpoints, with the issuer, expiry date, key size and owner, and the alerts set for coming expiry.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Exchange endpoint certificate inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-255",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Data Exchange System Inventory",
+        "type": "Register",
+        "control_ref": "F4-6.1",
+        "mandatory": false,
+        "description": "Inventory of the systems that make up the data exchange service, such as gateways, transfer servers and message brokers, with the owner, version and security baseline applied.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "Data exchange system inventory"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-256",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Exchange Logging Coverage Matrix",
+        "type": "Matrix",
+        "control_ref": "F4-7.1",
+        "mandatory": false,
+        "description": "Matrix of the data exchange components against the events each one logs, such as authentication, transfers, configuration changes and errors, showing that all of them send their logs to central storage.",
+        "format": "XLSX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Data exchange logging coverage matrix"
+        ]
       }
     ]
   }

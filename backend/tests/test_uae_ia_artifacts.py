@@ -6,8 +6,8 @@ QCB ...), every artifact hangs on a real control of the library with the control
 the function the API uses, and the journey flow in the framework page's data file matches the library's name and no other.
 The PDF is not needed here. On in-memory SQLite.
 
-The artifacts follow the evidence recommendations (seed_data/uae_ia_evidence.json, 527 items on 134 controls). Every item is
-classified once, in CLASSIFICATION at the end of this file:
+The artifacts follow the evidence recommendations the library ships (seed_data/frameworks/uae_ia.json: 527 items on the standard's
+134 controls and 333 on its 128 annex rows, E1-E3 and F1-F4). Every item is classified once, in CLASSIFICATION at the end of this file:
   class A, an authored document: a policy, standard, procedure, plan, register, matrix, schedule, template, report, or a section
           of one, that the entity writes and maintains. The value is the id of the artifact that provides it, and that artifact
           lists the item's name in its `evidence`.
@@ -37,7 +37,7 @@ FLOWS_TS = ROOT.parent / "grc-frontend" / "src" / "app" / "(dashboard)" / "frame
 KEY = "uae_ia"
 NAME = "UAE Information Assurance Standard"
 FAMILIES = [f"M{i}" for i in range(1, 7)] + [f"T{i}" for i in range(1, 10)]
-EVIDENCE = SEED / "uae_ia_evidence.json"
+ANNEXES = ["E1", "E2", "E3", "F1", "F2", "F3", "F4"]          # the national policies the annex rows belong to
 # the artifact types the content generator builds a document skeleton from (scripts/generate_artifact_content.py)
 TYPE_WORDS = {"policy", "standard", "guideline", "procedure", "process", "charter", "register", "plan", "report", "record",
               "log", "assessment", "form", "template", "matrix", "attestation", "strategy", "agreement", "training", "evidence"}
@@ -86,9 +86,9 @@ def controls(library):
 
 
 @pytest.fixture(scope="module")
-def layer():
-    """control id -> the names of its evidence items, in the layer's order."""
-    return {c: [i["name"] for i in items] for c, items in _json(EVIDENCE)["controls"].items()}
+def layer(controls):
+    """control id -> the names of its evidence items as the library ships them: the 134 controls and the 128 annex rows."""
+    return {cid: [e["name"] for e in c["evidence_requirements"]] for cid, c in controls.items()}
 
 
 @pytest.fixture
@@ -168,12 +168,16 @@ def test_every_artifact_hangs_on_a_real_control_and_follows_its_applicability(en
         # a document that serves several controls hangs on its primary one and names the others, in control order
         also = a.get("also_controls", [])
         assert all(c in controls and c != ref for c in also) and also == sorted(set(also), key=_natural), a["artifact_id"]
+        # a document never spans two policies: it serves the standard's own controls (no `annex` key) or the rows of one annex policy
+        assert len({controls[c].get("annex") for c in [ref, *also]}) == 1, a["artifact_id"]
 
 
 def test_every_control_family_has_a_document_and_the_foundation_documents_are_there(entry, controls):
-    refs = [a["control_ref"] for a in entry["artifacts"]]
+    core = [a["control_ref"] for a in entry["artifacts"] if "annex" not in controls[a["control_ref"]]]
     # all 15 families (M1-M6, T1-T9) each hold Always Applicable controls, and each has at least one artifact
-    assert {r.split(".")[0] for r in refs} == set(FAMILIES)
+    assert {r.split(".")[0] for r in core} == set(FAMILIES)
+    # each of the seven annex policies (E1-E3 national technology policies, F1-F4 national policy mappings) has documents as well
+    assert {controls[a["control_ref"]]["annex"] for a in entry["artifacts"] if "annex" in controls[a["control_ref"]]} == set(ANNEXES)
     # the documents the standard names outright (policy, objectives, plan, statement, ...) are on the controls that name them
     must = {"M1.2.1": "Information Security Policy", "M1.2.2": "Information Security Objectives",
             "M2.3.3": "Information Security Risk Treatment Plan", "M2.3.4": "Statement of Applicability",
@@ -310,13 +314,16 @@ def test_seeding_and_the_api_serve_the_catalogue_by_the_standards_name(db, entry
     def expected_for(code):
         return {a["name"] for a in entry["artifacts"] if code in [a["control_ref"], *(a.get("also_controls") or [])]}
 
-    for code in ("M2.3.4", "m2.3.4", "M1.1.3", "M1.3.3", "T2.3.5", "T2.3.2"):
+    for code in ("M2.3.4", "m2.3.4", "M1.1.3", "M1.3.3", "T2.3.5", "T2.3.2", "E1-2.1.1", "e1-2.4.1", "E1-2.6.2", "E3-2.1.4", "F1-5.7",
+                 "F2-5.2", "F4-5.4"):
         assert names_for(code) == expected_for(code.upper()) and names_for(code), code
     assert "Statement of Applicability" in names_for("M2.3.4")
     assert "Information Security Governance Charter" in names_for("M1.1.3")
     assert {"Document Control Procedure", "Controlled Document Register"} <= names_for("M1.3.3")
     assert "Equipment Security Procedure" in names_for("T2.3.5")                  # its control_ref is T2.3.1; T2.3.5 is an also_control
+    assert "Cloud Data Classification Mapping Matrix" in names_for("E1-2.6.2")   # its control_ref is E1-2.3.1; E1-2.6.2 is an also_control
     assert names_for("M2.3") == set() and names_for("M2.3.40") == set()          # token-equal, not a prefix
+    assert names_for("E1-2") == set() and names_for("E1-2.4") == set() and names_for("F1-5") == set()
     stored = {r.artifact_id: r.control_ref for r in db.query(m.ArtifactCatalogItem).filter_by(framework_key=KEY)}
     assert all(stored[a["artifact_id"]] == ", ".join([a["control_ref"], *(a.get("also_controls") or [])]) for a in entry["artifacts"])
 
@@ -1165,5 +1172,595 @@ CLASSIFICATION = {
         "Continuity plan test schedule": "UAEIA-129",
         "Continuity plan test reports": "test",
         "Continuity lessons learned and plan updates": "UAEIA-129",
+    },
+    # -- the annex rows (Annex E: national technology policies, Annex F: national policy mappings) --
+    "E1-2.1.1": {
+        "Approved cloud security policy": "UAEIA-134",
+        "Cloud security policy review record": "approval",
+        "Cloud usage analysis": "UAEIA-135",
+        "Provider access and data location analysis": "UAEIA-148",
+    },
+    "E1-2.1.2": {
+        "Cloud risk register": "UAEIA-137",
+        "Cloud risk assessment": "UAEIA-136",
+        "Cloud risk treatment plan": "UAEIA-137",
+        "Cloud risk communication record": "notice",
+    },
+    "E1-2.1.3": {
+        "Cloud provider contract personnel clauses": "signed",
+        "Shared responsibility matrix": "UAEIA-138",
+        "CSP contract clause checklist": "test",
+    },
+    "E1-2.1.4": {
+        "CSP onboarding risk assessment": "sample",
+        "Subcontracting risk assessment": "sample",
+        "CSP risk treatment record": "UAEIA-139",
+        "Approved CSP register": "UAEIA-140",
+    },
+    "E1-2.1.5": {
+        "Independent assurance reports from the CSP": "test",
+        "Review of CSP assurance reports": "test",
+        "CSP security certifications": "test",
+        "Assurance gap follow-up actions": "UAEIA-139",
+    },
+    "E1-2.2.1": {
+        "CSP due diligence questionnaire": "sample",
+        "CSP due diligence assessment report": "sample",
+        "Onboarding approval record": "approval",
+        "Non-disclosure agreement with the CSP": "signed",
+    },
+    "E1-2.2.2": {
+        "Executed CSP contract": "signed",
+        "Service level agreement with availability terms": "signed",
+        "Sovereignty, data ownership and location clauses": "signed",
+        "Incident, change and audit rights clauses": "signed",
+        "Exit, vendor lock-in and dispute clauses": "signed",
+    },
+    "E1-2.3.1": {
+        "Data classification policy": "UAEIA-142",
+        "Cloud data handling procedure": "UAEIA-143",
+        "Cloud data obligations analysis": "UAEIA-141",
+        "Pre-migration data classification record": "record",
+        "National cloud classification level mapping": "UAEIA-144",
+    },
+    "E1-2.3.2": {
+        "Encryption policy": "UAEIA-145",
+        "Encryption configuration evidence": "export",
+        "Cloud encryption key management procedure": "UAEIA-146",
+        "Hold your own key risk assessment": "UAEIA-147",
+        "Key custody and independence evidence": "export",
+    },
+    "E1-2.4.1": {
+        "CSP jurisdiction and data location assessment": "UAEIA-148",
+        "Cloud data location register": "UAEIA-149",
+        "Classified data hosting matrix": "UAEIA-144",
+        "Sovereign cloud hosting confirmation": "export",
+    },
+    "E1-2.5.1": {
+        "Interoperability needs evaluation": "UAEIA-150",
+        "Cloud integration architecture diagram": "UAEIA-151",
+        "Integration standards and API register": "UAEIA-152",
+    },
+    "E1-2.5.2": {
+        "CSP contract data portability clauses": "signed",
+        "CSP data portability commitment": "signed",
+        "Data export test result": "test",
+        "Data deletion terms and confirmation": "signed",
+    },
+    "E1-2.6.1": {
+        "CSP change management evidence": "sample",
+        "Procurement check of CSP change controls": "test",
+        "Service component tracking sample": "sample",
+    },
+    "E1-2.6.2": {
+        "CSP data center physical security assessment": "test",
+        "Independent data center security reports": "test",
+        "Data classification to physical security mapping": "UAEIA-144",
+    },
+    "E1-2.6.3": {
+        "Cloud asset inventory": "UAEIA-153",
+        "Asset to cloud service mapping": "UAEIA-153",
+        "Inventory reconciliation record": "test",
+    },
+    "E1-2.6.4": {
+        "CSP application security assurance": "test",
+        "CSP secure coding evidence": "sample",
+        "CSP security testing results": "test",
+        "Procurement check of application security": "test",
+    },
+    "E1-2.6.5": {
+        "Cloud system hardening guidelines": "UAEIA-154",
+        "Hardening implementation evidence": "export",
+        "Hardening compliance results": "test",
+    },
+    "E1-2.7.1": {
+        "Cloud identity lifecycle procedure": "UAEIA-155",
+        "Identity lifecycle sample records": "sample",
+        "Privileged account creation procedure": "UAEIA-155",
+        "Privileged account restrictions": "export",
+        "Privileged access MFA settings": "export",
+    },
+    "E1-2.7.2": {
+        "Cloud access control policy": "UAEIA-156",
+        "Cloud resource permissions export": "export",
+        "Authentication settings evidence": "export",
+        "Authentication methods and procedures": "UAEIA-157",
+        "Privileged access MFA enforcement test": "test",
+    },
+    "E1-2.7.3": {
+        "Cloud access control procedure": "UAEIA-158",
+        "Access request and approval records": "sample",
+        "Cloud access review results": "test",
+        "Access removal records": "record",
+    },
+    "E1-2.8.1": {
+        "Cloud incident management procedure": "UAEIA-159",
+        "Incident management test results": "test",
+        "Cloud incident records": "record",
+    },
+    "E1-2.8.2": {
+        "External incident notification procedure": "UAEIA-159",
+        "Incident notification contact list": "UAEIA-160",
+        "External incident notification records": "record",
+    },
+    "E1-2.8.3": {
+        "Cloud incident response plan": "UAEIA-161",
+        "Alignment to the national incident response plan": "UAEIA-162",
+        "Incident response test report": "test",
+    },
+    "E1-2.8.4": {
+        "E-discovery and forensics personnel appointment": "approval",
+        "Forensic capability metrics": "UAEIA-163",
+        "E-forensic protocols": "UAEIA-164",
+        "CSP forensic protocol compliance evidence": "signed",
+    },
+    "E1-2.9.1": {
+        "Cloud backup requirements": "UAEIA-165",
+        "Backup restoration testing schedule": "UAEIA-166",
+        "Cloud backup restoration test results": "test",
+    },
+    "E1-2.9.2": {
+        "Continuity requirements in CSP contracts": "signed",
+        "Continuity requirements test results": "test",
+        "Business continuity and disaster recovery plans": "UAEIA-167",
+        "Plan communication records": "notice",
+        "Recovery objectives and responsibilities": "UAEIA-167",
+    },
+    "E2-2.1": {
+        "AI/ML security policy": "UAEIA-168",
+        "AI/ML secure development and operation procedures": "UAEIA-169",
+        "AI/ML cyber security risk register": "UAEIA-170",
+        "AI/ML supply chain risk assessment": "UAEIA-171",
+        "AI/ML change management records": "record",
+    },
+    "E2-2.2": {
+        "AI/ML asset inventory": "UAEIA-172",
+        "AI/ML security baselines and compliance results": "UAEIA-173",
+        "AI/ML patch and vulnerability management records": "record",
+        "AI/ML secure development and testing evidence": "sample",
+        "AI/ML environment network security evidence": "export",
+    },
+    "E2-2.3": {
+        "AI/ML model security requirements": "sample",
+        "AI/ML model protection measures": "export",
+        "Inference data safeguards": "export",
+        "Model data access controls": "export",
+        "AI/ML data protection settings": "export",
+    },
+    "E2-2.4": {
+        "AI/ML application domain security analysis": "UAEIA-174",
+        "AI/ML availability architecture": "UAEIA-175",
+        "AI/ML continuity and recovery plans": "UAEIA-176",
+        "AI/ML restoration and continuity test results": "test",
+        "AI/ML security testing and validation report": "test",
+    },
+    "E2-2.5": {
+        "AI/ML attack awareness material": "UAEIA-177",
+        "AI/ML attack awareness attendance records": "record",
+        "AI/ML defense strategy": "UAEIA-178",
+        "Adversarial attack testing results": "test",
+    },
+    "E2-2.6": {
+        "AI/ML security analytics framework": "UAEIA-179",
+        "AI/ML detection and alert samples": "sample",
+        "AI/ML incident reporting and management procedure": "UAEIA-180",
+        "AI/ML incident records": "record",
+        "AI/ML digital forensics framework": "UAEIA-181",
+    },
+    "E3-2.1.1": {
+        "Approved IoT security policy": "UAEIA-182",
+        "IoT security policy review record": "approval",
+        "IoT governance model": "UAEIA-183",
+        "IoT roles and responsibilities matrix": "UAEIA-183",
+        "IoT device security requirements": "UAEIA-184",
+    },
+    "E3-2.1.2": {
+        "IoT risk assessment": "UAEIA-185",
+        "IoT risk register": "UAEIA-186",
+        "IoT risk treatment plan": "UAEIA-186",
+    },
+    "E3-2.1.3": {
+        "IoT security training plan": "UAEIA-187",
+        "IoT security training content": "UAEIA-188",
+        "IoT training completion records": "record",
+    },
+    "E3-2.1.4": {
+        "IoT third-party security policy": "UAEIA-189",
+        "Third-party adherence acknowledgements": "signed",
+        "IoT supplier contract terms": "signed",
+        "Third-party IoT access rights": "UAEIA-196",
+        "Third-party IoT access review results": "test",
+    },
+    "E3-2.1.5": {
+        "IoT compliance policy and program": "UAEIA-190",
+        "IoT legal and regulatory requirements register": "UAEIA-191",
+        "IoT compliance assessment results": "test",
+    },
+    "E3-2.2.1": {
+        "IoT data inventory and classification": "UAEIA-192",
+        "IoT data use and rights contract terms": "signed",
+        "IoT data protection and access restriction evidence": "export",
+        "CSP contract clauses for IoT data": "signed",
+        "Data minimization and collection evidence": "sample",
+    },
+    "E3-2.2.2": {
+        "IoT encryption policy and procedures": "UAEIA-193",
+        "IoT encryption configuration evidence": "export",
+        "Key hierarchy certificate chain": "export",
+        "Root private key protection evidence": "export",
+    },
+    "E3-2.2.3": {
+        "Session management settings": "export",
+        "Session token strength test result": "test",
+        "IoT communication protocol specification": "UAEIA-194",
+        "Encrypted channel verification results": "test",
+        "Approved encryption techniques list": "UAEIA-195",
+    },
+    "E3-2.3.1": {
+        "IoT access rights listing": "UAEIA-196",
+        "IoT authentication and MFA settings": "export",
+        "IoT credential storage and hard-coding checks": "test",
+        "IoT access review results": "test",
+        "IoT password rules configuration": "export",
+    },
+    "E3-2.3.2": {
+        "IoT location access control list": "UAEIA-197",
+        "Physical access control evidence": "export",
+        "Physical access monitoring records": "log",
+    },
+    "E3-2.4.1": {
+        "IoT incident response procedure": "UAEIA-198",
+        "IoT incident records": "record",
+        "Post-incident analysis report": "record",
+        "Incident evidence collection records": "record",
+        "Threat intelligence resourcing and outputs": "sample",
+    },
+    "E3-2.5.1": {
+        "IoT backup schedule and settings": "UAEIA-199",
+        "IoT backup job logs": "log",
+        "IoT backup restoration test results": "test",
+    },
+    "E3-2.5.2": {
+        "IoT continuity plan": "UAEIA-200",
+        "IoT response and recovery procedures": "UAEIA-200",
+        "IoT continuity test results": "test",
+    },
+    "E3-2.6.1": {
+        "IoT asset inventory": "UAEIA-201",
+        "IoT device handling procedure": "UAEIA-202",
+        "IoT device maintenance records": "record",
+        "IoT device disposal records": "record",
+    },
+    "E3-2.6.2": {
+        "IoT component authentication and encryption settings": "export",
+        "IoT application security architecture": "UAEIA-203",
+        "Trusted service layer access control rules": "export",
+        "Dedicated IoT gateway evidence": "export",
+    },
+    "E3-2.6.3": {
+        "IoT device installation and setup baseline": "UAEIA-204",
+        "Remote management evidence": "export",
+        "IoT device management strategy": "UAEIA-205",
+        "IoT patch and update records": "record",
+        "End-of-life device compensating measures": "UAEIA-206",
+    },
+    "E3-2.7.1": {
+        "IoT network architecture diagram": "UAEIA-207",
+        "Segmentation and traffic restriction rules": "export",
+        "Secure ports and protocols settings": "export",
+        "Unused and default service scan results": "test",
+        "Consumer IoT device cryptography evidence": "export",
+    },
+    "E3-2.8.1": {
+        "IoT logging settings": "export",
+        "Authentication and access event log extracts": "log",
+        "Data and operation event log extracts": "log",
+        "Update failure and physical access event logs": "log",
+        "Log storage, protection and analysis records": "export",
+    },
+    "F1-2.1": {
+        "National encryption conformance review": "test",
+        "Approved cryptographic algorithms and key lengths": "UAEIA-208",
+    },
+    "F1-2.2": {
+        "Encryption risk assessment": "UAEIA-209",
+        "Encryption risk remediation tracker": "UAEIA-210",
+    },
+    "F1-2.3": {
+        "Encryption legal and regulatory requirements map": "UAEIA-211",
+    },
+    "F1-2.4": {
+        "Encryption requirements by classification level": "UAEIA-212",
+    },
+    "F1-3.1": {
+        "Data at rest encryption coverage register": "UAEIA-213",
+        "Encryption exceptions register": "UAEIA-214",
+        "Encryption software patch status report": "export",
+    },
+    "F1-3.2": {
+        "Laptop and desktop encryption spot checks": "test",
+    },
+    "F1-3.3": {
+        "Lost and stolen mobile device records": "record",
+    },
+    "F1-3.4": {
+        "Unencrypted portable media block test": "test",
+    },
+    "F1-3.5": {
+        "Database encryption inventory": "UAEIA-213",
+    },
+    "F1-3.6": {
+        "System secrets protection register": "UAEIA-215",
+        "Clear-text credential scan results": "test",
+    },
+    "F1-4.1": {
+        "Approved secure transport protocols": "UAEIA-208",
+    },
+    "F1-4.2": {
+        "Mail transport encryption settings": "export",
+        "Email encryption rule settings": "export",
+    },
+    "F1-4.3": {
+        "Network path encryption review": "test",
+    },
+    "F1-5.1": {
+        "Cryptographic key inventory": "UAEIA-216",
+        "Key custodian appointments": "approval",
+    },
+    "F1-5.2": {
+        "Key generation settings": "export",
+        "Key generation ceremony record": "record",
+    },
+    "F1-5.3": {
+        "Key distribution and receipt records": "record",
+        "Key transport protection settings": "export",
+    },
+    "F1-5.4": {
+        "Key store access review results": "test",
+    },
+    "F1-5.5": {
+        "Key backup and escrow arrangements": "UAEIA-217",
+    },
+    "F1-5.6": {
+        "Key destruction records": "record",
+    },
+    "F1-5.7": {
+        "Key archive register": "UAEIA-216",
+    },
+    "F1-6.1": {
+        "Long-term data exposure assessment": "UAEIA-218",
+        "Cryptographic agility assessment": "UAEIA-218",
+    },
+    "F2-2.1": {
+        "Remote work security policy": "UAEIA-219",
+        "Remote work security procedures": "UAEIA-220",
+        "National remote work conformance review": "test",
+    },
+    "F2-2.2": {
+        "Remote work risk assessment": "UAEIA-221",
+        "Remote work risk monitoring report": "record",
+    },
+    "F2-2.3": {
+        "Remote worker awareness material": "UAEIA-222",
+        "Remote worker baseline completion report": "record",
+    },
+    "F2-3.1": {
+        "Zero Trust remote access model": "UAEIA-223",
+        "Remote device posture check settings": "export",
+        "Remote access session logs": "log",
+    },
+    "F2-3.2": {
+        "Remote access entitlement list": "export",
+        "Remote multi-factor enforcement test": "test",
+    },
+    "F2-3.3": {
+        "Remote worker onboarding checklists": "sample",
+        "Remote worker offboarding checklists": "sample",
+    },
+    "F2-4.1": {
+        "Off-network device compliance report": "export",
+    },
+    "F2-4.2": {
+        "Mobile device compliance rule settings": "export",
+        "Approved mobile application list": "UAEIA-224",
+    },
+    "F2-4.3": {
+        "Signed BYOD agreements": "signed",
+        "Third-party device access restrictions": "export",
+    },
+    "F2-5.1": {
+        "Remote work data location rules": "UAEIA-225",
+        "Remote access country restriction settings": "export",
+        "Remote work abroad approvals": "approval",
+    },
+    "F2-5.2": {
+        "Approved remote data transfer methods": "UAEIA-225",
+        "Remote upload restriction settings": "export",
+    },
+    "F2-5.3": {
+        "Remote work obligations register": "UAEIA-226",
+    },
+    "F3-2.1": {
+        "National third-party security conformance review": "test",
+    },
+    "F3-2.2": {
+        "Third-party risk awareness material": "UAEIA-227",
+        "Supplier-facing staff training completion report": "record",
+    },
+    "F3-3.1": {
+        "Supplier criticality criteria": "UAEIA-228",
+        "Supplier register completeness check": "test",
+    },
+    "F3-3.2": {
+        "Supplier classification worksheets": "sample",
+    },
+    "F3-3.3": {
+        "Supply chain dependency map": "UAEIA-229",
+        "Third-party risk register": "UAEIA-230",
+    },
+    "F3-3.4": {
+        "Supplier risk status report": "record",
+    },
+    "F3-4.1": {
+        "Supplier selection scoring sheet": "UAEIA-231",
+    },
+    "F3-4.2": {
+        "Supplier response verification records": "record",
+    },
+    "F3-5.1": {
+        "Tender security requirement extracts": "sample",
+    },
+    "F3-5.2": {
+        "Vendor product security documentation": "sample",
+    },
+    "F3-5.3": {
+        "Hardware receipt inspection records": "test",
+    },
+    "F3-5.4": {
+        "Supplier maintenance and support terms": "signed",
+        "Supplier maintenance session records": "record",
+    },
+    "F3-5.5": {
+        "End-of-support register": "UAEIA-232",
+        "Retired hardware data erasure records": "record",
+    },
+    "F3-5.6": {
+        "Software component inventory": "UAEIA-233",
+        "Build and release pipeline controls": "export",
+    },
+    "F3-6.1": {
+        "Minimum supplier security requirements": "UAEIA-234",
+    },
+    "F3-6.2": {
+        "Supplier contract clause coverage review": "test",
+    },
+    "F3-6.3": {
+        "Supplier legal compliance statements": "signed",
+    },
+    "F3-7.1": {
+        "Supplier performance review minutes": "minutes",
+        "Supplier non-compliance tracker": "UAEIA-235",
+    },
+    "F3-7.2": {
+        "Supplier log tamper protection settings": "export",
+    },
+    "F3-7.3": {
+        "Enhanced controls for high-risk suppliers": "UAEIA-236",
+        "High-risk supplier assurance schedule": "UAEIA-237",
+    },
+    "F3-8.1": {
+        "Supplier incident notification requirements": "signed",
+        "Supplier incident contact list": "UAEIA-238",
+        "Supplier incident response playbook": "UAEIA-239",
+    },
+    "F3-8.2": {
+        "Alternate supplier register": "UAEIA-240",
+        "Supplier exit and substitution plans": "UAEIA-241",
+    },
+    "F3-8.3": {
+        "Critical supplier failure impact analysis": "UAEIA-242",
+        "Supplier continuity assurance records": "sample",
+    },
+    "F3-8.4": {
+        "Supplier collaboration requirements": "sample",
+        "Joint exercise report": "test",
+    },
+    "F4-2.1": {
+        "Data exchange security policy": "UAEIA-243",
+        "Data exchange roles and owners": "UAEIA-244",
+        "National data exchange conformance review": "test",
+    },
+    "F4-2.2": {
+        "Data exchange risk assessment": "UAEIA-245",
+        "Data exchange risk treatment tracker": "UAEIA-246",
+    },
+    "F4-2.3": {
+        "Data exchange obligations register": "UAEIA-247",
+    },
+    "F4-2.4": {
+        "Data exchange handling rules by classification": "UAEIA-248",
+        "Exchange integrity protection settings": "export",
+    },
+    "F4-2.5": {
+        "Personal data exchange register": "UAEIA-249",
+        "Data minimization check results": "test",
+    },
+    "F4-3.1": {
+        "Data exchange authentication settings": "export",
+        "Partner and service account register": "UAEIA-250",
+    },
+    "F4-3.2": {
+        "Data exchange access approval records": "approval",
+        "Data exchange access review results": "test",
+    },
+    "F4-3.3": {
+        "Data exchange user activity logs": "log",
+    },
+    "F4-4.1": {
+        "Data exchange channel encryption register": "UAEIA-251",
+        "Partner connection encryption test results": "test",
+    },
+    "F4-5.1": {
+        "Data exchange network redundancy diagram": "UAEIA-252",
+        "Network failover test results": "test",
+    },
+    "F4-5.2": {
+        "Firewall rule review results": "test",
+    },
+    "F4-5.3": {
+        "VPN connection register": "UAEIA-253",
+    },
+    "F4-5.4": {
+        "DMZ architecture diagram": "UAEIA-252",
+        "DMZ stored data check": "test",
+    },
+    "F4-5.5": {
+        "Exchange endpoint certificate inventory": "UAEIA-254",
+    },
+    "F4-5.6": {
+        "Intrusion prevention sensor settings": "export",
+        "Intrusion alert handling records": "sample",
+    },
+    "F4-5.7": {
+        "Data loss prevention rule settings": "export",
+        "Data loss prevention alert records": "sample",
+    },
+    "F4-6.1": {
+        "Data exchange system inventory": "UAEIA-255",
+        "Completed hardening checklists": "sample",
+    },
+    "F4-6.2": {
+        "Data exchange configuration drift report": "export",
+    },
+    "F4-6.3": {
+        "Data exchange penetration test report": "test",
+    },
+    "F4-7.1": {
+        "Data exchange logging coverage matrix": "UAEIA-256",
+        "Log forwarding and retention settings": "export",
+    },
+    "F4-7.2": {
+        "Data exchange anomaly detection rules": "export",
+        "Inappropriate use case records": "record",
     },
 }

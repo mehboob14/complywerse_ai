@@ -19604,6 +19604,1605 @@
    "scf_ids": [],
    "match_mode": "exact",
    "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-134",
+   "name": "Cloud Security Policy",
+   "control_ref": "E1-2.1.1",
+   "codes": [
+    "E1-2.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-135",
+   "name": "Cloud Usage Analysis",
+   "control_ref": "E1-2.1.1",
+   "codes": [
+    "E1-2.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-136",
+   "name": "Cloud Risk Assessment",
+   "control_ref": "E1-2.1.2",
+   "codes": [
+    "E1-2.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-137",
+   "name": "Cloud Risk and Treatment Register",
+   "control_ref": "E1-2.1.2",
+   "codes": [
+    "E1-2.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-138",
+   "name": "Cloud Shared Responsibility Matrix",
+   "control_ref": "E1-2.1.3",
+   "codes": [
+    "E1-2.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-139",
+   "name": "CSP Risk and Assurance Action Register",
+   "control_ref": "E1-2.1.4",
+   "codes": [
+    "E1-2.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-140",
+   "name": "Approved CSP Register",
+   "control_ref": "E1-2.1.4",
+   "codes": [
+    "E1-2.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-141",
+   "name": "Cloud Data Obligations Analysis",
+   "control_ref": "E1-2.3.1",
+   "codes": [
+    "E1-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-142",
+   "name": "Cloud Data Classification Policy",
+   "control_ref": "E1-2.3.1",
+   "codes": [
+    "E1-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-143",
+   "name": "Cloud Data Handling Procedure",
+   "control_ref": "E1-2.3.1",
+   "codes": [
+    "E1-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-144",
+   "name": "Cloud Data Classification Mapping Matrix",
+   "control_ref": "E1-2.3.1",
+   "codes": [
+    "E1-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-145",
+   "name": "Cloud Encryption Policy",
+   "control_ref": "E1-2.3.2",
+   "codes": [
+    "E1-2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-146",
+   "name": "Cloud Encryption Key Management Procedure",
+   "control_ref": "E1-2.3.2",
+   "codes": [
+    "E1-2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-147",
+   "name": "Hold Your Own Key Risk Assessment",
+   "control_ref": "E1-2.3.2",
+   "codes": [
+    "E1-2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-148",
+   "name": "CSP Jurisdiction and Data Location Assessment",
+   "control_ref": "E1-2.4.1",
+   "codes": [
+    "E1-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-149",
+   "name": "Cloud Data Location Register",
+   "control_ref": "E1-2.4.1",
+   "codes": [
+    "E1-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-150",
+   "name": "Cloud Interoperability Needs Evaluation",
+   "control_ref": "E1-2.5.1",
+   "codes": [
+    "E1-2.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-151",
+   "name": "Cloud Integration Architecture Diagram",
+   "control_ref": "E1-2.5.1",
+   "codes": [
+    "E1-2.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-152",
+   "name": "Cloud Integration Standards and API Register",
+   "control_ref": "E1-2.5.1",
+   "codes": [
+    "E1-2.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-153",
+   "name": "Cloud Hosted Assets Inventory",
+   "control_ref": "E1-2.6.3",
+   "codes": [
+    "E1-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-154",
+   "name": "Cloud System Hardening Guidelines",
+   "control_ref": "E1-2.6.5",
+   "codes": [
+    "E1-2.6.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-155",
+   "name": "Cloud Identity and Privileged Account Procedure",
+   "control_ref": "E1-2.7.1",
+   "codes": [
+    "E1-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-156",
+   "name": "Cloud Access Control Policy",
+   "control_ref": "E1-2.7.2",
+   "codes": [
+    "E1-2.7.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-157",
+   "name": "Cloud Authentication Standard",
+   "control_ref": "E1-2.7.2",
+   "codes": [
+    "E1-2.7.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-158",
+   "name": "Cloud Access Control Procedure",
+   "control_ref": "E1-2.7.3",
+   "codes": [
+    "E1-2.7.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-159",
+   "name": "Cloud Incident Management and Reporting Procedure",
+   "control_ref": "E1-2.8.1",
+   "codes": [
+    "E1-2.8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-160",
+   "name": "Cloud Incident Notification Contact List",
+   "control_ref": "E1-2.8.2",
+   "codes": [
+    "E1-2.8.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-161",
+   "name": "Cloud Incident Response Plan",
+   "control_ref": "E1-2.8.3",
+   "codes": [
+    "E1-2.8.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-162",
+   "name": "Cloud Incident Response Plan Alignment Matrix",
+   "control_ref": "E1-2.8.3",
+   "codes": [
+    "E1-2.8.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-163",
+   "name": "Cloud Forensics Metrics Register",
+   "control_ref": "E1-2.8.4",
+   "codes": [
+    "E1-2.8.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-164",
+   "name": "Cloud Forensic Evidence Handling Procedure",
+   "control_ref": "E1-2.8.4",
+   "codes": [
+    "E1-2.8.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-165",
+   "name": "Cloud Backup Requirements Standard",
+   "control_ref": "E1-2.9.1",
+   "codes": [
+    "E1-2.9.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-166",
+   "name": "Cloud Backup Restoration Test Schedule",
+   "control_ref": "E1-2.9.1",
+   "codes": [
+    "E1-2.9.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-167",
+   "name": "Cloud Continuity and Disaster Recovery Plan",
+   "control_ref": "E1-2.9.2",
+   "codes": [
+    "E1-2.9.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-168",
+   "name": "AI/ML Security Policy",
+   "control_ref": "E2-2.1",
+   "codes": [
+    "E2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-169",
+   "name": "AI/ML Secure Development and Operation Procedure",
+   "control_ref": "E2-2.1",
+   "codes": [
+    "E2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-170",
+   "name": "AI/ML Cyber Security Risk and Treatment Register",
+   "control_ref": "E2-2.1",
+   "codes": [
+    "E2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-171",
+   "name": "AI/ML Supply Chain Risk Assessment",
+   "control_ref": "E2-2.1",
+   "codes": [
+    "E2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-172",
+   "name": "AI/ML Systems Inventory",
+   "control_ref": "E2-2.2",
+   "codes": [
+    "E2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-173",
+   "name": "AI/ML Security Baseline Standard",
+   "control_ref": "E2-2.2",
+   "codes": [
+    "E2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-174",
+   "name": "AI/ML Application Domain Security Analysis",
+   "control_ref": "E2-2.4",
+   "codes": [
+    "E2-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-175",
+   "name": "AI/ML Availability Architecture",
+   "control_ref": "E2-2.4",
+   "codes": [
+    "E2-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-176",
+   "name": "AI/ML Continuity and Recovery Plan",
+   "control_ref": "E2-2.4",
+   "codes": [
+    "E2-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-177",
+   "name": "AI/ML Attack Awareness Guidelines",
+   "control_ref": "E2-2.5",
+   "codes": [
+    "E2-2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-178",
+   "name": "AI/ML Adversarial Attack Defense Plan",
+   "control_ref": "E2-2.5",
+   "codes": [
+    "E2-2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-179",
+   "name": "AI/ML Security Monitoring and Analytics Plan",
+   "control_ref": "E2-2.6",
+   "codes": [
+    "E2-2.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-180",
+   "name": "AI/ML Incident Reporting and Management Procedure",
+   "control_ref": "E2-2.6",
+   "codes": [
+    "E2-2.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-181",
+   "name": "AI/ML Digital Forensics Procedure",
+   "control_ref": "E2-2.6",
+   "codes": [
+    "E2-2.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-182",
+   "name": "IoT Security Policy",
+   "control_ref": "E3-2.1.1",
+   "codes": [
+    "E3-2.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-183",
+   "name": "IoT Governance Charter",
+   "control_ref": "E3-2.1.1",
+   "codes": [
+    "E3-2.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-184",
+   "name": "IoT Device Security Requirements Standard",
+   "control_ref": "E3-2.1.1",
+   "codes": [
+    "E3-2.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-185",
+   "name": "IoT Risk Assessment",
+   "control_ref": "E3-2.1.2",
+   "codes": [
+    "E3-2.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-186",
+   "name": "IoT Risk and Treatment Register",
+   "control_ref": "E3-2.1.2",
+   "codes": [
+    "E3-2.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-187",
+   "name": "IoT Security Training Plan",
+   "control_ref": "E3-2.1.3",
+   "codes": [
+    "E3-2.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-188",
+   "name": "IoT Security Training Guidelines",
+   "control_ref": "E3-2.1.3",
+   "codes": [
+    "E3-2.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-189",
+   "name": "IoT Third-Party Security Policy",
+   "control_ref": "E3-2.1.4",
+   "codes": [
+    "E3-2.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-190",
+   "name": "IoT Compliance Policy and Program",
+   "control_ref": "E3-2.1.5",
+   "codes": [
+    "E3-2.1.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-191",
+   "name": "IoT Legal and Regulatory Requirements Register",
+   "control_ref": "E3-2.1.5",
+   "codes": [
+    "E3-2.1.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-192",
+   "name": "IoT Data Inventory and Classification Register",
+   "control_ref": "E3-2.2.1",
+   "codes": [
+    "E3-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-193",
+   "name": "IoT Encryption Policy and Procedures",
+   "control_ref": "E3-2.2.2",
+   "codes": [
+    "E3-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-194",
+   "name": "IoT Communication Protocol Specification",
+   "control_ref": "E3-2.2.3",
+   "codes": [
+    "E3-2.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-195",
+   "name": "IoT Approved Encryption Techniques List",
+   "control_ref": "E3-2.2.3",
+   "codes": [
+    "E3-2.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-196",
+   "name": "IoT Access Rights Register",
+   "control_ref": "E3-2.3.1",
+   "codes": [
+    "E3-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-197",
+   "name": "IoT Location Access Register",
+   "control_ref": "E3-2.3.2",
+   "codes": [
+    "E3-2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-198",
+   "name": "IoT Incident Response Procedure",
+   "control_ref": "E3-2.4.1",
+   "codes": [
+    "E3-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-199",
+   "name": "IoT Backup Schedule",
+   "control_ref": "E3-2.5.1",
+   "codes": [
+    "E3-2.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-200",
+   "name": "IoT Continuity Plan",
+   "control_ref": "E3-2.5.2",
+   "codes": [
+    "E3-2.5.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-201",
+   "name": "IoT Device and Software Inventory",
+   "control_ref": "E3-2.6.1",
+   "codes": [
+    "E3-2.6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-202",
+   "name": "IoT Device Handling Procedure",
+   "control_ref": "E3-2.6.1",
+   "codes": [
+    "E3-2.6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-203",
+   "name": "IoT Application Security Architecture",
+   "control_ref": "E3-2.6.2",
+   "codes": [
+    "E3-2.6.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-204",
+   "name": "IoT Device Secure Setup Baseline",
+   "control_ref": "E3-2.6.3",
+   "codes": [
+    "E3-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-205",
+   "name": "IoT Device Update and Maintenance Plan",
+   "control_ref": "E3-2.6.3",
+   "codes": [
+    "E3-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-206",
+   "name": "IoT End-of-Life Device Register",
+   "control_ref": "E3-2.6.3",
+   "codes": [
+    "E3-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-207",
+   "name": "IoT Network Architecture Diagram",
+   "control_ref": "E3-2.7.1",
+   "codes": [
+    "E3-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-208",
+   "name": "Approved Cryptographic Algorithms and Protocols Standard",
+   "control_ref": "F1-2.1",
+   "codes": [
+    "F1-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-209",
+   "name": "Encryption Risk Assessment",
+   "control_ref": "F1-2.2",
+   "codes": [
+    "F1-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-210",
+   "name": "Encryption Risk Remediation Register",
+   "control_ref": "F1-2.2",
+   "codes": [
+    "F1-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-211",
+   "name": "Encryption Legal and Regulatory Requirements Matrix",
+   "control_ref": "F1-2.3",
+   "codes": [
+    "F1-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-212",
+   "name": "Encryption Requirements by Classification Matrix",
+   "control_ref": "F1-2.4",
+   "codes": [
+    "F1-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-213",
+   "name": "Data at Rest Encryption Register",
+   "control_ref": "F1-3.1",
+   "codes": [
+    "F1-3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-214",
+   "name": "Encryption Exceptions Register",
+   "control_ref": "F1-3.1",
+   "codes": [
+    "F1-3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-215",
+   "name": "System Secrets Protection Register",
+   "control_ref": "F1-3.6",
+   "codes": [
+    "F1-3.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-216",
+   "name": "Cryptographic Key Inventory and Archive Register",
+   "control_ref": "F1-5.1",
+   "codes": [
+    "F1-5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-217",
+   "name": "Key Backup and Escrow Procedure",
+   "control_ref": "F1-5.5",
+   "codes": [
+    "F1-5.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-218",
+   "name": "Post-Quantum Readiness Assessment",
+   "control_ref": "F1-6.1",
+   "codes": [
+    "F1-6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-219",
+   "name": "Remote Work Security Policy",
+   "control_ref": "F2-2.1",
+   "codes": [
+    "F2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-220",
+   "name": "Remote Work Security Procedure",
+   "control_ref": "F2-2.1",
+   "codes": [
+    "F2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-221",
+   "name": "Remote Work Risk Assessment",
+   "control_ref": "F2-2.2",
+   "codes": [
+    "F2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-222",
+   "name": "Remote Worker Security Awareness Guidelines",
+   "control_ref": "F2-2.3",
+   "codes": [
+    "F2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-223",
+   "name": "Zero Trust Remote Access Standard",
+   "control_ref": "F2-3.1",
+   "codes": [
+    "F2-3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-224",
+   "name": "Approved Mobile Application List",
+   "control_ref": "F2-4.2",
+   "codes": [
+    "F2-4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-225",
+   "name": "Remote Work Data Handling Standard",
+   "control_ref": "F2-5.1",
+   "codes": [
+    "F2-5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-226",
+   "name": "Remote Work Obligations Register",
+   "control_ref": "F2-5.3",
+   "codes": [
+    "F2-5.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-227",
+   "name": "Third-Party Risk Awareness Guidelines",
+   "control_ref": "F3-2.2",
+   "codes": [
+    "F3-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-228",
+   "name": "Supplier Criticality Rating Standard",
+   "control_ref": "F3-3.1",
+   "codes": [
+    "F3-3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-229",
+   "name": "Supply Chain Dependency Map",
+   "control_ref": "F3-3.3",
+   "codes": [
+    "F3-3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-230",
+   "name": "Third-Party Risk and Treatment Register",
+   "control_ref": "F3-3.3",
+   "codes": [
+    "F3-3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-231",
+   "name": "Supplier Selection Scoring Matrix",
+   "control_ref": "F3-4.1",
+   "codes": [
+    "F3-4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-232",
+   "name": "End-of-Support Register",
+   "control_ref": "F3-5.5",
+   "codes": [
+    "F3-5.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-233",
+   "name": "Software Component Inventory",
+   "control_ref": "F3-5.6",
+   "codes": [
+    "F3-5.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-234",
+   "name": "Minimum Supplier Security Requirements Standard",
+   "control_ref": "F3-6.1",
+   "codes": [
+    "F3-6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-235",
+   "name": "Supplier Non-Compliance Register",
+   "control_ref": "F3-7.1",
+   "codes": [
+    "F3-7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-236",
+   "name": "High-Risk Supplier Controls Standard",
+   "control_ref": "F3-7.3",
+   "codes": [
+    "F3-7.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-237",
+   "name": "High-Risk Supplier Assurance Schedule",
+   "control_ref": "F3-7.3",
+   "codes": [
+    "F3-7.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-238",
+   "name": "Supplier Incident Contact List",
+   "control_ref": "F3-8.1",
+   "codes": [
+    "F3-8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-239",
+   "name": "Supplier Incident Response Playbook",
+   "control_ref": "F3-8.1",
+   "codes": [
+    "F3-8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-240",
+   "name": "Alternate Supplier Register",
+   "control_ref": "F3-8.2",
+   "codes": [
+    "F3-8.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-241",
+   "name": "Supplier Exit and Substitution Plan",
+   "control_ref": "F3-8.2",
+   "codes": [
+    "F3-8.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-242",
+   "name": "Critical Supplier Failure Impact Analysis",
+   "control_ref": "F3-8.3",
+   "codes": [
+    "F3-8.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-243",
+   "name": "Data Exchange Security Policy",
+   "control_ref": "F4-2.1",
+   "codes": [
+    "F4-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-244",
+   "name": "Data Exchange Roles and Owners Matrix",
+   "control_ref": "F4-2.1",
+   "codes": [
+    "F4-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-245",
+   "name": "Data Exchange Risk Assessment",
+   "control_ref": "F4-2.2",
+   "codes": [
+    "F4-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-246",
+   "name": "Data Exchange Risk Treatment Register",
+   "control_ref": "F4-2.2",
+   "codes": [
+    "F4-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-247",
+   "name": "Data Exchange Obligations Register",
+   "control_ref": "F4-2.3",
+   "codes": [
+    "F4-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-248",
+   "name": "Data Exchange Handling Standard",
+   "control_ref": "F4-2.4",
+   "codes": [
+    "F4-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-249",
+   "name": "Personal Data Exchange Register",
+   "control_ref": "F4-2.5",
+   "codes": [
+    "F4-2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-250",
+   "name": "Partner and Service Account Register",
+   "control_ref": "F4-3.1",
+   "codes": [
+    "F4-3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-251",
+   "name": "Data Exchange Channel Encryption Register",
+   "control_ref": "F4-4.1",
+   "codes": [
+    "F4-4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-252",
+   "name": "Data Exchange Network Diagram",
+   "control_ref": "F4-5.1",
+   "codes": [
+    "F4-5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-253",
+   "name": "Data Exchange VPN Connection Register",
+   "control_ref": "F4-5.3",
+   "codes": [
+    "F4-5.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-254",
+   "name": "Data Exchange Endpoint Certificate Inventory",
+   "control_ref": "F4-5.5",
+   "codes": [
+    "F4-5.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-255",
+   "name": "Data Exchange System Inventory",
+   "control_ref": "F4-6.1",
+   "codes": [
+    "F4-6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-256",
+   "name": "Data Exchange Logging Coverage Matrix",
+   "control_ref": "F4-7.1",
+   "codes": [
+    "F4-7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
   }
  ]
 }
