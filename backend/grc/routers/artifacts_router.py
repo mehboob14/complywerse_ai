@@ -232,6 +232,14 @@ def _get_platform_data_type(artifact_name: str) -> Optional[str]:
     return None
 
 
+def _catalog_control_ref(art: dict) -> Optional[str]:
+    """The artifact's control_ref. A document that serves several controls (`also_controls`, the UAE IA catalog) is stored as
+    "T2.3.1, T2.3.2": `_split_catalog_ref` already reads a comma list as several references, so the per-requirement list shows
+    the artifact under each control whose evidence it provides. Entries without `also_controls` are stored exactly as before."""
+    refs = [r for r in [art.get("control_ref"), *(art.get("also_controls") or [])] if r]
+    return ", ".join(refs) or None
+
+
 def _ensure_catalog_seeded(db: Session) -> None:
     """Ensure artifact tables exist and seed ArtifactCatalogItem table once if empty."""
     # Create tables if they don't exist yet (existing tenant DBs may be missing them)
@@ -284,7 +292,7 @@ def _ensure_catalog_seeded(db: Session) -> None:
                     stage_number=stage_num,
                     name=art.get("name", ""),
                     artifact_type=art.get("type", ""),
-                    control_ref=art.get("control_ref") or None,
+                    control_ref=_catalog_control_ref(art),
                     mandatory=art.get("mandatory", False),
                     description=art.get("description") or None,
                     format=art.get("format") or None,

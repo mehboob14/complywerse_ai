@@ -301,17 +301,24 @@ def test_seeding_and_the_api_serve_the_catalogue_by_the_standards_name(db, entry
     by_slug = get_catalog(framework_key=None, assessment_type="uae_ia", db=db, current_user=None)
     assert by_slug["framework_key"] == KEY and len(by_slug["items"]) == len(entry["artifacts"])
 
-    # the per-requirement section: a requirement shows the artifacts whose control_ref is exactly that requirement
+    # the per-requirement section: a requirement shows the artifacts of that control AND the documents that serve it as one of their
+    # `also_controls` (stored as "T2.3.1, T2.3.2": the router reads a comma list as several references)
     def names_for(code):
         out = list_artifacts_by_control(framework_key=None, assessment_type=NAME, control_ref=code, db=db, current_user=None)
         return {i["name"] for i in out["catalog"]}
 
-    assert names_for("M2.3.4") == {"Statement of Applicability"}
-    assert names_for("m2.3.4") == {"Statement of Applicability"}
-    assert names_for("M1.1.3") == {"Information Security Governance Charter"}
+    def expected_for(code):
+        return {a["name"] for a in entry["artifacts"] if code in [a["control_ref"], *(a.get("also_controls") or [])]}
+
+    for code in ("M2.3.4", "m2.3.4", "M1.1.3", "M1.3.3", "T2.3.5", "T2.3.2"):
+        assert names_for(code) == expected_for(code.upper()) and names_for(code), code
+    assert "Statement of Applicability" in names_for("M2.3.4")
+    assert "Information Security Governance Charter" in names_for("M1.1.3")
+    assert {"Document Control Procedure", "Controlled Document Register"} <= names_for("M1.3.3")
+    assert "Equipment Security Procedure" in names_for("T2.3.5")                  # its control_ref is T2.3.1; T2.3.5 is an also_control
     assert names_for("M2.3") == set() and names_for("M2.3.40") == set()          # token-equal, not a prefix
-    assert names_for("M1.3.3") == {"Document Control Procedure", "Controlled Document Register",
-                                   "Mandatory Controls Compliance Record"}
+    stored = {r.artifact_id: r.control_ref for r in db.query(m.ArtifactCatalogItem).filter_by(framework_key=KEY)}
+    assert all(stored[a["artifact_id"]] == ", ".join([a["control_ref"], *(a.get("also_controls") or [])]) for a in entry["artifacts"])
 
 
 # -- the journey flow on the framework page -----------------------------------------------------------------------------
