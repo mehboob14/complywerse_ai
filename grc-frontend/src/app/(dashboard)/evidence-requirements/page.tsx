@@ -224,8 +224,15 @@ export default function EvidenceRequirementsPage() {
       if (priorityFilter) params.priority = priorityFilter;
       if (typeFilter) params.evidence_type = typeFilter;
       
-      const response = await apiClient.get(`/framework-upload/parser/${selectedFramework}/evidence-requirements`, { params });
-      return response.data as EvidenceRequirementsResponse;
+      const url = `/framework-upload/parser/${selectedFramework}/evidence-requirements`;
+      const data = (await apiClient.get(url, { params })).data as EvidenceRequirementsResponse;
+      // The API returns at most 500 rows a page: fetch the rest (UAE IA has 860).
+      while (data.requirements.length < data.total) {
+        const next = (await apiClient.get(url, { params: { ...params, skip: data.requirements.length } })).data as EvidenceRequirementsResponse;
+        if (!next.requirements.length) break;
+        data.requirements.push(...next.requirements);
+      }
+      return data;
     },
     enabled: !!selectedFramework,
   });
