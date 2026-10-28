@@ -75,6 +75,7 @@ import FrameworkDynamicRegisterTab from './_tabs/FrameworkDynamicRegisterTab';
 import PciCdeInventoryTab from './_tabs/_PciCdeInventoryTab';
 import HipaaEphiInventoryTab from './_tabs/_HipaaEphiInventoryTab';
 import FrameworkJourney from './_tabs/FrameworkJourney';
+import HierarchicalRequirements from './_tabs/HierarchicalRequirements';
 import TabDropdown from './_tabs/TabDropdown';
 import { orderRegisters, orderDocuments } from './_tabs/templateSequence';
 import { matchFrameworkFlow } from './_data/frameworkFlows';
@@ -1331,7 +1332,8 @@ export default function CertificationJourneyPage() {
       const matchesSearch =
         control.control_code?.toLowerCase().includes(query) ||
         control.control_name?.toLowerCase().includes(query) ||
-        control.control_statement?.toLowerCase().includes(query);
+        control.control_statement?.toLowerCase().includes(query) ||
+        control.sub_control_tree?.some((n) => `${n.lead_in ?? ''} ${n.text}`.toLowerCase().includes(query));
       if (!matchesSearch) return false;
     }
     if (categoryFilter !== 'all') {
@@ -3572,6 +3574,20 @@ export default function CertificationJourneyPage() {
             <p className="text-slate-600">No {entityLabelPlural.toLowerCase()} found</p>
             <p className="mt-1 text-sm text-slate-500">Try adjusting your filters</p>
           </div>
+        ) : !isCustom && journey?.control_structure ? (
+          <HierarchicalRequirements
+            key={journeyId}
+            journeyId={journeyId}
+            sections={sectionsToRender}
+            structure={journey.control_structure}
+            filtersActive={!!searchQuery || categoryFilter !== 'all' || statusFilter !== 'all'}
+            focusControlId={selectedSpineControl?.id ?? null}
+            criteriaState={criteriaState}
+            onToggleCriterion={toggleCriterion}
+            onOpenControl={openSpineControl}
+            frameworkLabel={(journey as any)?.framework_name || journey?.name || ''}
+            tenantUsers={assignmentTenantUsers || []}
+          />
         ) : (
           <div className="relative">
             {sectionsToRender.map((section, idx) => {

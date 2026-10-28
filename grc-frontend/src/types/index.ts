@@ -513,6 +513,7 @@ export interface CertificationJourney {
     regulatory_authority?: string | null;
     adoption_approach?: string[];
   };
+  control_structure?: ControlStructure | null;
   name: string;
   target_date?: string;
   started_at: string;
@@ -629,6 +630,55 @@ export interface ControlEvidence {
   linked_evidence_id?: number;
 }
 
+// A printed point under a sub-control ("a.", "•"), as deep as the standard prints them.
+export interface PointNode {
+  label: string;
+  text: string;
+  points?: PointNode[];
+}
+
+// One sub-control of a control. `criterion_index` is the key into the control's `criteria_status` (null: nothing to tick).
+// `evidence` holds the titles of the control's evidence items that evidence it; the items themselves are the control's own
+// `evidence_requirements` (looked up by title).
+export interface SubControlNode {
+  code: string;
+  number: number;
+  text: string;
+  lead_in: string | null;
+  criterion_index: number | null;
+  met: boolean | null;
+  consideration: boolean;
+  points: PointNode[];
+  evidence: string[];
+  evidence_requirements?: EvidenceRequirement[];
+}
+
+// `GET /certifications/{id}` → `control_structure`: the standard's families and sub-families (objective, indicators, threats).
+export interface ControlStructureFamily {
+  id: string;
+  name: string;
+  kind?: string;
+  objective?: string;
+  performance_indicators?: string[];
+}
+
+export interface ControlStructureSubfamily {
+  id: string;
+  family: string;
+  name: string;
+  objective?: string;
+  performance_indicators?: string[];
+  automation_guidance?: string;
+  threats?: string[];
+}
+
+export interface ControlStructure {
+  version: number;
+  source?: string;
+  families: ControlStructureFamily[];
+  subfamilies: ControlStructureSubfamily[];
+}
+
 export interface CertificationControl {
   id: number;
   journey_id: number;
@@ -661,6 +711,15 @@ export interface CertificationControl {
   // Assessment criteria (spec sub-points) + per-criterion met/not-met state.
   assessment_criteria?: string[];
   criteria_status?: Record<string, boolean>;
+  // The standard's own hierarchy (frameworks whose journey carries `control_structure`, e.g. UAE IA): the sub-family a control
+  // sits in, its implementation priority and applicability, and its sub-controls with their evidence.
+  parent_section?: string | null;
+  priority_tier?: string | null;
+  applicability?: string | null;
+  control_types?: string[];
+  implementation_guidance?: string | null;
+  control_evidence?: string[];
+  sub_control_tree?: SubControlNode[] | null;
   sub_controls: SubControlWithEvidence[];
   evidence_requirements: EvidenceRequirement[];
   evidence_recommendations?: string[];
