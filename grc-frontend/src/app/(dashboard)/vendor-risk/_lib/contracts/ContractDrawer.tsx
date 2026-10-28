@@ -19,6 +19,7 @@ import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import { fmtDate } from '../tprmShared';
 import { errText } from '../intake/types';
 import { paperworkApi } from '../paperworkApi';
+import { engagementsApi, engagementsKey, type EngagementList } from '../engagementsApi';
 import { useUnsavedGuard } from '../../vendors/[id]/_tpra/useUnsavedGuard';
 import {
   BREACH_TIP, CLAUSES, CONTRACT_TYPES, FIELD_LABEL, OBLIGATION_STATUS, RENEWAL_LABEL, STATE_META, STATUS_LABEL,
@@ -41,6 +42,7 @@ type Form = {
   uplift: YesNo;
   right_to_audit: YesNo; subprocessor_terms: YesNo; exit_data_return: YesNo; security_addendum: YesNo;
   breach_notification_hours: string;
+  engagement_id: string;      // '' is the whole supplier
 };
 
 const EMPTY: Form = {
@@ -48,7 +50,7 @@ const EMPTY: Form = {
   renewal_date: '', expiry_date: '', renewal_type: '', notice_days: '', annual_value: '', currency: '', billing: '',
   termination: '', terms: '', unit_price: '', included_units: '', overage_price: '', one_time_fees: '',
   price_cap_pct: '', uplift: '', right_to_audit: '', subprocessor_terms: '', exit_data_return: '', security_addendum: '',
-  breach_notification_hours: '',
+  breach_notification_hours: '', engagement_id: '',
 };
 // Saved by their own endpoint (tpra/contracts.py), before the terms.
 const CLAUSE_KEYS = ['right_to_audit', 'subprocessor_terms', 'exit_data_return', 'security_addendum', 'breach_notification_hours'];
@@ -78,7 +80,7 @@ function toForm(c: ContractRow): Form {
     uplift: p.uplift === undefined ? '' : p.uplift ? 'yes' : 'no',
     right_to_audit: yesNo(c.right_to_audit), subprocessor_terms: yesNo(c.subprocessor_terms),
     exit_data_return: yesNo(c.exit_data_return), security_addendum: yesNo(c.security_addendum),
-    breach_notification_hours: text(c.breach_notification_hours),
+    breach_notification_hours: text(c.breach_notification_hours), engagement_id: text(c.engagement_id),
   };
 }
 
@@ -96,7 +98,7 @@ function toPayload(f: Form): Record<string, unknown> {
     termination: t(f.termination), terms: t(f.terms), pricing: Object.keys(pricing).length ? pricing : null,
     right_to_audit: fromYesNo(f.right_to_audit), subprocessor_terms: fromYesNo(f.subprocessor_terms),
     exit_data_return: fromYesNo(f.exit_data_return), security_addendum: fromYesNo(f.security_addendum),
-    breach_notification_hours: n(f.breach_notification_hours),
+    breach_notification_hours: n(f.breach_notification_hours), engagement_id: n(f.engagement_id),
   };
 }
 
@@ -187,6 +189,14 @@ export default function ContractDrawer({ contractId, vendorId, assessmentId, onC
   useUnsavedGuard(dirty);
   const editable = id ? canEdit : canCreate;
   const owner = vendorId ?? data?.vendor.id ?? pickedVendor?.id;
+  // What it can apply to: the whole supplier, or one of its engagements (an ended one only if it already does).
+  const { data: engaged } = useQuery<EngagementList>({
+    queryKey: engagementsKey(owner ?? 0),
+    queryFn: async () => (await engagementsApi.list(owner as number)).data,
+    enabled: !!owner,
+  });
+  const uses = (engaged?.items || []).filter((e) => !e.is_general && e.id
+    && (e.status !== 'ended' || String(e.id) === form.engagement_id));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -339,6 +349,15 @@ export default function ContractDrawer({ contractId, vendorId, assessmentId, onC
                   {Object.entries(STATUS_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                 </select>
               </Field>
+              {uses.length > 0 && (
+                <Field id={fid('applies')} label="Applies to" className="sm:col-span-2"
+                  tip="The whole supplier, unless the contract covers one engagement only.">
+                  <select id={fid('applies')} className={inputCls()} value={form.engagement_id} onChange={set('engagement_id')} disabled={!editable}>
+                    <option value="">Whole supplier</option>
+                    {uses.map((e) => <option key={e.id} value={String(e.id)}>{e.name}{e.status === 'ended' ? ' (ended)' : ''}</option>)}
+                  </select>
+                </Field>
+              )}
               <Field id={fid('reference')} label="Reference" ai={ai('reference')} hint="Contract, order or purchase-order number">
                 <input id={fid('reference')} className={inputCls(ai('reference'))} value={form.reference} onChange={set('reference')} disabled={!editable} />
               </Field>

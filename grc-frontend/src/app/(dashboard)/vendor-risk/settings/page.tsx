@@ -10,13 +10,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
   AlertCircle, BellRing, CalendarClock, ChevronsDownUp, ChevronsUpDown, Coins, FileCheck2, Gauge, Layers, ListChecks,
-  Loader2, Mail, MessageSquareText, Radar, Radio, Save, Search, Settings, SlidersHorizontal, TableProperties, type LucideIcon,
+  Loader2, Mail, MessageSquareText, Radar, Radio, Save, Search, Settings, Siren, SlidersHorizontal, TableProperties,
+  type LucideIcon,
 } from 'lucide-react';
 import { tpraApi, vendorEmailsApi, vendorRiskApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { alertRulesApi, alertRulesKey } from '../_lib/alertRulesApi';
 import { FieldsEditor, ListsEditor, liveFields, useModuleSettings } from '@/components/settings/CustomFields';
 import ExposureSection, { exposureProblems, exposureSummary, type Quant } from './_Exposure';
 import { EvidenceEditor, FactorsEditor, activeEvidence, type EvidenceDraft, type Named } from './_Lists';
@@ -144,6 +146,11 @@ export default function VendorRiskSettingsPage() {
   const { data: emails } = useQuery({
     queryKey: ['tprm-email-templates'],
     queryFn: async () => ((await vendorEmailsApi.list()).data?.items || []) as Array<{ key: string; label: string; changed: boolean }>,
+    ...TPRM_QUERY_OPTS,
+  });
+  const { data: alertRules } = useQuery({
+    queryKey: alertRulesKey,
+    queryFn: async () => (await alertRulesApi.list()).data,
     ...TPRM_QUERY_OPTS,
   });
 
@@ -618,6 +625,21 @@ export default function VendorRiskSettingsPage() {
             </>
           );
         },
+      },
+      {
+        id: 'alert-rules', keys: [], icon: Siren, title: 'Alert rules',
+        keywords: 'alert rule signal notify tell task to-do reassessment bring forward reopen breach order',
+        summary: alertRules
+          ? `The two built in${alertRules.items.length ? ` · ${alertRules.items.filter((x) => x.enabled).length} of your own on` : ''}`
+          : 'What a monitoring alert sets off',
+        body: () => (
+          <>
+            <Help>Every verified alert is emailed and can reopen an assessment. Your own rules add to that.</Help>
+            <Link href="/vendor-risk/settings/alert-rules" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <Siren className="h-4 w-4" /> Edit the rules
+            </Link>
+          </>
+        ),
       },
     ] },
     { group: 'Security ratings', items: [
