@@ -301,9 +301,11 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             continue
         reasons = tier_policy.retier_reasons(db, v, a, custom)
         if reasons:
+            e = db.get(TPRAEngagement, a.engagement_id) if a.engagement_id else None   # an engagement's, named
             add("retier_needed", "assessment", a.id, v.id, _day(v.updated_at) or today,
-                f"{v.name} may need re-tiering: {'; '.join(reasons)}",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering", [v.owner_id], once=True)
+                f"{v.name}{f' — {e.name}' if e is not None else ''} may need re-tiering: {'; '.join(reasons)}",
+                f"/vendor-risk/vendors/{v.id}?stage=tiering" + (f"&engagement={e.id}" if e is not None else ""),
+                [v.owner_id], once=True)
 
     # 7. Yearly check-ins falling due: the owner and whoever else looks after it.
     from .checkins import schedule  # here: checkins reads this module's vendor statuses

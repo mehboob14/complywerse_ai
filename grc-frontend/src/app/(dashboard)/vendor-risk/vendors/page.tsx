@@ -44,7 +44,14 @@ interface Vendor {
   lifecycle_stage?: string | null;
   archived_at?: string | null;
   created_at: string;
+  /** Engagements still in use, General left out. */
+  open_engagements?: number;
+  /** The one thing to do next, worked out on the server; null when nothing waits. */
+  next_action?: { code: string; label: string; link: string } | null;
 }
+
+// Next actions that are already late, shown in red.
+const LATE_ACTIONS = new Set(['suspended', 'reassessment_overdue', 'documents_expired']);
 
 // The register fetches every supplier, this many at a time.
 const PAGE_SIZE = 500;
@@ -409,6 +416,7 @@ export default function VendorListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Risk Rating</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lifecycle</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Next action</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data Access</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contract End</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Owner</th>
@@ -418,7 +426,7 @@ export default function VendorListPage() {
             <tbody className="bg-white divide-y divide-slate-200">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
                     <AlertCircle className="h-8 w-8 mx-auto mb-2 text-slate-300" />
                     {showArchived ? 'No archived vendors' : 'No vendors found'}
                   </td>
@@ -431,6 +439,11 @@ export default function VendorListPage() {
                         <VendorLogo vendorId={vendor.id} name={vendor.name} size={22} cachedOnly />
                         {vendor.name}
                       </Link>
+                      {!!vendor.open_engagements && (
+                        <Link href={`/vendor-risk/vendors/${vendor.id}?tab=engagements`} className="ml-[30px] block text-[11px] text-slate-500 hover:text-slate-700">
+                          {vendor.open_engagements} engagement{vendor.open_engagements === 1 ? '' : 's'}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
@@ -458,6 +471,16 @@ export default function VendorListPage() {
                         <StageProgress currentKey={vendor.lifecycle_stage} size="sm" />
                         <span className="text-[11px] text-slate-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {vendor.next_action ? (
+                        <Link href={vendor.next_action.link}
+                          className={`text-xs font-medium hover:underline ${LATE_ACTIONS.has(vendor.next_action.code) ? 'text-rose-700' : 'text-primary-700'}`}>
+                          {vendor.next_action.label}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-slate-500">

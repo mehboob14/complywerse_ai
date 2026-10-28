@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { vendorActionsApi, vendorOnboardingApi, vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useEngagements } from '../engagementsApi';
 
 export type ActionKind = 'todo' | 'questionnaire' | 'checkin' | 'reassessment';
 export type ActionStatus = 'scheduled' | 'done' | 'failed' | 'cancelled';
@@ -21,7 +22,12 @@ export interface ActionItem {
   people: Array<{ id: number; name: string | null }>; template_id: number | null; result: string | null;
   result_link: string | null; done_at: string | null; done_by: string | null; created_by: string | null;
   created_at: string; automatic: boolean;
+  /** A questionnaire or reassessment for one engagement; null: General. */
+  engagement?: { id: number; name: string | null } | null;
 }
+
+// The kinds that can be for one of the supplier's engagements.
+const FOR_ENGAGEMENT: ActionKind[] = ['questionnaire', 'reassessment'];
 
 export const KIND_META: Record<ActionKind, { icon: LucideIcon; label: string; help: string }> = {
   todo: { icon: ListTodo, label: 'To-do', help: 'Something for a person to do and mark done: it joins their attention queue on the day, and they are reminded weekly until it is done.' },
@@ -78,10 +84,15 @@ export function ActionForm({ vendorId, onDone }: { vendorId: number; onDone: () 
   const [who, setWho] = useState<number[]>([]);
   const [templateId, setTemplateId] = useState<number | ''>('');
   const [note, setNote] = useState('');
+  const [engagementId, setEngagementId] = useState<number | ''>('');
+  const { data: engaged } = useEngagements(vendorId);
+  const uses = (engaged?.items || []).filter((e) => !e.is_general && e.id && e.status !== 'ended');
+  const forEngagement = FOR_ENGAGEMENT.includes(kind) && uses.length > 0;
   const save = useMutation({
     mutationFn: () => vendorActionsApi.plan(vendorId, {
       kind, title: title || undefined, due_on: due, assignee_ids: who, note: note || undefined,
       template_id: kind === 'questionnaire' ? templateId || undefined : undefined,
+      engagement_id: forEngagement ? engagementId || undefined : undefined,
     }),
     onSuccess: () => {
       ['tprm-actions', 'tprm-actions-all'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -128,6 +139,16 @@ export function ActionForm({ vendorId, onDone }: { vendorId: number; onDone: () 
               onChange={(e) => setTemplateId(e.target.value ? Number(e.target.value) : '')}>
               <option value="">Choose a questionnaire</option>
               {(templates || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+        )}
+        {forEngagement && (
+          <label className="block text-xs font-medium text-slate-600 sm:col-span-2">
+            Engagement
+            <select className={clsx(input, 'mt-1')} value={engagementId}
+              onChange={(e) => setEngagementId(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">General</option>
+              {uses.map((e) => <option key={e.id} value={e.id ?? ''}>{e.name}</option>)}
             </select>
           </label>
         )}
@@ -198,7 +219,8 @@ export function ActionRow({ item, canEdit, showVendor = false }: { item: ActionI
           )}
         </p>
         <p className={clsx('text-xs', late ? 'font-medium text-rose-700' : 'text-slate-500')}>
-          {whenLabel(item)} · {item.kind_label} · for {item.people.map((p) => p.name || `User ${p.id}`).join(', ') || 'the owner'}
+          {whenLabel(item)} · {item.kind_label}{item.engagement ? ` · ${item.engagement.name || 'an engagement'}` : ''}
+          {' '}· for {item.people.map((p) => p.name || `User ${p.id}`).join(', ') || 'the owner'}
         </p>
         {item.note && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">{item.note}</p>}
         {item.result && (

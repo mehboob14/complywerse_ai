@@ -8,8 +8,9 @@ contact, the yearly check-in falls due, or a reassessment opens. What happened,
 or why it could not, is kept on the item, and one that could not happen goes to
 the attention queue of whoever it was for.
 
-Nobody chosen means the supplier's owner. Every change is on the supplier's
-audit trail.
+Nobody chosen means the supplier's owner. A questionnaire or reassessment can be
+for one of the supplier's engagements: it goes to that engagement's assessment.
+Every change is on the supplier's audit trail.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ....models import (
-    GRCUser, TPRAActionItem, Vendor, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
+    GRCUser, TPRAActionItem, TPRAEngagement, Vendor, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
 from . import contacts, portal, rbac, service, versions
@@ -35,6 +36,7 @@ KINDS = {
     "reassessment": "Open a reassessment",
 }
 AUTOMATIC = ("questionnaire", "checkin", "reassessment")
+FOR_ENGAGEMENT = ("questionnaire", "reassessment")      # the kinds that can be for one engagement
 QUESTIONNAIRE_DUE_DAYS = 14
 QUESTIONNAIRE_EXPIRES_DAYS = 30
 
@@ -61,6 +63,14 @@ def _queue_invite(db: Session, qr: VendorQuestionnaireResponse) -> None:
     _email_link(db, qr, issued=_personal_link(db, qr, "questionnaire"))
 
 
+def _engagement(db: Session, item: TPRAActionItem) -> Optional[TPRAEngagement]:
+    """The engagement an item is for (None: General); ActionProblem once it has ended."""
+    e = db.get(TPRAEngagement, item.engagement_id) if item.engagement_id else None
+    if e is not None and e.status == "ended":
+        raise ActionProblem(f"the engagement “{e.name}” has ended")
+    return e
+
+
 def _send_questionnaire(db: Session, item: TPRAActionItem, vendor: Vendor, now: datetime,
                         invite: Callable[[Session, VendorQuestionnaireResponse], None]) -> None:
     contact = contacts.recipient(db, vendor, item.created_by)        # the primary contact, emailed a personal link
@@ -71,8 +81,11 @@ def _send_questionnaire(db: Session, item: TPRAActionItem, vendor: Vendor, now: 
         VendorQuestionnaireTemplate.tenant_id == item.tenant_id).first()
     if template is None:
         raise ActionProblem("the questionnaire chosen no longer exists")
+    engagement = _engagement(db, item)
+    assessment = service.get_active_assessment(db, vendor, engagement)
+    if engagement is not None and assessment is None:
+        raise ActionProblem(f"the engagement “{engagement.name}” has no assessment open to send it for")
     version = versions.publish(db, template, item.created_by)
-    assessment = service.get_active_assessment(db, vendor)
     qr = VendorQuestionnaireResponse(
         tenant_id=vendor.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id if assessment else None,
         template_id=template.id, template_version_id=version.id if version else None, contact_id=contact.id,
@@ -106,9 +119,12 @@ def fire_due(db: Session, tenant_id: int, today: Optional[date] = None,
                 if item.kind == "questionnaire":
                     _send_questionnaire(db, item, vendor, now, invite)
                 elif item.kind == "reassessment":
-                    service.create_reassessment_version(db, vendor, actor_id=None, reason=f"Planned: {item.title}")
+                    engagement = _engagement(db, item)
+                    service.create_reassessment_version(db, vendor, actor_id=None, reason=f"Planned: {item.title}",
+                                                        engagement=engagement)
                     item.result = "A new assessment was opened"
-                    item.result_link = f"/vendor-risk/vendors/{vendor.id}?tab=lifecycle"
+                    item.result_link = f"/vendor-risk/vendors/{vendor.id}?tab=lifecycle" + (
+                        f"&engagement={engagement.id}" if engagement is not None else "")
                 else:
                     item.result = "The yearly check-in is due now"
                     item.result_link = f"/vendor-risk/reviews?vendor={vendor.id}"
@@ -151,10 +167,18 @@ def _names(db: Session, ids) -> Dict[int, str]:
     return {u.id: u.display_name or u.username or u.email for u in db.query(GRCUser).filter(GRCUser.id.in_(ids))}
 
 
-def _row(item: TPRAActionItem, vendor: Optional[Vendor], names: Dict[int, str], today: date) -> dict:
+def _engagement_names(db: Session, items: List[TPRAActionItem]) -> Dict[int, str]:
+    ids = {i.engagement_id for i in items if i.engagement_id}
+    return {e.id: e.name for e in db.query(TPRAEngagement).filter(TPRAEngagement.id.in_(ids))} if ids else {}
+
+
+def _row(item: TPRAActionItem, vendor: Optional[Vendor], names: Dict[int, str], today: date,
+         engagements: Optional[Dict[int, str]] = None) -> dict:
     people = people_for(item, vendor)
     return {
         "id": item.id, "vendor": {"id": item.vendor_id, "name": vendor.name if vendor else None},
+        "engagement": ({"id": item.engagement_id, "name": (engagements or {}).get(item.engagement_id)}
+                       if item.engagement_id else None),
         "kind": item.kind, "kind_label": KINDS.get(item.kind, item.kind), "title": item.title, "note": item.note,
         "due_on": item.due_on.isoformat(), "status": item.status,
         "overdue_days": max(0, (today - item.due_on).days) if item.status == "scheduled" else 0,
@@ -180,7 +204,8 @@ def vendor_actions(vendor_id: int, db: Session = Depends(get_db), user: GRCUser 
              .order_by(TPRAActionItem.due_on.desc(), TPRAActionItem.id.desc()).all())
     names = _names(db, [p for i in items for p in (*people_for(i, v), i.done_by, i.created_by)])
     today = datetime.utcnow().date()
-    return {"items": [_row(i, v, names, today) for i in items], "kinds": KINDS}
+    engagements = _engagement_names(db, items)
+    return {"items": [_row(i, v, names, today, engagements) for i in items], "kinds": KINDS}
 
 
 @router.get("/actions")
@@ -208,7 +233,9 @@ def all_actions(scope: Literal["all", "mine"] = "all",
                                                TPRAActionItem.due_on <= today).count(),
         "failed": db.query(TPRAActionItem).filter(TPRAActionItem.tenant_id == tid, TPRAActionItem.status == "failed").count(),
     }
-    return {"items": [_row(i, vendors.get(i.vendor_id), names, today) for i in items], "kinds": KINDS, "counts": counts}
+    engagements = _engagement_names(db, items)
+    return {"items": [_row(i, vendors.get(i.vendor_id), names, today, engagements) for i in items], "kinds": KINDS,
+            "counts": counts}
 
 
 class ActionIn(BaseModel):
@@ -218,6 +245,7 @@ class ActionIn(BaseModel):
     due_on: date
     assignee_ids: List[int] = Field(default_factory=list, max_length=20)
     template_id: Optional[int] = None
+    engagement_id: Optional[int] = None      # a questionnaire or reassessment for one engagement; none: General
 
 
 class ActionUpdate(BaseModel):
@@ -256,6 +284,13 @@ def plan(vendor_id: int, body: ActionIn, db: Session = Depends(get_db), user: GR
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick today or a later date")
     title = " ".join((body.title or "").split())
     template = _template(db, v.tenant_id, body.template_id) if body.kind == "questionnaire" else None
+    engagement = None
+    if body.engagement_id and body.kind in FOR_ENGAGEMENT:
+        engagement = db.query(TPRAEngagement).filter(TPRAEngagement.id == body.engagement_id,
+                                                     TPRAEngagement.vendor_id == v.id).first()
+        if engagement is None or engagement.status == "ended":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose one of the supplier's open engagements")
+        engagement = None if engagement.is_general else engagement
     if not title:
         if body.kind == "todo":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Say what is to be done")
@@ -264,14 +299,15 @@ def plan(vendor_id: int, body: ActionIn, db: Session = Depends(get_db), user: GR
                           note=(body.note or "").strip() or None, due_on=body.due_on,
                           assignee_ids=_check_people(db, body.assignee_ids) or None,
                           template_id=template.id if template is not None else None, status="scheduled",
-                          created_by=user.id)
+                          engagement_id=engagement.id if engagement is not None else None, created_by=user.id)
     db.add(item)
     db.flush()
     service.write_audit(db, v.tenant_id, entity="action", action="create", vendor_id=v.id, entity_id=item.id,
-                        actor_id=user.id, to_value=f"{KINDS[item.kind]} on {item.due_on:%d %b %Y}", reason=item.title)
+                        actor_id=user.id, to_value=f"{KINDS[item.kind]} on {item.due_on:%d %b %Y}", reason=item.title,
+                        extra={"engagement_id": item.engagement_id} if item.engagement_id else None)
     db.commit()
     names = _names(db, [*people_for(item, v), user.id])
-    return _row(item, v, names, today)
+    return _row(item, v, names, today, _engagement_names(db, [item]))
 
 
 @router.patch("/actions/{action_id}")
@@ -318,4 +354,4 @@ def change(action_id: int, body: ActionUpdate, db: Session = Depends(get_db), us
                         reason=item.title)
     db.commit()
     names = _names(db, [*people_for(item, v), item.done_by, item.created_by])
-    return _row(item, v, names, today)
+    return _row(item, v, names, today, _engagement_names(db, [item]))

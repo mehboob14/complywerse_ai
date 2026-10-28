@@ -17,6 +17,8 @@ export interface ContractRow {
   reference: string | null; record_link: string | null; renewal_type: RenewalType | null; notice_days: number | null;
   annual_value: number | null; currency: string | null; billing: string | null; pricing: Pricing | null;
   termination: string | null; terms: string | null; evidence_id: number | null; assessment_id: number | null;
+  /** The engagement it covers; null: the whole supplier. */
+  engagement_id: number | null;
   row_version: number;
   // The clauses a security review asks about: null until someone has checked.
   right_to_audit: boolean | null; subprocessor_terms: boolean | null; exit_data_return: boolean | null;
@@ -88,6 +90,7 @@ export const FIELD_LABEL: Record<string, string> = {
   effective_date: 'start date', renewal_date: 'renewal date', expiry_date: 'end date', renewal_type: 'renewal',
   notice_days: 'notice', annual_value: 'annual value', currency: 'currency', billing: 'billing', pricing: 'pricing',
   termination: 'termination', terms: 'notes', assessment_id: 'assessment', document_id: 'document',
+  engagement_id: 'applies to',
   right_to_audit: 'right to audit', subprocessor_terms: 'sub-processor terms', exit_data_return: 'exit and data return',
   security_addendum: 'security terms', breach_notification_hours: 'breach notice',
 };

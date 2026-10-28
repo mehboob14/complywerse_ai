@@ -12,6 +12,8 @@ longest waiting, so a long tail of low-tier vendors cannot starve critical ones.
 
 A signal becomes a finding with one action, and the finding carries where it
 came from; a finding becomes a risk the way every finding does.
+
+What else a verified signal sets off is the tenant's alert rules (tpra/alert_rules.py).
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from sqlalchemy.orm import Session, aliased
 from ....models import (
     TPRAFinding, TPRAMonitoringCursor, TPRAMonitoringSignal, TPRASignalRejection, Vendor,
 )
-from . import service, tier_policy
+from . import alert_rules, service, tier_policy
 from .bootstrap import get_tiering_config
 from .engine_monitoring import should_trigger_reassessment
 
@@ -118,12 +120,19 @@ def record_signal(db: Session, vendor: Vendor, *, signal_type: str, severity: st
 def _maybe_reopen(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, actor_id: Optional[int]) -> Optional[int]:
     """Reopen the vendor's assessment when the signal is serious enough for its tier:
     General's, and each open engagement's against that engagement's own tier. The
-    signal records the first one it opened or joined."""
+    signal records the first one it opened or joined. Then the tenant's alert rules
+    act; one of them can reopen a scope its tier alone would not."""
     policy = tier_policy.merged(get_tiering_config(db, vendor.tenant_id).get("tier_policy"))
-    opened = []
+    rules = alert_rules.for_supplier(db, vendor)
+    opened, scopes, reopened = [], {}, []
     for engagement in [None, *service.open_engagements(db, vendor)]:
-        threshold = tier_policy.reassess_threshold(service.scope_row(db, vendor, engagement).tier, policy)
-        if not should_trigger_reassessment(sig.signal_type, sig.severity, threshold):
+        tier = service.scope_row(db, vendor, engagement).tier
+        hits = [r for r in rules if alert_rules.matches(r, sig, tier)]
+        for r in hits:
+            scopes.setdefault(r.id, []).append(engagement)
+        builtin = should_trigger_reassessment(sig.signal_type, sig.severity, tier_policy.reassess_threshold(tier, policy))
+        rule = next((r for r in hits if r.action == "open_reassessment"), None)
+        if not (builtin or rule):
             continue
         # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
         # version already open in the diligence phase), attach this signal to it
@@ -135,8 +144,11 @@ def _maybe_reopen(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, actor_
         in_flight = (active is not None and (active.version_no or 1) > 1 and active.lifecycle_status == "active"
                      and active.current_stage not in ("monitoring", "reassessment"))
         opened.append(active if in_flight else service.create_reassessment_version(
-            db, vendor, actor_id=actor_id, reason=f"Auto-triggered by {sig.signal_type} signal",
-            engagement=engagement))
+            db, vendor, actor_id=actor_id, engagement=engagement,
+            reason=f"Auto-triggered by {sig.signal_type} signal" if builtin
+            else f"Alert rule “{rule.name}”: {sig.signal_type} signal"))
+        reopened.append(engagement)
+    alert_rules.act(db, vendor, sig, [r for r in rules if r.id in scopes], scopes, reopened, actor_id)
     if not opened:
         return None
     sig.triggered_reassessment = True
