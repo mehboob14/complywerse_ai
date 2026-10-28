@@ -23,6 +23,7 @@ from grc.models import (
     TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion,
 )
 from grc.models import TPRAEngagement  # where a scope keeps its own tier and scores
+from grc.models import TPRAAlertRule  # what else a recorded signal sets off
 from grc.modules.vendor_risk.tpra import service, rbac
 from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapshot
 
@@ -32,7 +33,7 @@ _TABLES = [
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion, TPRAEngagement,
+    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion, TPRAEngagement, TPRAAlertRule,
 ]
 
 

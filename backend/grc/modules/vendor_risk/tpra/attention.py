@@ -315,18 +315,20 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         v = vendors.get(a.vendor_id)
         if v is None:
             continue
+        # An engagement's assessment is named, and opens on that engagement.
+        e = db.get(TPRAEngagement, a.engagement_id) if a.engagement_id else None
+        who = f"{v.name} — {e.name}" if e is not None else v.name
+        link = f"/vendor-risk/vendors/{v.id}?stage=tiering" + (f"&engagement={e.id}" if e is not None else "")
         reasons = tier_policy.retier_reasons(db, v, a, custom)
         if reasons:
             add("retier_needed", "assessment", a.id, v, _day(v.updated_at) or today,
-                f"{v.name} may need re-tiering: {'; '.join(reasons)}", "Re-tier",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering", tone="red")
+                f"{who} may need re-tiering: {'; '.join(reasons)}", "Re-tier", link, tone="red")
         override = a.tier_override or {}
         if override.get("at"):
             add("tier_overridden", "assessment", a.id, v, _day(datetime.fromisoformat(override["at"])),
-                f"{v.name}'s tier was set to {override.get('to')} by hand "
+                f"{who}'s tier was set to {override.get('to')} by hand "
                 f"(computed {override.get('computed') or 'nothing'}): {override.get('justification')}",
-                f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering")
+                f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}", link)
 
     # Monitoring signals nobody has acknowledged — typed in or fetched. The queue is
     # where they are seen; there is no second inbox. An unverified alert is shown,

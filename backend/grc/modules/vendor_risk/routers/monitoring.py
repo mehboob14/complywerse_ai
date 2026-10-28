@@ -106,13 +106,16 @@ def serialize_incident(inc: VendorIncident) -> dict:
 
 # ── Helper ────────────────────────────────────────────────────────
 
-def get_vendor_for_tenant(vendor_id: int, tenant_ids: List[int], db: Session) -> Vendor:
+def get_vendor_for_tenant(vendor_id: int, tenant_ids: List[int], db: Session, writing: bool = False) -> Vendor:
+    """The supplier; an archived one is read, never written to."""
     vendor = db.query(Vendor).filter(
         Vendor.id == vendor_id,
         Vendor.tenant_id.in_(tenant_ids),
     ).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
+    if writing and vendor.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="This supplier is archived. Restore it first.")
     return vendor
 
 
@@ -228,7 +231,7 @@ def create_sla_record(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db)
+    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db, writing=True)
 
     record = VendorSLARecord(
         tenant_id=vendor.tenant_id,
@@ -271,7 +274,7 @@ def update_sla_record(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db)
+    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db, writing=True)
     record = db.query(VendorSLARecord).filter(
         VendorSLARecord.id == record_id,
         VendorSLARecord.vendor_id == vendor_id,
@@ -353,7 +356,7 @@ def create_incident(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db)
+    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db, writing=True)
 
     incident = VendorIncident(
         tenant_id=vendor.tenant_id,
@@ -421,7 +424,7 @@ def update_incident(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db)
+    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db, writing=True)
 
     incident = db.query(VendorIncident).options(
         joinedload(VendorIncident.reporter),

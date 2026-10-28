@@ -18,6 +18,7 @@ from grc.models import TPRAActionItem  # read by the action plan, check-in and a
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import IntegrationConnection  # where the rating providers' keys are held
 from grc.models import TPRAEngagement  # a signal reopens each engagement at its own tier
+from grc.models import TPRAAlertRule  # what else a recorded signal sets off
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAExternalRating, TPRAFinding,
@@ -32,7 +33,7 @@ _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireRespons
            TPRATieringConfig, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAMonitoringCursor,
            TPRASignalRejection, TPRAExternalRating, TPRAContract, TPRAControlObligation, TPRAApproval,
            TPRARiskAcceptance, TPRARiskSnapshot, AttentionState, AttentionActivity, TPRAVendorProduct, TPRACheckin,
-           IntegrationConnection, TPRAActionItem, TPRAEngagement]
+           IntegrationConnection, TPRAActionItem, TPRAEngagement, TPRAAlertRule]
 
 
 @pytest.fixture()

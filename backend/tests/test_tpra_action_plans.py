@@ -100,7 +100,7 @@ def test_automatic_actions_happen_on_their_date(db, monkeypatch):
     later = _item(db, kind="reassessment", title="Next year", due_on=TODAY + timedelta(days=30))
     opened = []
     monkeypatch.setattr(service, "create_reassessment_version",
-                        lambda db, vendor, actor_id, reason: opened.append((vendor.id, reason)))
+                        lambda db, vendor, actor_id, reason, engagement=None: opened.append((vendor.id, reason)))
     counts = action_plans.fire_due(db, 1, TODAY, invite=lambda db, qr: invited.append(qr.respondent_email))
     assert counts == {"done": 3, "failed": 1}
     qr = db.query(VendorQuestionnaireResponse).one()

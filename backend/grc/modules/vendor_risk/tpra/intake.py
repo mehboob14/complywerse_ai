@@ -451,5 +451,29 @@ def host(website: Optional[str]) -> str:
     return text.split("/")[0].removeprefix("www.")
 
 
+# The legal forms a company's name ends in, which say nothing about which company it is.
+_LEGAL_FORMS = frozenset("inc llc ltd limited corp co company gmbh plc sa bv ag pty pvt private llp fze fzco fzc "
+                         "wll spc saog saoc psc pjsc".split())
+
+
+def name_key(name: Optional[str]) -> str:
+    """A supplier's name as the duplicate check compares it: "Acme, Inc." and
+    "ACME Ltd" are both "acme". Case, punctuation and trailing legal forms go."""
+    words = re.sub(r"[^\w]+", " ", re.sub(r"[.,'’]", "", (name or "").lower())).split()
+    while len(words) > 1 and words[-1] in _LEGAL_FORMS:
+        words.pop()
+    return " ".join(words)
+
+
+def duplicate(db, tenant_id: int, name: Optional[str], website: Optional[str] = None):
+    """A supplier already on record by this name or website (archived ones too:
+    the caller says so), one in use first; None when there is none."""
+    key, site = name_key(name), host(website)
+    rows = (db.query(Vendor.id, Vendor.name, Vendor.website, Vendor.deleted_at)
+            .filter(Vendor.tenant_id == tenant_id)
+            .order_by(Vendor.deleted_at.isnot(None), Vendor.id))
+    return next((r for r in rows if (key and name_key(r.name) == key) or (site and host(r.website) == site)), None)
+
+
 def mine(vendor: Vendor, user_id: int) -> bool:
     return user_id in {vendor.requested_by, vendor.owner_id, *(vendor.stakeholder_ids or [])}

@@ -19,7 +19,6 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import GRCUser, TPRAAuditLog, TPRAStageInstance, Vendor, get_db
@@ -184,12 +183,10 @@ def create_request(body: NewRequest, db: Session = Depends(get_db), user: GRCUse
     tids = _tids(user, db)
     rbac.require_write(db, user, "intake", "create")
     name = " ".join(body.name.split())
-    existing = db.query(Vendor).filter(Vendor.tenant_id == tids[0], Vendor.deleted_at.is_(None),
-                                       func.lower(Vendor.name) == name.lower()).first()
-    if existing is None and intake.host(body.website):
-        existing = next((v for v in db.query(Vendor).filter(Vendor.tenant_id == tids[0], Vendor.deleted_at.is_(None),
-                                                            Vendor.website.isnot(None))
-                         if intake.host(v.website) == intake.host(body.website)), None)
+    existing = intake.duplicate(db, tids[0], name, body.website)
+    if existing is not None and existing.deleted_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"{existing.name} is on record but archived (ID {existing.id}); restore it instead of requesting it again.")
     if existing is not None:
         raise HTTPException(status.HTTP_409_CONFLICT,
                             f"{existing.name} is already on record (ID {existing.id}); open it instead of requesting it again.")
@@ -585,8 +582,15 @@ async def import_vendors(
             db.flush()
         elif values:
             v = p["_target"]
+            if values.get("status") == "offboarded" and (v.status or "").lower() != "offboarded":
+                from ..routers.lifecycle import start_offboarding    # closes the supplier's side, however it starts
+                start_offboarding(db, v, user.id, f"Status set to offboarded by row {p['row']} of {file.filename}")
             for key, value in values.items():
                 setattr(v, key, value)
+            general = service.general_row(db, v)
+            if general is not None and "tier" in values:
+                general.tier = values["tier"]          # General's own: the supplier shows its worst engagement
+                service.recache(db, v)
             v.updated_at = datetime.utcnow()
         else:
             continue
