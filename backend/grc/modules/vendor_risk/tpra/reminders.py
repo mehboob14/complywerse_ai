@@ -33,10 +33,12 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     Role, Tenant, TPRAActionItem, TPRAContract, TPRAFinding, TPRAMonitoringSignal, TPRAReminder, TPRARemediation,
-    TPRARiskAcceptance, TPRASurfaceWaiver, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
+    TPRARiskAcceptance, TPRASurfaceWaiver, TPRAVendorContact, UserRole, Vendor, VendorAssessment,
+    VendorQuestionnaireResponse,
 )
-from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
+from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, is_sealed, link as portal_link, supplier_link
 from . import contracts as contract_rules, tier_policy
+from .contacts import for_questionnaire, issue as issue_link
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,7 @@ class Notice:
     link: str
     recipients: List[int] = field(default_factory=list)
     email: Optional[str] = None      # someone outside the platform: a vendor's respondent
+    contact_id: Optional[int] = None  # a supplier contact on personal links: a fresh one goes in each email
 
 
 def _day(value) -> Optional[date]:
@@ -154,7 +157,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     notices: List[Notice] = []
 
     def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False, email=None,
-            before_days=None):
+            before_days=None, contact_id=None):
         if due is None:
             return
         period = reminder_period(due, today, before if before_days is None else before_days, every, once_overdue=once)
@@ -162,7 +165,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             return
         notices.append(Notice(kind, subject_type, subject_id, vendor_id, due, period,
                               max(0, (today - due).days), title, link,
-                              [int(r) for r in dict.fromkeys(recipients) if r], email))
+                              [int(r) for r in dict.fromkeys(recipients) if r], email, contact_id))
 
     vendors = {v.id: v for v in db.query(Vendor).filter(
         Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None))}
@@ -194,12 +197,17 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"Questionnaire for {v.name} is {state}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id], once=True)
         expires = _day(qr.expires_at)
-        if qr.respondent_email and (expires is None or expires >= today):
+        email, contact = qr.respondent_email, None
+        if is_sealed(qr.token):                 # on personal links: its contact, with a fresh link in each email
+            contact = for_questionnaire(db, qr)
+            email = contact.email if contact else None
+        if email and (expires is None or expires >= today):
             returned = qr.status == "returned"
             add("questionnaire_vendor", "questionnaire", qr.id, v.id, due,
                 f"{'Clarification needed on' if returned else 'Reminder:'} the questionnaire for {v.name}, "
                 f"{_when(due, today)}",
-                portal_link(qr.token) or "", [], email=qr.respondent_email)
+                "" if contact else portal_link(qr.token) or "", [], email=email,
+                contact_id=contact.id if contact else None)
 
     findings: Dict[int, TPRAFinding] = {}
 
@@ -365,6 +373,11 @@ def _deliver_external(db: Session, tenant_id: int, email: str, subject: str, mes
         raise RuntimeError(result.get("message") or "email is not configured")
 
 
+def _fresh_link(db: Session, notice: Notice) -> str:
+    raw, _ = issue_link(db, db.get(TPRAVendorContact, notice.contact_id), "reminder")
+    return supplier_link(raw, notice.subject_id)
+
+
 def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         deliver: Callable[[Session, int, int, str, str], None] = _deliver,
         deliver_external: Callable[[Session, int, str, str, str], None] = _deliver_external) -> Dict[str, int]:
@@ -385,9 +398,6 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         if notice.email:
             # The respondent has no account: recipient 0 stands for them, and the
             # notice id keeps it to one email per questionnaire per period.
-            subject, message, _ = words.render("questionnaire_reminder", {
-                "title": notice.title, "vendor": vendor_names.get(notice.vendor_id), "when": _when(notice.due_on, today),
-                "link": notice.link or "the link in your original invitation", "organisation": organisation})
             try:
                 with db.begin_nested():
                     db.add(TPRAReminder(
@@ -396,6 +406,13 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
                         period=notice.period, escalation=0, due_on=notice.due_on, detail=notice.email[:255],
                     ))
                     db.flush()
+                    # A personal link only for an email that goes: one owed already, or
+                    # one that fails, takes its link back with it.
+                    link = _fresh_link(db, notice) if notice.contact_id else notice.link
+                    subject, message, _ = words.render("questionnaire_reminder", {
+                        "title": notice.title, "vendor": vendor_names.get(notice.vendor_id),
+                        "when": _when(notice.due_on, today),
+                        "link": link or "the link in your original invitation", "organisation": organisation})
                     deliver_external(db, tenant_id, notice.email, subject, message)
                 counts["sent"] += 1
             except IntegrityError:

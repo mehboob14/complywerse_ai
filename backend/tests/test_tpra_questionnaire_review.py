@@ -3,11 +3,12 @@
 A submission now takes a named person attesting to it. The reviewer accepts or
 questions each answer, returns the questionnaire (after which the vendor can
 change only what was asked about) or accepts it (after which the link is dead).
-A resend issues a new link and kills the old one; each link is rate-limited;
+A resend kills a questionnaire's own link and issues a personal one; each link is rate-limited;
 conditional questions are re-worked on the server at submit; and the answers
 are due on a date of their own, apart from when the link expires, with the
 respondent reminded on the usual rhythm.
 """
+import uuid
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -21,6 +22,7 @@ from grc.models import TPRAActionItem  # read by the action plan, check-in and a
 from grc.models import TPRAEmailTemplate  # read when a reminder or assignment is worded
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import TPRASurfaceWaiver  # outside-in waivers running out
+from grc.models import TPRAPortalToken, TPRAVendorContact  # who a questionnaire goes to, and their links
 from grc.models import (
     TPRAMonitoringSignal, Base, GRCUser, Role, Tenant, TPRAAuditLog, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRAReminder,
     TPRARiskAcceptance, TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence,
@@ -28,7 +30,7 @@ from grc.models import (
     VendorAssessment, VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from grc.modules.vendor_risk.routers import questionnaires as routes
-from grc.modules.vendor_risk.tpra import attention, portal, rbac, reminders
+from grc.modules.vendor_risk.tpra import attention, portal, rbac, reminders, supplier_portal
 from grc.modules.vendor_risk.tpra.bootstrap import DEFAULT_TIERING_CONFIG
 from grc.routers.auth_router import require_auth
 
@@ -36,7 +38,8 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion,
            TPRAQuestionResponse, TPRAFinding, TPRATieringConfig, TPRAAuditLog, TPRAReminder, TPRARiskAcceptance,
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, TPRAApproval,
-           TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate, TPRAActionItem]
+           TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate, TPRAActionItem,
+           TPRAVendorContact, TPRAPortalToken]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},
@@ -66,9 +69,17 @@ def http(db, monkeypatch):
     monkeypatch.setattr(portal, "throttle", portal.Throttle())
     app = FastAPI()
     app.include_router(routes.router, prefix="/vendor-risk")
+    app.include_router(supplier_portal.router, prefix="/vendor-risk")
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: db.get(GRCUser, 7)
     return TestClient(app)
+
+
+def _own_link(db, qr_id) -> str:
+    """The questionnaire on a link of its own, as sent before personal links: still honoured."""
+    db.get(VendorQuestionnaireResponse, qr_id).token = str(uuid.uuid4())
+    db.commit()
+    return db.get(VendorQuestionnaireResponse, qr_id).token
 
 
 def _send(db, http, **extra):
@@ -79,8 +90,8 @@ def _send(db, http, **extra):
     sent = http.post("/vendor-risk/questionnaires/send",
                      json={"vendor_id": vendor.id, "template_id": template.id, **extra})
     assert sent.status_code == 201, sent.text
-    body = sent.json()
-    return body["token"], body["questionnaire_response"]["id"]
+    qr_id = sent.json()["questionnaire_response"]["id"]
+    return _own_link(db, qr_id), qr_id
 
 
 def _portal(http, token):
@@ -174,17 +185,20 @@ def test_accepting_closes_the_link_and_records_who_accepted(db, http):
     assert actions == ["review", "review", "accept"]
 
 
-def test_a_resend_issues_a_new_link_and_kills_the_old_one(db, http):
-    token, qr_id = _send(db, http, due_in_days=10, expires_in_days=20)
+def test_a_resend_kills_the_old_link_and_issues_a_personal_one(db, http):
+    token, qr_id = _send(db, http, due_in_days=10, expires_in_days=20, respondent_email="sam@vendor.test")
     qr = db.get(VendorQuestionnaireResponse, qr_id)
     assert (qr.expires_at - qr.due_date).days == 10
 
-    fresh = http.post(f"/vendor-risk/questionnaire-responses/{qr_id}/resend").json()["token"]
-    assert fresh != token
-    assert http.get(_portal(http, token)).status_code == 404
-    assert http.get(_portal(http, fresh)).status_code == 200
+    resent = http.post(f"/vendor-risk/questionnaire-responses/{qr_id}/resend").json()
+    assert resent["token"] is None and f"?q={qr_id}" in resent["link"]
+    assert http.get(_portal(http, token)).status_code == 404               # its own link stopped working
+    raw = resent["link"].split("/supplier/")[1].split("?")[0]
+    mine = f"/vendor-risk/portal/{raw}/questionnaires/{qr_id}"
+    assert http.get(mine).status_code == 200
 
-    _submit(http, fresh, {"subs": "no", "mfa": "yes"})
+    done = http.post(mine, json={"responses": {"subs": "no", "mfa": "yes"}, "attestation": ATTEST, "submit": True})
+    assert done.status_code == 200 and done.json()["status"] == "submitted"
     assert http.post(f"/vendor-risk/questionnaire-responses/{qr_id}/resend").status_code == 409
 
 

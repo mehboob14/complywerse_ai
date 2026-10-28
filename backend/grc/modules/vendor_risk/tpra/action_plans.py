@@ -13,7 +13,6 @@ audit trail.
 """
 from __future__ import annotations
 
-import uuid
 from datetime import date, datetime, timedelta
 from typing import Callable, Dict, List, Literal, Optional
 
@@ -25,7 +24,7 @@ from ....models import (
     GRCUser, TPRAActionItem, Vendor, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import rbac, service, versions
+from . import contacts, portal, rbac, service, versions
 
 router = APIRouter(tags=["Vendor action plans"])
 
@@ -57,14 +56,15 @@ def link_for(item: TPRAActionItem) -> str:
 # ── doing the automatic ones ─────────────────────────────────────────────────
 
 def _queue_invite(db: Session, qr: VendorQuestionnaireResponse) -> None:
-    from ..routers.questionnaires import _email_link  # here: that router imports this package
+    from ..routers.questionnaires import _email_link, _personal_link  # here: that router imports this package
 
-    _email_link(db, qr)
+    _email_link(db, qr, issued=_personal_link(db, qr, "questionnaire"))
 
 
 def _send_questionnaire(db: Session, item: TPRAActionItem, vendor: Vendor, now: datetime,
                         invite: Callable[[Session, VendorQuestionnaireResponse], None]) -> None:
-    if not vendor.primary_contact_email:
+    contact = contacts.recipient(db, vendor, item.created_by)        # the primary contact, emailed a personal link
+    if contact is None:
         raise ActionProblem("the supplier has no contact email to send the questionnaire to")
     template = db.query(VendorQuestionnaireTemplate).filter(
         VendorQuestionnaireTemplate.id == item.template_id,
@@ -75,15 +75,15 @@ def _send_questionnaire(db: Session, item: TPRAActionItem, vendor: Vendor, now: 
     assessment = service.get_active_assessment(db, vendor)
     qr = VendorQuestionnaireResponse(
         tenant_id=vendor.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id if assessment else None,
-        template_id=template.id, template_version_id=version.id if version else None,
-        respondent_name=vendor.primary_contact_name, respondent_email=vendor.primary_contact_email,
-        token=str(uuid.uuid4()), expires_at=now + timedelta(days=QUESTIONNAIRE_EXPIRES_DAYS),
+        template_id=template.id, template_version_id=version.id if version else None, contact_id=contact.id,
+        respondent_name=contact.name, respondent_email=contact.email,
+        token=portal.sealed_token(), expires_at=now + timedelta(days=QUESTIONNAIRE_EXPIRES_DAYS),
         due_date=now + timedelta(days=QUESTIONNAIRE_DUE_DAYS), last_sent_at=now, status="pending",
     )
     db.add(qr)
     db.flush()
     invite(db, qr)
-    item.result = f"'{template.name}' sent to {vendor.primary_contact_email}"
+    item.result = f"'{template.name}' sent to {contact.email}"
     item.result_link = (f"/vendor-risk/assessments/{qr.assessment_id}?tab=questionnaire" if qr.assessment_id
                         else f"/vendor-risk/vendors/{vendor.id}")
 
