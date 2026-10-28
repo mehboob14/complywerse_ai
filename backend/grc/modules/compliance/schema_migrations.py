@@ -544,6 +544,8 @@ _COLUMN_ADDS = [
     ("grc_parsed_framework_controls", "control_description", "TEXT", None),
     # Assessment criteria parsed from each spec's Control Specification text.
     ("grc_parsed_framework_controls", "assessment_criteria", "JSON DEFAULT '[]'::json", None),
+    # Native attributes and sub-controls of a framework's own hierarchy (UAE IA); NULL elsewhere.
+    ("grc_parsed_framework_controls", "native_attributes", "JSON", None),
     # Per-criterion met/not-met state on each journey control implementation.
     ("grc_control_implementations", "criteria_status", "JSON DEFAULT '{}'::json", None),
     # Gap-analysis runs: the job's heartbeat (a run silent for 15 minutes is cancelled automatically) and the version it read

@@ -75,6 +75,25 @@ def _provides_by_artifact(framework_key: str) -> dict:
         logger.warning("could not read the evidence lists of artifact_catalog.json", exc_info=True)
         return {}
 
+
+_sub_controls_cache: dict = {"mtime": None, "data": {}}
+
+
+def _sub_controls_by_artifact(framework_key: str) -> dict:
+    """{artifact_id: [codes of the sub-controls whose evidence it provides]} from the curated catalog file (UAE IA, where an
+    artifact serves sub-controls of several controls); {} for the others. The database rows do not carry the list. Cached by mtime."""
+    try:
+        mtime = _CATALOG_PATH.stat().st_mtime
+        if _sub_controls_cache["mtime"] != mtime:
+            raw = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+            _sub_controls_cache["data"] = {k: {a["artifact_id"]: a["sub_controls"] for a in v.get("artifacts", []) if a.get("sub_controls")}
+                                           for k, v in raw.items()}
+            _sub_controls_cache["mtime"] = mtime
+        return _sub_controls_cache["data"].get(framework_key, {})
+    except Exception:  # noqa: BLE001 — an optional enhancement of the per-requirement list
+        logger.warning("could not read the sub-control lists of artifact_catalog.json", exc_info=True)
+        return {}
+
 # Map assessment_type strings → catalog framework_key
 ASSESSMENT_TYPE_MAP: dict[str, str] = {
     # ISO 27001
@@ -1005,6 +1024,9 @@ def list_artifacts_by_control(
     Empty result (`catalog: []`) is normal — most parsed-framework
     requirements don't have a corresponding artifact catalog entry, and the
     UI hides the section in that case.
+
+    A reference may also be a sub-control code (UAE IA, "M1.1.1.1"): it finds the
+    artifacts that serve it, and every item lists the sub-controls it serves.
     """
     _ensure_catalog_seeded(db)
     tenant_id = get_user_primary_tenant(current_user, db)
@@ -1034,9 +1056,15 @@ def list_artifacts_by_control(
         .filter(ArtifactCatalogItem.framework_key == resolved_key)
         .all()
     )
+    # A requested code that is one of the sub-controls an artifact serves (UAE IA) matches it too, token for token like a control
+    # reference ("M1.2.1" does not match an artifact that lists only "M1.2.1.1"). The documents already created from such an
+    # item come with it, so the row shows "View" and not "Create" again.
+    sub_codes = _sub_controls_by_artifact(resolved_key)
+    wanted = {_normalize_ref(c) for c in requirement_codes}
+    via_sub = {i.id for i in catalog_items if any(_normalize_ref(c) in wanted for c in sub_codes.get(i.artifact_id, []))}
     matched_catalog = [
         i for i in catalog_items
-        if _ref_matches_any(i.control_ref, requirement_codes)
+        if i.id in via_sub or _ref_matches_any(i.control_ref, requirement_codes)
     ]
 
     tenant_artifacts = (
@@ -1049,7 +1077,7 @@ def list_artifacts_by_control(
     )
     matched_tenant = [
         a for a in tenant_artifacts
-        if _ref_matches_any(a.control_ref, requirement_codes)
+        if a.catalog_item_id in via_sub or _ref_matches_any(a.control_ref, requirement_codes)
     ]
 
     provides = _provides_by_artifact(resolved_key)
@@ -1072,6 +1100,7 @@ def list_artifacts_by_control(
                 "is_platform_native": i.is_platform_native,
                 "platform_data_type": i.platform_data_type,
                 "provides": provides.get(i.artifact_id, []),
+                "sub_controls": sub_codes.get(i.artifact_id, []),
             }
             for i in matched_catalog
         ],

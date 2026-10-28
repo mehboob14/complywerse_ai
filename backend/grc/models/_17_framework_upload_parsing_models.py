@@ -123,6 +123,9 @@ class ParsedFrameworkControl(Base):
     # scoring: all must be met for 100%). Empty list = single-statement spec
     # (the requirement itself is the one binary check). List of strings.
     assessment_criteria = Column(JSON, default=list)
+    # What a framework carries that the columns above have no place for. UAE IA: the priority tier P1-P4, applicability, control
+    # types, implementation guidance, and the standard's own sub-controls (nested points, evidence). NULL for frameworks without any.
+    native_attributes = Column(JSON, nullable=True)
 
     section_number = Column(String(50), nullable=True)
     parent_section = Column(String(255), nullable=True)

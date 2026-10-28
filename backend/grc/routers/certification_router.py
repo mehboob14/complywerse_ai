@@ -206,6 +206,44 @@ def resolve_parsed_control_evidence(parsed_control: ParsedFrameworkControl, db: 
     return []
 
 
+def _native_fields(native) -> dict:
+    """What a framework's own hierarchy adds to a control (UAE IA: priority tier, applicability, control types, implementation
+    guidance, control-level evidence), read from `native_attributes`. A framework without them, or with odd ones, gets None / []."""
+    n = native if isinstance(native, dict) else {}
+
+    def text(key):
+        return n[key] if isinstance(n.get(key), str) else None
+
+    def names(key):
+        return [x for x in n[key] if isinstance(x, str)] if isinstance(n.get(key), list) else []
+
+    return {
+        "priority_tier": text("priority_tier"),
+        "applicability": text("applicability"),
+        "control_types": names("control_types"),
+        "implementation_guidance": text("implementation_guidance"),
+        "control_evidence": names("control_evidence"),
+    }
+
+
+def _sub_control_tree(native, criteria_status) -> Optional[list]:
+    """The standard's own sub-controls of one control (`native_attributes["sub_controls"]`) as stored, each with whether its
+    criterion is ticked (`met`; None when it is not tickable). A node's `evidence` stays the list of evidence titles: the page finds
+    them in the control's own `evidence_requirements`, which the response carries already. The stored nodes are copied, never
+    changed; a node that is not a dict is skipped. None when there is nothing to show."""
+    nodes = native.get("sub_controls") if isinstance(native, dict) else None
+    if not isinstance(nodes, list):
+        return None
+    ticks = criteria_status if isinstance(criteria_status, dict) else {}
+    tree = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        index = node.get("criterion_index")
+        tree.append({**node, "met": bool(ticks.get(str(index))) if isinstance(index, int) and not isinstance(index, bool) else None})
+    return tree or None
+
+
 def get_phases_from_document_structure(framework: Optional[UploadedFramework]) -> List[dict]:
     """Extract certification phases from the framework's document structure.
     
@@ -754,6 +792,10 @@ def get_certification(
         "not_applicable": progress_summary.not_applicable_count,
     })
 
+    # The framework's own family / sub-family tree (UAE IA); None for the others.
+    structure = framework.document_structure if framework else None
+    control_structure = structure.get("control_structure") if isinstance(structure, dict) else None
+
     return {
         "id": journey.id,
         "tenant_id": journey.tenant_id,
@@ -774,6 +816,7 @@ def get_certification(
         "phases": phases_list,
         "has_generated_phases": bool(journey.generated_phases and len(journey.generated_phases) > 0),
         "stage_owners": journey.stage_owners or {},
+        "control_structure": control_structure if isinstance(control_structure, dict) else None,
         "progress": progress_payload
     }
 
@@ -1281,6 +1324,7 @@ def list_journey_controls(
         assigned_to_user_id = primary_assignee["id"] if primary_assignee else None
         assignee_name = primary_assignee["display_name"] if primary_assignee else None
         assignee_email = primary_assignee["email"] if primary_assignee else None
+        native = getattr(parsed_control, "native_attributes", None) if parsed_control else None
 
         result.append({
             "id": impl.id,
@@ -1314,6 +1358,11 @@ def list_journey_controls(
             # Assessment criteria (spec sub-points) + this control's per-criterion state.
             "assessment_criteria": (getattr(parsed_control, "assessment_criteria", None) or []) if parsed_control else [],
             "criteria_status": getattr(impl, "criteria_status", None) or {},
+            # The framework's own hierarchy (UAE IA): the sub-family the control sits in, its tier and applicability (from
+            # native_attributes, not priority_level, which drives NDMO's roadmap) and its sub-controls with their ticks.
+            "parent_section": parsed_control.parent_section if parsed_control else None,
+            **_native_fields(native),
+            "sub_control_tree": _sub_control_tree(native, getattr(impl, "criteria_status", None)),
             "assigned_to_user_id": assigned_to_user_id,
             "assignee_name": assignee_name,
             "assignee_email": assignee_email,

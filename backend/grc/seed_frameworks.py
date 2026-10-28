@@ -2090,6 +2090,8 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
             control_description=control_data.get("control_description"),
             # Assessment criteria (numbered sub-points of the spec).
             assessment_criteria=control_data.get("assessment_criteria", []),
+            # Priority tier, applicability, sub-controls... a framework's own hierarchy (UAE IA); None for the others.
+            native_attributes=control_data.get("native_attributes"),
             section_number=_cap_control("section_number", 50),
             parent_section=_cap_control("parent_section", 255),
             ai_confidence=control_data.get("ai_confidence"),
