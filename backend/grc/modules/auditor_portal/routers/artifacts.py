@@ -28,6 +28,8 @@ from ....models import (
     Vulnerability,
     VulnerabilityAssetLink,
     Vendor,
+    VendorAssessment,
+    TPRAApproval,
     FrameworkRiskAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -310,27 +312,49 @@ def list_vendors(
     """Active vendors in the tenant. Vendors don't have a direct framework
     FK in this schema — the auditor sees them all and uses the vendor
     assessment data (if any) to judge framework relevance. The list stays
-    tenant-scoped via `get_user_tenants`."""
+    tenant-scoped via `get_user_tenants`. An archived supplier stays on the
+    list, marked with the day it was archived: the period under review may
+    be one in which it was in use."""
     user_tenants = get_user_tenants(current_user, db)
     # Resolve context just to enforce tenant scoping + 404 on bad IDs
     resolve_framework_context(framework_id, user_tenants, db)
 
-    rows = db.query(Vendor).filter(
+    rows = db.query(Vendor).options(joinedload(Vendor.owner)).filter(
         Vendor.tenant_id.in_(user_tenants),
         Vendor.status == "active",
     ).order_by(Vendor.name.asc()).all()
+    ids = [v.id for v in rows] or [-1]
+    # Last assessed: the latest approval decision of the lifecycle, or of the older Approve button.
+    approvals = (db.query(TPRAApproval.vendor_id, func.max(TPRAApproval.created_at))
+                 .filter(TPRAApproval.vendor_id.in_(ids),
+                         TPRAApproval.decision.in_(("approve", "approve_with_conditions")))
+                 .group_by(TPRAApproval.vendor_id))
+    completed = (db.query(VendorAssessment.vendor_id, func.max(VendorAssessment.completed_at))
+                 .filter(VendorAssessment.vendor_id.in_(ids)).group_by(VendorAssessment.vendor_id))
+    assessed: dict = {}
+    for vid, at in [*approvals, *completed]:
+        if at and (vid not in assessed or at > assessed[vid]):
+            assessed[vid] = at
 
     out = [
         {
             "id": v.id,
             "name": v.name,
-            "vendor_type": getattr(v, "vendor_type", None),
-            "criticality": getattr(v, "criticality", None),
-            "risk_tier": getattr(v, "risk_tier", None),
+            "vendor_type": v.vendor_type,
+            # A vendor's criticality is its TPRA tier; there are no criticality / risk_tier /
+            # data_classification_access columns, so those keys carry the real ones.
+            "criticality": v.tier,
+            "risk_tier": v.tier,
+            "risk_rating": v.risk_rating,
+            "residual_risk_score": v.residual_risk_score,
             "status": v.status,
-            "data_classification_access": getattr(v, "data_classification_access", None),
-            "contract_expiry": getattr(v, "contract_end_date", None) or getattr(v, "contract_expiry", None),
-            "last_assessed_at": getattr(v, "last_assessed_at", None),
+            "lifecycle_stage": v.lifecycle_stage,
+            "data_classification_access": v.data_access_level,
+            "contract_expiry": v.contract_end_date,
+            "next_reassessment_date": v.next_reassessment_date,
+            "last_assessed_at": assessed.get(v.id),
+            "owner": {"id": v.owner.id, "name": v.owner.display_name or v.owner.username} if v.owner else None,
+            "archived_at": v.deleted_at,
             "updated_at": v.updated_at,
         }
         for v in rows
