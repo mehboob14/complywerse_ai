@@ -116,25 +116,32 @@ def record_signal(db: Session, vendor: Vendor, *, signal_type: str, severity: st
 
 
 def _maybe_reopen(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, actor_id: Optional[int]) -> Optional[int]:
-    """Reopen the vendor's assessment when the signal is serious enough for its tier."""
-    threshold = tier_policy.reassess_threshold(
-        vendor.tier, tier_policy.merged(get_tiering_config(db, vendor.tenant_id).get("tier_policy")))
-    if not should_trigger_reassessment(sig.signal_type, sig.severity, threshold):
+    """Reopen the vendor's assessment when the signal is serious enough for its tier:
+    General's, and each open engagement's against that engagement's own tier. The
+    signal records the first one it opened or joined."""
+    policy = tier_policy.merged(get_tiering_config(db, vendor.tenant_id).get("tier_policy"))
+    opened = []
+    for engagement in [None, *service.open_engagements(db, vendor)]:
+        threshold = tier_policy.reassess_threshold(service.scope_row(db, vendor, engagement).tier, policy)
+        if not should_trigger_reassessment(sig.signal_type, sig.severity, threshold):
+            continue
+        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
+        # version already open in the diligence phase), attach this signal to it
+        # rather than superseding + restarting, which would discard in-flight
+        # progress and let a burst of signals spawn a storm of reassessments.
+        active = service.get_active_assessment(db, vendor, engagement)
+        if engagement is not None and active is None:
+            continue                                    # never assessed: nothing to reopen
+        in_flight = (active is not None and (active.version_no or 1) > 1 and active.lifecycle_status == "active"
+                     and active.current_stage not in ("monitoring", "reassessment"))
+        opened.append(active if in_flight else service.create_reassessment_version(
+            db, vendor, actor_id=actor_id, reason=f"Auto-triggered by {sig.signal_type} signal",
+            engagement=engagement))
+    if not opened:
         return None
-    # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
-    # version already open in the diligence phase), attach this signal to it
-    # rather than superseding + restarting, which would discard in-flight
-    # progress and let a burst of signals spawn a storm of reassessments.
-    active = service.get_active_assessment(db, vendor)
-    in_flight = (active is not None and (active.version_no or 1) > 1 and active.lifecycle_status == "active"
-                 and active.current_stage not in ("monitoring", "reassessment"))
-    if in_flight:
-        sig.triggered_reassessment = True
-        sig.triggered_assessment_id = active.id
-        return active.id
-    return service.create_reassessment_version(
-        db, vendor, actor_id=actor_id, reason=f"Auto-triggered by {sig.signal_type} signal",
-        triggered_signal=sig).id
+    sig.triggered_reassessment = True
+    sig.triggered_assessment_id = opened[0].id
+    return opened[0].id
 
 
 def corroborate(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, sources: Optional[list],

@@ -21,6 +21,7 @@ from grc.models import TPRAActionItem  # read by the action plan, check-in and a
 from grc.models import TPRAEmailTemplate  # read when a reminder or assignment is worded
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import TPRASurfaceWaiver  # outside-in waivers running out
+from grc.models import TPRAEngagement  # each engagement's own review date
 from grc.models import (
     TPRAMonitoringSignal, Base, GRCUser, Role, Tenant, TPRAAuditLog, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRAReminder,
     TPRARiskAcceptance, TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence,
@@ -36,7 +37,8 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion,
            TPRAQuestionResponse, TPRAFinding, TPRATieringConfig, TPRAAuditLog, TPRAReminder, TPRARiskAcceptance,
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, TPRAApproval,
-           TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate, TPRAActionItem]
+           TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate, TPRAActionItem,
+           TPRAEngagement]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},

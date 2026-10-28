@@ -18,12 +18,13 @@ computing it needs a justification, which goes on the audit trail.
 from __future__ import annotations
 
 from datetime import date, datetime
+from types import SimpleNamespace
 from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Evidence, Role, TPRAEvidenceLink, TPRAMonitoringSignal, UserRole, Vendor, VendorAssessment,
+    Evidence, Role, TPRAEngagement, TPRAEvidenceLink, TPRAMonitoringSignal, UserRole, Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
 )
 from ....routers.auth_router import PLATFORM_GRANT
@@ -165,6 +166,24 @@ def _words(values) -> List[str]:
     return sorted({" ".join(str(v).lower().split()) for v in values or [] if str(v).strip()})
 
 
+def facts(vendor: Vendor, engagement: Optional[TPRAEngagement] = None):
+    """What a tier rests on: the supplier's record, or an engagement's own facts.
+    Where the supplier operates stays the supplier's, whatever it is used for."""
+    if engagement is None or engagement.is_general:
+        return vendor
+    return SimpleNamespace(
+        id=vendor.id, tenant_id=vendor.tenant_id, name=engagement.name, owner_id=engagement.owner_id,
+        tier=engagement.tier, criticality=engagement.criticality, intake=engagement.intake,
+        data_access_level=engagement.data_access_level, data_types_accessed=engagement.data_types_accessed or [],
+        services_provided=engagement.services_provided or [], geographic_locations=vendor.geographic_locations or [],
+    )
+
+
+def _facts_for(db: Session, vendor: Vendor, assessment: Optional[VendorAssessment]):
+    eid = getattr(assessment, "engagement_id", None) if assessment is not None else None
+    return facts(vendor, db.get(TPRAEngagement, eid) if eid else None)
+
+
 def basis(vendor: Vendor, custom: Optional[dict] = None) -> dict:
     """The facts a tier was computed from, kept to notice when they change."""
     return {
@@ -181,11 +200,13 @@ def basis(vendor: Vendor, custom: Optional[dict] = None) -> dict:
 def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAssessment],
                    custom: Optional[dict] = None) -> List[str]:
     """What has changed since the tier was computed. Nothing is reported for a
-    tier computed before its basis was recorded: there is nothing to compare."""
+    tier computed before its basis was recorded: there is nothing to compare. An
+    engagement's assessment is compared with the engagement's own facts."""
     recorded = (assessment.tiering_basis if assessment is not None else None) or {}
     if not recorded:
         return []
-    now = basis(vendor, custom)
+    scope = _facts_for(db, vendor, assessment)
+    now = basis(scope, custom)
     reasons = []
     if _ACCESS_RANK.get(now["data_access_level"], 0) > _ACCESS_RANK.get(recorded.get("data_access_level", "none"), 0):
         reasons.append(f"data access went from {recorded.get('data_access_level')} to {now['data_access_level']}")
@@ -198,7 +219,7 @@ def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAsses
     if now["services"] and now["services"] != recorded.get("services"):
         reasons.append("the services it provides have changed")
     if "intake" in recorded:
-        reasons.extend(intake_answers.changes_since(recorded["intake"] or {}, vendor, custom))
+        reasons.extend(intake_answers.changes_since(recorded["intake"] or {}, scope, custom))
     since = datetime.fromisoformat(recorded["at"]) if recorded.get("at") else None
     if since is not None:
         breach = (db.query(TPRAMonitoringSignal).filter(
@@ -212,15 +233,18 @@ def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAsses
 
 def requirements(db: Session, vendor: Vendor, assessment: VendorAssessment, config: dict) -> dict:
     """Everything the vendor's tier asks for, and where the vendor stands. The
-    evidence is the tier's, plus whatever an onboarding answer asked for."""
+    evidence is the tier's, plus whatever an onboarding answer asked for. An
+    engagement's assessment goes by the engagement's tier and answers; the
+    evidence on file is the supplier's."""
     policy = merged(config.get("tier_policy"))
-    tier = _tier(assessment.inherent_tier or vendor.tier)
+    scope = _facts_for(db, vendor, assessment)
+    tier = _tier(assessment.inherent_tier or scope.tier)
     rules = policy[tier]
     custom = config.get("customisation")
     in_use = customisation.evidence_kinds(custom)
     kinds = [k for k in rules.get("evidence") or [] if k in in_use]
     because = {}
-    for kind, question in intake_answers.evidence_asked(getattr(vendor, "intake", None), custom):
+    for kind, question in intake_answers.evidence_asked(getattr(scope, "intake", None), custom):
         if kind in in_use and kind not in kinds:
             kinds.append(kind)
             because[kind] = f"Asked because the answer to '{question}' was yes"
