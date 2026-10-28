@@ -161,8 +161,12 @@ def test_tiering_scoring_and_approving_an_engagement_never_moves_general_the_poi
     p = service.ensure_active_assessment(db, v, actor_id=ADMIN, engagement=payroll)
     assert service.advance_stage(db, v, p, actor_id=ADMIN)["advanced"] is True     # payroll's owner and data access
     _scored(db, v, p, CRITICAL, "Yes")
+    v.intake_status = "in_review"                       # the supplier's own onboarding request is still open
+    db.commit()
     decided = api.create_approval(p.id, api.ApprovalIn(decision="approve"), db=db, user=_user(db, ADMIN))
     assert decided["assessment_id"] == p.id
+    db.refresh(v)
+    assert v.intake_status == "in_review"               # decided by General's approval, not an engagement's
 
     for row in (g, w, v, payroll, warehouse):
         db.refresh(row)
@@ -384,6 +388,16 @@ def test_an_engagements_reassessment_schedules_its_own_next_review(db):
     service.create_reassessment_version(db, v, actor_id=ADMIN, reason="Yearly", engagement=payroll)
     db.commit()
     assert payroll.reassessment_cadence_days == 180 and payroll.next_reassessment_date.date() == TODAY + timedelta(days=180)
+    assert v.next_reassessment_date == datetime(2030, 1, 1)
+
+    # Scheduled by hand: a cadence alone counts from today; a date is kept as given.
+    admin = _user(db, ADMIN)
+    engagements.update_engagement(payroll.id, engagements.EngagementIn(reassessment_cadence_days=90), db=db, user=admin)
+    assert (payroll.reassessment_cadence_days, payroll.next_reassessment_date.date()) == (90, TODAY + timedelta(days=90))
+    engagements.update_engagement(payroll.id, engagements.EngagementIn(reassessment_cadence_days=30,
+                                                                         next_reassessment_date=datetime(2031, 5, 1)),
+                                  db=db, user=admin)
+    assert (payroll.reassessment_cadence_days, payroll.next_reassessment_date) == (30, datetime(2031, 5, 1))
     assert v.next_reassessment_date == datetime(2030, 1, 1)
 
 

@@ -64,9 +64,9 @@ export default function EngagementsPanel({ vendorId, onOpenLifecycle }: {
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[880px] text-left">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-100">
                 {['Engagement', 'Owner', 'Business unit', 'Type', 'Tier', 'Residual', 'Stage', 'Next review', 'Status', ''].map((h, i) => (
-                  <th key={i} className="px-3 py-2 font-semibold">{h}</th>
+                  <th key={i} className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{h}</th>
                 ))}
               </tr>
             </thead>
