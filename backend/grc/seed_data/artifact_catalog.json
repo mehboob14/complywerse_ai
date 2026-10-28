@@ -15082,6 +15082,2618 @@
           "Data exchange event recording coverage matrix"
         ],
         "sub_controls": []
+      },
+      {
+        "artifact_id": "UAEIA-257",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Policy and Objectives Approval Record",
+        "type": "Form/Template",
+        "control_ref": "M1.1.2",
+        "mandatory": true,
+        "description": "Form in which top management records its approval of the information security policy and objectives and of their alignment with the entity's strategic direction, with the documents and versions approved, the date and the signatures of the approvers.",
+        "format": "DOCX",
+        "owner": "Top Management",
+        "evidence": [
+          "Top management approval of security direction"
+        ],
+        "sub_controls": [
+          "M1.1.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-258",
+        "stage": "Stage 4: Implementation",
+        "name": "Business Process Security Requirements Evidence",
+        "type": "Evidence",
+        "control_ref": "M1.1.2",
+        "mandatory": true,
+        "description": "Collection guide for a sample of business process documents with the extracts that show where information security requirements are built into each process, labeled with the process owner, document version and date and signed off by the CISO.",
+        "format": "ZIP/Drive",
+        "owner": "CISO",
+        "evidence": [
+          "Security requirements built into business processes"
+        ],
+        "sub_controls": [
+          "M1.1.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-259",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Resource Commitment Approval Form",
+        "type": "Form/Template",
+        "control_ref": "M1.1.2",
+        "mandatory": true,
+        "description": "Form recording the budget, headcount and tooling that top management approves for the information security program, with the amounts, the period covered, the approvers and the date of approval.",
+        "format": "DOCX",
+        "owner": "Top Management",
+        "evidence": [
+          "Resource commitment approvals"
+        ],
+        "sub_controls": [
+          "M1.1.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-260",
+        "stage": "Stage 4: Implementation",
+        "name": "Top Management Security Communication Log",
+        "type": "Log",
+        "control_ref": "M1.1.2",
+        "mandatory": true,
+        "description": "Log of the messages and briefings in which top management explains why effective information security management matters and directs and supports people to contribute to it, with the date, channel, audience, topic, the direction or support given and a link to each message.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Top management communications on information security"
+        ],
+        "sub_controls": [
+          "M1.1.2.5",
+          "M1.1.2.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-261",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Continual Improvement and Management Support Log",
+        "type": "Log",
+        "control_ref": "M1.1.2",
+        "mandatory": true,
+        "description": "Log of the improvement actions promoted by top management and of the support it gave other management roles to show leadership in their own areas, with the date, the action, the manager supported, the outcome and the owner.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Continual improvement and management support record"
+        ],
+        "sub_controls": [
+          "M1.1.2.7",
+          "M1.1.2.8"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-262",
+        "stage": "Stage 1: Governance & Scoping",
+        "name": "Information Security Lead Appointment Letter",
+        "type": "Form/Template",
+        "control_ref": "M1.1.3",
+        "mandatory": true,
+        "description": "Letter in which top management appoints the leadership team member with overall responsibility for information security and names the dedicated function that supports them, with the role description, the date and the signatures of the appointer and the appointee.",
+        "format": "DOCX",
+        "owner": "Top Management",
+        "evidence": [
+          "Appointment of the information security lead"
+        ],
+        "sub_controls": [
+          "M1.1.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-263",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Policy Review and Revision Log",
+        "type": "Log",
+        "control_ref": "M1.2.1",
+        "mandatory": true,
+        "description": "Log of the reviews of the information security policy at planned intervals and after significant changes, with the trigger, the reviewer, the outcome, the changes made, the new version number and the approver and approval date.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Policy review and revision record"
+        ],
+        "sub_controls": [
+          "M1.2.1.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-264",
+        "stage": "Stage 4: Implementation",
+        "name": "Policy Communication and Availability Log",
+        "type": "Log",
+        "control_ref": "M1.2.1",
+        "mandatory": true,
+        "description": "Log of how the information security policy was communicated within the organization and made available to relevant interested parties, with the date, version, audience, channel, publication location or distribution list, sender and a link to the notice or screenshot.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Policy communication to staff",
+          "Policy availability to interested parties"
+        ],
+        "sub_controls": [
+          "M1.2.1.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-265",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Objectives Communication Log",
+        "type": "Log",
+        "control_ref": "M1.2.2",
+        "mandatory": true,
+        "description": "Log of the notices and briefings through which the information security objectives were communicated within the entity, with the date, audience, channel, presenter and a link to the material.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Objectives communication record"
+        ],
+        "sub_controls": [
+          "M1.2.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-266",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Security Objectives Review and Update Log",
+        "type": "Log",
+        "control_ref": "M1.2.2",
+        "mandatory": true,
+        "description": "Log of the reviews of the information security objectives, with the review date, the reviewer, whether each objective was kept, changed or retired, the reason, the new version and the approver.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Objectives update record"
+        ],
+        "sub_controls": [
+          "M1.2.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-267",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Policy-to-Practice Consistency Review Form",
+        "type": "Form/Template",
+        "control_ref": "M1.2.3",
+        "mandatory": true,
+        "description": "Form recording the review of each supporting policy against what the entity has implemented, with the statements checked, any statement the entity does not comply with, the correction made, the reviewer and the sign-off.",
+        "format": "DOCX",
+        "owner": "CISO",
+        "evidence": [
+          "Policy-to-practice consistency review"
+        ],
+        "sub_controls": [
+          "M1.2.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-268",
+        "stage": "Stage 4: Implementation",
+        "name": "Supporting Policy Acknowledgement Form",
+        "type": "Form/Template",
+        "control_ref": "M1.2.3",
+        "mandatory": true,
+        "description": "Form in which a staff member acknowledges having read and understood the supporting policies that apply to their role, with the policy names and versions, the person's name, role and signature and the date.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Personnel acknowledgement records"
+        ],
+        "sub_controls": [
+          "M1.2.3.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-269",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supporting Policy Review Log",
+        "type": "Log",
+        "control_ref": "M1.2.3",
+        "mandatory": true,
+        "description": "Log of the reviews of the supporting policies at planned intervals and after significant changes, with the policy, the trigger, the reviewer, the updates that resulted, the new version and the approver.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Supporting policy review log"
+        ],
+        "sub_controls": [
+          "M1.2.3.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-270",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Project Risk Treatment Review Record",
+        "type": "Form/Template",
+        "control_ref": "M1.3.4",
+        "mandatory": false,
+        "description": "Form recording the project or steering committee review of information security risk treatment progress, with the treatments reviewed, the tests used to evaluate their effectiveness and the results, the decisions taken and the reviewers' sign-off.",
+        "format": "DOCX",
+        "owner": "Project Management Lead",
+        "evidence": [
+          "Risk treatment progress and effectiveness review"
+        ],
+        "sub_controls": [
+          "M1.3.4.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-271",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Interest Group Information Circulation Log",
+        "type": "Log",
+        "control_ref": "M1.3.5",
+        "mandatory": false,
+        "description": "Log of the advisories and updates received from special interest groups and circulated inside the entity, with the source group, the dates received and circulated, the audience, a check against the group's sharing rules and a link to the message.",
+        "format": "XLSX",
+        "owner": "CISO",
+        "evidence": [
+          "Circulated interest group information"
+        ],
+        "sub_controls": [
+          "M1.3.5.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-272",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Residual Risk and Treatment Effectiveness Review Form",
+        "type": "Form/Template",
+        "control_ref": "M2.3.1",
+        "mandatory": true,
+        "description": "Form recording for each risk treatment whether the residual risk level is tolerable, the new treatment generated where it is not and the assessment of how effective the treatment is, signed by the risk owner and the Risk Manager.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Residual risk and treatment effectiveness review"
+        ],
+        "sub_controls": [
+          "M2.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-273",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Control Selection Criteria Review Form",
+        "type": "Form/Template",
+        "control_ref": "M2.3.2",
+        "mandatory": true,
+        "description": "Form recording the review of the controls selected for risk treatment against the risk acceptance criteria and the legal, regulatory and contractual requirements, with the criteria applied, the gaps found, the reviewer and the sign-off.",
+        "format": "DOCX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Control selection criteria review"
+        ],
+        "sub_controls": [
+          "M2.3.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-274",
+        "stage": "Stage 2: Risk Assessment",
+        "name": "Risk Factor Monitoring Log",
+        "type": "Log",
+        "control_ref": "M2.4.1",
+        "mandatory": true,
+        "description": "Log of the monitoring of asset values, impacts, threats, vulnerabilities and likelihood, with the date, the factor, the change observed in the entity's context, the risks affected and the action taken.",
+        "format": "XLSX",
+        "owner": "Risk Manager",
+        "evidence": [
+          "Risk factor monitoring records"
+        ],
+        "sub_controls": [
+          "M2.4.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-275",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Awareness and Training Effectiveness Evaluation",
+        "type": "Assessment",
+        "control_ref": "M3.2.1",
+        "mandatory": true,
+        "description": "Evaluation of whether the training and other awareness actions taken were effective, with the method, the measures used, the results by audience, the conclusions and the improvements agreed, signed by the HR / Training Lead and the CISO.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Effectiveness evaluation of actions taken"
+        ],
+        "sub_controls": [
+          "M3.2.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-276",
+        "stage": "Stage 4: Implementation",
+        "name": "Training Resource Approval Form",
+        "type": "Form/Template",
+        "control_ref": "M3.3.2",
+        "mandatory": true,
+        "description": "Form recording the budget, trainers, tools and time approved for the training in the awareness and training program, with the amounts, the period covered, the approvers and the date of approval.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Training resource allocation"
+        ],
+        "sub_controls": [
+          "M3.3.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-277",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Training Plan Variance Log",
+        "type": "Log",
+        "control_ref": "M3.3.3",
+        "mandatory": true,
+        "description": "Log of the problems met against the training implementation plan, with the date, the course or audience affected, the cause, the alternative training solution identified, its owner and its outcome.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Plan variance and alternative solutions record"
+        ],
+        "sub_controls": [
+          "M3.3.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-278",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Training Knowledge Measurement Register",
+        "type": "Register",
+        "control_ref": "M3.3.4",
+        "mandatory": false,
+        "description": "Register of the measurements of information security knowledge and skills taken before and after training, such as test scores, with the audience, the training, the dates, the scores before and after and the improvement.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Before and after knowledge measurements"
+        ],
+        "sub_controls": [
+          "M3.3.4.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-279",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Training Outcome Evaluation",
+        "type": "Assessment",
+        "control_ref": "M3.3.4",
+        "mandatory": false,
+        "description": "Evaluation of whether the training delivered meets the expected outcomes against the entity's knowledge requirements, with the outcomes expected, the measures used, the results, the gaps found and the reviewer's sign-off.",
+        "format": "DOCX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Training outcome evaluation"
+        ],
+        "sub_controls": [
+          "M3.3.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-280",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Training Corrective Action Log",
+        "type": "Log",
+        "control_ref": "M3.3.4",
+        "mandatory": false,
+        "description": "Log of the actions taken to improve or replace training solutions that did not reach the expected outcome, with the training concerned, the shortfall, the action, the owner, the due and completion dates and the result.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Training corrective actions"
+        ],
+        "sub_controls": [
+          "M3.3.4.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-281",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Training Records Periodic Check Log",
+        "type": "Log",
+        "control_ref": "M3.3.5",
+        "mandatory": false,
+        "description": "Log of the periodic checks of training records, with the check date, the stakeholder group, the training required, the number who completed it, those outstanding, the follow-up action and the person who made the check.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Training records periodic check"
+        ],
+        "sub_controls": [
+          "M3.3.5.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-282",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Awareness Campaign Delivery Evidence",
+        "type": "Evidence",
+        "control_ref": "M3.4.1",
+        "mandatory": false,
+        "description": "Collection guide for samples of the awareness campaign materials issued, such as emails, posters and session invitations, each dated against the program timeline and labeled with the campaign and audience and signed off by the HR / Training Lead.",
+        "format": "ZIP/Drive",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Campaign delivery evidence"
+        ],
+        "sub_controls": [
+          "M3.4.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-283",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Awareness Campaign Adjustment Log",
+        "type": "Log",
+        "control_ref": "M3.4.1",
+        "mandatory": false,
+        "description": "Log of the problems against the awareness program timeline, with the date, the cause, the alternative campaign identified, the check that the updated campaign still satisfies the program objectives and the approver.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Campaign adjustment record"
+        ],
+        "sub_controls": [
+          "M3.4.1.4",
+          "M3.4.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-284",
+        "stage": "Stage 4: Implementation",
+        "name": "Background Verification Completion Register",
+        "type": "Register",
+        "control_ref": "M4.1.1",
+        "mandatory": true,
+        "description": "Register of every candidate, contractor and third-party person subject to background verification, with the type of check, the status (complete, pending or missing), the completion date, the outcome recorded without the report contents, the person who confirmed completion and the date current personnel were last reviewed against these records.",
+        "format": "XLSX",
+        "owner": "HR Director",
+        "evidence": [
+          "Verification check completion records",
+          "Verification coverage review"
+        ],
+        "sub_controls": [
+          "M4.1.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-285",
+        "stage": "Stage 4: Implementation",
+        "name": "Background Verification Document Storage Evidence",
+        "type": "Evidence",
+        "control_ref": "M4.1.1",
+        "mandatory": true,
+        "description": "Collection guide for the access permissions and the retention arrangement of the storage that holds background verification documents, captured as dated screenshots showing the system and the authorized groups and signed off by the HR Director.",
+        "format": "Configs",
+        "owner": "HR Director",
+        "evidence": [
+          "Verification document handling"
+        ],
+        "sub_controls": [
+          "M4.1.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-286",
+        "stage": "Stage 4: Implementation",
+        "name": "Employment and Third-Party Contract Sample",
+        "type": "Evidence",
+        "control_ref": "M4.1.2",
+        "mandatory": true,
+        "description": "Collection guide for a sample of signed employment, contractor and third-party contracts with pay and personal details masked, showing the clause or annex that carries the information security terms, with the contract reference, signing date and signatories of each, signed off by the HR Director.",
+        "format": "ZIP/Drive",
+        "owner": "HR Director",
+        "evidence": [
+          "Contracts containing information security terms"
+        ],
+        "sub_controls": [
+          "M4.1.2.2",
+          "M4.1.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-287",
+        "stage": "Stage 4: Implementation",
+        "name": "Information Security Terms Acceptance Form",
+        "type": "Form/Template",
+        "control_ref": "M4.1.2",
+        "mandatory": true,
+        "description": "Form in which an employee, contractor or third party confirms having understood and agreed the information security terms and conditions, including any confidentiality or non-disclosure agreement, with the name, role, date and signature and the HR countersignature.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "evidence": [
+          "Understanding and acceptance records"
+        ],
+        "sub_controls": [
+          "M4.1.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-288",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Contract Review and Amendment Log",
+        "type": "Log",
+        "control_ref": "M4.1.2",
+        "mandatory": true,
+        "description": "Log of the review of existing contracts with employees, contractors and third parties, with the contract, the review date, the information security terms missing, the amendment made, the date it was signed and the reviewer.",
+        "format": "XLSX",
+        "owner": "HR Director",
+        "evidence": [
+          "Contract review and amendment record"
+        ],
+        "sub_controls": [
+          "M4.1.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-289",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Policy Notification Log",
+        "type": "Log",
+        "control_ref": "M4.2.1",
+        "mandatory": true,
+        "description": "Log of the notices through which employees, contractors and third parties were informed of the security policies that apply to them, with the date, policy and version, audience, channel, sender and a link to the notice or distribution list.",
+        "format": "XLSX",
+        "owner": "HR Director",
+        "evidence": [
+          "Security policy notification records"
+        ],
+        "sub_controls": [
+          "M4.2.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-290",
+        "stage": "Stage 4: Implementation",
+        "name": "First Access Policy Acceptance Evidence",
+        "type": "Evidence",
+        "control_ref": "M4.2.1",
+        "mandatory": true,
+        "description": "Collection guide for the first-access screen that presents the security policy or guidelines for the user to read and accept and for the export of the acceptance records with the date and version accepted, signed off by the IAM Lead.",
+        "format": "Reports",
+        "owner": "IAM Lead",
+        "evidence": [
+          "First-access acceptance screen",
+          "User acceptance records"
+        ],
+        "sub_controls": [
+          "M4.2.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-291",
+        "stage": "Stage 4: Implementation",
+        "name": "Disciplinary Process Awareness Log",
+        "type": "Log",
+        "control_ref": "M4.2.2",
+        "mandatory": false,
+        "description": "Log of the notices, induction material and briefings through which people were made aware of the disciplinary process, with the date, audience, channel, presenter and a link to the material.",
+        "format": "XLSX",
+        "owner": "HR Director",
+        "evidence": [
+          "Disciplinary process awareness evidence"
+        ],
+        "sub_controls": [
+          "M4.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-292",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Disciplinary Action Record",
+        "type": "Form/Template",
+        "control_ref": "M4.2.2",
+        "mandatory": false,
+        "description": "Confidential form recording a confirmed information security policy violation, the verification that it occurred, the action taken and the approvers, signed by the HR Director and kept in the HR file, with a copy that protects identities as required for use as audit evidence.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "evidence": [
+          "Disciplinary action records"
+        ],
+        "sub_controls": [
+          "M4.2.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-293",
+        "stage": "Stage 4: Implementation",
+        "name": "Exit Notice of Continuing Security Responsibilities",
+        "type": "Form/Template",
+        "control_ref": "M4.3.1",
+        "mandatory": false,
+        "description": "Notice given to a leaver or a person changing role that lists the information security responsibilities and duties that remain valid, with the acknowledgement signature of the person, the manager's signature and the date.",
+        "format": "DOCX",
+        "owner": "HR Director",
+        "evidence": [
+          "Communication of continuing responsibilities"
+        ],
+        "sub_controls": [
+          "M4.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-294",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Compliance Requirements Review Record",
+        "type": "Form/Template",
+        "control_ref": "M5.1.1",
+        "mandatory": false,
+        "description": "Form recording the periodic review of the compliance requirements and their associated controls for completeness, with the review date, the reviewer, the gaps found, the updates made and the sign-off.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Periodic review of compliance requirements"
+        ],
+        "sub_controls": [
+          "M5.1.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-295",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Intellectual Property Controls Review Record",
+        "type": "Form/Template",
+        "control_ref": "M5.1.2",
+        "mandatory": false,
+        "description": "Form recording the periodic review of the intellectual property requirements and of the licensing and ownership controls, with the review date, the reviewer, the gaps found and closed and the sign-off.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Intellectual property controls review"
+        ],
+        "sub_controls": [
+          "M5.1.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-296",
+        "stage": "Stage 4: Implementation",
+        "name": "Record Protection Controls Evidence",
+        "type": "Evidence",
+        "control_ref": "M5.1.3",
+        "mandatory": false,
+        "description": "Collection guide for the controls that protect important records, such as access permissions, integrity protection and archive or backup settings, captured as dated screenshots showing the system and the records covered and signed off by the Records Manager.",
+        "format": "Configs",
+        "owner": "Records Manager",
+        "evidence": [
+          "Record protection controls"
+        ],
+        "sub_controls": [
+          "M5.1.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-297",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Record Protection Requirements Review Record",
+        "type": "Form/Template",
+        "control_ref": "M5.1.3",
+        "mandatory": false,
+        "description": "Form recording the periodic review of the record protection requirements and of the retention, access and integrity controls, with the review date, the reviewer, the changes made and the sign-off.",
+        "format": "DOCX",
+        "owner": "Records Manager",
+        "evidence": [
+          "Record protection requirements review"
+        ],
+        "sub_controls": [
+          "M5.1.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-298",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Audit Access Request Form",
+        "type": "Form/Template",
+        "control_ref": "M5.3.1",
+        "mandatory": false,
+        "description": "Form in which an auditor requests access to systems and data for an audit, with the systems and data, the purpose, the access level and period, the approval of the appropriate management and the date.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Approved audit access requests"
+        ],
+        "sub_controls": [
+          "M5.3.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-299",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Technical Audit Test Scope and Access Record",
+        "type": "Form/Template",
+        "control_ref": "M5.3.1",
+        "mandatory": false,
+        "description": "Form recording the agreed scope of technical audit tests, including the systems covered and the level of access granted, and after the audit the account settings and clean-up that show the access was limited as agreed, signed by the auditor and the system owner.",
+        "format": "DOCX",
+        "owner": "Compliance Officer",
+        "evidence": [
+          "Technical audit test scope agreement",
+          "Audit access restrictions and clean-up"
+        ],
+        "sub_controls": [
+          "M5.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-300",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Auditor Selection and Impartiality Record",
+        "type": "Form/Template",
+        "control_ref": "M6.2.2",
+        "mandatory": true,
+        "description": "Form recording how the auditors for an internal audit were selected and their confirmation of objectivity and impartiality, with the audit, the auditors, the selection criteria, any conflict of interest declared and the approver.",
+        "format": "DOCX",
+        "owner": "Head of Internal Audit",
+        "evidence": [
+          "Auditor selection and impartiality record"
+        ],
+        "sub_controls": [
+          "M6.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-301",
+        "stage": "Stage 6: Audit & Regulatory Reporting",
+        "name": "Audit Results Reporting Record",
+        "type": "Form/Template",
+        "control_ref": "M6.2.2",
+        "mandatory": true,
+        "description": "Form recording that the audit results were reported to relevant management, with the audit, the results reported, the recipients, the date, the means used such as a transmittal, presentation or meeting and the acknowledgement of receipt.",
+        "format": "DOCX",
+        "owner": "Head of Internal Audit",
+        "evidence": [
+          "Audit results reported to management"
+        ],
+        "sub_controls": [
+          "M6.2.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-302",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Inventory Reconciliation Sheet",
+        "type": "Form/Template",
+        "control_ref": "T1.2.1",
+        "mandatory": true,
+        "description": "Sheet reconciling the information asset inventory with the entity's other inventories, such as enterprise asset management and ERP, with the date, the inventories compared, the differences found, how each was resolved, the owner and the reviewer.",
+        "format": "XLSX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "Inventory reconciliation with other inventories"
+        ],
+        "sub_controls": [
+          "T1.2.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-303",
+        "stage": "Stage 4: Implementation",
+        "name": "Acceptable Use Rules Circulation and Acceptance Log",
+        "type": "Log",
+        "control_ref": "T1.2.2",
+        "mandatory": false,
+        "description": "Log of the circulation of the acceptable use rules to employees, contractors and third parties and of their acceptance, with the date, the version, the recipient, the channel, the date accepted and a link to the signed or recorded acceptance.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Acceptable use rules circulation record",
+          "Acceptance records for the rules"
+        ],
+        "sub_controls": [
+          "T1.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-304",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Acceptable Use Compliance Check Log",
+        "type": "Log",
+        "control_ref": "T1.2.2",
+        "mandatory": false,
+        "description": "Log of the checks that the acceptable use rules are followed, with the date, the method such as monitoring results, the violations found, the action taken, its outcome and the person who made the check.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Acceptable use compliance checks"
+        ],
+        "sub_controls": [
+          "T1.2.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-305",
+        "stage": "Stage 4: Implementation",
+        "name": "Classification Scheme Communication Log",
+        "type": "Log",
+        "control_ref": "T1.3.1",
+        "mandatory": true,
+        "description": "Log of the notices, intranet pages and training material through which the classification scheme was communicated across the whole entity, with the date, audience, channel, version and a link to the material.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Classification scheme communication"
+        ],
+        "sub_controls": [
+          "T1.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-306",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Classification Review Log",
+        "type": "Log",
+        "control_ref": "T1.3.1",
+        "mandatory": true,
+        "description": "Log of the reclassification of information and of the checks that classifications remain correct, with the date, the information, the old and new classification, the change in value, sensitivity or criticality that caused it and the owner who approved it.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Classification review records"
+        ],
+        "sub_controls": [
+          "T1.3.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-307",
+        "stage": "Stage 4: Implementation",
+        "name": "Public Platform Sharing Controls Evidence",
+        "type": "Evidence",
+        "control_ref": "T1.3.4",
+        "mandatory": false,
+        "description": "Collection guide for the controls that limit what is shared on social media and other public platforms to authorized information, such as an approval workflow or blocking rules, captured as dated screenshots and signed off by the Information Security Manager.",
+        "format": "Configs",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "Public platform sharing controls"
+        ],
+        "sub_controls": [
+          "T1.3.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-308",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Data Leak Prevention Evidence",
+        "type": "Evidence",
+        "control_ref": "T1.3.5",
+        "mandatory": false,
+        "description": "Collection guide for the data leak prevention rule configuration, an extract of the monitoring of channels such as email, file transfers and removable media and the records of blocked transmissions with their follow-up, signed off by the Security Operations Lead.",
+        "format": "Configs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Data leak prevention configuration",
+          "Leakage monitoring and detection records",
+          "Blocked transmission records"
+        ],
+        "sub_controls": [
+          "T1.3.5.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-309",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Deletion Process Review Record",
+        "type": "Form/Template",
+        "control_ref": "T1.3.6",
+        "mandatory": true,
+        "description": "Form recording the periodic review of the data deletion process against business requirements, laws and regulations, with the review date, the reviewer, the changes made as a result and the sign-off.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Deletion process review"
+        ],
+        "sub_controls": [
+          "T1.3.6.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-310",
+        "stage": "Stage 4: Implementation",
+        "name": "Removable Media Restriction Evidence",
+        "type": "Evidence",
+        "control_ref": "T1.4.1",
+        "mandatory": false,
+        "description": "Collection guide for the configuration that disables removable media ports and drives on systems that do not need them, captured as dated screenshots or policy exports showing the systems covered and signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Removable media restriction settings"
+        ],
+        "sub_controls": [
+          "T1.4.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-311",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Removable Media Usage Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T1.4.1",
+        "mandatory": false,
+        "description": "Collection guide for the extract or report of removable media use from the endpoint or device control system, with the period, the devices and users and the action taken on unauthorized use, signed off by the Security Operations Lead.",
+        "format": "Logs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Removable media usage monitoring"
+        ],
+        "sub_controls": [
+          "T1.4.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-312",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Media Sanitization and Destruction Record",
+        "type": "Form/Template",
+        "control_ref": "T1.4.2",
+        "mandatory": false,
+        "description": "Form completed for each batch of storage media securely erased or physically destroyed before reuse or disposal, with the media identifiers, classification, method such as shredding or incineration, date, the person or contractor who performed it, a witness and the contractor's certificate of destruction attached.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Media sanitization and destruction records"
+        ],
+        "sub_controls": [
+          "T1.4.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-313",
+        "stage": "Stage 4: Implementation",
+        "name": "Endpoint Automatic Lockout Evidence",
+        "type": "Evidence",
+        "control_ref": "T1.5.1",
+        "mandatory": true,
+        "description": "Collection guide for the configuration export or screenshot that shows the lockout time applied to unattended user endpoint devices, with the policy name, the devices covered and the date, signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Automatic lockout configuration"
+        ],
+        "sub_controls": [
+          "T1.5.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-314",
+        "stage": "Stage 4: Implementation",
+        "name": "Personal Device Enrollment Report",
+        "type": "Evidence",
+        "control_ref": "T1.5.1",
+        "mandatory": true,
+        "description": "Collection guide for the export from the device management system that lists the personal devices used for work that are enrolled, with the encryption, passcode and remote wipe settings enforced on each, signed off by the IT Operations Manager.",
+        "format": "Reports",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Mobile device management enrollment"
+        ],
+        "sub_controls": [
+          "T1.5.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-315",
+        "stage": "Stage 4: Implementation",
+        "name": "Work Data Separation Evidence",
+        "type": "Evidence",
+        "control_ref": "T1.5.1",
+        "mandatory": true,
+        "description": "Collection guide for the configuration that separates work data from personal data on personal devices through containerization or an equivalent method, captured as dated screenshots showing the devices and profiles covered and signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Work data separation settings"
+        ],
+        "sub_controls": [
+          "T1.5.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-316",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Endpoint Logging and Monitoring Report",
+        "type": "Evidence",
+        "control_ref": "T1.5.1",
+        "mandatory": true,
+        "description": "Collection guide for the export from the endpoint management or logging system that lists the devices with logging and monitoring enabled and their agent status, with a sample of the events collected, signed off by the Security Operations Lead.",
+        "format": "Reports",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Endpoint logging and monitoring settings"
+        ],
+        "sub_controls": [
+          "T1.5.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-317",
+        "stage": "Stage 4: Implementation",
+        "name": "Secure Area Entry Authentication Evidence",
+        "type": "Evidence",
+        "control_ref": "T2.2.2",
+        "mandatory": false,
+        "description": "Collection guide for the access control system configuration or screenshots that show persons are authenticated at the entrances of secure areas such as data center halls and vaults, for example by card and PIN, or the provider's physical security assurance report for hosted services, signed off by the Physical Security Manager.",
+        "format": "Configs",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Secure area entry authentication settings"
+        ],
+        "sub_controls": [
+          "T2.2.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-318",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Secure Area Access and Visitor Log",
+        "type": "Log",
+        "control_ref": "T2.2.2",
+        "mandatory": false,
+        "description": "Log of entries to and departures from secure areas, combining the visitor register with an extract from the entry system for badge holders, with the date and time of entry and departure, the person, the area, the host and, for visitors, the purpose of the visit.",
+        "format": "XLSX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Secure area access records"
+        ],
+        "sub_controls": [
+          "T2.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-319",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Physical Access Log Review Record",
+        "type": "Form/Template",
+        "control_ref": "T2.2.2",
+        "mandatory": false,
+        "description": "Form recording the review of the entry-system access logs, with the period reviewed, the anomalies found, the action taken, the reviewer's signature and the date.",
+        "format": "DOCX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Physical access log review records"
+        ],
+        "sub_controls": [
+          "T2.2.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-320",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Facility Signage and Inspection Record",
+        "type": "Form/Template",
+        "control_ref": "T2.2.3",
+        "mandatory": false,
+        "description": "Form recording the inspection of offices, rooms and facilities for signs, outside or inside, that identify the type of information or activities in secure areas and for the application of the public access rules, with the areas inspected, the photographs referenced, the findings and the inspector's sign-off.",
+        "format": "DOCX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Facility signage review",
+          "Offices and facilities inspection records"
+        ],
+        "sub_controls": [
+          "T2.2.3.1",
+          "T2.2.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-321",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Secure Area Supervision Log",
+        "type": "Log",
+        "control_ref": "T2.2.5",
+        "mandatory": false,
+        "description": "Log of the supervision of activities in secure areas, including work by third parties, and of the checks that vacant secure areas are locked, with the date, area, activity, supervisor and result.",
+        "format": "XLSX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Secure area supervision records"
+        ],
+        "sub_controls": [
+          "T2.2.5.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-322",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Surveillance Coverage and Test Record",
+        "type": "Form/Template",
+        "control_ref": "T2.2.5",
+        "mandatory": false,
+        "description": "Form recording the camera and intruder alarm layout for secure areas such as data center halls and vaults and the results of the periodic tests of the surveillance systems, with the test date, the areas covered, the faults found, the action taken and the tester's sign-off.",
+        "format": "DOCX",
+        "owner": "Physical Security Manager",
+        "evidence": [
+          "Surveillance coverage and test records"
+        ],
+        "sub_controls": [
+          "T2.2.5.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-323",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Environmental Monitoring Evidence",
+        "type": "Evidence",
+        "control_ref": "T2.3.1",
+        "mandatory": false,
+        "description": "Collection guide for the configuration of the environmental sensors, such as temperature, humidity, water and smoke, with their alert thresholds and recipients, and for the records of alerts raised and the response to each, signed off by the Facilities Manager.",
+        "format": "Configs",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Environmental monitoring configuration",
+          "Environmental alert records"
+        ],
+        "sub_controls": [
+          "T2.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-324",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Emergency Lighting Test Log",
+        "type": "Log",
+        "control_ref": "T2.3.2",
+        "mandatory": false,
+        "description": "Log of the tests that emergency lighting operates when the main power fails, with the date, the area or fixture, the test method, the result, the defects found, the repair made and the tester.",
+        "format": "XLSX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Emergency lighting test records"
+        ],
+        "sub_controls": [
+          "T2.3.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-325",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cable Protection Inspection Record",
+        "type": "Form/Template",
+        "control_ref": "T2.3.3",
+        "mandatory": false,
+        "description": "Form recording the inspection of power and telecommunication cabling for protection against physical tampering, such as conduits, locked rooms or boxes and controlled access to patch panels, and, where cables are labeled, the labeling at both ends and any unauthorized devices found attached, with the date, the locations inspected, the findings, the action taken and the inspector's sign-off.",
+        "format": "DOCX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Cable tamper protection evidence",
+          "Cable labeling and inspection records"
+        ],
+        "sub_controls": [
+          "T2.3.3.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-326",
+        "stage": "Stage 4: Implementation",
+        "name": "Cable Segregation Inspection Record",
+        "type": "Form/Template",
+        "control_ref": "T2.3.3",
+        "mandatory": false,
+        "description": "Form recording the inspection of the cabling layout to confirm power cables are separated from communications cables to prevent interference, with the locations checked, the deviations found, the photographs referenced and the inspector's sign-off.",
+        "format": "DOCX",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Cable segregation layout"
+        ],
+        "sub_controls": [
+          "T2.3.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-327",
+        "stage": "Stage 4: Implementation",
+        "name": "Equipment Maintenance Recommendations Evidence",
+        "type": "Evidence",
+        "control_ref": "T2.3.4",
+        "mandatory": false,
+        "description": "Collection guide for the suppliers' recommended service intervals and specifications for the equipment, with proof that they are available to maintenance personnel, such as the repository location and its access list, signed off by the Facilities Manager.",
+        "format": "ZIP/Drive",
+        "owner": "Facilities Manager",
+        "evidence": [
+          "Supplier maintenance recommendations"
+        ],
+        "sub_controls": [
+          "T2.3.4.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-328",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Security Configuration Compliance Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.1",
+        "mandatory": true,
+        "description": "Collection guide for configuration exports from sampled systems and for the report from the configuration monitoring tool that compares systems with the minimum security configurations and lists the deviations found, signed off by the IT Operations Manager.",
+        "format": "Reports",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Applied configuration evidence",
+          "Configuration compliance monitoring report"
+        ],
+        "sub_controls": [
+          "T3.1.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-329",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Security Configuration Review Record",
+        "type": "Form/Template",
+        "control_ref": "T3.1.1",
+        "mandatory": true,
+        "description": "Form recording the periodic review of the security configurations, with the review date, the configurations reviewed, the updates made as a result, the reviewer and the sign-off.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Security configuration review records"
+        ],
+        "sub_controls": [
+          "T3.1.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-330",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Operating Procedure Review Log",
+        "type": "Log",
+        "control_ref": "T3.1.2",
+        "mandatory": false,
+        "description": "Log of the periodic reviews of the operating procedures, with the procedure, the review date, the reviewer, the updates made and the approver.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Operating procedure review records"
+        ],
+        "sub_controls": [
+          "T3.1.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-331",
+        "stage": "Stage 4: Implementation",
+        "name": "Operating Procedure Access and Awareness Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.2",
+        "mandatory": false,
+        "description": "Collection guide for the repository permissions that give stakeholders access to the operating procedures and for the notices that told them about the procedures, captured as dated screenshots and signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Operating procedure access and awareness"
+        ],
+        "sub_controls": [
+          "T3.1.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-332",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Change Rollback and Communication Plan Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.3",
+        "mandatory": true,
+        "description": "Collection guide for a sample of approved changes from the change ticketing system with, for each, its rollback, fallback and recovery procedure, its communication plan and, where a change advisory board decides on changes, the record of its decision, signed off by the Change Manager.",
+        "format": "ITSM",
+        "owner": "Change Manager",
+        "evidence": [
+          "Rollback and communication plans"
+        ],
+        "sub_controls": [
+          "T3.1.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-333",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Capacity Adjustment and Stress Test Record",
+        "type": "Form/Template",
+        "control_ref": "T3.1.5",
+        "mandatory": false,
+        "description": "Form recording the adjustments made to keep system performance at the required level and the stress tests that confirm capacity meets peak demand, with the system, the date, the load applied, the result, the decision and the sign-off.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Capacity adjustment and stress test records"
+        ],
+        "sub_controls": [
+          "T3.1.5.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-334",
+        "stage": "Stage 4: Implementation",
+        "name": "Anti-Malware Coverage Report",
+        "type": "Evidence",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Collection guide for the export from the anti-malware console that lists the servers, workstations, laptops and other connected devices that are protected and any that are not, signed off by the Security Operations Lead.",
+        "format": "Reports",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Anti-malware coverage report"
+        ],
+        "sub_controls": [
+          "T3.1.6.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-335",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Anti-Malware Update Status Report",
+        "type": "Evidence",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Collection guide for the export from the anti-malware console that lists the versions of the tools, scanning engines and detection definitions on each protected device to show they are up to date, signed off by the Security Operations Lead.",
+        "format": "Reports",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Anti-malware update status"
+        ],
+        "sub_controls": [
+          "T3.1.6.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-336",
+        "stage": "Stage 4: Implementation",
+        "name": "Malware Scanning Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Collection guide for the settings that scan system files and files downloaded from public networks periodically, scan email attachments before they reach the inbox and scan removable media each time it is connected, with one capture per scanning point, signed off by the Security Operations Lead.",
+        "format": "Configs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Malware scanning configuration"
+        ],
+        "sub_controls": [
+          "T3.1.6.3",
+          "T3.1.6.4",
+          "T3.1.6.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-337",
+        "stage": "Stage 4: Implementation",
+        "name": "Removable Media Auto-Run Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Collection guide for the configuration of servers, workstations and laptops that stops content on removable media from running automatically, captured as dated screenshots or policy exports showing the systems covered and signed off by the Security Operations Lead.",
+        "format": "Configs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Auto-run disabled configuration"
+        ],
+        "sub_controls": [
+          "T3.1.6.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-338",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Malware Detection Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Collection guide for the extract of the malware detection events logged by the anti-malware tools and of the notifications sent to administrators, with the period covered and the response taken, signed off by the Security Operations Lead.",
+        "format": "Logs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Malware detection events and notifications"
+        ],
+        "sub_controls": [
+          "T3.1.6.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-339",
+        "stage": "Stage 4: Implementation",
+        "name": "Malware Awareness Attendance Log",
+        "type": "Log",
+        "control_ref": "T3.1.6",
+        "mandatory": true,
+        "description": "Log of the awareness sessions and material covering malware risks, behaviors and preventative actions, with the date, the audience, the delivery method, the number of attendees and a link to the attendance list and the material.",
+        "format": "XLSX",
+        "owner": "HR / Training Lead",
+        "evidence": [
+          "Malware awareness records"
+        ],
+        "sub_controls": [
+          "T3.1.6.8"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-340",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Backup Restoration Test Record",
+        "type": "Form/Template",
+        "control_ref": "T3.1.7",
+        "mandatory": true,
+        "description": "Form recording a routine test that backed up information and software can be restored reliably, with the backup set, the system, the date, the restore point used, the integrity check, the time taken, any failure and the tester's sign-off.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Backup restoration test results"
+        ],
+        "sub_controls": [
+          "T3.1.7.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-341",
+        "stage": "Stage 4: Implementation",
+        "name": "Software Installation Restrictions Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.1.8",
+        "mandatory": false,
+        "description": "Collection guide for the settings that prohibit unauthorized software and for the list of administrators authorized to install software on operational systems, captured as dated screenshots and signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Software installation restrictions"
+        ],
+        "sub_controls": [
+          "T3.1.8.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-342",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Unauthorized Software Review Record",
+        "type": "Form/Template",
+        "control_ref": "T3.1.8",
+        "mandatory": false,
+        "description": "Form recording the regular review to detect unauthorized software or amendments, with the review date, the systems reviewed, the findings, the corrective action started and the reviewer's sign-off.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Unauthorized software review records"
+        ],
+        "sub_controls": [
+          "T3.1.8.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-343",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Software Installation Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T3.1.8",
+        "mandatory": false,
+        "description": "Collection guide for the extract of the audit log of all software installations on operational systems, with the period, the systems, the installer and the approval reference, signed off by the IT Operations Manager.",
+        "format": "Logs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Software installation audit log"
+        ],
+        "sub_controls": [
+          "T3.1.8.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-344",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Monitoring Capability Assessment",
+        "type": "Assessment",
+        "control_ref": "T3.2.3",
+        "mandatory": true,
+        "description": "Assessment of whether the security capabilities across the monitored environment meet national, Emirate or sectoral considerations, with the capabilities assessed, the criteria applied, the gaps found, the actions agreed and the sign-off.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "National, Emirate and sector monitoring capability check"
+        ],
+        "sub_controls": [
+          "T3.2.3.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-345",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Time Synchronization Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.2.4",
+        "mandatory": false,
+        "description": "Collection guide for the configuration of a sample of systems that shows they use the standard time format and the agreed time source and for the results of the regular checks that their clocks are synchronized, signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Time synchronization configuration",
+          "Clock synchronization check results"
+        ],
+        "sub_controls": [
+          "T3.2.4.1",
+          "T3.2.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-346",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Cryptographic Compliance Review Record",
+        "type": "Form/Template",
+        "control_ref": "T3.4.1",
+        "mandatory": true,
+        "description": "Form recording the monitoring of whether the cryptographic practices in use comply with applicable laws, regulations and standards, with the practices reviewed, the requirements checked, the gaps found, the reviewer and the sign-off.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Cryptographic compliance monitoring"
+        ],
+        "sub_controls": [
+          "T3.4.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-347",
+        "stage": "Stage 4: Implementation",
+        "name": "Encryption at Rest Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.4.2",
+        "mandatory": true,
+        "description": "Collection guide for the settings that encrypt classified data at rest on file servers and storage and protect system and user credentials in storage by encryption or hashing, with the algorithm and key strength, signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "Encryption at rest settings"
+        ],
+        "sub_controls": [
+          "T3.4.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-348",
+        "stage": "Stage 4: Implementation",
+        "name": "End-User Device Encryption Report",
+        "type": "Evidence",
+        "control_ref": "T3.4.2",
+        "mandatory": true,
+        "description": "Collection guide for the export from the device management system that shows the encryption status of laptops, desktops, smartphones and tablets that hold classified data, signed off by the IT Operations Manager.",
+        "format": "Reports",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "End-user device encryption status"
+        ],
+        "sub_controls": [
+          "T3.4.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-349",
+        "stage": "Stage 4: Implementation",
+        "name": "Database and Portable Media Encryption Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.4.2",
+        "mandatory": true,
+        "description": "Collection guide for the settings that encrypt databases and portable storage media holding classified data, captured as dated screenshots showing the systems and media covered and signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "Database and portable media encryption settings"
+        ],
+        "sub_controls": [
+          "T3.4.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-350",
+        "stage": "Stage 4: Implementation",
+        "name": "Encryption in Motion Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.4.2",
+        "mandatory": true,
+        "description": "Collection guide for the configuration of the protocols and ciphers that protect data in motion, including credentials in transit, over system interfaces, public networks and electronic messaging, signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "Encryption in motion configuration"
+        ],
+        "sub_controls": [
+          "T3.4.2.4",
+          "T3.4.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-351",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Transmission Encryption Test Report",
+        "type": "Evidence",
+        "control_ref": "T3.4.2",
+        "mandatory": true,
+        "description": "Collection guide for the results of the scans or tests that show classified data transmissions are encrypted and weak protocols are disabled, with the tool, the targets, the date and the findings fixed, signed off by the Security Architect.",
+        "format": "Reports",
+        "owner": "Security Architect",
+        "evidence": [
+          "Transmission encryption test results"
+        ],
+        "sub_controls": [
+          "T3.4.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-352",
+        "stage": "Stage 4: Implementation",
+        "name": "Key Storage Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T3.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings, such as hardware security module or key vault configuration and the access permissions on them, that show cryptographic keys are stored securely, with the key ceremony records, custodian attestations and module audit log where a hardware module is used, signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "Key storage settings"
+        ],
+        "sub_controls": [
+          "T3.4.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-353",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Key Recovery Test Record",
+        "type": "Form/Template",
+        "control_ref": "T3.4.3",
+        "mandatory": true,
+        "description": "Form recording a test or an incident in which cryptographic keys were recovered after loss or corruption, with the keys involved, the date, the recovery steps, the custodians present where a hardware security module is used, the result, the issues found and the sign-off.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Key recovery test records"
+        ],
+        "sub_controls": [
+          "T3.4.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-354",
+        "stage": "Stage 4: Implementation",
+        "name": "Post-Quantum Laboratory Test Record",
+        "type": "Form/Template",
+        "control_ref": "T3.4.4",
+        "mandatory": false,
+        "description": "Form recording the laboratory testing of a new post-quantum cryptographic standard before production use, with the standard, the test environment, the tests run, the results, the issues found and the decision to proceed or not, signed by the Security Architect.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Post-quantum laboratory test results"
+        ],
+        "sub_controls": [
+          "T3.4.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-355",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Access Control Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T4.1.1",
+        "mandatory": true,
+        "description": "Collection guide for the configuration that detects, restricts and authenticates equipment and devices connecting to the network, such as port security, network access control or cloud network access settings, signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Network access control configuration"
+        ],
+        "sub_controls": [
+          "T4.1.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-356",
+        "stage": "Stage 4: Implementation",
+        "name": "Traffic Control and Monitoring Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T4.1.1",
+        "mandatory": true,
+        "description": "Collection guide for the configuration of the measures that control and monitor incoming and outgoing network traffic, such as firewall or cloud security-group rule sets and traffic monitoring settings, signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Traffic control and monitoring configuration"
+        ],
+        "sub_controls": [
+          "T4.1.1.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-357",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Service Security Schedule",
+        "type": "Agreement",
+        "control_ref": "T4.1.2",
+        "mandatory": false,
+        "description": "Schedule attached to a network service level agreement that states the minimum security requirements, service levels and management requirements for each network service, with the signatures of the provider and of the entity.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Network service level agreements"
+        ],
+        "sub_controls": [
+          "T4.1.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-358",
+        "stage": "Stage 4: Implementation",
+        "name": "Network Segregation Requirements Evidence",
+        "type": "Evidence",
+        "control_ref": "T4.1.3",
+        "mandatory": false,
+        "description": "Collection guide for the extracts from the system and service development life cycle that show the segregation requirements of each group are identified and integrated, labeled with the system, document version and date and signed off by the Network Security Lead.",
+        "format": "ZIP/Drive",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Segregation requirements in the development life cycle"
+        ],
+        "sub_controls": [
+          "T4.1.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-359",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Network Segregation Effectiveness Evaluation",
+        "type": "Assessment",
+        "control_ref": "T4.1.3",
+        "mandatory": false,
+        "description": "Evaluation of how effective the implemented network segregation is, such as test results, with the groups and tests covered, the results, the weaknesses found, the improvements identified and the sign-off.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Segregation effectiveness evaluation"
+        ],
+        "sub_controls": [
+          "T4.1.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-360",
+        "stage": "Stage 4: Implementation",
+        "name": "Wireless Site Survey Report",
+        "type": "Report",
+        "control_ref": "T4.1.4",
+        "mandatory": false,
+        "description": "Report of the survey that determines the best physical locations for wireless equipment so that stray radio coverage does not reach far outside the entity's physical perimeter, with the method, the signal measurements, the locations chosen and the surveyor's sign-off.",
+        "format": "DOCX",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Wireless site survey"
+        ],
+        "sub_controls": [
+          "T4.1.4.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-361",
+        "stage": "Stage 4: Implementation",
+        "name": "Wireless Segregation Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T4.1.4",
+        "mandatory": false,
+        "description": "Collection guide for the wireless configuration that separates guest internet access from corporate wireless access, captured as dated screenshots showing the networks and the segregation rules and signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Wireless segregation configuration"
+        ],
+        "sub_controls": [
+          "T4.1.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-362",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Web Filtering Evidence",
+        "type": "Evidence",
+        "control_ref": "T4.1.5",
+        "mandatory": false,
+        "description": "Collection guide for the web filtering configuration with the blocked categories and for an extract of the requests blocked because the site holds illegal information, viruses or phishing material, signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Web filter configuration",
+          "Web filter block records"
+        ],
+        "sub_controls": [
+          "T4.1.5.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-363",
+        "stage": "Stage 4: Implementation",
+        "name": "User Identity List Export",
+        "type": "Evidence",
+        "control_ref": "T5.2.1",
+        "mandatory": true,
+        "description": "Collection guide for the export of user accounts that shows a unique identifier and a named individual for each and lists any shared or generic accounts with the approval recorded for each, signed off by the IAM Lead.",
+        "format": "Reports",
+        "owner": "IAM Lead",
+        "evidence": [
+          "User identity list"
+        ],
+        "sub_controls": [
+          "T5.2.1.1",
+          "T5.2.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-364",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Restricted Identity Activity Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T5.2.1",
+        "mandatory": true,
+        "description": "Collection guide for the extract of the log of the activities performed by restricted identities, with the period, the identities covered and the review made, signed off by the IAM Lead.",
+        "format": "Logs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Restricted identity activity records"
+        ],
+        "sub_controls": [
+          "T5.2.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-365",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Access Revocation Log",
+        "type": "Log",
+        "control_ref": "T5.2.2",
+        "mandatory": true,
+        "description": "Log of the access revoked when users changed role or left the entity, with the user, the event date, the time access was revoked, the systems affected, the person who revoked it and the check against the joiner, mover and leaver data.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Role change and leaver revocation records"
+        ],
+        "sub_controls": [
+          "T5.2.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-366",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Temporary and Inactive Account Review Log",
+        "type": "Log",
+        "control_ref": "T5.2.2",
+        "mandatory": true,
+        "description": "Log of the periodic checks of temporary and inactive accounts, with the check date, the accounts reviewed, the access revoked as a result, the reviewer and the approver.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Temporary and inactive account review"
+        ],
+        "sub_controls": [
+          "T5.2.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-367",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Administrative Group Membership Report",
+        "type": "Evidence",
+        "control_ref": "T5.2.3",
+        "mandatory": true,
+        "description": "Collection guide for the export of the members of the domain and local administrator groups that shows regular users hold no administrative privileges, with the export date and the review of each member, signed off by the IAM Lead and, where the IAM Lead administers the groups, countersigned by a second reviewer.",
+        "format": "Reports",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Administrative group membership export"
+        ],
+        "sub_controls": [
+          "T5.2.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-368",
+        "stage": "Stage 4: Implementation",
+        "name": "Administrator Account Usage Controls Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.2.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings, such as separate administrator accounts and the restriction of email and web browsing on them, that show administrator accounts are used only for system administration, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Administrator account usage controls"
+        ],
+        "sub_controls": [
+          "T5.2.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-369",
+        "stage": "Stage 4: Implementation",
+        "name": "Administrative Multi-Factor Authentication Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.2.3",
+        "mandatory": true,
+        "description": "Collection guide for the configuration that requires multi-factor authentication for all administrative access, captured as dated screenshots showing the systems and roles covered and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Administrative multi-factor authentication settings"
+        ],
+        "sub_controls": [
+          "T5.2.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-370",
+        "stage": "Stage 4: Implementation",
+        "name": "Local Administrator Password Controls Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.2.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings, such as a local password management tool, that show a different password is used on each local administrator account, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Local administrator password controls"
+        ],
+        "sub_controls": [
+          "T5.2.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-371",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Administrative Activity Log Extract and Review",
+        "type": "Record/Log",
+        "control_ref": "T5.2.3",
+        "mandatory": true,
+        "description": "Collection guide for the extract of the logs of all administrative access activity, with the sign-off of a reviewer who is not one of the administrators and the response to any suspicious or unauthorized activity attached and, where a privileged access management tool is used, its session recordings and the emergency access records.",
+        "format": "Logs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Administrative activity logs and reviews"
+        ],
+        "sub_controls": [
+          "T5.2.3.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-372",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Special Access Validity Check Log",
+        "type": "Log",
+        "control_ref": "T5.2.4",
+        "mandatory": true,
+        "description": "Log of the checks of granted special and privileged access, with the check date, the access checked, whether each grant is still valid, the access removed, the interval set for the check and the reviewer, who is not the holder of the access.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Special access validity checks"
+        ],
+        "sub_controls": [
+          "T5.2.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-373",
+        "stage": "Stage 4: Implementation",
+        "name": "Strong Authentication Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.1",
+        "mandatory": true,
+        "description": "Collection guide for the authentication settings of information systems that show strong techniques are used, with the strength matched to the classification of the information accessed, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Information system authentication configuration"
+        ],
+        "sub_controls": [
+          "T5.3.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-374",
+        "stage": "Stage 4: Implementation",
+        "name": "Secure Log-On and Log-Off Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.1",
+        "mandatory": true,
+        "description": "Collection guide for the settings, such as limits on failed attempts and the ending of sessions at log-off, that show the secure log-on and log-off procedure is applied, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Secure log-on and log-off settings"
+        ],
+        "sub_controls": [
+          "T5.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-375",
+        "stage": "Stage 4: Implementation",
+        "name": "Maximum Session Time Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.1",
+        "mandatory": true,
+        "description": "Collection guide for the settings of the maximum session time of authenticated users on sensitive systems and applications, captured as dated screenshots showing the systems covered and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Maximum session time settings"
+        ],
+        "sub_controls": [
+          "T5.3.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-376",
+        "stage": "Stage 4: Implementation",
+        "name": "Inactivity Timeout Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.1",
+        "mandatory": true,
+        "description": "Collection guide for the settings that terminate inactive sessions after the predefined period of inactivity, captured as dated screenshots showing the systems covered and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Inactivity timeout settings"
+        ],
+        "sub_controls": [
+          "T5.3.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-377",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Business-Need Access Adjustment Log",
+        "type": "Log",
+        "control_ref": "T5.3.2",
+        "mandatory": false,
+        "description": "Log of the access changes made for individual users and support personnel because of specific business needs, with the user, the change, the business reason, the date, the approver and the person who made the change.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Business-need access adjustments"
+        ],
+        "sub_controls": [
+          "T5.3.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-378",
+        "stage": "Stage 4: Implementation",
+        "name": "Secure Remote Access Configuration Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.3",
+        "mandatory": true,
+        "description": "Collection guide for the configuration, such as virtual private network settings, that shows all remote connections by users and administrators go through secure channels, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Secure remote access configuration"
+        ],
+        "sub_controls": [
+          "T5.3.3.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-379",
+        "stage": "Stage 4: Implementation",
+        "name": "Remote Authentication Method Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.3.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings that show the authentication methods required of remote users, such as certificates, hardware tokens or multi-factor authentication, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Remote authentication method settings"
+        ],
+        "sub_controls": [
+          "T5.3.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-380",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Remote Administrator Access Approval and Monitoring Record",
+        "type": "Form/Template",
+        "control_ref": "T5.3.3",
+        "mandatory": true,
+        "description": "Form recording the approval given before remote administrator-level access is granted, with the requester, the systems, the reason, the period and the approver, and a monitoring section that records the review of the remote administrator session log for the period, the reviewer and any action taken.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Remote administrator access approvals",
+          "Remote administrator access monitoring"
+        ],
+        "sub_controls": [
+          "T5.3.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-381",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Utility Program Usage Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T5.3.4",
+        "mandatory": false,
+        "description": "Collection guide for the extract of the log of the use of utility programs that can override system and application controls, with the period, the users and the programs used, signed off by the IAM Lead.",
+        "format": "Logs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Utility program usage records"
+        ],
+        "sub_controls": [
+          "T5.3.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-382",
+        "stage": "Stage 4: Implementation",
+        "name": "Credential Change Automation Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings, such as the self-service reset configuration, that show the credential change procedure is automated and verifies the identity of the user before a change, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Credential change automation"
+        ],
+        "sub_controls": [
+          "T5.4.3.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-383",
+        "stage": "Stage 4: Implementation",
+        "name": "Credential Strength Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings that validate the strength of changed credentials, such as minimum length and complexity, and that lock accounts after a set number of failed attempts, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Credential strength settings"
+        ],
+        "sub_controls": [
+          "T5.4.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-384",
+        "stage": "Stage 4: Implementation",
+        "name": "Credential Lifetime and Reuse Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings of the maximum lifetime of credentials and of the conditions on reuse, including the history of previous credentials, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Credential lifetime and reuse settings"
+        ],
+        "sub_controls": [
+          "T5.4.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-385",
+        "stage": "Stage 4: Implementation",
+        "name": "First Login Password Change Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the settings that force default and temporary passwords to be changed at first access, captured as dated screenshots and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "First access password change enforcement"
+        ],
+        "sub_controls": [
+          "T5.4.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-386",
+        "stage": "Stage 4: Implementation",
+        "name": "Credential Storage Protection Evidence",
+        "type": "Evidence",
+        "control_ref": "T5.4.3",
+        "mandatory": true,
+        "description": "Collection guide for the hashing or encryption settings of the credential store that show credentials are stored hashed with salt or encrypted, signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Credential storage protection"
+        ],
+        "sub_controls": [
+          "T5.4.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-387",
+        "stage": "Stage 4: Implementation",
+        "name": "Supplier Assessment and Due Diligence Register",
+        "type": "Register",
+        "control_ref": "T6.2.2",
+        "mandatory": true,
+        "description": "Register of the supplier security assessments completed against the criteria during selection and of the due diligence checks made before onboarding and at intervals set by criticality, with the supplier, the checks made, the result, the decision reached and the reviewer.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Completed supplier security assessments",
+          "Supplier due diligence records"
+        ],
+        "sub_controls": [
+          "T6.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-388",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Compliance Verification Record",
+        "type": "Form/Template",
+        "control_ref": "T6.2.5",
+        "mandatory": true,
+        "description": "Form recording an assessment, audit or evaluation that verifies a supplier complies with the specified security controls and measures, with the supplier, the method, the controls checked, the findings, the follow-up and the assessor's sign-off.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier assessments and audit reports"
+        ],
+        "sub_controls": [
+          "T6.2.5.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-389",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Supplier Security Practice Change Log",
+        "type": "Log",
+        "control_ref": "T6.2.5",
+        "mandatory": true,
+        "description": "Log of the changes in supplier security practices and service delivery, with the supplier, the change, the date, the entity's assessment of its effect on security, how it was handled and the decision maker.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Supplier change management records"
+        ],
+        "sub_controls": [
+          "T6.2.5.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-390",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Design Review Record",
+        "type": "Form/Template",
+        "control_ref": "T7.2.2",
+        "mandatory": false,
+        "description": "Form recording the review of sampled system designs against known attack patterns and the security risks of new components, and the check that the engineering principles are applied across the business, data, applications and technology layers, with the findings and the reviewer's sign-off.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Principles applied across architecture layers",
+          "Security design reviews"
+        ],
+        "sub_controls": [
+          "T7.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-391",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Automated Security Testing Report",
+        "type": "Evidence",
+        "control_ref": "T7.3.1",
+        "mandatory": false,
+        "description": "Collection guide for the results of the automated security tests run during and after deployment, with the findings and how they were fixed, signed off by the Head of Application Security.",
+        "format": "Reports",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Automated security testing results"
+        ],
+        "sub_controls": [
+          "T7.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-392",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Delivered Code Check Report",
+        "type": "Evidence",
+        "control_ref": "T7.3.2",
+        "mandatory": false,
+        "description": "Collection guide for the results of the checks of delivered code for vulnerabilities, malicious code or code that does not conform to the required functionality, with the supplier, the delivery, the findings and the action taken, signed off by the Head of Application Security.",
+        "format": "Reports",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Delivered code checks"
+        ],
+        "sub_controls": [
+          "T7.3.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-393",
+        "stage": "Stage 4: Implementation",
+        "name": "Source Code Access Permissions Evidence",
+        "type": "Evidence",
+        "control_ref": "T7.3.3",
+        "mandatory": false,
+        "description": "Collection guide for the read and write permissions on source code repositories, development tools and software libraries, captured as dated screenshots that show they follow the access control policy and signed off by the Head of Application Security.",
+        "format": "Configs",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Source code access permissions"
+        ],
+        "sub_controls": [
+          "T7.3.3.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-394",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Source Code Permission Review Log",
+        "type": "Log",
+        "control_ref": "T7.3.3",
+        "mandatory": false,
+        "description": "Log of the periodic reviews of the permissions on source code, development tools and software libraries, with the review date, the repositories reviewed, the permissions changed as a result and the reviewer.",
+        "format": "XLSX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Source code permission reviews"
+        ],
+        "sub_controls": [
+          "T7.3.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-395",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Source Code Access Log Extract",
+        "type": "Record/Log",
+        "control_ref": "T7.3.3",
+        "mandatory": false,
+        "description": "Collection guide for the extract of the audit log of all accesses to source code, development tools and software libraries, with the period, the users and the repositories, signed off by the Head of Application Security.",
+        "format": "Logs",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Source code access audit log"
+        ],
+        "sub_controls": [
+          "T7.3.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-396",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Change Rollback Procedure Evidence",
+        "type": "Evidence",
+        "control_ref": "T7.4.1",
+        "mandatory": false,
+        "description": "Collection guide for a sample of changes from the change ticketing system with the rollback procedure defined for each, which can be the same sample as for the rollback and communication plan evidence, signed off by the Change Manager.",
+        "format": "ITSM",
+        "owner": "Change Manager",
+        "evidence": [
+          "Change rollback procedures"
+        ],
+        "sub_controls": [
+          "T7.4.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-397",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Pre-Production Change Test Evidence",
+        "type": "Evidence",
+        "control_ref": "T7.4.1",
+        "mandatory": false,
+        "description": "Collection guide for a sample of changes from the change ticketing system with the results of testing each in a test environment before it moved to production, signed off by the Change Manager.",
+        "format": "ITSM",
+        "owner": "Change Manager",
+        "evidence": [
+          "Pre-production change test results"
+        ],
+        "sub_controls": [
+          "T7.4.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-398",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Change Implementation Planning Evidence",
+        "type": "Evidence",
+        "control_ref": "T7.4.1",
+        "mandatory": false,
+        "description": "Collection guide for a sample of changes from the change ticketing system with the plan for each that shows the implementation was scheduled for the right time and the stakeholders were told, such as the change calendar entry or the change advisory board decision, signed off by the Change Manager.",
+        "format": "ITSM",
+        "owner": "Change Manager",
+        "evidence": [
+          "Change implementation planning"
+        ],
+        "sub_controls": [
+          "T7.4.1.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-399",
+        "stage": "Stage 4: Implementation",
+        "name": "Production Data Copy Authorization Form",
+        "type": "Form/Template",
+        "control_ref": "T7.4.2",
+        "mandatory": false,
+        "description": "Form recording the authorization to transfer real data from the production environment to a test environment, with the data, the reason, the protection applied, the period, the requester, the approver, who is a different person, and the date.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Production data copy authorizations"
+        ],
+        "sub_controls": [
+          "T7.4.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-400",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Test Data Erasure Log",
+        "type": "Log",
+        "control_ref": "T7.4.2",
+        "mandatory": false,
+        "description": "Log of the erasure of data from test applications after testing is completed, with the application, the data erased, the test completion date, the erasure date and time, the method, the person who erased it and, where the data came from production, the reference to the matching movement log entry.",
+        "format": "XLSX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Test data erasure records"
+        ],
+        "sub_controls": [
+          "T7.4.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-401",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Test Data Movement Log",
+        "type": "Log",
+        "control_ref": "T7.4.2",
+        "mandatory": false,
+        "description": "Log of every copy and erasure of data between the production and test environments, with the date, the direction, the data set, the authorization reference, the person who made the movement and the confirmation of erasure.",
+        "format": "XLSX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Test data movement log"
+        ],
+        "sub_controls": [
+          "T7.4.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-402",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Security Test Results Evidence",
+        "type": "Evidence",
+        "control_ref": "T7.4.3",
+        "mandatory": false,
+        "description": "Collection guide for the documented results of the security tests carried out on a sample of new or updated systems, with the system, the tests run, the findings and the acceptance decision, signed off by the Head of Application Security.",
+        "format": "Reports",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Security test results"
+        ],
+        "sub_controls": [
+          "T7.4.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-403",
+        "stage": "Stage 4: Implementation",
+        "name": "Security Test Completion Responsibility Form",
+        "type": "Form/Template",
+        "control_ref": "T7.4.3",
+        "mandatory": false,
+        "description": "Form formally assigning responsibility for ensuring security tests are completed before new systems are accepted into the operational environment, with the role named, the systems covered and the sign-off on each acceptance.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "Test completion responsibility assignment"
+        ],
+        "sub_controls": [
+          "T7.4.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-404",
+        "stage": "Stage 4: Implementation",
+        "name": "Event Reporting Awareness and Usage Evidence",
+        "type": "Evidence",
+        "control_ref": "T8.1.2",
+        "mandatory": true,
+        "description": "Collection guide for the awareness and induction material that made employees, contractors and third parties aware of their responsibility to report events as quickly as possible and of the reporting procedure and point of contact, and for a sample of reported events from the reporting channel with the times detected and reported, signed off by the Incident Response Lead.",
+        "format": "ITSM",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Event reporting awareness records",
+          "Reported event records"
+        ],
+        "sub_controls": [
+          "T8.1.2.1",
+          "T8.1.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-405",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "Incident Response Plan Approval Record",
+        "type": "Form/Template",
+        "control_ref": "T8.2.1",
+        "mandatory": true,
+        "description": "Form recording the senior management sign-off of the incident response plan and of all related plans and procedures, with the documents and versions approved, the date and the signatures of the approvers.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Senior management approval of response plans"
+        ],
+        "sub_controls": [
+          "T8.2.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-406",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Incident Documentation Protection Evidence",
+        "type": "Evidence",
+        "control_ref": "T8.2.5",
+        "mandatory": true,
+        "description": "Collection guide for the access controls and storage protections applied to incident documentation, captured as dated screenshots showing the repository and the authorized groups and signed off by the Incident Response Lead.",
+        "format": "Configs",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident documentation protection"
+        ],
+        "sub_controls": [
+          "T8.2.5.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-407",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Post-Incident Report",
+        "type": "Report",
+        "control_ref": "T8.2.6",
+        "mandatory": false,
+        "description": "Report on a closed incident covering its impact and damage assessment, the timeline of activities and their outcomes, the mitigating measures, the deficiencies identified and the confirmation that the incident is closed, signed by the Incident Response Lead.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Post-incident reports"
+        ],
+        "sub_controls": [
+          "T8.2.6.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-408",
+        "stage": "Stage 4: Implementation",
+        "name": "Continuity Roles and Competence Register",
+        "type": "Register",
+        "control_ref": "T9.1.1",
+        "mandatory": true,
+        "description": "Register of the roles in the continuity structure and the personnel who hold them, with each role's responsibility and authority and the evidence of the person's competence, such as training and exercise participation, confirmed by the BCM Manager.",
+        "format": "XLSX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Continuity roles and competence records"
+        ],
+        "sub_controls": [
+          "T9.1.1.2"
+        ]
       }
     ]
   }

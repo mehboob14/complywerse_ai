@@ -21203,6 +21203,1982 @@
    "scf_ids": [],
    "match_mode": "exact",
    "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-257",
+   "name": "Policy and Objectives Approval Record",
+   "control_ref": "M1.1.2",
+   "codes": [
+    "M1.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-258",
+   "name": "Business Process Security Requirements Evidence",
+   "control_ref": "M1.1.2",
+   "codes": [
+    "M1.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-259",
+   "name": "Resource Commitment Approval Form",
+   "control_ref": "M1.1.2",
+   "codes": [
+    "M1.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-260",
+   "name": "Top Management Security Communication Log",
+   "control_ref": "M1.1.2",
+   "codes": [
+    "M1.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-261",
+   "name": "Continual Improvement and Management Support Log",
+   "control_ref": "M1.1.2",
+   "codes": [
+    "M1.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-262",
+   "name": "Information Security Lead Appointment Letter",
+   "control_ref": "M1.1.3",
+   "codes": [
+    "M1.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-263",
+   "name": "Policy Review and Revision Log",
+   "control_ref": "M1.2.1",
+   "codes": [
+    "M1.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-264",
+   "name": "Policy Communication and Availability Log",
+   "control_ref": "M1.2.1",
+   "codes": [
+    "M1.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-265",
+   "name": "Security Objectives Communication Log",
+   "control_ref": "M1.2.2",
+   "codes": [
+    "M1.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-266",
+   "name": "Security Objectives Review and Update Log",
+   "control_ref": "M1.2.2",
+   "codes": [
+    "M1.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-267",
+   "name": "Policy-to-Practice Consistency Review Form",
+   "control_ref": "M1.2.3",
+   "codes": [
+    "M1.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-268",
+   "name": "Supporting Policy Acknowledgement Form",
+   "control_ref": "M1.2.3",
+   "codes": [
+    "M1.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-269",
+   "name": "Supporting Policy Review Log",
+   "control_ref": "M1.2.3",
+   "codes": [
+    "M1.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-270",
+   "name": "Project Risk Treatment Review Record",
+   "control_ref": "M1.3.4",
+   "codes": [
+    "M1.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-271",
+   "name": "Interest Group Information Circulation Log",
+   "control_ref": "M1.3.5",
+   "codes": [
+    "M1.3.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-272",
+   "name": "Residual Risk and Treatment Effectiveness Review Form",
+   "control_ref": "M2.3.1",
+   "codes": [
+    "M2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-273",
+   "name": "Control Selection Criteria Review Form",
+   "control_ref": "M2.3.2",
+   "codes": [
+    "M2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-274",
+   "name": "Risk Factor Monitoring Log",
+   "control_ref": "M2.4.1",
+   "codes": [
+    "M2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-275",
+   "name": "Awareness and Training Effectiveness Evaluation",
+   "control_ref": "M3.2.1",
+   "codes": [
+    "M3.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-276",
+   "name": "Training Resource Approval Form",
+   "control_ref": "M3.3.2",
+   "codes": [
+    "M3.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-277",
+   "name": "Training Plan Variance Log",
+   "control_ref": "M3.3.3",
+   "codes": [
+    "M3.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-278",
+   "name": "Training Knowledge Measurement Register",
+   "control_ref": "M3.3.4",
+   "codes": [
+    "M3.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-279",
+   "name": "Training Outcome Evaluation",
+   "control_ref": "M3.3.4",
+   "codes": [
+    "M3.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-280",
+   "name": "Training Corrective Action Log",
+   "control_ref": "M3.3.4",
+   "codes": [
+    "M3.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-281",
+   "name": "Training Records Periodic Check Log",
+   "control_ref": "M3.3.5",
+   "codes": [
+    "M3.3.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-282",
+   "name": "Awareness Campaign Delivery Evidence",
+   "control_ref": "M3.4.1",
+   "codes": [
+    "M3.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-283",
+   "name": "Awareness Campaign Adjustment Log",
+   "control_ref": "M3.4.1",
+   "codes": [
+    "M3.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-284",
+   "name": "Background Verification Completion Register",
+   "control_ref": "M4.1.1",
+   "codes": [
+    "M4.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-285",
+   "name": "Background Verification Document Storage Evidence",
+   "control_ref": "M4.1.1",
+   "codes": [
+    "M4.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-286",
+   "name": "Employment and Third-Party Contract Sample",
+   "control_ref": "M4.1.2",
+   "codes": [
+    "M4.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-287",
+   "name": "Information Security Terms Acceptance Form",
+   "control_ref": "M4.1.2",
+   "codes": [
+    "M4.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-288",
+   "name": "Contract Review and Amendment Log",
+   "control_ref": "M4.1.2",
+   "codes": [
+    "M4.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-289",
+   "name": "Security Policy Notification Log",
+   "control_ref": "M4.2.1",
+   "codes": [
+    "M4.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-290",
+   "name": "First Access Policy Acceptance Evidence",
+   "control_ref": "M4.2.1",
+   "codes": [
+    "M4.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-291",
+   "name": "Disciplinary Process Awareness Log",
+   "control_ref": "M4.2.2",
+   "codes": [
+    "M4.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-292",
+   "name": "Disciplinary Action Record",
+   "control_ref": "M4.2.2",
+   "codes": [
+    "M4.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-293",
+   "name": "Exit Notice of Continuing Security Responsibilities",
+   "control_ref": "M4.3.1",
+   "codes": [
+    "M4.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-294",
+   "name": "Compliance Requirements Review Record",
+   "control_ref": "M5.1.1",
+   "codes": [
+    "M5.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-295",
+   "name": "Intellectual Property Controls Review Record",
+   "control_ref": "M5.1.2",
+   "codes": [
+    "M5.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-296",
+   "name": "Record Protection Controls Evidence",
+   "control_ref": "M5.1.3",
+   "codes": [
+    "M5.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-297",
+   "name": "Record Protection Requirements Review Record",
+   "control_ref": "M5.1.3",
+   "codes": [
+    "M5.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-298",
+   "name": "Audit Access Request Form",
+   "control_ref": "M5.3.1",
+   "codes": [
+    "M5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-299",
+   "name": "Technical Audit Test Scope and Access Record",
+   "control_ref": "M5.3.1",
+   "codes": [
+    "M5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-300",
+   "name": "Auditor Selection and Impartiality Record",
+   "control_ref": "M6.2.2",
+   "codes": [
+    "M6.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-301",
+   "name": "Audit Results Reporting Record",
+   "control_ref": "M6.2.2",
+   "codes": [
+    "M6.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-302",
+   "name": "Inventory Reconciliation Sheet",
+   "control_ref": "T1.2.1",
+   "codes": [
+    "T1.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-303",
+   "name": "Acceptable Use Rules Circulation and Acceptance Log",
+   "control_ref": "T1.2.2",
+   "codes": [
+    "T1.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-304",
+   "name": "Acceptable Use Compliance Check Log",
+   "control_ref": "T1.2.2",
+   "codes": [
+    "T1.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-305",
+   "name": "Classification Scheme Communication Log",
+   "control_ref": "T1.3.1",
+   "codes": [
+    "T1.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-306",
+   "name": "Classification Review Log",
+   "control_ref": "T1.3.1",
+   "codes": [
+    "T1.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-307",
+   "name": "Public Platform Sharing Controls Evidence",
+   "control_ref": "T1.3.4",
+   "codes": [
+    "T1.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-308",
+   "name": "Data Leak Prevention Evidence",
+   "control_ref": "T1.3.5",
+   "codes": [
+    "T1.3.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-309",
+   "name": "Deletion Process Review Record",
+   "control_ref": "T1.3.6",
+   "codes": [
+    "T1.3.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-310",
+   "name": "Removable Media Restriction Evidence",
+   "control_ref": "T1.4.1",
+   "codes": [
+    "T1.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-311",
+   "name": "Removable Media Usage Log Extract",
+   "control_ref": "T1.4.1",
+   "codes": [
+    "T1.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-312",
+   "name": "Media Sanitization and Destruction Record",
+   "control_ref": "T1.4.2",
+   "codes": [
+    "T1.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-313",
+   "name": "Endpoint Automatic Lockout Evidence",
+   "control_ref": "T1.5.1",
+   "codes": [
+    "T1.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-314",
+   "name": "Personal Device Enrollment Report",
+   "control_ref": "T1.5.1",
+   "codes": [
+    "T1.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-315",
+   "name": "Work Data Separation Evidence",
+   "control_ref": "T1.5.1",
+   "codes": [
+    "T1.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-316",
+   "name": "Endpoint Logging and Monitoring Report",
+   "control_ref": "T1.5.1",
+   "codes": [
+    "T1.5.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-317",
+   "name": "Secure Area Entry Authentication Evidence",
+   "control_ref": "T2.2.2",
+   "codes": [
+    "T2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-318",
+   "name": "Secure Area Access and Visitor Log",
+   "control_ref": "T2.2.2",
+   "codes": [
+    "T2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-319",
+   "name": "Physical Access Log Review Record",
+   "control_ref": "T2.2.2",
+   "codes": [
+    "T2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-320",
+   "name": "Facility Signage and Inspection Record",
+   "control_ref": "T2.2.3",
+   "codes": [
+    "T2.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-321",
+   "name": "Secure Area Supervision Log",
+   "control_ref": "T2.2.5",
+   "codes": [
+    "T2.2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-322",
+   "name": "Surveillance Coverage and Test Record",
+   "control_ref": "T2.2.5",
+   "codes": [
+    "T2.2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-323",
+   "name": "Environmental Monitoring Evidence",
+   "control_ref": "T2.3.1",
+   "codes": [
+    "T2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-324",
+   "name": "Emergency Lighting Test Log",
+   "control_ref": "T2.3.2",
+   "codes": [
+    "T2.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-325",
+   "name": "Cable Protection Inspection Record",
+   "control_ref": "T2.3.3",
+   "codes": [
+    "T2.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-326",
+   "name": "Cable Segregation Inspection Record",
+   "control_ref": "T2.3.3",
+   "codes": [
+    "T2.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-327",
+   "name": "Equipment Maintenance Recommendations Evidence",
+   "control_ref": "T2.3.4",
+   "codes": [
+    "T2.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-328",
+   "name": "Security Configuration Compliance Evidence",
+   "control_ref": "T3.1.1",
+   "codes": [
+    "T3.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-329",
+   "name": "Security Configuration Review Record",
+   "control_ref": "T3.1.1",
+   "codes": [
+    "T3.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-330",
+   "name": "Operating Procedure Review Log",
+   "control_ref": "T3.1.2",
+   "codes": [
+    "T3.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-331",
+   "name": "Operating Procedure Access and Awareness Evidence",
+   "control_ref": "T3.1.2",
+   "codes": [
+    "T3.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-332",
+   "name": "Change Rollback and Communication Plan Evidence",
+   "control_ref": "T3.1.3",
+   "codes": [
+    "T3.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-333",
+   "name": "Capacity Adjustment and Stress Test Record",
+   "control_ref": "T3.1.5",
+   "codes": [
+    "T3.1.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-334",
+   "name": "Anti-Malware Coverage Report",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-335",
+   "name": "Anti-Malware Update Status Report",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-336",
+   "name": "Malware Scanning Configuration Evidence",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-337",
+   "name": "Removable Media Auto-Run Configuration Evidence",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-338",
+   "name": "Malware Detection Log Extract",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-339",
+   "name": "Malware Awareness Attendance Log",
+   "control_ref": "T3.1.6",
+   "codes": [
+    "T3.1.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-340",
+   "name": "Backup Restoration Test Record",
+   "control_ref": "T3.1.7",
+   "codes": [
+    "T3.1.7"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-341",
+   "name": "Software Installation Restrictions Evidence",
+   "control_ref": "T3.1.8",
+   "codes": [
+    "T3.1.8"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-342",
+   "name": "Unauthorized Software Review Record",
+   "control_ref": "T3.1.8",
+   "codes": [
+    "T3.1.8"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-343",
+   "name": "Software Installation Log Extract",
+   "control_ref": "T3.1.8",
+   "codes": [
+    "T3.1.8"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-344",
+   "name": "Monitoring Capability Assessment",
+   "control_ref": "T3.2.3",
+   "codes": [
+    "T3.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-345",
+   "name": "Time Synchronization Evidence",
+   "control_ref": "T3.2.4",
+   "codes": [
+    "T3.2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-346",
+   "name": "Cryptographic Compliance Review Record",
+   "control_ref": "T3.4.1",
+   "codes": [
+    "T3.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-347",
+   "name": "Encryption at Rest Evidence",
+   "control_ref": "T3.4.2",
+   "codes": [
+    "T3.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-348",
+   "name": "End-User Device Encryption Report",
+   "control_ref": "T3.4.2",
+   "codes": [
+    "T3.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-349",
+   "name": "Database and Portable Media Encryption Evidence",
+   "control_ref": "T3.4.2",
+   "codes": [
+    "T3.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-350",
+   "name": "Encryption in Motion Configuration Evidence",
+   "control_ref": "T3.4.2",
+   "codes": [
+    "T3.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-351",
+   "name": "Transmission Encryption Test Report",
+   "control_ref": "T3.4.2",
+   "codes": [
+    "T3.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-352",
+   "name": "Key Storage Settings Evidence",
+   "control_ref": "T3.4.3",
+   "codes": [
+    "T3.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-353",
+   "name": "Key Recovery Test Record",
+   "control_ref": "T3.4.3",
+   "codes": [
+    "T3.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-354",
+   "name": "Post-Quantum Laboratory Test Record",
+   "control_ref": "T3.4.4",
+   "codes": [
+    "T3.4.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-355",
+   "name": "Network Access Control Configuration Evidence",
+   "control_ref": "T4.1.1",
+   "codes": [
+    "T4.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-356",
+   "name": "Traffic Control and Monitoring Configuration Evidence",
+   "control_ref": "T4.1.1",
+   "codes": [
+    "T4.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-357",
+   "name": "Network Service Security Schedule",
+   "control_ref": "T4.1.2",
+   "codes": [
+    "T4.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-358",
+   "name": "Network Segregation Requirements Evidence",
+   "control_ref": "T4.1.3",
+   "codes": [
+    "T4.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-359",
+   "name": "Network Segregation Effectiveness Evaluation",
+   "control_ref": "T4.1.3",
+   "codes": [
+    "T4.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-360",
+   "name": "Wireless Site Survey Report",
+   "control_ref": "T4.1.4",
+   "codes": [
+    "T4.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-361",
+   "name": "Wireless Segregation Configuration Evidence",
+   "control_ref": "T4.1.4",
+   "codes": [
+    "T4.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-362",
+   "name": "Web Filtering Evidence",
+   "control_ref": "T4.1.5",
+   "codes": [
+    "T4.1.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-363",
+   "name": "User Identity List Export",
+   "control_ref": "T5.2.1",
+   "codes": [
+    "T5.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-364",
+   "name": "Restricted Identity Activity Log Extract",
+   "control_ref": "T5.2.1",
+   "codes": [
+    "T5.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-365",
+   "name": "Access Revocation Log",
+   "control_ref": "T5.2.2",
+   "codes": [
+    "T5.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-366",
+   "name": "Temporary and Inactive Account Review Log",
+   "control_ref": "T5.2.2",
+   "codes": [
+    "T5.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-367",
+   "name": "Administrative Group Membership Report",
+   "control_ref": "T5.2.3",
+   "codes": [
+    "T5.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-368",
+   "name": "Administrator Account Usage Controls Evidence",
+   "control_ref": "T5.2.3",
+   "codes": [
+    "T5.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-369",
+   "name": "Administrative Multi-Factor Authentication Evidence",
+   "control_ref": "T5.2.3",
+   "codes": [
+    "T5.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-370",
+   "name": "Local Administrator Password Controls Evidence",
+   "control_ref": "T5.2.3",
+   "codes": [
+    "T5.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-371",
+   "name": "Administrative Activity Log Extract and Review",
+   "control_ref": "T5.2.3",
+   "codes": [
+    "T5.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-372",
+   "name": "Special Access Validity Check Log",
+   "control_ref": "T5.2.4",
+   "codes": [
+    "T5.2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-373",
+   "name": "Strong Authentication Configuration Evidence",
+   "control_ref": "T5.3.1",
+   "codes": [
+    "T5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-374",
+   "name": "Secure Log-On and Log-Off Settings Evidence",
+   "control_ref": "T5.3.1",
+   "codes": [
+    "T5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-375",
+   "name": "Maximum Session Time Settings Evidence",
+   "control_ref": "T5.3.1",
+   "codes": [
+    "T5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-376",
+   "name": "Inactivity Timeout Settings Evidence",
+   "control_ref": "T5.3.1",
+   "codes": [
+    "T5.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-377",
+   "name": "Business-Need Access Adjustment Log",
+   "control_ref": "T5.3.2",
+   "codes": [
+    "T5.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-378",
+   "name": "Secure Remote Access Configuration Evidence",
+   "control_ref": "T5.3.3",
+   "codes": [
+    "T5.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-379",
+   "name": "Remote Authentication Method Settings Evidence",
+   "control_ref": "T5.3.3",
+   "codes": [
+    "T5.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-380",
+   "name": "Remote Administrator Access Approval and Monitoring Record",
+   "control_ref": "T5.3.3",
+   "codes": [
+    "T5.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-381",
+   "name": "Utility Program Usage Log Extract",
+   "control_ref": "T5.3.4",
+   "codes": [
+    "T5.3.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-382",
+   "name": "Credential Change Automation Evidence",
+   "control_ref": "T5.4.3",
+   "codes": [
+    "T5.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-383",
+   "name": "Credential Strength Settings Evidence",
+   "control_ref": "T5.4.3",
+   "codes": [
+    "T5.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-384",
+   "name": "Credential Lifetime and Reuse Settings Evidence",
+   "control_ref": "T5.4.3",
+   "codes": [
+    "T5.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-385",
+   "name": "First Login Password Change Evidence",
+   "control_ref": "T5.4.3",
+   "codes": [
+    "T5.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-386",
+   "name": "Credential Storage Protection Evidence",
+   "control_ref": "T5.4.3",
+   "codes": [
+    "T5.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-387",
+   "name": "Supplier Assessment and Due Diligence Register",
+   "control_ref": "T6.2.2",
+   "codes": [
+    "T6.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-388",
+   "name": "Supplier Compliance Verification Record",
+   "control_ref": "T6.2.5",
+   "codes": [
+    "T6.2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-389",
+   "name": "Supplier Security Practice Change Log",
+   "control_ref": "T6.2.5",
+   "codes": [
+    "T6.2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-390",
+   "name": "Security Design Review Record",
+   "control_ref": "T7.2.2",
+   "codes": [
+    "T7.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-391",
+   "name": "Automated Security Testing Report",
+   "control_ref": "T7.3.1",
+   "codes": [
+    "T7.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-392",
+   "name": "Delivered Code Check Report",
+   "control_ref": "T7.3.2",
+   "codes": [
+    "T7.3.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-393",
+   "name": "Source Code Access Permissions Evidence",
+   "control_ref": "T7.3.3",
+   "codes": [
+    "T7.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-394",
+   "name": "Source Code Permission Review Log",
+   "control_ref": "T7.3.3",
+   "codes": [
+    "T7.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-395",
+   "name": "Source Code Access Log Extract",
+   "control_ref": "T7.3.3",
+   "codes": [
+    "T7.3.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-396",
+   "name": "Change Rollback Procedure Evidence",
+   "control_ref": "T7.4.1",
+   "codes": [
+    "T7.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-397",
+   "name": "Pre-Production Change Test Evidence",
+   "control_ref": "T7.4.1",
+   "codes": [
+    "T7.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-398",
+   "name": "Change Implementation Planning Evidence",
+   "control_ref": "T7.4.1",
+   "codes": [
+    "T7.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-399",
+   "name": "Production Data Copy Authorization Form",
+   "control_ref": "T7.4.2",
+   "codes": [
+    "T7.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-400",
+   "name": "Test Data Erasure Log",
+   "control_ref": "T7.4.2",
+   "codes": [
+    "T7.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-401",
+   "name": "Test Data Movement Log",
+   "control_ref": "T7.4.2",
+   "codes": [
+    "T7.4.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-402",
+   "name": "Security Test Results Evidence",
+   "control_ref": "T7.4.3",
+   "codes": [
+    "T7.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-403",
+   "name": "Security Test Completion Responsibility Form",
+   "control_ref": "T7.4.3",
+   "codes": [
+    "T7.4.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-404",
+   "name": "Event Reporting Awareness and Usage Evidence",
+   "control_ref": "T8.1.2",
+   "codes": [
+    "T8.1.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-405",
+   "name": "Incident Response Plan Approval Record",
+   "control_ref": "T8.2.1",
+   "codes": [
+    "T8.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-406",
+   "name": "Incident Documentation Protection Evidence",
+   "control_ref": "T8.2.5",
+   "codes": [
+    "T8.2.5"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-407",
+   "name": "Post-Incident Report",
+   "control_ref": "T8.2.6",
+   "codes": [
+    "T8.2.6"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-408",
+   "name": "Continuity Roles and Competence Register",
+   "control_ref": "T9.1.1",
+   "codes": [
+    "T9.1.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
   }
  ]
 }

@@ -201,7 +201,7 @@ def _prompt(framework_name: str, name: str, artifact_type: str, control_ref: str
         "4. Start with a short metadata block (Document ID, Version, Owner, Effective Date, Framework, "
         "Classification) as a markdown table. Do NOT include a 'Control Reference' row.\n"
         "5. Where the type calls for inline tables (forms, timelines), include realistic markdown tables.\n"
-        "6. Use [bracketed placeholders] only for genuinely org-specific values (names, dates, systems).\n"
+        "6. Use [bracketed placeholders] only for genuinely org-specific values (names, dates, systems, retention periods, review frequencies).\n"
         "7. Do NOT include any framework clause numbers, control-reference codes, annex numbers, or citations "
         "anywhere (no 'Clause X', no '(A.5.9)', no 'Control Reference' row).\n"
         "8. Be thorough and ready-to-use; aim for a document an auditor would accept as a strong first draft."
@@ -220,7 +220,7 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "Return STRICT JSON ONLY with this exact shape (no code fences, no commentary):\n"
         '{ "columns": ["..."], "field_guidance": {"Column": "precise instruction for what the user enters here, '
         'incl. format/allowed values where relevant"}, "example_rows": [["..."]], '
-        '"maintenance": "who owns this template, how often it is updated, and the source system it draws from" }\n\n'
+        '"maintenance": "who owns this template, how often it is updated (a [bracketed] suggestion for the organisation to set), and the source system it draws from" }\n\n'
         "Rules:\n"
         f"- columns: the COMPLETE, specific column set this {artifact_type} needs to satisfy "
         f"{framework_name} {control_ref or ''} — derived from what that control actually requires. "
@@ -231,7 +231,7 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "- example_rows: ONE or TWO illustrative rows ONLY, and wrap EVERY cell value like `[EXAMPLE: ...]` so it "
         "is obviously placeholder text the user must replace. Example values are invented: never put the framework's own "
         "control, clause or annex numbers (or the control given above) in an example cell, a column name or the guidance.\n"
-        "- maintenance: 1-2 sentences (owner role, update cadence, source system)."
+        "- maintenance: 1-2 sentences (owner role, update cadence written as a [bracketed] suggestion, never a fixed frequency, source system)."
     )
 
 
@@ -243,17 +243,21 @@ def _prompt_guide(framework_name: str, name: str, artifact_type: str, control_re
         f"(e.g. SIEM/log store, ITSM/ticketing, a portal, a tool, or a dashboard). Do NOT fabricate the "
         f"evidence itself. Instead, write a concise, practical GUIDE telling the user HOW and WHERE to "
         f"collect it from THEIR setup, for an organisation implementing **{framework_name}** "
-        f"(control {control_ref or 'general obligation'}).\n"
+        f"(internal scope hint, do NOT print it or any control, clause or annex number: {control_ref or 'general obligation'}).\n"
         f"Intent: {description or 'Not provided.'}\n\n"
         "Output GitHub-flavoured Markdown (no code fences) with these ## sections:\n"
-        "- What This Evidences (tie explicitly to the control, and state plainly that it is collected, not authored)\n"
+        "- What This Evidences (say in plain words what the evidence shows about the safeguard, never cite a control or say what a framework expects, and state plainly that it is collected, not authored)\n"
         "- Where To Collect It From (the source system/tool in a typical setup; name the kind of system)\n"
         "- How To Collect (concrete, ordered steps an operator can follow)\n"
         "- What To Capture (the exact fields/records/screens that make it sufficient)\n"
         "- Frequency & Owner\n"
         "- Retention & Storage\n"
-        "- Acceptance Criteria (what an auditor accepts as sufficient)\n\n"
-        "Keep it tight (~350-550 words). Use [bracketed placeholders] for org-specific tool/system names."
+        "- Acceptance Criteria (what a reviewer should check before signing off; a suggestion, not a promise of audit acceptance)\n\n"
+        "Keep it tight (~350-550 words). Use [bracketed placeholders] for org-specific tool/system names. "
+        "Rules: never print any control, clause or annex number and never say what the framework or an auditor expects or will accept; "
+        "write every frequency, retention period, sample size and acceptance criterion as a [bracketed] suggestion for the organisation "
+        "to set, never as a fixed number or a requirement of the framework; name kinds of systems, not products or vendors, and cover "
+        "on-premises and own data center systems as well as cloud."
     )
 
 

@@ -105,19 +105,27 @@ def _grounded(art: dict, controls: dict) -> dict:
             "requirement": _no_ids(requirement).strip()}
 
 
-_ID_REF = re.compile(r"\s*\((?:refer to|see|per)\s+[MT]\d\.\d\.\d+(?:\s*(?:,|and)\s*[MT]\d\.\d\.\d+)*\)", re.I)
-_ID = re.compile(r"\b[MT]\d\.\d\.\d+\b")
+_ID_REF = re.compile(r"\s*\((?:refer to|see|per)\s+[MT]\.?\d\.\d(?:\.\d+)?(?:\s*(?:,|and)\s*[MT]\.?\d\.\d(?:\.\d+)?)*\)", re.I)
+_ID = re.compile(r"\b[MT]\.?\d\.\d(?:\.\d+)?\b")
 
 
 def _no_ids(text: str) -> str:
-    """The generator forbids control references in the documents: keep UAE IA control ids ("refer to M1.2.2") out of the prompt too."""
+    """The generator forbids control references in the documents: keep UAE IA control ids ("refer to M1.2.2") out of the prompt too, also
+    the standard's own misprint "T.3.2.3" in the malware control and its "(see also M2.3)" in the risk treatment control."""
     return _ID.sub("the related control", _ID_REF.sub("", text or ""))
 
 
 def _write(content: dict) -> None:
     tmp = gen._CONTENT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, gen._CONTENT)
+    for attempt in range(20):   # Windows: another process (a reader, an indexer) can hold the target open for a moment
+        try:
+            os.replace(tmp, gen._CONTENT)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.5)
 
 
 def main() -> None:
