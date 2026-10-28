@@ -11,7 +11,7 @@ import { FileSignature, Loader2, Paperclip, Plus } from 'lucide-react';
 import { vendorContractsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import ContractDrawer from '../../../_lib/contracts/ContractDrawer';
-import { STATE_META, countdown, money, type Register } from '../../../_lib/contracts/shared';
+import { CLAUSES, STATE_META, countdown, money, type Register } from '../../../_lib/contracts/shared';
 import { fmtDate } from './constants';
 
 export default function ContractsPanel({ vendorId, assessmentId }: { vendorId: number; assessmentId?: number }) {
@@ -63,6 +63,13 @@ export default function ContractsPanel({ vendorId, assessmentId }: { vendorId: n
                   {c.act_by && c.act_by !== c.ends_on && ` · notice by ${fmtDate(c.act_by)}`}
                   {c.annual_value !== null && ` · ${money(c.annual_value, c.currency)} a year`}
                 </p>
+                {CLAUSES.some(({ key }) => c[key] === false) && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {CLAUSES.filter(({ key }) => c[key] === false).map(({ key, gap }) => (
+                      <span key={key} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800">{gap}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               {countdown(c) && ['lapsed', 'decide', 'ending'].includes(c.state) && (
                 <span className="shrink-0 text-[11px] text-slate-500">{countdown(c)}</span>

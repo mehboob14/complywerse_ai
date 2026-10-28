@@ -272,6 +272,12 @@ class TPRAContract(Base):
     billing = Column(String(20), nullable=True)          # monthly | quarterly | annually
     pricing = Column(JSON, nullable=True)                # unit price, included units, overage, one-off fees, cap, uplift
     termination = Column(Text, nullable=True)            # how either side can get out
+    # The clauses a security review asks about; None until someone has checked (contracts.CLAUSE_FIELDS).
+    right_to_audit = Column(Boolean, nullable=True)
+    subprocessor_terms = Column(Boolean, nullable=True)
+    exit_data_return = Column(Boolean, nullable=True)
+    security_addendum = Column(Boolean, nullable=True)
+    breach_notification_hours = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -518,6 +524,11 @@ class TPRAEvidenceLink(Base):
     requirement = Column(String(40), nullable=True)
     evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
     note = Column(Text, nullable=True)
+    # The period the document vouches for, and who checked it (tpra/paperwork.py).
+    coverage_from = Column(Date, nullable=True)
+    coverage_to = Column(Date, nullable=True)
+    reviewed_by = Column(Integer, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
