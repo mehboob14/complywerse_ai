@@ -2412,8 +2412,11 @@ export const tpraApi = {
   // Lifecycle
   getStages: () => apiClient.get('/vendor-risk/tpra/stages'),
   getBoard: () => apiClient.get('/vendor-risk/tpra/board'),
-  getLifecycle: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`),
-  initLifecycle: (vendorId: number) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, {}),
+  // engagementId: one engagement's lifecycle; omitted, the supplier's General one.
+  getLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  initLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, engagementId ? { engagement_id: engagementId } : {}),
   listAssessmentVersions: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/assessments`),
   advance: (assessmentId: number, data?: { note?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/advance`, data || {}),
@@ -2427,7 +2430,7 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-tiering`, data || {}),
   runScoring: (assessmentId: number) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-scoring`, {}),
-  reassess: (vendorId: number, data: { reason: string; assessment_type?: string }) =>
+  reassess: (vendorId: number, data: { reason: string; assessment_type?: string; engagement_id?: number | null }) =>
     apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/reassess`, data),
 
   // Findings + remediation + acceptance

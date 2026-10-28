@@ -33,6 +33,8 @@ import OffboardingPanel from './OffboardingPanel';
 import TierRequirementsPanel from './TierRequirementsPanel';
 import StageWorkspace from './StageWorkspace';
 import { useUnsavedGuard } from './useUnsavedGuard';
+import { EngagementFacts } from './EngagementsPanel';
+import { engagementsKey, useEngagements, type Engagement } from '../../../_lib/engagementsApi';
 
 function errMsg(e: unknown, fallback: string): string {
   return (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback;
@@ -46,12 +48,15 @@ interface AuditEntry {
 }
 
 export default function TpraLifecycle({
-  vendorId, onChanged, initialStage, initialFindingId,
+  vendorId, onChanged, initialStage, initialFindingId, engagementId = null, onEngagementChange,
 }: {
   vendorId: number;
   onChanged?: () => void;
   initialStage?: string | null;
   initialFindingId?: number | null;
+  /** The engagement whose lifecycle this is; null is General, the supplier itself. */
+  engagementId?: number | null;
+  onEngagementChange?: (engagementId: number | null) => void;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -78,9 +83,28 @@ export default function TpraLifecycle({
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tpra-lifecycle', vendorId],
-    queryFn: async () => (await tpraApi.getLifecycle(vendorId)).data as LifecycleResponse,
+    queryKey: ['tpra-lifecycle', vendorId, engagementId],
+    queryFn: async () => (await tpraApi.getLifecycle(vendorId, engagementId)).data as LifecycleResponse,
   });
+
+  // The engagements in use; a picker once the supplier has more than General.
+  const { data: scopes } = useEngagements(vendorId);
+  const inUse = (scopes?.items || []).filter((e) => e.status !== 'ended');
+  const engagement = inUse.find((e) => !e.is_general && e.id === engagementId) || null;
+  const picker = inUse.length > 1 ? (
+    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+      Engagement
+      <select value={engagement?.id ?? ''} aria-label="Engagement"
+        onChange={(ev) => { setSelected(null); onEngagementChange?.(ev.target.value ? Number(ev.target.value) : null); }}
+        className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500">
+        {inUse.map((e) => (
+          <option key={e.id ?? 'general'} value={e.is_general ? '' : (e.id as number)}>
+            {e.name}{e.tier ? ` · ${e.tier}` : ''}
+          </option>
+        ))}
+      </select>
+    </label>
+  ) : null;
 
   // Default the selected stage once loaded — honour a valid deep-link stage first,
   // otherwise fall back to the current stage.
@@ -92,11 +116,12 @@ export default function TpraLifecycle({
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['tpra-lifecycle', vendorId] });
+    qc.invalidateQueries({ queryKey: engagementsKey(vendorId) });
     onChanged?.();
   };
 
   const initMut = useMutation({
-    mutationFn: () => tpraApi.initLifecycle(vendorId),
+    mutationFn: () => tpraApi.initLifecycle(vendorId, engagementId),
     onSuccess: () => { refresh(); toast({ type: 'success', title: 'Lifecycle started' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not start', message: errMsg(e, 'Try again.') }),
   });
@@ -145,7 +170,7 @@ export default function TpraLifecycle({
   });
 
   const reassessMut = useMutation({
-    mutationFn: (reason: string) => tpraApi.reassess(vendorId, { reason }),
+    mutationFn: (reason: string) => tpraApi.reassess(vendorId, { reason, engagement_id: engagementId }),
     onSuccess: () => { refresh(); setReassessOpen(false); toast({ type: 'success', title: 'Reassessment opened' }); },
     onError: (e) => toast({ type: 'error', title: 'Failed', message: errMsg(e, 'Try again.') }),
   });
@@ -178,19 +203,22 @@ export default function TpraLifecycle({
   // No assessment yet → start the lifecycle.
   if (!assessment) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-        <Sparkles className="mx-auto mb-2 h-7 w-7 text-primary-600" />
-        <p className="text-sm font-semibold text-slate-900">No active TPRA assessment</p>
-        <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">
-          Start the 11-stage third-party risk lifecycle for this vendor. Intake begins immediately; the tiering gate sets depth and cadence.
-        </p>
-        {canInit && (
-          <button onClick={() => initMut.mutate()} disabled={initMut.isPending}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-            {initMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-            Start TPRA lifecycle
-          </button>
-        )}
+      <div className="space-y-3">
+        {picker}
+        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+          <Sparkles className="mx-auto mb-2 h-7 w-7 text-primary-600" />
+          <p className="text-sm font-semibold text-slate-900">No active TPRA assessment</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">
+            Start the 11-stage third-party risk lifecycle for {engagement ? engagement.name : 'this vendor'}. Intake begins immediately; the tiering gate sets depth and cadence.
+          </p>
+          {canInit && (
+            <button onClick={() => initMut.mutate()} disabled={initMut.isPending}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+              {initMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              Start TPRA lifecycle
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -208,6 +236,7 @@ export default function TpraLifecycle({
 
   return (
     <div className="space-y-4">
+      {picker}
       {/* Summary */}
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gray-200 bg-white p-4">
         <ProgressRing percentage={pct} size={64} color="primary" showPercentage />
@@ -279,7 +308,7 @@ export default function TpraLifecycle({
           onOpenSkip={() => setSkipOpen(true)}
         >
           <StageBody stageKey={selectedKey} vendorId={vendorId} assessmentId={assessment.id}
-            assessment={assessment} canRunEngines={canRunEngines} onChanged={refresh}
+            assessment={assessment} engagement={engagement} canRunEngines={canRunEngines} onChanged={refresh}
             onRunTiering={() => tieringMut.mutate()} tieringBusy={tieringMut.isPending}
             onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending}
             initialFindingId={initialFindingId} />
@@ -304,7 +333,7 @@ export default function TpraLifecycle({
       <ReasonModal open={reassessOpen} onClose={() => setReassessOpen(false)}
         title="New reassessment"
         cta="Open reassessment" busy={reassessMut.isPending}
-        note="Opens a fresh assessment version for this vendor. The reason is recorded on the audit trail."
+        note={`Opens a fresh assessment version for ${engagement ? engagement.name : 'this vendor'}. The reason is recorded on the audit trail.`}
         onSubmit={(reason) => reassessMut.mutate(reason)} />
 
       {/* Per-vendor activity timeline (TPRM-010) */}
@@ -368,16 +397,19 @@ function StageChip({ stage, active, isCurrent, onClick }: { stage: StageInstance
 }
 
 function StageBody({
-  stageKey, vendorId, assessmentId, assessment, canRunEngines, onChanged, onRunTiering, tieringBusy, onRunScoring, scoringBusy, initialFindingId,
+  stageKey, vendorId, assessmentId, assessment, engagement, canRunEngines, onChanged, onRunTiering, tieringBusy, onRunScoring, scoringBusy, initialFindingId,
 }: {
   stageKey: string; vendorId: number; assessmentId: number;
-  assessment: LifecycleResponse['assessment']; canRunEngines: boolean; onChanged?: () => void;
+  assessment: LifecycleResponse['assessment']; engagement: Engagement | null; canRunEngines: boolean; onChanged?: () => void;
   onRunTiering: () => void; tieringBusy: boolean; onRunScoring: () => void; scoringBusy: boolean;
   initialFindingId?: number | null;
 }) {
   switch (stageKey) {
     case 'intake':
-      return <IntakePanel vendorId={vendorId} onChanged={onChanged} />;
+      // An engagement is held to its own facts; General to the supplier's record.
+      return engagement
+        ? <EngagementFacts vendorId={vendorId} engagement={engagement} />
+        : <IntakePanel vendorId={vendorId} onChanged={onChanged} />;
     case 'tiering':
       return (
         <div className="space-y-3">
@@ -448,7 +480,7 @@ function StageBody({
       return (
         <div className="space-y-4">
           <SignalsPanel vendorId={vendorId} />
-          <OffboardingPanel vendorId={vendorId} assessmentId={assessmentId} />
+          <OffboardingPanel vendorId={vendorId} assessmentId={assessmentId} engagement={engagement} />
         </div>
       );
     default:

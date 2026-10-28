@@ -28,7 +28,7 @@ import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
 import ActionPlanPanel from './_tpra/ActionPlanPanel';
-import EngagementsPanel from './_tpra/EngagementsPanel';
+import EngagementsPanel, { WorstOfNote } from './_tpra/EngagementsPanel';
 import PortalPanel from './_tpra/PortalPanel';
 import PaperworkPanel from './_tpra/PaperworkPanel';
 import VendorLogo from '../../_lib/VendorLogo';
@@ -195,6 +195,8 @@ export default function VendorDetailPage() {
   const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
   const deepLinkApplied = useRef(false);
   const deepLinkTab = searchParams?.get('tab') as TabType | null;
+  // ?engagement=<id> opens that engagement's lifecycle; none is General, the supplier itself.
+  const [engagementId, setEngagementId] = useState<number | null>(Number(searchParams?.get('engagement')) || null);
   useEffect(() => {
     if (deepLinkApplied.current) return;
     if (deepLinkStage || deepLinkFinding != null) {
@@ -357,8 +359,11 @@ export default function VendorDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <VendorLogo vendorId={vendor.id} name={vendor.name} size={32} />
             <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{vendor.name}</h1>
-            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
-              {vendor.tier}
+            <span className="inline-flex items-center">
+              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
+                {vendor.tier}
+              </span>
+              <WorstOfNote vendorId={vendorId} />
             </span>
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(vendor.status)}`}>
               {vendor.status?.replace(/_/g, ' ')}
@@ -463,6 +468,8 @@ export default function VendorDetailPage() {
         <div role="tabpanel" id="vendor-tabpanel-lifecycle" aria-labelledby="vendor-tab-lifecycle" tabIndex={0} className="focus:outline-none">
           <TpraLifecycle
             vendorId={vendorId}
+            engagementId={engagementId}
+            onEngagementChange={setEngagementId}
             initialStage={deepLinkStage}
             initialFindingId={deepLinkFinding}
             onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
@@ -625,7 +632,8 @@ export default function VendorDetailPage() {
       {/* Action plan Tab — dated to-dos, and sends, check-ins and reassessments on a date */}
       {activeTab === 'engagements' && (
         <div role="tabpanel" id="vendor-tabpanel-engagements" aria-labelledby="vendor-tab-engagements" tabIndex={0} className="focus:outline-none">
-          <EngagementsPanel vendorId={vendorId} />
+          <EngagementsPanel vendorId={vendorId}
+            onOpenLifecycle={(id) => { setEngagementId(id); setActiveTab('lifecycle'); }} />
         </div>
       )}
 
