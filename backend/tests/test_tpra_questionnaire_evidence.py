@@ -6,6 +6,7 @@ question. A certificate answers the questions a template lets it — prefilled,
 or not asked at all — but only when it is in date, names the vendor, and the AI
 review (when it can run) does not find it fails to support the vendor.
 """
+import uuid
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import TPRAActionItem  # read by the action plan, check-in and alert sweeps
 from grc.models import TPRACheckin  # read by the check-in schedule
+from grc.models import TPRAPortalToken, TPRAVendorContact  # who a questionnaire goes to, and their links
 from grc.models import (
     TPRAMonitoringSignal, Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRARiskAcceptance,
@@ -32,7 +34,8 @@ from grc.routers.auth_router import require_auth
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAContract,
-           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRAActionItem]
+           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRAActionItem,
+           TPRAVendorContact, TPRAPortalToken]
 
 QUESTIONS = [
     {"id": "isms", "text": "Do you run an information security programme?", "type": "yes_no",
@@ -101,6 +104,14 @@ def _send(http, vendor, template, **extra):
                      json={"vendor_id": vendor.id, "template_id": template.id, **extra})
 
 
+def _own_link(db, sent: dict) -> str:
+    """The questionnaire on a link of its own, as sent before personal links: still honoured."""
+    qr = db.get(VendorQuestionnaireResponse, sent["questionnaire_response"]["id"])
+    qr.token = str(uuid.uuid4())
+    db.commit()
+    return qr.token
+
+
 # ── naming the vendor ────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("text,name,expected", [
@@ -138,7 +149,7 @@ def test_skip_answers_the_covered_questions_and_the_vendor_cannot_change_them(db
     cert = _certificate(db)
     sent = _send(http, vendor, template, certificate_evidence_id=cert.id, certificate_mode="skip")
     assert sent.status_code == 201, sent.text
-    token, qr_id = sent.json()["token"], sent.json()["questionnaire_response"]["id"]
+    token, qr_id = _own_link(db, sent.json()), sent.json()["questionnaire_response"]["id"]
 
     shown = http.get(f"/vendor-risk/questionnaires/external/{token}").json()
     assert [q["id"] for q in shown["questions"] if q.get("locked")] == ["isms", "enc"]
@@ -155,7 +166,7 @@ def test_skip_answers_the_covered_questions_and_the_vendor_cannot_change_them(db
 def test_prefill_answers_them_but_the_vendor_can_change_them(db, http):
     vendor, template = _vendor_and_template(db)
     sent = _send(http, vendor, template, certificate_evidence_id=_certificate(db).id, certificate_mode="prefill")
-    token, qr_id = sent.json()["token"], sent.json()["questionnaire_response"]["id"]
+    token, qr_id = _own_link(db, sent.json()), sent.json()["questionnaire_response"]["id"]
     assert not any(q.get("locked") for q in http.get(f"/vendor-risk/questionnaires/external/{token}").json()["questions"])
     http.post(f"/vendor-risk/questionnaires/external/{token}",
               json={"responses": {"isms": "partial", "enc": "yes"}, "submit": False})
@@ -175,7 +186,7 @@ def test_a_certificate_that_fails_its_checks_is_refused_at_sending(db, http):
 def test_an_upload_becomes_library_evidence_for_its_question(db, http, reviews):
     vendor, template = _vendor_and_template(db)
     sent = _send(http, vendor, template).json()
-    token = sent["token"]
+    token = _own_link(db, sent)
     up = http.post(f"/vendor-risk/questionnaires/external/{token}/evidence/bcp",
                    files={"file": ("bcp-test.pdf", b"%PDF-1.4 continuity test report", "application/pdf")},
                    data={"expires_on": (TODAY + timedelta(days=10)).isoformat()})
@@ -200,7 +211,7 @@ def test_an_upload_becomes_library_evidence_for_its_question(db, http, reviews):
 def test_uploads_go_only_to_questions_that_can_change(db, http):
     vendor, template = _vendor_and_template(db)
     sent = _send(http, vendor, template).json()
-    token, qr_id = sent["token"], sent["questionnaire_response"]["id"]
+    token, qr_id = _own_link(db, sent), sent["questionnaire_response"]["id"]
     pdf = lambda: {"file": ("x.pdf", b"%PDF-1.4 x", "application/pdf")}
     assert http.post(f"/vendor-risk/questionnaires/external/{token}/evidence/nope", files=pdf()).status_code == 404
 

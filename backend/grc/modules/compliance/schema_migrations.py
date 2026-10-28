@@ -1190,6 +1190,7 @@ _COLUMN_ADDS = [
     ("grc_uploaded_frameworks", "slug", "VARCHAR(64)", "ix_grc_uploaded_frameworks_slug"),
 
     # ── TPRM supplier contacts and portal links (A/C0): add columns below this line ──
+    ("grc_vendor_questionnaire_responses", "contact_id", "INTEGER", None),
 
     # ── TPRM paperwork (E): add columns below this line ──
     # The period a supplier's document vouches for, and who checked it (tpra/paperwork.py).

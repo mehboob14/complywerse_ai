@@ -7,10 +7,16 @@ questions the reviewer asked about can change. Submitting takes a named person
 who attests to the answers. Which questions apply is worked out again on the
 server at submit, so an answer to a question the vendor could not see neither
 counts nor blocks.
+
+A questionnaire sent since personal links exist is reached only through its
+supplier's portal (tpra/supplier_portal.py): its own token is sealed, never sent
+and never matched.
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 import threading
 import time
 from collections import deque
@@ -20,6 +26,7 @@ from typing import Dict, List, Optional
 WAITING_ON_VENDOR = ("pending", "in_progress", "returned")
 ANSWERED = ("submitted", "under_review", "returned", "accepted")
 REVIEWABLE = ("submitted", "under_review")
+SEALED = "sealed:"
 
 
 def base_url() -> str:
@@ -30,6 +37,32 @@ def base_url() -> str:
 def link(token: str) -> Optional[str]:
     root = base_url()
     return f"{root}/vendor-risk/questionnaires/{token}" if root else None
+
+
+def sealed_token() -> str:
+    return SEALED + secrets.token_hex(24)
+
+
+def is_sealed(token: Optional[str]) -> bool:
+    return (token or "").startswith(SEALED)
+
+
+def hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def supplier_link(raw: str, questionnaire_id: Optional[int] = None) -> str:
+    """A contact's personal link, opening one questionnaire when given. Relative
+    when the app's address is not configured (the analyst's copy completes it)."""
+    return f"{base_url()}/supplier/{raw}" + (f"?q={questionnaire_id}" if questionnaire_id else "")
+
+
+def client_ip(request) -> Optional[str]:
+    """The address failed lookups are counted against. ponytail: a loopback address
+    means a proxy that did not pass the client on, and counting it would lock every
+    supplier out at once, so there is no failure count then."""
+    host = request.client.host if request is not None and request.client else None
+    return None if host in (None, "127.0.0.1", "::1", "localhost") else host
 
 
 def _value(answer) -> str:
@@ -99,22 +132,40 @@ def clean_attestation(raw: Optional[dict]) -> dict:
 
 
 class Throttle:
-    """At most `limit` requests per `window` seconds for one questionnaire link.
+    """At most `limit` requests per `window` seconds for one questionnaire link,
+    and at most `failures` failed link lookups per window from one address.
 
     ponytail: per process, so each web worker allows its own quota; move the
     counts to Redis if links are ever hammered from many addresses at once."""
 
-    def __init__(self, limit: int = 120, window: float = 300.0):
-        self.limit, self.window = limit, window
+    def __init__(self, limit: int = 120, window: float = 300.0, failures: int = 10):
+        self.limit, self.window, self.failures = limit, window, failures
         self._hits: Dict[str, deque] = {}
         self._lock = threading.Lock()
+
+    def _recent(self, key: str, now: float) -> deque:
+        hits = self._hits.setdefault(key, deque())
+        while hits and now - hits[0] > self.window:
+            hits.popleft()
+        return hits
+
+    def failing(self, address: Optional[str], now: Optional[float] = None) -> bool:
+        """Whether this address has used up its failed lookups for now."""
+        if not address:
+            return False
+        with self._lock:
+            return len(self._recent(f"fail:{address}", time.monotonic() if now is None else now)) >= self.failures
+
+    def failed(self, address: Optional[str], now: Optional[float] = None) -> None:
+        if address:
+            now = time.monotonic() if now is None else now
+            with self._lock:
+                self._recent(f"fail:{address}", now).append(now)
 
     def allow(self, key: str, now: Optional[float] = None) -> bool:
         now = time.monotonic() if now is None else now
         with self._lock:
-            hits = self._hits.setdefault(key, deque())
-            while hits and now - hits[0] > self.window:
-                hits.popleft()
+            hits = self._recent(key, now)
             if len(hits) >= self.limit:
                 return False
             hits.append(now)

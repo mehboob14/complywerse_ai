@@ -225,6 +225,8 @@ class VendorQuestionnaireResponse(Base):
     # "<parent>:<question>:<template>" that stops it being sent twice.
     parent_response_id = Column(Integer, nullable=True)
     trigger_key = Column(String(200), nullable=True, index=True)
+    # The supplier contact its personal links go to (grc_tpra_vendor_contacts); none on one sent before them.
+    contact_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")

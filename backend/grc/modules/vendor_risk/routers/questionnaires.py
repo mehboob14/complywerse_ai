@@ -6,7 +6,7 @@ import uuid
 from typing import List, Literal, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, Request
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -14,10 +14,10 @@ from sqlalchemy.orm import Session, joinedload
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate, TPRATemplateVersion,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
-    Evidence, TPRAEvidenceLink,
+    Evidence, TPRAEvidenceLink, Tenant,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import portal, rbac, versions
+from ..tpra import contacts, emails, portal, rbac, versions
 from ..tpra import questionnaire_evidence as qevidence
 from ..tpra import follow_ups, questionnaire_pdf, workbook
 from ..tpra.service import write_audit
@@ -62,6 +62,9 @@ class SendQuestionnaireRequest(BaseModel):
     vendor_id: int
     assessment_id: Optional[int] = None
     template_id: Optional[int] = None
+    # Who it goes to: one of the supplier's contacts, or someone named here (added as
+    # a contact); neither means the supplier's primary contact.
+    contact_id: Optional[int] = None
     respondent_name: Optional[str] = None
     respondent_email: Optional[str] = None
     expires_in_days: Optional[int] = 30     # the link stops working
@@ -132,8 +135,10 @@ def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
         "respondent_email": qr.respondent_email,
         "responses": qr.responses or {},
         "status": qr.status,
-        # An accepted questionnaire's link is closed; there is nothing to share.
-        "token": None if qr.status == "accepted" else qr.token,
+        # An accepted questionnaire's link is closed, and one on personal links has
+        # none of its own (its supplier's contacts have theirs): nothing to share.
+        "token": None if qr.status == "accepted" or portal.is_sealed(qr.token) else qr.token,
+        "contact_id": qr.contact_id,
         "template_version_id": qr.template_version_id,
         "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
         "due_date": qr.due_date.isoformat() if qr.due_date else None,
@@ -331,9 +336,39 @@ def update_questionnaire_response(
 
 # ── Send questionnaire (authenticated) ───────────────────────────
 
-def _email_link(db: Session, qr: VendorQuestionnaireResponse, is_reminder: bool = False) -> None:
-    """Best effort: the analyst always has the copyable link, and this does
-    nothing when email is not configured."""
+def _personal_link(db: Session, qr: VendorQuestionnaireResponse, purpose: str,
+                   by: Optional[int] = None) -> Optional[dict]:
+    """A fresh personal link opening this questionnaire, for whoever its links go
+    to (its contact, or else the supplier's primary contact). None for one sent
+    before personal links, which has a link of its own, or when there is nobody.
+    The caller commits."""
+    if not portal.is_sealed(qr.token):
+        return None
+    contact = contacts.for_questionnaire(db, qr)
+    if contact is None:
+        return None
+    raw, row = contacts.issue(db, contact, purpose, by)
+    return {"link": portal.supplier_link(raw, qr.id), "expires_at": row.expires_at.isoformat(),
+            "contact": {"id": contact.id, "name": contact.name, "email": contact.email}}
+
+
+def _email_link(db: Session, qr: VendorQuestionnaireResponse, is_reminder: bool = False,
+                issued: Optional[dict] = None):
+    """Best effort: the analyst always has a link to copy, and this does nothing
+    when email is not configured. A questionnaire on personal links is emailed
+    the fresh link `issued` for it, now; one sent before them its own link."""
+    if portal.is_sealed(qr.token):
+        if not issued:
+            return False
+        vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+        vendor_name = vendor.name if vendor else "your organization"
+        due = f"on {qr.due_date:%d %b %Y}" if qr.due_date else "as soon as you can"
+        subject, text, body_html = emails.render(
+            db, qr.tenant_id, "questionnaire_reminder" if is_reminder else "questionnaire_invite", {
+                "vendor": vendor_name, "link": issued["link"], "due": due, "when": f"due {due}",
+                "organisation": db.query(Tenant.name).filter(Tenant.id == qr.tenant_id).scalar() or "",
+                "title": f"Reminder: please complete the security questionnaire for {vendor_name}"})
+        return contacts.deliver(db, qr.tenant_id, issued["contact"]["email"], subject, text, body_html)
     if not qr.respondent_email:
         return
     try:
@@ -347,13 +382,25 @@ def _email_link(db: Session, qr: VendorQuestionnaireResponse, is_reminder: bool 
         logger.warning("could not queue the questionnaire email for response %s", qr.id)
 
 
+def _invite(db: Session, qr: VendorQuestionnaireResponse, is_reminder: bool = False,
+            by: Optional[int] = None) -> Optional[dict]:
+    """Send the vendor their way in (_email_link), committing a fresh personal link
+    first. Returns that link, once, for the analyst to copy."""
+    issued = _personal_link(db, qr, "reminder" if is_reminder else "questionnaire", by)
+    if issued:
+        db.commit()
+    emailed = _email_link(db, qr, is_reminder, issued)
+    return {**issued, "emailed": bool(emailed)} if issued else None
+
+
 @router.post("/questionnaires/send", status_code=status.HTTP_201_CREATED)
 def send_questionnaire(
     payload: SendQuestionnaireRequest,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Send a questionnaire to a vendor. Creates a VendorQuestionnaireResponse with a unique token."""
+    """Send a questionnaire to a supplier's contact, who is emailed a personal link
+    opening it in the supplier portal. The questionnaire's own token is sealed."""
     rbac.require_write(db, current_user, "assessments", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
@@ -400,6 +447,12 @@ def send_questionnaire(
         if problem:
             raise HTTPException(status_code=400, detail=problem)
 
+    try:
+        contact = contacts.recipient(db, vendor, current_user.id, payload.contact_id,
+                                     payload.respondent_name, payload.respondent_email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     expires_in = max(1, min(int(payload.expires_in_days or 30), 365))
     due_in = max(1, min(int(payload.due_in_days or 14), expires_in))
     now = datetime.utcnow()
@@ -409,9 +462,10 @@ def send_questionnaire(
         assessment_id=payload.assessment_id,
         template_id=payload.template_id,
         template_version_id=version.id if version else None,
-        respondent_name=payload.respondent_name or vendor.primary_contact_name,
-        respondent_email=payload.respondent_email or vendor.primary_contact_email,
-        token=str(uuid.uuid4()),
+        contact_id=contact.id if contact else None,
+        respondent_name=contact.name if contact else (payload.respondent_name or vendor.primary_contact_name),
+        respondent_email=contact.email if contact else (payload.respondent_email or vendor.primary_contact_email),
+        token=portal.sealed_token(),
         expires_at=now + timedelta(days=expires_in),
         due_date=now + timedelta(days=due_in),
         last_sent_at=now,
@@ -424,11 +478,16 @@ def send_questionnaire(
                                     current_user.id)
     db.commit()
     db.refresh(qr)
-    _email_link(db, qr)
+    sent = _invite(db, qr, by=current_user.id)
 
     return {
-        "message": "Vendor questionnaire link generated",
-        "token": qr.token,
+        "message": ("Questionnaire sent" if sent and sent["emailed"] else "Questionnaire ready: copy the link"
+                    if sent else "Questionnaire saved. Add a contact to the supplier to send it."),
+        "token": None,                       # sealed: it opens through the contact's personal link
+        "link": sent["link"] if sent else None,
+        "link_expires_at": sent["expires_at"] if sent else None,
+        "contact": sent["contact"] if sent else None,
+        "emailed": bool(sent and sent["emailed"]),
         "expires_at": qr.expires_at.isoformat(),
         "due_date": qr.due_date.isoformat(),
         "questionnaire_response": serialize_questionnaire_response(qr),
@@ -509,7 +568,7 @@ def return_to_vendor(
         qr.expires_at = qr.due_date + timedelta(days=7)          # the link outlives the new due date
     _audit(db, qr, current_user, "return", to_value="returned", questions=sorted(asks))
     db.commit()
-    _email_link(db, qr, is_reminder=True)
+    _invite(db, qr, is_reminder=True, by=current_user.id)
     return serialize_questionnaire_response(qr)
 
 
@@ -548,7 +607,7 @@ def accept_questionnaire(
                follow_up_id=child.id)
     db.commit()
     for child in children:
-        _email_link(db, child)
+        _invite(db, child, by=current_user.id)
     return {**serialize_questionnaire_response(qr), "follow_ups": [c.id for c in children]}
 
 
@@ -559,37 +618,47 @@ def resend_questionnaire(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """A new link, and the old one stops working."""
+    """More time and a fresh personal link for its contact. A link of its own, from
+    before personal links, stops working: it is on personal links from now on."""
     rbac.require_write(db, current_user, "assessments", "edit")
     qr = _response_or_404(db, current_user, response_id)
     if qr.status not in portal.WAITING_ON_VENDOR:
         raise HTTPException(status_code=409, detail="Only a questionnaire still waiting on the vendor can be resent")
+    vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+    try:
+        contact = (contacts.for_questionnaire(db, qr) if portal.is_sealed(qr.token) else None) or contacts.recipient(
+            db, vendor, current_user.id, name=qr.respondent_name, email=qr.respondent_email)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if contact is None:
+        raise HTTPException(status_code=400, detail=(
+            "This supplier has no contact to send it to. Add one under the supplier's Supplier portal tab."))
     now = datetime.utcnow()
-    qr.token = str(uuid.uuid4())
+    qr.token = portal.sealed_token()
+    qr.contact_id, qr.respondent_name, qr.respondent_email = contact.id, contact.name, contact.email
     qr.expires_at = now + timedelta(days=payload.expires_in_days)
     qr.due_date = now + timedelta(days=min(payload.due_in_days, payload.expires_in_days))
     qr.last_sent_at = now
     _audit(db, qr, current_user, "resend", to_value="resent")
     db.commit()
-    _email_link(db, qr, is_reminder=True)
-    return serialize_questionnaire_response(qr)
+    sent = _invite(db, qr, is_reminder=True, by=current_user.id)
+    return {**serialize_questionnaire_response(qr), "link": sent["link"] if sent else None,
+            "emailed": bool(sent and sent["emailed"])}
 
 
 # ── External vendor access (NO AUTH) ─────────────────────────────
+# Two ways in, the same code behind both: a questionnaire's own link (sent before
+# personal links, still honoured) and a supplier contact's personal link
+# (tpra/supplier_portal.py). Each route only finds the questionnaire; the
+# vendor_* functions below do the work for both.
 
 _GONE = "This questionnaire link is no longer valid. Ask your contact for a new one."
+_BUSY = "Too many requests for this questionnaire. Wait a few minutes and try again."
 
 
-def _validate_external_token(token: str, db: Session, allow_submitted: bool = False) -> VendorQuestionnaireResponse:
-    """The questionnaire behind a vendor's link, if the link still works."""
-    qr = db.query(VendorQuestionnaireResponse).filter(
-        VendorQuestionnaireResponse.token == token,
-    ).first()
-    if not qr:
-        raise HTTPException(status_code=404, detail=_GONE)
-    if not portal.throttle.allow(token):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                            detail="Too many requests for this questionnaire. Wait a few minutes and try again.")
+def open_for_vendor(qr: VendorQuestionnaireResponse, allow_submitted: bool = False) -> VendorQuestionnaireResponse:
+    """The questionnaire, if the vendor can still work on it (or, with
+    `allow_submitted`, read what they sent)."""
     if qr.expires_at and qr.expires_at < datetime.utcnow():
         raise HTTPException(status_code=410, detail="This questionnaire link has expired. Ask your contact to send a new one.")
     if not allow_submitted and qr.status not in portal.WAITING_ON_VENDOR:
@@ -597,16 +666,40 @@ def _validate_external_token(token: str, db: Session, allow_submitted: bool = Fa
     return qr
 
 
+def _validate_external_token(token: str, db: Session, allow_submitted: bool = False,
+                             request: Optional[Request] = None) -> VendorQuestionnaireResponse:
+    """The questionnaire behind a vendor's own link, if the link still works. A
+    sealed token is never a link, and failed lookups count against the address."""
+    address = portal.client_ip(request)
+    if portal.throttle.failing(address):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_BUSY)
+    qr = None if portal.is_sealed(token) else db.query(VendorQuestionnaireResponse).filter(
+        VendorQuestionnaireResponse.token == token,
+    ).first()
+    if not qr:
+        portal.throttle.failed(address)
+        raise HTTPException(status_code=404, detail=_GONE)
+    if not portal.throttle.allow(token):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=_BUSY)
+    return open_for_vendor(qr, allow_submitted)
+
+
 @router.get("/questionnaires/external/{token}")
 def external_load_questionnaire(
     token: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """External vendor loads the questionnaire by token. No authentication required."""
-    qr = _validate_external_token(token, db)
+    return vendor_view(db, _validate_external_token(token, db, request=request))
 
+
+def vendor_view(db: Session, qr: VendorQuestionnaireResponse, contact=None) -> dict:
+    """The questionnaire as the vendor sees it. Through a personal link the
+    contact is the one answering, so they are shown as respondent and attester."""
     # The questions as they were sent, whatever has happened to the template since.
-    questions = versions.questions_for(db, qr)
+    version = versions.pin(db, qr)
+    questions = list(version.questions or []) if version else []
     db.commit()                      # a link sent before versions existed is pinned now
     fixed = qevidence.locked(qr, questions)
     if fixed:
@@ -624,8 +717,9 @@ def external_load_questionnaire(
             "uploaded_at": ev.uploaded_at.isoformat() if ev.uploaded_at else None,
         })
 
-    return {
+    shown = {
         "questionnaire_id": qr.id,
+        "title": version.name if version else None,
         "vendor_name": vendor.name if vendor else None,
         "respondent_name": qr.respondent_name,
         "respondent_email": qr.respondent_email,
@@ -644,6 +738,10 @@ def external_load_questionnaire(
         if certificate else None,
         "evidence": evidence_by_question,
     }
+    if contact is not None:
+        shown["respondent_name"], shown["respondent_email"] = contact.name, contact.email
+        shown["attestation"] = {"name": contact.name, "title": contact.job_title, "email": contact.email}
+    return shown
 
 
 def _materialise(db: Session, assessment, qr) -> None:
@@ -665,20 +763,32 @@ def _materialise(db: Session, assessment, qr) -> None:
 def external_submit_questionnaire(
     token: str,
     payload: ExternalSubmitRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """External vendor saves or submits answers. No authentication required."""
-    qr = _validate_external_token(token, db)
+    qr = _validate_external_token(token, db, request=request)
     return _save_answers(db, qr, payload)
 
 
-def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: ExternalSubmitRequest) -> dict:
+def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: ExternalSubmitRequest,
+                  contact=None) -> dict:
     """Save a vendor's answers, from the portal or a workbook.
 
     Which questions apply is worked out again here, so an answer to one the
     vendor could not see neither counts nor blocks. While a questionnaire is
     returned, only the questions the reviewer asked about can change. Submitting
-    takes a named person attesting to the answers."""
+    takes a named person attesting to the answers. Through a personal link the
+    contact is the respondent and attester unless the answers name someone, and
+    the questionnaire's links go to them from now on."""
+    if contact is not None:
+        qr.contact_id = contact.id
+        given = {k: v for k, v in (payload.attestation or {}).items() if v not in (None, "")}
+        payload = payload.model_copy(update={
+            "respondent_name": payload.respondent_name or contact.name,
+            "respondent_email": payload.respondent_email or contact.email,
+            "attestation": None if payload.attestation is None else {
+                "name": contact.name, "email": contact.email, "title": contact.job_title, **given}})
     questions = versions.questions_for(db, qr)
     answers = portal.merge(qr.status, questions, qr.responses or {}, payload.responses or {}, qr.review)
     answers.update(qevidence.locked(qr, questions))
@@ -746,11 +856,18 @@ def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: Externa
 async def external_upload_evidence(
     token: str,
     question_id: str,
+    request: Request,
     file: UploadFile = File(...),
     expires_on: Optional[date] = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload evidence file for a specific question. No auth — token validated.
+    """Upload evidence file for a specific question. No auth — token validated."""
+    return await vendor_upload(db, _validate_external_token(token, db, request=request), question_id, file, expires_on)
+
+
+async def vendor_upload(db: Session, qr: VendorQuestionnaireResponse, question_id: str, file: UploadFile,
+                        expires_on: Optional[date]) -> dict:
+    """A vendor's file for one question.
 
     Hardened (TPRM-009): extension allow-list, 25 MB size cap (bounded read),
     per-questionnaire file cap, and a UUID-based on-disk name derived only from the
@@ -759,7 +876,6 @@ async def external_upload_evidence(
     The file also becomes an evidence-library record linked to the question, with
     the expiry the vendor gives (a certificate's), and is reviewed against the
     question in the background."""
-    qr = _validate_external_token(token, db)
     question = next((q for q in versions.questions_for(db, qr) if str(q.get("id")) == question_id), None)
     if question is None:
         raise HTTPException(status_code=404, detail="That question is not in this questionnaire")
@@ -829,11 +945,15 @@ async def external_upload_evidence(
 @router.get("/questionnaires/external/{token}/evidence")
 def external_list_evidence(
     token: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """List all evidence files for a questionnaire. No auth — token validated."""
-    qr = _validate_external_token(token, db, allow_submitted=True)
+    return vendor_evidence(db, _validate_external_token(token, db, allow_submitted=True, request=request))
 
+
+def vendor_evidence(db: Session, qr: VendorQuestionnaireResponse) -> dict:
+    """The vendor's files, by question, newest first."""
     evidence_list = db.query(VendorQuestionnaireEvidence).filter(
         VendorQuestionnaireEvidence.response_id == qr.id,
     ).order_by(VendorQuestionnaireEvidence.uploaded_at.desc()).all()
@@ -857,11 +977,15 @@ def external_list_evidence(
 def external_delete_evidence(
     token: str,
     evidence_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Delete an evidence file. No auth — token validated."""
-    qr = _validate_external_token(token, db)
+    return vendor_delete_evidence(db, _validate_external_token(token, db, request=request), evidence_id)
 
+
+def vendor_delete_evidence(db: Session, qr: VendorQuestionnaireResponse, evidence_id: int) -> dict:
+    """A file the vendor withdraws before submitting."""
     evidence = db.query(VendorQuestionnaireEvidence).filter(
         VendorQuestionnaireEvidence.id == evidence_id,
         VendorQuestionnaireEvidence.response_id == qr.id,
@@ -1002,30 +1126,36 @@ async def _read_workbook(db: Session, qr: VendorQuestionnaireResponse, file: Upl
 
 
 @router.get("/questionnaires/external/{token}/workbook")
-def external_workbook(token: str, db: Session = Depends(get_db)):
+def external_workbook(token: str, request: Request, db: Session = Depends(get_db)):
     """The questionnaire as a workbook, to answer offline. No auth — token validated."""
-    return _workbook_file(db, _validate_external_token(token, db))
+    return _workbook_file(db, _validate_external_token(token, db, request=request))
 
 
 @router.get("/questionnaires/external/{token}/pdf")
-def external_pdf(token: str, db: Session = Depends(get_db)):
+def external_pdf(token: str, request: Request, db: Session = Depends(get_db)):
     """The questionnaire as a fillable PDF, to answer offline. No auth — token validated.
     It comes back through the workbook upload, which takes either."""
-    return _pdf_file(db, _validate_external_token(token, db))
+    return _pdf_file(db, _validate_external_token(token, db, request=request))
 
 
 @router.post("/questionnaires/external/{token}/workbook")
 async def external_import_workbook(
     token: str,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    """A completed workbook, saved as a draft. No auth — token validated."""
+    return await vendor_import_workbook(db, _validate_external_token(token, db, request=request), file)
+
+
+async def vendor_import_workbook(db: Session, qr: VendorQuestionnaireResponse, file: UploadFile,
+                                 contact=None) -> dict:
     """A completed workbook, saved as a draft. The vendor then checks it and
     submits in the portal, where the attestation is confirmed."""
-    qr = _validate_external_token(token, db)
     parsed = await _read_workbook(db, qr, file)
     saved = _save_answers(db, qr, ExternalSubmitRequest(
-        responses=parsed["responses"], comments=parsed["comments"], submit=False))
+        responses=parsed["responses"], comments=parsed["comments"], submit=False), contact)
     return {**saved, "imported": len(parsed["responses"]), "attestation": parsed["attestation"]}
 
 

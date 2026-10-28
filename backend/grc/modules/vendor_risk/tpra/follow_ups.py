@@ -9,15 +9,15 @@ being sent however often the parent is accepted or re-examined.
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from ....models import VendorQuestionnaireResponse, VendorQuestionnaireTemplate
+from ....models import Vendor, VendorQuestionnaireResponse, VendorQuestionnaireTemplate
 from . import versions
-from .portal import visible_questions
+from .contacts import recipient
+from .portal import sealed_token, visible_questions
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,20 @@ def trigger_key(parent_id: int, question_key: str, template_id: int) -> str:
     return f"{parent_id}:{question_key}:{template_id}"[:200]
 
 
+def _contact_id(db: Session, qr: VendorQuestionnaireResponse, actor_id: Optional[int]) -> Optional[int]:
+    """Whom a follow-up's personal links go to: the parent's contact. A parent sent
+    before personal links has none, and its respondent becomes one."""
+    if qr.contact_id or not qr.respondent_email:
+        return qr.contact_id
+    try:
+        contact = recipient(db, db.get(Vendor, qr.vendor_id), actor_id, name=qr.respondent_name,
+                            email=qr.respondent_email)
+    except ValueError:                     # an address that is not one, or a contact with no portal access
+        return None
+    qr.contact_id = contact.id if contact else None
+    return qr.contact_id
+
+
 def send(db: Session, qr: VendorQuestionnaireResponse, questions: List[dict], actor_id: Optional[int],
          now: Optional[datetime] = None) -> List[VendorQuestionnaireResponse]:
     """Create the follow-ups this questionnaire's answers call for, each once."""
@@ -69,9 +83,9 @@ def send(db: Session, qr: VendorQuestionnaireResponse, questions: List[dict], ac
         version = versions.publish(db, template, actor_id)
         child = VendorQuestionnaireResponse(
             tenant_id=qr.tenant_id, vendor_id=qr.vendor_id, assessment_id=qr.assessment_id,
-            template_id=template.id, template_version_id=version.id,
+            template_id=template.id, template_version_id=version.id, contact_id=_contact_id(db, qr, actor_id),
             respondent_name=qr.respondent_name, respondent_email=qr.respondent_email,
-            token=str(uuid.uuid4()), status="pending", last_sent_at=now,
+            token=sealed_token(), status="pending", last_sent_at=now,
             due_date=now + timedelta(days=DUE_IN_DAYS), expires_at=now + timedelta(days=EXPIRES_IN_DAYS),
             parent_response_id=qr.id, trigger_key=trigger,
         )

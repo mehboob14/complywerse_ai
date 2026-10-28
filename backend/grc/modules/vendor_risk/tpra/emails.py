@@ -1,8 +1,8 @@
 """The emails third-party risk sends, in the tenant's own words.
 
-Five of them: the questionnaire invitation and the reminder a supplier receives,
-the reminder and the escalation our people receive as a date nears or passes,
-and the note that an attention item was assigned to someone. Each has built-in
+Among them: the questionnaire invitation, the reminder and the personal portal
+link a supplier receives, the reminder and the escalation our people receive as a
+date nears or passes, and the note that an attention item was assigned to someone. Each has built-in
 wording, which is what went out before any of this was editable. A tenant can
 change the subject and body, see it filled in with sample values before saving,
 send it to themselves, and go back to the built-in wording.
@@ -56,6 +56,20 @@ CATALOGUE: Dict[str, dict] = {
         "sample": {"title": "Reminder: the questionnaire for Payroll Co, due in 3 days", "vendor": "Payroll Co",
                    "link": "https://grc.example.com/vendor-risk/questionnaires/abc123", "when": "due in 3 days",
                    "organisation": "Acme Bank"},
+    },
+    "portal_link": {
+        "label": "Supplier portal link", "audience": "Supplier",
+        "when": "A supplier's contact is sent their personal link to the supplier portal, or asks for a new one.",
+        "placeholders": {"contact": "The contact's name", "vendor": "The supplier's name",
+                         "link": "The contact's personal link", "expires": "When the link stops working, e.g. '28 Nov 2026'",
+                         "organisation": "Our organisation's name"},
+        "required": ("link",),
+        "subject": "Your supplier portal link for {vendor}",
+        "body": "Hello {contact},\n\nHere is your personal link to the supplier portal for {vendor}. It is for you "
+                "alone and works until {expires}.\n\nOpen the portal: {link}\n\nIf it stops working, open it anyway "
+                "and ask for a new one.\n\nThank you,\n{organisation}",
+        "sample": {"contact": "Sam Lee", "vendor": "Payroll Co", "link": "https://grc.example.com/supplier/abc123",
+                   "expires": "28 Nov 2026", "organisation": "Acme Bank"},
     },
     "reminder": {
         "label": "Reminder to our people", "audience": "Our people",
