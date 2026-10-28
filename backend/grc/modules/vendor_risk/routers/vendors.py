@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, or_
 
 from ....models import (
     Vendor, VendorAssessment, VendorSLARecord, VendorIncident,
@@ -126,6 +126,8 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "intake_status": getattr(v, "intake_status", None),
         "custom_values": getattr(v, "custom_values", None) or {},
         "vat_number": getattr(v, "vat_number", None), "vat_check": getattr(v, "vat_check", None),
+        # Set while the supplier is archived (DELETE /vendors/{id}); POST /vendors/{id}/restore clears it.
+        "archived_at": v.deleted_at.isoformat() if getattr(v, "deleted_at", None) else None,
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }
@@ -159,8 +161,12 @@ def list_vendors(
     search: Optional[str] = Query(None, description="Search by name"),
     vendor_type: Optional[str] = Query(None),
     data_access_level: Optional[str] = Query(None),
-    skip: int = 0,
-    limit: int = 100,
+    # Archived suppliers, and onboarding requests not yet picked up (or turned down), are not suppliers in use: left
+    # out unless asked for. A request in review is a supplier being onboarded and is listed.
+    include_archived: bool = Query(False, description="Also list archived suppliers"),
+    include_requests: bool = Query(False, description="Also list requests not yet in review, and turned-down ones"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, description="Page size; page with skip until `total` is reached"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -172,6 +178,10 @@ def list_vendors(
         joinedload(Vendor.owner),
     ).filter(Vendor.tenant_id.in_(tenant_ids))
 
+    if not include_archived:
+        query = query.filter(Vendor.deleted_at.is_(None))
+    if not include_requests:
+        query = query.filter(or_(Vendor.intake_status.is_(None), Vendor.intake_status.in_(("in_review", "approved"))))
     if tier:
         query = query.filter(Vendor.tier == tier)
     if vendor_status:
@@ -183,8 +193,9 @@ def list_vendors(
     if search:
         query = query.filter(Vendor.name.ilike(f"%{search}%"))
 
-    vendors = query.order_by(Vendor.created_at.desc()).offset(skip).limit(limit).all()
     total = query.count()
+    # The id breaks ties (an import creates many at once), so pages never overlap or skip a supplier.
+    vendors = query.order_by(Vendor.created_at.desc(), Vendor.id.desc()).offset(skip).limit(limit).all()
 
     return {
         "items": [serialize_vendor(v) for v in vendors],
@@ -227,9 +238,10 @@ def create_vendor(
                     .first()
                 )
         if existing:
+            where = "is archived" if existing.deleted_at else "already exists"
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"A vendor named “{existing.name}” already exists (ID {existing.id}). It may be the same relationship.",
+                detail=f"A vendor named “{existing.name}” {where} (ID {existing.id}). It may be the same relationship.",
             )
 
     try:
@@ -276,14 +288,16 @@ def vendor_dashboard(
     if not tenant_ids:
         return {"total_vendors": 0}
 
-    base = db.query(Vendor).filter(Vendor.tenant_id.in_(tenant_ids))
+    # Archived suppliers are not counted anywhere on the dashboard.
+    live = and_(Vendor.tenant_id.in_(tenant_ids), Vendor.deleted_at.is_(None))
+    base = db.query(Vendor).filter(live)
 
     total = base.count()
 
     # By tier
     by_tier_rows = (
         db.query(Vendor.tier, func.count(Vendor.id))
-        .filter(Vendor.tenant_id.in_(tenant_ids))
+        .filter(live)
         .group_by(Vendor.tier)
         .all()
     )
@@ -292,7 +306,7 @@ def vendor_dashboard(
     # By status
     by_status_rows = (
         db.query(Vendor.status, func.count(Vendor.id))
-        .filter(Vendor.tenant_id.in_(tenant_ids))
+        .filter(live)
         .group_by(Vendor.status)
         .all()
     )
@@ -316,7 +330,7 @@ def vendor_dashboard(
     avg_inherent = (
         db.query(func.avg(Vendor.inherent_risk_score))
         .filter(
-            Vendor.tenant_id.in_(tenant_ids),
+            live,
             Vendor.inherent_risk_score != None,
         )
         .scalar()
@@ -324,7 +338,7 @@ def vendor_dashboard(
     avg_residual = (
         db.query(func.avg(Vendor.residual_risk_score))
         .filter(
-            Vendor.tenant_id.in_(tenant_ids),
+            live,
             Vendor.residual_risk_score != None,
         )
         .scalar()
@@ -334,7 +348,8 @@ def vendor_dashboard(
     recent_assessments = (
         db.query(VendorAssessment)
         .options(joinedload(VendorAssessment.vendor))
-        .filter(VendorAssessment.tenant_id.in_(tenant_ids))
+        .join(Vendor, Vendor.id == VendorAssessment.vendor_id)
+        .filter(VendorAssessment.tenant_id.in_(tenant_ids), Vendor.deleted_at.is_(None))
         .order_by(VendorAssessment.created_at.desc())
         .limit(5)
         .all()
@@ -343,9 +358,11 @@ def vendor_dashboard(
     # Open incidents count
     open_incidents = (
         db.query(func.count(VendorIncident.id))
+        .join(Vendor, Vendor.id == VendorIncident.vendor_id)
         .filter(
             VendorIncident.tenant_id.in_(tenant_ids),
             VendorIncident.status.in_(["open", "investigating"]),
+            Vendor.deleted_at.is_(None),
         )
         .scalar()
     )
@@ -458,12 +475,42 @@ def delete_vendor(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    """Archive the supplier: it leaves the register, dashboards, queues and reminders, and everything recorded about
+    it (assessments, questionnaires, SLAs, incidents, findings) stays readable. A supplier carries history, so it is
+    never hard-deleted; restore brings it back as it was."""
     rbac.require_write(db, current_user, "vendors", "delete")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
-    db.delete(vendor)
-    db.commit()
-    return {"message": f"Vendor '{vendor.name}' deleted successfully"}
+    if vendor.deleted_at is None:
+        from ..tpra.service import write_audit
+        vendor.deleted_at = datetime.utcnow()
+        write_audit(db, vendor.tenant_id, entity="vendor", action="archive", vendor_id=vendor.id,
+                    entity_id=vendor.id, actor_id=current_user.id)
+        db.commit()
+    return {"message": f"Vendor '{vendor.name}' archived", "archived_at": vendor.deleted_at.isoformat()}
+
+
+@router.post("/vendors/{vendor_id}/restore")
+def restore_vendor(
+    vendor_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Bring an archived supplier back, as it was when it was archived."""
+    rbac.require_write(db, current_user, "vendors", "delete")
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+
+    vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    if vendor.deleted_at is not None:
+        from ..tpra.service import write_audit
+        vendor.deleted_at = None
+        write_audit(db, vendor.tenant_id, entity="vendor", action="restore", vendor_id=vendor.id,
+                    entity_id=vendor.id, actor_id=current_user.id)
+        db.commit()
+        db.refresh(vendor)
+    return serialize_vendor(vendor)

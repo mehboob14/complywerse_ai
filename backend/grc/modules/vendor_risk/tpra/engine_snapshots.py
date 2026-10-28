@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ....models import (
@@ -28,6 +29,8 @@ def _finding_counts(db: Session, tenant_id: int, vendor_id: Optional[int] = None
     )
     if vendor_id is not None:
         q = q.filter(TPRAFinding.vendor_id == vendor_id)
+    else:   # the portfolio leaves archived suppliers out, findings included
+        q = q.filter(~TPRAFinding.vendor_id.in_(select(Vendor.id).where(Vendor.deleted_at.isnot(None))))
     rows = q.all()
     return len(rows), sum(1 for f in rows if (f.severity or "").lower() == "critical")
 
@@ -69,6 +72,7 @@ def write_portfolio_snapshot(
     vendors = db.query(Vendor).filter(
         Vendor.tenant_id == tenant_id,
         Vendor.status != "retired",
+        Vendor.deleted_at.is_(None),
     ).all()
     inherents = [v.inherent_risk_score for v in vendors if v.inherent_risk_score is not None]
     residuals = [v.residual_risk_score for v in vendors if v.residual_risk_score is not None]
