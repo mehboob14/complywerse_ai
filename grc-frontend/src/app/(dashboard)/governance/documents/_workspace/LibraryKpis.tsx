@@ -38,14 +38,18 @@ const CARDS: { key: CardKey; label: string; tip: string; Icon: LucideIcon; tile:
 /** What a bucket's chip says: a word or two (the full wording is its tooltip and the filter list's). */
 const CHIP_WORD: Record<ReviewBucket, string> = { ok: 'current', due_soon: 'due', overdue: 'overdue', unscheduled: 'no date' };
 
-// six tiles: 2 across on a phone (3 rows), 3 across from tablets (2 rows), one row on a laptop with the health tile widest
-const GRID = 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(0,2.6fr)]';
-const TILE = 'h-[72px]';
+// six tiles: 2 across on a phone (4 rows), 3 across from tablets (3 rows: the health tile spans the last one, "Published" widens to
+// fill the one above), one row on a laptop with the health tile widest (never narrower than the ring and its four counts need)
+const GRID = 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(320px,2.2fr)]';
+// a minimum, not a fixed height: if the counts of the health tile ever have to wrap, the whole row grows instead of clipping them
+const TILE = 'min-h-[72px]';
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 // NOTE: the platform's CSS forces `.bg-white` with !important, which would beat a hover tint on the same element: a tile whose
 // background changes is spelled bg-[#fff], not bg-white.
 /** A zero is quieter than a count, but still readable (3.7:1 on white; large text needs 3:1). */
 const ZERO = 'text-[#7b8794]';
+/** The same quiet, for text under 24px (4.6:1 on white; small text needs 4.5:1): the health tile's zeros and its empty line. */
+const ZERO_SMALL = 'text-[#6b7785]';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const documents = (n: number) => `${fmt(n)} ${n === 1 ? 'document' : 'documents'}`;
@@ -58,7 +62,7 @@ function StatusTile({ card, count, delta, active, wide, onClick }: {
   /** documents added in the last 30 days (the "All" tile only) */
   delta?: number;
   active: boolean;
-  /** the odd tile of the two-column phone grid fills its row */
+  /** the odd tile of the two- and three-column grids fills its row (the health tile has the next row to itself) */
   wide: boolean;
   onClick: () => void;
 }) {
@@ -70,7 +74,7 @@ function StatusTile({ card, count, delta, active, wide, onClick }: {
       aria-label={`${card.label}, ${documents(count)}. ${card.key === 'all' ? 'Show all.' : 'Show only these.'}`}
       title={`${card.tip}${active ? ' — click to show all' : ''}`}
       onClick={onClick}
-      className={`${TILE} flex min-w-0 flex-col justify-between rounded-xl border px-3.5 py-2.5 text-left transition-colors ${wide ? 'col-span-2 md:col-span-1' : ''} ${FOCUS} focus-visible:ring-offset-1 ${
+      className={`${TILE} flex min-w-0 flex-col justify-between rounded-xl border px-3.5 py-2.5 text-left transition-colors ${wide ? 'col-span-2 xl:col-span-1' : ''} ${FOCUS} focus-visible:ring-offset-1 ${
         active ? 'border-[#0f766e] bg-[#f0fdfa] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-[#fff] hover:border-[#99d5cf] hover:bg-[#f0fdfa]'
       }`}
     >
@@ -92,8 +96,9 @@ function StatusTile({ card, count, delta, active, wide, onClick }: {
 
 // ─── Review health ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const SIZE = 52;
-const STROKE = 7;
+// a thin ring: the percentage inside it (13px, about 31px wide) has ~7px of air on each side, the arcs read as a gauge, not a block
+const SIZE = 56;
+const STROKE = 5;
 const RADIUS = (SIZE - STROKE) / 2;
 
 function HealthTile({ health, review, onReview }: { health: Kpis['health']; review: ReviewBucket[]; onReview: (next: ReviewBucket[]) => void }) {
@@ -104,11 +109,12 @@ function HealthTile({ health, review, onReview }: { health: Kpis['health']; revi
     <div
       role="group"
       aria-label="Review health"
-      className={`${TILE} col-span-2 flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-[#d5dbe1] bg-white px-3.5 md:col-span-1`}
+      className={`${TILE} col-span-2 flex min-w-0 items-center gap-3.5 overflow-hidden rounded-xl border border-[#d5dbe1] bg-white px-3.5 py-1.5 md:col-span-3 xl:col-span-1`}
     >
-      <div className="relative h-[52px] w-[52px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable)} in force are up to date` : undefined}>
+      <div className="relative h-[56px] w-[56px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable)} in force are up to date` : undefined}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
-          {arcs.length === 0 && <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="#e1e6eb" strokeWidth={STROKE} />}
+          {/* the track: the whole ring in a pale grey, the arcs are drawn over it (it shows only in the gaps between arcs, or alone when nothing is in force) */}
+          <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="#e8edf1" strokeWidth={STROKE} />
           {arcs.map((arc) => (
             <circle
               key={arc.bucket}
@@ -140,8 +146,8 @@ function HealthTile({ health, review, onReview }: { health: Kpis['health']; revi
               : 'A review is owed on published and approved documents. None is in force yet.'}
           />
         </div>
-        {reviewable > 0 && (
-          <div className="mt-0.5 flex flex-wrap gap-1">
+        {reviewable > 0 ? (
+          <div className="flex flex-wrap gap-x-1.5">
             {rows.map((bucket) => {
               const count = healthCount(health, bucket);
               const share = percent(count, reviewable);
@@ -154,17 +160,22 @@ function HealthTile({ health, review, onReview }: { health: Kpis['health']; revi
                   aria-label={`${REVIEW_BUCKET_LABEL[bucket]}, ${documents(count)}, ${share}%. Show only these.`}
                   title={`${REVIEW_BUCKET_LABEL[bucket]}: ${fmt(count)} of ${fmt(reviewable)} (${share}%)`}
                   onClick={() => onReview(active ? [] : [bucket])}
-                  className={`inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[12px] leading-4 transition-colors ${FOCUS} ${
-                    active ? 'border-[#99d5cf] bg-[#f0fdfa] text-[#115e59]' : 'border-transparent text-[#26323d] hover:bg-[#f3f6f8]'
+                  className={`flex flex-col items-start rounded-md border px-0.5 text-left transition-colors ${FOCUS} ${
+                    active ? 'border-[#99d5cf] bg-[#f0fdfa]' : 'border-transparent hover:bg-[#f3f6f8]'
                   }`}
                 >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: HEALTH_COLOUR[bucket] }} aria-hidden />
-                  <span className="font-semibold tabular-nums text-[#1f2933]">{fmt(count)}</span>
-                  <span>{CHIP_WORD[bucket]}</span>
+                  {/* the count on top with its colour, the word under it: four of them take about 200px, one line, whatever the data */}
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: HEALTH_COLOUR[bucket] }} aria-hidden />
+                    <span className={`text-[16px] font-semibold leading-5 tabular-nums ${count === 0 ? ZERO_SMALL : 'text-[#1f2933]'}`}>{fmt(count)}</span>
+                  </span>
+                  <span className={`text-[12px] leading-4 ${active ? 'text-[#115e59]' : 'text-[#586472]'}`}>{CHIP_WORD[bucket]}</span>
                 </button>
               );
             })}
           </div>
+        ) : (
+          <div className={`mt-1 text-[12px] leading-5 ${ZERO_SMALL}`}>None in force yet</div>
         )}
       </div>
     </div>
