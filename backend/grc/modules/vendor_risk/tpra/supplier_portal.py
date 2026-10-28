@@ -13,6 +13,10 @@ The home also lists what we asked the supplier for outside a questionnaire, and
 the supplier's thread with us (tpra/supplier_requests.py): a request is answered
 here, with files and a reply, and only shared messages are ever shown. Another
 supplier's request gets the same answer as a link that does not work.
+
+A questionnaire the supplier already sent opens read-only, with the comments a
+reviewer shared on its questions (never an internal one); the contact replies on
+the question, and the question's reviewers hear of it (tpra/reviews.py).
 """
 from __future__ import annotations
 
@@ -29,7 +33,7 @@ from ....models import (
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ..routers import questionnaires as routes
-from . import contacts, portal, supplier_requests, versions
+from . import contacts, portal, reviews, supplier_requests, versions
 
 router = APIRouter(tags=["Supplier portal"])
 
@@ -64,12 +68,16 @@ def resolve(db: Session, token: str, request: Request) -> Tuple[TPRAPortalToken,
 
 def _questionnaire(db: Session, token: str, qid: int, request: Request,
                    allow_submitted: bool = False) -> Tuple[TPRAVendorContact, VendorQuestionnaireResponse]:
-    """A questionnaire of the link's supplier, as the vendor may use it now."""
+    """A questionnaire of the link's supplier, as the vendor may use it now. With
+    `allow_submitted`, one already sent is there to read and talk about, whatever
+    its own expiry: the personal link is the key."""
     _, contact, vendor = resolve(db, token, request)
     qr = db.query(VendorQuestionnaireResponse).filter(VendorQuestionnaireResponse.id == qid,
                                                       VendorQuestionnaireResponse.vendor_id == vendor.id).first()
     if qr is None:
         _refuse(request, 404)
+    if allow_submitted and qr.status not in portal.WAITING_ON_VENDOR:
+        return contact, qr
     return contact, routes.open_for_vendor(qr, allow_submitted)
 
 
@@ -99,19 +107,21 @@ def _questions(db: Session, qr) -> Tuple[List[dict], Optional[str]]:
     return (versions.freeze(template.questions or []), template.name) if template else ([], None)
 
 
-def _item(db: Session, qr, now: datetime) -> dict:
+def _item(db: Session, qr, now: datetime, unread: int = 0) -> dict:
     questions, title = _questions(db, qr)
     answers = qr.responses or {}
     shown = portal.visible_questions(questions, answers)
+    files = portal.evidence_keys(db, qr) if any(portal._type(q) == "file" for q in shown) else set()
     return {
         "id": qr.id, "title": title or "Questionnaire", "status": qr.status,
         "due_date": _iso(qr.due_date), "sent_at": _iso(qr.last_sent_at or qr.created_at),
         "expires_at": _iso(qr.expires_at), "submitted_at": _iso(qr.submitted_at),
-        "progress": {"answered": sum(1 for q in shown if portal._value(answers.get(str(q.get("id"))))),
+        "progress": {"answered": sum(1 for q in shown if portal.answered(q, answers.get(str(q.get("id"))), files)),
                      "total": len(shown)},
         "returned_questions": len(portal.clarifications(qr.review)) if qr.status == "returned" else 0,
         # Answerable now; the rest are there to read about.
         "open": qr.status in portal.WAITING_ON_VENDOR and not (qr.expires_at and qr.expires_at < now),
+        "unread": unread,                    # comments we shared on its questions since the last visit
     }
 
 
@@ -125,7 +135,8 @@ def home(db: Session, row: TPRAPortalToken, contact: TPRAVendorContact, vendor: 
         and_(Q.status.in_(portal.WAITING_ON_VENDOR), or_(Q.expires_at.is_(None), Q.expires_at >= since)),
         and_(Q.status.in_(("submitted", "under_review", "accepted")), Q.submitted_at >= since),
     )).order_by(Q.created_at.desc(), Q.id.desc()).all()
-    items = [_item(db, qr, now) for qr in rows]
+    new = supplier_requests.unread(db, vendor.id, seen_at)
+    items = [_item(db, qr, now, new.get(("questionnaire", qr.id), 0)) for qr in rows]
     waiting = sorted((i for i in items if i["status"] in portal.WAITING_ON_VENDOR),
                      key=lambda i: (i["due_date"] is None, i["due_date"] or ""))
     requests, messages = supplier_requests.for_portal(db, vendor, seen_at)
@@ -191,10 +202,43 @@ def open_home(token: str, request: Request, db: Session = Depends(get_db)):
 _Q = "/portal/{token}/questionnaires/{qid}"
 
 
+def _comments(db: Session, qr) -> dict:
+    """The comments a reviewer shared, and the supplier's replies, by question."""
+    rows = supplier_requests.thread(db, qr.vendor_id, "questionnaire", qr.id, shared_only=True)
+    out: dict = {}
+    for m, row in zip(rows, supplier_requests.message_rows(db, rows, public=True)):
+        out.setdefault(m.question_key or "", []).append(row)
+    return out
+
+
 @router.get(_Q)
 def load_questionnaire(token: str, qid: int, request: Request, db: Session = Depends(get_db)):
-    contact, qr = _questionnaire(db, token, qid, request)
-    return routes.vendor_view(db, qr, contact)
+    """Waiting on the supplier: to answer. Already sent: to read and reply on."""
+    contact, qr = _questionnaire(db, token, qid, request, allow_submitted=True)
+    return {**routes.vendor_view(db, qr, contact), "messages": _comments(db, qr)}
+
+
+class ReplyIn(BaseModel):
+    question_key: str = Field(..., max_length=100)
+    body: str = Field(..., max_length=supplier_requests.MAX_TEXT)
+
+
+@router.post(_Q + "/messages", status_code=201)
+def reply(token: str, qid: int, body: ReplyIn, request: Request, db: Session = Depends(get_db)):
+    """A contact's reply on one question, always shared."""
+    contact, qr = _questionnaire(db, token, qid, request, allow_submitted=True)
+    if body.question_key not in {str(q.get("id")) for q in versions.questions_for(db, qr)}:
+        raise HTTPException(404, "That question is not in this questionnaire")
+    vendor = db.get(Vendor, qr.vendor_id)
+    try:
+        m = supplier_requests.post(db, vendor, "questionnaire", qr.id, body.body, author_kind="contact",
+                                   contact_id=contact.id, question_key=body.question_key)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    db.commit()
+    title = _questions(db, qr)[1] or "the questionnaire"
+    reviews.tell_reviewers(db, qr, body.question_key, f"{vendor.name} replied on a question in '{title}'")
+    return supplier_requests.message_rows(db, [m], public=True)[0]
 
 
 @router.post(_Q)

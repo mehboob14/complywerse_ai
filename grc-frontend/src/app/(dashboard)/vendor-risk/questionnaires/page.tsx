@@ -35,14 +35,23 @@ import Link from 'next/link';
 
 
 // An option carries a score (0..1) when the author gave one; a plain string is unscored.
-interface OptionDef { value: string; label?: string; score?: number | null }
+// na: "not applicable" (unscored; picking it needs a reason). comment_required: picking it needs a note.
+interface OptionDef { value: string; label?: string; score?: number | null; na?: boolean; comment_required?: boolean }
+
+type EvidenceMode = 'none' | 'optional' | 'required';
 
 interface Question {
   id: string;
   text: string;
-  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating';
+  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
   required: boolean;
-  evidence_required: boolean;
+  evidence_required: boolean;          // kept for older readers: evidence === 'required'
+  // Evidence the supplier gives with the answer; when required, owed on the answers in evidence_on (none listed: any).
+  evidence?: EvidenceMode;
+  evidence_on?: string[];
+  // Who reviews it: its section, else its risk domain (built-in templates), else General.
+  section?: string;
+  domain?: string;
   weight: number;
   options?: Array<string | OptionDef>;
   // A current certificate (SOC 2, ISO 27001) can answer this yes/no question.
@@ -55,6 +64,24 @@ interface Question {
 
 const optLabel = (o: string | OptionDef) => (typeof o === 'string' ? o : o.label ?? o.value);
 const optScore = (o: string | OptionDef) => (typeof o === 'string' ? null : o.score ?? null);
+const optValue = (o: string | OptionDef) => (typeof o === 'string' ? o : o.value);
+const optFlag = (o: string | OptionDef, flag: 'na' | 'comment_required') => typeof o !== 'string' && !!o[flag];
+
+// The answers a rule can name: Yes / Partial / No, or a choice's options.
+const answerValues = (q: Question) =>
+  q.type === 'yes_no' ? ['yes', 'partial', 'no'] : q.type === 'multiple_choice' ? (q.options || []).map(optValue) : [];
+// A question written before the evidence rules: evidence_required meant "on Yes or Partial".
+const evidenceOf = (q: Question): EvidenceMode => q.evidence ?? (q.evidence_required ? 'required' : 'optional');
+const evidenceOnOf = (q: Question) => (q.evidence ? q.evidence_on || []
+  : q.evidence_required && q.type === 'yes_no' ? ['yes', 'partial'] : []);
+// Saved as shown: the rule made explicit, answers it names that the question cannot have dropped.
+const withRules = (q: Question): Question => {
+  const evidence = q.type === 'file' ? 'none' : evidenceOf(q);
+  const values = answerValues(q);
+  return { ...q, evidence, evidence_on: evidence === 'required' ? evidenceOnOf(q).filter((v) => values.includes(v)) : [],
+           evidence_required: evidence === 'required' };
+};
+const EVIDENCE_LABEL: Record<EvidenceMode, string> = { none: 'No evidence', optional: 'Evidence optional', required: 'Evidence required' };
 
 interface QuestionnaireTemplate {
   id: number;
@@ -230,6 +257,7 @@ export default function VendorQuestionnairesPage() {
     type: 'text',
     required: true,
     evidence_required: false,
+    evidence: 'optional',
     weight: 3,
     options: [],
   });
@@ -450,11 +478,42 @@ export default function VendorQuestionnairesPage() {
       questions: prev.questions.map((q, i) =>
         i === qIdx
           ? { ...q, options: (q.options || []).map((o, j) => (j !== optIdx ? o : {
-              value: optLabel(o), label: optLabel(o),
+              ...(typeof o === 'string' ? {} : o), value: optLabel(o), label: optLabel(o),
               score: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))) / 100,
             })) }
           : q
       ),
+    }));
+  };
+
+  const setEvidence = (qIdx: number, patch: { evidence?: EvidenceMode; evidence_on?: string[] }) => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => (i !== qIdx ? q
+        : { ...q, evidence: patch.evidence ?? evidenceOf(q), evidence_on: patch.evidence_on ?? evidenceOnOf(q) })),
+    }));
+  };
+
+  // N/A (unscored, needs a reason) or "Needs a note" on one option. A Yes / No question lists only the
+  // options it changes; the rest are the standard ones (filled in when it is sent).
+  const toggleOptionFlag = (qIdx: number, value: string, flag: 'na' | 'comment_required') => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => {
+        if (i !== qIdx) return q;
+        if (q.type === 'yes_no') {
+          const given = (q.options || []).filter((o): o is OptionDef => typeof o !== 'string');
+          return { ...q, options: given.some((o) => o.value === value)
+            ? given.map((o) => (o.value === value ? { ...o, [flag]: !o[flag] } : o))
+            : [...given, { value, [flag]: true }] };
+        }
+        return { ...q, options: (q.options || []).map((o) => {
+          if (optValue(o) !== value) return o;
+          const def: OptionDef = typeof o === 'string' ? { value: o, label: o } : { ...o };
+          const on = !def[flag];
+          return { ...def, [flag]: on, ...(flag === 'na' && on ? { score: null } : {}) };
+        }) };
+      }),
     }));
   };
 
@@ -483,7 +542,7 @@ export default function VendorQuestionnairesPage() {
       name: templateForm.name,
       description: templateForm.description,
       category: templateForm.category,
-      questions: templateForm.questions.filter((q) => q.text.trim()),
+      questions: templateForm.questions.filter((q) => q.text.trim()).map(withRules),
     });
   };
 
@@ -573,7 +632,10 @@ export default function VendorQuestionnairesPage() {
     { value: 'yes_no', label: 'Yes / No' },
     { value: 'multiple_choice', label: 'Multiple Choice' },
     { value: 'rating', label: 'Rating (1-5)' },
+    { value: 'file', label: 'File upload' },
   ];
+  // Sections already used in this template, offered as choices.
+  const sectionsUsed = Array.from(new Set(templateForm.questions.map((q) => (q.section || '').trim()).filter(Boolean)));
 
   const weightItems = [1, 2, 3, 4, 5].map((w) => ({ value: String(w), label: String(w) }));
 
@@ -1164,15 +1226,26 @@ export default function VendorQuestionnairesPage() {
                           />
                           Required
                         </label>
-                        <label className="flex items-center gap-1.5 text-xs text-orange-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={q.evidence_required}
-                            onChange={(e) => updateQuestion(idx, 'evidence_required', e.target.checked)}
-                            className="rounded border-orange-300 text-orange-600"
-                          />
-                          <Paperclip className="h-3 w-3" />
-                          Evidence Required
+                        {q.type !== 'file' && (
+                          <label className="flex items-center gap-1.5 text-xs text-orange-700">
+                            <Paperclip className="h-3 w-3" />
+                            <span className="sr-only">Evidence for question {idx + 1}</span>
+                            <select value={evidenceOf(q)} onChange={(e) => setEvidence(idx, { evidence: e.target.value as EvidenceMode })}
+                              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700">
+                              <option value="none">No evidence</option>
+                              <option value="optional">Evidence optional</option>
+                              <option value="required">Evidence required</option>
+                            </select>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500"
+                          title="Questions in the same section are reviewed together">
+                          Section
+                          <input value={q.section || ''} list={`sections-${idx}`} maxLength={100}
+                            placeholder={q.domain ? q.domain.replace(/_/g, ' ') : 'General'}
+                            onChange={(e) => updateQuestion(idx, 'section', e.target.value || undefined)}
+                            className="w-32 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900" />
+                          <datalist id={`sections-${idx}`}>{sectionsUsed.map((s) => <option key={s} value={s} />)}</datalist>
                         </label>
                         {q.type === 'yes_no' && (
                           <label className="flex items-center gap-1.5 text-xs text-emerald-700 cursor-pointer"
@@ -1188,6 +1261,40 @@ export default function VendorQuestionnairesPage() {
                           </label>
                         )}
                       </div>
+
+                      {/* Evidence owed only on some answers (none picked: any answer) */}
+                      {evidenceOf(q) === 'required' && answerValues(q).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                          <span>Needed when the answer is</span>
+                          {answerValues(q).map((v) => {
+                            const on = evidenceOnOf(q).includes(v);
+                            return (
+                              <button key={v} type="button" aria-pressed={on}
+                                onClick={() => setEvidence(idx, { evidence_on: on ? evidenceOnOf(q).filter((x) => x !== v) : [...evidenceOnOf(q), v] })}
+                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                {v}
+                              </button>
+                            );
+                          })}
+                          {evidenceOnOf(q).length === 0 && <span className="text-gray-400">any answer</span>}
+                        </div>
+                      )}
+
+                      {/* A Yes / No answer that needs a note (N/A always needs a reason) */}
+                      {q.type === 'yes_no' && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                          <span title="Not applicable always needs a reason">Needs a note on</span>
+                          {['yes', 'partial', 'no'].map((v) => {
+                            const on = (q.options || []).some((o) => optValue(o) === v && optFlag(o, 'comment_required'));
+                            return (
+                              <button key={v} type="button" aria-pressed={on} onClick={() => toggleOptionFlag(idx, v, 'comment_required')}
+                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                {v}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {/* Conditional: ask only when an earlier question was answered a certain way */}
                       {idx > 0 && (() => {
@@ -1284,8 +1391,19 @@ export default function VendorQuestionnairesPage() {
                                 placeholder="score %"
                                 aria-label={`Score for option ${optIdx + 1}`}
                                 title="How good this answer is, 0 to 100. Leave empty for an answer that does not count."
-                                className="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-right"
+                                disabled={optFlag(opt, 'na')}
+                                className="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-right disabled:opacity-50"
                               />
+                              {([['na', 'N/A', 'Not applicable: not scored, and picking it needs a reason'],
+                                 ['comment_required', 'Note', 'Picking it needs a note']] as const).map(([flag, text, tip]) => (
+                                <button key={flag} type="button" title={tip} aria-pressed={optFlag(opt, flag)}
+                                  disabled={!optLabel(opt).trim()}
+                                  onClick={() => toggleOptionFlag(idx, optValue(opt), flag)}
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] disabled:opacity-40 ${optFlag(opt, flag)
+                                    ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                  {text}
+                                </button>
+                              ))}
                               <button type="button" onClick={() => removeOption(idx, optIdx)} className="text-gray-400 hover:text-red-500">
                                 <X className="h-3 w-3" />
                               </button>
@@ -1345,11 +1463,13 @@ export default function VendorQuestionnairesPage() {
                         </span>
                         <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
                         {q.required && <span className="text-xs text-primary-600">Required</span>}
-                        {q.evidence_required && (
+                        {q.type !== 'file' && evidenceOf(q) !== 'optional' && (
                           <span className="text-xs text-orange-600 flex items-center gap-1">
-                            <Paperclip className="h-3 w-3" /> Evidence Required
+                            <Paperclip className="h-3 w-3" /> {EVIDENCE_LABEL[evidenceOf(q)]}
+                            {evidenceOf(q) === 'required' && evidenceOnOf(q).length > 0 && ` (${evidenceOnOf(q).join(', ')})`}
                           </span>
                         )}
+                        {(q.section || q.domain) && <span className="text-xs text-gray-500">{q.section || q.domain.replace(/_/g, ' ')}</span>}
                       </div>
                       {q.type === 'multiple_choice' && q.options?.length > 0 && (
                         <div className="mt-2 pl-2 space-y-1">

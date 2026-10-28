@@ -10,7 +10,8 @@ Editing a template can therefore never change what an old answer meant.
 Publishing also freezes how answers score (decision 6: weights sit on the answer
 options, so "Partial" is worth what the tenant says) and the finding each weak
 answer raises. Changing the tenant's scoring policy later affects new versions
-only.
+only. The question rules ride along as written (evidence, evidence_on, an
+option's comment_required); an option marked not_applicable is scored as N/A.
 """
 from __future__ import annotations
 
@@ -47,12 +48,13 @@ def freeze(questions: list, scoring_policy: Optional[dict] = None) -> List[dict]
         q["weight"] = float(q.get("weight") or 1.0)
         options = q.get("options") or []
         if qtype == "yes_no":
+            # An option given (to ask for a note on it, say) keeps the defaults it leaves out.
             given = {str(o.get("value", "")).lower(): o for o in options if isinstance(o, dict)}
             options = [
-                given.get("yes") or {"value": "yes", "label": "Yes", "score": 1.0},
-                given.get("partial") or {"value": "partial", "label": "Partial", "score": partial},
-                given.get("no") or {"value": "no", "label": "No", "score": 0.0},
-                given.get("n-a") or {"value": "n-a", "label": "Not applicable", "na": True},
+                {"value": "yes", "label": "Yes", "score": 1.0, **given.get("yes", {})},
+                {"value": "partial", "label": "Partial", "score": partial, **given.get("partial", {})},
+                {"value": "no", "label": "No", "score": 0.0, **given.get("no", {})},
+                {"value": "n-a", "label": "Not applicable", "na": True, **given.get("n-a", {})},
             ]
         elif qtype == "rating":
             # 1 is the worst, 5 the best.
@@ -63,6 +65,8 @@ def freeze(questions: list, scoring_policy: Optional[dict] = None) -> List[dict]
         else:
             options = []
         for option in options:
+            if option.get("not_applicable"):
+                option["na"] = True
             if not option.get("na"):
                 option.setdefault("finding", default_severity(q, option.get("score")))
         q["options"] = options

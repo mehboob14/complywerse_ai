@@ -3,7 +3,7 @@
 Among them: the questionnaire invitation, the reminder, the personal portal link,
 the requests and the messages a supplier receives, the reminder and the escalation
 our people receive as a date nears or passes, the note that a supplier answered,
-and the note that an attention item was assigned to someone. Each has built-in
+and the notes that an attention item or a review was assigned to someone. Each has built-in
 wording, which is what went out before any of this was editable. A tenant can
 change the subject and body, see it filled in with sample values before saving,
 send it to themselves, and go back to the built-in wording.
@@ -164,6 +164,18 @@ CATALOGUE: Dict[str, dict] = {
         "body": "{title}.\n\nOpen: {link}",
         "sample": {"title": "Payroll Co: questionnaire to review", "link": "https://grc.example.com/vendor-risk/attention",
                    "vendor": "Payroll Co", "assigned_by": "Ana Lyst"},
+    },
+    "review_assigned": {
+        "label": "Review assigned", "audience": "Our people",
+        "when": "Someone is asked to review a section of a supplier's questionnaire, or the whole of it.",
+        "placeholders": {"section": "What to review, e.g. 'the Cybersecurity section' or 'the whole questionnaire'",
+                         "questionnaire": "The questionnaire's name", "vendor": "The supplier's name",
+                         "assigned_by": "Who assigned it", "link": "Where to review it"},
+        "required": (),
+        "subject": "Please review {section} for {vendor}",
+        "body": "{assigned_by} asked you to review {section} of '{questionnaire}' from {vendor}.\n\nOpen: {link}",
+        "sample": {"section": "the Cybersecurity section", "questionnaire": "Security", "vendor": "Payroll Co",
+                   "assigned_by": "Ana Lyst", "link": "https://grc.example.com/vendor-risk/assessments/11?tab=questionnaire"},
     },
 }
 _FIELD = re.compile(r"\{([a-z_]+)\}")

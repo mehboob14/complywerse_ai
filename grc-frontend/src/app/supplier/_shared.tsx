@@ -14,6 +14,7 @@ export interface PortalQuestionnaire {
   id: number; title: string; status: string; due_date: string | null; sent_at: string | null;
   expires_at: string | null; submitted_at: string | null; progress: { answered: number; total: number };
   returned_questions: number; open: boolean;
+  unread?: number;                                                // comments we shared on its questions since the last visit
 }
 
 export type RequestStatus = 'open' | 'submitted' | 'returned' | 'accepted' | 'cancelled';

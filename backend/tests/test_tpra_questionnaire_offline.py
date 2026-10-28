@@ -23,6 +23,7 @@ from grc.models import (
     Vendor, VendorAssessment, VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
     get_db,
 )
+from grc.models import TPRAReviewAssignment  # accepting waits for the questionnaire's reviewers
 from grc.modules.vendor_risk.routers import questionnaires as routes
 from grc.modules.vendor_risk.tpra import follow_ups, portal, rbac, versions
 from grc.routers.auth_router import require_auth
@@ -30,7 +31,7 @@ from grc.routers.auth_router import require_auth
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAVendorContact,
-           TPRAPortalToken]
+           TPRAPortalToken, TPRAReviewAssignment]
 ATTEST = {"name": "Sam Vendor", "email": "sam@vendor.test", "confirm": True}
 
 

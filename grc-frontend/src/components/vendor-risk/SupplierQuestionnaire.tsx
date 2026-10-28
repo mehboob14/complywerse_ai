@@ -6,12 +6,28 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, ArrowLeft, CheckCircle, Clock, Download, FileSpreadsheet, FileText, Loader2, Lock, MessageSquare, Paperclip, Save, Send, Shield, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowLeft, CheckCircle, Clock, Download, FileSpreadsheet, FileText, Loader2, Lock, MessageSquare, Paperclip, Save, Send, Shield, Trash2, Upload } from 'lucide-react';
 import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
 
-type QuestionType = 'text' | 'yes_no' | 'multiple_choice' | 'rating';
+type QuestionType = 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
 
-interface Question {
+/** An answer option. `na`/`not_applicable`: picking it needs a reason; `comment_required`: a note. */
+export interface QuestionOption {
+  value: string; label?: string; score?: number | null;
+  na?: boolean; not_applicable?: boolean; comment_required?: boolean;
+}
+
+/** What the question rules read (tpra/portal.py). */
+export interface RuleQuestion {
+  type?: string;
+  evidence?: 'none' | 'optional' | 'required';
+  evidence_on?: string[];                  // answers that owe the evidence; empty: any answer
+  evidence_required?: boolean;             // before the rules: owed on Yes or Partial
+  options?: Array<string | QuestionOption>;
+}
+
+interface Question extends RuleQuestion {
   id: string;
   text: string;
   type: QuestionType;
@@ -19,14 +35,46 @@ interface Question {
   evidence_required: boolean;
   weight: number;
   // A sent questionnaire carries its options as {value, label}; older templates as plain strings.
-  options?: Array<string | { value: string; label?: string }>;
+  options?: Array<string | QuestionOption>;
   // Shown only when an earlier question was answered with one of these values.
   show_if?: { question: string; in: string[] };
   // Answered by a certificate the requester already holds; cannot be changed.
   locked?: boolean;
 }
 
+// The question rules as the server applies them at submit (tpra/portal.py). ponytail: answers here
+// are always an option's own value, so the server's Yes/No spellings ("Y", "true") are not read.
+export function evidenceRule(q: RuleQuestion): { mode: 'none' | 'optional' | 'required'; on: string[] } {
+  if (q.evidence === 'none' || q.evidence === 'optional' || q.evidence === 'required') {
+    return { mode: q.evidence, on: (q.evidence_on || []).map((v) => String(v).trim().toLowerCase()) };
+  }
+  return q.evidence_required ? { mode: 'required', on: ['yes', 'partial'] } : { mode: 'optional', on: [] };
+}
+
+const optionOf = (q: RuleQuestion, value: string) => (q.options || []).find(
+  (o): o is QuestionOption => typeof o !== 'string' && String(o.value).trim().toLowerCase() === value.trim().toLowerCase());
+
+export const isNotApplicable = (o?: QuestionOption | null) => !!o && !!(o.na || o.not_applicable);
+
+/** Whether this answer owes evidence: a file question's file is its answer; N/A owes a reason instead. */
+export function owesEvidence(q: RuleQuestion, answer: string): boolean {
+  const { mode, on } = evidenceRule(q);
+  const value = (answer || '').trim();
+  if (mode !== 'required' || !value || q.type === 'file' || isNotApplicable(optionOf(q, value))) return false;
+  return on.length === 0 || on.includes(value.toLowerCase());
+}
+
+/** 'reason' for a not-applicable answer, 'note' for one whose option asks for a note. */
+export function noteNeeded(q: RuleQuestion, answer: string): 'reason' | 'note' | null {
+  const option = optionOf(q, answer || '');
+  if (isNotApplicable(option)) return 'reason';
+  return option?.comment_required ? 'note' : null;
+}
+
 type EvidenceFile = { id: number; file_name: string; file_type: string | null; file_size: number | null };
+
+// A comment a reviewer shared on a question, or the supplier's reply (portal only).
+type QuestionMessage = { id: number; from_supplier: boolean; author: string | null; body: string; created_at: string };
 
 interface Attestation { name: string; title: string; email: string }
 
@@ -46,11 +94,30 @@ interface QuestionnaireResponseData {
   attestation: { name: string | null; title: string | null; email: string | null };
   certificate: { name: string; mode: string; expires: string | null } | null;
   evidence: Record<string, EvidenceFile[]>;
+  // In the supplier portal: the comments shared on each question. A questionnaire's own link has none.
+  messages?: Record<string, QuestionMessage[]>;
 }
 
 const optionsOf = (question: Question) =>
   (question.options || []).map((o) =>
     typeof o === 'string' ? { value: o, label: o } : { value: String(o.value), label: String(o.label ?? o.value) });
+
+const WAITING = ['pending', 'in_progress', 'returned'];
+const SENT_STATUS: Record<string, string> = { submitted: 'Submitted', under_review: 'In review', accepted: 'Accepted' };
+
+/** The file a question asks for, dropped here or chosen. */
+function DropZone({ busy, onFile, label }: { busy: boolean; onFile: (f: File) => void; label: string }) {
+  return (
+    <label onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f && !busy) onFile(f); }}
+      className="relative flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-gray-300 bg-white px-4 py-5 text-center text-sm text-gray-600 hover:border-primary-400">
+      {busy ? <Loader2 className="h-5 w-5 animate-spin text-primary-600" /> : <Upload className="h-5 w-5 text-gray-400" />}
+      <span>Drop the file here or <span className="font-medium text-primary-700">choose it</span></span>
+      <input type="file" className="sr-only" aria-label={label} disabled={busy}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
+    </label>
+  );
+}
 
 const emptyFormState = (questions: Question[], existingResponses: Record<string, unknown>) => {
   const initial: Record<string, string> = {};
@@ -101,6 +168,11 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   const [evidence, setEvidence] = useState<Record<string, EvidenceFile[]>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [expiresOn, setExpiresOn] = useState<Record<string, string>>({});
+  const [openDrops, setOpenDrops] = useState<Record<string, boolean>>({});
+  const [threads, setThreads] = useState<Record<string, QuestionMessage[]>>({});
+  const [replies, setReplies] = useState<Record<string, string>>({});
+  const [replying, setReplying] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(0);
 
   const loadQuestionnaire = async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -114,6 +186,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
       setResponses(emptyFormState(payload.questions || [], payload.existing_responses || {}));
       setComments(payload.comments || {});
       setEvidence(payload.evidence || {});
+      setThreads(payload.messages || {});
       setAttestation((prev) => ({
         name: payload.attestation?.name || prev.name || payload.respondent_name || '',
         title: payload.attestation?.title || prev.title || '',
@@ -202,16 +275,56 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
     }
   };
 
+  // A reply on one question, to the comments a reviewer shared there (portal only; always shared).
+  const sendReply = async (questionId: string) => {
+    const body = (replies[questionId] || '').trim();
+    if (!body) return;
+    setReplying(questionId);
+    setError(null);
+    try {
+      const res = await apiClient.post(`${apiBase}/messages`, { question_key: questionId, body });
+      setThreads((prev) => ({ ...prev, [questionId]: [...(prev[questionId] || []), res.data as QuestionMessage] }));
+      setReplies((prev) => ({ ...prev, [questionId]: '' }));
+    } catch (replyError: any) {
+      setError(replyError?.response?.data?.detail || 'Your reply could not be sent.');
+    } finally {
+      setReplying(null);
+    }
+  };
+
   const returned = data?.status === 'returned';
+  const done = !!data && !WAITING.includes(data.status);       // sent: there to read, and to reply on
   const clarifications = data?.clarifications || {};
   const canEdit = (question: Question) => !question.locked && (!returned || question.id in clarifications);
 
   const shownQuestions = useMemo(() => applicable(data?.questions || [], responses), [data, responses]);
 
-  const unansweredRequired = useMemo(
-    () => shownQuestions.filter((question) => question.required && !(responses[question.id] || '').toString().trim()),
-    [shownQuestions, responses],
-  );
+  // A file question is answered by its file.
+  const isAnswered = (question: Question) => (question.type === 'file'
+    ? (evidence[question.id] || []).length > 0 : !!(responses[question.id] || '').toString().trim());
+
+  // What a question still lacks, by the server's rules: an answer, a reason or note, a document.
+  const gapsOf = (question: Question) => {
+    const value = (responses[question.id] || '').toString();
+    const answered = isAnswered(question);
+    const need = answered ? noteNeeded(question, value) : null;
+    return {
+      need,
+      left: (!answered && question.required) || (!!need && !(comments[question.id] || '').trim()),
+      document: answered && owesEvidence(question, value) && !(evidence[question.id] || []).length,
+    };
+  };
+  const toDo = done ? [] : shownQuestions.filter((q) => canEdit(q) && (gapsOf(q).left || gapsOf(q).document));
+  const questionsLeft = toDo.filter((q) => gapsOf(q).left).length;
+  const documentsMissing = toDo.filter((q) => gapsOf(q).document).length;
+  const goNext = () => {
+    if (!toDo.length) return;
+    const q = toDo[cursor % toDo.length];
+    document.getElementById(`question-${q.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setCursor((c) => c + 1);
+  };
+
+  const unansweredRequired = shownQuestions.filter((question) => question.required && !isAnswered(question));
 
   // Completeness across the REQUIRED questions that apply — drives the progress
   // meter and the submit gate. The server applies the same rule at submit.
@@ -221,16 +334,15 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
   const requiredPct = requiredTotal === 0 ? 100 : Math.round((requiredAnswered / requiredTotal) * 100);
   const attested = !!attestation.name.trim() && /\S+@\S+\.\S+/.test(attestation.email.trim()) && confirmed;
 
-  const isAnswered = (question: Question) => !!(responses[question.id] || '').toString().trim();
-
   const updateResponse = (questionId: string, value: string) => {
     setResponses((prev) => ({ ...prev, [questionId]: value }));
   };
 
   const submitQuestionnaire = async (submit: boolean) => {
     if (!data) return;
-    if (submit && unansweredRequired.length > 0) {
-      setError(`Please answer all required questions before submitting (${unansweredRequired.length} remaining).`);
+    if (submit && toDo.length > 0) {
+      setError('Finish the questions marked first.');
+      goNext();
       return;
     }
     if (submit && !attested) {
@@ -292,8 +404,6 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
     );
   }
 
-  const done = data?.status === 'submitted';
-
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
@@ -315,7 +425,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-gray-500" />
-                <span>{done ? 'Submitted' : returned ? 'Clarification requested' : 'In progress'}</span>
+                <span>{done ? SENT_STATUS[data?.status || ''] || 'Submitted' : returned ? 'Clarification requested' : 'In progress'}</span>
               </div>
               {data?.due_date && (
                 <div className="mt-1 text-xs text-gray-600">Due {new Date(data.due_date).toLocaleDateString()}</div>
@@ -406,11 +516,19 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                   const editable = canEdit(question) && !done;
                   const asked = clarifications[question.id];
                   const isAsked = question.id in clarifications;
-                  const commentOpen = openComments[question.id] || !!comments[question.id] || isAsked;
+                  const gaps = gapsOf(question);
+                  const files = evidence[question.id] || [];
+                  const rule = evidenceRule(question);
+                  const owes = owesEvidence(question, currentValue);
+                  // A question from before the rules asked for evidence this way, whatever the answer.
+                  const requested = question.evidence === undefined && !!question.evidence_required;
+                  const dropOpen = question.type === 'file' || owes || requested || !!openDrops[question.id];
+                  const thread = threads[question.id] || [];
+                  const commentOpen = openComments[question.id] || !!comments[question.id] || isAsked || !!gaps.need;
                   return (
-                    <div key={question.id}
-                      className={`rounded-xl border p-4 sm:p-5 ${isAsked ? 'border-amber-300 bg-amber-50/40'
-                        : needsAnswer && editable ? 'border-amber-300 bg-gray-50 ring-1 ring-amber-100' : 'border-gray-200 bg-gray-50'}`}>
+                    <div key={question.id} id={`question-${question.id}`}
+                      className={`scroll-mt-6 rounded-xl border p-4 sm:p-5 ${isAsked ? 'border-amber-300 bg-amber-50/40'
+                        : (gaps.left || gaps.document) && editable ? 'border-amber-300 bg-gray-50 ring-1 ring-amber-100' : 'border-gray-200 bg-gray-50'}`}>
                       <div className="mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-primary-100 px-2.5 py-1 text-xs font-medium text-primary-700">Q{index + 1}</span>
@@ -419,7 +537,12 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                               <span aria-hidden="true">*</span> Required
                             </span>
                           )}
-                          {question.evidence_required && (
+                          {owes ? (
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                              files.length ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <Paperclip className="h-3 w-3" /> {files.length ? 'Evidence attached' : 'Evidence needed'}
+                            </span>
+                          ) : requested && (
                             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">Evidence requested</span>
                           )}
                           {needsAnswer && editable && (
@@ -449,7 +572,7 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                           className={`min-h-[120px] ${inputCls}`} placeholder="Enter your answer" aria-label={`Answer to question ${index + 1}`} />
                       )}
 
-                      {question.type !== 'text' && (
+                      {question.type !== 'text' && question.type !== 'file' && (
                         <select value={currentValue} disabled={!editable} onChange={(e) => updateResponse(question.id, e.target.value)}
                           className={inputCls} aria-label={`Answer to question ${index + 1}`}>
                           <option value="">Select an answer</option>
@@ -461,9 +584,9 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                         </select>
                       )}
 
-                      {(evidence[question.id]?.length || (question.evidence_required && editable)) ? (
+                      {(files.length > 0 || question.type === 'file' || (editable && rule.mode !== 'none')) && (
                         <div className="mt-3 space-y-2">
-                          {(evidence[question.id] || []).map((file) => (
+                          {files.map((file) => (
                             <div key={file.id} className="flex min-w-0 items-center gap-2 text-xs text-gray-700">
                               <Paperclip className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                               <span className="truncate">{file.file_name}</span>
@@ -475,29 +598,38 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                               )}
                             </div>
                           ))}
-                          {editable && (
-                            <div className="flex flex-wrap items-end gap-3">
-                              <label className="min-w-0 max-w-full text-xs font-medium text-gray-600">
-                                Attach a file
-                                <input type="file" className="mt-1 block max-w-full text-xs" disabled={uploading === question.id}
-                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(question.id, f); e.target.value = ''; }} />
-                              </label>
-                              <label className="text-xs font-medium text-gray-600">
+                          {editable && (dropOpen ? (
+                            <div className="space-y-2">
+                              <DropZone busy={uploading === question.id} onFile={(f) => uploadFile(question.id, f)}
+                                label={`File for question ${index + 1}`} />
+                              <label className="block text-xs font-medium text-gray-600">
                                 Expires on (certificates, reports)
                                 <input type="date" value={expiresOn[question.id] || ''}
                                   onChange={(e) => setExpiresOn((prev) => ({ ...prev, [question.id]: e.target.value }))}
                                   className="mt-1 block rounded-lg border border-gray-300 px-2 py-1 text-xs" />
                               </label>
-                              {uploading === question.id && <Loader2 className="h-4 w-4 animate-spin text-primary-600" />}
                             </div>
+                          ) : (
+                            <button type="button" onClick={() => setOpenDrops((prev) => ({ ...prev, [question.id]: true }))}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 hover:underline">
+                              <Paperclip className="h-3.5 w-3.5" /> Attach a file
+                            </button>
+                          ))}
+                          {question.type === 'file' && !editable && !files.length && (
+                            <p className="text-xs text-gray-500">No file sent.</p>
                           )}
                         </div>
-                      ) : null}
+                      )}
 
                       {commentOpen ? (
                         <label className="mt-3 block">
-                          <span className="text-xs font-medium text-gray-600">{isAsked ? 'Your reply' : 'Comment (optional)'}</span>
+                          <span className="text-xs font-medium text-gray-600">
+                            {gaps.need === 'reason' ? 'Why it does not apply' : gaps.need === 'note' ? 'Note'
+                              : isAsked ? 'Your reply' : 'Comment (optional)'}
+                            {gaps.need && <span className="ml-1 text-rose-600" aria-hidden="true">*</span>}
+                          </span>
                           <textarea value={comments[question.id] || ''} disabled={!editable} rows={2} maxLength={4000}
+                            required={!!gaps.need}
                             onChange={(e) => setComments((prev) => ({ ...prev, [question.id]: e.target.value }))}
                             className={`mt-1 ${inputCls}`} />
                         </label>
@@ -507,10 +639,62 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                           <MessageSquare className="h-3.5 w-3.5" /> Add a comment
                         </button>
                       )}
+
+                      {thread.length > 0 && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-primary-100 bg-white p-3">
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                            <MessageSquare className="h-3.5 w-3.5 text-primary-600" /> Comments
+                          </p>
+                          <ul className="space-y-2">
+                            {thread.map((m) => (
+                              <li key={m.id} className={`rounded-lg px-3 py-2 ${m.from_supplier ? 'ml-6 bg-primary-50' : 'mr-6 bg-gray-50'}`}>
+                                <p className="text-xs text-gray-600">
+                                  <span className="font-medium text-gray-800">{m.author || (m.from_supplier ? 'You' : 'Us')}</span>
+                                  {' · '}{parseUtc(m.created_at)?.toLocaleDateString() ?? ''}
+                                </p>
+                                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">{m.body}</p>
+                              </li>
+                            ))}
+                          </ul>
+                          <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); sendReply(question.id); }}>
+                            <label className="min-w-[200px] flex-1">
+                              <span className="sr-only">Reply on question {index + 1}</span>
+                              <textarea rows={2} maxLength={8000} value={replies[question.id] || ''} placeholder="Reply"
+                                onChange={(e) => setReplies((prev) => ({ ...prev, [question.id]: e.target.value }))}
+                                className={inputCls} />
+                            </label>
+                            <button type="submit" disabled={replying === question.id || !(replies[question.id] || '').trim()}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                              {replying === question.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Reply
+                            </button>
+                          </form>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
+
+              {!done && shownQuestions.length > 0 && (
+                <div className="sticky bottom-0 z-10 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
+                  role="status" aria-live="polite">
+                  {toDo.length ? (
+                    <span className="text-sm font-medium text-amber-800">
+                      {questionsLeft} question{questionsLeft === 1 ? '' : 's'} left · {documentsMissing} document{documentsMissing === 1 ? '' : 's'} missing
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
+                      <CheckCircle className="h-4 w-4" /> Ready to submit
+                    </span>
+                  )}
+                  {toDo.length > 0 && (
+                    <button type="button" onClick={goNext}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      Next <ArrowDown className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              )}
             </section>
 
             {!done && (
@@ -595,13 +779,15 @@ export default function SupplierQuestionnaire({ apiBase, backHref }: {
                   <span className="font-medium text-gray-900">{requiredTotal}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Evidence items</span>
-                  <span className="font-medium text-gray-900">{shownQuestions.filter((q) => q.evidence_required).length}</span>
+                  <span>Documents needed</span>
+                  <span className="font-medium text-gray-900">
+                    {shownQuestions.filter((q) => q.type === 'file' || owesEvidence(q, responses[q.id] || '')).length}
+                  </span>
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs leading-5 text-gray-600">
                   Save a draft at any time. Submitting needs every
                   <span className="mx-1 font-medium text-rose-600">Required</span>
-                  question answered and a named person attesting to the answers.
+                  question answered, the documents asked for, and a named person attesting to the answers.
                 </div>
               </div>
 
