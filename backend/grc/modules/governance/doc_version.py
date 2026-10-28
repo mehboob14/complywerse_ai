@@ -284,7 +284,7 @@ _NOISE = (       # the platform's own bookkeeping, wherever it stands in the tex
     re.compile(rf"\s*{_KIND}: Chosen by .+? when saving it to the library\.?", re.I),
     re.compile(r"\s*·?\s*Proposed by .+?, accepted by .+$"),
 )
-_LEAD = re.compile(r"^(?:(?:Edited|Changed) in the (?:Comply )?AI Studio(?: \(version [\d.]+\))?|Content edited)(?::\s*|\.\s*|$)", re.I)
+_LEAD = re.compile(r"^(?:(?:Edited|Changed) in the (?:Comply )?AI\s+Studio(?: \(version [\d.]+\))?|Content edited)(?::\s*|\.\s*|$)", re.I)      # (rows from before the name "Comply AI Studio" say "AI Studio")
 _FIRST = re.compile(r"^Initial version: the uploaded file\b", re.I)
 _SKIP = tuple(re.compile(p, re.I) for p in (       # sentences that only say how the platform went about it
     r"^(?:Major|Minor|Patch|Signoff) update\.?$",
