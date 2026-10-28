@@ -100,6 +100,43 @@ def test_comply_agent_decides_from_what_changed_and_an_answer_it_cannot_give_in_
     assert late["by"] == "rule" and time.monotonic() - started < 1.5                           # a save never waits for a slow answer
 
 
+# ── what a document's revision history says about a version ──────────────────
+def test_the_revision_history_leaves_out_the_platforms_bookkeeping():
+    d = V.described
+    # the line that was in a document's Revision History: which module saved it and who picked minor is nothing a reader needs
+    assert d("Edited in the Comply AI Studio. Minor change: Chosen by Admin when saving it to the library.") == ""
+    assert d(V.summary_of("Edited in the Comply AI Studio", V.chosen("major", "J. Smith"))) == ""         # (a name may hold a full stop)
+    assert d("Edited in the AI Studio: Updated the password rules. Minor change: Chosen by Admin when saving it to the library.") == "Updated the password rules."
+    for plain in ("minor update", "signoff update", "Original document, before it was changed", "Baseline snapshot (before first edit)"):
+        assert d(plain) == ""
+    # a first version says it is the first, and whether it was uploaded; where its number came from is the Version column's business
+    assert d(V.first_summary("1.0", "")) == d(V.first_summary("4.0", "revision table")) == d(V.first_summary("2.1", "file name")) == "Initial version (uploaded file)"
+    assert d("Initial version") == "Initial version"
+    # a file put in place: that it was, not how its version was read
+    assert d("File updated: Policy v2.docx. The file states version 2.0 (from its file name).") == "File updated: Policy v2.docx."
+    assert d("File updated: Policy.docx. Minor change: the new file's text could not be read to compare it with the last version.") == "File updated: Policy.docx."
+    assert d("Updated the password rules · Proposed by Rana Reviewer, accepted by Olivia Owner") == "Updated the password rules"
+
+
+def test_the_revision_history_keeps_what_the_change_was_without_its_label_or_its_note():
+    d = V.described
+    ai = {"change": "major", "reason": "A new section on retention was added.", "by": "ai"}
+    assert d(V.summary_of("Edited in the Comply AI Studio", ai)) == "A new section on retention was added."          # the Change type column says "major"
+    rule = {"change": "minor", "reason": "A limited change to the wording.", "by": "rule"}
+    assert d(V.summary_of("Content edited", rule)) == "A limited change to the wording."                             # and not that a rule decided
+    assert d(V.summary_of("Gap fix (clause replaced) for ISO/IEC 27001:2022 A.5.2", ai)) == "Gap fix (clause replaced) for ISO/IEC 27001:2022 A.5.2. A new section on retention was added."
+    assert d("Took back 2 changes made since version 1.3: they were not agreed") == "Took back 2 changes made since version 1.3: they were not agreed"
+    assert d("Temporary staff added to the scope") == "Temporary staff added to the scope"                            # a person's own summary is left as it is
+    assert d("Vendor chosen by the board") == "Vendor chosen by the board" and d(None) == "" and d("") == ""
+
+
+def test_a_person_who_gave_a_reason_has_it_as_the_summary_whatever_the_platform_wrote():
+    said = V.summary_of("Edited in the Comply AI Studio: Added a retention schedule", V.chosen("minor", "Admin"))
+    assert V.described(said, "Added a retention schedule") == "Added a retention schedule"
+    assert V.described(V.summary_of("Edited in the Comply AI Studio", {"change": "major", "reason": "A section was added.", "by": "ai"}),
+                       "  Retention\nperiods stated\n ") == "Retention periods stated"                          # one line, however it was typed
+
+
 # ── the library ──────────────────────────────────────────────────────────────
 @pytest.fixture
 def library(tmp_path, monkeypatch):

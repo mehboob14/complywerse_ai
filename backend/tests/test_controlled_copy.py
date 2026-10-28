@@ -22,6 +22,7 @@ from lxml import etree
 import grc.models as m
 from grc.modules.governance import approval_record_export as X
 from grc.modules.governance import controlled_copy as C
+from grc.modules.governance import doc_version
 from grc.modules.governance.router import router
 
 from _docx_fixtures import corporate_policy, png as ink, tracked_policy
@@ -428,6 +429,17 @@ def test_the_revision_and_approval_history_tables_read_as_the_banks_do():
     rec["approval_history"] = []
     assert "No version has been approved yet." in "\n".join(pdf_pages(X.to_pdf(rec, {})))
     assert "No version has been approved yet." in "\n".join(cell_texts(Document(io.BytesIO(X.to_docx(rec, {})))))
+
+
+def test_a_revision_with_several_changes_has_a_line_for_each_in_both_files():
+    rec, _images = fake()
+    rec["revision_history"][0]["summary"] = "1.1: Scope widened\n1.2: Exceptions added\nand 2 more\n1.5: Retention stated"
+    word = Document(io.BytesIO(X.to_docx(rec, {})))
+    table = table_starting(word, "Version", "Date", "Change type", "Summary of change", "Updated by")
+    assert [p.text for p in table.rows[1].cells[3].paragraphs] == ["1.1: Scope widened", "1.2: Exceptions added", "and 2 more", "1.5: Retention stated"]
+    with fitz.open(stream=X.to_pdf(rec, {}), filetype="pdf") as pdf:
+        at = [r.y0 for page in pdf for needle in ("1.1: Scope widened", "1.2: Exceptions added", "1.5: Retention stated") for r in page.search_for(needle)]
+    assert len(at) == 3 and at == sorted(at) and len({round(y) for y in at}) == 3                    # one line each, in order
 
 
 SECTIONS = ["Document Description", "Review and Approval", "Revision History", "Approval History"]
@@ -1030,8 +1042,8 @@ def test_two_released_versions_and_one_in_progress_make_three_rows_and_the_saves
         ("1.0", True, "Creation"), ("1.3", True, "Minor revision"), ("1.4", False, "Minor revision")]
     first, second, third = rec["revision_history"]
     assert first["summary"] == "Initial version" and first["updated_by"] == "Olivia Owner"
-    # the released version's own summary, then what the saves since the version released before it said
-    assert second["summary"] == "Retention period stated; Temporary staff added to the scope; A clause about exceptions"
+    # a line for each change since the version released before it, oldest first, its version in front (the row is 1.3, its own change last)
+    assert second["summary"] == "1.1: Temporary staff added to the scope\n1.2: A clause about exceptions\n1.3: Retention period stated"
     assert third["summary"] == "Work in progress" and third["date"] != second["date"] and third["date"] < "2999"
     assert second["date"] == rec["approval_history"][1]["approval_date"]                        # a released version is dated by its approval
     assert [a["version"] for a in rec["approval_history"]] == ["1.0", "1.3"]                      # oldest first, one for each released version
@@ -1055,10 +1067,43 @@ def test_many_saves_between_two_releases_list_four_and_say_how_many_more(world):
     sign(world, MO)
     row = record(world)["revision_history"][-1]
     assert row["version"] == "1.7" and row["released"] is True
-    assert row["summary"] == "Change number 7; Change number 1; Change number 2; Change number 3; Change number 4; and 2 more"
-    long = "x" * 300
-    edit(world, SMALL + "\nLong.\n", long)
-    assert len(record(world)["revision_history"][-1]["summary"]) <= 305
+    assert row["summary"] == "1.1: Change number 1\n1.2: Change number 2\n1.3: Change number 3\n1.4: Change number 4\nand 2 more\n1.7: Change number 7"
+    edit(world, SMALL + "\nLong.\n", "x" * 300)
+    assert record(world)["revision_history"][-1]["summary"] == "x" * 160 + " …"                  # a few lines at most: cut, with the rest in the Change log
+
+
+def test_a_persons_reason_is_the_summary_and_a_save_with_nothing_to_say_leaves_no_line(world):
+    approve_and_publish(world, (RANA,), (MINA,))
+    chose = doc_version.chosen("minor", "Admin")
+    edit(world, SMALL, doc_version.summary_of("Edited in the Comply AI Studio", chose))                         # saved with nothing written
+    edit(world, SMALL + "\nA clause.\n", doc_version.summary_of("Edited in the Comply AI Studio: Retention period stated", chose), reason="Retention period stated")
+    rows = record(world)["revision_history"]
+    assert [(r["version"], r["released"]) for r in rows] == [("1.0", True), ("1.2", False)]
+    assert rows[1]["summary"] == "Retention period stated"                                                       # 1.1 had nothing to say: no line for it
+    assert "Chosen by" not in str(rows) and "Studio" not in str(rows) and "Minor change" not in str(rows)
+
+
+def test_a_document_uploaded_and_saved_once_from_the_studio_reads_as_its_first_version(world):
+    """The Revision History a user sent: "Edited in the Comply AI Studio. Minor change: Chosen by Admin when saving it to the library.;
+    Initial version: the uploaded file (it states no version, so it starts at 1.0)"."""
+    world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=5, version_number="1.0").update({"change_summary": doc_version.first_summary("1.0", "")})
+    world.db.commit()
+    edit(world, SMALL, doc_version.summary_of("Edited in the Comply AI Studio", doc_version.chosen("minor", "Admin")))
+    rows = record(world)["revision_history"]
+    assert [(r["version"], r["released"], r["change_type"]) for r in rows] == [("1.1", False, "Creation")]
+    assert rows[0]["summary"] == "1.0: Initial version (uploaded file)"
+
+
+def test_a_sign_off_stamp_is_not_a_change_in_the_revision_history(world):
+    """A version row a signer's stamp made (change_type signoff, "signoff update", "Reviewed by: <name>") changes no wording."""
+    d = doc(world)
+    world.db.add(m.GovernanceDocumentVersion(document_id=5, version_number="1.1", change_type="signoff", title=d.title, content=d.content,
+                                             change_summary="signoff update", change_reason="Reviewed by: Rana Reviewer", status="current", created_by=RANA))
+    d.current_version = "1.1"
+    world.db.commit()
+    rows = record(world)["revision_history"]
+    assert [r["version"] for r in rows] == ["1.1"] and rows[0]["summary"] == "1.0: Initial version"
+    assert "Reviewed by" not in str(rows) and "signoff" not in str(rows)
 
 
 def test_approvals_that_cannot_be_tied_to_a_version_are_one_unknown_row_in_both_histories(world):
@@ -1127,7 +1172,7 @@ def test_a_version_that_was_never_approved_and_has_been_overtaken_is_not_listed_
     assert record(world)["state"] == "approved"
     now = record(world)
     assert released(now) == [("1.1", True)] and now["revision_history"][0]["change_type"] == "Creation"
-    assert now["revision_history"][0]["summary"] == "Temporary staff added to the scope; Initial version"
+    assert now["revision_history"][0]["summary"] == "1.0: Initial version\n1.1: Temporary staff added to the scope"
     old = record(world, version="1.0")                                                      # 1.0 was rejected: it is not "in progress" nor released
     assert old["revision_history"] == [] and old["approval_history"] == [] and old["control"]["status"] == "Draft"
 

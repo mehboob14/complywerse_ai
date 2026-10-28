@@ -160,13 +160,14 @@ def publish(w, by=ADAM):
     w.db.commit()
 
 
-def edit(w, text=SMALL, summary="Temporary staff added to the scope", by=OLIVIA):
-    """What a save of the author does: a new version (1.0 -> 1.1), and whatever the status says happens next."""
+def edit(w, text=SMALL, summary="Temporary staff added to the scope", by=OLIVIA, reason=None):
+    """What a save of the author does: a new version (1.0 -> 1.1), and whatever the status says happens next. ``summary``: what the
+    platform wrote about it; ``reason``: what the person wrote when they saved it (nothing, usually)."""
     d = doc(w)
     old, number, status = d.content, d.current_version, d.status
     d.content = text
     documents._snapshot_content_version(w.db, d, old_content=old, old_title=d.title, old_version=number, change_type="minor",
-                                        change_reason="Edited", user_id=by, summary=summary)
+                                        change_reason=reason, user_id=by, summary=summary)
     life.changed_after_review(w.db, d, status, by, "Content edited")
     w.db.commit()
 

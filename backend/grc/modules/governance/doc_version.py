@@ -249,15 +249,18 @@ def before_pending(db, doc, row):
             .order_by(V.id.desc()).first())
 
 
+CHOSEN_REASON = "Chosen by {by} when saving it to the library."
+RULE_NOTE = " (decided by rule: Comply Agent was not available)"
+
+
 def chosen(change: str, by: str) -> Dict[str, str]:
     """The person's own choice of major or minor (Save to the library, Move to the library), in ``decide``'s shape."""
-    return {"change": "major" if change == "major" else "minor", "reason": f"Chosen by {by or 'the person'} when saving it to the library.",
-            "by": "person"}
+    return {"change": "major" if change == "major" else "minor", "reason": CHOSEN_REASON.format(by=by or "the person"), "by": "person"}
 
 
 def verdict(decision: Dict[str, str]) -> str:
     """The decision as the version history says it: "Major change: <why>"."""
-    by = "" if decision.get("by") in ("ai", "person") else " (decided by rule: Comply Agent was not available)"
+    by = "" if decision.get("by") in ("ai", "person") else RULE_NOTE
     return f"{decision['change'].capitalize()} change: {decision['reason']}{by}"
 
 
@@ -273,6 +276,45 @@ def first_summary(version: str, found_in: str) -> str:
     if found_in in _FOUND:
         return f"Initial version: the uploaded file, version {version} {_FOUND[found_in]}"
     return "Initial version: the uploaded file (it states no version, so it starts at 1.0)"
+
+
+# ── what a document's revision history says about a version ──────────────────
+_KIND = r"(?:Major|Minor|Patch) change"
+_NOISE = (       # the platform's own bookkeeping, wherever it stands in the text: who picked major or minor, who proposed it
+    re.compile(rf"\s*{_KIND}: Chosen by .+? when saving it to the library\.?", re.I),
+    re.compile(r"\s*·?\s*Proposed by .+?, accepted by .+$"),
+)
+_LEAD = re.compile(r"^(?:(?:Edited|Changed) in the (?:Comply )?AI Studio(?: \(version [\d.]+\))?|Content edited)(?::\s*|\.\s*|$)", re.I)
+_FIRST = re.compile(r"^Initial version: the uploaded file\b", re.I)
+_SKIP = tuple(re.compile(p, re.I) for p in (       # sentences that only say how the platform went about it
+    r"^(?:Major|Minor|Patch|Signoff) update\.?$",
+    r"^The file states version [\d.]+ \([^)]*\)\.?$",
+    rf"^(?:{_KIND}: )?the new file's text could not be read to compare it with the last version\.?$",
+    r"^(?:Original document, before it was changed|Baseline snapshot \(before first edit\))\.?$",
+))
+UPLOADED_FIRST = "Initial version (uploaded file)"
+
+
+def described(summary: Optional[str], reason: Optional[str] = None) -> str:
+    """What a revision history says a version changed, to a reader of the document: the person's own words (``reason``: what they
+    wrote when they saved it) when they gave any, else the platform's sentence about the change without its bookkeeping - the module
+    that saved it, who picked major or minor, whether a rule decided, where a version number came from, "Minor change:" (the Change
+    type says it). "" when nothing is left to say; the Change log keeps every word."""
+    own = " ".join((reason or "").split())
+    if own:
+        return own
+    text = " ".join((summary or "").replace(RULE_NOTE, "").split())
+    for noise in _NOISE:
+        text = noise.sub("", text)
+    kept: List[str] = []
+    for sentence in re.split(r"(?<=[.!?])\s+", _LEAD.sub("", text.strip())):
+        s = sentence.strip()
+        if _FIRST.match(s):
+            s = UPLOADED_FIRST
+        elif not s or any(p.match(s) for p in _SKIP):
+            continue
+        kept.append(re.sub(rf"^{_KIND}:\s*", "", s, flags=re.I))
+    return re.sub(r"(?<!\.)\.\.(?!\.)", ".", " ".join(kept)).strip(" ;,")
 
 
 def _safe_key(version: str) -> Tuple[int, ...]:

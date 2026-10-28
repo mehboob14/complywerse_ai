@@ -328,7 +328,8 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
         data = [[Paragraph(esc(h), head) for h in ("Version", "Date", "Change type", "Summary of change", "Updated by")]]
         for version, released, date, kind, summary, by in revision_rows(record):
             mark = [Paragraph(esc(version), cell)] + ([Paragraph("In progress", small)] if not released else [])
-            data.append([mark, Paragraph(esc(date), cell), Paragraph(esc(kind), cell), Paragraph(esc(summary), cell), Paragraph(esc(by), cell)])
+            said = [Paragraph(esc(line), cell) for line in summary.split("\n")]                        # a line for each change
+            data.append([mark, Paragraph(esc(date), cell), Paragraph(esc(kind), cell), said, Paragraph(esc(by), cell)])
         out.append(grid(data, [2.2, 2.4, 2.8, 6.6, 3.0], [VERSION_MIN * cm, DATE_MIN * cm, 0, 0, 0]))
         out += title(APPROVAL_TITLE)
         rows = approval_rows(record)
@@ -693,7 +694,7 @@ def _add_block(doc, record: Mapping[str, Any], images: Mapping[int, bytes], widt
     if not record["stages"]:
         _run(doc.add_paragraph(), "No review or approval is recorded for this version.", "small")
     heading(SLOT_TITLE["revision"])
-    rows = [[[(version, "plain")] + ([] if released else [("In progress", "small")]), [(date, "plain")], [(kind, "plain")], [(summary, "plain")], [(by, "plain")]]
+    rows = [[[(version, "plain")] + ([] if released else [("In progress", "small")]), [(date, "plain")], [(kind, "plain")], [(line, "plain") for line in summary.split("\n")], [(by, "plain")]]
             for version, released, date, kind, summary, by in revision_rows(record)]
     _table(doc, ("Version", "Date", "Change type", "Summary of change", "Updated by"), rows, fractions((2.2, 2.4, 2.8, 6.6, 3.0), (VERSION_MIN, DATE_MIN, 0, 0, 0)), width)
     heading(APPROVAL_TITLE)

@@ -40,7 +40,7 @@ from sqlalchemy import func
 
 from ...models import (DocumentAuditLog, DocumentRouteHold, DocumentRouteStage, DocumentSignature, ElectronicSignature,
                        GovernanceDocumentVersion, GRCDepartment, GRCUser)
-from . import permissions, routes
+from . import doc_version, permissions, routes
 
 STATES = {"published": "published", "expired": "published", "exception_applied": "published", "review_required": "published",
           "approved": "approved", "pending_approval": "in_approval", "pending_review": "in_review", "archived": "archived"}
@@ -61,8 +61,8 @@ STATE_LABEL = {"published": "Published", "approved": "Approved, not published", 
 TYPE_LABEL = {"policy": "Policy", "standard": "Standard", "procedure": "Procedure", "guideline": "Guideline", "charter": "Charter",
               "framework": "Framework"}
 NAMELESS = "Unknown"                                            # a person is never listed without a name
-SAVES_LISTED = 4                                                # saves a revision's summary lists besides the released version's own
-SAVE_CHARS = 90
+SAVES_LISTED = 4                                                # changes a revision's summary lists besides the released version's own
+ENTRY_CHARS = 160                                               # one change in a summary is cut here (a few lines); the Change log has it whole
 
 
 def _iso(dt: Optional[datetime]) -> Optional[str]:
@@ -74,6 +74,15 @@ def _cut(text: Optional[str], n: int = MAX_TEXT) -> Optional[str]:
     if not text:
         return None
     return text if len(text) <= n else text[:n].rstrip() + " …"
+
+
+def _brief(text: str, n: int = ENTRY_CHARS) -> str:
+    """``text`` cut at a word, with "…", when it is longer than ``n``."""
+    if len(text) <= n:
+        return text
+    head = text[:n]
+    space = head.rfind(" ")
+    return (head[:space] if space > n // 2 else head).rstrip(" ,;:.-–—") + " …"
 
 
 def _when(s) -> Tuple[datetime, int]:
@@ -119,7 +128,7 @@ class _Facts:
         self.db, self.doc = db, doc
         V, S, E, A, H, R = (GovernanceDocumentVersion, DocumentSignature, ElectronicSignature, DocumentAuditLog, DocumentRouteHold,
                             DocumentRouteStage)
-        self.versions = (db.query(V.id, V.version_number, V.change_type, V.change_summary, V.created_at, V.created_by, V.title, V.status)
+        self.versions = (db.query(V.id, V.version_number, V.change_type, V.change_summary, V.change_reason, V.created_at, V.created_by, V.title, V.status)
                          .filter(V.document_id == doc.id).order_by(V.id).all())
         self.row = {v.id: v for v in self.versions}
         self.rank: Dict[str, int] = {}
@@ -530,12 +539,24 @@ def _frequency(months: Optional[int]) -> Optional[str]:
     return "Every month" if months == 1 else f"Every {months} months"
 
 
+def _lines(entries: Sequence[Tuple[str, str]], number: str) -> str:
+    """A revision's Summary of change: a line for each change (its version and what it said), oldest first. The version leads the line
+    when the summary lists more than one change or one that is not the row's own version, else the Version column says it. More than
+    SAVES_LISTED + 1 changes are the first SAVES_LISTED, how many more there were, and the last (the row's own)."""
+    lead = len(entries) > 1 or any(v != number for v, _ in entries)
+    shown: List[Tuple[Optional[str], str]] = list(entries)
+    if len(entries) > SAVES_LISTED + 1:
+        shown = list(entries[:SAVES_LISTED]) + [(None, f"and {len(entries) - SAVES_LISTED - 1} more")] + list(entries[-1:])
+    return "\n".join(f"{v}: {text}" if lead and v else text for v, text in shown)
+
+
 def _revisions(f: _Facts, number: str, released: Sequence[Tuple[str, Optional[str]]], working: bool) -> List[Dict[str, Any]]:
     """The revision history, oldest first: a row for every version that completed approval (``released``: its number and the time it
     was approved) and, when ``working`` and it is not one of them, one for the version being worked on (``released`` false: not
-    approved yet, dated by when it was made). A version's summary is its own followed by what the saves since the version released
-    before it said - every save is a version of its own, and they are not rows here - at most SAVES_LISTED of them, then how many
-    more there were. The first row is the creation."""
+    approved yet, dated by when it was made). A row's summary is what its version and the saves since the version released before it
+    changed - every save is a version of its own, and they are not rows here - a line for each (``_lines``), in the person's own words
+    when they gave a reason, else the platform's sentence without its bookkeeping (``doc_version.described``); a save with nothing to
+    say is left out. The first row is the creation."""
     plan = list(released)
     done = {v for v, _ in plan}
     if working and number not in done:
@@ -547,19 +568,16 @@ def _revisions(f: _Facts, number: str, released: Sequence[Tuple[str, Optional[st
         row = f.row_of(version) if known else None
         rid = f.rank.get(version) if known else None
         made = f.prepared(version) if known else {"name": None, "at": None, "summary": None}
-        own = made["summary"] if row is not None and row.change_type != "baseline" else None
         between = [] if rid is None else [v for v in f.versions if before_id < v.id < rid and v.version_number not in (version, before)
                                           and v.change_type not in ("baseline", "signoff") and v.status != "reverted"]
-        said: List[str] = []
-        for v in between:
-            text = _cut(v.change_summary, SAVE_CHARS)
-            if text and text != own and text not in said:
-                said.append(text)
-        more = len(said) - SAVES_LISTED
-        summary = "; ".join(([own] if own else []) + said[:SAVES_LISTED] + ([f"and {more} more"] if more > 0 else []))
+        entries: List[Tuple[str, str]] = []
+        for v in between + ([row] if row is not None and row.change_type not in ("baseline", "signoff") else []):         # (a sign-off stamp changes no wording)
+            text = doc_version.described(v.change_summary, v.change_reason)
+            if text:
+                entries.append((v.version_number, _brief(text)))
         kind = ("Creation" if not out else "Major revision" if row is not None and row.change_type == "major" else "Minor revision" if known else "Revision")
         out.append({"version": version, "date": approved_at or made["at"], "change_type": kind,
-                    "summary": summary or ("Initial version" if not out else None), "updated_by": made["name"], "released": version in done})
+                    "summary": _lines(entries, version) or ("Initial version" if not out else None), "updated_by": made["name"], "released": version in done})
         if rid is not None:
             before_id, before = rid, version
     return out
