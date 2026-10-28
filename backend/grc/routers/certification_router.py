@@ -226,9 +226,10 @@ def _native_fields(native) -> dict:
     }
 
 
-def _sub_control_tree(native, criteria_status) -> Optional[list]:
+def _sub_control_tree(native, criteria_status, owners=None) -> Optional[list]:
     """The standard's own sub-controls of one control (`native_attributes["sub_controls"]`) as stored, each with whether its
-    criterion is ticked (`met`; None when it is not tickable). A node's `evidence` stays the list of evidence titles: the page finds
+    criterion is ticked (`met`; None when it is not tickable) and who owns it (`owners`: {code: [{id, display_name, email}]};
+    `assigned_user_ids` / `assignees`, empty when nobody). A node's `evidence` stays the list of evidence titles: the page finds
     them in the control's own `evidence_requirements`, which the response carries already. The stored nodes are copied, never
     changed; a node that is not a dict is skipped. None when there is nothing to show."""
     nodes = native.get("sub_controls") if isinstance(native, dict) else None
@@ -240,8 +241,46 @@ def _sub_control_tree(native, criteria_status) -> Optional[list]:
         if not isinstance(node, dict):
             continue
         index = node.get("criterion_index")
-        tree.append({**node, "met": bool(ticks.get(str(index))) if isinstance(index, int) and not isinstance(index, bool) else None})
+        code = node.get("code")
+        people = owners.get(code, []) if owners and isinstance(code, str) else []
+        tree.append({**node, "met": bool(ticks.get(str(index))) if isinstance(index, int) and not isinstance(index, bool) else None,
+                     "assigned_user_ids": [p["id"] for p in people], "assignees": list(people)})
     return tree or None
+
+
+def _sub_control_nodes(native) -> list:
+    """The sub-controls of one control as stored: the nodes that are dicts with a code (empty for any other framework)."""
+    nodes = native.get("sub_controls") if isinstance(native, dict) else None
+    return [n for n in nodes if isinstance(n, dict) and isinstance(n.get("code"), str)] if isinstance(nodes, list) else []
+
+
+def _sub_control_requirement(node: dict) -> str:
+    """One sub-control as the ask a file is rated against: its lead-in and text, then its points (and their sub-points), a line each."""
+    def lines(points, depth=0):
+        for point in points if isinstance(points, list) else []:
+            if isinstance(point, dict) and isinstance(point.get("text"), str):
+                label = point["label"] if isinstance(point.get("label"), str) else ""
+                yield "  " * depth + f"{label} {point['text']}".strip()
+                yield from lines(point.get("points"), depth + 1)
+
+    head = " ".join(s for s in (node.get("lead_in"), node.get("text")) if isinstance(s, str) and s)
+    return "\n".join([head, *lines(node.get("points"))]).strip()
+
+
+def _sub_control_owners(state) -> dict:
+    """{code: [user id, ...]} from `ControlImplementation.sub_control_state` ({code: {"assigned_user_ids": [...]}}). Whatever is not
+    that shape is skipped, never raised."""
+    owners = {}
+    for code, entry in state.items() if isinstance(state, dict) else ():
+        ids = entry.get("assigned_user_ids") if isinstance(entry, dict) else None
+        ids = [i for i in ids if isinstance(i, int) and not isinstance(i, bool)] if isinstance(ids, list) else []
+        if ids:
+            owners[code] = ids
+    return owners
+
+
+def _person(user: GRCUser) -> dict:
+    return {"id": user.id, "display_name": user.display_name or user.username, "email": user.email}
 
 
 def get_phases_from_document_structure(framework: Optional[UploadedFramework]) -> List[dict]:
@@ -990,7 +1029,8 @@ def list_journey_controls(
                             "review_status": "linked",
                             "linked_evidence_id": linked_evidence.id,
                             "ai_assessment_status": "linked",
-                            "ai_assessment_summary": None
+                            "ai_assessment_summary": None,
+                            "sub_control_code": None
                         }
                         mapped_evidence_by_parsed.setdefault(impl_pc_id, []).append(payload)
 
@@ -1013,7 +1053,8 @@ def list_journey_controls(
                 "review_status": "linked",
                 "linked_evidence_id": linked_evidence.id,
                 "ai_assessment_status": "linked",
-                "ai_assessment_summary": None
+                "ai_assessment_summary": None,
+                "sub_control_code": None
             }
 
             if mapping.parsed_control_id:
@@ -1073,6 +1114,11 @@ def list_journey_controls(
     implementations.sort(key=lambda impl: (domain_rank.get(_impl_domain(impl), 1_000_000_000), natural_sort_key(impl)))
     
     result = []
+
+    # Who owns the standard's sub-controls (UAE IA): one lookup for the whole journey, none at all when nobody was named.
+    sub_owner_ids = {impl.id: _sub_control_owners(impl.sub_control_state) for impl in implementations}
+    wanted = sorted({uid for owned in sub_owner_ids.values() for ids in owned.values() for uid in ids})
+    sub_people = {u.id: _person(u) for u in db.query(GRCUser).filter(GRCUser.id.in_(wanted))} if wanted else {}
 
     def collect_sub_control_recommendations(sub_controls: list) -> list:
         titles = []
@@ -1229,6 +1275,7 @@ def list_journey_controls(
                 "ai_assessment_status": ai_assessment_status,
                 "ai_assessment_summary": ai_assessment_summary,
                 "maturity": round(maturity) if maturity is not None else None,
+                "sub_control_code": ev.sub_control_code,
             })
 
         existing_linked_ids = {
@@ -1325,6 +1372,7 @@ def list_journey_controls(
         assignee_name = primary_assignee["display_name"] if primary_assignee else None
         assignee_email = primary_assignee["email"] if primary_assignee else None
         native = getattr(parsed_control, "native_attributes", None) if parsed_control else None
+        sub_owners = {code: [sub_people[i] for i in ids if i in sub_people] for code, ids in sub_owner_ids[impl.id].items()}
 
         result.append({
             "id": impl.id,
@@ -1362,7 +1410,7 @@ def list_journey_controls(
             # native_attributes, not priority_level, which drives NDMO's roadmap) and its sub-controls with their ticks.
             "parent_section": parsed_control.parent_section if parsed_control else None,
             **_native_fields(native),
-            "sub_control_tree": _sub_control_tree(native, getattr(impl, "criteria_status", None)),
+            "sub_control_tree": _sub_control_tree(native, getattr(impl, "criteria_status", None), sub_owners),
             "assigned_to_user_id": assigned_to_user_id,
             "assignee_name": assignee_name,
             "assignee_email": assignee_email,
@@ -1528,7 +1576,8 @@ def get_control_details(
             "review_status": ev.review_status,
             "reviewed_by": ev.reviewed_by,
             "reviewed_at": ev.reviewed_at.isoformat() if ev.reviewed_at else None,
-            "review_notes": ev.review_notes
+            "review_notes": ev.review_notes,
+            "sub_control_code": ev.sub_control_code
         })
     
     return {
@@ -1588,6 +1637,30 @@ def update_control_implementation(
     return implementation
 
 
+def _active_assignees(db: Session, raw_ids, kept=()) -> List[GRCUser]:
+    """The users behind a requested list of assignees, in the order asked: duplicates dropped, an account an access review imported
+    refused (one in `kept` is already named on the record and may be sent back), each an active user of this tenant DB (HTTP 400
+    otherwise). Per-tenant DB: every active row in `grc_users` is a tenant user."""
+    seen: set = set()
+    requested_ids: List[int] = []
+    for uid in raw_ids:
+        if uid is None or uid in seen:
+            continue
+        seen.add(uid)
+        requested_ids.append(int(uid))
+    if not requested_ids:
+        return []
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, requested_ids, kept=kept)
+    user_by_id = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(requested_ids), GRCUser.is_active == True).all()}
+    users = []
+    for uid in requested_ids:
+        if uid not in user_by_id:
+            raise HTTPException(status_code=400, detail=f"User {uid} is not an active member of this tenant")
+        users.append(user_by_id[uid])
+    return users
+
+
 class _ControlAssignRequest(BaseModel):
     """Body for control assignment.
 
@@ -1632,36 +1705,9 @@ def assign_control_implementation(
     else:
         raw_ids = []
 
-    # Deduplicate while preserving order, drop falsy values.
-    seen: set = set()
-    requested_ids: List[int] = []
-    for uid in raw_ids:
-        if uid is None:
-            continue
-        if uid in seen:
-            continue
-        seen.add(uid)
-        requested_ids.append(int(uid))
-
-    # Validate every id maps to an active user in this tenant DB.
-    resolved_users = []
-    if requested_ids:
-        from .auth_router import refuse_imported_accounts
-        refuse_imported_accounts(db, requested_ids, kept=list(implementation.assigned_user_ids or []) + [implementation.assigned_to_user_id])
-        users = (
-            db.query(GRCUser)
-            .filter(GRCUser.id.in_(requested_ids), GRCUser.is_active == True)
-            .all()
-        )
-        user_by_id = {u.id: u for u in users}
-        for uid in requested_ids:
-            u = user_by_id.get(uid)
-            if not u:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"User {uid} is not an active member of this tenant",
-                )
-            resolved_users.append(u)
+    # Deduplicated in order; every id must be an active user in this tenant DB.
+    resolved_users = _active_assignees(
+        db, raw_ids, kept=list(implementation.assigned_user_ids or []) + [implementation.assigned_to_user_id])
 
     final_ids = [u.id for u in resolved_users]
     implementation.assigned_user_ids = final_ids
@@ -1690,6 +1736,48 @@ def assign_control_implementation(
         "assignee_name": (resolved_users[0].display_name or resolved_users[0].username) if resolved_users else None,
         "assignee_email": resolved_users[0].email if resolved_users else None,
     }
+
+
+class _SubControlAssignRequest(BaseModel):
+    assigned_user_ids: List[int]
+
+
+@router.patch("/{journey_id}/controls/{control_id}/sub-controls/{code}/assign")
+def assign_sub_control(
+    journey_id: int,
+    control_id: int,
+    code: str,
+    payload: _SubControlAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Replace the owners of one of the standard's sub-controls (UAE IA), under the same rules as a requirement's own owners.
+    They live inside the requirement (`sub_control_state`); a sub-control nobody owns has no entry, so an empty list removes it."""
+    get_journey_or_404(journey_id, current_user, db)
+
+    # Locked for the read-modify-write below: two people naming owners of different sub-controls of one control must not lose one.
+    implementation = db.query(ControlImplementation).filter(
+        ControlImplementation.id == control_id,
+        ControlImplementation.journey_id == journey_id,
+    ).with_for_update().first()
+    if not implementation:
+        raise HTTPException(status_code=404, detail="Control implementation not found")
+    parsed = implementation.parsed_control
+    if not any(n["code"] == code for n in _sub_control_nodes(parsed.native_attributes if parsed else None)):
+        raise HTTPException(status_code=404, detail="Sub-control not found")
+
+    state = dict(implementation.sub_control_state) if isinstance(implementation.sub_control_state, dict) else {}
+    users = _active_assignees(db, payload.assigned_user_ids, kept=_sub_control_owners(state).get(code, []))
+    assignees = [_person(u) for u in users]
+    if assignees:
+        state[code] = {"assigned_user_ids": [a["id"] for a in assignees]}
+    else:
+        state.pop(code, None)
+    implementation.sub_control_state = state
+    flag_modified(implementation, "sub_control_state")
+    db.commit()
+
+    return {"control_id": control_id, "code": code, "assigned_user_ids": [a["id"] for a in assignees], "assignees": assignees}
 
 
 class _CriteriaStatusRequest(BaseModel):
@@ -1943,6 +2031,7 @@ async def upload_control_evidence(
     background_tasks: BackgroundTasks,
     evidence_id: Optional[int] = Form(None),
     file: Optional[UploadFile] = File(None),
+    sub_control_code: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1959,6 +2048,17 @@ async def upload_control_evidence(
             detail="Control implementation not found"
         )
     
+    # A file can be attached to one of the standard's sub-controls (UAE IA) instead of the control as a whole. A code the control
+    # does not have is refused before anything is written; a control with no sub-controls (any other framework) ignores the field.
+    sub_control = None
+    parsed = implementation.parsed_control
+    nodes = _sub_control_nodes(parsed.native_attributes if parsed else None)
+    if nodes and (sub_control_code or "").strip():
+        sub_control = next((n for n in nodes if n["code"] == sub_control_code.strip()), None)
+        if sub_control is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown sub-control for this control")
+    tagged = sub_control["code"] if sub_control else None
+
     library_evidence = None
     ocr_status_val = None
 
@@ -1976,7 +2076,8 @@ async def upload_control_evidence(
             file_name=existing_evidence.file_name,
             file_path=existing_evidence.file_path,
             uploaded_by=current_user.id,
-            review_status="pending"
+            review_status="pending",
+            sub_control_code=tagged
         )
     elif file:
         file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
@@ -2015,7 +2116,8 @@ async def upload_control_evidence(
             file_size=len(contents),
             mime_type=file.content_type,
             uploaded_by=current_user.id,
-            review_status="pending"
+            review_status="pending",
+            sub_control_code=tagged
         )
     else:
         raise HTTPException(
@@ -2029,6 +2131,7 @@ async def upload_control_evidence(
 
     if library_evidence and ocr_status_val == "pending":
         # Reviewed against this requirement too, not just mapped to clauses.
+        from dataclasses import replace
         from ..services.evidence_quality import QualityTarget
 
         pc, fc = implementation.parsed_control, implementation.framework_control
@@ -2041,6 +2144,10 @@ async def upload_control_evidence(
                          or getattr(fc, "statement", None) or ""),
             guidance=implementation.implementation_notes or "",
         )
+        if sub_control:
+            # Attached to one sub-control: the file is rated against that one, not against the whole control.
+            target = replace(target, ref=tagged, label=str(sub_control.get("text") or "")[:120],
+                             requirement=_sub_control_requirement(sub_control))
         evidence_review.start(db, library_evidence, db.info.get("tenant_slug"), target=target, user_id=current_user.id)
 
     return impl_evidence

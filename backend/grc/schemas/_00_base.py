@@ -1385,6 +1385,7 @@ class ImplementationEvidenceResponse(BaseModel):
     reviewed_by: Optional[int]
     reviewed_at: Optional[datetime]
     review_notes: Optional[str]
+    sub_control_code: Optional[str] = None
 
     class Config:
         from_attributes = True

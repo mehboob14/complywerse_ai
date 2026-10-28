@@ -548,6 +548,9 @@ _COLUMN_ADDS = [
     ("grc_parsed_framework_controls", "native_attributes", "JSON", None),
     # Per-criterion met/not-met state on each journey control implementation.
     ("grc_control_implementations", "criteria_status", "JSON DEFAULT '{}'::json", None),
+    # Sub-controls of a framework's own hierarchy (UAE IA): who owns each inside a control, and which one a file was attached to.
+    ("grc_control_implementations", "sub_control_state", "JSON", None),
+    ("grc_implementation_evidence", "sub_control_code", "VARCHAR(64)", None),
     # Gap-analysis runs: the job's heartbeat (a run silent for 15 minutes is cancelled automatically) and the version it read
     ("grc_policy_gap_analysis_runs", "updated_at", "TIMESTAMP", None),
     ("grc_policy_gap_analysis_runs", "document_version", "VARCHAR(50)", None),

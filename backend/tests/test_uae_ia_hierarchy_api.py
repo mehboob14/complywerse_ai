@@ -217,8 +217,10 @@ def test_a_control_carries_its_sub_controls_as_stored_with_their_ticks(world):
 
     tree = one["sub_control_tree"]
     assert [n["code"] for n in tree] == ["T1.1.1.1", "T1.1.1.2", "T1.1.1.3"]
-    # a node is the stored node and whether it is met (nothing ticked yet; a consideration is not tickable): no resolved items on it
-    assert tree == [{**stored, "met": met} for stored, met in zip(NATIVE["sub_controls"], [False, False, None])]
+    # a node is the stored node, whether it is met (nothing ticked yet; a consideration is not tickable) and who owns it (round 5:
+    # nobody yet): no resolved items on it
+    assert tree == [{**stored, "met": met, "assigned_user_ids": [], "assignees": []}
+                    for stored, met in zip(NATIVE["sub_controls"], [False, False, None])]
     assert not any("evidence_requirements" in n for n in tree)
     assert tree[0]["points"][0]["points"] == [{"label": "•", "text": "by name"}] and tree[0]["points"][1] == {"label": "b.", "text": "the date"}
     # the evidence stays the titles as stored, in the node's own order, a title the control does not list included: the page does the lookup
@@ -308,8 +310,8 @@ def test_a_sub_control_that_does_not_fit_is_skipped_never_raised():
     # odd ticks are no ticks; what a node says about its evidence is passed on as stored, nothing is looked up or checked
     stored = {"code": "Z.1", "criterion_index": 0, "evidence": ["Register", "No such item"]}
     for ticks in (None, "x", [], {}, {"1": True}):
-        assert certs._sub_control_tree({"sub_controls": [stored]}, ticks) == [{**stored, "met": False}]
-    assert certs._sub_control_tree({"sub_controls": [stored]}, {"0": 1}) == [{**stored, "met": True}]
+        assert certs._sub_control_tree({"sub_controls": [stored]}, ticks) == [{**stored, "met": False, "assigned_user_ids": [], "assignees": []}]
+    assert certs._sub_control_tree({"sub_controls": [stored]}, {"0": 1}) == [{**stored, "met": True, "assigned_user_ids": [], "assignees": []}]
     assert certs._native_fields(None) == certs._native_fields("x") == certs._native_fields([]) == {
         "priority_tier": None, "applicability": None, "control_types": [], "implementation_guidance": None, "control_evidence": []}
 
@@ -469,8 +471,9 @@ def test_the_real_library_reaches_the_journey_whole(world):
         assert [n["code"] for n in tree] == [s["code"] for s in native["sub_controls"]], src["control_id"]
         titles = {e["title"] for e in control["evidence_requirements"]}
         for node, stored in zip(tree, native["sub_controls"]):
-            # the stored node plus whether it is met, nothing resolved on it ...
-            assert node == {**stored, "met": None if stored["criterion_index"] is None else False}, stored["code"]
+            # the stored node plus whether it is met and who owns it (nobody), nothing resolved on it ...
+            assert node == {**stored, "met": None if stored["criterion_index"] is None else False,
+                            "assigned_user_ids": [], "assignees": []}, stored["code"]
             assert "evidence_requirements" not in node
             # ... and every title it lists is one of the control's own evidence items, which the page looks up there
             assert stored["evidence"] and set(node["evidence"]) <= titles, stored["code"]

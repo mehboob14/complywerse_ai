@@ -103,6 +103,9 @@ class ControlImplementation(Base):
     # Per-criterion met/not-met state for this control's assessment criteria
     # (the parsed spec sub-points). Keyed by criterion index: {"0": true, "1": false}.
     criteria_status = Column(JSON, default=dict)
+    # Who owns each of the standard's sub-controls inside this control (UAE IA): {"M1.1.1.1": {"assigned_user_ids": [3, 5]}}.
+    # A sub-control nobody owns has no key; NULL for every other framework.
+    sub_control_state = Column(JSON, nullable=True)
 
     journey = relationship("CertificationJourney", back_populates="control_implementations")
     framework_control = relationship("FrameworkControl")
@@ -159,6 +162,8 @@ class ImplementationEvidence(Base):
     reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     review_notes = Column(Text, nullable=True)
+    # The sub-control (UAE IA, "M1.1.1.1") the file was attached to; NULL = the control itself.
+    sub_control_code = Column(String(64), nullable=True)
     
     implementation = relationship("ControlImplementation", back_populates="evidence_attachments")
     evidence = relationship("Evidence")
