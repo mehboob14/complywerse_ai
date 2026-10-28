@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate, TPRATemplateVersion,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
-    Evidence, TPRAEvidenceLink, Tenant,
+    Evidence, TPRAEvidenceLink, TPRAReviewAssignment, Tenant,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import contacts, emails, portal, rbac, versions
@@ -326,6 +326,9 @@ def update_questionnaire_response(
         raise HTTPException(status_code=404, detail="Questionnaire response not found")
     if payload.assessment_id is not None:
         qr.assessment_id = payload.assessment_id
+        # Its reviewers now count among the assessment's (service.reviewers_assigned).
+        db.query(TPRAReviewAssignment).filter(TPRAReviewAssignment.questionnaire_response_id == qr.id).update(
+            {"assessment_id": qr.assessment_id}, synchronize_session=False)
         if qr.status in portal.ANSWERED:
             _materialise(db, db.query(VendorAssessment).filter(
                 VendorAssessment.id == qr.assessment_id).first(), qr)
@@ -587,6 +590,11 @@ def accept_questionnaire(
         raise HTTPException(status_code=409, detail=(
             f"{len(waiting)} question{'s are' if len(waiting) != 1 else ' is'} marked for clarification. "
             "Return the questionnaire to the vendor, or clear those first."))
+    from ..tpra import reviews
+
+    unfinished = reviews.unfinished(db, qr)
+    if unfinished:
+        raise HTTPException(status_code=409, detail=f"Not every reviewer is done: {unfinished}.")
     now = datetime.utcnow()
     questions = versions.questions_for(db, qr)
     review = dict(qr.review or {})
@@ -810,10 +818,12 @@ def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: Externa
 
     now = datetime.utcnow()
     if payload.submit:
-        missing = portal.missing_required(questions, answers)
-        if missing:
-            raise HTTPException(status_code=400, detail=(
-                f"{len(missing)} required question{'s' if len(missing) != 1 else ''} still need an answer"))
+        # The question rules (tpra/portal.py); while returned, over what can still change.
+        problem = portal.problem_sentence(portal.problems(
+            questions, answers, comments, portal.evidence_keys(db, qr),
+            only=set(portal.clarifications(qr.review)) if qr.status == "returned" else None))
+        if problem:
+            raise HTTPException(status_code=400, detail=problem)
         try:
             who = portal.clean_attestation(payload.attestation)
         except ValueError as exc:

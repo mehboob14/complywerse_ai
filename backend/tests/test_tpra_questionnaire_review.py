@@ -25,6 +25,7 @@ from grc.models import TPRASurfaceWaiver  # outside-in waivers running out
 from grc.models import TPRAPortalToken, TPRAVendorContact  # who a questionnaire goes to, and their links
 from grc.models import TPRAEngagement  # each engagement's own review date
 from grc.models import TPRASupplierRequest  # read by the supplier-request conditions
+from grc.models import TPRAMessage, TPRAReviewAssignment  # comments on answers; accepting waits for the reviewers
 from grc.models import (
     TPRAMonitoringSignal, Base, GRCUser, Role, Tenant, TPRAAuditLog, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRAReminder,
     TPRARiskAcceptance, TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence,
@@ -41,7 +42,7 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            TPRAQuestionResponse, TPRAFinding, TPRATieringConfig, TPRAAuditLog, TPRAReminder, TPRARiskAcceptance,
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, TPRAApproval,
            TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate, TPRAActionItem,
-           TPRAVendorContact, TPRAPortalToken, TPRAEngagement, TPRASupplierRequest]
+           TPRAVendorContact, TPRAPortalToken, TPRAEngagement, TPRASupplierRequest, TPRAMessage, TPRAReviewAssignment]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},

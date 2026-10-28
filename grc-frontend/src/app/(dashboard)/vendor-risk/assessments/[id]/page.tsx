@@ -32,7 +32,9 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
-import { QuestionEvidence, QuestionReview, ReviewBar, type ReviewableResponse } from './_review';
+import { QuestionEvidence, QuestionReview, ReviewBar, ReviewersStrip, type ReviewableResponse } from './_review';
+import { sectionKey, sectionLabel } from '../../_lib/reviewsApi';
+import { owesEvidence, type RuleQuestion } from '@/components/vendor-risk/SupplierQuestionnaire';
 
 interface Assessment {
   id: number;
@@ -61,15 +63,17 @@ interface Assessment {
   questionnaire_responses?: QuestionnaireResponse[];
 }
 
-interface TemplateQuestion {
+interface TemplateQuestion extends Omit<RuleQuestion, 'options'> {
   id: string;
   text: string;
-  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating';
+  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
   required: boolean;
   evidence_required: boolean;
   weight: number;
   options?: string[];
   category?: string;
+  section?: string;
+  domain?: string;
 }
 
 interface EvidenceFile {
@@ -311,6 +315,8 @@ export default function AssessmentDetailPage() {
   const [scoreResult, setScoreResult] = useState<{ inherent_score: number; residual_score: number; risk_rating: string } | null>(null);
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit');
+  // Per questionnaire: only these questions (a reviewer's own sections), or all.
+  const [only, setOnly] = useState<Record<number, string[] | null>>({});
 
   // â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -840,11 +846,19 @@ export default function AssessmentDetailPage() {
               const questions = qr.questions || [];
               const qrResponses = qr.responses || {};
               const qrEvidence = qr.evidence || {};
-              const answeredCount = questions.filter((q) => qrResponses[q.id] !== undefined && qrResponses[q.id] !== '').length;
-              const evidenceRequired = questions.filter((q) => q.evidence_required).length;
-              const evidenceProvided = questions.filter((q) => q.evidence_required && qrEvidence[q.id]?.length > 0).length;
+              // Evidence linked to a question: the vendor's file, or library evidence attached to it.
+              const hasEvidence = (key: string) => (qrEvidence[key]?.length || 0) + (qr.library_evidence?.[key]?.length || 0) > 0;
+              const isAnsweredQ = (q: TemplateQuestion) => (q.type === 'file' ? hasEvidence(q.id)
+                : qrResponses[q.id] !== undefined && qrResponses[q.id] !== '');
+              const owes = (q: TemplateQuestion) => q.type === 'file' || owesEvidence(q, String(qrResponses[q.id] ?? ''));
+              const answeredCount = questions.filter(isAnsweredQ).length;
+              const evidenceRequired = questions.filter(owes).length;
+              const evidenceProvided = questions.filter((q) => owes(q) && hasEvidence(q.id)).length;
+              const shownKeys = only[qr.id];
+              // Grouped by section, as the reviewers take them (the server's rule).
               const groupedQuestions = questions.reduce((acc, q, idx) => {
-                const category = getQuestionCategory(q, assessment.assessment_type);
+                if (shownKeys && !shownKeys.includes(String(q.id))) return acc;
+                const category = sectionLabel(sectionKey(q));
                 if (!acc[category]) acc[category] = [];
                 acc[category].push({ question: q, index: idx });
                 return acc;
@@ -895,6 +909,8 @@ export default function AssessmentDetailPage() {
                       </div>
                     )}
                     <ReviewBar qr={qr} assessmentId={assessmentId} canEdit={canEdit} />
+                    <ReviewersStrip qr={qr} canEdit={canEdit} filtered={!!shownKeys}
+                      onFilter={(keys) => setOnly((prev) => ({ ...prev, [qr.id]: keys }))} />
                   </div>
 
                   {/* Questions + Answers */}
@@ -910,7 +926,7 @@ export default function AssessmentDetailPage() {
                           {rows.map(({ question: q, index: idx }) => {
                             const answer = qrResponses[q.id];
                             const qEvFiles = qrEvidence[q.id] || [];
-                            const isAnswered = answer !== undefined && answer !== '';
+                            const isAnswered = isAnsweredQ(q);
 
                             return (
                               <div key={`${category}-${q.id}-${idx}`} className="px-5 py-4 border-b border-gray-50 last:border-b-0">
@@ -923,16 +939,18 @@ export default function AssessmentDetailPage() {
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                       <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded capitalize">{q.type.replace('_', '/')}</span>
                                       {q.weight > 3 && <span className="text-xs text-gray-400">Weight: {q.weight}/5</span>}
-                                      {q.evidence_required && (
-                                        <span className={`text-xs flex items-center gap-0.5 ${qEvFiles.length > 0 ? 'text-green-600' : 'text-orange-500'}`}>
+                                      {owes(q) && (
+                                        <span className={`text-xs flex items-center gap-0.5 ${hasEvidence(q.id) ? 'text-green-600' : 'text-orange-500'}`}>
                                           <Paperclip className="h-3 w-3" />
-                                          {qEvFiles.length > 0 ? 'Evidence provided' : 'Evidence required'}
+                                          {hasEvidence(q.id) ? 'Evidence provided' : 'Evidence required'}
                                         </span>
                                       )}
                                     </div>
 
                                     <div className="mt-2">
-                                      {!isAnswered ? (
+                                      {q.type === 'file' ? (
+                                        !isAnswered && <p className="text-sm text-gray-300 italic">No file sent</p>
+                                      ) : !isAnswered ? (
                                         <p className="text-sm text-gray-300 italic">No answer provided</p>
                                       ) : q.type === 'yes_no' ? (
                                         <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${

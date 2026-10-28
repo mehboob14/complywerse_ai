@@ -40,6 +40,7 @@ from grc.modules.vendor_risk.tpra.bootstrap import DEFAULT_TIERING_CONFIG
 from grc.routers.auth_router import require_auth
 
 from grc.models import TPRAEngagement  # noqa: E402
+from grc.models import TPRAReviewAssignment  # noqa: E402  a supplier's reply is told to the question's reviewers
 
 _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQuestionnaireTemplate,
            VendorQuestionnaireResponse, VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion,
@@ -47,7 +48,8 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, EvidenceQualityCheck,
            TPRAApproval, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate,
            TPRAActionItem, TPRAVendorContact, TPRAPortalToken, TPRASupplierRequest, TPRASupplierRequestFile, TPRAMessage,
-           TPRAEngagement]   # the reminder sweep reads each engagement's review date
+           TPRAEngagement,   # the reminder sweep reads each engagement's review date
+           TPRAReviewAssignment]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},
@@ -351,7 +353,8 @@ def test_a_questionnaire_sent_to_a_contact_is_answered_through_their_personal_li
     assert done.status_code == 200 and done.json()["status"] == "submitted"
     qr = db.get(VendorQuestionnaireResponse, qr.id)
     assert (qr.attested_name, qr.attested_email, qr.attested_title) == ("Ana Ops", "ana@payroll.test", "CISO")
-    assert http.get(base).status_code == 400                                   # submitted: no more changes
+    assert http.get(base).json()["status"] == "submitted"                     # submitted: there to read
+    assert http.post(base, json={"responses": {"subs": "yes"}, "submit": False}).status_code == 400   # not to change
 
 
 def test_a_send_with_nobody_named_goes_to_the_primary_and_a_new_name_becomes_a_contact(db, http, mail):

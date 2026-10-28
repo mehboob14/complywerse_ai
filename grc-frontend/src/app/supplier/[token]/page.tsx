@@ -29,6 +29,7 @@ function Waiting({ token, q }: { token: string; q: PortalQuestionnaire }) {
           <p className={`mt-0.5 text-xs ${q.status === 'returned' ? 'font-medium text-amber-800' : 'text-gray-600'}`}>
             {label}{q.due_date ? ` · Due ${day(q.due_date)}` : ''}
           </p>
+          <Unread n={q.unread} />
         </div>
         {q.open ? (
           <Link href={`/supplier/${token}/questionnaires/${q.id}`}
@@ -50,6 +51,14 @@ function Waiting({ token, q }: { token: string; q: PortalQuestionnaire }) {
       )}
     </li>
   );
+}
+
+function Unread({ n }: { n?: number }) {
+  return n ? (
+    <span className="mt-1 flex w-fit items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
+      <MessageSquare className="h-3 w-3" aria-hidden /> {n} new comment{n === 1 ? '' : 's'}
+    </span>
+  ) : null;
 }
 
 function RequestItem({ token, r }: { token: string; r: PortalRequest }) {
@@ -89,7 +98,8 @@ export default function SupplierHomePage() {
     fetchHome(token).then((h) => {
       if (!live) return;
       const wanted = Number(new URLSearchParams(window.location.search).get('q'));
-      if (wanted && h.questionnaires.some((q) => q.id === wanted && q.open)) {
+      // One to answer, or one already sent (to read the comments on it).
+      if (wanted && h.questionnaires.some((q) => q.id === wanted && (q.open || !WAITING.includes(q.status)))) {
         router.replace(`/supplier/${token}/questionnaires/${wanted}`);
         return;
       }
@@ -157,7 +167,11 @@ export default function SupplierHomePage() {
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
             {earlier.map((q) => (
               <li key={q.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <span className="min-w-0 break-words text-sm text-gray-900">{q.title}</span>
+                <span className="min-w-0">
+                  <Link href={`/supplier/${token}/questionnaires/${q.id}`}
+                    className="break-words text-sm font-medium text-primary-700 hover:underline">{q.title}</Link>
+                  <Unread n={q.unread} />
+                </span>
                 <span className="inline-flex items-center gap-1 text-xs text-gray-600">
                   <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> {STATUS[q.status] || q.status}
                   {q.submitted_at ? ` ${day(q.submitted_at)}` : ''}

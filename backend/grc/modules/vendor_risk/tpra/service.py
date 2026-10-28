@@ -369,9 +369,14 @@ REVIEWER_SEATS = {seat for seats in TIER_REQUIRED_REVIEWERS.values() for seat in
 
 def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
     """How many different people are named to review this assessment: the plan's
-    reviewer and whoever holds a reviewing seat in Assign duties (the roster)."""
+    reviewer, whoever holds a reviewing seat in Assign duties (the roster), and
+    whoever is assigned a part of its questionnaires (tpra/reviews.py)."""
+    from ....models import TPRAReviewAssignment
+
     roster = assessment.team_roster or {}
     people = {assessment.reviewed_by, *(roster.get(seat) for seat in REVIEWER_SEATS)}
+    people.update(uid for (uid,) in db.query(TPRAReviewAssignment.reviewer_id).filter(
+        TPRAReviewAssignment.assessment_id == assessment.id))
     return len({p for p in people if p})
 
 
@@ -401,16 +406,13 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
         ctx["tier_templates_unsent"] = [q["name"] for q in wanted["questionnaires"] if q["status"] == "unsent"]
     elif stage_key == "questionnaire":
-        # Compute completeness from the REAL responses (normalized rows if present,
-        # else the vendor-submitted questionnaire blob) — not the empty normalized
-        # table — and enforce required evidence instead of hardcoding it to 0.
-        resp = collect_responses_for_scoring(db, assessment.id)
-        total = len(resp)
-        answered = sum(1 for r in resp if is_answered(r.get("answer")))
+        # Completeness from what the supplier answered, question by question
+        # (_questionnaire_gaps), and evidence linked to the question that owes it.
+        total, owed, missing = _questionnaire_gaps(db, assessment)
         wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
         ctx.update(
-            responses_total=total, responses_answered=answered,
-            required_evidence_missing=_count_required_evidence_missing(db, assessment),
+            responses_total=total, responses_answered=total - owed,
+            required_evidence_missing=missing,
             tier_questionnaires_unanswered=[q["name"] for q in wanted["questionnaires"] if q["status"] != "answered"],
             tier_evidence_missing=[e["label"] for e in wanted["evidence"] if not e["satisfied"]],
         )
@@ -757,33 +759,29 @@ def materialise_responses(db: Session, assessment: VendorAssessment, qr) -> int:
     return written
 
 
-def _count_required_evidence_missing(db: Session, assessment: VendorAssessment) -> int:
-    """How many evidence-required, affirmatively-answered questions lack ANY attached
-    evidence. Approximate (evidence isn't matched per-question in the blob) but makes
-    'evidence-required answers with no evidence at all' a real gate blocker instead of
-    the previous hardcoded 0."""
-    qr = _latest_submitted_questionnaire(db, assessment.id) if assessment else None
-    questions = versions.questions_for(db, qr)
-    answers = (qr.responses or {}) if qr else {}
-    need = 0
-    for q in questions:
-        if q.get("evidence_required") or q.get("evidence"):
-            a = answers.get(str(q.get("id")))
-            if a is None:
-                a = answers.get(q.get("id"))
-            if normalize_answer(a) in ("yes", "partial"):
-                need += 1
-    if need == 0:
-        return 0
-    attached = (
-        db.query(TPRAEvidenceLink.id)
-        .filter(
-            TPRAEvidenceLink.assessment_id == assessment.id,
-            TPRAEvidenceLink.deleted_at.is_(None),
-        )
-        .count()
-    )
-    return max(0, need - attached)
+def _questionnaire_gaps(db: Session, assessment: VendorAssessment) -> Tuple[int, int, int]:
+    """Over each questionnaire of the assessment the supplier answered, and only the
+    questions its answers made apply: how many there are, how many still owe an
+    answer (one marked optional never does; a file question is answered by its
+    file), and how many answers owe evidence that nothing linked to that same
+    question gives (tpra/portal.py's rules, as at submit)."""
+    from . import portal
+
+    total = owed = missing = 0
+    for qr in (db.query(VendorQuestionnaireResponse)
+               .filter(VendorQuestionnaireResponse.assessment_id == assessment.id,
+                       VendorQuestionnaireResponse.status.in_(ANSWERED))
+               .order_by(VendorQuestionnaireResponse.id)):
+        answers, linked = qr.responses or {}, portal.evidence_keys(db, qr)
+        for q in portal.visible_questions(versions.questions_for(db, qr), answers):
+            key = str(q.get("id"))
+            total += 1
+            if not portal.answered(q, answers.get(key), linked):
+                if q.get("required") is not False:         # not marked optional: as it always counted
+                    owed += 1
+            elif portal.owes_evidence(q, answers.get(key)) and key not in linked:
+                missing += 1
+    return total, owed, missing
 
 
 def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]:

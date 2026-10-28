@@ -2,9 +2,9 @@
 
 // Stage 04 — Questionnaire & Evidence, framed correctly: the VENDOR completes the
 // questionnaire and uploads evidence via the sent portal link; the analyst REVIEWS
-// here. Shows each issued questionnaire's status + the vendor's submitted answers,
-// with copy/open-link so the analyst can (re)share the link. Internal evidence
-// attachment stays as a fallback for offline vendors.
+// here. Shows each issued questionnaire's status, its reviewers per section, and the
+// vendor's submitted answers, with copy/open-link so the analyst can (re)share the
+// link. Internal evidence attachment stays as a fallback for offline vendors.
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -14,8 +14,10 @@ import {
   Send, User, AlertCircle,
 } from 'lucide-react';
 import { vendorRiskApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { absoluteLink, portalApi } from '../../../_lib/portalApi';
+import { ReviewersStrip } from '../../../assessments/[id]/_review';
 import EvidencePanel from './EvidencePanel';
 
 interface QResponse {
@@ -50,7 +52,10 @@ function isExpired(r: QResponse): boolean {
 
 export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { vendorId: number; assessmentId: number }) {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canReview = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
   const [open, setOpen] = useState<number | null>(null);
+  const [only, setOnly] = useState<Record<number, string[] | null>>({});     // a reviewer's own sections
 
   const { data, isLoading } = useQuery({
     queryKey: ['tpra-questionnaire-responses', assessmentId],
@@ -104,7 +109,7 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
             const expired = isExpired(r);
             const status = expired ? 'expired' : r.status;
             const answered = Object.values(r.responses || {}).filter((v) => v !== null && v !== undefined && v !== '').length;
-            const entries = Object.entries(r.responses || {});
+            const entries = Object.entries(r.responses || {}).filter(([qid]) => !only[r.id] || only[r.id]!.includes(qid));
             return (
               <div key={r.id} className="rounded-xl border border-gray-200 bg-white">
                 <div className="flex items-start gap-3 p-3">
@@ -134,6 +139,10 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
 
                 {open === r.id && (
                   <div className="border-t border-gray-100 p-3">
+                    <div className="mb-3">
+                      <ReviewersStrip qr={r} canEdit={canReview} filtered={!!only[r.id]}
+                        onFilter={(keys) => setOnly((prev) => ({ ...prev, [r.id]: keys }))} />
+                    </div>
                     {r.status !== 'submitted' && (
                       <p className="mb-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"><AlertCircle className="h-3 w-3" /> Not yet submitted — answers may be incomplete.</p>
                     )}
@@ -149,7 +158,8 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
                         ))}
                       </div>
                     )}
-                    <Link href="/vendor-risk/questionnaires" className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
+                    <Link href={`/vendor-risk/assessments/${assessmentId}?tab=questionnaire`}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
                       Full review &amp; vendor evidence <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>

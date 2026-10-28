@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TpraAssessment } from './types';
 import EvidencePanel from './EvidencePanel';
+import { reviewsApi } from '../../../_lib/reviewsApi';
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
@@ -82,8 +83,18 @@ export default function PlanningPanel({
     onError: (e) => toast({ type: 'error', title: 'Could not send', message: errMsg(e, 'Try again.') }),
   });
 
+  // The gate's own count of different reviewers (the plan's, Assign duties, section reviewers). Under the
+  // lifecycle's key, so whatever refreshes the lifecycle refreshes this.
+  const { data: reviewers } = useQuery({
+    queryKey: ['tpra-lifecycle', 'reviewers', assessmentId],
+    queryFn: async () => (await reviewsApi.planning(assessmentId)).data,
+  });
   const templateSet = templateId !== '';
-  const reviewerSet = reviewerId !== '';
+  const reviewerSet = !!reviewers && reviewers.assigned >= reviewers.required;
+  const reviewerLabel = !reviewers ? 'Reviewer needed'
+    : reviewers.required > 1 ? `Reviewers ${reviewers.assigned}/${reviewers.required}`
+      : reviewers.required === 0 && reviewers.assigned === 0 ? 'No reviewer needed'
+        : `Reviewer ${reviewerSet ? 'assigned' : 'needed'}`;
 
   return (
     <div className="space-y-4">
@@ -119,8 +130,9 @@ export default function PlanningPanel({
             <span className={`inline-flex items-center gap-1 ${templateSet ? 'text-emerald-600' : 'text-gray-400'}`}>
               <CheckCircle2 className="h-3 w-3" /> Template {templateSet ? 'selected' : 'needed'}
             </span>
-            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Reviewer {reviewerSet ? 'assigned' : 'needed'}
+            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-emerald-600' : 'text-gray-400'}`}
+              title={reviewers?.roles.length ? `This tier needs ${reviewers.roles.join(', ')}` : undefined}>
+              <CheckCircle2 className="h-3 w-3" /> {reviewerLabel}
             </span>
           </div>
           {canEdit && (
