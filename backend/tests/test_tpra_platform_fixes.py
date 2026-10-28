@@ -316,7 +316,7 @@ def test_a_workflow_archives_and_restores_a_supplier(db):
 def test_a_workflow_sends_a_questionnaire_to_the_supplier_its_event_is_about(db, monkeypatch):
     from grc.modules.vendor_risk.routers import questionnaires
     emailed = []
-    monkeypatch.setattr(questionnaires, "_email_link", lambda _db, qr, is_reminder=False: emailed.append(qr.id))
+    monkeypatch.setattr(questionnaires, "_email_link", lambda _db, qr, is_reminder=False, issued=None: emailed.append(qr.id))
     v = vendor(db, "Payroll Co", primary_contact_email="security@payroll.test")
     t = m.VendorQuestionnaireTemplate(tenant_id=1, name="Security", questions=[])
     db.add(t)
@@ -343,8 +343,11 @@ def test_a_workflow_records_a_supplier_incident_and_updates_it(db):
 def test_a_workflow_records_an_sla_measurement_with_the_steps_own_figures(db):
     v = vendor(db, "Payroll Co")
     db.commit()
+    with pytest.raises(ActionRefused, match="higher or a lower value is better"):   # both figures need their direction
+        step(db, "create.risk_management.vendor_risk.sla_record", vendor_id=v.id, sla_metric="Uptime",
+             target_value=99.9, actual_value=99.5)
     step(db, "create.risk_management.vendor_risk.sla_record", vendor_id=v.id, sla_metric="Uptime",
-         target_value=99.9, actual_value=99.5, is_compliant=False)
+         target_value=99.9, actual_value=99.5, direction="higher_is_better")
     rec = db.query(m.VendorSLARecord).one()
     assert (rec.tenant_id, rec.sla_metric, rec.target_value, rec.actual_value, rec.is_compliant) == (1, "Uptime", 99.9, 99.5, False)
     with pytest.raises(ActionRefused, match="wrong sla metric"):
