@@ -9,13 +9,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, RotateCcw, ChevronDown, ChevronRight, ShieldCheck, Wrench, AlertOctagon, Loader2,
-  ArrowUpRight,
+  ArrowUpRight, Send,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { tpraApi } from '@/lib/api';
 import { RightSlidePanel } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { Finding, FindingDetail, Remediation, Acceptance } from './types';
 import {
@@ -23,6 +24,9 @@ import {
 } from './constants';
 import { useUnsavedGuard } from './useUnsavedGuard';
 import EvidencePanel from './EvidencePanel';
+import { ContactSelect } from './PortalPanel';
+import { REQUEST_STATUS, requestsApi, sentNote, type SupplierRequest } from '../../../_lib/requestsApi';
+import { inDays } from '@/app/(dashboard)/governance/regulatory-changes/_ui';
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
@@ -84,6 +88,16 @@ export default function FindingsPanel({ assessmentId, initialFindingId }: { asse
   });
 
   const findings = data?.items || [];
+  // Findings shared with the supplier and not finished: one request each at a time.
+  const vendorId = findings[0]?.vendor_id;
+  const { data: asked } = useQuery({
+    queryKey: ['tprm-supplier-requests', vendorId],
+    queryFn: async () => (await requestsApi.list(vendorId as number)).data,
+    enabled: !!vendorId,
+  });
+  const sharedOf = new Map((asked?.items || [])
+    .filter((r) => r.finding && ['open', 'submitted', 'returned'].includes(r.status))
+    .map((r) => [r.finding!.id, r] as const));
 
   useEffect(() => {
     if (deepLinkDone.current || initialFindingId == null) return;
@@ -139,7 +153,7 @@ export default function FindingsPanel({ assessmentId, initialFindingId }: { asse
         <div className="space-y-2">
           {findings.map((f) => (
             <FindingCard
-              key={f.id} finding={f}
+              key={f.id} finding={f} shared={sharedOf.get(f.id)}
               expanded={expanded === f.id}
               onToggle={() => setExpanded(expanded === f.id ? null : f.id)}
               canEdit={canEdit} canDelete={canDelete} canAccept={canAccept}
@@ -159,9 +173,9 @@ export default function FindingsPanel({ assessmentId, initialFindingId }: { asse
 }
 
 function FindingCard({
-  finding, expanded, onToggle, canEdit, canDelete, canAccept, onDelete, onRestore,
+  finding, shared, expanded, onToggle, canEdit, canDelete, canAccept, onDelete, onRestore,
 }: {
-  finding: Finding; expanded: boolean; onToggle: () => void;
+  finding: Finding; shared?: SupplierRequest; expanded: boolean; onToggle: () => void;
   canEdit: boolean; canDelete: boolean; canAccept: boolean;
   onDelete: () => void; onRestore: () => void;
 }) {
@@ -170,6 +184,7 @@ function FindingCard({
   const { toast } = useToast();
   const [showRem, setShowRem] = useState(false);
   const [showAcc, setShowAcc] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const { data: detail } = useQuery({
     queryKey: ['tpra-finding', finding.id],
@@ -260,6 +275,12 @@ function FindingCard({
                 <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} /> Issue #{finding.linked_issue_id}
               </Link>
             )}
+            {shared && (
+              <span title="Shared with the supplier: see the Supplier portal tab"
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${REQUEST_STATUS[shared.status].tone}`}>
+                <Send className="h-3 w-3" aria-hidden /> {shared.status === 'submitted' ? 'Supplier answered' : 'With supplier'}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm font-medium text-slate-900">{finding.title || 'Untitled finding'}</p>
           {finding.description && <p className="mt-0.5 text-xs text-gray-500">{finding.description}</p>}
@@ -278,6 +299,12 @@ function FindingCard({
                   title="Move this finding into the ERM Risk Register as a vendor-sourced risk"
                   className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                   {promoteMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpRight className="h-3 w-3" />} To register
+                </button>
+              )}
+              {canEdit && !shared && ['open', 'in_remediation'].includes(finding.status) && (
+                <button onClick={() => setShowShare(true)} title="Ask the supplier for a plan to fix it"
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50">
+                  <Send className="h-3 w-3" /> Share
                 </button>
               )}
               {canEdit && (
@@ -377,7 +404,69 @@ function FindingCard({
         onSubmit={(p) => addRem.mutate(p)} busy={addRem.isPending} />
       <AddAcceptancePanel open={showAcc} onClose={() => setShowAcc(false)}
         onSubmit={(p) => addAcc.mutate(p)} busy={addAcc.isPending} />
+      {showShare && <ShareFindingPanel finding={finding} onClose={() => setShowShare(false)} />}
     </div>
+  );
+}
+
+function ShareFindingPanel({ finding, onClose }: { finding: Finding; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    title: finding.title || '', note: finding.description || '', due_date: inDays(30), contact_id: null as number | null,
+  });
+  useUnsavedGuard(form.title !== (finding.title || '') || form.note !== (finding.description || ''));
+  const share = useMutation({
+    mutationFn: () => requestsApi.shareFinding(finding.id, {
+      title: form.title.trim() || undefined, note: form.note.trim() || undefined, due_date: form.due_date,
+      contact_id: form.contact_id,
+    }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['tprm-supplier-requests', finding.vendor_id] });
+      const sent = sentNote(res.data.sent);
+      toast({ type: sent.ok ? 'success' : 'warning', title: 'Shared with the supplier', message: sent.text });
+      onClose();
+    },
+    onError: (e) => toast({ type: 'error', title: 'Not shared', message: errMsg(e, 'Try again.') }),
+  });
+  return (
+    <RightSlidePanel isOpen onClose={onClose} title="Share with supplier" width="w-full max-w-lg"
+      footer={
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button form={`tpra-share-form-${finding.id}`} type="submit" disabled={share.isPending}
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            {share.isPending ? 'Sharing…' : 'Share'}
+          </button>
+        </div>
+      }>
+      <form id={`tpra-share-form-${finding.id}`} onSubmit={(e) => { e.preventDefault(); share.mutate(); }} className="space-y-4">
+        <div>
+          <label htmlFor={`share-title-${finding.id}`} className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-700">
+            Title <InfoTip text="The supplier sees this title and the text below, and is asked for a plan, a date and evidence. Never the severity or scores." />
+          </label>
+          <input id={`share-title-${finding.id}`} className={inputCls} maxLength={255} required value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        </div>
+        <div>
+          <label htmlFor={`share-note-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">What the supplier reads</label>
+          <textarea id={`share-note-${finding.id}`} className={inputCls} rows={5} maxLength={8000} value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={`share-due-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">Due</label>
+            <input id={`share-due-${finding.id}`} type="date" className={inputCls} required min={inDays(0)} value={form.due_date}
+              onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor={`share-to-${finding.id}`} className="mb-1 block text-xs font-medium text-gray-700">Send to</label>
+            <ContactSelect id={`share-to-${finding.id}`} vendorId={finding.vendor_id} value={form.contact_id}
+              onChange={(id) => setForm({ ...form, contact_id: id })} />
+          </div>
+        </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
