@@ -161,9 +161,10 @@ export function departmentsSummary(all: readonly { is_active?: boolean }[]): str
 
 // ── the form ─────────────────────────────────────────────────────────────────
 
+/** The fields a person fills in. There is no code: the server makes one from the name (initials, a number added when taken) and an
+ *  edit leaves it alone, so nobody is asked for an identifier. */
 export interface DepartmentForm {
   name: string;
-  code: string;
   description: string;
   parentId: number | null;
   leadId: number | null;
@@ -182,15 +183,13 @@ interface DepartmentRecord {
 
 const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id) => b.includes(id));
 
-/** The PATCH body for an edit: only what the person changed (a code left empty keeps the one it has; a cleared description is
- *  sent as '', a cleared lead or parent as null, which is how the server clears them). Empty: nothing to save. */
+/** The PATCH body for an edit: only what the person changed (a cleared description is sent as '', a cleared lead or parent as
+ *  null, which is how the server clears them). Empty: nothing to save. */
 export function departmentPatch(d: DepartmentRecord, f: DepartmentForm): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const name = f.name.trim();
-  const code = f.code.trim();
   const description = f.description.trim();
   if (name !== d.name) out.name = name;
-  if (code && code !== (d.code ?? '')) out.code = code;
   if (description !== (d.description ?? '')) out.description = description;
   if (f.parentId !== (d.parent_department_id ?? null)) out.parent_department_id = f.parentId;
   if (f.leadId !== (d.department_head_user_id ?? null)) out.department_head_user_id = f.leadId;
@@ -202,7 +201,6 @@ export function departmentPatch(d: DepartmentRecord, f: DepartmentForm): Record<
 /** The POST body for a new department: the name, and only what was filled in. */
 export function departmentCreateBody(f: DepartmentForm): Record<string, unknown> {
   const out: Record<string, unknown> = { name: f.name.trim() };
-  if (f.code.trim()) out.code = f.code.trim();
   if (f.description.trim()) out.description = f.description.trim();
   if (f.parentId != null) out.parent_department_id = f.parentId;
   if (f.leadId != null) out.department_head_user_id = f.leadId;

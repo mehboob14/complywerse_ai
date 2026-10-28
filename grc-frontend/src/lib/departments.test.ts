@@ -91,14 +91,13 @@ const dept = {
   roles: [{ id: 8 }, { id: 9 }],
 };
 const form = (over: Partial<DepartmentForm> = {}): DepartmentForm => ({
-  name: 'Compliance', code: 'COMP', description: 'Rules', parentId: 4, leadId: 7, roleIds: [9, 8], active: true, ...over,
+  name: 'Compliance', description: 'Rules', parentId: 4, leadId: 7, roleIds: [9, 8], active: true, ...over,
 });
 
 test('an edit sends only what changed; a cleared lead or parent is null, a cleared description is empty', () => {
   assert.deepEqual(departmentPatch(dept, form()), {});                                                   // nothing changed (roles in another order are the same)
   assert.deepEqual(departmentPatch(dept, form({ name: '  Risk and Compliance ' })), { name: 'Risk and Compliance' });
-  assert.deepEqual(departmentPatch(dept, form({ code: '' })), {});                                       // an empty code keeps the one it has
-  assert.deepEqual(departmentPatch(dept, form({ code: 'RC' })), { code: 'RC' });
+  assert.deepEqual(departmentPatch(dept, form({ name: 'Risk' })), { name: 'Risk' });                      // the code the server made is never sent back
   assert.deepEqual(departmentPatch(dept, form({ description: '' })), { description: '' });
   assert.deepEqual(departmentPatch(dept, form({ leadId: null, parentId: null })), { parent_department_id: null, department_head_user_id: null });
   assert.deepEqual(departmentPatch(dept, form({ roleIds: [8] })), { role_ids: [8] });
@@ -106,13 +105,13 @@ test('an edit sends only what changed; a cleared lead or parent is null, a clear
   assert.deepEqual(departmentPatch(dept, form({ active: false })), { is_active: false });
   // a department made without a description, lead, parent or roles
   const bare = { name: 'IT', code: 'IT', description: null, parent_department_id: null, department_head_user_id: null, is_active: true, roles: [] };
-  assert.deepEqual(departmentPatch(bare, form({ name: 'IT', code: 'IT', description: '', parentId: null, leadId: null, roleIds: [] })), {});
+  assert.deepEqual(departmentPatch(bare, form({ name: 'IT', description: '', parentId: null, leadId: null, roleIds: [] })), {});
 });
 
-test('a new department sends its name and only what was filled in', () => {
-  assert.deepEqual(departmentCreateBody(form({ name: ' IT Security ', code: '', description: '', parentId: null, leadId: null, roleIds: [] })), { name: 'IT Security' });
-  assert.deepEqual(departmentCreateBody(form({ code: 'C1', roleIds: [3] })), {
-    name: 'Compliance', code: 'C1', description: 'Rules', parent_department_id: 4, department_head_user_id: 7, role_ids: [3],
+test('a new department sends its name and only what was filled in, never a code (the server makes one from the name)', () => {
+  assert.deepEqual(departmentCreateBody(form({ name: ' IT Security ', description: '', parentId: null, leadId: null, roleIds: [] })), { name: 'IT Security' });
+  assert.deepEqual(departmentCreateBody(form({ roleIds: [3] })), {
+    name: 'Compliance', description: 'Rules', parent_department_id: 4, department_head_user_id: 7, role_ids: [3],
   });
 });
 

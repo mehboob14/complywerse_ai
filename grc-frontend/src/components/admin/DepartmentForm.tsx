@@ -110,7 +110,6 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
   const id = useId();
   const [form, setForm] = useState<DepartmentForm>(() => ({
     name: department?.name ?? '',
-    code: department?.code ?? '',
     description: department?.description ?? '',
     parentId: department?.parent_department_id ?? null,
     leadId: department?.department_head_user_id ?? null,
@@ -189,10 +188,7 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
           <input id={`${id}-name`} value={form.name} onChange={(e) => set({ name: e.target.value })} required autoFocus className={INPUT}
             placeholder="Compliance / IT Security / Risk" />
         </Field>
-        <Field label="Code" htmlFor={`${id}-code`}>
-          <input id={`${id}-code`} value={form.code} onChange={(e) => set({ code: e.target.value })} className={INPUT} placeholder="Auto if empty" />
-        </Field>
-        <Field label="Parent department" htmlFor={`${id}-parent`}>
+        <Field label="Parent department" htmlFor={`${id}-parent`} wide>
           <select id={`${id}-parent`} value={form.parentId ?? ''} onChange={(e) => set({ parentId: e.target.value ? Number(e.target.value) : null })} className={INPUT}>
             <option value="">— None —</option>
             {parents.map((p) => <option key={p.id} value={p.id}>{p.name}{p.is_active ? '' : ' (inactive)'}</option>)}
