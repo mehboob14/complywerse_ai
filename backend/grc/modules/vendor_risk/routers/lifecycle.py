@@ -114,9 +114,10 @@ def advance_stage(
     target = CANONICAL_TO_LEGACY.get(result.get("to") or "", vendor.lifecycle_stage or "intake")
     record_transition(vendor, target, current_user.id, payload.note or "")
 
-    # Entering monitoring: seed a reassessment cadence from the tier if unset.
+    # Entering monitoring: seed a reassessment cadence from the tier if unset
+    # (General's own tier: the supplier's may be the worst of its engagements).
     if target == "monitoring" and not vendor.reassessment_cadence_days:
-        days = TIER_CADENCE_DAYS.get((vendor.tier or "medium").lower(), 730)
+        days = TIER_CADENCE_DAYS.get((tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
         vendor.reassessment_cadence_days = days
         vendor.next_reassessment_date = datetime.utcnow() + timedelta(days=days)
 
@@ -234,7 +235,9 @@ def schedule_reassessment(
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
     rbac.require_write(db, current_user, "vendors", "edit")
-    cadence = payload.cadence_days or TIER_CADENCE_DAYS.get((vendor.tier or "medium").lower(), 730)
+    # General's review: an engagement's is set on the engagement (PUT /engagements/{id}).
+    cadence = payload.cadence_days or TIER_CADENCE_DAYS.get(
+        (tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
     vendor.reassessment_cadence_days = cadence
     vendor.next_reassessment_date = payload.next_date or (datetime.utcnow() + timedelta(days=cadence))
     vendor.updated_at = datetime.utcnow()

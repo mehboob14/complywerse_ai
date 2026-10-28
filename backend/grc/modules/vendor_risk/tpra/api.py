@@ -20,7 +20,7 @@ from ....models import (
     get_db, GRCUser, Vendor, VendorAssessment,
     TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance,
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
-    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
+    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment, TPRAEngagement,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services import evidence_review
@@ -57,6 +57,24 @@ def _assessment(db: Session, assessment_id: int, tids: List[int]) -> VendorAsses
     if not a:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Assessment not found")
     return a
+
+
+def _engagement(db: Session, v: Vendor, engagement_id: Optional[int]) -> Optional[TPRAEngagement]:
+    """The engagement of this supplier a call names; None is General (nothing named,
+    or General's own row)."""
+    if not engagement_id:
+        return None
+    e = db.query(TPRAEngagement).filter(TPRAEngagement.id == engagement_id, TPRAEngagement.vendor_id == v.id).first()
+    if e is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Engagement not found")
+    return None if e.is_general else e
+
+
+def _open_engagement(db: Session, v: Vendor, engagement_id: Optional[int]) -> Optional[TPRAEngagement]:
+    e = _engagement(db, v, engagement_id)
+    if e is not None and e.status == "ended":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This engagement has ended")
+    return e
 
 
 def _get(db: Session, model, obj_id: int, tids: List[int], allow_deleted=False):
@@ -124,7 +142,7 @@ def s_acceptance(a: TPRARiskAcceptance) -> dict:
 
 def s_contract(c: TPRAContract) -> dict:
     return {
-        "id": c.id, "vendor_id": c.vendor_id, "assessment_id": c.assessment_id,
+        "id": c.id, "vendor_id": c.vendor_id, "assessment_id": c.assessment_id, "engagement_id": c.engagement_id,
         "contract_type": c.contract_type, "title": c.title, "terms": c.terms,
         "document_id": c.document_id, "effective_date": c.effective_date,
         "renewal_date": c.renewal_date, "expiry_date": c.expiry_date, "status": c.status,
@@ -200,6 +218,7 @@ def s_assessment(a: VendorAssessment) -> dict:
         "status": a.status, "row_version": a.row_version,
         "template_id": a.template_id, "reviewed_by": a.reviewed_by, "due_date": a.due_date,
         "team_roster": getattr(a, "team_roster", None) or {},
+        "engagement_id": a.engagement_id,
         "created_at": a.created_at, "updated_at": a.updated_at,
     }
 
@@ -237,6 +256,11 @@ class EvidenceRequirementIn(BaseModel):
 class ReassessIn(BaseModel):
     reason: str
     assessment_type: Optional[str] = "reassessment"
+    engagement_id: Optional[int] = None     # omitted: General
+
+
+class ScopeIn(BaseModel):
+    engagement_id: Optional[int] = None     # omitted: General
 
 # Controlled vocabularies (no free-text severity/status that a typo can slip past
 # the gate/suspension logic, which string-matches on these exact values).
@@ -275,6 +299,7 @@ class AcceptanceIn(BaseModel):
 
 class ContractIn(BaseModel):
     assessment_id: Optional[int] = None
+    engagement_id: Optional[int] = None     # the engagement it covers; omitted: the whole supplier
     contract_type: str = "master"
     title: Optional[str] = None
     terms: Optional[str] = None
@@ -302,7 +327,7 @@ class ContractUpdate(ContractIn):
     reason: Optional[str] = None
 
 _CONTRACT_FIELDS = ("contract_type", "title", "terms", "document_id", "effective_date", "renewal_date",
-                    "expiry_date", "status", "assessment_id") + contracts.TERM_FIELDS
+                    "expiry_date", "status", "assessment_id", "engagement_id") + contracts.TERM_FIELDS
 
 class ObligationIn(BaseModel):
     obligation: str
@@ -413,7 +438,8 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
         .order_by(Vendor.name.asc())
         .all()
     )
-    # Active assessment per vendor (highest version wins if several are active).
+    # Active assessment per vendor (highest version wins if several are active):
+    # its General one; an engagement's has its own lifecycle on the vendor page.
     amap: dict = {}
     for a in (
         db.query(VendorAssessment)
@@ -421,6 +447,7 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
             VendorAssessment.tenant_id.in_(tids),
             VendorAssessment.lifecycle_status == "active",
             VendorAssessment.deleted_at.is_(None),
+            VendorAssessment.engagement_id.is_(None),
         )
         .all()
     ):
@@ -475,41 +502,49 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
 
 
 @router.get("/vendors/{vendor_id}/lifecycle")
-def get_lifecycle(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def get_lifecycle(vendor_id: int, engagement_id: Optional[int] = None,
+                  db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """One scope's lifecycle: an engagement's (`engagement_id`), or General's."""
     tids = _tids(user, db)
     ensure_tpra_columns(db)
     v = _vendor(db, vendor_id, tids)
-    a = service.get_active_assessment(db, v)
+    e = _engagement(db, v, engagement_id)
+    a = service.get_active_assessment(db, v, e)
+    scope = {"vendor_id": v.id, "engagement_id": e.id if e is not None else None}
     if not a:
-        return {"vendor_id": v.id, "assessment": None, "stages": [], "current": None, "gate": None}
+        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None}
     stages = service.get_stage_instances(db, a.id)
     cur = a.current_stage
     gate = service.evaluate_current(db, v, a, cur) if cur else None
     return {
-        "vendor_id": v.id, "assessment": s_assessment(a),
+        **scope, "assessment": s_assessment(a),
         "stages": [s_stage(s) for s in stages], "current": cur, "gate": gate,
     }
 
 
 @router.post("/vendors/{vendor_id}/lifecycle/init")
-def init_lifecycle(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def init_lifecycle(vendor_id: int, engagement_id: Optional[int] = None, body: Optional[ScopeIn] = None,
+                   db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "assessments", "create")
-    a = service.ensure_active_assessment(db, v, actor_id=user.id)
+    e = _open_engagement(db, v, engagement_id or (body.engagement_id if body else None))
+    a = service.ensure_active_assessment(db, v, actor_id=user.id, engagement=e)
     db.commit()
     return {"assessment": s_assessment(a), "stages": [s_stage(s) for s in service.get_stage_instances(db, a.id)]}
 
 
 @router.get("/vendors/{vendor_id}/assessments")
-def list_assessment_versions(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def list_assessment_versions(vendor_id: int, engagement_id: Optional[int] = None,
+                             db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Every version, or one scope's when `engagement_id` names it (General's own id: General)."""
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
-    rows = (
-        db.query(VendorAssessment)
-        .filter(VendorAssessment.vendor_id == v.id, VendorAssessment.deleted_at.is_(None))
-        .order_by(VendorAssessment.version_no.desc()).all()
-    )
+    q = db.query(VendorAssessment).filter(VendorAssessment.vendor_id == v.id, VendorAssessment.deleted_at.is_(None))
+    if engagement_id:
+        e = _engagement(db, v, engagement_id)
+        q = q.filter(VendorAssessment.engagement_id == e.id if e is not None else VendorAssessment.engagement_id.is_(None))
+    rows = q.order_by(VendorAssessment.version_no.desc(), VendorAssessment.id.desc()).all()
     return {"items": [s_assessment(a) for a in rows], "total": len(rows)}
 
 
@@ -604,12 +639,15 @@ def run_scoring(assessment_id: int, db: Session = Depends(get_db), user: GRCUser
 
 
 @router.post("/vendors/{vendor_id}/reassess")
-def reassess(vendor_id: int, body: ReassessIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def reassess(vendor_id: int, body: ReassessIn, engagement_id: Optional[int] = None,
+             db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "assessments", "create")
+    e = _open_engagement(db, v, engagement_id or body.engagement_id)
     new = service.create_reassessment_version(db, v, actor_id=user.id, reason=body.reason,
-                                              assessment_type=body.assessment_type or "reassessment")
+                                              assessment_type=body.assessment_type or "reassessment",
+                                              engagement=e)
     db.commit()
     return s_assessment(new)
 
@@ -1121,8 +1159,10 @@ def create_contract(vendor_id: int, body: ContractIn, db: Session = Depends(get_
         terms = contracts.clean({k: getattr(body, k) for k in ("contract_type", "status", *contracts.TERM_FIELDS)})
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    e = _engagement(db, v, body.engagement_id)
     c = TPRAContract(
         tenant_id=v.tenant_id, vendor_id=v.id, assessment_id=body.assessment_id, title=body.title, terms=body.terms,
+        engagement_id=e.id if e is not None else None,
         document_id=body.document_id, effective_date=body.effective_date,
         renewal_date=body.renewal_date, expiry_date=body.expiry_date,
         **{**terms, "contract_type": terms.get("contract_type") or "master", "status": terms.get("status") or "draft"},
@@ -1149,6 +1189,9 @@ def update_contract(contract_id: int, body: ContractUpdate, db: Session = Depend
     for required in ("contract_type", "status"):           # these can change but never be emptied
         if required in given and not given[required]:
             given.pop(required)
+    if "engagement_id" in given:                           # the whole supplier (None), or one of its engagements
+        e = _engagement(db, db.get(Vendor, c.vendor_id), given["engagement_id"])
+        given["engagement_id"] = e.id if e is not None else None
     try:
         changes = contracts.apply(c, contracts.clean(given))
         contracts.check_dates(c)
@@ -1297,9 +1340,10 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     service.write_audit(db, a.tenant_id, entity="approval", action="create",
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=ap.id, actor_id=user.id,
                         to_value=body.decision, reason=body.rationale)
-    # An onboarding request is decided by the same decision.
+    # An onboarding request is decided by the same decision: the supplier's own
+    # (General) assessment's, not an engagement's.
     _requested = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
-    if _requested is not None and _requested.intake_status in ("submitted", "in_review"):
+    if _requested is not None and a.engagement_id is None and _requested.intake_status in ("submitted", "in_review"):
         if body.decision in ("approve", "approve_with_conditions"):
             intake.set_status(_requested, "approved")
         elif body.decision == "reject":

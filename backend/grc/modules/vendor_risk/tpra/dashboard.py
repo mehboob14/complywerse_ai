@@ -335,21 +335,25 @@ def third_party_risk_register(
         ),
     ).all()
     vname = dict(db.query(Vendor.id, Vendor.name).filter(Vendor.tenant_id.in_(tids)).all())
-    # Per-vendor 10-domain residual breakdown from the active assessment (TPRM-014).
+    # Per-vendor 10-domain residual breakdown from the active assessment (TPRM-014),
+    # an engagement's entry (`vendor:{id}/engagement:{id}`) from that engagement's.
     dmap = {}
-    for vid_, ds in db.query(VendorAssessment.vendor_id, VendorAssessment.domain_scores).filter(
+    for vid_, eid_, ds in db.query(VendorAssessment.vendor_id, VendorAssessment.engagement_id,
+                                   VendorAssessment.domain_scores).filter(
         VendorAssessment.tenant_id.in_(tids),
         VendorAssessment.lifecycle_status == "active",
     ).all():
         if ds:
-            dmap[vid_] = ds
+            dmap[(vid_, eid_)] = ds
 
     items = []
     for r in risks:
-        vid = None
+        vid = eid = None
         if r.source_reference and r.source_reference.startswith("vendor:"):
             try:
                 vid = int(r.source_reference.split(":", 1)[1].split("/", 1)[0])
+                tail = r.source_reference.split("/", 1)[1] if "/" in r.source_reference else ""
+                eid = int(tail.split(":", 1)[1]) if tail.startswith("engagement:") else None
             except (ValueError, IndexError):
                 vid = None
         items.append({
@@ -358,7 +362,7 @@ def third_party_risk_register(
             "residual_score": r.residual_score, "status": r.status,
             "register_type": r.register_type, "owner_id": r.owner_id,
             "source_type": r.source_type, "source_reference": r.source_reference,
-            "domain_scores": dmap.get(vid),
+            "domain_scores": dmap.get((vid, eid)),
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         })
     items.sort(key=lambda x: (x["residual_score"] is not None, x["residual_score"] or 0), reverse=True)

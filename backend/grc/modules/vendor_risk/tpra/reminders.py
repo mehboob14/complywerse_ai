@@ -32,8 +32,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Role, Tenant, TPRAActionItem, TPRAContract, TPRAFinding, TPRAMonitoringSignal, TPRAReminder, TPRARemediation,
-    TPRARiskAcceptance, TPRASurfaceWaiver, TPRAVendorContact, UserRole, Vendor, VendorAssessment,
+    Role, Tenant, TPRAActionItem, TPRAContract, TPRAEngagement, TPRAFinding, TPRAMonitoringSignal, TPRAReminder,
+    TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver, TPRAVendorContact, UserRole, Vendor, VendorAssessment,
     VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, is_sealed, link as portal_link, supplier_link
@@ -170,7 +170,8 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     vendors = {v.id: v for v in db.query(Vendor).filter(
         Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None))}
 
-    # 1. Reassessments falling due.
+    # 1. Reassessments falling due: the supplier's (General's), and each open
+    #    engagement's own, which its owner hears about.
     for v in vendors.values():
         if (v.status or "").lower() in _INACTIVE_VENDOR or not v.next_reassessment_date:
             continue
@@ -178,6 +179,17 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
         add("reassessment_due", "vendor", v.id, v.id, due,
             f"Reassessment of {v.name} is {_when(due, today)}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id])
+    for e in db.query(TPRAEngagement).filter(
+            TPRAEngagement.tenant_id == tenant_id, TPRAEngagement.is_general.is_(False),
+            TPRAEngagement.status != "ended", TPRAEngagement.next_reassessment_date.isnot(None)
+    ).order_by(TPRAEngagement.id):
+        v = vendors.get(e.vendor_id)
+        if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
+            continue
+        due = _day(e.next_reassessment_date)
+        add("reassessment_due", "engagement", e.id, v.id, due,
+            f"Reassessment of {v.name} — {e.name} is {_when(due, today)}",
+            f"/vendor-risk/vendors/{v.id}?stage=reassessment&engagement={e.id}", [e.owner_id or v.owner_id])
 
     # 2. Questionnaires still waiting on the vendor: the owner hears as the due date
     #    nears and once when it passes; the respondent is emailed on the usual

@@ -20,6 +20,7 @@ from sqlalchemy.pool import StaticPool
 from grc.models import TPRAActionItem  # read by the action plan, check-in and alert sweeps
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import TPRAPortalToken, TPRAVendorContact  # who a questionnaire goes to, and their links
+from grc.models import TPRAEngagement  # each engagement's own review date
 from grc.models import (
     TPRAMonitoringSignal, Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRARiskAcceptance,
@@ -35,7 +36,7 @@ _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplat
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAContract,
            TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRAActionItem,
-           TPRAVendorContact, TPRAPortalToken]
+           TPRAVendorContact, TPRAPortalToken, TPRAEngagement]
 
 QUESTIONS = [
     {"id": "isms", "text": "Do you run an information security programme?", "type": "yes_no",

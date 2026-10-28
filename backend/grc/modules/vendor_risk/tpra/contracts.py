@@ -241,6 +241,7 @@ def describe(c: TPRAContract, v: Vendor, today: date, decide: int) -> dict:
         "days_left": (due - today).days if due else None,
         **{k: getattr(c, k) for k in TERM_FIELDS}, **{k: getattr(c, k) for k in CLAUSE_FIELDS}, "terms": c.terms,
         "evidence_id": c.evidence_id, "assessment_id": c.assessment_id, "row_version": c.row_version,
+        "engagement_id": c.engagement_id,   # None: the whole supplier
     }
 
 

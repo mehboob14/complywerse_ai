@@ -249,6 +249,8 @@ class TPRAContract(Base):
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
+    # The engagement it covers (grc_tpra_engagements); NULL covers the whole supplier.
+    engagement_id = Column(Integer, nullable=True)
     # master | dpa | sla | security_addendum
     contract_type = Column(String(40), default="master")
     title = Column(String(255), nullable=True)
@@ -482,6 +484,7 @@ class TPRARiskSnapshot(Base):
     scope = Column(String(20), nullable=False, default="vendor", index=True)
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=True, index=True)
     assessment_id = Column(Integer, nullable=True)  # loose ref: which assessment drove it
+    engagement_id = Column(Integer, nullable=True)  # that assessment's engagement; NULL is General
     inherent_score = Column(Float, nullable=True)
     residual_score = Column(Float, nullable=True)
     rating_grade = Column(String(2), nullable=True)        # A–F

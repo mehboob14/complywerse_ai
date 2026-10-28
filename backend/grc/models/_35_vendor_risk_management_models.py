@@ -168,6 +168,8 @@ class VendorAssessment(Base):
     # Assessment-level RACI team roster (assign once, reused across all stages):
     # {role_key: user_id} e.g. {"business_owner": 4, "tprm_lead": 7, ...}.
     team_roster = Column(JSON, default=dict)
+    # The engagement this assesses (grc_tpra_engagements); NULL is the General scope.
+    engagement_id = Column(Integer, nullable=True, index=True)
     # Optimistic-concurrency token for edits.
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)

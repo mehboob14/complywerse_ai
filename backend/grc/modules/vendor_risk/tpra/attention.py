@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from ....models import (
     AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRACheckin, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
-    TPRAActionItem, TPRARiskSnapshot,
+    TPRAActionItem, TPRARiskSnapshot, TPRAEngagement,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
@@ -222,13 +222,25 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"The {kind} assessment of {v.name} was due on {due:%d %b %Y}",
             _countdown(due, today, "Due"), f"/vendor-risk/assessments/{a.id}", tone="red")
 
-    # Reassessments whose date has passed.
+    # Reassessments whose date has passed: the supplier's (General's), and each
+    # open engagement's own.
     for v in vendors.values():
         due = _day(v.next_reassessment_date)
         if due is not None and due < today:
             add("reassessment_overdue", "vendor", v.id, v, due,
                 f"Reassessment of {v.name} was due on {due:%d %b %Y}",
                 _countdown(due, today, "Due"), f"/vendor-risk/vendors/{v.id}?stage=reassessment", tone="red")
+    for e in db.query(TPRAEngagement).filter(
+            TPRAEngagement.tenant_id == tenant_id, TPRAEngagement.is_general.is_(False),
+            TPRAEngagement.status != "ended", TPRAEngagement.next_reassessment_date.isnot(None)
+    ).order_by(TPRAEngagement.id):
+        v = vendors.get(e.vendor_id)
+        due = _day(e.next_reassessment_date)
+        if v is not None and due < today:
+            add("reassessment_overdue", "engagement", e.id, v, due,
+                f"Reassessment of {v.name} — {e.name} was due on {due:%d %b %Y}",
+                _countdown(due, today, "Due"),
+                f"/vendor-risk/vendors/{v.id}?stage=reassessment&engagement={e.id}", tone="red", people=[e.owner_id])
 
     # Vendors approved, or already in use, whose inherent risk was never tiered.
     tiered = {vid for (vid,) in db.query(VendorAssessment.vendor_id).filter(

@@ -12,18 +12,19 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAApproval,
-    TPRAMonitoringSignal, TPRAAuditLog, TPRAEvidenceLink,
+    TPRAMonitoringSignal, TPRAAuditLog, TPRAEvidenceLink, TPRAEngagement,
 )
 from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
     stages_at_or_after, can_skip, cadence_days_for, required_reviewers_for,
-    TIER_SKIPPABLE_STAGES, TIER_REQUIRED_REVIEWERS,
+    TIER_SKIPPABLE_STAGES, TIER_REQUIRED_REVIEWERS, TIER_RANK,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
@@ -53,6 +54,76 @@ def write_audit(
     )
     db.add(row)
     return row
+
+
+# ── Engagements: one use of a supplier, each with its own lifecycle ──────────
+# An assessment's engagement_id names the engagement it assesses; NULL is the
+# General scope, the supplier as it always was. A supplier with no engagement
+# rows is exactly that, so everything below falls back to the supplier itself.
+
+def engagement_of(db: Session, assessment: Optional[VendorAssessment]) -> Optional[TPRAEngagement]:
+    """The engagement an assessment belongs to, or None for General."""
+    eid = getattr(assessment, "engagement_id", None) if assessment is not None else None
+    return db.get(TPRAEngagement, eid) if eid else None
+
+
+def general_row(db: Session, vendor: Vendor) -> Optional[TPRAEngagement]:
+    """The supplier's General row: made when its first engagement is added."""
+    return db.query(TPRAEngagement).filter(
+        TPRAEngagement.vendor_id == vendor.id, TPRAEngagement.is_general.is_(True)).first()
+
+
+def open_engagements(db: Session, vendor: Vendor) -> List[TPRAEngagement]:
+    """The supplier's engagements still in use, General left out."""
+    return (db.query(TPRAEngagement)
+            .filter(TPRAEngagement.vendor_id == vendor.id, TPRAEngagement.is_general.is_(False),
+                    TPRAEngagement.status != "ended")
+            .order_by(TPRAEngagement.id).all())
+
+
+def scope_row(db: Session, vendor: Vendor, engagement: Optional[TPRAEngagement] = None):
+    """Where a scope keeps its own tier and scores: an engagement's row; General's
+    on the General row once the supplier has engagements, else the supplier itself."""
+    if engagement is not None and not engagement.is_general:
+        return engagement
+    return general_row(db, vendor) or vendor
+
+
+def _worst(values) -> Optional[str]:
+    known = [v.lower() for v in values if (v or "").lower() in TIER_RANK]
+    return max(known, key=TIER_RANK.get) if known else None
+
+
+def worst_grade(rows) -> Optional[str]:
+    """A–F, F the worst."""
+    return max((r.rating_grade for r in rows if r.rating_grade), default=None)
+
+
+def recache(db: Session, vendor: Vendor) -> None:
+    """The supplier shows its worst open engagement, General included: tier, inherent
+    and residual scores, rating. It is the worst of where each stands now, not the
+    worst ever, so a better reassessment can improve the supplier."""
+    rows = db.query(TPRAEngagement).filter(
+        TPRAEngagement.vendor_id == vendor.id, TPRAEngagement.status != "ended").all()
+    if not rows:
+        return
+    vendor.tier = _worst(r.tier for r in rows) or vendor.tier
+    vendor.risk_rating = _worst(r.risk_rating for r in rows)
+    vendor.inherent_risk_score = max((r.inherent_risk_score for r in rows if r.inherent_risk_score is not None),
+                                     default=None)
+    vendor.residual_risk_score = max((r.residual_risk_score for r in rows if r.residual_risk_score is not None),
+                                     default=None)
+
+
+def set_scores(db: Session, vendor: Vendor, row, **values) -> None:
+    """Write a scope's tier or scores on its row (scope_row). Written on an
+    engagement's row, the supplier is recached to its worst; the supplier itself
+    keeps no grade."""
+    for key, value in values.items():
+        if row is not vendor or hasattr(Vendor, key):
+            setattr(row, key, value)
+    if row is not vendor:
+        recache(db, vendor)
 
 
 # ── Stage instantiation ──────────────────────────────────────────────────────
@@ -236,22 +307,37 @@ def close_finding_issue(db: Session, finding, actor_id: Optional[int] = None,
 _POST_APPROVAL_STAGES = {"onboarding", "monitoring", "reassessment"}
 
 
+def _past_approval(db: Session, assessment: VendorAssessment) -> bool:
+    return (assessment.current_stage in _POST_APPROVAL_STAGES) or bool(
+        db.query(TPRAStageInstance.id).filter(
+            TPRAStageInstance.assessment_id == assessment.id,
+            TPRAStageInstance.stage_key == "approval",
+            TPRAStageInstance.status.in_(("complete", "skipped")),
+        ).first()
+    )
+
+
+def _critical_elsewhere(db: Session, vendor: Vendor, assessment: VendorAssessment) -> bool:
+    """Whether another scope's active assessment (another engagement's, or General's)
+    still has an unmitigated critical past its approval."""
+    others = db.query(VendorAssessment).filter(
+        VendorAssessment.vendor_id == vendor.id, VendorAssessment.id != assessment.id,
+        VendorAssessment.lifecycle_status == "active", VendorAssessment.deleted_at.is_(None),
+        func.coalesce(VendorAssessment.engagement_id, 0) != (assessment.engagement_id or 0)).all()
+    return any(_past_approval(db, a) and count_open_critical(db, a.id) > 0 for a in others)
+
+
 def enforce_critical_invariant(
     db: Session, vendor: Vendor, assessment: VendorAssessment, actor_id: Optional[int] = None,
 ) -> None:
     """TPRM-002: an open, unmitigated critical-control failure must NOT silently
     persist on a vendor that has already passed the approval gate. Suspend such a
     vendor (auditable); auto-reactivate once the critical is remediated/accepted/
-    closed. Best-effort — never blocks the calling mutation. Caller owns commit."""
+    closed — on every engagement: a supplier stays suspended while any of its
+    active assessments has one. Best-effort — never blocks the calling mutation.
+    Caller owns commit."""
     try:
-        past_approval = (assessment.current_stage in _POST_APPROVAL_STAGES) or bool(
-            db.query(TPRAStageInstance.id).filter(
-                TPRAStageInstance.assessment_id == assessment.id,
-                TPRAStageInstance.stage_key == "approval",
-                TPRAStageInstance.status.in_(("complete", "skipped")),
-            ).first()
-        )
-        if not past_approval:
+        if not _past_approval(db, assessment):
             return
         open_crit = count_open_critical(db, assessment.id)
         status = (vendor.status or "").lower()
@@ -263,7 +349,7 @@ def enforce_critical_invariant(
                         vendor_id=vendor.id, assessment_id=assessment.id, actor_id=actor_id,
                         from_value=prev, to_value="suspended",
                         reason="Open critical control failure on an onboarded vendor (TPRM-002).")
-        elif open_crit == 0 and status == "suspended":
+        elif open_crit == 0 and status == "suspended" and not _critical_elsewhere(db, vendor, assessment):
             vendor.status = "active"
             vendor.updated_at = datetime.utcnow()
             write_audit(db, vendor.tenant_id, entity="vendor", action="reactivate",
@@ -290,15 +376,18 @@ def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
 
 
 def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> dict:
-    """Gather the plain facts the pure gate engine needs for one stage."""
-    tier = assessment.inherent_tier or vendor.tier or "medium"
+    """Gather the plain facts the pure gate engine needs for one stage. An
+    engagement's assessment is held to the engagement's own facts and tier."""
+    engagement = engagement_of(db, assessment)
+    scope = engagement or vendor
+    tier = assessment.inherent_tier or scope.tier or "medium"
     ctx: dict = {"tier": tier}
 
     if stage_key == "intake":
         ctx.update(
-            has_name=bool(vendor.name),
-            has_owner=bool(vendor.owner_id),
-            has_data_classification=bool(vendor.data_access_level and vendor.data_access_level != "none"),
+            has_name=bool(scope.name),
+            has_owner=bool(scope.owner_id),
+            has_data_classification=bool(scope.data_access_level and scope.data_access_level != "none"),
         )
     elif stage_key == "tiering":
         ctx["inherent_tier"] = assessment.inherent_tier
@@ -330,10 +419,16 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     elif stage_key == "findings":
         ctx["open_critical_unmitigated"] = count_open_critical(db, assessment.id)
     elif stage_key == "contracting":
+        # A contract for the whole supplier covers every engagement; one made for
+        # an engagement covers only that one.
+        covers = TPRAContract.engagement_id.is_(None)
+        if engagement is not None:
+            covers = or_(covers, TPRAContract.engagement_id == engagement.id)
         ctx["contract_linked"] = bool(
             db.query(TPRAContract.id).filter(
                 TPRAContract.vendor_id == vendor.id,
                 TPRAContract.deleted_at.is_(None),
+                covers,
             ).first()
         )
     elif stage_key == "approval":
@@ -363,6 +458,11 @@ def _stage_row(db: Session, assessment_id: int, stage_key: str) -> Optional[TPRA
         .filter(TPRAStageInstance.assessment_id == assessment_id, TPRAStageInstance.stage_key == stage_key)
         .first()
     )
+
+
+def _set_stage(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> None:
+    """Keep the scope's stage pointer: the engagement's own, or the supplier's legacy one."""
+    (engagement_of(db, assessment) or vendor).lifecycle_stage = stage_key
 
 
 def advance_stage(
@@ -402,7 +502,7 @@ def advance_stage(
             nxt.status = "in_progress"
             nxt.started_at = datetime.utcnow()
         assessment.current_stage = nxt_key
-        vendor.lifecycle_stage = nxt_key  # keep legacy pointer in sync
+        _set_stage(db, vendor, assessment, nxt_key)  # keep legacy pointer in sync
     else:
         assessment.current_stage = current_key  # terminal
 
@@ -461,7 +561,7 @@ def send_back(
         s.row_version = (s.row_version or 1) + 1
 
     assessment.current_stage = target_stage
-    vendor.lifecycle_stage = target_stage
+    _set_stage(db, vendor, assessment, target_stage)
     assessment.row_version = (assessment.row_version or 1) + 1
     write_audit(db, assessment.tenant_id, entity="stage", action="send_back",
                 vendor_id=vendor.id, assessment_id=assessment.id,
@@ -474,7 +574,7 @@ def skip_stage(
     actor_id: Optional[int], reason: str,
 ) -> dict:
     """Skip a non-gate stage where tier rules permit; record who & why."""
-    tier = assessment.inherent_tier or vendor.tier or "medium"
+    tier = assessment.inherent_tier or (engagement_of(db, assessment) or vendor).tier or "medium"
     if not can_skip(tier, stage_key):
         raise ValueError(f"stage '{stage_key}' is not skippable for tier '{tier}'")
     row = _stage_row(db, assessment.id, stage_key)
@@ -494,7 +594,7 @@ def skip_stage(
             nxt_row.status = "in_progress"
             nxt_row.started_at = datetime.utcnow()
         assessment.current_stage = nxt
-        vendor.lifecycle_stage = nxt
+        _set_stage(db, vendor, assessment, nxt)
     write_audit(db, assessment.tenant_id, entity="stage", action="skip",
                 vendor_id=vendor.id, assessment_id=assessment.id, entity_id=row.id,
                 actor_id=actor_id, to_value="skipped", reason=reason)
@@ -507,30 +607,35 @@ def run_tiering(
     db: Session, vendor: Vendor, assessment: VendorAssessment, actor_id: Optional[int],
     factors: Optional[Dict[str, float]] = None,
 ) -> dict:
-    """Compute the inherent tier and persist it on the assessment + vendor."""
+    """Compute the inherent tier and persist it on the assessment + vendor (or, for
+    an engagement's assessment, on the engagement, from the engagement's facts)."""
     cfg = get_tiering_config(db, assessment.tenant_id)
+    engagement = engagement_of(db, assessment)
+    facts = tier_policy.facts(vendor, engagement)
+    row = scope_row(db, vendor, engagement)
     reasons = None
-    if factors is None and intake_answers.has_answers(getattr(vendor, "intake", None)):
+    if factors is None and intake_answers.has_answers(getattr(facts, "intake", None)):
         # The requester's answers are the facts; the factors follow from them.
-        factors, reasons = intake_answers.factors(vendor.intake, cfg.get("customisation"))
+        factors, reasons = intake_answers.factors(facts.intake, cfg.get("customisation"))
     elif factors is None:
         factors = derive_factors_from_profile({
-            "data_access_level": vendor.data_access_level,
-            "data_types_accessed": vendor.data_types_accessed or [],
-            "geographic_locations": vendor.geographic_locations or [],
-            "business_criticality": vendor.tier,
+            "data_access_level": facts.data_access_level,
+            "data_types_accessed": facts.data_types_accessed or [],
+            "geographic_locations": facts.geographic_locations or [],
+            # An engagement says how critical it is. General still reads its own
+            # last tier here, as it always has (a loop: the tier feeds itself).
+            "business_criticality": engagement.criticality if engagement is not None else row.tier,
         })
     result = compute_inherent_tier(factors, cfg)
     if reasons:
         result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons).
-    assessment.tiering_basis = tier_policy.basis(vendor, cfg.get("customisation"))
+    assessment.tiering_basis = tier_policy.basis(facts, cfg.get("customisation"))
     assessment.tier_override = None
     assessment.inherent_tier = result["tier"]
     assessment.inherent_score = result["score"]
-    vendor.inherent_risk_score = result["score"]
-    vendor.tier = result["tier"]
-    vendor.risk_rating = vendor.risk_rating or result["tier"]
+    set_scores(db, vendor, row, inherent_risk_score=result["score"], tier=result["tier"],
+               risk_rating=row.risk_rating or result["tier"])
     assessment.row_version = (assessment.row_version or 1) + 1
     # Right-size the path by tier: auto-skip the stages this tier is allowed to skip
     # (a Low vendor bypasses deep diligence) so the path visibly collapses instead of
@@ -729,7 +834,8 @@ def record_tier_override(db: Session, vendor: Vendor, assessment: VendorAssessme
                          justification: str, actor_id: Optional[int]) -> None:
     """A tier set by hand instead of computed: kept with who set it, why, and what
     the engine had computed, and written to the vendor's audit trail."""
-    previous = assessment.inherent_tier or vendor.tier
+    row = scope_row(db, vendor, engagement_of(db, assessment))
+    previous = assessment.inherent_tier or row.tier
     computed = (assessment.tier_override or {}).get("computed") or assessment.inherent_tier
     assessment.tier_override = {
         "from": previous, "to": tier, "computed": computed, "justification": justification,
@@ -737,7 +843,7 @@ def record_tier_override(db: Session, vendor: Vendor, assessment: VendorAssessme
     }
     assessment.inherent_tier = tier
     assessment.row_version = (assessment.row_version or 1) + 1
-    vendor.tier = tier
+    set_scores(db, vendor, row, tier=tier)
     write_audit(db, assessment.tenant_id, entity="tiering", action="override", vendor_id=vendor.id,
                 assessment_id=assessment.id, actor_id=actor_id, from_value=previous, to_value=tier,
                 reason=justification, extra={"computed": computed})
@@ -785,7 +891,8 @@ def run_scoring(
     """Score the assessment from its normalized responses; persist residual +
     domain scores and auto-create blocking findings for failed critical controls."""
     responses = collect_responses_for_scoring(db, assessment.id)
-    inherent = assessment.inherent_score or vendor.inherent_risk_score or 0.0
+    row = scope_row(db, vendor, engagement_of(db, assessment))
+    inherent = assessment.inherent_score or row.inherent_risk_score or 0.0
     cfg = get_tiering_config(db, assessment.tenant_id)
     result = score_assessment(responses, inherent_score=inherent, config=cfg)
 
@@ -793,15 +900,15 @@ def run_scoring(
     assessment.residual_rating = result["residual_rating"]
     assessment.rating_grade = result["rating_grade"]
     assessment.domain_scores = result["domain_scores"]
-    vendor.residual_risk_score = result["overall_residual"]
-    vendor.risk_rating = result["residual_rating"]
+    set_scores(db, vendor, row, residual_risk_score=result["overall_residual"],
+               risk_rating=result["residual_rating"], rating_grade=result["rating_grade"])
     assessment.row_version = (assessment.row_version or 1) + 1
 
     created_findings = raise_answer_findings(db, vendor, assessment, responses, actor_id)
 
     # Snapshot the new posture so the risk-over-time series is real history.
     db.flush()
-    write_vendor_snapshot(db, vendor, assessment, source="score")
+    snapshot(db, vendor, assessment, "score")
     # Roll the residual up into the enterprise Risk Register (Risk 360°).
     sync_risk_register(db, vendor, assessment)
 
@@ -821,14 +928,16 @@ def residual_from_inherent(db: Session, assessment: VendorAssessment, actor_id: 
     or domain score is made up. Returns whether it applied."""
     vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
     scoring = _stage_row(db, assessment.id, "scoring")
-    tier = assessment.inherent_tier or (vendor.tier if vendor else None)
+    engagement = engagement_of(db, assessment)
+    tier = assessment.inherent_tier or ((engagement or vendor).tier if vendor else None)
     if (vendor is None or assessment.inherent_score is None or scoring is None or scoring.status != "skipped"
             or not can_skip(tier, "scoring")):
         return False
     assessment.residual_score = assessment.inherent_score
     assessment.residual_rating = tier
     assessment.row_version = (assessment.row_version or 1) + 1
-    vendor.residual_risk_score, vendor.risk_rating = assessment.residual_score, tier
+    set_scores(db, vendor, scope_row(db, vendor, engagement), residual_risk_score=assessment.residual_score,
+               risk_rating=tier)
     write_audit(db, assessment.tenant_id, entity="scoring", action="update", vendor_id=vendor.id,
                 assessment_id=assessment.id, actor_id=actor_id, to_value=tier,
                 reason="Scoring is skipped for this tier, so the residual is the inherent score; "
@@ -847,7 +956,7 @@ def approval_problem(db: Session, user, assessment: VendorAssessment) -> Optiona
                      "an independent approver is required.")
     vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
     problem = tier_policy.approver_problem(
-        db, user, assessment.inherent_tier or (vendor.tier if vendor else None),
+        db, user, assessment.inherent_tier or ((engagement_of(db, assessment) or vendor).tier if vendor else None),
         tier_policy.merged(get_tiering_config(db, assessment.tenant_id).get("tier_policy")),
         is_admin=rbac._is_admin_or_primary(db, user))
     if problem:
@@ -866,17 +975,26 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
     register entry per vendor, whichever version wrote it, updated on each
     re-score). Matched on that exact prefix: `vendor:1` alone would also match
     vendor 12, and vendor 1's promoted findings (`vendor:1/tpra_finding:{id}`).
-    Best-effort — never blocks scoring."""
+    An engagement has its own entry, `vendor:{id}/engagement:{id}` matched
+    exactly, and General keeps the one above; nothing rolls them up again, so
+    nothing is counted twice. Best-effort — never blocks scoring."""
     try:
         from ....models import Risk
         ref = f"vendor:{vendor.id}"
-        risk = db.query(Risk).filter(
-            Risk.tenant_id == vendor.tenant_id,
-            Risk.source_reference.startswith(f"{ref}/vendor_assessment:", autoescape=True),
-        ).order_by(Risk.id).first()
+        engagement = engagement_of(db, assessment)
+        found = db.query(Risk).filter(Risk.tenant_id == vendor.tenant_id)
+        if engagement is None:
+            found = found.filter(Risk.source_reference.startswith(f"{ref}/vendor_assessment:", autoescape=True))
+            key, name, owner = f"{ref}/vendor_assessment:{assessment.id}", vendor.name, vendor
+        else:
+            key = f"{ref}/engagement:{engagement.id}"
+            found = found.filter(Risk.source_reference == key)
+            name, owner = f"{vendor.name} — {engagement.name}", engagement
+        risk = found.order_by(Risk.id).first()
+        tier = scope_row(db, vendor, engagement).tier
         desc = (
-            f"Residual third-party risk from the TPRA lifecycle of vendor '{vendor.name}'. "
-            f"Tier: {assessment.inherent_tier or vendor.tier or 'n/a'}, "
+            f"Residual third-party risk from the TPRA lifecycle of vendor '{name}'. "
+            f"Tier: {assessment.inherent_tier or tier or 'n/a'}, "
             f"residual rating: {assessment.residual_rating or 'n/a'}, "
             f"grade: {getattr(assessment, 'rating_grade', None) or 'n/a'}."
         )
@@ -886,22 +1004,22 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
         if inh is not None and res is not None:
             res = min(res, inh)
         if risk:
-            risk.title = f"Third-party risk: {vendor.name}"
+            risk.title = f"Third-party risk: {name}"
             risk.description = desc
             risk.inherent_score = inh
             risk.residual_score = res
-            risk.risk_sub_category = vendor.tier
+            risk.risk_sub_category = tier
             risk.updated_at = datetime.utcnow()
         else:
             risk = Risk(
-                tenant_id=vendor.tenant_id, business_unit_id=vendor.business_unit_id,
-                title=f"Third-party risk: {vendor.name}", description=desc,
+                tenant_id=vendor.tenant_id, business_unit_id=owner.business_unit_id or vendor.business_unit_id,
+                title=f"Third-party risk: {name}", description=desc,
                 category="third_party", risk_category="third_party",
-                register_type="Third-Party Risk", risk_sub_category=vendor.tier,
-                owner_id=vendor.owner_id, inherent_score=inh,
+                register_type="Third-Party Risk", risk_sub_category=tier,
+                owner_id=owner.owner_id or vendor.owner_id, inherent_score=inh,
                 residual_score=res, status="open",
                 source_type="assessment",
-                source_reference=f"{ref}/vendor_assessment:{assessment.id}",
+                source_reference=key,
             )
             db.add(risk)
             db.flush()
@@ -976,6 +1094,20 @@ def promote_finding_to_register(db: Session, finding: TPRAFinding, actor_id: Opt
         return None
 
 
+def snapshot(db: Session, vendor: Vendor, assessment: Optional[VendorAssessment], source: str):
+    """The supplier's posture over time. Once it has engagements its posture is its
+    worst, so the snapshot reads the supplier's own columns and names the assessment
+    (and engagement) that moved them."""
+    general = general_row(db, vendor)
+    if general is None:
+        return write_vendor_snapshot(db, vendor, assessment, source=source)
+    snap = write_vendor_snapshot(db, vendor, None, source=source)
+    if assessment is not None:
+        snap.assessment_id, snap.engagement_id = assessment.id, assessment.engagement_id
+    snap.rating_grade = worst_grade([general, *open_engagements(db, vendor)])
+    return snap
+
+
 def snapshot_after_finding_change(db: Session, finding: TPRAFinding) -> None:
     """Capture the vendor's posture after a finding transitions to closed/accepted,
     so closure events show up on the risk-over-time trend. Best-effort."""
@@ -985,26 +1117,41 @@ def snapshot_after_finding_change(db: Session, finding: TPRAFinding) -> None:
     assessment = db.query(VendorAssessment).filter(
         VendorAssessment.id == finding.assessment_id
     ).first()
-    write_vendor_snapshot(db, vendor, assessment, source="finding_close")
+    snapshot(db, vendor, assessment, "finding_close")
 
 
 # ── Versioned reassessment ───────────────────────────────────────────────────
+
+def _in_scope(query, engagement: Optional[TPRAEngagement]):
+    """Assessments of one scope: an engagement's, or General's (engagement_id NULL),
+    so General never picks up an engagement's assessment, nor one engagement another's."""
+    if engagement is None:
+        return query.filter(VendorAssessment.engagement_id.is_(None))
+    return query.filter(VendorAssessment.engagement_id == engagement.id)
+
+
+def _scope(engagement: Optional[TPRAEngagement]) -> Optional[TPRAEngagement]:
+    """None for General, whether named by nothing or by its own row."""
+    return None if engagement is None or engagement.is_general else engagement
+
 
 def create_reassessment_version(
     db: Session, vendor: Vendor, actor_id: Optional[int], reason: str,
     assessment_type: str = "reassessment",
     triggered_signal: Optional[TPRAMonitoringSignal] = None,
+    engagement: Optional[TPRAEngagement] = None,
 ) -> VendorAssessment:
     """Open a new assessment version without losing prior history: the current
     active assessment is marked superseded; a fresh version (with new stage
-    instances) becomes active and re-enters the lifecycle at due-diligence."""
+    instances) becomes active and re-enters the lifecycle at due-diligence.
+    `engagement` reassesses that engagement only; None is General."""
+    engagement = _scope(engagement)
     prior = (
-        db.query(VendorAssessment)
-        .filter(
+        _in_scope(db.query(VendorAssessment).filter(
             VendorAssessment.vendor_id == vendor.id,
             VendorAssessment.lifecycle_status == "active",
             VendorAssessment.deleted_at.is_(None),
-        )
+        ), engagement)
         .order_by(VendorAssessment.version_no.desc())
         .first()
     )
@@ -1022,20 +1169,22 @@ def create_reassessment_version(
         current_stage="dd_planning",  # re-enter at planning (tier already known)
         inherent_tier=prior.inherent_tier if prior else None,
         inherent_score=prior.inherent_score if prior else None,
+        engagement_id=engagement.id if engagement is not None else None,
     )
     db.add(new)
     db.flush()
-    vendor.active_assessment_id = new.id
-    vendor.lifecycle_stage = "dd_planning"
+    holder = engagement or vendor   # whose pointers move: the engagement's, or the supplier's for General
+    holder.active_assessment_id = new.id
+    holder.lifecycle_stage = "dd_planning"
     # Reset the review clock — opening a reassessment schedules the NEXT one from the
     # tier cadence (single source of truth = stages.cadence_days_for, honouring the
     # tenant's admin-configured cadence), so a just-reassessed vendor no longer shows
     # overdue against a stale target date.
     _cfg = get_tiering_config(db, vendor.tenant_id)
     _cad_override = _cfg.get("cadence_days") if isinstance(_cfg.get("cadence_days"), dict) else None
-    _cadence = cadence_days_for(new.inherent_tier or vendor.tier, _cad_override)
-    vendor.reassessment_cadence_days = _cadence
-    vendor.next_reassessment_date = datetime.utcnow() + timedelta(days=_cadence)
+    _cadence = cadence_days_for(new.inherent_tier or scope_row(db, vendor, engagement).tier, _cad_override)
+    holder.reassessment_cadence_days = _cadence
+    holder.next_reassessment_date = datetime.utcnow() + timedelta(days=_cadence)
 
     # New stage instances; mark tiering complete (carried over), planning active.
     ensure_stage_instances(db, new)
@@ -1054,46 +1203,55 @@ def create_reassessment_version(
     write_audit(db, vendor.tenant_id, entity="assessment", action="create",
                 vendor_id=vendor.id, assessment_id=new.id, entity_id=new.id, actor_id=actor_id,
                 from_value=prior.id if prior else None, to_value=new.id, reason=reason,
-                extra={"version_no": new.version_no})
+                extra={"version_no": new.version_no, **({"engagement_id": engagement.id} if engagement else {})})
     return new
 
 
-def get_active_assessment(db: Session, vendor: Vendor) -> Optional[VendorAssessment]:
-    if vendor.active_assessment_id:
+def get_active_assessment(db: Session, vendor: Vendor,
+                          engagement: Optional[TPRAEngagement] = None) -> Optional[VendorAssessment]:
+    """The active assessment of one scope: the engagement's, or General's (None)."""
+    engagement = _scope(engagement)
+    pointer = (engagement or vendor).active_assessment_id
+    if pointer:
         a = db.query(VendorAssessment).filter(
-            VendorAssessment.id == vendor.active_assessment_id,
+            VendorAssessment.id == pointer,
             VendorAssessment.deleted_at.is_(None),
         ).first()
-        if a:
+        if a and a.engagement_id == (engagement.id if engagement is not None else None):
             return a
     return (
-        db.query(VendorAssessment)
-        .filter(
+        _in_scope(db.query(VendorAssessment).filter(
             VendorAssessment.vendor_id == vendor.id,
             VendorAssessment.lifecycle_status == "active",
             VendorAssessment.deleted_at.is_(None),
-        )
+        ), engagement)
         .order_by(VendorAssessment.version_no.desc())
         .first()
     )
 
 
-def ensure_active_assessment(db: Session, vendor: Vendor, actor_id: Optional[int] = None) -> VendorAssessment:
-    """Get the vendor's active assessment, creating the first version + stages if none."""
-    existing = get_active_assessment(db, vendor)
+def ensure_active_assessment(db: Session, vendor: Vendor, actor_id: Optional[int] = None,
+                             engagement: Optional[TPRAEngagement] = None) -> VendorAssessment:
+    """Get the scope's active assessment (an engagement's, or General's), creating
+    the first version + stages if none."""
+    engagement = _scope(engagement)
+    existing = get_active_assessment(db, vendor, engagement)
     if existing:
         ensure_stage_instances(db, existing)
         return existing
     a = VendorAssessment(
         tenant_id=vendor.tenant_id, vendor_id=vendor.id, assessment_type="initial",
         status="in_progress", version_no=1, lifecycle_status="active", current_stage="intake",
+        engagement_id=engagement.id if engagement is not None else None,
     )
     db.add(a)
     db.flush()
-    vendor.active_assessment_id = a.id
-    vendor.lifecycle_stage = "intake"
+    holder = engagement or vendor
+    holder.active_assessment_id = a.id
+    holder.lifecycle_stage = "intake"
     ensure_stage_instances(db, a)
     write_audit(db, vendor.tenant_id, entity="assessment", action="create",
                 vendor_id=vendor.id, assessment_id=a.id, entity_id=a.id, actor_id=actor_id,
-                to_value=a.id, reason="initial assessment", extra={"version_no": 1})
+                to_value=a.id, reason="initial assessment",
+                extra={"version_no": 1, **({"engagement_id": engagement.id} if engagement else {})})
     return a

@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import TPRAActionItem  # read by the action plan, check-in and alert sweeps
 from grc.models import TPRACheckin  # read by the check-in schedule
+from grc.models import TPRAEngagement  # where a scope keeps its own tier, and each one's review date
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Role, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRAQuestion,
@@ -34,7 +35,7 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAApproval,
            TPRAStageInstance, TPRAContract, TPRAControlObligation, TPRARemediation, TPRARiskAcceptance,
-           TPRARiskSnapshot, AttentionState, AttentionActivity, TPRACheckin, TPRAActionItem]
+           TPRARiskSnapshot, AttentionState, AttentionActivity, TPRACheckin, TPRAActionItem, TPRAEngagement]
 TODAY = datetime.utcnow().date()
 
 

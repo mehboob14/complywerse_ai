@@ -116,12 +116,13 @@ from grc.models import (  # noqa: E402
     TPRASignalRejection, TPRATieringConfig, TPRAVendorLink, TPRAVendorProduct, VendorAssessment,
 )
 from grc.models import IntegrationConnection  # noqa: E402 - where the rating providers' keys are held
+from grc.models import TPRAEngagement  # noqa: E402 - a signal reopens each engagement at its own tier
 from grc.modules.vendor_risk.tpra import monitoring_connectors as feeds, service  # noqa: E402
 
 _WIDE = _TABLES + [ITAsset, SoftwareIdentifier, BcmPlan, BcmBiaRecord, BcmBiaDependency, ControlRecordLink,
                    SCFControlState, NormalizedControl, TPRAVendorLink, TPRAVendorProduct, TPRAMonitoringSignal,
                    TPRAMonitoringCursor, TPRASignalRejection, TPRATieringConfig, Evidence, TPRAEvidenceLink,
-                   VendorAssessment, IntegrationConnection]
+                   VendorAssessment, IntegrationConnection, TPRAEngagement]
 
 
 @pytest.fixture()

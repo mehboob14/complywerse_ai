@@ -29,7 +29,7 @@ from ....models import (
     TPRAMonitoringSignal, TPRAContract, TPRASurfaceScan, Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import contracts as contract_rules, outside_in, portal, rbac
+from . import contracts as contract_rules, outside_in, portal, rbac, service
 from .engine_scoring import answer_score
 from .versions import questions_for
 
@@ -188,8 +188,11 @@ def summary(db: Session, tenant_id: int, vendor: Vendor, today: date, narrative:
         obls = []
     csf = profile(db, vendor, obls)
 
-    assessment = (db.query(VendorAssessment).filter(VendorAssessment.vendor_id == vendor.id, VendorAssessment.deleted_at.is_(None))
-                  .order_by(VendorAssessment.created_at.desc()).first())
+    # The latest assessment speaks for the supplier until it has engagements; then
+    # the supplier's own rating does, the worst of them.
+    assessment = None if service.general_row(db, vendor) else (
+        db.query(VendorAssessment).filter(VendorAssessment.vendor_id == vendor.id, VendorAssessment.deleted_at.is_(None))
+        .order_by(VendorAssessment.created_at.desc()).first())
     decision = (db.query(TPRAApproval).filter(TPRAApproval.vendor_id == vendor.id).order_by(TPRAApproval.created_at.desc()).first())
     findings = (db.query(TPRAFinding).filter(TPRAFinding.vendor_id == vendor.id, TPRAFinding.deleted_at.is_(None),
                                              TPRAFinding.status.in_(("open", "in_remediation")))

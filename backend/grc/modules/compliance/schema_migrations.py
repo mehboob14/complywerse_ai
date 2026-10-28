@@ -1210,6 +1210,11 @@ _COLUMN_ADDS = [
     ("grc_vendor_sla_records", "direction", "VARCHAR(20)", None),
 
     # ── TPRM engagements (B): add columns below this line ──
+    # What each record is for; NULL is the General scope, the supplier as it always was.
+    ("grc_vendor_assessments", "engagement_id", "INTEGER", "ix_grc_vendor_assessments_engagement_id"),
+    ("grc_tpra_contracts", "engagement_id", "INTEGER", None),
+    ("grc_tpra_risk_snapshots", "engagement_id", "INTEGER", None),
+    ("grc_tpra_action_items", "engagement_id", "INTEGER", None),
 
     # ── TPRM supplier requests and messages (C1): add columns below this line ──
 
