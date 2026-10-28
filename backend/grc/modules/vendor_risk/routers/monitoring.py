@@ -1,7 +1,7 @@
 """SLA tracking + vendor incident management endpoints."""
 
 import logging
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -9,10 +9,10 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from ....models import (
-    Vendor, VendorSLARecord, VendorIncident, GRCUser, get_db,
+    Vendor, VendorSLARecord, VendorIncident, GRCUser, TPRAContract, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import rbac
+from ..tpra import monitoring as tpra_monitoring, rbac, service as tpra_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Monitoring"])
@@ -23,10 +23,21 @@ router = APIRouter(tags=["Vendor Monitoring"])
 class SLARecordCreate(BaseModel):
     sla_metric: str = Field(..., min_length=1, max_length=255)
     target_value: Optional[float] = None
-    actual_value: Optional[float] = None
+    actual_value: Optional[float] = None          # what was measured
     measurement_period: Optional[str] = "monthly"
-    is_compliant: Optional[bool] = True
+    is_compliant: Optional[bool] = True           # used only when the numbers cannot say
     notes: Optional[str] = None
+    # Measured against the contract: which one, in what unit, and which way is good.
+    contract_id: Optional[int] = None
+    unit: Optional[str] = Field(None, max_length=20)
+    direction: Optional[Literal["higher_is_better", "lower_is_better"]] = None
+
+
+class SLARecordUpdate(SLARecordCreate):
+    # Only the fields a request names are written.
+    sla_metric: Optional[str] = Field(None, min_length=1, max_length=255)
+    measurement_period: Optional[str] = None
+    is_compliant: Optional[bool] = None
 
 
 class IncidentCreate(BaseModel):
@@ -64,6 +75,9 @@ def serialize_sla_record(s: VendorSLARecord) -> dict:
         "is_compliant": s.is_compliant,
         "notes": s.notes,
         "recorded_at": s.recorded_at.isoformat() if s.recorded_at else None,
+        "contract_id": s.contract_id,
+        "unit": s.unit,
+        "direction": s.direction,
     }
 
 
@@ -102,6 +116,56 @@ def get_vendor_for_tenant(vendor_id: int, tenant_ids: List[int], db: Session) ->
     return vendor
 
 
+# ── A service level against its contract ──────────────────────────
+
+_SLA_FIELDS = ("sla_metric", "target_value", "actual_value", "measurement_period", "is_compliant", "notes",
+               "contract_id", "unit", "direction")
+
+
+def sla_met(target: Optional[float], measured: Optional[float], direction: Optional[str],
+            recorded: Optional[bool]) -> bool:
+    """Whether a level was met: from the target and the measurement when both are known (which way
+    is good being part of the level), otherwise what was recorded."""
+    if target is None or measured is None or direction is None:
+        return True if recorded is None else bool(recorded)
+    return measured >= target if direction == "higher_is_better" else measured <= target
+
+
+def _settle(db: Session, vendor: Vendor, record: VendorSLARecord) -> None:
+    """Check the record's contract and work out whether it was met. ValueError says what is wrong."""
+    if record.target_value is not None and record.actual_value is not None and record.direction is None:
+        raise ValueError("Say whether a higher or a lower value is better")
+    if record.contract_id is not None and not db.query(TPRAContract.id).filter(
+            TPRAContract.id == record.contract_id, TPRAContract.vendor_id == vendor.id,
+            TPRAContract.deleted_at.is_(None)).first():
+        raise ValueError("That contract is not one of this supplier's")
+    record.unit = " ".join((record.unit or "").split()) or None
+    record.is_compliant = sla_met(record.target_value, record.actual_value, record.direction, record.is_compliant)
+
+
+def _amount(value: float, unit: Optional[str]) -> str:
+    return f"{value:g}{unit}" if unit == "%" else f"{value:g} {unit}" if unit else f"{value:g}"
+
+
+def _breach_signal(db: Session, vendor: Vendor, record: VendorSLARecord, actor_id: Optional[int]) -> Optional[int]:
+    """A missed level becomes a monitoring signal, once per record: it shows in the attention
+    queue, and reopens the assessment when the supplier's tier says a medium signal should."""
+    if record.is_compliant:
+        return None
+    if record.target_value is not None and record.actual_value is not None:
+        detail = (f"Measured {_amount(record.actual_value, record.unit)} against a target of "
+                  f"{_amount(record.target_value, record.unit)}"
+                  f" ({'higher' if record.direction == 'higher_is_better' else 'lower'} is better).")
+    else:
+        detail = "Recorded as missed."
+    signal, _, created = tpra_monitoring.record_signal(
+        db, vendor, signal_type="sla", severity="medium",
+        title=f"{vendor.name} missed a service level: {record.sla_metric}", detail=detail + (
+            f"\n\n{record.notes}" if record.notes else ""),
+        source="SLA tracking", occurred_at=record.recorded_at, external_id=f"sla:{record.id}", actor_id=actor_id)
+    return signal.id if created else None
+
+
 # ── SLA endpoints ─────────────────────────────────────────────────
 
 @router.get("/vendors/{vendor_id}/sla")
@@ -130,7 +194,7 @@ def list_sla_records(
         query = query.filter(VendorSLARecord.is_compliant == is_compliant)
 
     total = query.count()
-    records = query.order_by(VendorSLARecord.recorded_at.desc()).offset(skip).limit(limit).all()
+    records = query.order_by(VendorSLARecord.recorded_at.desc(), VendorSLARecord.id.desc()).offset(skip).limit(limit).all()
 
     # Compliance summary
     total_records = db.query(func.count(VendorSLARecord.id)).filter(
@@ -175,11 +239,66 @@ def create_sla_record(
         measurement_period=payload.measurement_period,
         is_compliant=payload.is_compliant,
         notes=payload.notes,
+        contract_id=payload.contract_id,
+        unit=payload.unit,
+        direction=payload.direction,
     )
+    try:
+        _settle(db, vendor, record)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     db.add(record)
+    db.flush()
+    tpra_service.write_audit(db, vendor.tenant_id, entity="sla", action="create", vendor_id=vendor.id,
+                             entity_id=record.id, actor_id=current_user.id, to_value=record.sla_metric,
+                             extra={"met": record.is_compliant})
+    signal_id = _breach_signal(db, vendor, record, current_user.id)
     db.commit()
     db.refresh(record)
-    return serialize_sla_record(record)
+    return {**serialize_sla_record(record), "signal_id": signal_id}
+
+
+@router.put("/vendors/{vendor_id}/sla/{record_id}")
+def update_sla_record(
+    vendor_id: int,
+    record_id: int,
+    payload: SLARecordUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "monitoring", "edit")
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+
+    vendor = get_vendor_for_tenant(vendor_id, tenant_ids, db)
+    record = db.query(VendorSLARecord).filter(
+        VendorSLARecord.id == record_id,
+        VendorSLARecord.vendor_id == vendor_id,
+        VendorSLARecord.tenant_id.in_(tenant_ids),
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="SLA record not found")
+
+    before = {k: getattr(record, k) for k in _SLA_FIELDS}
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        if value is None and key in ("sla_metric", "measurement_period"):
+            continue                                   # these can change but never be emptied
+        setattr(record, key, value)
+    try:
+        _settle(db, vendor, record)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    changes = {k: [before[k], getattr(record, k)] for k in _SLA_FIELDS if before[k] != getattr(record, k)}
+    if changes:
+        tpra_service.write_audit(db, vendor.tenant_id, entity="sla", action="update", vendor_id=vendor.id,
+                                 entity_id=record.id, actor_id=current_user.id, to_value=record.sla_metric,
+                                 extra={"changes": changes, "met": record.is_compliant})
+    signal_id = _breach_signal(db, vendor, record, current_user.id)
+    db.commit()
+    db.refresh(record)
+    return {**serialize_sla_record(record), "signal_id": signal_id}
 
 
 # ── Incident endpoints ───────────────────────────────────────────

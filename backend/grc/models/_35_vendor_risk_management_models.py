@@ -273,7 +273,12 @@ class VendorSLARecord(Base):
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     sla_metric = Column(String(255), nullable=False)
     target_value = Column(Float, nullable=True)
-    actual_value = Column(Float, nullable=True)
+    actual_value = Column(Float, nullable=True)          # what was measured
+    # The contract the level is promised in, the unit, and which way is good; with
+    # both values and a direction, is_compliant follows from them (routers/monitoring.py).
+    contract_id = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=True)
+    direction = Column(String(20), nullable=True)        # higher_is_better | lower_is_better
     measurement_period = Column(String(50), default="monthly")
     is_compliant = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)

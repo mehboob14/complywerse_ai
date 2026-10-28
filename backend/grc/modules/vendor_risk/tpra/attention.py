@@ -163,16 +163,19 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             _countdown(due, today, "Due"), f"/vendor-risk/contracts?contract={c.id}",
             tone="red" if due < today else "amber", lapsed=due < today)
 
-    # Certificates and other evidence a vendor supplied, expired or about to.
+    # Certificates and other documents a vendor supplied, expired or about to: the
+    # earlier of the expiry and the end of the period it covers, as its Paperwork tab says.
+    from .paperwork import EXPIRING_DAYS, ends_on
+    doc_horizon = max(horizon, today + timedelta(days=EXPIRING_DAYS))
     seen = set()
     for link, ev in (db.query(TPRAEvidenceLink, Evidence)
                      .join(Evidence, Evidence.id == TPRAEvidenceLink.evidence_id)
                      .filter(TPRAEvidenceLink.tenant_id == tenant_id, TPRAEvidenceLink.deleted_at.is_(None),
-                             Evidence.expiry_date.isnot(None))
+                             or_(Evidence.expiry_date.isnot(None), TPRAEvidenceLink.coverage_to.isnot(None)))
                      .order_by(TPRAEvidenceLink.id)):
         v = vendors.get(link.vendor_id)
-        due = _day(ev.expiry_date)
-        if (v is None or due > horizon or (v.id, ev.id) in seen
+        due = ends_on(link, ev)
+        if (v is None or due > doc_horizon or (v.id, ev.id) in seen
                 or (ev.status or "").lower() in _EVIDENCE_RETIRED):
             continue
         seen.add((v.id, ev.id))

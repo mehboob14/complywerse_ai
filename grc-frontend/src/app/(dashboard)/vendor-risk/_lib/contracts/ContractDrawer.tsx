@@ -12,14 +12,16 @@ import { clsx } from 'clsx';
 import { ExternalLink, FileUp, Loader2, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
 import { tpraApi, vendorContractsApi, vendorRiskApi } from '@/lib/api';
 import { RightSlidePanel } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import { fmtDate } from '../tprmShared';
 import { errText } from '../intake/types';
+import { paperworkApi } from '../paperworkApi';
 import { useUnsavedGuard } from '../../vendors/[id]/_tpra/useUnsavedGuard';
 import {
-  CONTRACT_TYPES, FIELD_LABEL, OBLIGATION_STATUS, RENEWAL_LABEL, STATE_META, STATUS_LABEL,
+  BREACH_TIP, CLAUSES, CONTRACT_TYPES, FIELD_LABEL, OBLIGATION_STATUS, RENEWAL_LABEL, STATE_META, STATUS_LABEL,
   countdown, money, nextTerm, type ContractDetail, type ContractRow, type HistoryRow, type RenewalType,
 } from './shared';
 
@@ -30,22 +32,38 @@ const PRICE_LABEL: Record<(typeof PRICE_KEYS)[number], string> = {
 };
 const FILE_ACCEPT = '.pdf,.docx,.txt,.rtf,.png,.jpg,.jpeg,.tif,.tiff';
 
+type YesNo = '' | 'yes' | 'no';
 type Form = {
   title: string; contract_type: string; status: string; reference: string; record_link: string;
   effective_date: string; renewal_date: string; expiry_date: string; renewal_type: string; notice_days: string;
   annual_value: string; currency: string; billing: string; termination: string; terms: string;
   unit_price: string; included_units: string; overage_price: string; one_time_fees: string; price_cap_pct: string;
-  uplift: '' | 'yes' | 'no';
+  uplift: YesNo;
+  right_to_audit: YesNo; subprocessor_terms: YesNo; exit_data_return: YesNo; security_addendum: YesNo;
+  breach_notification_hours: string;
 };
 
 const EMPTY: Form = {
   title: '', contract_type: 'master', status: 'active', reference: '', record_link: '', effective_date: '',
   renewal_date: '', expiry_date: '', renewal_type: '', notice_days: '', annual_value: '', currency: '', billing: '',
   termination: '', terms: '', unit_price: '', included_units: '', overage_price: '', one_time_fees: '',
-  price_cap_pct: '', uplift: '',
+  price_cap_pct: '', uplift: '', right_to_audit: '', subprocessor_terms: '', exit_data_return: '', security_addendum: '',
+  breach_notification_hours: '',
 };
+// Saved by their own endpoint (tpra/contracts.py), before the terms.
+const CLAUSE_KEYS = ['right_to_audit', 'subprocessor_terms', 'exit_data_return', 'security_addendum', 'breach_notification_hours'];
 
 const text = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+const yesNo = (v: boolean | null | undefined): YesNo => (v === true ? 'yes' : v === false ? 'no' : '');
+const fromYesNo = (v: YesNo) => (v === 'yes' ? true : v === 'no' ? false : null);
+
+/** A payload in two: the clauses, and everything else. */
+function split(values: Record<string, unknown>) {
+  const clauses: Record<string, unknown> = {};
+  const terms: Record<string, unknown> = {};
+  Object.entries(values).forEach(([k, v]) => { (CLAUSE_KEYS.includes(k) ? clauses : terms)[k] = v; });
+  return { clauses, terms };
+}
 
 function toForm(c: ContractRow): Form {
   const p = c.pricing || {};
@@ -58,6 +76,9 @@ function toForm(c: ContractRow): Form {
     unit_price: text(p.unit_price), included_units: text(p.included_units), overage_price: text(p.overage_price),
     one_time_fees: text(p.one_time_fees), price_cap_pct: text(p.price_cap_pct),
     uplift: p.uplift === undefined ? '' : p.uplift ? 'yes' : 'no',
+    right_to_audit: yesNo(c.right_to_audit), subprocessor_terms: yesNo(c.subprocessor_terms),
+    exit_data_return: yesNo(c.exit_data_return), security_addendum: yesNo(c.security_addendum),
+    breach_notification_hours: text(c.breach_notification_hours),
   };
 }
 
@@ -73,6 +94,9 @@ function toPayload(f: Form): Record<string, unknown> {
     expiry_date: t(f.expiry_date), renewal_type: t(f.renewal_type), notice_days: n(f.notice_days),
     annual_value: n(f.annual_value), currency: t(f.currency.toUpperCase()), billing: t(f.billing),
     termination: t(f.termination), terms: t(f.terms), pricing: Object.keys(pricing).length ? pricing : null,
+    right_to_audit: fromYesNo(f.right_to_audit), subprocessor_terms: fromYesNo(f.subprocessor_terms),
+    exit_data_return: fromYesNo(f.exit_data_return), security_addendum: fromYesNo(f.security_addendum),
+    breach_notification_hours: n(f.breach_notification_hours),
   };
 }
 
@@ -94,15 +118,18 @@ const inputCls = (ai = false) => clsx(
   'w-full rounded-lg border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50',
   ai ? 'border-violet-300 bg-violet-50/50' : 'border-slate-300 bg-white');
 
-function Field({ id, label, ai, hint, children, className }: {
-  id?: string; label: string; ai?: boolean; hint?: React.ReactNode; children: React.ReactNode; className?: string;
+function Field({ id, label, ai, hint, tip, children, className }: {
+  id?: string; label: string; ai?: boolean; hint?: React.ReactNode; tip?: string; children: React.ReactNode; className?: string;
 }) {
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-700">
-        {label}
-        {ai && <span className="rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-700" title="Filled in by AI">AI</span>}
-      </label>
+      <div className="mb-1 flex items-center gap-1">
+        <label htmlFor={id} className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+          {label}
+          {ai && <span className="rounded bg-violet-100 px-1 text-[10px] font-semibold text-violet-700" title="Filled in by AI">AI</span>}
+        </label>
+        {tip && <InfoTip label={`About ${label.toLowerCase()}`} text={tip} />}
+      </div>
       {children}
       {hint && <p className="mt-0.5 text-[11px] text-slate-400">{hint}</p>}
     </div>
@@ -163,8 +190,14 @@ export default function ContractDrawer({ contractId, vendorId, assessmentId, onC
 
   const save = useMutation({
     mutationFn: async () => {
-      if (id) return (await vendorContractsApi.update(id, { ...changed, row_version: data?.row_version })).data;
-      return (await vendorContractsApi.create(owner as number, { ...toPayload(form), assessment_id: assessmentId })).data;
+      if (id) {
+        const { clauses, terms } = split(changed);
+        // The clauses first: saving them leaves the row version alone, so the terms follow with it.
+        if (Object.keys(clauses).length) await paperworkApi.setClauses(id, clauses);
+        if (Object.keys(terms).length) return (await vendorContractsApi.update(id, { ...terms, row_version: data?.row_version })).data;
+        return { id };
+      }
+      return (await vendorContractsApi.create(owner as number, { ...split(toPayload(form)).terms, assessment_id: assessmentId })).data;
     },
     onSuccess: (saved: { id: number }) => {
       refreshContracts(qc);
@@ -383,6 +416,24 @@ export default function ContractDrawer({ contractId, vendorId, assessmentId, onC
           </Section>
 
           {id && data && (
+            <Section title="Clauses">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {CLAUSES.map(({ key, label, tip }) => (
+                  <Field key={key} id={fid(key)} label={label} tip={tip}>
+                    <select id={fid(key)} className={inputCls()} value={form[key]} onChange={set(key)} disabled={!editable}>
+                      <option value="">Not checked</option><option value="yes">Yes</option><option value="no">No</option>
+                    </select>
+                  </Field>
+                ))}
+                <Field id={fid('breach')} label="Breach notice (hours)" tip={BREACH_TIP}>
+                  <input id={fid('breach')} type="number" min={0} max={8760} className={inputCls()} value={form.breach_notification_hours}
+                    onChange={set('breach_notification_hours')} disabled={!editable} />
+                </Field>
+              </div>
+            </Section>
+          )}
+
+          {id && data && (
             <Section title="Signed copy" aside={canEdit && data.file && (
               <button type="button" onClick={() => read.mutate()} disabled={read.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-60">
@@ -518,6 +569,8 @@ function shown(key: string, value: unknown): string {
   if (key === 'contract_type') return CONTRACT_TYPES[String(value)] || String(value);
   if (key === 'renewal_type') return RENEWAL_LABEL[value as RenewalType] || String(value);
   if (key === 'notice_days') return `${value} days`;
+  if (key === 'breach_notification_hours') return `${value} hours`;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'object') return 'updated';
   return String(value);
 }

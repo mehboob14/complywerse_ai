@@ -1192,6 +1192,21 @@ _COLUMN_ADDS = [
     # ── TPRM supplier contacts and portal links (A/C0): add columns below this line ──
 
     # ── TPRM paperwork (E): add columns below this line ──
+    # The period a supplier's document vouches for, and who checked it (tpra/paperwork.py).
+    ("grc_tpra_evidence_links", "coverage_from", "DATE", None),
+    ("grc_tpra_evidence_links", "coverage_to", "DATE", None),
+    ("grc_tpra_evidence_links", "reviewed_by", "INTEGER", None),
+    ("grc_tpra_evidence_links", "reviewed_at", "TIMESTAMP", None),
+    # The clauses a security review asks about (tpra/contracts.py).
+    ("grc_tpra_contracts", "right_to_audit", "BOOLEAN", None),
+    ("grc_tpra_contracts", "subprocessor_terms", "BOOLEAN", None),
+    ("grc_tpra_contracts", "exit_data_return", "BOOLEAN", None),
+    ("grc_tpra_contracts", "security_addendum", "BOOLEAN", None),
+    ("grc_tpra_contracts", "breach_notification_hours", "INTEGER", None),
+    # Service levels measured against the contract (routers/monitoring.py).
+    ("grc_vendor_sla_records", "contract_id", "INTEGER", None),
+    ("grc_vendor_sla_records", "unit", "VARCHAR(20)", None),
+    ("grc_vendor_sla_records", "direction", "VARCHAR(20)", None),
 
     # ── TPRM engagements (B): add columns below this line ──
 
