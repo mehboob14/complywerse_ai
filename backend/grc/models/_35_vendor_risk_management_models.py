@@ -161,6 +161,9 @@ class VendorAssessment(Base):
     # and a tier set by hand instead: {from, to, computed, justification, by, at}.
     tiering_basis = Column(JSON, nullable=True)
     tier_override = Column(JSON, nullable=True)
+    # The tiering config and tier policy this assessment is held to, taken when its
+    # tier was set: {weights, thresholds, cadence_days, tier_policy, at} (tpra/service.py).
+    policy_snapshot = Column(JSON, nullable=True)
     residual_rating = Column(String(20), nullable=True)
     rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
     # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.

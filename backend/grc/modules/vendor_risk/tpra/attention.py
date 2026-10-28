@@ -34,7 +34,7 @@ from . import contracts as contract_rules, rbac, tier_policy
 from .bootstrap import get_tiering_config
 from .reminders import _INACTIVE_VENDOR, _day
 from .schema_migrations import ensure_tpra_columns
-from .service import write_audit
+from .service import condition_due, write_audit
 from .stages import remediation_sla_days_for
 
 # condition → (label, base priority). Higher goes first.
@@ -61,6 +61,7 @@ CONDITIONS: Dict[str, tuple] = {
     "action_failed": ("Planned action could not happen", 68),
     "supplier_responded": ("Supplier responded", 52),
     "supplier_request_overdue": ("Supplier request overdue", 45),
+    "approval_condition_overdue": ("Approval condition overdue", 65),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
 _TIER_BONUS = {"critical": 6, "high": 3, "low": -3}
@@ -223,6 +224,27 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         add("assessment_overdue", "assessment", a.id, v, due,
             f"The {kind} assessment of {v.name} was due on {due:%d %b %Y}",
             _countdown(due, today, "Due"), f"/vendor-risk/assessments/{a.id}", tone="red")
+
+    # Conditions of a decision still open past their due date, on an assessment in
+    # use: one item per decision, for the conditions' owners.
+    for ap, a in (db.query(TPRAApproval, VendorAssessment)
+                  .join(VendorAssessment, VendorAssessment.id == TPRAApproval.assessment_id)
+                  .filter(TPRAApproval.tenant_id == tenant_id, VendorAssessment.deleted_at.is_(None),
+                          or_(VendorAssessment.lifecycle_status == "active", VendorAssessment.lifecycle_status.is_(None)))
+                  .order_by(TPRAApproval.id)):
+        v = vendors.get(ap.vendor_id)
+        late = [c for c in ap.conditions or [] if isinstance(c, dict) and c.get("status") != "closed"
+                and condition_due(c) is not None and condition_due(c).date() < today]
+        if v is None or not late:
+            continue
+        due = min(condition_due(c).date() for c in late)
+        what = "; ".join(str(c.get("text") or "condition")[:100] for c in late[:2]) + ("; …" if len(late) > 2 else "")
+        add("approval_condition_overdue", "approval", ap.id, v, due,
+            f"{len(late)} condition{'s' if len(late) != 1 else ''} of the decision on {v.name} "
+            f"{'are' if len(late) != 1 else 'is'} overdue: {what}",
+            _countdown(due, today, "Due"),
+            f"/vendor-risk/vendors/{v.id}?stage=approval" + (f"&engagement={a.engagement_id}" if a.engagement_id else ""),
+            tone="red", lapsed=True, people=[c.get("owner_id") for c in late if c.get("owner_id")])
 
     # Reassessments whose date has passed: the supplier's (General's), and each
     # open engagement's own.

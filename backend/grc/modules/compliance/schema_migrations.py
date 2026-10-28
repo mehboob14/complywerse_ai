@@ -1221,6 +1221,8 @@ _COLUMN_ADDS = [
     # ── TPRM reviews and question rules (D): add columns below this line ──
 
     # ── TPRM hardening (F): add columns below this line ──
+    # The tiering config and tier policy an assessment is held to (tpra/service.policy_snapshot).
+    ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
 ]
 
 
