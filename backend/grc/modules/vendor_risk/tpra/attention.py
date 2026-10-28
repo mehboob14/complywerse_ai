@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from ....models import (
     AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRACheckin, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
-    TPRAActionItem, TPRARiskSnapshot,
+    TPRAActionItem, TPRARiskSnapshot, TPRASupplierRequest,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
@@ -59,6 +59,8 @@ CONDITIONS: Dict[str, tuple] = {
     "questionnaire_untouched": ("Questionnaire not started", 40),
     "action_due": ("Planned action due", 57),
     "action_failed": ("Planned action could not happen", 68),
+    "supplier_responded": ("Supplier responded", 52),
+    "supplier_request_overdue": ("Supplier request overdue", 45),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
 _TIER_BONUS = {"critical": 6, "high": 3, "low": -3}
@@ -401,6 +403,27 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             add("action_due", "action", item.id, v, item.due_on, f"{v.name}: {item.title}",
                 _countdown(item.due_on, today, "Due") if late else "Due today", link_for(item),
                 lapsed=late > 0, people=people_for(item, v))
+
+    # Requests to suppliers: answers waiting for a reviewer, and requests the supplier
+    # let pass their date (tpra/supplier_requests.py). Whoever asked sees them as theirs.
+    for r in db.query(TPRASupplierRequest).filter(
+            TPRASupplierRequest.tenant_id == tenant_id,
+            or_(TPRASupplierRequest.status == "submitted",
+                and_(TPRASupplierRequest.status.in_(("open", "returned")), TPRASupplierRequest.due_date < today))):
+        v = vendors.get(r.vendor_id)
+        if v is None:
+            continue
+        link, asker = f"/vendor-risk/vendors/{v.id}?tab=portal&request={r.id}", [r.requested_by] if r.requested_by else []
+        if r.status == "submitted":
+            answered = _day(r.responded_at) or today
+            add("supplier_responded", "supplier_request", r.id, v, answered,
+                f"{v.name} answered the request '{r.title}'",
+                f"Answered {_days((today - answered).days)} ago" if answered < today else "Answered today", link,
+                people=asker)
+        else:
+            add("supplier_request_overdue", "supplier_request", r.id, v, r.due_date,
+                f"{v.name} has not answered the request '{r.title}', due {r.due_date:%d %b %Y}",
+                _countdown(r.due_date, today, "Due"), link, tone="red", lapsed=True, people=asker)
 
     return items
 

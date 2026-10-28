@@ -8,11 +8,16 @@ supplier's. An unknown, expired or revoked link, and another supplier's
 questionnaire, all get the same answer, and failed lookups count against the
 address they came from. A contact who lost their link asks for a new one by
 email; the answer never says whether the address is known.
+
+The home also lists what we asked the supplier for outside a questionnaire, and
+the supplier's thread with us (tpra/supplier_requests.py): a request is answered
+here, with files and a reply, and only shared messages are ever shown. Another
+supplier's request gets the same answer as a link that does not work.
 """
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -20,11 +25,11 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Tenant, TPRAPortalToken, TPRATemplateVersion, TPRAVendorContact, Vendor, VendorQuestionnaireResponse,
-    VendorQuestionnaireTemplate, get_db,
+    Tenant, TPRAPortalToken, TPRASupplierRequest, TPRATemplateVersion, TPRAVendorContact, Vendor,
+    VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ..routers import questionnaires as routes
-from . import contacts, portal, versions
+from . import contacts, portal, supplier_requests, versions
 
 router = APIRouter(tags=["Supplier portal"])
 
@@ -68,6 +73,17 @@ def _questionnaire(db: Session, token: str, qid: int, request: Request,
     return contact, routes.open_for_vendor(qr, allow_submitted)
 
 
+def _request(db: Session, token: str, rid: int,
+             request: Request) -> Tuple[TPRAVendorContact, Vendor, TPRASupplierRequest]:
+    """A request to the link's supplier."""
+    _, contact, vendor = resolve(db, token, request)
+    r = db.query(TPRASupplierRequest).filter(TPRASupplierRequest.id == rid,
+                                             TPRASupplierRequest.vendor_id == vendor.id).first()
+    if r is None:
+        _refuse(request, 404)
+    return contact, vendor, r
+
+
 # ── the home ─────────────────────────────────────────────────────────────────
 
 def _iso(value) -> Optional[str]:
@@ -99,7 +115,9 @@ def _item(db: Session, qr, now: datetime) -> dict:
     }
 
 
-def home(db: Session, row: TPRAPortalToken, contact: TPRAVendorContact, vendor: Vendor) -> dict:
+def home(db: Session, row: TPRAPortalToken, contact: TPRAVendorContact, vendor: Vendor,
+         seen_at: Optional[datetime]) -> dict:
+    """`seen_at`: the contact's visit before this one; our messages since then are new."""
     now = datetime.utcnow()
     since = now - timedelta(days=RECENT_DAYS)
     Q = VendorQuestionnaireResponse
@@ -110,14 +128,15 @@ def home(db: Session, row: TPRAPortalToken, contact: TPRAVendorContact, vendor: 
     items = [_item(db, qr, now) for qr in rows]
     waiting = sorted((i for i in items if i["status"] in portal.WAITING_ON_VENDOR),
                      key=lambda i: (i["due_date"] is None, i["due_date"] or ""))
+    requests, messages = supplier_requests.for_portal(db, vendor, seen_at)
     return {
         "organisation": {"name": db.query(Tenant.name).filter(Tenant.id == vendor.tenant_id).scalar()},
         "supplier": {"name": vendor.name},
         "contact": {"name": contact.name, "email": contact.email},
         "expires_at": _iso(row.expires_at),
         "questionnaires": waiting + [i for i in items if i["status"] not in portal.WAITING_ON_VENDOR],
-        "requests": [],                     # documents asked for and findings shared (next piece of work)
-        "messages": {"unread": 0},
+        "requests": requests,
+        "messages": messages,
     }
 
 
@@ -154,17 +173,18 @@ def request_link(body: LinkRequest, request: Request, background: BackgroundTask
 @router.get("/portal/{token}")
 def view_home(token: str, request: Request, db: Session = Depends(get_db)):
     """The supplier's home as it stands. Records nothing."""
-    return home(db, *resolve(db, token, request))
+    row, contact, vendor = resolve(db, token, request)
+    return home(db, row, contact, vendor, contact.last_portal_at)
 
 
 @router.post("/portal/{token}/open")
 def open_home(token: str, request: Request, db: Session = Depends(get_db)):
     """The supplier's home, recording the visit (the page calls this once per load)."""
     row, contact, vendor = resolve(db, token, request)
-    now = datetime.utcnow()
+    seen, now = contact.last_portal_at, datetime.utcnow()
     row.last_used_at, row.use_count, contact.last_portal_at = now, (row.use_count or 0) + 1, now
     db.commit()
-    return home(db, row, contact, vendor)
+    return home(db, row, contact, vendor, seen)
 
 
 # One questionnaire, through the same code as its own link.
@@ -218,3 +238,66 @@ async def import_workbook(token: str, qid: int, request: Request, file: UploadFi
                           db: Session = Depends(get_db)):
     contact, qr = _questionnaire(db, token, qid, request)
     return await routes.vendor_import_workbook(db, qr, file, contact)
+
+
+# A request to the supplier: what is asked, its files, the answer, its thread.
+_R = "/portal/{token}/requests/{rid}"
+
+
+@router.get(_R)
+def view_request(token: str, rid: int, request: Request, db: Session = Depends(get_db)):
+    return supplier_requests.portal_detail(db, _request(db, token, rid, request)[2])
+
+
+@router.post(_R + "/files")
+async def upload_request_file(token: str, rid: int, request: Request, file: UploadFile = File(...),
+                              coverage_from: Optional[date] = Form(None), coverage_to: Optional[date] = Form(None),
+                              expires_on: Optional[date] = Form(None), db: Session = Depends(get_db)):
+    contact, vendor, r = _request(db, token, rid, request)
+    return await supplier_requests.upload(db, vendor, r, contact, file, coverage_from, coverage_to, expires_on)
+
+
+@router.delete(_R + "/files/{fid}")
+def delete_request_file(token: str, rid: int, fid: int, request: Request, db: Session = Depends(get_db)):
+    return supplier_requests.withdraw_file(db, _request(db, token, rid, request)[2], fid)
+
+
+@router.post(_R + "/submit")
+def submit_request(token: str, rid: int, body: supplier_requests.SubmitIn, request: Request,
+                   db: Session = Depends(get_db)):
+    contact, vendor, r = _request(db, token, rid, request)
+    return supplier_requests.submit(db, vendor, r, contact, body)
+
+
+def _thread(db: Session, token: str, subject_type: str, subject_id: Optional[int],
+            request: Request) -> Tuple[TPRAVendorContact, Vendor, Optional[TPRASupplierRequest]]:
+    """The supplier's own thread, or a request's when the request is the supplier's."""
+    if subject_type == "request":
+        return _request(db, token, subject_id or 0, request)
+    _, contact, vendor = resolve(db, token, request)
+    return contact, vendor, None
+
+
+@router.get("/portal/{token}/messages")
+def list_messages(token: str, request: Request, subject_type: Literal["vendor", "request"] = "vendor",
+                  subject_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Shared messages only, oldest first."""
+    _, vendor, about = _thread(db, token, subject_type, subject_id, request)
+    rows = supplier_requests.thread(db, vendor.id, subject_type, about.id if about is not None else None,
+                                    shared_only=True)
+    return {"items": supplier_requests.message_rows(db, rows, public=True)}
+
+
+class MessageIn(BaseModel):
+    body: str = Field(..., max_length=supplier_requests.MAX_TEXT)
+    subject_type: Literal["vendor", "request"] = "vendor"
+    subject_id: Optional[int] = None
+
+
+@router.post("/portal/{token}/messages", status_code=201)
+def post_message(token: str, body: MessageIn, request: Request, db: Session = Depends(get_db)):
+    contact, vendor, about = _thread(db, token, body.subject_type, body.subject_id, request)
+    try:
+        return supplier_requests.supplier_writes(db, vendor, contact, about, body.body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))

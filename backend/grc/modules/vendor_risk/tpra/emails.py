@@ -1,8 +1,9 @@
 """The emails third-party risk sends, in the tenant's own words.
 
-Among them: the questionnaire invitation, the reminder and the personal portal
-link a supplier receives, the reminder and the escalation our people receive as a
-date nears or passes, and the note that an attention item was assigned to someone. Each has built-in
+Among them: the questionnaire invitation, the reminder, the personal portal link,
+the requests and the messages a supplier receives, the reminder and the escalation
+our people receive as a date nears or passes, the note that a supplier answered,
+and the note that an attention item was assigned to someone. Each has built-in
 wording, which is what went out before any of this was editable. A tenant can
 change the subject and body, see it filled in with sample values before saving,
 send it to themselves, and go back to the built-in wording.
@@ -70,6 +71,45 @@ CATALOGUE: Dict[str, dict] = {
                 "and ask for a new one.\n\nThank you,\n{organisation}",
         "sample": {"contact": "Sam Lee", "vendor": "Payroll Co", "link": "https://grc.example.com/supplier/abc123",
                    "expires": "28 Nov 2026", "organisation": "Acme Bank"},
+    },
+    "supplier_request": {
+        "label": "Request to a supplier", "audience": "Supplier",
+        "when": "A supplier is asked for a document or for information, or a finding is shared with it.",
+        "placeholders": {"contact": "The contact's name", "vendor": "The supplier's name", "title": "What is asked for",
+                         "due": "When it is due, e.g. 'on 30 Oct 2026' or 'as soon as you can'",
+                         "link": "The contact's personal link, opening the request", "organisation": "Our organisation's name"},
+        "required": ("link",),
+        "subject": "Request for {vendor}: {title}",
+        "body": "Hello {contact},\n\n{organisation} asks {vendor} for: {title}. It is due {due}.\n\nOpen the request: {link}\n\n"
+                "The link is for you alone.\n\nThank you,\n{organisation}",
+        "sample": {"contact": "Sam Lee", "vendor": "Payroll Co", "title": "SOC 2 Type 2 report", "due": "on 30 Nov 2026",
+                   "link": "https://grc.example.com/supplier/abc123/requests/7", "organisation": "Acme Bank"},
+    },
+    "supplier_message": {
+        "label": "Message to a supplier", "audience": "Supplier",
+        "when": "A message is shared with a supplier in the supplier portal, or its answer to a request is returned.",
+        "placeholders": {"contact": "The contact's name", "vendor": "The supplier's name",
+                         "about": "What the message is about, e.g. \"the request 'SOC 2 report'\"",
+                         "message": "The message", "link": "The contact's personal link, opening the conversation",
+                         "organisation": "Our organisation's name"},
+        "required": ("link",),
+        "subject": "Message from {organisation} about {about}",
+        "body": "Hello {contact},\n\n{organisation} wrote about {about}:\n\n{message}\n\nReply in the portal: {link}\n\n"
+                "Thank you,\n{organisation}",
+        "sample": {"contact": "Sam Lee", "vendor": "Payroll Co", "about": "the request 'SOC 2 report'",
+                   "message": "Please send the full report, not the bridge letter.",
+                   "link": "https://grc.example.com/supplier/abc123/requests/7", "organisation": "Acme Bank"},
+    },
+    "supplier_responded": {
+        "label": "Supplier responded", "audience": "Our people",
+        "when": "A supplier answers a request or writes in the supplier portal: to whoever asked and the supplier's owner.",
+        "placeholders": {"title": "What the supplier did, in one sentence", "link": "Where to read it",
+                         "vendor": "The supplier's name"},
+        "required": (),
+        "subject": "{title}",
+        "body": "{title}.\n\nOpen: {link}",
+        "sample": {"title": "Payroll Co answered the request 'SOC 2 report'",
+                   "link": "https://grc.example.com/vendor-risk/vendors/3?tab=portal&request=7", "vendor": "Payroll Co"},
     },
     "reminder": {
         "label": "Reminder to our people", "audience": "Our people",

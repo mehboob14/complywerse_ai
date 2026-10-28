@@ -16,6 +16,7 @@ from grc.models import TPRAActionItem  # read by the action plan, check-in and a
 from grc.models import TPRAEmailTemplate  # read when a reminder or assignment is worded
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import UserRole  # read by who is a platform account (auth_router.platform_account), before an alert
+from grc.models import TPRASupplierRequest  # read by the supplier-request conditions
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal,
@@ -29,7 +30,7 @@ _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireRespons
            TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation, TPRAApproval,
            Evidence, TPRAEvidenceLink, TPRARiskSnapshot, TPRATieringConfig, TPRAAuditLog,
            TPRAMonitoringSignal, AttentionState, AttentionActivity, WorkflowNotification, TPRACheckin, TPRAEmailTemplate, TPRAActionItem,
-           UserRole]
+           UserRole, TPRASupplierRequest]
 
 
 @pytest.fixture()

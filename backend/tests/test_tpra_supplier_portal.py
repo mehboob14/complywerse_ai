@@ -32,6 +32,7 @@ from grc.models import (
     TPRAVendorContact, UserRole, Vendor, VendorAssessment, VendorQuestionnaireEvidence, VendorQuestionnaireResponse,
     VendorQuestionnaireTemplate, get_db,
 )
+from grc.models import TPRAMessage, TPRASupplierRequest, TPRASupplierRequestFile  # the home's requests and messages
 from grc.modules.vendor_risk.routers import questionnaires as routes
 from grc.modules.vendor_risk.tpra import contacts, portal, rbac, reminders, supplier_portal, versions
 from grc.modules.vendor_risk.tpra import questionnaire_evidence as qevidence
@@ -43,7 +44,7 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            TPRAQuestionResponse, TPRAFinding, TPRATieringConfig, TPRAAuditLog, TPRAReminder, TPRARiskAcceptance,
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, EvidenceQualityCheck,
            TPRAApproval, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRASurfaceWaiver, TPRAEmailTemplate,
-           TPRAActionItem, TPRAVendorContact, TPRAPortalToken]
+           TPRAActionItem, TPRAVendorContact, TPRAPortalToken, TPRASupplierRequest, TPRASupplierRequestFile, TPRAMessage]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},
@@ -294,7 +295,7 @@ def test_the_home_lists_what_is_waiting_and_a_get_writes_nothing(db, http):
     assert db.get(VendorQuestionnaireResponse, unpinned.id).template_version_id == unpinned_version is None
     assert (home["organisation"], home["supplier"], home["contact"]) == (
         {"name": "Acme Bank"}, {"name": "Payroll Co"}, {"name": "Ana Ops", "email": "ana@payroll.test"})
-    assert home["requests"] == [] and home["messages"] == {"unread": 0} and home["expires_at"]
+    assert home["requests"] == [] and home["messages"] == {"unread": 0, "latest": []} and home["expires_at"]
     items = home["questionnaires"]
     assert [i["id"] for i in items] == [soon.id, returned.id, unpinned.id, answered.id]   # waiting by due date first
     by_id = {i["id"]: i for i in items}
