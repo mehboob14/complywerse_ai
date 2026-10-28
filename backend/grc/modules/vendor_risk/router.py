@@ -27,6 +27,13 @@ from .tpra.action_plans import router as tpra_action_plans_router
 from .tpra.leaks import router as tpra_leaks_router
 from .tpra.logos import router as tpra_logos_router
 from .tpra.vat import router as tpra_vat_router
+from .tpra.contacts import router as tpra_contacts_router
+from .tpra.supplier_portal import router as tpra_supplier_portal_router
+from .tpra.paperwork import router as tpra_paperwork_router
+from .tpra.engagements import router as tpra_engagements_router
+from .tpra.supplier_requests import router as tpra_supplier_requests_router
+from .tpra.reviews import router as tpra_reviews_router
+from .tpra.alert_rules import router as tpra_alert_rules_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -57,6 +64,15 @@ router.include_router(tpra_action_plans_router)
 router.include_router(tpra_leaks_router)
 router.include_router(tpra_logos_router)
 router.include_router(tpra_vat_router)
+# The supplier relationship: contacts and portal links, the portal itself, paperwork,
+# engagements, requests and messages, reviews, alert rules (wired once; each file is its own).
+router.include_router(tpra_contacts_router)
+router.include_router(tpra_supplier_portal_router)
+router.include_router(tpra_paperwork_router)
+router.include_router(tpra_engagements_router)
+router.include_router(tpra_supplier_requests_router)
+router.include_router(tpra_reviews_router)
+router.include_router(tpra_alert_rules_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

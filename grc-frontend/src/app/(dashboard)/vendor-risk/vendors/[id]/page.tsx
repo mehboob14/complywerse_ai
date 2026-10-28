@@ -28,6 +28,9 @@ import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
 import ActionPlanPanel from './_tpra/ActionPlanPanel';
+import EngagementsPanel from './_tpra/EngagementsPanel';
+import PortalPanel from './_tpra/PortalPanel';
+import PaperworkPanel from './_tpra/PaperworkPanel';
 import VendorLogo from '../../_lib/VendorLogo';
 import VatCard from './_tpra/VatCard';
 import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
@@ -156,7 +159,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'engagements' | 'portal' | 'paperwork' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -317,6 +320,9 @@ export default function VendorDetailPage() {
   const tabs: { key: TabType; label: string; count?: number }[] = [
     { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
+    { key: 'engagements', label: 'Engagements' },
+    { key: 'portal', label: 'Supplier portal' },
+    { key: 'paperwork', label: 'Paperwork' },
     { key: 'actions', label: 'Action plan' },
     { key: 'dependencies', label: 'Dependencies' },
     { key: 'exposure', label: 'Exposure' },
@@ -617,6 +623,24 @@ export default function VendorDetailPage() {
       )}
 
       {/* Action plan Tab — dated to-dos, and sends, check-ins and reassessments on a date */}
+      {activeTab === 'engagements' && (
+        <div role="tabpanel" id="vendor-tabpanel-engagements" aria-labelledby="vendor-tab-engagements" tabIndex={0} className="focus:outline-none">
+          <EngagementsPanel vendorId={vendorId} />
+        </div>
+      )}
+
+      {activeTab === 'portal' && (
+        <div role="tabpanel" id="vendor-tabpanel-portal" aria-labelledby="vendor-tab-portal" tabIndex={0} className="focus:outline-none">
+          <PortalPanel vendorId={vendorId} />
+        </div>
+      )}
+
+      {activeTab === 'paperwork' && (
+        <div role="tabpanel" id="vendor-tabpanel-paperwork" aria-labelledby="vendor-tab-paperwork" tabIndex={0} className="focus:outline-none">
+          <PaperworkPanel vendorId={vendorId} />
+        </div>
+      )}
+
       {activeTab === 'actions' && (
         <div role="tabpanel" id="vendor-tabpanel-actions" aria-labelledby="vendor-tab-actions" tabIndex={0} className="focus:outline-none">
           <ActionPlanPanel vendorId={vendorId} />

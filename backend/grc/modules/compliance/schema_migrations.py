@@ -1188,6 +1188,18 @@ _COLUMN_ADDS = [
     ("grc_scf_scope", "locations", "JSON", None),
     ("grc_scf_control_state", "assigned_user_ids", "JSON", None),
     ("grc_uploaded_frameworks", "slug", "VARCHAR(64)", "ix_grc_uploaded_frameworks_slug"),
+
+    # ── TPRM supplier contacts and portal links (A/C0): add columns below this line ──
+
+    # ── TPRM paperwork (E): add columns below this line ──
+
+    # ── TPRM engagements (B): add columns below this line ──
+
+    # ── TPRM supplier requests and messages (C1): add columns below this line ──
+
+    # ── TPRM reviews and question rules (D): add columns below this line ──
+
+    # ── TPRM hardening (F): add columns below this line ──
 ]
 
 
