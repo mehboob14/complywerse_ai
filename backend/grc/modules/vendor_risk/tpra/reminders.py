@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -216,10 +216,13 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             findings[finding_id] = db.query(TPRAFinding).filter(TPRAFinding.id == finding_id).first()
         return findings[finding_id]
 
+    # An archived supplier's remediations and acceptances are not chased.
+    archived = select(TPRAFinding.id).join(Vendor, Vendor.id == TPRAFinding.vendor_id).where(Vendor.deleted_at.isnot(None))
+
     # 3. Remediation falling due.
     for r in db.query(TPRARemediation).filter(
             TPRARemediation.tenant_id == tenant_id, TPRARemediation.deleted_at.is_(None),
-            TPRARemediation.due_date.isnot(None)):
+            TPRARemediation.due_date.isnot(None), ~TPRARemediation.finding_id.in_(archived)):
         if (r.status or "").lower() in _REMEDIATION_DONE:
             continue
         f = finding(r.finding_id)
@@ -237,7 +240,8 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     #    is caught too; once reopened nothing matches, so a second run does nothing.
     for a in db.query(TPRARiskAcceptance).filter(
             TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
-            TPRARiskAcceptance.status == "active", TPRARiskAcceptance.expiry.isnot(None)):
+            TPRARiskAcceptance.status == "active", TPRARiskAcceptance.expiry.isnot(None),
+            ~TPRARiskAcceptance.finding_id.in_(archived)):
         f = finding(a.finding_id)
         v = vendors.get(f.vendor_id) if f else None
         due = _day(a.expiry)

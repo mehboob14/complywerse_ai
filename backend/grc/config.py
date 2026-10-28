@@ -54,6 +54,13 @@ DOCUMENT_STUDIO_TENANTS = frozenset(
     slug.strip().lower() for slug in os.getenv("DOCUMENT_STUDIO_TENANTS", "*").split(",") if slug.strip())
 
 
+# Third-party risk demo suppliers (13 made-up suppliers with a year of history, rolled into the Risk Register) are added at
+# start-up only to the tenants named here, and only while a tenant has no suppliers (comma-separated slugs; "*" = every
+# tenant; unset = none). The built-in questionnaire templates are not demo data and are added either way.
+TPRM_DEMO_TENANTS = frozenset(
+    slug.strip().lower() for slug in os.getenv("TPRM_DEMO_TENANTS", "").split(",") if slug.strip())
+
+
 # ----- OpenAI ---------------------------------------------------------------
 # Default chat-completions model. Centralized so the model can be swapped in a
 # single place; mirrors the literal ``"gpt-4o"`` that was inlined across the

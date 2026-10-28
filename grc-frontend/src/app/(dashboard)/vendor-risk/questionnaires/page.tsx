@@ -197,9 +197,12 @@ export default function VendorQuestionnairesPage() {
   const { data: categorySettings } = useModuleSettings('vendors');
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('vendor_risk:questionnaires:create');
-  const canDelete = hasPermission('vendor_risk:questionnaires:delete');
-  const canEditVendors = hasPermission('vendor_risk:vendors:edit');     // personal links are issued on the supplier
+  // The rights the server checks (routers/questionnaires.py), with its erm:risks:edit fallback.
+  const canCreate = hasPermission('vendor_risk:templates:create') || hasPermission('erm:risks:edit');
+  const canEdit = hasPermission('vendor_risk:templates:edit') || hasPermission('erm:risks:edit');
+  const canDelete = hasPermission('vendor_risk:templates:delete') || hasPermission('erm:risks:edit');
+  const canResend = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
+  const canEditVendors = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');     // personal links are issued on the supplier
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -688,7 +691,7 @@ export default function VendorQuestionnairesPage() {
                     >
                       <Eye className="h-4 w-4" strokeWidth={1.75} />
                     </button>
-                    {canCreate && (
+                    {canEdit && (
                       <button
                         onClick={() => openEditor(template)}
                         aria-label={`Edit template ${template.name}`}
@@ -886,7 +889,7 @@ export default function VendorQuestionnairesPage() {
                                 <Copy className="h-4 w-4" strokeWidth={1.75} />
                               </button>
                             )}
-                            {canCreate && waitingOnVendor && (
+                            {canResend && waitingOnVendor && (
                               <button
                                 onClick={() => {
                                   if (window.confirm(response.token

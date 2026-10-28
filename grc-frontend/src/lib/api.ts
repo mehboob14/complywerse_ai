@@ -2264,13 +2264,17 @@ export const vendorRiskApi = {
     search?: string;
     vendor_type?: string;
     data_access_level?: string;
+    include_archived?: boolean;   // archived suppliers are left out unless asked for
+    include_requests?: boolean;   // so are requests not yet in review, and turned-down ones
     skip?: number;
     limit?: number;
   }) => apiClient.get('/vendor-risk/vendors', { params }),
   createVendor: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/vendors', data),
   getVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}`),
   updateVendor: (vendorId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/vendors/${vendorId}`, data),
+  // Archives the supplier (nothing is deleted); restoreVendor brings it back.
   deleteVendor: (vendorId: number) => apiClient.delete(`/vendor-risk/vendors/${vendorId}`),
+  restoreVendor: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/restore`),
 
   // Assessments
   getAssessments: (params?: {

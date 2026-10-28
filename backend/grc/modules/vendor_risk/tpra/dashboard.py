@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import asc, desc, or_, select
 from sqlalchemy.orm import Session
 
 from ....models import (
@@ -89,8 +89,10 @@ def program_dashboard(
     coverage = round(len(covered) / len(crit) * 100) if crit else 100
 
     # ── Findings posture / severity / domain ──
+    # An archived supplier's findings and signals are not counted, as the supplier itself is not.
+    archived = select(Vendor.id).where(Vendor.tenant_id.in_(tids), Vendor.deleted_at.isnot(None))
     fq = db.query(TPRAFinding).filter(
-        TPRAFinding.tenant_id.in_(tids), TPRAFinding.deleted_at.is_(None),
+        TPRAFinding.tenant_id.in_(tids), TPRAFinding.deleted_at.is_(None), ~TPRAFinding.vendor_id.in_(archived),
     )
     if scope == "mine":
         fq = fq.filter(TPRAFinding.vendor_id.in_(vids))
@@ -132,6 +134,7 @@ def program_dashboard(
     # ── Monitoring feed (latest signals) ──
     sq = db.query(TPRAMonitoringSignal).filter(
         TPRAMonitoringSignal.tenant_id.in_(tids), TPRAMonitoringSignal.deleted_at.is_(None),
+        ~TPRAMonitoringSignal.vendor_id.in_(archived),
     )
     if scope == "mine":
         sq = sq.filter(TPRAMonitoringSignal.vendor_id.in_(vids))
