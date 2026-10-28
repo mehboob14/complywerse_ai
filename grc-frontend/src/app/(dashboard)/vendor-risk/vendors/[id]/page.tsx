@@ -192,7 +192,7 @@ export default function VendorDetailPage() {
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
-    } else if (deepLinkTab && ['lifecycle', 'overview', 'engagements', 'portal', 'paperwork', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
+    } else if (deepLinkTab && ['lifecycle', 'overview', 'engagements', 'portal', 'paperwork', 'actions', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
       setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
       deepLinkApplied.current = true;
     }

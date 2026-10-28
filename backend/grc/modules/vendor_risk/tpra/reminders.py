@@ -200,7 +200,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             or_(VendorQuestionnaireResponse.due_date.isnot(None),
                 VendorQuestionnaireResponse.expires_at.isnot(None))):
         v = vendors.get(qr.vendor_id)
-        if v is None:
+        if v is None or (v.status or "").lower() in ("retired", "offboarded", "inactive", "terminated"):
             continue
         due = _day(qr.due_date or qr.expires_at)
         state = (f"{(today - due).days} days overdue" if due < today

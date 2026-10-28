@@ -278,8 +278,9 @@ def close_supplier_side(db: Session, vendor: Vendor, by: Optional[int], reason: 
     if expired:
         tpra_service.write_audit(db, vendor.tenant_id, entity="questionnaire", action="expire", vendor_id=vendor.id,
                                  actor_id=by, to_value=len(expired), reason=reason, extra={"questionnaire_ids": expired})
-    # C1: cancel the supplier's open requests (grc_tpra_supplier_requests) here.
-    return {"links_revoked": links, "questionnaires_expired": expired}
+    from ..tpra.supplier_requests import cancel_open       # late: that module imports the TPRA API
+    cancelled = cancel_open(db, vendor, by, reason)
+    return {"links_revoked": links, "questionnaires_expired": expired, "requests_cancelled": cancelled}
 
 
 def start_offboarding(db: Session, vendor: Vendor, by: Optional[int], reason: Optional[str]) -> dict:

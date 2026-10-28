@@ -408,6 +408,20 @@ def supplier_writes(db: Session, vendor: Vendor, contact: TPRAVendorContact,
 
 # ── REST (signed in) ─────────────────────────────────────────────────────────
 
+def cancel_open(db: Session, vendor: Vendor, by: Optional[int], reason: Optional[str]) -> List[int]:
+    """Every request still with or from the supplier is cancelled, as offboarding closes its
+    side. Audited once; the caller commits."""
+    rows = (db.query(TPRASupplierRequest)
+            .filter(TPRASupplierRequest.vendor_id == vendor.id, TPRASupplierRequest.status.in_(LIVE))
+            .order_by(TPRASupplierRequest.id).all())
+    for r in rows:
+        r.status = "cancelled"
+    if rows:
+        service.write_audit(db, vendor.tenant_id, entity="supplier_request", action="cancel", vendor_id=vendor.id,
+                            actor_id=by, to_value=len(rows), reason=reason, extra={"request_ids": [r.id for r in rows]})
+    return [r.id for r in rows]
+
+
 def _one(db: Session, vendor: Vendor, request_id: int) -> TPRASupplierRequest:
     r = db.query(TPRASupplierRequest).filter(TPRASupplierRequest.id == request_id,
                                              TPRASupplierRequest.vendor_id == vendor.id).first()

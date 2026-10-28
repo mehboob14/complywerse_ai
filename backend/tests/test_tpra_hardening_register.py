@@ -283,6 +283,38 @@ def test_starting_offboarding_stops_the_links_and_expires_what_is_unanswered(db)
     assert {("portal_link", "revoke_all"), ("questionnaire", "expire"), ("vendor", "offboard")} <= trail
 
 
+def test_offboarding_cancels_open_requests_and_the_portal_stays_shut(db):
+    """Integration of F2's offboarding with C1's requests and C0's portal: an open request is
+    cancelled (a finished one is left), a link issued after the start is refused, and asking
+    for a new link by email issues nothing."""
+    from starlette.background import BackgroundTasks
+    from starlette.requests import Request
+    from grc.models import TPRASupplierRequest
+    from grc.modules.vendor_risk.tpra import supplier_portal
+
+    v = _vendor(db)
+    c = contacts.add(db, v, ADMIN, name="Sam Lee", email="sam@payroll.test")
+    live = TPRASupplierRequest(tenant_id=1, vendor_id=v.id, kind="document", title="ISO certificate", status="open")
+    done = TPRASupplierRequest(tenant_id=1, vendor_id=v.id, kind="document", title="Old report", status="accepted")
+    db.add_all([live, done])
+    db.commit()
+    out = lifecycle.begin_offboarding(v.id, lifecycle.OffboardIn(reason="Contract ended"), db=db,
+                                      current_user=_user(db, ADMIN))
+    db.expire_all()
+    assert out["requests_cancelled"] == [live.id] and (live.status, done.status) == ("cancelled", "accepted")
+    assert ("supplier_request", "cancel") in {(r.entity, r.action) for r in db.query(TPRAAuditLog).filter_by(vendor_id=v.id)}
+
+    ask = Request({"type": "http", "method": "POST", "path": "/", "headers": [], "client": ("203.0.113.9", 5000)})
+    raw_token, _ = contacts.issue(db, c, "invite", ADMIN)
+    db.commit()
+    with pytest.raises(HTTPException) as shut:
+        supplier_portal.resolve(db, raw_token, ask)
+    assert shut.value.status_code == 410
+    before = db.query(TPRAPortalToken).count()
+    supplier_portal.request_link(supplier_portal.LinkRequest(email="sam@payroll.test"), ask, BackgroundTasks(), db=db)
+    assert db.query(TPRAPortalToken).count() == before
+
+
 def test_setting_the_status_to_offboarded_closes_the_door_too(db):
     v = _vendor(db)
     _door(db, v)

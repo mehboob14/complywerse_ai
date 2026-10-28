@@ -55,7 +55,7 @@ def resolve(db: Session, token: str, request: Request) -> Tuple[TPRAPortalToken,
     contact, vendor = db.get(TPRAVendorContact, row.contact_id), db.get(Vendor, row.vendor_id)
     if (row.revoked_at is not None or row.expires_at <= datetime.utcnow() or contact is None
             or contact.archived_at is not None or not contact.portal_access
-            or vendor is None or vendor.deleted_at is not None):
+            or vendor is None or vendor.deleted_at is not None or vendor.status == "offboarded"):
         _refuse(request, 410)
     if not portal.throttle.allow(f"portal:{row.id}"):
         raise HTTPException(429, BUSY)
@@ -159,7 +159,7 @@ def request_link(body: LinkRequest, request: Request, background: BackgroundTask
                 TPRAVendorContact.email == email, TPRAVendorContact.archived_at.is_(None),
                 TPRAVendorContact.portal_access.is_(True)).order_by(TPRAVendorContact.id).limit(5).all():
             vendor = db.get(Vendor, contact.vendor_id)
-            if vendor is None or vendor.deleted_at is not None:
+            if vendor is None or vendor.deleted_at is not None or vendor.status == "offboarded":
                 continue
             raw, row = contacts.issue(db, contact, "request")
             background.add_task(contacts.deliver_later,
