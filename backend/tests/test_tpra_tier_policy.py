@@ -173,6 +173,7 @@ def test_the_approval_route_enforces_the_tiers_approver(db, monkeypatch):
     monkeypatch.setattr(rbac, "_is_admin_or_primary", lambda *a, **k: False)
     _policy(db, critical={"approver_role": "CISO"})
     vendor = _vendor(db, tier="critical")
+    vendor.owner_id = None              # the approver is not its business owner (segregation of duties)
     a = VendorAssessment(tenant_id=1, vendor_id=vendor.id, status="reviewed", inherent_tier="critical",
                          residual_score=30.0, residual_rating="medium", lifecycle_status="active")
     db.add(a)

@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, null
 
 from ....models import (
     Vendor, VendorAssessment,
@@ -16,6 +16,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
 from ..tpra import service as tpra_service
+from ..tpra.engine_tiering import score_to_tier
 from .questionnaires import serialize_questionnaire_response
 from ..tpra import questionnaire_evidence as qevidence
 
@@ -148,17 +149,6 @@ def get_assessment_or_404(
     return assessment
 
 
-def _calculate_risk_rating(score: float) -> str:
-    if score >= 80:
-        return "critical"
-    elif score >= 60:
-        return "high"
-    elif score >= 40:
-        return "medium"
-    else:
-        return "low"
-
-
 # ── Endpoints ─────────────────────────────────────────────────────
 
 @router.get("/assessments")
@@ -252,6 +242,10 @@ def create_assessment(
         findings=payload.findings,
         recommendations=payload.recommendations,
         assessed_by=assessed_by,
+        # Stand-alone, approved on this page: no lifecycle stage (NULL, not the
+        # column's default), so the lifecycle never takes it for its own
+        # (tpra/service.IN_LIFECYCLE).
+        current_stage=null(),
     )
     db.add(assessment)
     db.commit()
@@ -424,7 +418,6 @@ def score_assessment(
         score_assessment as engine_score,
         build_responses_from_answers,
     )
-    from ..tpra.bootstrap import get_tiering_config
 
     inherent = assessment.inherent_score
     if not inherent:
@@ -432,7 +425,7 @@ def score_assessment(
         # so residual still responds to the answers rather than collapsing to a
         # false "low". Run the tiering stage for a real inherent value.
         inherent = 50.0
-    cfg = get_tiering_config(db, assessment.tenant_id)
+    cfg = tpra_service.config_for(db, assessment)
     resp_list = build_responses_from_answers(questions, responses)
     result = engine_score(resp_list, inherent_score=inherent, config=cfg)
 
@@ -491,31 +484,37 @@ def approve_assessment(
     if problem:
         raise HTTPException(*problem)
 
+    # The approver is not the reviewer: who approved goes on the audit trail below.
     assessment.status = "approved"
-    assessment.reviewed_by = current_user.id
     assessment.completed_at = datetime.utcnow()
     assessment.updated_at = datetime.utcnow()
 
     # TPRM-005: NEVER trust a client-supplied risk_rating — always recompute it
-    # server-side from the (server-computed) score. payload.risk_rating is ignored.
+    # server-side from the (server-computed) score, on the tenant's thresholds.
+    # payload.risk_rating is ignored.
     _basis = assessment.residual_score if assessment.residual_score is not None else assessment.inherent_score
     if _basis is not None:
-        assessment.risk_rating = _calculate_risk_rating(_basis)
+        assessment.risk_rating = score_to_tier(_basis, tpra_service.config_for(db, assessment).get("thresholds"))
     if payload.recommendations:
         assessment.recommendations = payload.recommendations
 
-    # Update vendor risk scores from assessment. Residual is clamped ≤ inherent
-    # (TPRM-004): controls can only reduce risk.
+    # Update vendor risk scores from assessment, on its scope's row (the supplier
+    # shows its worst engagement). Residual is clamped ≤ inherent (TPRM-004):
+    # controls can only reduce risk.
     vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
     if vendor and assessment.inherent_score is not None:
-        vendor.inherent_risk_score = assessment.inherent_score
         _res = assessment.residual_score
         if _res is not None:
             _res = min(_res, assessment.inherent_score)
             assessment.residual_score = _res
-        vendor.residual_risk_score = _res
-        vendor.risk_rating = assessment.risk_rating
+        tpra_service.set_scores(
+            db, vendor, tpra_service.scope_row(db, vendor, tpra_service.engagement_of(db, assessment)),
+            inherent_risk_score=assessment.inherent_score, residual_risk_score=_res, risk_rating=assessment.risk_rating)
         vendor.updated_at = datetime.utcnow()
+    tpra_service.write_audit(db, assessment.tenant_id, entity="approval", action="create",
+                             vendor_id=assessment.vendor_id, assessment_id=assessment.id, entity_id=assessment.id,
+                             actor_id=current_user.id, to_value="approve",
+                             reason="Approved on the Assessments page")
 
     # ── Linkage: surface the vendor's residual risk in the enterprise Risk
     # Register so it rolls up to the ERM dashboard. Fully guarded — a linkage

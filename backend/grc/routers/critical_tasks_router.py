@@ -408,10 +408,12 @@ def _sync_mirrors(db: Session, task_ids, user_id: Optional[int]) -> None:
     Wrapped so the governance module can never break a Task Management write."""
     try:
         from ..modules.governance import committee_tasks, doc_lifecycle, regulatory_tasks
+        from ..modules.vendor_risk.tpra import service as tpra_service
         for task_id in task_ids:
             regulatory_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
             committee_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
             doc_lifecycle.sync_from_critical_task(db, task_id, user_id=user_id)
+            tpra_service.sync_condition_from_task(db, task_id, user_id=user_id)
         db.commit()
     except Exception:
         logger.exception("Mirrored task sync failed for tasks %s", list(task_ids))
@@ -1244,9 +1246,11 @@ def delete_task(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=lifecycle.DELETE_REFUSED)
     try:
         from ..modules.governance import committee_tasks, doc_lifecycle, regulatory_tasks
+        from ..modules.vendor_risk.tpra import service as tpra_service
         regulatory_tasks.on_critical_task_deleted(db, task)
         committee_tasks.on_critical_task_deleted(db, task)
         doc_lifecycle.on_critical_task_deleted(db, task)
+        tpra_service.on_condition_task_deleted(db, task, current_user.id)     # an approval condition stays
     except Exception:
         logger.exception("Could not remove the regulatory task or committee action mirrored by task %s", task.id)
     db.delete(task)
