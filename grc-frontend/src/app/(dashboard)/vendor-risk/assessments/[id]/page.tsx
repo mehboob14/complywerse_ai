@@ -1116,6 +1116,10 @@ export default function AssessmentDetailPage() {
                   {approveMutation.isError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 p-2 rounded-lg">
                       {(approveMutation.error as any)?.response?.data?.detail || 'Failed to approve assessment.'}
+                      {(approveMutation.error as any)?.response?.status === 409 && (
+                        <Link href={`/vendor-risk/vendors/${assessment.vendor_id}?stage=approval`}
+                          className="ml-1 font-medium underline">Open Approval</Link>
+                      )}
                     </div>
                   )}
                   <button

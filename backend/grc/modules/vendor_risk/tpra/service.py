@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +23,13 @@ from ....models import (
 from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
     stages_at_or_after, can_skip, cadence_days_for, required_reviewers_for,
-    TIER_SKIPPABLE_STAGES,
+    TIER_SKIPPABLE_STAGES, TIER_REQUIRED_REVIEWERS,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
-    score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity,
+    score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity, is_answered,
 )
-from . import intake as intake_answers, tier_policy, versions
+from . import intake as intake_answers, rbac, tier_policy, versions
 from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
@@ -100,9 +100,39 @@ def get_stage_instances(db: Session, assessment_id: int) -> List[TPRAStageInstan
 
 # ── Gate context + evaluation ────────────────────────────────────────────────
 
+def acceptance_holds(db: Session, finding: TPRAFinding, now: Optional[datetime] = None) -> bool:
+    """Whether a signed acceptance covers this finding now. One past its expiry
+    covers nothing, whether or not the daily sweep has marked it expired (or
+    reopened the finding) yet; a finding marked accepted before acceptances were
+    recorded keeps the standing it had."""
+    now = now or datetime.utcnow()
+    rows = db.query(TPRARiskAcceptance).filter(TPRARiskAcceptance.finding_id == finding.id).all()
+    if any(a.deleted_at is None and a.status == "active" and (a.expiry is None or a.expiry >= now) for a in rows):
+        return True
+    return finding.status == "accepted" and not rows
+
+
+def reopen_finding(db: Session, finding: TPRAFinding, actor_id: Optional[int], reason: str) -> None:
+    """A finding its acceptance no longer covers (revoked, or expired) is open
+    again and counts in every gate and count: on the audit trail (no actor = the
+    system), given an issue if it has none, and an onboarded vendor is suspended
+    if a critical is left unmitigated (TPRM-002). Caller owns commit."""
+    if finding.status == "accepted":
+        finding.status = "open"
+        finding.row_version = (finding.row_version or 1) + 1
+        write_audit(db, finding.tenant_id, entity="finding", action="reopen", vendor_id=finding.vendor_id,
+                    assessment_id=finding.assessment_id, entity_id=finding.id, actor_id=actor_id,
+                    from_value="accepted", to_value="open", reason=reason)
+    ensure_finding_issue(db, finding, actor_id)
+    vendor = db.query(Vendor).filter(Vendor.id == finding.vendor_id).first()
+    assessment = db.query(VendorAssessment).filter(VendorAssessment.id == finding.assessment_id).first()
+    if vendor and assessment:
+        enforce_critical_invariant(db, vendor, assessment, actor_id)
+
+
 def count_open_critical(db: Session, assessment_id: int) -> int:
-    """Critical findings that are neither accepted/closed, nor covered by an
-    active acceptance, nor by a completed remediation → 'unmitigated'."""
+    """Critical findings that are neither closed, nor covered by an acceptance
+    in force, nor by a completed remediation → 'unmitigated'."""
     crit = (
         db.query(TPRAFinding)
         .filter(
@@ -115,20 +145,9 @@ def count_open_critical(db: Session, assessment_id: int) -> int:
     now = datetime.utcnow()
     open_count = 0
     for f in crit:
-        if f.status in ("accepted", "closed"):
-            continue
-        acc = (
-            db.query(TPRARiskAcceptance)
-            .filter(
-                TPRARiskAcceptance.finding_id == f.id,
-                TPRARiskAcceptance.deleted_at.is_(None),
-                TPRARiskAcceptance.status == "active",
-            ).first()
-        )
-        # An active acceptance mitigates ONLY while it has not lapsed. A past-expiry
-        # acceptance must re-surface the critical for re-review (it is no longer a
-        # standing mitigation), so it does not clear the approval gate.
-        if acc and (acc.expiry is None or acc.expiry >= now):
+        # A past-expiry acceptance re-surfaces the critical for re-review: it is no
+        # longer a standing mitigation, so it does not clear the approval gate.
+        if f.status == "closed" or acceptance_holds(db, f, now):
             continue
         has_done_remediation = (
             db.query(TPRARemediation.id)
@@ -256,6 +275,20 @@ def enforce_critical_invariant(
                        getattr(vendor, "id", "?"), exc_info=True)
 
 
+# The team-roster seats that review an assessment: the disciplines a tier asks
+# for. The business owner, the TPRM lead and analyst running it, procurement, IT
+# and the approver are not its reviewers.
+REVIEWER_SEATS = {seat for seats in TIER_REQUIRED_REVIEWERS.values() for seat in seats}
+
+
+def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
+    """How many different people are named to review this assessment: the plan's
+    reviewer and whoever holds a reviewing seat in Assign duties (the roster)."""
+    roster = assessment.team_roster or {}
+    people = {assessment.reviewed_by, *(roster.get(seat) for seat in REVIEWER_SEATS)}
+    return len({p for p in people if p})
+
+
 def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> dict:
     """Gather the plain facts the pure gate engine needs for one stage."""
     tier = assessment.inherent_tier or vendor.tier or "medium"
@@ -273,8 +306,9 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         ctx["templates_selected"] = 1 if assessment.template_id else (
             db.query(TPRAQuestionResponse.id).filter(TPRAQuestionResponse.assessment_id == assessment.id).first() and 1 or 0
         )
-        ctx["required_reviewers"] = len(required_reviewers_for(tier))
-        ctx["reviewers_assigned"] = 1 if assessment.reviewed_by else 0
+        ctx["reviewer_roles"] = required_reviewers_for(tier)
+        ctx["required_reviewers"] = len(ctx["reviewer_roles"])
+        ctx["reviewers_assigned"] = reviewers_assigned(db, assessment)
         wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
         ctx["tier_templates_unsent"] = [q["name"] for q in wanted["questionnaires"] if q["status"] == "unsent"]
     elif stage_key == "questionnaire":
@@ -283,7 +317,7 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         # table — and enforce required evidence instead of hardcoding it to 0.
         resp = collect_responses_for_scoring(db, assessment.id)
         total = len(resp)
-        answered = sum(1 for r in resp if normalize_answer(r.get("answer")) is not None)
+        answered = sum(1 for r in resp if is_answered(r.get("answer")))
         wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
         ctx.update(
             responses_total=total, responses_answered=answered,
@@ -669,7 +703,8 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
         label, score = answer_score(question, raw)
         out.append({
             "domain": (q.domain if q else None) or "cybersecurity",
-            "answer": resp.answer,
+            # The Yes/Partial/No/N-A label, else what was given: text, a choice, a rating.
+            "answer": resp.answer if resp.answer is not None else resp.raw_value,
             "label": label,
             "score": score,
             "finding": finding_severity(question, raw),
@@ -779,19 +814,66 @@ def run_scoring(
     return result
 
 
+def residual_from_inherent(db: Session, assessment: VendorAssessment, actor_id: Optional[int]) -> bool:
+    """A tier that skips scoring (Low) has no questionnaire answers to score, so
+    nothing has reduced its inherent risk: its residual is the inherent score.
+    Set on the assessment and the vendor and said so on the audit trail; no grade
+    or domain score is made up. Returns whether it applied."""
+    vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
+    scoring = _stage_row(db, assessment.id, "scoring")
+    tier = assessment.inherent_tier or (vendor.tier if vendor else None)
+    if (vendor is None or assessment.inherent_score is None or scoring is None or scoring.status != "skipped"
+            or not can_skip(tier, "scoring")):
+        return False
+    assessment.residual_score = assessment.inherent_score
+    assessment.residual_rating = tier
+    assessment.row_version = (assessment.row_version or 1) + 1
+    vendor.residual_risk_score, vendor.risk_rating = assessment.residual_score, tier
+    write_audit(db, assessment.tenant_id, entity="scoring", action="update", vendor_id=vendor.id,
+                assessment_id=assessment.id, actor_id=actor_id, to_value=tier,
+                reason="Scoring is skipped for this tier, so the residual is the inherent score; "
+                       "no questionnaire was scored.",
+                extra={"residual": assessment.residual_score, "rating_basis": "inherent_score"})
+    return True
+
+
+def approval_problem(db: Session, user, assessment: VendorAssessment) -> Optional[Tuple[int, str]]:
+    """Why this person may not approve this assessment, as (HTTP status, reason),
+    or None. One set of rules for every route that approves: the assessor or
+    reviewer cannot approve their own assessment, the tier may require an approver
+    role, and no critical finding may stand unmitigated."""
+    if user.id is not None and user.id in (assessment.assessed_by, assessment.reviewed_by):
+        return 403, ("Segregation of duties: the assessor/reviewer cannot approve their own assessment — "
+                     "an independent approver is required.")
+    vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
+    problem = tier_policy.approver_problem(
+        db, user, assessment.inherent_tier or (vendor.tier if vendor else None),
+        tier_policy.merged(get_tiering_config(db, assessment.tenant_id).get("tier_policy")),
+        is_admin=rbac._is_admin_or_primary(db, user))
+    if problem:
+        return 403, problem
+    open_crit = count_open_critical(db, assessment.id)
+    if open_crit > 0:
+        return 400, (f"Cannot approve while {open_crit} unmitigated critical finding(s) remain — "
+                     "remediate or formally accept them first.")
+    return None
+
+
 def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment) -> Optional[int]:
     """Upsert the vendor's residual third-party risk into the enterprise Risk
     Register (category='third_party') so TPRM rolls up to ERM and shows in Risk
-    360°. Keyed by `source_reference=vendor:{id}` (one register entry per vendor,
-    updated on each re-score). Best-effort — never blocks scoring."""
+    360°. Keyed by `source_reference=vendor:{id}/vendor_assessment:{id}` (one
+    register entry per vendor, whichever version wrote it, updated on each
+    re-score). Matched on that exact prefix: `vendor:1` alone would also match
+    vendor 12, and vendor 1's promoted findings (`vendor:1/tpra_finding:{id}`).
+    Best-effort — never blocks scoring."""
     try:
         from ....models import Risk
         ref = f"vendor:{vendor.id}"
         risk = db.query(Risk).filter(
-            Risk.tenant_id == vendor.tenant_id, Risk.source_reference.like(f"{ref}%"),
-        ).first()
-        if not risk and getattr(assessment, "linked_risk_id", None):
-            risk = db.query(Risk).filter(Risk.id == assessment.linked_risk_id).first()
+            Risk.tenant_id == vendor.tenant_id,
+            Risk.source_reference.startswith(f"{ref}/vendor_assessment:", autoescape=True),
+        ).order_by(Risk.id).first()
         desc = (
             f"Residual third-party risk from the TPRA lifecycle of vendor '{vendor.name}'. "
             f"Tier: {assessment.inherent_tier or vendor.tier or 'n/a'}, "

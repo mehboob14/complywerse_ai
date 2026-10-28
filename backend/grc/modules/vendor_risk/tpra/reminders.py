@@ -17,8 +17,8 @@ key of what it is about, who it is for and which period it belongs to. The sweep
 can therefore run any number of times a day and still tell each person once per
 period; and a delivery that fails leaves no row, so the next run tries again.
 
-An expired risk acceptance is marked expired here, so it stops mitigating the
-finding it covered.
+An expired risk acceptance is marked expired here, and the finding it covered
+is open again, so it counts in every gate and count once more.
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from ....models import (
     TPRARiskAcceptance, TPRASurfaceWaiver, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
-from . import contracts as contract_rules, tier_policy
+from . import contracts as contract_rules, service, tier_policy
 
 logger = logging.getLogger(__name__)
 
@@ -223,8 +223,10 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"/vendor-risk/vendors/{v.id}" if v else "/vendor-risk/findings",
             [r.owner_id or (v.owner_id if v else None)])
 
-    # 4. Risk acceptances expiring. One that has lapsed is marked expired, so it
-    #    stops mitigating the finding it covered.
+    # 4. Risk acceptances expiring. One that has lapsed is marked expired, and the
+    #    finding it covered is open again unless another acceptance still holds,
+    #    with the system as the actor. A finding an earlier lapse left "accepted"
+    #    is caught too; once reopened nothing matches, so a second run does nothing.
     for a in db.query(TPRARiskAcceptance).filter(
             TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
             TPRARiskAcceptance.status == "active", TPRARiskAcceptance.expiry.isnot(None)):
@@ -237,6 +239,15 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"Risk acceptance{f' on {v.name}' if v else ''} is {_when(due, today, 'past its expiry')}",
             f"/vendor-risk/vendors/{v.id}" if v else "/vendor-risk/findings",
             [a.accepted_by, v.owner_id if v else None], once=True)
+    start = datetime.combine(today, time.min)
+    for a, f in (db.query(TPRARiskAcceptance, TPRAFinding)
+                 .join(TPRAFinding, TPRAFinding.id == TPRARiskAcceptance.finding_id)
+                 .filter(TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
+                         TPRARiskAcceptance.expiry < start, TPRAFinding.deleted_at.is_(None),
+                         TPRAFinding.status == "accepted")
+                 .order_by(TPRARiskAcceptance.expiry.desc(), TPRARiskAcceptance.id)):
+        if f.status == "accepted" and not service.acceptance_holds(db, f, start):
+            service.reopen_finding(db, f, None, f"Acceptance expired on {a.expiry:%d %b %Y}")
 
     # 5. Contracts needing a decision: due on the last day to give notice (the end
     #    date when the contract asks for none), then weekly until someone records

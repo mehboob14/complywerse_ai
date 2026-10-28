@@ -20,7 +20,7 @@ from ....models import (
     TPRAMonitoringSignal, TPRARiskSnapshot,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from .engine_scoring import residual_to_grade
+from .engine_scoring import grade_for
 from .bootstrap import get_tiering_config, ensure_tpra_tenant_defaults
 from .schema_migrations import ensure_tpra_columns
 from .attention import queue as attention_queue
@@ -148,14 +148,14 @@ def program_dashboard(
     # ── Onboarded this period (last 30 days) ──
     onboarded_30 = sum(1 for v in vendors if v.created_at and (now - v.created_at).days <= 30)
 
-    # ── Top-residual vendors ──
+    # ── Top-residual vendors (the grade never reads better than the rating beside it) ──
     top = sorted([v for v in vendors if v.residual_risk_score is not None],
                  key=lambda v: v.residual_risk_score, reverse=True)[:8]
+    thresholds = get_tiering_config(db, tids[0]).get("thresholds") if tids[0] > 0 else None
     top_vendors = [{
         "id": v.id, "name": v.name, "tier": v.tier,
         "residual": v.residual_risk_score, "inherent": v.inherent_risk_score,
-        "rating": v.risk_rating, "grade": residual_to_grade(v.residual_risk_score)
-        if v.residual_risk_score is not None else None,
+        "rating": v.risk_rating, "grade": grade_for(v.residual_risk_score, v.risk_rating, thresholds),
     } for v in top]
 
     # The attention tile asks the queue itself, so the two always agree.

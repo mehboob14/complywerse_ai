@@ -181,8 +181,9 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             _countdown(due, today), f"/vendor-risk/vendors/{v.id}?stage=questionnaire",
             tone="red" if due < today else "amber", lapsed=due < today)
 
-    # Risk acceptances running out — or already out while the finding still reads
-    # "accepted", so nobody has decided again. Only each finding's latest counts.
+    # Risk acceptances running out — or already out with nobody deciding again: the
+    # finding still reads "accepted", or the lapse reopened it and no remediation or
+    # new acceptance has followed. Only each finding's latest counts.
     latest: Dict[int, TPRARiskAcceptance] = {}
     for a in db.query(TPRARiskAcceptance).filter(
             TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
@@ -196,7 +197,7 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         due = _day(a.expiry)
         if v is None or due is None or due > horizon or f.status == "closed":
             continue
-        if a.status == "expired" and f.status != "accepted":
+        if a.status == "expired" and f.status not in ("accepted", "open"):
             continue
         add("acceptance_expiring", "acceptance", a.id, v, due,
             f"Risk acceptance of '{f.title or 'finding'}' on {v.name} "

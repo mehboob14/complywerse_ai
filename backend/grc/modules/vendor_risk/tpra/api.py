@@ -1090,17 +1090,12 @@ def revoke_acceptance(acc_id: int, db: Session = Depends(get_db), user: GRCUser 
     a.deleted_at = datetime.utcnow()
     _bump(a)
     f = db.query(TPRAFinding).filter(TPRAFinding.id == a.finding_id).first()
-    if f and f.status == "accepted":
-        f.status = "open"
     service.write_audit(db, a.tenant_id, entity="risk_acceptance", action="delete", entity_id=a.id, actor_id=user.id)
-    # TPRM-002/003: revoking acceptance reopens the finding → reopen/recreate its
-    # issue and re-suspend the onboarded vendor if the critical is unmitigated.
-    if f:
-        service.ensure_finding_issue(db, f, user.id)
-        v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
-        asmt = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
-        if v and asmt:
-            service.enforce_critical_invariant(db, v, asmt, user.id)
+    # TPRM-002/003: revoking acceptance reopens the finding (unless another
+    # acceptance still covers it) → reopen/recreate its issue and re-suspend the
+    # onboarded vendor if the critical is unmitigated.
+    if f and not service.acceptance_holds(db, f):
+        service.reopen_finding(db, f, user.id, "Risk acceptance revoked.")
     db.commit()
     return {"revoked": True, "id": a.id}
 
@@ -1258,33 +1253,17 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     # approvals:approve is high-sensitivity — no broad erm:risks:edit backdoor.
     rbac.require_write(db, user, "approvals", "approve", allow_fallback=False)
     if body.decision in ("approve", "approve_with_conditions"):
-        # Segregation of duties — the approver must be independent of whoever
-        # performed or reviewed the assessment.
-        if user.id is not None and user.id in (a.assessed_by, a.reviewed_by):
-            raise HTTPException(
-                status_code=403,
-                detail="Segregation of duties: the assessor/reviewer cannot approve their own assessment — an independent approver is required.",
-            )
-        # Approval authority follows the tier.
-        _vendor_row = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
-        _problem = tier_policy.approver_problem(
-            db, user, a.inherent_tier or (_vendor_row.tier if _vendor_row else None),
-            tier_policy.merged(service.get_tiering_config(db, a.tenant_id).get("tier_policy")),
-            is_admin=rbac._is_admin_or_primary(db, user))
+        # Segregation of duties, the tier's approver role and no unmitigated
+        # critical finding: the rules every approve route applies.
+        _problem = service.approval_problem(db, user, a)
         if _problem:
-            raise HTTPException(status_code=403, detail=_problem)
-        # Preconditions — a positive decision requires a computed residual and no
-        # unmitigated critical findings (the gate can otherwise be pre-stamped).
-        if a.residual_score is None:
+            raise HTTPException(*_problem)
+        # A positive decision requires a residual (the gate can otherwise be
+        # pre-stamped): a scored one, or the inherent score where the tier skips scoring.
+        if a.residual_score is None and not service.residual_from_inherent(db, a, user.id):
             raise HTTPException(
                 status_code=400,
                 detail="Score the assessment before recording an approval decision.",
-            )
-        _open_crit = service.count_open_critical(db, a.id)
-        if _open_crit > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve while {_open_crit} unmitigated critical finding(s) remain — remediate or formally accept them first.",
             )
     rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
     # Conditions are TRACKED items chased to closure, not write-once text: each

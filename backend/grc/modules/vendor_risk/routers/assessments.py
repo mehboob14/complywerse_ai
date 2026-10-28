@@ -11,10 +11,11 @@ from sqlalchemy import func
 from ....models import (
     Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
-    TPRAFinding,
+    TPRAFinding, TPRAStageInstance,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
+from ..tpra import service as tpra_service
 from .questionnaires import serialize_questionnaire_response
 from ..tpra import questionnaire_evidence as qevidence
 
@@ -472,11 +473,23 @@ def approve_assessment(
 
     assessment = get_assessment_or_404(assessment_id, tenant_ids, db)
 
+    # One way to approve an assessment the lifecycle runs: its Approval stage,
+    # which records the decision and moves the gate.
+    if db.query(TPRAStageInstance.id).filter(TPRAStageInstance.assessment_id == assessment.id).first():
+        raise HTTPException(
+            status_code=409,
+            detail="This assessment runs through the vendor's lifecycle: record the decision at its Approval stage.",
+        )
     if assessment.status not in ("reviewed", "submitted", "in_progress"):
         raise HTTPException(
             status_code=400,
             detail=f"Assessment in status '{assessment.status}' cannot be approved"
         )
+    # The rules the lifecycle's approval applies: segregation of duties, the
+    # tier's approver role, no unmitigated critical finding.
+    problem = tpra_service.approval_problem(db, current_user, assessment)
+    if problem:
+        raise HTTPException(*problem)
 
     assessment.status = "approved"
     assessment.reviewed_by = current_user.id

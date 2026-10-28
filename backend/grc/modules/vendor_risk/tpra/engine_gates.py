@@ -40,7 +40,8 @@ def evaluate_stage_exit(stage_key: str, ctx: Dict) -> dict:
     `ctx` carries plain facts the API gathered, e.g.:
       intake:        has_name, has_owner, has_data_classification
       tiering:       inherent_tier (str|None)
-      dd_planning:   templates_selected (int), reviewers_assigned (int), required_reviewers (int)
+      dd_planning:   templates_selected (int), reviewers_assigned (int), required_reviewers (int),
+                     reviewer_roles (the seats the tier asks for)
       questionnaire: responses_total, responses_answered, required_evidence_missing (int)
       scoring:       residual_computed (bool)
       findings:      open_critical_unmitigated (int)
@@ -71,8 +72,11 @@ def evaluate_stage_exit(stage_key: str, ctx: Dict) -> dict:
         if unsent:
             blockers.append(f"Send the questionnaires this tier requires: {', '.join(unsent)}.")
         required = int(ctx.get("required_reviewers", 0))
-        if int(ctx.get("reviewers_assigned", 0)) < required:
-            blockers.append(f"Assign at least {required} reviewer(s) for this tier.")
+        named = int(ctx.get("reviewers_assigned", 0))
+        if named < required:
+            who = "a reviewer" if required == 1 else f"{required} different reviewers"
+            seats = ", ".join(r.title() for r in ctx.get("reviewer_roles") or [])
+            blockers.append(f"Name {who} in Assign duties{f' ({seats})' if seats else ''}; {named} named so far.")
 
     elif stage_key == "questionnaire":
         total = int(ctx.get("responses_total", 0))
