@@ -2496,7 +2496,11 @@ export const tpraApi = {
 
   // Approvals (append-only)
   listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
-  createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
+  listApprovers: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvers`),
+  createApproval: (assessmentId: number, data: {
+    decision: string; rationale?: string;
+    conditions?: Array<string | { text: string; owner_id?: number | null; due_date?: string | null }>;
+  }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
   resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
     apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),
