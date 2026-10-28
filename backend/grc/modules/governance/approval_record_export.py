@@ -30,6 +30,7 @@ TITLE = "Document control"
 SLOTS = ("description", "signoff", "revision")                  # the sections, in the order they are printed
 SLOT_TITLE = {"description": "Document Description", "signoff": "Review and Approval", "revision": "Revision History"}
 APPROVAL_TITLE = "Approval History"                              # printed with the revision history
+PRODUCED = "These pages are produced by the platform from the document's sign-off, signature and audit data."        # the line that closes them
 _STATUS = {"complete": "Complete", "pending": "Pending", "changes_requested": "Changes requested", "rejected": "Rejected"}
 _RULE = {"all": "everyone signs", "any": "any one signs"}
 _DECIDED = {"signed": "Signed", "rejected": "Rejected", "changes_requested": "Asked for changes"}
@@ -348,7 +349,7 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
     if notes:
         story.append(Spacer(1, 6))
         story += [Paragraph(esc("- " + n), small) for n in record["notes"]]
-        story.append(KeepTogether(Paragraph(esc("These pages are produced by the platform from the document's sign-off, signature and audit data. They are not edited by hand."),
+        story.append(KeepTogether(Paragraph(esc(PRODUCED),
                                             ParagraphStyle("end", parent=small, fontName=italic, spaceBefore=4))))
     foot_title, foot_tail = foot_parts(record)
 
@@ -441,6 +442,7 @@ _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _FONT = {"name": (True, None, 0.0, False), "text": (None, None, 0.0, False), "small": (None, None, -1.5, True), "quote": (None, True, -1.5, False),
          "bold": (True, None, 0.0, False), "plain": (None, None, 0.0, False)}        # style -> (bold, italic, size added, grey)
 _GRID = (0.25, 0.25, 0.12, 0.38)           # the signature grid: two cells of two columns each, and the title bar over the first three
+CELL_MARGINS = {"top": 29, "left": 115, "bottom": 29, "right": 115}        # twips: a cell's own padding, 0.2 cm at the sides and 0.05 cm above and below
 
 
 def _run(paragraph, text: str, style: str = "plain", size: float = 8.5):
@@ -455,11 +457,26 @@ def _run(paragraph, text: str, style: str = "plain", size: float = 8.5):
     return run
 
 
+def _flat(paragraph, align: Optional[str] = None):
+    """A paragraph of the control pages says its own indents, line spacing and alignment, so what the document's Normal style says about
+    them never reaches the tables: a Word file whose Normal indents every paragraph by 0.38 in (the CFSB policies) took that from every
+    cell, and a column two centimetres wide had room for "Versio" and "2026-10-" (a bank's Normal may also justify or double-space).
+    ``align``: "centre" or "right", else left."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
+
+    f = paragraph.paragraph_format
+    f.left_indent = f.right_indent = f.first_line_indent = Pt(0)
+    f.line_spacing = 1.0
+    paragraph.alignment = {"centre": WD_ALIGN_PARAGRAPH.CENTER, "right": WD_ALIGN_PARAGRAPH.RIGHT}.get(align or "", WD_ALIGN_PARAGRAPH.LEFT)
+    return paragraph
+
+
 def _title(doc, text: str, size: float = 14, before: float = 14):
     """A heading by hand (never a Heading style: the document's own headings may be numbered, and its contents list reads them)."""
     from docx.shared import Pt
 
-    p = doc.add_paragraph()
+    p = _flat(doc.add_paragraph())
     run = p.add_run(text)
     run.bold, run.font.size = True, Pt(size)
     p.paragraph_format.space_before, p.paragraph_format.space_after, p.paragraph_format.keep_with_next = Pt(before), Pt(6), True
@@ -472,7 +489,7 @@ def _gap(doc, points: float = 6) -> None:
     from docx.oxml.ns import qn
     from docx.shared import Pt
 
-    p = doc.add_paragraph()
+    p = _flat(doc.add_paragraph())
     p.paragraph_format.space_before = p.paragraph_format.space_after = Pt(0)
     props, size = OxmlElement("w:rPr"), OxmlElement("w:sz")
     size.set(qn("w:val"), str(int(points * 2)))
@@ -481,7 +498,8 @@ def _gap(doc, points: float = 6) -> None:
 
 
 def _grid(table) -> None:
-    """Thin borders on every cell, set on the table itself so a file without a "Table Grid" style still shows them."""
+    """Thin borders on every cell, no indent and the cells' own padding, all set on the table itself: a file without a "Table Grid"
+    style still shows the lines, and the document's default table style (an indent, wide or no padding) does not decide the room a cell has."""
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
@@ -495,6 +513,18 @@ def _grid(table) -> None:
     after = {qn("w:shd"), qn("w:tblLayout"), qn("w:tblCellMar"), qn("w:tblLook")}          # Word's schema puts them before these
     nxt = next((c for c in pr if c.tag in after), None)
     (nxt.addprevious(borders) if nxt is not None else pr.append(borders))
+    indent = OxmlElement("w:tblInd")
+    indent.set(qn("w:w"), "0")
+    indent.set(qn("w:type"), "dxa")
+    borders.addprevious(indent)
+    margins = OxmlElement("w:tblCellMar")
+    for edge in ("top", "left", "bottom", "right"):
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:w"), str(CELL_MARGINS[edge]))
+        el.set(qn("w:type"), "dxa")
+        margins.append(el)
+    look = pr.find(qn("w:tblLook"))
+    (look.addprevious(margins) if look is not None else pr.append(margins))
 
 
 def _shade(cell, fill: str) -> None:
@@ -524,18 +554,15 @@ def _no_edge(cell, *edges: str) -> None:
 
 def _fill(cell, lines: Sequence[Tuple[str, str]], size: float = 8.5, shade: Optional[str] = None, align: Optional[str] = None, keep: bool = False) -> None:
     """The lines of a cell, each a paragraph (text, style): the style is one of _FONT; ``align``: "centre" or "right"."""
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Pt
 
     cell.text = ""
     for stray in cell.paragraphs[0].runs:               # `cell.text = ""` leaves an empty run behind
         stray._r.getparent().remove(stray._r)
     for i, (text, style) in enumerate(lines):
-        p = cell.paragraphs[0] if i == 0 else cell.add_paragraph()
+        p = _flat(cell.paragraphs[0] if i == 0 else cell.add_paragraph(), align)
         p.paragraph_format.space_before, p.paragraph_format.space_after = Pt(0), Pt(1)
         p.paragraph_format.keep_with_next = True if keep else None
-        if align:
-            p.alignment = {"centre": WD_ALIGN_PARAGRAPH.CENTER, "right": WD_ALIGN_PARAGRAPH.RIGHT}[align]
         _run(p, text, style, size)
     if shade:
         _shade(cell, shade)
@@ -600,17 +627,15 @@ def _person_cell(cell, stage: Mapping[str, Any], p: Mapping[str, Any], images: M
     rule, then their printed lines."""
     from io import BytesIO
 
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Cm, Pt, RGBColor
 
     from .studio.exporters import _border
 
     png = _ink(images, p)
     cell.text = ""
-    first = cell.paragraphs[0]
+    first = _flat(cell.paragraphs[0], "centre")
     for stray in first.runs:                            # `cell.text = ""` leaves an empty run behind
         stray._r.getparent().remove(stray._r)
-    first.alignment = WD_ALIGN_PARAGRAPH.CENTER
     first.paragraph_format.space_before, first.paragraph_format.space_after, first.paragraph_format.keep_with_next = Pt(4), Pt(2), True
     room = fit(png) if png else None
     placed = False
@@ -627,8 +652,7 @@ def _person_cell(cell, stage: Mapping[str, Any], p: Mapping[str, Any], images: M
             run.font.size, run.font.color.rgb = Pt(7.5), RGBColor(0x8C, 0x8C, 0x8C)
     _border(first, "bottom", 6, "000000", 1)
     for text, style in person_lines(stage, p):
-        q = cell.add_paragraph()
-        q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        q = _flat(cell.add_paragraph(), "centre")
         q.paragraph_format.space_before, q.paragraph_format.space_after = Pt(0), Pt(1)
         _run(q, text, style)
 
@@ -692,7 +716,7 @@ def _add_block(doc, record: Mapping[str, Any], images: Mapping[int, bytes], widt
     for stage in record["stages"]:
         _signature_grid(doc, stage_title(stage), stage_note(stage), stage["people"], lambda cell, p, s=stage: _person_cell(cell, s, p, images), width)
     if not record["stages"]:
-        _run(doc.add_paragraph(), "No review or approval is recorded for this version.", "small")
+        _run(_flat(doc.add_paragraph()), "No review or approval is recorded for this version.", "small")
     heading(SLOT_TITLE["revision"])
     rows = [[[(version, "plain")] + ([] if released else [("In progress", "small")]), [(date, "plain")], [(kind, "plain")], [(line, "plain") for line in summary.split("\n")], [(by, "plain")]]
             for version, released, date, kind, summary, by in revision_rows(record)]
@@ -703,10 +727,10 @@ def _add_block(doc, record: Mapping[str, Any], images: Mapping[int, bytes], widt
            fractions((2.2, 5.6, 6.2, 3.0), (VERSION_MIN, 0, 0, DATE_MIN)), width, whole_row=not rows)
     _gap(doc)
     for note in record["notes"]:
-        _run(doc.add_paragraph(), "- " + note, "small", 8.5)
-    _run(doc.add_paragraph(), "These pages are produced by the platform from the document's sign-off, signature and audit data. They are not edited by hand.", "quote", 8.5)
+        _run(_flat(doc.add_paragraph()), "- " + note, "small", 8.5)
+    _run(_flat(doc.add_paragraph()), PRODUCED, "quote", 8.5)
     if stamp:
-        _run(doc.add_paragraph(), foot_text(record), "small", 8.5)
+        _run(_flat(doc.add_paragraph()), foot_text(record), "small", 8.5)
     if trailing_break:
         doc.add_page_break()
 

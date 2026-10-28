@@ -857,6 +857,47 @@ def test_the_pages_are_as_wide_as_the_text_of_the_section_they_land_in_and_never
             assert p.runs[0].bold and p.paragraph_format.keep_with_next
 
 
+def test_the_pages_say_their_own_indents_spacing_and_cell_padding_whatever_the_documents_normal_style_says():
+    """The CFSB policies' Normal style indents every paragraph 0.38 in (543 twips, hanging 10): the pages took it into every cell, and a
+    column two centimetres wide had room for "Versio" and "2026-10-" (and the heading stood further in than its table)."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Cm
+
+    def build(d):
+        normal = d.styles["Normal"].paragraph_format
+        normal.left_indent, normal.first_line_indent, normal.line_spacing = Cm(0.96), Cm(-0.02), 2.0
+        normal.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        cover(d)
+        d.add_page_break()
+        content(d)
+
+    data, _k, _block = placed(docx_of(build))
+    word = Document(io.BytesIO(data))
+    revision = table_starting(word, "Version", "Date", "Change type", "Summary of change", "Updated by")
+    approval = table_starting(word, "Version", "Reviewed by", "Approved by", "Approval date")
+    prepared = table_starting(word, "PREPARED BY")
+    mine = [p for t in (revision, approval, prepared) for r in t.rows for c in r.cells for p in c.paragraphs]
+    mine += [p for p in word.paragraphs if p.text in SECTIONS or p.text.startswith("These pages are produced")]
+    assert len(mine) > 20
+    for p in mine:
+        f = p.paragraph_format
+        assert (f.left_indent, f.right_indent, f.first_line_indent) == (0, 0, 0) and f.line_spacing == 1.0, p.text
+        assert p.alignment in (WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.RIGHT), p.text         # never the document's justified
+    for t in (revision, approval, prepared):
+        pr = t._tbl.tblPr
+        assert pr.find(W + "tblInd").get(W + "w") == "0"
+        assert {c.tag.split("}")[1]: c.get(W + "w") for c in pr.find(W + "tblCellMar")} == {"top": "29", "left": "115", "bottom": "29", "right": "115"}
+    order = [c.tag.split("}")[1] for c in revision._tbl.tblPr]
+    assert order.index("tblInd") < order.index("tblBorders") < order.index("tblLayout") < order.index("tblCellMar") < order.index("tblLook")      # Word's schema order
+
+
+def test_the_closing_line_of_the_pages_says_where_they_come_from_and_nothing_more():
+    rec, images = fake()
+    assert "edited by hand" not in " ".join(pdf_pages(X.to_pdf(rec, images)))
+    assert [p.text for p in Document(io.BytesIO(X.to_docx(rec, images))).paragraphs if p.text.startswith("These pages are produced")] == [
+        "These pages are produced by the platform from the document's sign-off, signature and audit data."]
+
+
 def test_a_word_file_that_python_docx_cannot_open_raises_so_the_caller_serves_it_as_it_is():
     rec, images = fake()
     with pytest.raises(Exception):

@@ -198,11 +198,21 @@ export function SignoffSection(props: SectionProps) {
 }
 
 // ── Revision History and Approval History ───────────────────────────────────────────────────────────────────
-/** A table that scrolls inside its own block on a phone and takes the page's width on paper. */
+// below 640 px a table of five columns cannot be read: each row becomes a block of its own with every cell under its column's name
+// (the header row stays for a screen reader); on a tablet and on paper it is the table
+const STACKED = [
+  'max-sm:block max-sm:min-w-0 max-sm:[&_thead]:sr-only max-sm:[&_tbody]:block',
+  'max-sm:[&_tr]:mb-3 max-sm:[&_tr]:block max-sm:[&_tr]:border max-sm:[&_tr]:border-[#000]',
+  'max-sm:[&_td]:!flex max-sm:[&_td]:!gap-3 max-sm:[&_td]:!border-0 max-sm:[&_td]:!border-b max-sm:[&_td]:!border-[#9ca3af] max-sm:[&_td:last-child]:!border-b-0',
+  'max-sm:[&_td]:before:w-[6.5rem] max-sm:[&_td]:before:shrink-0 max-sm:[&_td]:before:font-bold max-sm:[&_td]:before:content-[attr(data-label)]',
+  'max-sm:[&_td>div]:min-w-0 max-sm:[&_td>div]:flex-1',
+].join(' ');
+
+/** A table that scrolls inside its own block when it must and takes the page's width on paper; on a phone, see STACKED. */
 function Table({ label, head, children }: { label: string; head: string[]; children: ReactNode }) {
   return (
     <div className="relative overflow-x-auto print:overflow-visible">
-      <table aria-label={label} className="w-full min-w-[34rem] border-collapse print:min-w-0">
+      <table aria-label={label} className={`w-full min-w-[34rem] border-collapse print:min-w-0 ${STACKED}`}>
         <thead>
           <tr>{head.map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}</tr>
         </thead>
@@ -210,6 +220,11 @@ function Table({ label, head, children }: { label: string; head: string[]; child
       </table>
     </div>
   );
+}
+
+/** A cell of such a table: its column's name for the stacked layout, its content in a block of its own. */
+function Td({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
+  return <td data-label={label} className={`${TD} ${className}`}><div>{children}</div></td>;
 }
 
 function Lines({ lines }: { lines: string[] }) {
@@ -228,14 +243,14 @@ function Revision({ record, heading }: SectionProps) {
         <Table label="Revision history" head={['Version', 'Date', 'Change type', 'Summary of change', 'Updated by']}>
           {revisions.map((r, i) => (
             <tr key={`${r.version}-${i}`} className={ROW}>
-              <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>
+              <Td label="Version" className="whitespace-nowrap print:whitespace-normal">
                 {r.version}
                 {r.mark && <span className="block text-[11px] italic">{r.mark}</span>}
-              </td>
-              <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{r.date}</td>
-              <td className={TD}>{r.changeType}</td>
-              <td className={`${TD} whitespace-pre-wrap`}>{r.summary}</td>
-              <td className={TD}>{r.updatedBy}</td>
+              </Td>
+              <Td label="Date" className="whitespace-nowrap print:whitespace-normal">{r.date}</Td>
+              <Td label="Change type">{r.changeType}</Td>
+              <Td label="Summary of change" className="whitespace-pre-wrap">{r.summary}</Td>
+              <Td label="Updated by">{r.updatedBy}</Td>
             </tr>
           ))}
         </Table>
@@ -243,13 +258,13 @@ function Revision({ record, heading }: SectionProps) {
       <h2 className={heading ? OWN_TITLE : DOC_TITLE}>Approval History</h2>
       <Table label="Approval history" head={['Version', 'Reviewed by', 'Approved by', 'Approval date']}>
         {approvals.length === 0 ? (
-          <tr className={ROW}><td colSpan={4} className={TD}>No version has been approved yet.</td></tr>
+          <tr className={ROW}><td colSpan={4} className={`${TD} max-sm:before:!hidden`}><div>No version has been approved yet.</div></td></tr>
         ) : approvals.map((a, i) => (
           <tr key={`${a.version}-${i}`} className={ROW}>
-            <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.version}</td>
-            <td className={TD}><Lines lines={a.reviewers} /></td>
-            <td className={TD}><Lines lines={a.approvers} /></td>
-            <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.date}</td>
+            <Td label="Version" className="whitespace-nowrap print:whitespace-normal">{a.version}</Td>
+            <Td label="Reviewed by"><Lines lines={a.reviewers} /></Td>
+            <Td label="Approved by"><Lines lines={a.approvers} /></Td>
+            <Td label="Approval date" className="whitespace-nowrap print:whitespace-normal">{a.date}</Td>
           </tr>
         ))}
       </Table>
