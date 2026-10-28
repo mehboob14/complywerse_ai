@@ -346,7 +346,7 @@ def test_a_stage_is_a_title_bar_over_a_grid_of_two_columns_one_cell_for_each_per
         mid = page.rect.width / 2
         at = {n: page.search_for(f"Person {n}")[0] for n in (1, 2, 3)}                 # the grid comes before the history tables on the page
         assert at[1].x1 < mid < at[2].x0 and abs(at[1].y0 - at[2].y0) < 2               # two to a row ...
-        assert at[3].y0 > at[1].y0 + 40 and at[3].x1 < mid                              # ... the third begins the next
+        assert at[3].y0 > at[1].y0 + 40 and at[3].x0 < mid < at[3].x1                   # ... the third has the next row to itself, across it (no empty half)
         bar = page.search_for("STAGE 1 — REVIEWED BY")[0]
         assert bar.y1 < at[1].y0
         pictures = sorted((i["bbox"] for i in page.get_image_info()), key=lambda b: (round(b[1]), b[0]))
@@ -428,6 +428,109 @@ def test_the_revision_and_approval_history_tables_read_as_the_banks_do():
     rec["approval_history"] = []
     assert "No version has been approved yet." in "\n".join(pdf_pages(X.to_pdf(rec, {})))
     assert "No version has been approved yet." in "\n".join(cell_texts(Document(io.BytesIO(X.to_docx(rec, {})))))
+
+
+SECTIONS = ["Document Description", "Review and Approval", "Revision History", "Approval History"]
+
+
+def title_sizes(data, titles=SECTIONS):
+    """The size each title is printed at in a PDF (the first line of its own that says it)."""
+    sizes = {}
+    with fitz.open(stream=data, filetype="pdf") as pdf:
+        for page in pdf:
+            for block in page.get_text("dict")["blocks"]:
+                for line in block.get("lines", []):
+                    said = "".join(s["text"] for s in line["spans"]).strip()
+                    if said in titles and said not in sizes:
+                        sizes[said] = round(line["spans"][0]["size"], 1)
+    return sizes
+
+
+def table_starting(word, *first_row):
+    """The table of a Word document whose first row says ``first_row`` (a merged cell once)."""
+    from docx.table import _Cell
+
+    for table in word.tables:
+        if [_Cell(tc, table).text for tc in table._tbl.tr_lst[0].tc_lst] == list(first_row):
+            return table
+    raise AssertionError(f"no table starts with {first_row}")
+
+
+def test_the_four_sections_are_titled_alike_in_the_pdf_and_in_the_word_file():
+    rec, images = fake(stages=1, per=2)
+    sizes = title_sizes(X.to_pdf(rec, images))
+    assert set(sizes) == set(SECTIONS) and len(set(sizes.values())) == 1, sizes            # Approval History is no smaller than the rest
+    word = Document(io.BytesIO(X.to_docx(rec, images)))
+    runs = {p.text: [(r.font.size.pt, r.bold) for r in p.runs] for p in word.paragraphs if p.text in SECTIONS}
+    assert set(runs) == set(SECTIONS) and len({tuple(v) for v in runs.values()}) == 1, runs
+    assert all(bold for v in runs.values() for _size, bold in v)
+
+
+def test_prepared_by_is_one_whole_cell_with_no_empty_half_in_both_files():
+    rec, images = fake(stages=1, per=2)
+    word = Document(io.BytesIO(X.to_docx(rec, images)))
+    prepared = table_starting(word, "PREPARED BY")
+    assert [tc.grid_span for tr in prepared._tbl.tr_lst for tc in tr.tc_lst] == [4, 4]       # the bar and the cell under it, each across the table
+    assert prepared.rows[1].cells[0].text.startswith("Olivia Owner")
+    with fitz.open(stream=X.to_pdf(rec, images), filetype="pdf") as pdf:
+        page = pdf[0]
+        line = page.search_for("Version 1.0 prepared 2026-10-01 09:00 UTC")[0]
+        assert abs((line.x0 + line.x1) / 2 - page.rect.width / 2) < 4                         # centred on the page, not in the left half
+
+
+def test_a_person_alone_in_the_last_row_of_a_stage_has_the_whole_row_in_the_word_file():
+    rec, images = fake(stages=1, per=3)
+    grid = table_starting(Document(io.BytesIO(X.to_docx(rec, images))), "STAGE 1 — APPROVED BY · Stage 1 name", "Complete · 3 of 3 signed")
+    assert [[tc.grid_span for tc in tr.tc_lst] for tr in grid._tbl.tr_lst] == [[3, 1], [2, 2], [4]]       # the bar, a pair, the third across the table
+    assert "Person 3" in grid.rows[2].cells[0].text                                                       # (the first paragraph of a cell holds its signature)
+    title, note = grid._tbl.tr_lst[0].tc_lst
+    assert title.find(f"{W}tcPr/{W}tcBorders/{W}right").get(W + "val") == "nil" and note.find(f"{W}tcPr/{W}tcBorders/{W}left").get(W + "val") == "nil"      # one band, no line between the title and its note
+    for tc in (title, note):
+        tags = [c.tag for c in tc.find(W + "tcPr")]
+        assert tags.index(W + "tcBorders") < tags.index(W + "shd")                                    # (Word's schema order)
+
+
+def test_nothing_approved_yet_is_one_line_across_the_whole_table_in_both_files():
+    rec, _images = fake()
+    rec["approval_history"] = []
+    word = Document(io.BytesIO(X.to_docx(rec, {})))
+    table = table_starting(word, "Version", "Reviewed by", "Approved by", "Approval date")
+    rows = table._tbl.tr_lst
+    assert len(rows) == 2 and [tc.grid_span for tc in rows[1].tc_lst] == [4]
+    assert table.rows[1].cells[0].text == "No version has been approved yet."
+    with fitz.open(stream=X.to_pdf(rec, {}), filetype="pdf") as pdf:
+        hit = [r for page in pdf for r in page.search_for("No version has been approved yet.")]
+        assert len(hit) == 1 and hit[0].height < 14                                          # one line, not a sentence broken in a narrow column
+
+
+def test_columns_keep_a_version_and_a_date_whole_on_a_narrow_page():
+    wide = X._columns(16.0, (2.2, 2.4, 2.8, 6.6, 3.0), (1.9, 2.2, 0, 0, 0))
+    assert wide == pytest.approx([16.0 * p / 17 for p in (2.2, 2.4, 2.8, 6.6, 3.0)])         # enough room: the proportions as they are
+    narrow = X._columns(10.0, (2.2, 2.4, 2.8, 6.6, 3.0), (1.9, 2.2, 0, 0, 0))
+    assert narrow[0] == pytest.approx(1.9) and narrow[1] == pytest.approx(2.2) and sum(narrow) == pytest.approx(10.0)
+    assert narrow[2:] == pytest.approx([5.9 * p / 12.4 for p in (2.8, 6.6, 3.0)])             # the others share what is left, in their proportions
+    assert X._columns(3.0, (2.2, 2.4), (1.9, 2.2)) == pytest.approx([3.0 * 2.2 / 4.6, 3.0 * 2.4 / 4.6])      # no room for both: as proportioned
+    for total in (4.0, 6.0, 8.0, 12.0, 20.0):
+        assert sum(X._columns(total, (2.2, 5.6, 6.2, 3.0), (1.9, 0, 0, 2.2))) == pytest.approx(total)
+
+
+def test_a_narrow_word_text_area_and_a_small_pdf_page_do_not_cut_a_version_or_a_date_in_two():
+    from docx.shared import Cm
+
+    rec, _images = fake()
+    doc = Document()
+    X._add_block(doc, rec, {}, Cm(9))
+    revision = table_starting(doc, "Version", "Date", "Change type", "Summary of change", "Updated by")
+    assert revision.columns[0].width >= Cm(1.9) * 0.99 and revision.columns[1].width >= Cm(2.2) * 0.99
+    approval = table_starting(doc, "Version", "Reviewed by", "Approved by", "Approval date")
+    assert approval.columns[0].width >= Cm(1.9) * 0.99 and approval.columns[3].width >= Cm(2.2) * 0.99
+    assert sum(c.width for c in revision.columns) == pytest.approx(Cm(9), abs=Cm(0.05))        # (a column's width is kept in twips)
+    small = fitz.open()
+    for _ in range(3):
+        small.new_page(width=419.5, height=595.3)                                              # A5: the control pages are made at this size
+    placed = X.place_in_pdf(small.tobytes(), rec, {})
+    with fitz.open(stream=placed, filetype="pdf") as pdf:
+        assert sum(len(page.search_for("2026-10-23")) for page in pdf) == 4                    # the description (2), the revision row and the approval row: each on one line
 
 
 def test_the_foot_of_the_pages_says_what_they_are_and_counts_only_themselves():

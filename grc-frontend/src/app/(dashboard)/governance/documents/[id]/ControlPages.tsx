@@ -32,6 +32,9 @@ const TH = `${CELL} !bg-transparent !text-left !font-bold`;
 const TD = `${CELL} font-normal break-words`;
 // (the dashboard stripes every other row of a table grey; a page of a document is plain)
 const ROW = '!bg-transparent print:break-inside-avoid';
+// the title over Approval History is the title of the section it belongs to: the page's own (when it brings one) or the look of the document's own headings
+const OWN_TITLE = 'mb-3 mt-6 text-[17px] font-bold text-[#000] print:break-after-avoid';
+const DOC_TITLE = 'mb-2 mt-5 font-sans text-xl font-semibold text-gray-900 print:break-after-avoid';
 const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 
 const UNAVAILABLE = 'The document control pages are not available right now.';
@@ -237,21 +240,19 @@ function Revision({ record, heading }: SectionProps) {
           ))}
         </Table>
       )}
-      <h3 className="mb-2 mt-6 text-[15px] font-bold text-[#000] print:break-after-avoid">Approval History</h3>
-      {approvals.length === 0 ? (
-        <Plain>No version has been approved yet.</Plain>
-      ) : (
-        <Table label="Approval history" head={['Version', 'Reviewed by', 'Approved by', 'Approval date']}>
-          {approvals.map((a, i) => (
-            <tr key={`${a.version}-${i}`} className={ROW}>
-              <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.version}</td>
-              <td className={TD}><Lines lines={a.reviewers} /></td>
-              <td className={TD}><Lines lines={a.approvers} /></td>
-              <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.date}</td>
-            </tr>
-          ))}
-        </Table>
-      )}
+      <h2 className={heading ? OWN_TITLE : DOC_TITLE}>Approval History</h2>
+      <Table label="Approval history" head={['Version', 'Reviewed by', 'Approved by', 'Approval date']}>
+        {approvals.length === 0 ? (
+          <tr className={ROW}><td colSpan={4} className={TD}>No version has been approved yet.</td></tr>
+        ) : approvals.map((a, i) => (
+          <tr key={`${a.version}-${i}`} className={ROW}>
+            <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.version}</td>
+            <td className={TD}><Lines lines={a.reviewers} /></td>
+            <td className={TD}><Lines lines={a.approvers} /></td>
+            <td className={`${TD} whitespace-nowrap print:whitespace-normal`}>{a.date}</td>
+          </tr>
+        ))}
+      </Table>
     </Page>
   );
 }

@@ -245,6 +245,14 @@ test('a control field that is missing falls back to the document\'s own', () => 
   assert.equal(Object.fromEntries(descriptionRows({ control, document }).map((r) => [r.label, r.value]))['Title'], 'Access Control Policy');
 });
 
+test('a classification stored as typed ("internal") is capitalised, as the Word and PDF pages print it', () => {
+  const row = (c: string | null, d: string | null) => descriptionRows({ control: { ...control, classification: c }, document: { ...document, classification: d } }).find((r) => r.label === 'Classification')?.value;
+  assert.equal(row('internal', null), 'Internal');
+  assert.equal(row(null, 'confidential'), 'Confidential');
+  assert.equal(row('Restricted', null), 'Restricted');
+  assert.equal(row(null, null), undefined);
+});
+
 test('a document type is said by its label, else made readable, else left out', () => {
   assert.equal(descriptionRows({ control: { ...control, type_label: null, type: 'standard' }, document }).find((r) => r.label === 'Document type')?.value, 'Standard');
   assert.equal(descriptionRows({ control: { ...control, type_label: null, type: null }, document: { ...document, type: null } }).find((r) => r.label === 'Document type'), undefined);

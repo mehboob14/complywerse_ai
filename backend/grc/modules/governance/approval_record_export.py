@@ -36,6 +36,7 @@ _DECIDED = {"signed": "Signed", "rejected": "Rejected", "changes_requested": "As
 SIGN_BOX = (5.2, 1.6)                          # cm: the room a drawn signature gets above its line
 NAMELESS = "Unknown"                           # a person is never printed without a name (the record never lists one, but a name can scrub to nothing)
 COMMENT_CHARS = 220
+VERSION_MIN, DATE_MIN = 1.9, 2.2               # cm: the narrowest a version or a date column gets on a narrow page, so "Version" and "2026-10-28" stay whole
 COVER_CHARS = 700                              # a first page with fewer characters of text than this is a cover
 COVER_SCAN = 40                                # a Word file's cover ends at a page boundary among its first elements
 MIME = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
@@ -198,6 +199,22 @@ def _grid_pairs(people: Sequence[Any]) -> List[List[Any]]:
     return [list(people[i:i + 2]) for i in range(0, len(people), 2)]
 
 
+def _columns(total: float, parts: Sequence[float], floors: Sequence[float]) -> List[float]:
+    """The widths of a table's columns: ``total`` shared in the proportions of ``parts``, but no column narrower than its floor (a
+    version number and a date must not be cut in two on a narrow page); the other columns give way. Same unit in and out."""
+    held: set = set()
+    while True:
+        free = [i for i in range(len(parts)) if i not in held]
+        rest = total - sum(floors[i] for i in held)
+        if not free or rest <= 0:                                           # no room to hold them all: as proportioned
+            return [total * p / sum(parts) for p in parts]
+        widths = [floors[i] if i in held else rest * parts[i] / sum(parts[j] for j in free) for i in range(len(parts))]
+        short = [i for i in free if widths[i] < floors[i]]
+        if not short:
+            return widths
+        held.update(short)
+
+
 # ── PDF ──────────────────────────────────────────────────────────────────────────
 def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = None, *, slots: Sequence[str] = SLOTS,
            titles: Optional[Mapping[str, Optional[str]]] = None, size: Optional[Tuple[float, float]] = None, first: int = 1,
@@ -227,7 +244,6 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
     small = ParagraphStyle("small", parent=base, fontSize=7.5, leading=9.5, textColor=grey)
     head = ParagraphStyle("head", parent=cell, fontName=bold)
     h1 = ParagraphStyle("h1", parent=base, fontName=bold, fontSize=14, leading=18, spaceBefore=14, spaceAfter=7, keepWithNext=1)
-    h2 = ParagraphStyle("h2", parent=base, fontName=bold, fontSize=12, leading=15, spaceBefore=14, spaceAfter=6, keepWithNext=1)
     lead_style = ParagraphStyle("lead", parent=base, fontName=bold, fontSize=18, leading=22, spaceAfter=6)
     centred = {"name": ParagraphStyle("name", parent=cell, fontName=bold, alignment=1, spaceBefore=2),
                "text": ParagraphStyle("ctext", parent=cell, alignment=1), "small": ParagraphStyle("csmall", parent=small, alignment=1),
@@ -238,16 +254,18 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
     def esc(value: Any) -> str:
         return html.escape(str(value if value is not None else "")).replace("\n", "<br/>")
 
-    def grid(data: List[List[Any]], widths: Sequence[float], header: bool = True) -> Table:
-        t = Table(data, colWidths=[w * avail / 17.0 for w in widths], repeatRows=1 if header else 0)
+    def grid(data: List[List[Any]], widths: Sequence[float], floors: Sequence[float], header: bool = True) -> Table:
+        t = Table(data, colWidths=_columns(avail, widths, floors), repeatRows=1 if header else 0)
         style = [("GRID", (0, 0), (-1, -1), 0.4, ink), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 3),
                  ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4)]
         t.setStyle(TableStyle(style + ([("BACKGROUND", (0, 0), (-1, 0), fill)] if header else [])))
         return t
 
+    def title(text: Optional[str]) -> List[Any]:
+        return [CondPageBreak(5 * cm), Paragraph(esc(text), h1)] if text else []
+
     def heading(slot: str) -> List[Any]:
-        t = SLOT_TITLE[slot] if titles is None else titles.get(slot)           # None: the part that goes under a heading the document has
-        return [CondPageBreak(5 * cm), Paragraph(esc(t), h1)] if t else []
+        return title(SLOT_TITLE[slot] if titles is None else titles.get(slot))         # None: the part that goes under a heading the document has
 
     def description() -> List[Any]:
         t = Table([[Paragraph(esc(k), head), Paragraph(esc(v), cell)] for k, v in description_rows(record)], colWidths=[5.0 * avail / 17.0, 12.0 * avail / 17.0])
@@ -258,8 +276,9 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
 
     inside = avail / 2 - 12                                            # the room in a cell of the signature grid
 
-    def person_cell(stage: Mapping[str, Any], p: Mapping[str, Any]) -> List[Any]:
-        """The drawn signature (or the empty line, with "Awaiting signature" on it) above its rule, then the printed lines."""
+    def person_cell(stage: Mapping[str, Any], p: Mapping[str, Any], room_wide: float = inside) -> List[Any]:
+        """The drawn signature (or the empty line, with "Awaiting signature" on it) above its rule, then the printed lines;
+        ``room_wide``: the width of the cell (a person alone in a row has the whole row)."""
         png = _ink(images, p)
         room = fit(png, SIGN_BOX) if png else None
         if png and room:
@@ -267,7 +286,7 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
         else:
             wait = p["decision"] in ("pending", "delegated")
             mark = Paragraph(esc("Awaiting signature") if wait else "&nbsp;", ParagraphStyle("wait", parent=centred["small"], textColor=light))
-        line = Table([["", mark, ""]], colWidths=[inside * 0.14, inside * 0.72, inside * 0.14], rowHeights=[1.75 * cm])
+        line = Table([["", mark, ""]], colWidths=[room_wide * 0.14, room_wide * 0.72, room_wide * 0.14], rowHeights=[1.75 * cm])
         line.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "CENTER"), ("VALIGN", (1, 0), (1, 0), "BOTTOM"), ("LINEBELOW", (1, 0), (1, 0), 0.6, ink),
                                   ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0),
                                   ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
@@ -278,8 +297,12 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
         data: List[List[Any]] = [[Paragraph(esc(stage_title(stage)), title_style), "", "", Paragraph(esc(stage_note(stage)), note_style)]]
         boxes: List[Any] = [("BOX", (0, 0), (-1, 0), 0.6, ink), ("BACKGROUND", (0, 0), (-1, 0), bar), ("SPAN", (0, 0), (2, 0))]
         for r, pair in enumerate(_grid_pairs(stage["people"]), start=1):
-            data.append([person_cell(stage, pair[0]), "", person_cell(stage, pair[1]) if len(pair) > 1 else "", ""])
-            boxes += [("SPAN", (0, r), (1, r)), ("SPAN", (2, r), (3, r)), ("BOX", (0, r), (1, r), 0.6, ink)] + ([("BOX", (2, r), (3, r), 0.6, ink)] if len(pair) > 1 else [])
+            if len(pair) == 1:                                           # alone in the last row: the whole row, not half of it and an empty half
+                data.append([person_cell(stage, pair[0], avail - 12), "", "", ""])
+                boxes += [("SPAN", (0, r), (3, r)), ("BOX", (0, r), (3, r), 0.6, ink)]
+                continue
+            data.append([person_cell(stage, pair[0]), "", person_cell(stage, pair[1]), ""])
+            boxes += [("SPAN", (0, r), (1, r)), ("SPAN", (2, r), (3, r)), ("BOX", (0, r), (1, r), 0.6, ink), ("BOX", (2, r), (3, r), 0.6, ink)]
         t = Table(data, colWidths=[avail * f for f in (0.25, 0.25, 0.12, 0.38)], repeatRows=1)
         t.setStyle(TableStyle(boxes + [("VALIGN", (0, 0), (-1, -1), "TOP"), ("VALIGN", (0, 0), (-1, 0), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 3),
                                        ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6)]))
@@ -290,8 +313,8 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
         prep = record["prepared_by"]
         made = [(prep["name"] or "-", "name")] + ([(prep["designation"], "text")] if prep.get("designation") else []) + [
             (f"Version {record['document']['version']} prepared {when(prep['at'])}" if prep.get("at") else f"Version {record['document']['version']}", "small")]
-        t = Table([[Paragraph("PREPARED BY", title_style), ""], [[Paragraph(esc(x), centred[s]) for x, s in made], ""]], colWidths=[avail / 2, avail / 2], repeatRows=1)
-        t.setStyle(TableStyle([("BOX", (0, 0), (-1, 0), 0.6, ink), ("BACKGROUND", (0, 0), (-1, 0), bar), ("BOX", (0, 1), (0, 1), 0.6, ink),
+        t = Table([[Paragraph("PREPARED BY", title_style)], [[Paragraph(esc(x), centred[s]) for x, s in made]]], colWidths=[avail], repeatRows=1)
+        t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, ink), ("LINEBELOW", (0, 0), (-1, 0), 0.6, ink), ("BACKGROUND", (0, 0), (-1, 0), bar),
                                ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("LEFTPADDING", (0, 0), (-1, -1), 6)]))
         out += [t, Spacer(1, 0.45 * cm)]
         if not record["stages"]:
@@ -306,12 +329,12 @@ def to_pdf(record: Mapping[str, Any], images: Optional[Mapping[int, bytes]] = No
         for version, released, date, kind, summary, by in revision_rows(record):
             mark = [Paragraph(esc(version), cell)] + ([Paragraph("In progress", small)] if not released else [])
             data.append([mark, Paragraph(esc(date), cell), Paragraph(esc(kind), cell), Paragraph(esc(summary), cell), Paragraph(esc(by), cell)])
-        out.append(grid(data, [2.2, 2.4, 2.8, 6.6, 3.0]))
-        out.append(Paragraph(esc(APPROVAL_TITLE), h2))
+        out.append(grid(data, [2.2, 2.4, 2.8, 6.6, 3.0], [VERSION_MIN * cm, DATE_MIN * cm, 0, 0, 0]))
+        out += title(APPROVAL_TITLE)
         rows = approval_rows(record)
         data = [[Paragraph(esc(h), head) for h in ("Version", "Reviewed by", "Approved by", "Approval date")]]
         data += [[Paragraph(esc(c), cell) for c in row] for row in rows] or [[Paragraph("No version has been approved yet.", cell), "", "", ""]]
-        t = grid(data, [2.2, 5.6, 6.2, 3.0])
+        t = grid(data, [2.2, 5.6, 6.2, 3.0], [VERSION_MIN * cm, 0, 0, DATE_MIN * cm])
         if not rows:
             t.setStyle(TableStyle([("SPAN", (0, 1), (-1, 1))]))
         out.append(t)
@@ -484,6 +507,20 @@ def _shade(cell, fill: str) -> None:
     cell._tc.get_or_add_tcPr().append(shd)
 
 
+def _no_edge(cell, *edges: str) -> None:
+    """No line on these sides of a cell ("left", "right"): a title bar and its note read as one band. Before ``_fill``/``_shade``, so the
+    cell's properties stay in the order Word's schema has them."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    borders = OxmlElement("w:tcBorders")
+    for edge in edges:
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "nil")
+        borders.append(el)
+    cell._tc.get_or_add_tcPr().append(borders)
+
+
 def _fill(cell, lines: Sequence[Tuple[str, str]], size: float = 8.5, shade: Optional[str] = None, align: Optional[str] = None, keep: bool = False) -> None:
     """The lines of a cell, each a paragraph (text, style): the style is one of _FONT; ``align``: "centre" or "right"."""
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -536,9 +573,11 @@ def _widths(table, fractions: Sequence[float], width) -> None:
         total.set(qn("w:w"), str(int(width / 635)))      # twips: 635 EMU each
 
 
-def _table(doc, headers: Optional[Sequence[str]], rows: Sequence[Sequence[Any]], fractions: Sequence[float], width, shade_first: bool = False) -> None:
+def _table(doc, headers: Optional[Sequence[str]], rows: Sequence[Sequence[Any]], fractions: Sequence[float], width, shade_first: bool = False,
+           whole_row: bool = False) -> None:
     """A table of ``rows`` (each cell a list of (text, style)) as wide as ``width``, under a shaded header row when ``headers`` are
-    given (it repeats on every page); the first column is shaded when ``shade_first``."""
+    given (it repeats on every page); the first column is shaded when ``shade_first``; ``whole_row``: its one row is a single cell
+    across the table (a line that says there is nothing to list, not a sentence in the narrow first column)."""
     table = doc.add_table(rows=(1 if headers else 0) + len(rows), cols=len(fractions))
     table.autofit = False
     _grid(table)
@@ -548,6 +587,9 @@ def _table(doc, headers: Optional[Sequence[str]], rows: Sequence[Sequence[Any]],
     for r, row in enumerate(rows, start=top):
         for c, value in enumerate(row):
             _fill(table.rows[r].cells[c], value, shade="F2F2F2" if shade_first and c == 0 else None)
+    if whole_row:
+        cells = table.rows[top].cells
+        cells[0].merge(cells[-1])
     _no_split(table, header=bool(headers))
     _widths(table, fractions, width)
 
@@ -591,20 +633,28 @@ def _person_cell(cell, stage: Mapping[str, Any], p: Mapping[str, Any], images: M
 
 
 def _signature_grid(doc, label: str, note: str, people: Sequence[Any], fill_person, width) -> None:
-    """A title bar (``label``, and ``note`` at its right) over a grid of bordered cells, two to a row, one for each of ``people``."""
+    """A title bar (``label``, and ``note`` at its right when there is one) over a grid of bordered cells, two to a row, one for each
+    of ``people``; a person alone in the last row has the whole row (as on the screen), not half of it and an empty half."""
     pairs = _grid_pairs(people)
     table = doc.add_table(rows=1 + len(pairs), cols=4)
     table.autofit = False
     _grid(table)
     bar = table.rows[0].cells
-    _fill(bar[0].merge(bar[2]), [(label, "bold")], size=9, shade="E0E0E0", keep=True)
-    _fill(bar[3], [(note, "small")], shade="E0E0E0", align="right", keep=True)
+    if note:
+        title = bar[0].merge(bar[2])
+        _no_edge(title, "right")
+        _no_edge(bar[3], "left")
+        _fill(title, [(label, "bold")], size=9, shade="E0E0E0", keep=True)
+        _fill(bar[3], [(note, "small")], shade="E0E0E0", align="right", keep=True)
+    else:
+        _fill(bar[0].merge(bar[3]), [(label, "bold")], size=9, shade="E0E0E0", keep=True)
     for r, pair in enumerate(pairs, start=1):
         row = table.rows[r].cells
+        if len(pair) == 1:
+            fill_person(row[0].merge(row[3]), pair[0])
+            continue
         for c, (a, b) in enumerate(((0, 1), (2, 3))):
-            merged = row[a].merge(row[b])
-            if c < len(pair):
-                fill_person(merged, pair[c])
+            fill_person(row[a].merge(row[b]), pair[c])
     _no_split(table, header=True)
     _widths(table, _GRID, width)
     _gap(doc)
@@ -616,16 +666,20 @@ def _add_block(doc, record: Mapping[str, Any], images: Mapping[int, bytes], widt
     grids (a title bar over two columns of bordered cells, each a person: the drawn signature over a rule, then the name,
     designation, what they did and when) and the Revision and Approval History tables. ``lead_break``: they begin on a new page
     of their own; ``trailing_break``: what follows them does; ``stamp``: their last line says by what and when they were made."""
-    from docx.shared import Pt
+    from docx.shared import Cm
 
     record = scrub(record)
     first = [True]
 
-    def heading(text: str, size: float = 14) -> None:
-        p = _title(doc, text, size)
+    def heading(text: str) -> None:
+        p = _title(doc, text)
         if first[0] and lead_break:
             p.paragraph_format.page_break_before = True
         first[0] = False
+
+    def fractions(parts: Sequence[float], floors: Sequence[float]) -> List[float]:
+        """The columns of a table as parts of the text width, a version and a date never narrower than they can be read."""
+        return [c / width for c in _columns(float(width), parts, [Cm(f) if f else 0 for f in floors])]
 
     heading(SLOT_TITLE["description"])
     _table(doc, None, [[[(k, "bold")], [(v, "plain")]] for k, v in description_rows(record)], (5 / 17, 12 / 17), width, shade_first=True)
@@ -641,10 +695,12 @@ def _add_block(doc, record: Mapping[str, Any], images: Mapping[int, bytes], widt
     heading(SLOT_TITLE["revision"])
     rows = [[[(version, "plain")] + ([] if released else [("In progress", "small")]), [(date, "plain")], [(kind, "plain")], [(summary, "plain")], [(by, "plain")]]
             for version, released, date, kind, summary, by in revision_rows(record)]
-    _table(doc, ("Version", "Date", "Change type", "Summary of change", "Updated by"), rows, (2.2 / 17, 2.4 / 17, 2.8 / 17, 6.6 / 17, 3.0 / 17), width)
-    heading(APPROVAL_TITLE, 12)
-    rows = [[[(c, "plain")] for c in row] for row in approval_rows(record)] or [[[("No version has been approved yet.", "plain")], [], [], []]]
-    _table(doc, ("Version", "Reviewed by", "Approved by", "Approval date"), rows, (2.2 / 17, 5.6 / 17, 6.2 / 17, 3.0 / 17), width)
+    _table(doc, ("Version", "Date", "Change type", "Summary of change", "Updated by"), rows, fractions((2.2, 2.4, 2.8, 6.6, 3.0), (VERSION_MIN, DATE_MIN, 0, 0, 0)), width)
+    heading(APPROVAL_TITLE)
+    rows = [[[(c, "plain")] for c in row] for row in approval_rows(record)]
+    _table(doc, ("Version", "Reviewed by", "Approved by", "Approval date"), rows or [[[("No version has been approved yet.", "plain")], [], [], []]],
+           fractions((2.2, 5.6, 6.2, 3.0), (VERSION_MIN, 0, 0, DATE_MIN)), width, whole_row=not rows)
+    _gap(doc)
     for note in record["notes"]:
         _run(doc.add_paragraph(), "- " + note, "small", 8.5)
     _run(doc.add_paragraph(), "These pages are produced by the platform from the document's sign-off, signature and audit data. They are not edited by hand.", "quote", 8.5)

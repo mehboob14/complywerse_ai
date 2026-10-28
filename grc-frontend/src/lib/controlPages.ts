@@ -160,12 +160,13 @@ export function descriptionRows(rec: Partial<Pick<ApprovalRecord, 'control' | 'd
     return t === NONE ? '' : t;
   };
   const type = c?.type_label ? text(c.type_label) : c?.type || d?.type ? typeLabel(first(c?.type, d?.type)) : '';
+  const classification = first(c?.classification, d?.classification);          // stored as typed ("internal"); the Word and PDF pages print it capitalised
   const rows: Array<[string, string, boolean]> = [
     ['Title', first(c?.title, d?.title), true],
     ['Document code', first(c?.code, d?.code), false],
     ['Version', first(c?.version, d?.version), true],
     ['Document type', type, false],
-    ['Classification', first(c?.classification, d?.classification), false],
+    ['Classification', classification ? typeLabel(classification) : '', false],
     ['Ownership', first(c?.ownership), false],
     ['Owner', first(c?.owner, d?.owner), false],
     ['Department', first(c?.department, d?.department), false],
