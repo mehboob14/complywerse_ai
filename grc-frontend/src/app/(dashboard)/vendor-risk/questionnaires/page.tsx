@@ -6,6 +6,7 @@ import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { absoluteLink, portalApi } from '../_lib/portalApi';
 import { listOptions, useModuleSettings } from '@/components/settings/CustomFields';
 import {
   ClipboardList,
@@ -90,7 +91,8 @@ interface QuestionnaireResponseRecord {
   respondent_email: string | null;
   responses: Record<string, unknown>;
   status: string;
-  token: string | null;               // null once accepted: the vendor's link is closed
+  token: string | null;               // null once accepted, and on personal links (the contact has the link)
+  contact_id?: number | null;         // the supplier contact its personal links go to
   expires_at: string | null;
   due_date?: string | null;
   submitted_at: string | null;
@@ -197,13 +199,19 @@ export default function VendorQuestionnairesPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:questionnaires:create');
   const canDelete = hasPermission('vendor_risk:questionnaires:delete');
+  const canEditVendors = hasPermission('vendor_risk:vendors:edit');     // personal links are issued on the supplier
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<QuestionnaireTemplate | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sendSuccess, setSendSuccess] = useState<{ token: string } | null>(null);
+  // A send emails the contact a personal link, shown here once.
+  const [sendSuccess, setSendSuccess] = useState<{
+    link: string | null; emailed: boolean; contact: { name: string; email: string | null } | null; vendorId: number;
+  } | null>(null);
+  // '' = the supplier's primary contact, 'new' = someone typed in now, else a contact's id ('record': the supplier record's).
+  const [sendContact, setSendContact] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponseRecord | null>(null);
 
@@ -284,6 +292,18 @@ export default function VendorQuestionnairesPage() {
     ...TPRM_QUERY_OPTS,
   });
 
+  // Who at the supplier it can go to: contacts a personal link can reach.
+  const { data: vendorContacts } = useQuery({
+    queryKey: ['tprm-contacts', Number(sendForm.vendor_id), false],
+    queryFn: async () => (await portalApi.contacts(Number(sendForm.vendor_id))).data.items,
+    enabled: !!sendForm.vendor_id,
+    ...TPRM_QUERY_OPTS,
+  });
+  const reachableContacts = (vendorContacts || []).filter((c) => c.email && c.portal_access && !c.archived_at);
+  const primaryContact = reachableContacts.find((c) => c.is_primary);
+  const contactChoice = sendContact || (primaryContact ? String(primaryContact.id ?? 'record')
+    : reachableContacts[0] ? String(reachableContacts[0].id ?? 'record') : 'new');
+
   const { data: questionnaireResponses } = useQuery({
     queryKey: ['questionnaire-responses'],
     queryFn: async () => {
@@ -344,23 +364,36 @@ export default function VendorQuestionnairesPage() {
     },
   });
 
-  // A resend issues a new link; the old one stops working.
+  // A resend emails the contact a new personal link (copied here too); a link of the
+  // questionnaire's own, from before personal links, stops working.
   const resendMutation = useMutation({
     mutationFn: async (id: number) => (await vendorRiskApi.resendQuestionnaire(id)).data,
-    onSuccess: (data: { token?: string | null }) => {
+    onSuccess: (data: { token?: string | null; link?: string | null }) => {
       queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
-      if (data?.token) copyLink(buildQuestionnaireLink(data.token));
+      if (data?.link) copyLink(absoluteLink(data.link));
+      else if (data?.token) copyLink(buildQuestionnaireLink(data.token));
     },
+    onError: (e: any) => window.alert(e?.response?.data?.detail || 'The questionnaire could not be sent again.'),
+  });
+
+  // A questionnaire on personal links has no link of its own: a fresh one for its contact, to copy.
+  const copyContactLink = useMutation({
+    mutationFn: async (r: QuestionnaireResponseRecord) =>
+      `${absoluteLink((await portalApi.issueLink(r.vendor_id, r.contact_id as number, { send_email: false })).data.link)}?q=${r.id}`,
+    onSuccess: (link) => copyLink(link),
+    onError: (e: any) => window.alert(e?.response?.data?.detail || 'No link could be made.'),
   });
 
   const sendMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
+    mutationFn: async (data: Parameters<typeof vendorRiskApi.sendQuestionnaire>[0] & { contact_id?: number }) => {
       const res = await vendorRiskApi.sendQuestionnaire(data);
       return res.data;
     },
-    onSuccess: (data: any) => {
-      setSendSuccess({ token: data.token });
+    onSuccess: (data: any, sent) => {
+      setSendSuccess({ link: data.link ? absoluteLink(data.link) : null, emailed: !!data.emailed,
+                       contact: data.contact || null, vendorId: Number(sent.vendor_id) });
       queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
+      queryClient.invalidateQueries({ queryKey: ['tprm-contacts'] });
     },
   });
 
@@ -457,8 +490,10 @@ export default function VendorQuestionnairesPage() {
       template_id: selectedTemplateId,
       vendor_id: Number(sendForm.vendor_id),
       assessment_id: sendForm.assessment_id ? Number(sendForm.assessment_id) : undefined,
-      respondent_email: sendForm.respondent_email || undefined,
-      respondent_name: sendForm.respondent_name || undefined,
+      // Nothing named: the server sends it to the supplier's primary contact.
+      ...(contactChoice === 'new'
+        ? { respondent_email: sendForm.respondent_email || undefined, respondent_name: sendForm.respondent_name || undefined }
+        : contactChoice === 'record' ? {} : { contact_id: Number(contactChoice) }),
       due_in_days: sendForm.due_in_days,
       expires_in_days: Math.max(sendForm.expires_in_days, sendForm.due_in_days),
       ...(sendForm.certificate_mode !== 'off' && sendForm.certificate_evidence_id
@@ -840,17 +875,30 @@ export default function VendorQuestionnairesPage() {
                                 </a>
                               </>
                             )}
+                            {!responseLink && waitingOnVendor && response.contact_id && canEditVendors && (
+                              <button
+                                onClick={() => copyContactLink.mutate(response)}
+                                disabled={copyContactLink.isPending}
+                                aria-label={`Copy the contact's link for response #${response.id}`}
+                                className="p-1.5 text-gray-500 hover:text-gray-700 rounded disabled:opacity-50"
+                                title="Copy the contact's personal link"
+                              >
+                                <Copy className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            )}
                             {canCreate && waitingOnVendor && (
                               <button
                                 onClick={() => {
-                                  if (window.confirm('Send a new link? The current link stops working, and the new one is copied for you.')) {
+                                  if (window.confirm(response.token
+                                    ? 'Send a new link? The current link stops working, and the new one is copied for you.'
+                                    : 'Email the contact a new link? It is copied for you too.')) {
                                     resendMutation.mutate(response.id);
                                   }
                                 }}
                                 disabled={resendMutation.isPending}
                                 aria-label={`Send a new link for response #${response.id}`}
                                 className="p-1.5 text-gray-500 hover:text-primary-700 rounded disabled:opacity-50"
-                                title="Send a new link (the old one stops working)"
+                                title="Send a new link"
                               >
                                 {resendMutation.isPending && resendMutation.variables === response.id
                                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1328,8 +1376,8 @@ export default function VendorQuestionnairesPage() {
           setSendSuccess(null);
           setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
         }}
-        title="Generate vendor link"
-        subtitle="Mints a private response link — no email is sent automatically."
+        title="Send questionnaire"
+        subtitle="The contact is emailed a personal link to the supplier portal."
         width="w-full max-w-3xl"
         footer={
           sendSuccess ? (
@@ -1368,12 +1416,12 @@ export default function VendorQuestionnairesPage() {
                 {sendMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
+                    Sending...
                   </>
                 ) : (
                   <>
                     <LinkIcon className="h-4 w-4" strokeWidth={1.75} />
-                    Generate link
+                    Send
                   </>
                 )}
               </button>
@@ -1385,35 +1433,43 @@ export default function VendorQuestionnairesPage() {
           <div className="space-y-4">
             <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-center">
               <LinkIcon className="mx-auto mb-2 h-8 w-8 text-primary-600" strokeWidth={1.75} />
-              <p className="text-sm font-medium text-primary-800">Vendor link generated</p>
+              <p className="text-sm font-medium text-primary-800">
+                {!sendSuccess.link ? 'Questionnaire saved' : sendSuccess.emailed
+                  ? `Sent to ${sendSuccess.contact?.name || 'the contact'}` : 'Email not sent'}
+              </p>
               <p className="mt-1 text-xs text-primary-700">
-                No email is sent yet — copy this link and share it with the vendor.
+                {!sendSuccess.link ? (
+                  <>No contact to send it to. Add one under the supplier’s{' '}
+                    <Link href={`/vendor-risk/vendors/${sendSuccess.vendorId}?tab=portal`} className="font-medium underline">Supplier portal</Link> tab.</>
+                ) : sendSuccess.emailed ? sendSuccess.contact?.email : 'Copy the link and send it yourself.'}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Vendor response link</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={buildQuestionnaireLink(sendSuccess.token)}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className={`${inputClass} font-mono text-xs`}
-                />
-                <button
-                  type="button"
-                  onClick={() => copyLink(buildQuestionnaireLink(sendSuccess.token))}
-                  aria-label="Copy vendor response link"
-                  className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
-                >
-                  {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
-                  {linkCopied ? 'Copied' : 'Copy'}
-                </button>
+            {sendSuccess.link && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Personal link</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={sendSuccess.link}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className={`${inputClass} font-mono text-xs`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyLink(sendSuccess.link as string)}
+                    aria-label="Copy the personal link"
+                    className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
+                  >
+                    {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
+                    {linkCopied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Shown once. It opens the supplier’s portal, with this questionnaire, for 30 days.
+                </p>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">
-                The link is private to this vendor. Anyone with it can complete the questionnaire until it expires.
-              </p>
-            </div>
+            )}
           </div>
         ) : (
           <form id="send-questionnaire-form" onSubmit={handleSendSubmit} className="space-y-4">
@@ -1426,16 +1482,16 @@ export default function VendorQuestionnairesPage() {
                   selectedValues={sendForm.vendor_id ? [sendForm.vendor_id] : []}
                   onApply={(values) => {
                     const vendorId = values[0] || '';
-                    const v = (vendors ?? []).find((x) => String(x.id) === vendorId);
                     const vendorAssessments = (assessments || []).filter(
                       (item) => String(item.vendor_id) === vendorId
                     );
+                    setSendContact('');                // the new supplier's primary contact, unless changed
                     setSendForm({
                       ...sendForm,
                       vendor_id: vendorId,
                       assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
-                      respondent_email: v?.primary_contact_email || sendForm.respondent_email,
-                      respondent_name: v?.primary_contact_name || sendForm.respondent_name,
+                      respondent_email: '',
+                      respondent_name: '',
                     });
                   }}
                   multiSelect={false}
@@ -1470,26 +1526,45 @@ export default function VendorQuestionnairesPage() {
                   placeholder={sendForm.vendor_id ? 'No linked assessment' : 'Select vendor first'}
                 />
               </div>
-              <div>
-                <label className={labelClass}>Respondent Name</label>
-                <input
-                  type="text"
-                  value={sendForm.respondent_name}
-                  onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
-                  className={inputClass}
-                  placeholder="Vendor contact name"
-                />
+              <div className="md:col-span-2">
+                <label className={labelClass} htmlFor="send-contact">Send to</label>
+                <select id="send-contact" value={contactChoice} disabled={!sendForm.vendor_id}
+                  onChange={(e) => setSendContact(e.target.value)} className={inputClass}>
+                  {reachableContacts.map((c) => (
+                    <option key={c.id ?? 'record'} value={String(c.id ?? 'record')}>
+                      {c.name} · {c.email}{c.is_primary ? ' (primary)' : ''}
+                    </option>
+                  ))}
+                  <option value="new">New contact…</option>
+                </select>
               </div>
-              <div>
-                <label className={labelClass}>Respondent Email</label>
-                <input
-                  type="email"
-                  value={sendForm.respondent_email}
-                  onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
-                  className={inputClass}
-                  placeholder="vendor-contact@example.com"
-                />
-              </div>
+              {contactChoice === 'new' && (
+                <>
+                  <div>
+                    <label className={labelClass} htmlFor="send-new-name">Name</label>
+                    <input
+                      id="send-new-name"
+                      type="text"
+                      value={sendForm.respondent_name}
+                      onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
+                      className={inputClass}
+                      placeholder="Contact name"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="send-new-email">Email</label>
+                    <input
+                      id="send-new-email"
+                      type="email"
+                      required
+                      value={sendForm.respondent_email}
+                      onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
+                      className={inputClass}
+                      placeholder="contact@supplier.com"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label className={labelClass} htmlFor="send-due-days">Answers due in (days)</label>
                 <input

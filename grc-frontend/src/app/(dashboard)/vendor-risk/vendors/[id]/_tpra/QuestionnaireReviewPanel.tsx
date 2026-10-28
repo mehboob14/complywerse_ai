@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { absoluteLink, portalApi } from '../../../_lib/portalApi';
 import EvidencePanel from './EvidencePanel';
 
 interface QResponse {
   id: number; vendor_id: number; assessment_id: number | null; template_id: number | null;
   respondent_name: string | null; respondent_email: string | null;
-  responses: Record<string, unknown>; status: string; token: string;
+  // No token on personal links: the contact's link opens it.
+  responses: Record<string, unknown>; status: string; token: string | null; contact_id?: number | null;
   expires_at: string | null; submitted_at: string | null; created_at: string;
 }
 
@@ -58,9 +60,14 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
 
   const portalLink = (token: string) =>
     `${typeof window !== 'undefined' ? window.location.origin : ''}/vendor-risk/questionnaires/${token}`;
-  const copyLink = async (token: string) => {
-    try { await navigator.clipboard.writeText(portalLink(token)); toast({ type: 'success', title: 'Link copied', message: 'Share it with the vendor contact.' }); }
-    catch { toast({ type: 'error', title: 'Could not copy' }); }
+  // A questionnaire's own link (sent before personal links), or a fresh personal link for its contact.
+  const copyLink = async (r: QResponse) => {
+    try {
+      const link = r.token ? portalLink(r.token) : `${absoluteLink((await portalApi.issueLink(
+        vendorId, r.contact_id as number, { send_email: false })).data.link)}?q=${r.id}`;
+      await navigator.clipboard.writeText(link);
+      toast({ type: 'success', title: 'Link copied', message: 'Share it with the vendor contact.' });
+    } catch { toast({ type: 'error', title: 'Could not copy' }); }
   };
 
   const anyWaiting = responses.some((r) => r.status !== 'submitted' && !isExpired(r));
@@ -116,8 +123,12 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
                     </p>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
-                    <button onClick={() => copyLink(r.token)} title="Copy vendor link" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Copy className="h-3.5 w-3.5" /></button>
-                    <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><ExternalLink className="h-3.5 w-3.5" /></a>
+                    {(r.token || (r.contact_id && ['pending', 'in_progress', 'returned'].includes(r.status))) && (
+                      <button onClick={() => copyLink(r)} title="Copy vendor link" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Copy className="h-3.5 w-3.5" /></button>
+                    )}
+                    {r.token && (
+                      <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><ExternalLink className="h-3.5 w-3.5" /></a>
+                    )}
                   </div>
                 </div>
 
