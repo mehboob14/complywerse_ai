@@ -1,10 +1,11 @@
 // The rules of the hierarchical Requirements view (a framework whose journey carries `control_structure`, today UAE IA), in one place and
 // without React, so `node --test` checks them (requirementTree.test.ts): how the page's sections become family → sub-family → control
 // with the standard's own structure and each control's `parent_section`, what counts as compliant, which section starts open, which
-// sub-controls share a lead-in, how many are met, which artifact belongs to which sub-control, and how the open/closed state of the
-// tree lives (the person's clicks, kept for the session; a temporary layer while a search or filter is on). The components only draw it.
+// sub-controls share a lead-in, how many are met, which artifact, owner and file belongs to which sub-control (and the status that
+// follows from them), and how the open/closed state of the tree lives (the person's clicks, kept for the session; a temporary layer
+// while a search or filter is on). The components only draw it.
 import type {
-  CertificationControl, ControlStructure, ControlStructureFamily, ControlStructureSubfamily, EvidenceRequirement, SubControlNode,
+  CertificationControl, ControlEvidence, ControlStructure, ControlStructureFamily, ControlStructureSubfamily, EvidenceRequirement, SubControlNode,
 } from '../../../../../types/index.ts';
 
 // ─── The tree ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -323,6 +324,73 @@ export function placeCatalog<T extends { sub_controls?: string[] | null }>(
   }
   return { byCode, controlLevel };
 }
+
+// ─── Owners, files and status of one sub-control ─────────────────────────────────────────────────────────────────────────
+
+/** A person from the tenant's user list as the page holds it. */
+export interface UserRef { id: number; display_name?: string | null; username?: string | null; email?: string | null }
+export interface Owner { id: number; name: string }
+
+/** A person's name as the control modal's picker words it. */
+export const userName = (u: UserRef): string => u.display_name || u.username || u.email || `User ${u.id}`;
+
+/** The ids of a sub-control's owners. */
+export const ownerIdsOf = (node: Pick<SubControlNode, 'assigned_user_ids' | 'assignees'>): number[] =>
+  node.assigned_user_ids ?? (node.assignees ?? []).map((a) => a.id);
+
+/** The owners to show: the names the server resolved; when it sent ids only, the names from the user list (an id the list lacks stays "User 9"). */
+export function ownersOf(node: Pick<SubControlNode, 'assigned_user_ids' | 'assignees'>, users: readonly UserRef[]): Owner[] {
+  const resolved = node.assignees ?? [];
+  if (resolved.length > 0) return resolved.map((a) => ({ id: a.id, name: a.display_name || a.email || `User ${a.id}` }));
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return (node.assigned_user_ids ?? []).map((id) => {
+    const u = byId.get(id);
+    return { id, name: u ? userName(u) : `User ${id}` };
+  });
+}
+
+/** The files attached to this very sub-control: not the control's own, not another sub-control's. */
+export const attachmentsOf = (control: Pick<CertificationControl, 'evidence'>, node: Pick<SubControlNode, 'code'>): ControlEvidence[] =>
+  (control.evidence ?? []).filter((e) => e.sub_control_code === node.code);
+
+export interface EvidenceCount { approved: number; files: number; wanted: number }
+
+/** How far a sub-control's evidence is: its approved files against the evidence titles it recommends (a repeated title counts once). */
+export function evidenceCountOf(
+  control: Pick<CertificationControl, 'evidence'>,
+  node: Pick<SubControlNode, 'code' | 'evidence'>,
+): EvidenceCount {
+  const files = attachmentsOf(control, node);
+  return {
+    approved: files.filter((e) => e.review_status === 'approved').length,
+    files: files.length,
+    wanted: new Set((node.evidence ?? []).map(norm).filter(Boolean)).size,
+  };
+}
+
+/** "1 of 2 evidence" (never more approved than wanted); a sub-control that recommends nothing says how many files it holds; '' when there is nothing to say. */
+export function evidenceCountLabel({ approved, files, wanted }: EvidenceCount): string {
+  if (wanted > 0) return `${Math.min(approved, wanted)} of ${wanted} evidence`;
+  return files > 0 ? `${files} ${files === 1 ? 'file' : 'files'}` : '';
+}
+
+export type RowStatus = 'met' | 'progress';
+export const ROW_STATUS_LABEL: Record<RowStatus, string> = { met: 'Met', progress: 'In progress' };
+export const ROW_STATUS_TIP: Record<RowStatus, string> = { met: 'Ticked as met', progress: 'Has an owner or a file, not ticked yet' };
+
+/** Met when ticked; in progress when it is not but someone owns it or a file is attached; nothing otherwise. The tick stays the only source of "met". */
+export const rowStatus = (met: boolean, owners: number, files: number): RowStatus | null => (met ? 'met' : owners > 0 || files > 0 ? 'progress' : null);
+
+/** How many of a control's sub-controls hold at least one file of their own. */
+export function subControlsWithEvidence(control: Pick<CertificationControl, 'sub_control_tree' | 'evidence'>): number {
+  const tagged = new Set((control.evidence ?? []).map((e) => e.sub_control_code).filter(Boolean));
+  return (control.sub_control_tree ?? []).filter((n) => tagged.has(n.code)).length;
+}
+
+const REVIEW_LABEL: Record<string, string> = { approved: 'Approved', rejected: 'Rejected', pending: 'Pending' };
+
+/** A file's review status as the control modal words it (capitalised); anything unknown reads as pending. */
+export const reviewLabel = (status: string | null | undefined): string => REVIEW_LABEL[status ?? ''] ?? 'Pending';
 
 // ─── Words ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 

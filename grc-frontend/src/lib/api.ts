@@ -1176,6 +1176,11 @@ export const certificationsApi = {
     apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/assign`, {
       assigned_user_ids: userIds,
     }),
+  // The owners of one sub-control (a framework with `control_structure`); the code is the sub-control's, e.g. "M1.1.1.2".
+  assignSubControl: (journeyId: number, controlId: number, code: string, userIds: number[]) =>
+    apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/sub-controls/${encodeURIComponent(code)}/assign`, {
+      assigned_user_ids: userIds,
+    }),
   getTenantUsers: () =>
     apiClient.get<Array<{ id: number; username: string; display_name: string; email: string }>>(
       '/certifications/meta/tenant-users'

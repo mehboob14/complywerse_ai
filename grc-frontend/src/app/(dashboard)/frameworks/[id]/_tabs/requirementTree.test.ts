@@ -3,11 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { CertificationControl, ControlStructure, EvidenceRequirement, SubControlNode } from '../../../../../types/index.ts';
+import type { CertificationControl, ControlEvidence, ControlStructure, EvidenceRequirement, SubControlNode } from '../../../../../types/index.ts';
 import {
-  OTHER_BAND_NAME, applicabilityTip, buildTree, controlEvidenceOf, defaultLayer, evidenceChips, evidenceOf, focusLayer, initialState, isMet, isOpen,
-  isTickable, isTier, keyOf, leadInGroups, locate, parseLayer, placeCatalog, priorityTip, progress, setAll, statusOf, subControlsOf, toggled,
-  totalProgress, treeControls, type OpenState,
+  OTHER_BAND_NAME, ROW_STATUS_LABEL, ROW_STATUS_TIP, applicabilityTip, attachmentsOf, buildTree, controlEvidenceOf, defaultLayer, evidenceChips, evidenceCountLabel,
+  evidenceCountOf, evidenceOf, focusLayer, initialState, isMet, isOpen, isTickable, isTier, keyOf, leadInGroups, locate, ownerIdsOf, ownersOf, parseLayer,
+  placeCatalog, priorityTip, progress, reviewLabel, rowStatus, setAll, statusOf, subControlsOf, subControlsWithEvidence, toggled, totalProgress, treeControls,
+  userName, type OpenState,
 } from './requirementTree.ts';
 
 let n = 0;
@@ -426,6 +427,83 @@ test('a code is matched whole: M1.1.1 is not M1.1.1.1', () => {
   const { byCode, controlLevel } = placeCatalog([{ id: 1, sub_controls: ['M1.1.1.1'] }], ['M1.1.1', 'M1.1.1.10']);
   assert.deepEqual(byCode, {});
   assert.equal(controlLevel.length, 1);
+});
+
+// ── owners, files and status of one sub-control ─────────────────────────────────────────────────────────────────────────
+
+const file = (id: number, over: Partial<ControlEvidence> = {}): ControlEvidence =>
+  ({ id, file_name: `f${id}.pdf`, uploaded_at: '2026-10-29T08:00:00', review_status: 'pending', ...over });
+
+test('a person is named as the control modal\'s picker names them', () => {
+  assert.equal(userName({ id: 1, display_name: 'Olivia Owner', username: 'olivia', email: 'o@x.test' }), 'Olivia Owner');
+  assert.equal(userName({ id: 2, display_name: '', username: 'rana', email: 'r@x.test' }), 'rana');
+  assert.equal(userName({ id: 3, email: 'u@x.test' }), 'u@x.test');
+  assert.equal(userName({ id: 4 }), 'User 4');
+});
+
+test('owners are the names the server resolved; with ids only, the names from the user list; an unknown id stays an id; none is none', () => {
+  const users = [{ id: 1, display_name: 'Olivia Owner', email: 'o@x.test' }, { id: 2, display_name: null, username: 'rana', email: 'r@x.test' }, { id: 3, email: 'u@x.test' }];
+  const resolved = sub({
+    assigned_user_ids: [2, 1],
+    assignees: [{ id: 2, display_name: 'Rana K', email: 'r@x.test' }, { id: 1, display_name: 'Olivia Owner', email: 'o@x.test' }],
+  });
+  assert.deepEqual(ownersOf(resolved, []), [{ id: 2, name: 'Rana K' }, { id: 1, name: 'Olivia Owner' }]);               // the server's order and names
+  assert.deepEqual(ownersOf(sub({ assigned_user_ids: [2, 3, 9], assignees: [] }), users), [{ id: 2, name: 'rana' }, { id: 3, name: 'u@x.test' }, { id: 9, name: 'User 9' }]);
+  assert.deepEqual(ownersOf(sub(), users), []);                                                                         // the keys can be missing altogether
+  assert.deepEqual(ownersOf(sub({ assigned_user_ids: [], assignees: [] }), users), []);
+  assert.deepEqual(ownersOf(sub({ assignees: [{ id: 5, display_name: '', email: 'e@x.test' }] }), []), [{ id: 5, name: 'e@x.test' }]);
+  assert.deepEqual(ownerIdsOf(resolved), [2, 1]);
+  assert.deepEqual(ownerIdsOf(sub({ assignees: [{ id: 4, display_name: 'D', email: 'd@x.test' }] })), [4]);
+  assert.deepEqual(ownerIdsOf(sub()), []);
+});
+
+test('the files of a sub-control are those tagged with its code: not the control\'s own, not another one\'s, not a code that only starts the same', () => {
+  const control = ctl({
+    evidence: [file(1, { sub_control_code: 'M1.1.1.1' }), file(2), file(3, { sub_control_code: null }), file(4, { sub_control_code: 'M1.1.1.10' }), file(5, { sub_control_code: 'M1.1.1.1' })],
+  });
+  assert.deepEqual(attachmentsOf(control, sub({ code: 'M1.1.1.1' })).map((e) => e.id), [1, 5]);
+  assert.deepEqual(attachmentsOf(control, sub({ code: 'M1.1.1.2' })), []);
+  assert.deepEqual(attachmentsOf(ctl(), sub()), []);                                                                    // a payload without the list
+});
+
+test('the count is the approved files against the titles the sub-control recommends (a repeated title once), never more approved than wanted', () => {
+  const node = sub({ code: 'C.1', evidence: ['Register', 'register', 'Minutes', ''] });
+  const control = ctl({
+    evidence: [file(1, { sub_control_code: 'C.1', review_status: 'approved' }), file(2, { sub_control_code: 'C.1' }), file(3, { sub_control_code: 'C.2', review_status: 'approved' })],
+  });
+  const count = evidenceCountOf(control, node);
+  assert.deepEqual(count, { approved: 1, files: 2, wanted: 2 });
+  assert.equal(evidenceCountLabel(count), '1 of 2 evidence');
+  assert.equal(evidenceCountLabel({ approved: 3, files: 3, wanted: 2 }), '2 of 2 evidence');
+  assert.equal(evidenceCountLabel({ approved: 0, files: 0, wanted: 1 }), '0 of 1 evidence');
+  assert.equal(evidenceCountLabel({ approved: 1, files: 2, wanted: 0 }), '2 files');                                  // nothing recommended: the files it holds
+  assert.equal(evidenceCountLabel({ approved: 0, files: 1, wanted: 0 }), '1 file');
+  assert.equal(evidenceCountLabel({ approved: 0, files: 0, wanted: 0 }), '');
+  assert.deepEqual(evidenceCountOf(ctl(), sub({ evidence: undefined as never })), { approved: 0, files: 0, wanted: 0 });
+});
+
+test('a row is Met when ticked, In progress when it is not but has an owner or a file, and says nothing otherwise', () => {
+  assert.equal(rowStatus(true, 0, 0), 'met');
+  assert.equal(rowStatus(true, 2, 3), 'met');                                                                          // the tick wins
+  assert.equal(rowStatus(false, 1, 0), 'progress');
+  assert.equal(rowStatus(false, 0, 1), 'progress');
+  assert.equal(rowStatus(false, 0, 0), null);
+  assert.deepEqual([ROW_STATUS_LABEL.met, ROW_STATUS_LABEL.progress], ['Met', 'In progress']);
+  assert.deepEqual([ROW_STATUS_TIP.met, ROW_STATUS_TIP.progress], ['Ticked as met', 'Has an owner or a file, not ticked yet']);
+});
+
+test('a control counts the sub-controls that hold a file of their own', () => {
+  const control = ctl({
+    sub_control_tree: [sub({ code: 'C.1', number: 1 }), sub({ code: 'C.2', number: 2 }), sub({ code: 'C.3', number: 3 })],
+    evidence: [file(1, { sub_control_code: 'C.1' }), file(2, { sub_control_code: 'C.1' }), file(3), file(4, { sub_control_code: 'Z.9' })],
+  });
+  assert.equal(subControlsWithEvidence(control), 1);
+  assert.equal(subControlsWithEvidence(ctl()), 0);
+  assert.equal(subControlsWithEvidence(ctl({ evidence: [file(1, { sub_control_code: 'C.1' })] })), 0);                   // no tree: nothing to count them under
+});
+
+test('a file\'s review status in the control modal\'s words, capitalised; anything unknown reads as pending', () => {
+  assert.deepEqual(['approved', 'rejected', 'pending', '', null, undefined, 'weird'].map(reviewLabel), ['Approved', 'Rejected', 'Pending', 'Pending', 'Pending', 'Pending', 'Pending']);
 });
 
 // ── words ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

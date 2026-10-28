@@ -3038,6 +3038,9 @@ export default function CertificationJourneyPage() {
                               </div>
                             )}
                             <div className="flex items-center gap-2 flex-shrink-0">
+                              {ev.sub_control_code && (
+                                <span className="rounded bg-[#f3f6f8] px-1.5 py-0.5 font-mono text-[10px] text-[#5a6670]" title="Attached to this sub-control">{ev.sub_control_code}</span>
+                              )}
                               {ev.linked_evidence_id ? (
                                 <EvidenceMaturity evidenceId={ev.linked_evidence_id} refresh={['certification-controls']} />
                               ) : (

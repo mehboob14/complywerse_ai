@@ -628,6 +628,8 @@ export interface ControlEvidence {
   // Set when this control-evidence row points back at a row in the
   // central evidence library (used to deep-link to `/evidence/{id}`).
   linked_evidence_id?: number;
+  // The sub-control (a framework with `control_structure`, e.g. UAE IA) this file was attached to; null or absent: the control as a whole.
+  sub_control_code?: string | null;
 }
 
 // A printed point under a sub-control ("a.", "•"), as deep as the standard prints them.
@@ -651,6 +653,9 @@ export interface SubControlNode {
   points: PointNode[];
   evidence: string[];
   evidence_requirements?: EvidenceRequirement[];
+  // Who owns this sub-control: the same two fields as the control's own, kept per sub-control code.
+  assigned_user_ids?: number[];
+  assignees?: Array<{ id: number; display_name: string; email: string }>;
 }
 
 // `GET /certifications/{id}` → `control_structure`: the standard's families and sub-families (objective, indicators, threats).

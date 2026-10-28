@@ -1,14 +1,20 @@
 'use client';
 
 /**
- * The small marks of the hierarchical Requirements view: priority, applicability, an evidence recommendation, an artifact.
+ * The small marks of the hierarchical Requirements view: priority, applicability, an evidence recommendation, an artifact, and what a
+ * sub-control has of its own: its status, an owner, the review status of a file attached to it.
  * Fills and text are hex on purpose: the platform CSS repaints slate fills white and slate/emerald text to its own greys and greens
  * (PITFALLS 31, 100), which would make a chip that carries meaning look like every other. Sizes sit on <span>s, never on <button>s.
  */
 import { Check, FileText, Package, Plus } from 'lucide-react';
-import { applicabilityTip, isTier, priorityTip, type EvidenceChip } from './requirementTree';
+import { initialsOf } from '@/lib/people';
+import { ROW_STATUS_LABEL, ROW_STATUS_TIP, applicabilityTip, isTier, priorityTip, reviewLabel, type EvidenceChip, type RowStatus } from './requirementTree';
 
 export const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+
+// The buttons of a sub-control's tools (Assign, Upload / Save). Their words sit on a <span>: the platform sizes a <button>'s own text.
+export const MINI = `inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#d5dbe1] bg-[#fff] text-[#26323d] transition-colors hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS}`;
+export const MINI_PRIMARY = `inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#0f766e] bg-[#0f766e] px-3 text-[#fff] transition-colors hover:bg-[#0b5f58] disabled:cursor-not-allowed disabled:border-[#d5dbe1] disabled:bg-[#e8ecf0] disabled:text-[#5a6670] ${FOCUS}`;
 
 // A teal scale for P1 → P4 (the order to plan in, not how bad it is, so nothing here is amber or red).
 const TIER: Record<'P1' | 'P2' | 'P3' | 'P4', string> = {
@@ -81,5 +87,41 @@ export function ArtifactChipView({ name, type, created, onClick }: { name: strin
       {type && <span className="shrink-0 text-[10px] font-semibold uppercase leading-4 tracking-wide opacity-80">{type}</span>}
       {created ? <Check className="mt-0.5 h-3 w-3 shrink-0" aria-hidden /> : <Plus className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />}
     </button>
+  );
+}
+
+// Done is green, under way amber, turned down rose; the same three for a sub-control's status and for a file's review.
+const DONE = 'border-[#9fd0b8] bg-[#effaf4] text-[#14532d]';
+const DOING = 'border-[#ecd49a] bg-[#fff6e0] text-[#7a4a00]';
+const TURNED_DOWN = 'border-[#f0b6bd] bg-[#fdecee] text-[#8a1c2b]';
+const PILL = 'inline-flex shrink-0 items-center rounded-full border px-1.5 text-[10px] font-semibold leading-4';
+
+/** Met (ticked) or In progress (an owner or a file, not yet ticked); nothing for neither. */
+export function RowStatusChip({ status }: { status: RowStatus | null }) {
+  if (!status) return null;
+  return (
+    <span title={ROW_STATUS_TIP[status]} data-testid="subcontrol-status" data-status={status} className={`${PILL} ${status === 'met' ? DONE : DOING}`}>
+      {ROW_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+/** The review status of a file attached to a sub-control: Pending, Approved, Rejected. */
+export function ReviewChip({ status }: { status?: string | null }) {
+  const label = reviewLabel(status);
+  return (
+    <span data-testid="subcontrol-review" data-status={label.toLowerCase()} className={`${PILL} ${label === 'Approved' ? DONE : label === 'Rejected' ? TURNED_DOWN : DOING}`}>
+      {label}
+    </span>
+  );
+}
+
+/** An owner: initials and name. */
+export function OwnerChip({ name }: { name: string }) {
+  return (
+    <span title={name} data-testid="subcontrol-owner" className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#fff] py-0.5 pl-0.5 pr-2">
+      <span aria-hidden className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#d3efe8] text-[9px] font-semibold leading-none text-[#0b4f46]">{initialsOf(name)}</span>
+      <span className="min-w-0 truncate text-[11px] leading-4 text-[#26323d]">{name}</span>
+    </span>
   );
 }

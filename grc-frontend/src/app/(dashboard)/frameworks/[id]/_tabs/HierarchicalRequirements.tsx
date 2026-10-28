@@ -8,6 +8,8 @@
  * the page's requirement modal; ticks go through the page's own `toggleCriterion`, so a tick moves the control's status as before.
  * The look is the flat spine's (numbered circles on an emerald trunk, `rounded-xl` cards); geometry that the flat spine takes from
  * `h-12 w-12` (which the platform CSS shrinks to 2.5rem) is written out in px here so the trunk meets the circles and the arms.
+ * Below `sm` (a phone) there is no spine: the trunk, legs and arms are `max-sm:hidden`, the circle sits inline with the heading, and
+ * nothing is indented, so the text keeps the width. Those are `max-sm:` classes added to the ones above, which stay as they were from `sm` up.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Info } from 'lucide-react';
@@ -15,11 +17,13 @@ import type { CertificationControl, ControlStructure } from '@/types';
 import ControlDetail, { type PageUser } from './ControlDetail';
 import { ApplicabilityChip, FOCUS, PriorityChip } from './RequirementChips';
 import {
-  buildTree, focusLayer, initialState, isCompliant, isOpen, parseLayer, progress, setAll, statusOf, storageKey, toggled, totalProgress, treeControls,
+  buildTree, focusLayer, initialState, isCompliant, isOpen, parseLayer, progress, setAll, statusOf, storageKey, subControlsWithEvidence, toggled,
+  totalProgress, treeControls,
   type BandNode, type FamilyNode, type NodeKind, type OpenState, type SectionInput,
 } from './requirementTree';
 
 interface Ctx {
+  journeyId: number;
   open: (kind: NodeKind, key: string | number) => boolean;
   toggle: (kind: NodeKind, key: string | number) => void;
   criteriaState: Record<number, Record<string, boolean>>;
@@ -71,6 +75,7 @@ function ControlCard({ control, last, ctx }: { control: CertificationControl; la
   const isOpenNow = ctx.open('c', control.id);
   const panelId = domId('ctl', control.id);
   const { met, total } = progress(control, statusOf(control, ctx.criteriaState));
+  const withFiles = subControlsWithEvidence(control);
 
   const done = isCompliant(control.status);
   const isInProgress = control.status === 'in_progress';
@@ -83,8 +88,8 @@ function ControlCard({ control, last, ctx }: { control: CertificationControl; la
   return (
     <div data-testid="req-control" data-code={control.control_code} data-expanded={isOpenNow ? 'true' : 'false'} className="relative">
       {/* The lighter rail from the sub-family: a leg that carries on to the next card (or stops at the bend) and an arm to this one. */}
-      <div aria-hidden className="absolute -left-[14px] -top-2 w-[2px] bg-emerald-300" style={{ height: last ? 'calc(0.5rem + 1.45rem)' : 'calc(100% + 0.5rem)' }} />
-      <div aria-hidden className="absolute -left-[14px] top-[1.4rem] h-[2px] w-[14px] bg-emerald-300" />
+      <div aria-hidden className="absolute -left-[14px] -top-2 w-[2px] bg-emerald-300 max-sm:hidden" style={{ height: last ? 'calc(0.5rem + 1.45rem)' : 'calc(100% + 0.5rem)' }} />
+      <div aria-hidden className="absolute -left-[14px] top-[1.4rem] h-[2px] w-[14px] bg-emerald-300 max-sm:hidden" />
       <div className="rounded-xl border border-slate-200 bg-white transition-colors hover:border-emerald-300">
         <div className="flex items-stretch">
           <button
@@ -93,14 +98,14 @@ function ControlCard({ control, last, ctx }: { control: CertificationControl; la
             aria-controls={panelId}
             aria-label={`${isOpenNow ? 'Hide' : 'Show'} details of ${control.control_code}`}
             onClick={() => ctx.toggle('c', control.id)}
-            className={`flex w-8 shrink-0 items-center justify-center rounded-l-xl text-slate-500 hover:text-[#26323d] ${FOCUS}`}
+            className={`flex w-8 shrink-0 items-center justify-center rounded-l-xl text-slate-500 hover:text-[#26323d] max-sm:w-7 ${FOCUS}`}
           >
             <ChevronRight className={`h-4 w-4 transition-transform ${isOpenNow ? 'rotate-90' : ''}`} aria-hidden />
           </button>
           <button
             type="button"
             onClick={() => ctx.onOpenControl(control)}
-            className={`group min-w-0 flex-1 rounded-r-xl py-3 pl-1 pr-3 text-left ${FOCUS}`}
+            className={`group min-w-0 flex-1 rounded-r-xl py-3 pl-1 pr-3 text-left max-sm:pr-2 ${FOCUS}`}
           >
             <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span className="flex min-w-0 flex-1 basis-[13rem] items-center gap-3">
@@ -123,6 +128,7 @@ function ControlCard({ control, last, ctx }: { control: CertificationControl; la
                       {statusLabel}
                       {evidenceTotal > 0 && <> · {evidenceApproved}/{evidenceTotal} evidence approved</>}
                       {total > 0 && <> · <span data-testid="req-control-met">{met}/{total}</span> sub-controls met</>}
+                      {withFiles > 0 && <> · <span title="Sub-controls with a file of their own" data-testid="req-control-files">{withFiles}</span> with evidence</>}
                     </span>
                     <PriorityChip tier={control.priority_tier} />
                     <ApplicabilityChip text={control.applicability} />
@@ -139,6 +145,7 @@ function ControlCard({ control, last, ctx }: { control: CertificationControl; la
           <ControlDetail
             control={control}
             id={panelId}
+            journeyId={ctx.journeyId}
             criteriaState={ctx.criteriaState}
             onToggleCriterion={ctx.onToggleCriterion}
             frameworkLabel={ctx.frameworkLabel}
@@ -167,9 +174,9 @@ function BandSection({ band, last, ctx }: { band: BandNode; last: boolean; ctx: 
   return (
     <div data-testid="req-subfamily" data-subfamily={band.id} className="relative">
       {/* The trunk's branch to this band, as the flat spine draws one to each card. */}
-      <div aria-hidden className="absolute -left-[45.5px] top-0 w-[3px] rounded-full bg-emerald-600/80" style={{ height: last ? '1.2rem' : 'calc(100% + 0.5rem)' }} />
-      <div aria-hidden className="absolute -left-[45.5px] top-4 h-[3px] w-6 bg-emerald-600/80" />
-      <div aria-hidden className="absolute -left-5 top-[0.8rem] h-2 w-2 rounded-full border-2 border-emerald-600 bg-white" />
+      <div aria-hidden className="absolute -left-[45.5px] top-0 w-[3px] rounded-full bg-emerald-600/80 max-sm:hidden" style={{ height: last ? '1.2rem' : 'calc(100% + 0.5rem)' }} />
+      <div aria-hidden className="absolute -left-[45.5px] top-4 h-[3px] w-6 bg-emerald-600/80 max-sm:hidden" />
+      <div aria-hidden className="absolute -left-5 top-[0.8rem] h-2 w-2 rounded-full border-2 border-emerald-600 bg-white max-sm:hidden" />
       <div className="flex items-start gap-1 rounded-xl border border-emerald-200 bg-emerald-50/60 pr-1">
         <button
           type="button"
@@ -192,7 +199,7 @@ function BandSection({ band, last, ctx }: { band: BandNode; last: boolean; ctx: 
       </div>
       {about && hasMore && <StandardDetails id={aboutId} fields={fields} />}
       {isOpenNow && (
-        <div id={panelId} className="mt-2 space-y-2 pl-4 sm:pl-6">
+        <div id={panelId} className="mt-2 space-y-2 pl-4 sm:pl-6 max-sm:pl-0">
           {band.controls.map((control, i) => (
             <ControlCard key={control.id} control={control} last={i === band.controls.length - 1} ctx={ctx} />
           ))}
@@ -216,30 +223,31 @@ function FamilySection({ family, index, last, ctx }: { family: FamilyNode; index
   const hasMore = fields.some((f) => (f.text && f.text.trim()) || (f.items && f.items.length > 0));
 
   return (
-    <section data-testid="req-section" data-family={family.id ?? ''} className="relative pb-8 pl-16 last:pb-0">
-      {/* The trunk down to the next section; the last section's trunk is the branches of its own bands. */}
-      {!last && <div aria-hidden className="absolute left-[18.5px] top-10 h-[calc(100%-2.5rem)] w-[3px] rounded-full bg-emerald-600/80" />}
+    <section data-testid="req-section" data-family={family.id ?? ''} className="relative pb-8 pl-16 last:pb-0 max-sm:pl-0">
+      {/* The trunk down to the next section; the last section's trunk is the branches of its own bands. Below `sm` there is no spine:
+          the circle sits inline with the heading and everything under it uses the full width. */}
+      {!last && <div aria-hidden className="absolute left-[18.5px] top-10 h-[calc(100%-2.5rem)] w-[3px] rounded-full bg-emerald-600/80 max-sm:hidden" />}
       <div className="relative flex items-start gap-1">
-        {isOpenNow && last && <div aria-hidden className="absolute -bottom-3 left-[-45.5px] top-10 w-[3px] bg-emerald-600/80" />}
+        {isOpenNow && last && <div aria-hidden className="absolute -bottom-3 left-[-45.5px] top-10 w-[3px] bg-emerald-600/80 max-sm:hidden" />}
         <h3 className="min-w-0 flex-1">
           <button
             type="button"
             aria-expanded={isOpenNow}
             aria-controls={panelId}
             onClick={() => ctx.toggle('f', family.key)}
-            className={`relative -ml-16 flex w-[calc(100%+4rem)] items-start gap-3 rounded-xl pl-16 pr-2 text-left ${FOCUS}`}
+            className={`relative -ml-16 flex w-[calc(100%+4rem)] items-start gap-3 rounded-xl pl-16 pr-2 text-left max-sm:ml-0 max-sm:w-full max-sm:pl-0 ${FOCUS}`}
           >
             <span
-              className={`absolute left-0 top-0 z-10 grid h-10 w-10 place-items-center rounded-full border-[3px] bg-white text-sm font-semibold shadow-card ring-4 ring-white ${
+              className={`absolute left-0 top-0 z-10 grid h-10 w-10 place-items-center rounded-full border-[3px] bg-white text-sm font-semibold shadow-card ring-4 ring-white max-sm:relative max-sm:h-8 max-sm:w-8 max-sm:shrink-0 max-sm:text-xs ${
                 family.compliant > 0 ? 'border-emerald-600 text-emerald-700' : 'border-slate-400 text-slate-600'
               }`}
             >
               {family.id ?? index + 1}
             </span>
-            <span className="min-w-0 flex-1 pt-px">
+            <span className="min-w-0 flex-1 pt-px max-sm:pt-1.5">
               <span className="flex items-start gap-2">
-                <span className="min-w-0 break-words text-lg font-semibold leading-tight text-slate-900">{family.title}</span>
-                <ChevronRight className={`mt-1 h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpenNow ? 'rotate-90' : ''}`} aria-hidden />
+                <span className="min-w-0 break-words text-lg font-semibold leading-tight text-slate-900 max-sm:text-base max-sm:leading-tight">{family.title}</span>
+                <ChevronRight className={`mt-1 h-4 w-4 shrink-0 text-slate-500 transition-transform max-sm:mt-0.5 ${isOpenNow ? 'rotate-90' : ''}`} aria-hidden />
               </span>
               <span className="mt-0.5 block text-xs text-slate-500">
                 <span className="font-medium text-emerald-700">{family.compliant}</span> of {family.total} compliant
@@ -308,6 +316,7 @@ export default function HierarchicalRequirements({
   }, [focusControlId]);
 
   const ctx: Ctx = {
+    journeyId,
     open: (kind, key) => isOpen(state, filtersActive, kind, key),
     toggle: (kind, key) => setState((s) => toggled(s, filtersActive, kind, key)),
     criteriaState,
