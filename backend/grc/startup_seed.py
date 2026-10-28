@@ -1043,11 +1043,14 @@ def ensure_governance_dashboard_seed(db: Session, tenant_id: int, slug: str) -> 
     return out
 
 
-def ensure_vendor_risk_portfolio_seed(db: Session, tenant_id: int) -> dict:
-    """Seed TPRM portfolio + templates when a tenant has no vendors (powers dashboard tabs)."""
+def ensure_vendor_risk_portfolio_seed(db: Session, tenant_id: int, slug: str) -> dict:
+    """Seed the built-in TPRM templates when a tenant has no vendors, and the demo portfolio (13 made-up vendors, a year
+    of snapshots, each rolled into the Risk Register) only for the tenants in ``config.TPRM_DEMO_TENANTS``."""
+    from grc.config import TPRM_DEMO_TENANTS
     from grc.models import Vendor
     if db.query(Vendor.id).filter(Vendor.tenant_id == tenant_id).first():
         return {"seeded": False, "reason": "has_vendors"}
+    demo = "*" in TPRM_DEMO_TENANTS or (slug or "").lower() in TPRM_DEMO_TENANTS
     try:
         from grc.modules.vendor_risk.tpra.seed import seed_templates, seed_portfolio
         from grc.modules.vendor_risk.tpra.bootstrap import ensure_tpra_tenant_defaults
@@ -1058,7 +1061,7 @@ def ensure_vendor_risk_portfolio_seed(db: Session, tenant_id: int) -> dict:
         ensure_tpra_columns(db)
         ensure_tpra_tenant_defaults(db, tenant_id)
         templates = seed_templates(db, tenant_id)
-        portfolio = seed_portfolio(db, tenant_id, months=12)
+        portfolio = seed_portfolio(db, tenant_id, months=12) if demo else {"created": False, "reason": "not_a_demo_tenant"}
         db.commit()
         return {
             "seeded": bool(templates or portfolio.get("created")),
@@ -1233,7 +1236,7 @@ def ensure_startup_seed_data() -> dict:
             assessments = ensure_compliance_assessment_seed_data(db, tenant["id"])
             governance = ensure_governance_dashboard_seed(db, tenant["id"], slug)
             operational = ensure_operational_dashboard_seed(db, tenant["id"], slug)
-            vendor_risk = ensure_vendor_risk_portfolio_seed(db, tenant["id"])
+            vendor_risk = ensure_vendor_risk_portfolio_seed(db, tenant["id"], slug)
             kpi_history = ensure_kpi_trend_history_seed(db, tenant["id"])
             db.commit()
             if (catalog.get("seeded") or baseline.get("seeded") or assessments.get("seeded")
