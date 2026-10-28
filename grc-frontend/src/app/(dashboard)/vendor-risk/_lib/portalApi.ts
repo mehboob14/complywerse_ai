@@ -15,7 +15,7 @@ export interface SupplierContact {
 
 export interface PortalLink {
   id: number; contact: { id: number; name: string | null; email: string | null };
-  purpose: 'invite' | 'reminder' | 'request' | 'questionnaire';
+  purpose: 'invite' | 'reminder' | 'request' | 'questionnaire' | 'supplier_request' | 'message';
   created_at: string; created_by: string | null; expires_at: string; last_used_at: string | null; use_count: number;
   revoked_at: string | null; revoked_by: string | null; active: boolean;
 }

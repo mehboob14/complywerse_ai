@@ -1,11 +1,12 @@
 'use client';
 
 // The supplier portal's shared pieces: the home (the first page loaded records the
-// visit), the frame of its pages, and the screen for a link that no longer works, with
-// the form that asks for a new one. No sign-in: the personal link is the key.
+// visit), the frame of its pages, the screen for a link that no longer works, with
+// the form that asks for a new one, and a conversation with us. No sign-in: the
+// personal link is the key.
 
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Loader2, Lock, Mail } from 'lucide-react';
+import { Loader2, Lock, Mail, Send } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 
@@ -15,11 +16,31 @@ export interface PortalQuestionnaire {
   returned_questions: number; open: boolean;
 }
 
+export type RequestStatus = 'open' | 'submitted' | 'returned' | 'accepted' | 'cancelled';
+
+export interface PortalRequest {
+  id: number; kind: 'document' | 'finding' | 'information'; title: string; detail: string | null;
+  evidence_label: string | null; due_date: string | null; overdue: boolean; status: RequestStatus;
+  open: boolean;                                                  // the supplier can still work on it
+  requested_at: string; responded_at: string | null; review_note: string | null;
+  file_count?: number; unread?: number;                           // on the home
+}
+
+export interface PortalMessage { id: number; from_supplier: boolean; author: string | null; body: string; created_at: string }
+
 export interface PortalHome {
   organisation: { name: string | null }; supplier: { name: string }; contact: { name: string; email: string | null };
   expires_at: string; questionnaires: PortalQuestionnaire[];
-  requests: unknown[]; messages: { unread: number };            // filled by the next piece of work
+  requests: PortalRequest[];
+  messages: { unread: number; latest: PortalMessage[] };         // the supplier's own thread with us
 }
+
+export const REQUEST_KIND: Record<PortalRequest['kind'], string> = {
+  document: 'Document', information: 'Information', finding: 'Finding to fix',
+};
+export const REQUEST_STATUS: Record<RequestStatus, string> = {
+  open: 'To answer', returned: 'Returned to you', submitted: 'Sent', accepted: 'Accepted', cancelled: 'Withdrawn',
+};
 
 export const WAITING = ['pending', 'in_progress', 'returned'];
 const BUSY = 'Too many requests. Wait a few minutes and try again.';
@@ -44,6 +65,75 @@ export function problemOf(e: unknown): { gone: boolean; message: string } {
 
 export const day = (value: string | null | undefined) =>
   parseUtc(value)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '';
+
+/** A date with no time ("2026-11-30") as the day it names, wherever the reader is. */
+export const dateOnly = (value: string | null | undefined) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    .toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+};
+
+export const detailOf = (e: unknown, fallback = 'That did not go through. Try again.') => {
+  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  return typeof detail === 'string' ? detail : fallback;
+};
+
+/** The supplier's conversation with us: its own thread, or one request's. */
+export function Conversation({ token, requestId, initial }: { token: string; requestId?: number; initial: PortalMessage[] }) {
+  const [messages, setMessages] = useState(initial);
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const path = `/vendor-risk/portal/${encodeURIComponent(token)}/messages`;
+  const thread = requestId ? { subject_type: 'request', subject_id: requestId } : { subject_type: 'vendor' };
+
+  const send = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(path, { ...thread, body });
+      setMessages((await apiClient.get(path, { params: thread })).data.items as PortalMessage[]);
+      setBody('');
+    } catch (err) {
+      setError(detailOf(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {messages.length === 0 ? (
+        <p className="text-sm text-gray-600">No messages yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {messages.map((m) => (
+            <li key={m.id} className={`rounded-xl border px-3 py-2 ${m.from_supplier ? 'ml-6 border-primary-100 bg-primary-50' : 'mr-6 border-gray-200 bg-white'}`}>
+              <p className="text-xs text-gray-600">
+                <span className="font-medium text-gray-800">{m.author || (m.from_supplier ? 'You' : 'Us')}</span> · {day(m.created_at)}
+              </p>
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-900">{m.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={send} className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">
+          Write to us
+          <textarea rows={3} maxLength={8000} value={body} onChange={(e) => setBody(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100" />
+        </label>
+        <button type="submit" disabled={busy || !body.trim()}
+          className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send
+        </button>
+        {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+      </form>
+    </div>
+  );
+}
 
 export function Shell({ children }: { children: ReactNode }) {
   return (
