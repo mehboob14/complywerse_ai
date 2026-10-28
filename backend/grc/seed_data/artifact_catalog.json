@@ -10316,6 +10316,13 @@
         "owner": "CISO",
         "evidence": [
           "Approved information security policy"
+        ],
+        "sub_controls": [
+          "M1.2.1.1",
+          "M1.2.1.2",
+          "M1.2.1.3",
+          "M1.2.1.4",
+          "M1.2.1.5"
         ]
       },
       {
@@ -10331,6 +10338,12 @@
         "evidence": [
           "Documented information security objectives",
           "Objectives basis record"
+        ],
+        "sub_controls": [
+          "M1.2.2.1",
+          "M1.2.2.2",
+          "M1.2.2.3",
+          "M1.2.2.6"
         ]
       },
       {
@@ -10346,6 +10359,11 @@
         "evidence": [
           "Assignment of responsibility and authority",
           "Information Security Committee charter"
+        ],
+        "sub_controls": [
+          "M1.1.3.1",
+          "M1.1.3.2",
+          "M1.1.3.4"
         ]
       },
       {
@@ -10360,6 +10378,10 @@
         "owner": "CISO",
         "evidence": [
           "Communication plan"
+        ],
+        "sub_controls": [
+          "M1.3.2.1",
+          "M1.3.2.3"
         ]
       },
       {
@@ -10387,6 +10409,16 @@
           "External information sharing requirements",
           "Incident handling and reporting requirements",
           "Jurisdictional evidence requirements"
+        ],
+        "sub_controls": [
+          "M5.1.1.2",
+          "M5.1.1.3",
+          "M5.1.1.5",
+          "M5.1.4.2",
+          "M5.1.4.4",
+          "T3.2.1.6",
+          "T8.1.1.3",
+          "T8.2.7.1"
         ]
       },
       {
@@ -10408,6 +10440,16 @@
           "Risk treatment and monitoring strategy",
           "Risk assessment approach",
           "Level of detail decision"
+        ],
+        "sub_controls": [
+          "M2.1.1.1",
+          "M2.1.1.2",
+          "M2.1.1.3",
+          "M2.1.1.4",
+          "M2.1.1.5",
+          "M2.1.1.6",
+          "M2.1.1.7",
+          "M2.2.1.1"
         ]
       },
       {
@@ -10423,6 +10465,10 @@
         "evidence": [
           "Information asset inventory",
           "Asset ownership listing"
+        ],
+        "sub_controls": [
+          "T1.2.1.1",
+          "T1.2.1.3"
         ]
       },
       {
@@ -10438,6 +10484,11 @@
         "evidence": [
           "Risk identification results",
           "Risk owner assignments"
+        ],
+        "sub_controls": [
+          "M2.2.1.1",
+          "M2.2.1.2",
+          "M2.2.1.3"
         ]
       },
       {
@@ -10459,6 +10510,15 @@
           "Consequence assessment",
           "Likelihood assessment",
           "Risk analysis results"
+        ],
+        "sub_controls": [
+          "M2.2.2.1",
+          "M2.2.2.2",
+          "M2.2.2.3",
+          "M2.2.2.4",
+          "M2.2.3.1",
+          "M2.2.3.2",
+          "M2.2.3.3"
         ]
       },
       {
@@ -10474,6 +10534,9 @@
         "evidence": [
           "Risk treatment plan",
           "Treatment implementation schedule"
+        ],
+        "sub_controls": [
+          "M2.3.3.1"
         ]
       },
       {
@@ -10494,6 +10557,14 @@
           "Control exclusion justifications",
           "Entity-specific additional controls",
           "Control coverage in the Statement of Applicability"
+        ],
+        "sub_controls": [
+          "M2.3.2.2",
+          "M2.3.2.3",
+          "M2.3.4.1",
+          "M2.3.4.2",
+          "M2.3.4.3",
+          "M2.3.4.4"
         ]
       },
       {
@@ -10508,6 +10579,10 @@
         "owner": "CISO",
         "evidence": [
           "Approved supporting policy set"
+        ],
+        "sub_controls": [
+          "M1.2.3.1",
+          "M1.2.3.4"
         ]
       },
       {
@@ -10522,6 +10597,9 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Information classification scheme"
+        ],
+        "sub_controls": [
+          "T1.3.1.1"
         ]
       },
       {
@@ -10536,6 +10614,9 @@
         "owner": "CISO",
         "evidence": [
           "Approved cryptographic policy"
+        ],
+        "sub_controls": [
+          "T3.4.1.1"
         ]
       },
       {
@@ -10550,6 +10631,9 @@
         "owner": "Network Security Lead",
         "evidence": [
           "Approved network security policy"
+        ],
+        "sub_controls": [
+          "T4.1.1.1"
         ]
       },
       {
@@ -10564,6 +10648,10 @@
         "owner": "Physical Security Manager",
         "evidence": [
           "Approved physical and environmental security policy"
+        ],
+        "sub_controls": [
+          "T2.1.1.1",
+          "T2.1.1.2"
         ]
       },
       {
@@ -10578,6 +10666,9 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "Approved awareness and training program"
+        ],
+        "sub_controls": [
+          "M3.2.1.1"
         ]
       },
       {
@@ -10614,6 +10705,22 @@
           "Developer security training records",
           "Incident response training records",
           "Evidence handler competence records"
+        ],
+        "sub_controls": [
+          "M1.3.1.2",
+          "M1.3.1.3",
+          "M3.2.1.1",
+          "M3.2.1.2",
+          "M3.2.1.4",
+          "M3.3.3.1",
+          "M3.3.5.1",
+          "T3.2.2.4",
+          "T3.2.3.4",
+          "T3.4.4.3",
+          "T7.3.1.3",
+          "T8.2.3.1",
+          "T8.2.3.2",
+          "T8.2.7.2"
         ]
       },
       {
@@ -10628,6 +10735,9 @@
         "owner": "HR Director",
         "evidence": [
           "Standard information security terms and conditions"
+        ],
+        "sub_controls": [
+          "M4.1.2.1"
         ]
       },
       {
@@ -10642,6 +10752,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Minimum security configuration standards"
+        ],
+        "sub_controls": [
+          "T3.1.1.1"
         ]
       },
       {
@@ -10657,6 +10770,10 @@
         "evidence": [
           "Backup requirements",
           "Backup procedures"
+        ],
+        "sub_controls": [
+          "T3.1.7.1",
+          "T3.1.7.2"
         ]
       },
       {
@@ -10671,6 +10788,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Access provisioning and de-provisioning procedure"
+        ],
+        "sub_controls": [
+          "T5.2.2.1"
         ]
       },
       {
@@ -10689,6 +10809,15 @@
         "evidence": [
           "Third-party risk management procedure",
           "ICT supply chain security procedure"
+        ],
+        "sub_controls": [
+          "T6.2.1.1",
+          "T6.2.1.2",
+          "T6.2.1.3",
+          "T6.2.3.1",
+          "T6.2.3.2",
+          "T6.2.3.3",
+          "T6.2.3.4"
         ]
       },
       {
@@ -10704,6 +10833,10 @@
         "evidence": [
           "Application security requirements specification",
           "Requirements by application purpose"
+        ],
+        "sub_controls": [
+          "T7.2.1.1",
+          "T7.2.1.2"
         ]
       },
       {
@@ -10719,6 +10852,10 @@
         "evidence": [
           "Pre-production vulnerability assessment",
           "Production vulnerability scan results"
+        ],
+        "sub_controls": [
+          "T3.3.2.1",
+          "T3.3.2.2"
         ]
       },
       {
@@ -10733,6 +10870,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Privileged access register"
+        ],
+        "sub_controls": [
+          "T5.2.3.1"
         ]
       },
       {
@@ -10750,6 +10890,12 @@
           "Incident communication plan",
           "Incident response resources and capabilities",
           "Incident Response Team establishment"
+        ],
+        "sub_controls": [
+          "T8.2.1.1",
+          "T8.2.1.2",
+          "T8.2.1.4",
+          "T8.2.1.5"
         ]
       },
       {
@@ -10765,6 +10911,10 @@
         "evidence": [
           "Incident data collection requirements",
           "Incident documentation records"
+        ],
+        "sub_controls": [
+          "T8.2.5.1",
+          "T8.2.5.2"
         ]
       },
       {
@@ -10781,6 +10931,10 @@
           "Continuity objectives and ICT requirements",
           "ICT continuity organizational structure",
           "ICT continuity plans"
+        ],
+        "sub_controls": [
+          "T9.1.1.1",
+          "T9.1.1.3"
         ]
       },
       {
@@ -10795,6 +10949,9 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Compliance check results"
+        ],
+        "sub_controls": [
+          "M5.2.1.1"
         ]
       },
       {
@@ -10811,6 +10968,11 @@
           "Internal audit program",
           "Audit plan, criteria and scope",
           "Internal audit reports"
+        ],
+        "sub_controls": [
+          "M6.2.2.1",
+          "M6.2.2.4",
+          "M6.2.2.5"
         ]
       },
       {
@@ -10830,6 +10992,12 @@
           "Management review inputs",
           "Management review minutes",
           "Top management review of information security"
+        ],
+        "sub_controls": [
+          "M1.1.2.3",
+          "M1.1.2.9",
+          "M6.2.3.1",
+          "M6.2.3.2"
         ]
       },
       {
@@ -10851,6 +11019,13 @@
           "Corrective action implementation records",
           "Non-compliance tracking",
           "Test findings remediation tracker"
+        ],
+        "sub_controls": [
+          "M5.2.1.3",
+          "M6.3.1.1",
+          "M6.3.1.3",
+          "M6.3.1.5",
+          "T8.2.4.2"
         ]
       },
       {
@@ -10866,6 +11041,10 @@
         "evidence": [
           "Interested parties register",
           "Requirements of interested parties"
+        ],
+        "sub_controls": [
+          "M1.1.1.1",
+          "M1.1.1.2"
         ]
       },
       {
@@ -10882,6 +11061,11 @@
           "External context analysis",
           "Internal capabilities assessment",
           "Organization chart"
+        ],
+        "sub_controls": [
+          "M1.1.1.3",
+          "M1.1.1.4",
+          "M1.1.1.5"
         ]
       },
       {
@@ -10896,6 +11080,10 @@
         "owner": "CISO",
         "evidence": [
           "Policy coverage matrix"
+        ],
+        "sub_controls": [
+          "M1.2.3.2",
+          "M1.2.3.3"
         ]
       },
       {
@@ -10910,6 +11098,9 @@
         "owner": "CISO",
         "evidence": [
           "Information security budget and staffing plan"
+        ],
+        "sub_controls": [
+          "M1.3.1.1"
         ]
       },
       {
@@ -10924,6 +11115,10 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "Competence requirements for security roles"
+        ],
+        "sub_controls": [
+          "M1.3.1.2",
+          "M1.3.1.3"
         ]
       },
       {
@@ -10938,6 +11133,9 @@
         "owner": "CISO",
         "evidence": [
           "Authority and lead entity contact list"
+        ],
+        "sub_controls": [
+          "M1.3.2.2"
         ]
       },
       {
@@ -10952,6 +11150,18 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Document control procedure"
+        ],
+        "sub_controls": [
+          "M1.3.3.1",
+          "M1.3.3.2",
+          "M1.3.3.3",
+          "M1.3.3.4",
+          "M1.3.3.5",
+          "M1.3.3.6",
+          "M1.3.3.7",
+          "M1.3.3.8",
+          "M1.3.3.9",
+          "M1.3.3.10"
         ]
       },
       {
@@ -10966,6 +11176,13 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Controlled document register"
+        ],
+        "sub_controls": [
+          "M1.3.3.2",
+          "M1.3.3.3",
+          "M1.3.3.4",
+          "M1.3.3.7",
+          "M1.3.3.10"
         ]
       },
       {
@@ -10980,6 +11197,9 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Mandatory controls compliance record"
+        ],
+        "sub_controls": [
+          "M1.3.3.11"
         ]
       },
       {
@@ -10994,6 +11214,10 @@
         "owner": "Project Management Lead",
         "evidence": [
           "Project management procedure with security requirements"
+        ],
+        "sub_controls": [
+          "M1.3.4.1",
+          "M1.3.4.2"
         ]
       },
       {
@@ -11008,6 +11232,9 @@
         "owner": "CISO",
         "evidence": [
           "Special interest groups register"
+        ],
+        "sub_controls": [
+          "M1.3.5.1"
         ]
       },
       {
@@ -11022,6 +11249,9 @@
         "owner": "CISO",
         "evidence": [
           "Rules on what participants may share"
+        ],
+        "sub_controls": [
+          "M1.3.5.2"
         ]
       },
       {
@@ -11042,6 +11272,11 @@
           "Treatment option decisions",
           "Control selection record",
           "Risk-to-control traceability"
+        ],
+        "sub_controls": [
+          "M2.3.1.1",
+          "M2.3.2.1",
+          "M2.3.4.2"
         ]
       },
       {
@@ -11056,6 +11291,9 @@
         "owner": "Risk Manager",
         "evidence": [
           "Risk communication plan"
+        ],
+        "sub_controls": [
+          "M2.4.2.1"
         ]
       },
       {
@@ -11072,6 +11310,12 @@
           "Approved awareness and training policy",
           "Awareness and training objectives",
           "Provider and recipient role assignments"
+        ],
+        "sub_controls": [
+          "M3.1.1.1",
+          "M3.1.1.2",
+          "M3.1.1.3",
+          "M3.1.1.4"
         ]
       },
       {
@@ -11088,6 +11332,11 @@
           "Required information security skills",
           "Current skills assessment",
           "Skills gap analysis"
+        ],
+        "sub_controls": [
+          "M3.3.1.1",
+          "M3.3.1.2",
+          "M3.3.1.3"
         ]
       },
       {
@@ -11107,6 +11356,11 @@
           "Training solution per need",
           "Training implementation plan",
           "Updated training implementation plan"
+        ],
+        "sub_controls": [
+          "M3.3.2.1",
+          "M3.3.2.2",
+          "M3.3.3.3"
         ]
       },
       {
@@ -11123,6 +11377,11 @@
           "Awareness campaign scope",
           "Awareness campaign timeline",
           "Awareness campaign records"
+        ],
+        "sub_controls": [
+          "M3.4.1.1",
+          "M3.4.1.2",
+          "M3.4.1.6"
         ]
       },
       {
@@ -11137,6 +11396,9 @@
         "owner": "HR Director",
         "evidence": [
           "Background verification procedure"
+        ],
+        "sub_controls": [
+          "M4.1.1.1"
         ]
       },
       {
@@ -11151,6 +11413,9 @@
         "owner": "HR Director",
         "evidence": [
           "Formal disciplinary process"
+        ],
+        "sub_controls": [
+          "M4.2.2.1"
         ]
       },
       {
@@ -11165,6 +11430,9 @@
         "owner": "HR Director",
         "evidence": [
           "Security breach register"
+        ],
+        "sub_controls": [
+          "M4.2.2.4"
         ]
       },
       {
@@ -11183,6 +11451,10 @@
         "evidence": [
           "Asset return procedure",
           "Termination and change of employment procedure"
+        ],
+        "sub_controls": [
+          "M4.3.1.1",
+          "M4.3.2.1"
         ]
       },
       {
@@ -11201,6 +11473,10 @@
         "evidence": [
           "Compliance requirements identification procedure",
           "Intellectual property requirements identification"
+        ],
+        "sub_controls": [
+          "M5.1.1.1",
+          "M5.1.2.2"
         ]
       },
       {
@@ -11215,6 +11491,9 @@
         "owner": "Legal Counsel",
         "evidence": [
           "Intellectual property rights policy"
+        ],
+        "sub_controls": [
+          "M5.1.2.1"
         ]
       },
       {
@@ -11230,6 +11509,10 @@
         "evidence": [
           "Intellectual property system requirements",
           "License and ownership register"
+        ],
+        "sub_controls": [
+          "M5.1.2.3",
+          "M5.1.2.4"
         ]
       },
       {
@@ -11244,6 +11527,9 @@
         "owner": "Records Manager",
         "evidence": [
           "Record identification procedure"
+        ],
+        "sub_controls": [
+          "M5.1.3.1"
         ]
       },
       {
@@ -11258,6 +11544,10 @@
         "owner": "Records Manager",
         "evidence": [
           "Records inventory and retention schedule"
+        ],
+        "sub_controls": [
+          "M5.1.3.1",
+          "M5.1.3.2"
         ]
       },
       {
@@ -11272,6 +11562,9 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "Data privacy and protection policy"
+        ],
+        "sub_controls": [
+          "M5.1.4.1"
         ]
       },
       {
@@ -11286,6 +11579,9 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "Personal data handling inventory"
+        ],
+        "sub_controls": [
+          "M5.1.4.3"
         ]
       },
       {
@@ -11300,6 +11596,9 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "Privacy risk assessments"
+        ],
+        "sub_controls": [
+          "M5.1.4.3"
         ]
       },
       {
@@ -11314,6 +11613,9 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "Data breach detection and response procedure"
+        ],
+        "sub_controls": [
+          "M5.1.4.5"
         ]
       },
       {
@@ -11328,6 +11630,10 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Compliance checking procedure"
+        ],
+        "sub_controls": [
+          "M5.2.1.1",
+          "M5.2.1.2"
         ]
       },
       {
@@ -11344,6 +11650,11 @@
           "Approved performance evaluation policy",
           "Performance results reporting methods",
           "Measurement integration model"
+        ],
+        "sub_controls": [
+          "M6.1.1.1",
+          "M6.1.1.2",
+          "M6.1.1.3"
         ]
       },
       {
@@ -11360,6 +11671,10 @@
           "Monitoring and measurement plan",
           "Monitoring and measurement methods",
           "Monitoring and measurement results"
+        ],
+        "sub_controls": [
+          "M6.2.1.1",
+          "M6.2.1.2"
         ]
       },
       {
@@ -11378,6 +11693,10 @@
         "evidence": [
           "Performance and effectiveness evaluation",
           "Information security performance report"
+        ],
+        "sub_controls": [
+          "M1.1.3.2",
+          "M6.2.1.1"
         ]
       },
       {
@@ -11393,6 +11712,10 @@
         "evidence": [
           "Management review schedule",
           "Management review action tracker"
+        ],
+        "sub_controls": [
+          "M6.2.3.1",
+          "M6.2.3.2"
         ]
       },
       {
@@ -11407,6 +11730,12 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Nonconformity and corrective action procedure"
+        ],
+        "sub_controls": [
+          "M6.3.1.1",
+          "M6.3.1.2",
+          "M6.3.1.4",
+          "M6.3.1.5"
         ]
       },
       {
@@ -11422,6 +11751,10 @@
         "evidence": [
           "Improvement plan",
           "Improvement decisions from monitoring and review"
+        ],
+        "sub_controls": [
+          "M6.3.2.1",
+          "M6.3.2.2"
         ]
       },
       {
@@ -11437,6 +11770,11 @@
         "evidence": [
           "Approved information asset management policy",
           "Bring-your-own-device arrangements"
+        ],
+        "sub_controls": [
+          "T1.1.1.1",
+          "T1.1.1.2",
+          "T1.1.1.3"
         ]
       },
       {
@@ -11451,6 +11789,9 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Acceptable use rules"
+        ],
+        "sub_controls": [
+          "T1.2.2.1"
         ]
       },
       {
@@ -11469,6 +11810,10 @@
         "evidence": [
           "Information labeling procedure",
           "Information handling procedures"
+        ],
+        "sub_controls": [
+          "T1.3.2.1",
+          "T1.3.3.1"
         ]
       },
       {
@@ -11483,6 +11828,9 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Information transfer rules"
+        ],
+        "sub_controls": [
+          "T1.3.4.1"
         ]
       },
       {
@@ -11503,6 +11851,11 @@
           "Information deletion procedure",
           "Media reuse and disposal procedure",
           "Equipment disposal and re-use procedure"
+        ],
+        "sub_controls": [
+          "T1.3.6.1",
+          "T1.4.2.1",
+          "T2.3.6.1"
         ]
       },
       {
@@ -11518,6 +11871,10 @@
         "evidence": [
           "Removable media management procedure",
           "Removable media protection levels"
+        ],
+        "sub_controls": [
+          "T1.4.1.1",
+          "T1.4.1.2"
         ]
       },
       {
@@ -11532,6 +11889,10 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Removable media register"
+        ],
+        "sub_controls": [
+          "T1.4.1.1",
+          "T1.4.1.2"
         ]
       },
       {
@@ -11550,6 +11911,10 @@
         "evidence": [
           "Media disposal log",
           "Disposed equipment register"
+        ],
+        "sub_controls": [
+          "T1.4.2.3",
+          "T2.3.6.2"
         ]
       },
       {
@@ -11564,6 +11929,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Endpoint device security requirements"
+        ],
+        "sub_controls": [
+          "T1.5.1.1"
         ]
       },
       {
@@ -11589,6 +11957,14 @@
           "Public access restriction rules",
           "Secure area working guidelines",
           "Recording equipment and device authorization"
+        ],
+        "sub_controls": [
+          "T2.2.2.3",
+          "T2.2.2.5",
+          "T2.2.2.6",
+          "T2.2.3.1",
+          "T2.2.5.1",
+          "T2.2.5.3"
         ]
       },
       {
@@ -11604,6 +11980,10 @@
         "evidence": [
           "Security area classification",
           "Security perimeter definitions"
+        ],
+        "sub_controls": [
+          "T2.2.1.1",
+          "T2.2.1.2"
         ]
       },
       {
@@ -11625,6 +12005,12 @@
           "Physical protection countermeasures",
           "Perimeter risk assessment",
           "Off-premise location risk assessment"
+        ],
+        "sub_controls": [
+          "T2.2.1.2",
+          "T2.2.1.3",
+          "T2.2.4.1",
+          "T2.3.5.1"
         ]
       },
       {
@@ -11647,6 +12033,12 @@
           "Power protection description",
           "Equipment commissioning and decommissioning procedure",
           "Off-site equipment protection rules"
+        ],
+        "sub_controls": [
+          "T2.3.1.1",
+          "T2.3.2.1",
+          "T2.3.4.2",
+          "T2.3.5.1"
         ]
       },
       {
@@ -11661,6 +12053,9 @@
         "owner": "Facilities Manager",
         "evidence": [
           "Equipment maintenance log"
+        ],
+        "sub_controls": [
+          "T2.3.4.3"
         ]
       },
       {
@@ -11675,6 +12070,11 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Clear desk and clear screen policy"
+        ],
+        "sub_controls": [
+          "T2.3.7.1",
+          "T2.3.7.2",
+          "T2.3.7.3"
         ]
       },
       {
@@ -11689,6 +12089,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Approved operating procedures"
+        ],
+        "sub_controls": [
+          "T3.1.2.1"
         ]
       },
       {
@@ -11708,6 +12111,11 @@
           "Change management procedure",
           "Change management scope",
           "Change control procedure for systems and software"
+        ],
+        "sub_controls": [
+          "T3.1.3.1",
+          "T3.1.3.2",
+          "T7.4.1.1"
         ]
       },
       {
@@ -11726,6 +12134,10 @@
         "evidence": [
           "Change log",
           "Change track record"
+        ],
+        "sub_controls": [
+          "T3.1.3.3",
+          "T7.4.1.2"
         ]
       },
       {
@@ -11745,6 +12157,12 @@
           "Environment separation description",
           "Environment transfer rules",
           "Test data selection rules"
+        ],
+        "sub_controls": [
+          "T3.1.4.1",
+          "T3.1.4.2",
+          "T3.1.4.3",
+          "T7.4.2.1"
         ]
       },
       {
@@ -11759,6 +12177,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Capacity requirements forecast"
+        ],
+        "sub_controls": [
+          "T3.1.5.1"
         ]
       },
       {
@@ -11777,6 +12198,10 @@
         "evidence": [
           "Software original copy repository",
           "Software version archive"
+        ],
+        "sub_controls": [
+          "T3.1.8.2",
+          "T7.4.1.3"
         ]
       },
       {
@@ -11798,6 +12223,14 @@
           "Logging requirements",
           "Clock synchronization requirements",
           "Date and time standard"
+        ],
+        "sub_controls": [
+          "T3.2.1.1",
+          "T3.2.1.2",
+          "T3.2.1.3",
+          "T3.2.1.4",
+          "T3.2.1.5",
+          "T3.2.4.1"
         ]
       },
       {
@@ -11821,6 +12254,17 @@
           "Monitored system usage list",
           "Monitoring review frequency and records",
           "Monitoring information retention requirements"
+        ],
+        "sub_controls": [
+          "T3.2.2.1",
+          "T3.2.2.2",
+          "T3.2.2.3",
+          "T3.2.2.5",
+          "T3.2.2.6",
+          "T3.2.3.1",
+          "T3.2.3.2",
+          "T3.2.3.3",
+          "T3.2.3.5"
         ]
       },
       {
@@ -11836,6 +12280,10 @@
         "evidence": [
           "Threat information sources",
           "Actions taken on threat intelligence"
+        ],
+        "sub_controls": [
+          "T3.3.1.1",
+          "T3.3.1.2"
         ]
       },
       {
@@ -11850,6 +12298,11 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Vulnerability management procedure"
+        ],
+        "sub_controls": [
+          "T3.3.2.1",
+          "T3.3.2.2",
+          "T3.3.2.3"
         ]
       },
       {
@@ -11864,6 +12317,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Vulnerability remediation tracker"
+        ],
+        "sub_controls": [
+          "T3.3.2.3"
         ]
       },
       {
@@ -11883,6 +12339,11 @@
           "Encryption requirements register",
           "Weak cipher and algorithm replacement",
           "Public key cryptography inventory"
+        ],
+        "sub_controls": [
+          "T3.4.1.2",
+          "T3.4.1.4",
+          "T3.4.4.1"
         ]
       },
       {
@@ -11897,6 +12358,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Key management procedure"
+        ],
+        "sub_controls": [
+          "T3.4.3.1"
         ]
       },
       {
@@ -11911,7 +12375,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Post-quantum transition plan"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-101",
@@ -11926,6 +12391,10 @@
         "evidence": [
           "Network risk assessment",
           "Network control implementation record"
+        ],
+        "sub_controls": [
+          "T4.1.1.4",
+          "T4.1.1.5"
         ]
       },
       {
@@ -11940,6 +12409,10 @@
         "owner": "Network Security Lead",
         "evidence": [
           "Network services security requirements"
+        ],
+        "sub_controls": [
+          "T4.1.2.1",
+          "T4.1.2.2"
         ]
       },
       {
@@ -11961,6 +12434,12 @@
           "Wireless security controls by network",
           "Wireless usage and configuration standard",
           "Website access categories"
+        ],
+        "sub_controls": [
+          "T4.1.3.1",
+          "T4.1.4.3",
+          "T4.1.4.4",
+          "T4.1.5.1"
         ]
       },
       {
@@ -11979,6 +12458,11 @@
         "evidence": [
           "Approved identity and access management policy",
           "Access restriction model"
+        ],
+        "sub_controls": [
+          "T5.1.1.1",
+          "T5.3.2.1",
+          "T5.3.2.2"
         ]
       },
       {
@@ -11993,6 +12477,10 @@
         "owner": "IAM Lead",
         "evidence": [
           "Identity life cycle procedure"
+        ],
+        "sub_controls": [
+          "T5.2.1.2",
+          "T5.2.1.3"
         ]
       },
       {
@@ -12013,6 +12501,12 @@
           "Segregation of duties matrix",
           "Access requirements set by owners",
           "Role-based access matrix"
+        ],
+        "sub_controls": [
+          "T5.1.1.1",
+          "T5.2.2.2",
+          "T5.3.2.2",
+          "T5.3.2.3"
         ]
       },
       {
@@ -12031,6 +12525,10 @@
         "evidence": [
           "Access rights records",
           "Authorized recipients record"
+        ],
+        "sub_controls": [
+          "T1.3.3.2",
+          "T5.2.2.3"
         ]
       },
       {
@@ -12045,6 +12543,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Access rights review procedure"
+        ],
+        "sub_controls": [
+          "T5.2.4.1"
         ]
       },
       {
@@ -12059,6 +12560,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Utility program authorization list"
+        ],
+        "sub_controls": [
+          "T5.3.4.1"
         ]
       },
       {
@@ -12078,6 +12582,10 @@
           "Credential issuance procedure",
           "Credential use good practices",
           "Approved credential storage method"
+        ],
+        "sub_controls": [
+          "T5.4.1.1",
+          "T5.4.2.1"
         ]
       },
       {
@@ -12093,6 +12601,10 @@
         "evidence": [
           "Approved third-party security policy",
           "Third-party security governance arrangements"
+        ],
+        "sub_controls": [
+          "T6.1.1.1",
+          "T6.1.1.2"
         ]
       },
       {
@@ -12108,6 +12620,10 @@
         "evidence": [
           "Supplier risk classification register",
           "Supplier risk mitigation plans"
+        ],
+        "sub_controls": [
+          "T6.2.1.1",
+          "T6.2.1.3"
         ]
       },
       {
@@ -12122,6 +12638,9 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supplier security assessment criteria"
+        ],
+        "sub_controls": [
+          "T6.2.2.1"
         ]
       },
       {
@@ -12136,6 +12655,9 @@
         "owner": "Procurement Manager",
         "evidence": [
           "Procurement security requirements"
+        ],
+        "sub_controls": [
+          "T6.2.3.1"
         ]
       },
       {
@@ -12158,6 +12680,13 @@
           "Third-party deletion requirements",
           "Secure coding and QA contract clauses",
           "Contractual security requirements"
+        ],
+        "sub_controls": [
+          "T1.3.6.1",
+          "T6.2.4.1",
+          "T6.2.4.2",
+          "T7.3.2.2",
+          "T7.3.2.3"
         ]
       },
       {
@@ -12172,6 +12701,9 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supplier monitoring program"
+        ],
+        "sub_controls": [
+          "T6.2.5.1"
         ]
       },
       {
@@ -12187,6 +12719,11 @@
         "evidence": [
           "Approved acquisition, development and maintenance policy",
           "Policy framework for security in the life cycle"
+        ],
+        "sub_controls": [
+          "T7.1.1.1",
+          "T7.1.1.2",
+          "T7.1.1.3"
         ]
       },
       {
@@ -12205,6 +12742,10 @@
         "evidence": [
           "Secure engineering principles",
           "Secure coding guidelines"
+        ],
+        "sub_controls": [
+          "T7.2.2.1",
+          "T7.3.1.1"
         ]
       },
       {
@@ -12219,6 +12760,9 @@
         "owner": "Head of Application Security",
         "evidence": [
           "Quality assurance process"
+        ],
+        "sub_controls": [
+          "T7.3.2.1"
         ]
       },
       {
@@ -12234,6 +12778,10 @@
         "evidence": [
           "Security testing requirements",
           "Acceptance parameters for security tests"
+        ],
+        "sub_controls": [
+          "T7.4.3.1",
+          "T7.4.3.2"
         ]
       },
       {
@@ -12248,6 +12796,10 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Approved incident management policy"
+        ],
+        "sub_controls": [
+          "T8.1.1.1",
+          "T8.1.1.2"
         ]
       },
       {
@@ -12262,6 +12814,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Event reporting procedure"
+        ],
+        "sub_controls": [
+          "T8.1.2.2"
         ]
       },
       {
@@ -12277,6 +12832,10 @@
         "evidence": [
           "Incident classification and prioritization scheme",
           "National agency reporting criteria"
+        ],
+        "sub_controls": [
+          "T8.2.2.1",
+          "T8.2.2.2"
         ]
       },
       {
@@ -12292,6 +12851,10 @@
         "evidence": [
           "Incident response training needs analysis",
           "Incident response training program"
+        ],
+        "sub_controls": [
+          "T8.2.3.1",
+          "T8.2.3.2"
         ]
       },
       {
@@ -12306,6 +12869,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Incident response test procedures and cases"
+        ],
+        "sub_controls": [
+          "T8.2.4.1"
         ]
       },
       {
@@ -12320,6 +12886,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Lessons learned records"
+        ],
+        "sub_controls": [
+          "T8.2.6.2"
         ]
       },
       {
@@ -12334,6 +12903,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Evidence collection procedure"
+        ],
+        "sub_controls": [
+          "T8.2.7.2"
         ]
       },
       {
@@ -12350,6 +12922,11 @@
           "Security controls in continuity plans",
           "Disruption security maintenance procedures",
           "Compensating controls register"
+        ],
+        "sub_controls": [
+          "T9.1.2.1",
+          "T9.1.2.2",
+          "T9.1.2.3"
         ]
       },
       {
@@ -12365,6 +12942,10 @@
         "evidence": [
           "Continuity plan test schedule",
           "Continuity lessons learned and plan updates"
+        ],
+        "sub_controls": [
+          "T9.2.1.1",
+          "T9.2.1.2"
         ]
       },
       {
@@ -12379,6 +12960,10 @@
         "owner": "Risk Manager",
         "evidence": [
           "Risk review and update procedure"
+        ],
+        "sub_controls": [
+          "M2.4.1.2",
+          "M2.4.1.3"
         ]
       },
       {
@@ -12393,6 +12978,9 @@
         "owner": "Network Security Lead",
         "evidence": [
           "Network diagram"
+        ],
+        "sub_controls": [
+          "T4.1.1.2"
         ]
       },
       {
@@ -12407,6 +12995,9 @@
         "owner": "CISO",
         "evidence": [
           "Compliance progress report to the lead entity"
+        ],
+        "sub_controls": [
+          "M1.3.2.2"
         ]
       },
       {
@@ -12421,6 +13012,9 @@
         "owner": "Facilities Manager",
         "evidence": [
           "Off-site equipment authorization and custody records"
+        ],
+        "sub_controls": [
+          "T2.3.5.1"
         ]
       },
       {
@@ -12435,6 +13029,9 @@
         "owner": "CISO",
         "evidence": [
           "Approved cloud security policy"
+        ],
+        "sub_controls": [
+          "E1-2.1.1.1"
         ]
       },
       {
@@ -12449,6 +13046,12 @@
         "owner": "Security Architect",
         "evidence": [
           "Cloud usage analysis"
+        ],
+        "sub_controls": [
+          "E1-2.1.1.3",
+          "E1-2.1.1.4",
+          "E1-2.1.1.5",
+          "E1-2.1.1.6"
         ]
       },
       {
@@ -12463,6 +13066,9 @@
         "owner": "Risk Manager",
         "evidence": [
           "Cloud risk assessment"
+        ],
+        "sub_controls": [
+          "E1-2.1.2.1"
         ]
       },
       {
@@ -12478,6 +13084,9 @@
         "evidence": [
           "Cloud risk register",
           "Cloud risk treatment plan"
+        ],
+        "sub_controls": [
+          "E1-2.1.2.1"
         ]
       },
       {
@@ -12492,6 +13101,9 @@
         "owner": "CISO",
         "evidence": [
           "Shared responsibility matrix"
+        ],
+        "sub_controls": [
+          "E1-2.1.3.2"
         ]
       },
       {
@@ -12510,6 +13122,10 @@
         "evidence": [
           "CSP risk treatment record",
           "CSP independent assessment register"
+        ],
+        "sub_controls": [
+          "E1-2.1.4.1",
+          "E1-2.1.5.1"
         ]
       },
       {
@@ -12524,6 +13140,9 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Approved CSP register"
+        ],
+        "sub_controls": [
+          "E1-2.1.4.1"
         ]
       },
       {
@@ -12538,6 +13157,9 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Cloud data obligations analysis"
+        ],
+        "sub_controls": [
+          "E1-2.3.1.1"
         ]
       },
       {
@@ -12552,6 +13174,9 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Data classification policy"
+        ],
+        "sub_controls": [
+          "E1-2.3.1.1"
         ]
       },
       {
@@ -12566,6 +13191,9 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Cloud data handling procedure"
+        ],
+        "sub_controls": [
+          "E1-2.3.1.1"
         ]
       },
       {
@@ -12586,6 +13214,12 @@
           "National cloud classification level mapping",
           "Classified data hosting matrix",
           "Data classification to physical security mapping"
+        ],
+        "sub_controls": [
+          "E1-2.3.1.2",
+          "E1-2.4.1.2",
+          "E1-2.4.1.3",
+          "E1-2.6.2.1"
         ]
       },
       {
@@ -12600,6 +13234,9 @@
         "owner": "CISO",
         "evidence": [
           "Encryption policy"
+        ],
+        "sub_controls": [
+          "E1-2.3.2.1"
         ]
       },
       {
@@ -12614,6 +13251,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Cloud encryption key management procedure"
+        ],
+        "sub_controls": [
+          "E1-2.3.2.2"
         ]
       },
       {
@@ -12628,6 +13268,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Hold your own key risk assessment"
+        ],
+        "sub_controls": [
+          "E1-2.3.2.3"
         ]
       },
       {
@@ -12646,6 +13289,11 @@
         "evidence": [
           "Provider access and data location analysis",
           "CSP jurisdiction and data location assessment"
+        ],
+        "sub_controls": [
+          "E1-2.1.1.2",
+          "E1-2.1.1.7",
+          "E1-2.4.1.1"
         ]
       },
       {
@@ -12660,6 +13308,11 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Cloud data location register"
+        ],
+        "sub_controls": [
+          "E1-2.4.1.1",
+          "E1-2.4.1.2",
+          "E1-2.4.1.3"
         ]
       },
       {
@@ -12674,6 +13327,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Interoperability needs evaluation"
+        ],
+        "sub_controls": [
+          "E1-2.5.1.1"
         ]
       },
       {
@@ -12688,6 +13344,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Cloud integration architecture diagram"
+        ],
+        "sub_controls": [
+          "E1-2.5.1.1"
         ]
       },
       {
@@ -12702,6 +13361,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Integration standards and API register"
+        ],
+        "sub_controls": [
+          "E1-2.5.1.1"
         ]
       },
       {
@@ -12717,6 +13379,9 @@
         "evidence": [
           "Cloud asset inventory",
           "Asset to cloud service mapping"
+        ],
+        "sub_controls": [
+          "E1-2.6.3.1"
         ]
       },
       {
@@ -12731,6 +13396,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Cloud system hardening guidelines"
+        ],
+        "sub_controls": [
+          "E1-2.6.5.1"
         ]
       },
       {
@@ -12746,6 +13414,10 @@
         "evidence": [
           "Cloud identity lifecycle procedure",
           "Privileged account creation procedure"
+        ],
+        "sub_controls": [
+          "E1-2.7.1.1",
+          "E1-2.7.1.2"
         ]
       },
       {
@@ -12760,6 +13432,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Cloud access control policy"
+        ],
+        "sub_controls": [
+          "E1-2.7.2.1"
         ]
       },
       {
@@ -12774,6 +13449,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Authentication methods and procedures"
+        ],
+        "sub_controls": [
+          "E1-2.7.2.2"
         ]
       },
       {
@@ -12788,6 +13466,9 @@
         "owner": "IAM Lead",
         "evidence": [
           "Cloud access control procedure"
+        ],
+        "sub_controls": [
+          "E1-2.7.3.1"
         ]
       },
       {
@@ -12806,6 +13487,10 @@
         "evidence": [
           "Cloud incident management procedure",
           "External incident notification procedure"
+        ],
+        "sub_controls": [
+          "E1-2.8.1.1",
+          "E1-2.8.2.1"
         ]
       },
       {
@@ -12820,6 +13505,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Incident notification contact list"
+        ],
+        "sub_controls": [
+          "E1-2.8.2.1"
         ]
       },
       {
@@ -12834,6 +13522,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Cloud incident response plan"
+        ],
+        "sub_controls": [
+          "E1-2.8.3.1"
         ]
       },
       {
@@ -12848,6 +13539,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Alignment to the national incident response plan"
+        ],
+        "sub_controls": [
+          "E1-2.8.3.1"
         ]
       },
       {
@@ -12862,6 +13556,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Forensic capability metrics"
+        ],
+        "sub_controls": [
+          "E1-2.8.4.1"
         ]
       },
       {
@@ -12876,6 +13573,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "E-forensic protocols"
+        ],
+        "sub_controls": [
+          "E1-2.8.4.2"
         ]
       },
       {
@@ -12890,6 +13590,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Cloud backup requirements"
+        ],
+        "sub_controls": [
+          "E1-2.9.1.1"
         ]
       },
       {
@@ -12904,6 +13607,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Backup restoration testing schedule"
+        ],
+        "sub_controls": [
+          "E1-2.9.1.1"
         ]
       },
       {
@@ -12919,6 +13625,10 @@
         "evidence": [
           "Business continuity and disaster recovery plans",
           "Recovery objectives and responsibilities"
+        ],
+        "sub_controls": [
+          "E1-2.9.2.2",
+          "E1-2.9.2.3"
         ]
       },
       {
@@ -12933,6 +13643,9 @@
         "owner": "CISO",
         "evidence": [
           "AI/ML security policy"
+        ],
+        "sub_controls": [
+          "E2-2.1.1"
         ]
       },
       {
@@ -12947,6 +13660,9 @@
         "owner": "Head of Application Security",
         "evidence": [
           "AI/ML secure development and operation procedures"
+        ],
+        "sub_controls": [
+          "E2-2.1.1"
         ]
       },
       {
@@ -12961,6 +13677,9 @@
         "owner": "Risk Manager",
         "evidence": [
           "AI/ML cyber security risk register"
+        ],
+        "sub_controls": [
+          "E2-2.1.2"
         ]
       },
       {
@@ -12975,6 +13694,9 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "AI/ML supply chain risk assessment"
+        ],
+        "sub_controls": [
+          "E2-2.1.3"
         ]
       },
       {
@@ -12989,6 +13711,9 @@
         "owner": "IT Asset Manager",
         "evidence": [
           "AI/ML asset inventory"
+        ],
+        "sub_controls": [
+          "E2-2.2.1"
         ]
       },
       {
@@ -13003,6 +13728,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "AI/ML security baselines and compliance results"
+        ],
+        "sub_controls": [
+          "E2-2.2.2"
         ]
       },
       {
@@ -13017,6 +13745,9 @@
         "owner": "Security Architect",
         "evidence": [
           "AI/ML application domain security analysis"
+        ],
+        "sub_controls": [
+          "E2-2.4.1"
         ]
       },
       {
@@ -13031,6 +13762,9 @@
         "owner": "Security Architect",
         "evidence": [
           "AI/ML availability architecture"
+        ],
+        "sub_controls": [
+          "E2-2.4.2"
         ]
       },
       {
@@ -13045,6 +13779,9 @@
         "owner": "BCM Manager",
         "evidence": [
           "AI/ML continuity and recovery plans"
+        ],
+        "sub_controls": [
+          "E2-2.4.3"
         ]
       },
       {
@@ -13059,6 +13796,9 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "AI/ML attack awareness material"
+        ],
+        "sub_controls": [
+          "E2-2.5.1"
         ]
       },
       {
@@ -13073,6 +13813,9 @@
         "owner": "CISO",
         "evidence": [
           "AI/ML defense strategy"
+        ],
+        "sub_controls": [
+          "E2-2.5.2"
         ]
       },
       {
@@ -13087,6 +13830,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "AI/ML security analytics framework"
+        ],
+        "sub_controls": [
+          "E2-2.6.1"
         ]
       },
       {
@@ -13101,6 +13847,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "AI/ML incident reporting and management procedure"
+        ],
+        "sub_controls": [
+          "E2-2.6.2"
         ]
       },
       {
@@ -13115,6 +13864,9 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "AI/ML digital forensics framework"
+        ],
+        "sub_controls": [
+          "E2-2.6.3"
         ]
       },
       {
@@ -13129,6 +13881,9 @@
         "owner": "CISO",
         "evidence": [
           "Approved IoT security policy"
+        ],
+        "sub_controls": [
+          "E3-2.1.1.1"
         ]
       },
       {
@@ -13144,6 +13899,10 @@
         "evidence": [
           "IoT governance model",
           "IoT roles and responsibilities matrix"
+        ],
+        "sub_controls": [
+          "E3-2.1.1.2",
+          "E3-2.1.1.3"
         ]
       },
       {
@@ -13158,6 +13917,9 @@
         "owner": "Security Architect",
         "evidence": [
           "IoT device security requirements"
+        ],
+        "sub_controls": [
+          "E3-2.1.1.4"
         ]
       },
       {
@@ -13172,6 +13934,9 @@
         "owner": "Risk Manager",
         "evidence": [
           "IoT risk assessment"
+        ],
+        "sub_controls": [
+          "E3-2.1.2.1"
         ]
       },
       {
@@ -13187,6 +13952,9 @@
         "evidence": [
           "IoT risk register",
           "IoT risk treatment plan"
+        ],
+        "sub_controls": [
+          "E3-2.1.2.1"
         ]
       },
       {
@@ -13201,6 +13969,9 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "IoT security training plan"
+        ],
+        "sub_controls": [
+          "E3-2.1.3.1"
         ]
       },
       {
@@ -13215,6 +13986,9 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "IoT security training content"
+        ],
+        "sub_controls": [
+          "E3-2.1.3.1"
         ]
       },
       {
@@ -13229,6 +14003,9 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "IoT third-party security policy"
+        ],
+        "sub_controls": [
+          "E3-2.1.4.1"
         ]
       },
       {
@@ -13243,6 +14020,9 @@
         "owner": "Compliance Officer",
         "evidence": [
           "IoT compliance policy and program"
+        ],
+        "sub_controls": [
+          "E3-2.1.5.1"
         ]
       },
       {
@@ -13257,6 +14037,9 @@
         "owner": "Compliance Officer",
         "evidence": [
           "IoT legal and regulatory requirements register"
+        ],
+        "sub_controls": [
+          "E3-2.1.5.1"
         ]
       },
       {
@@ -13271,6 +14054,9 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "IoT data inventory and classification"
+        ],
+        "sub_controls": [
+          "E3-2.2.1.1"
         ]
       },
       {
@@ -13285,6 +14071,9 @@
         "owner": "CISO",
         "evidence": [
           "IoT encryption policy and procedures"
+        ],
+        "sub_controls": [
+          "E3-2.2.2.1"
         ]
       },
       {
@@ -13299,6 +14088,9 @@
         "owner": "Network Security Lead",
         "evidence": [
           "IoT communication protocol specification"
+        ],
+        "sub_controls": [
+          "E3-2.2.3.5"
         ]
       },
       {
@@ -13313,6 +14105,9 @@
         "owner": "Security Architect",
         "evidence": [
           "Approved encryption techniques list"
+        ],
+        "sub_controls": [
+          "E3-2.2.3.5"
         ]
       },
       {
@@ -13331,6 +14126,12 @@
         "evidence": [
           "Third-party IoT access rights",
           "IoT access rights listing"
+        ],
+        "sub_controls": [
+          "E3-2.1.4.5",
+          "E3-2.1.4.6",
+          "E3-2.3.1.1",
+          "E3-2.3.1.3"
         ]
       },
       {
@@ -13345,6 +14146,9 @@
         "owner": "Physical Security Manager",
         "evidence": [
           "IoT location access control list"
+        ],
+        "sub_controls": [
+          "E3-2.3.2.1"
         ]
       },
       {
@@ -13359,6 +14163,12 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "IoT incident response procedure"
+        ],
+        "sub_controls": [
+          "E3-2.4.1.1",
+          "E3-2.4.1.2",
+          "E3-2.4.1.3",
+          "E3-2.4.1.4"
         ]
       },
       {
@@ -13373,6 +14183,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "IoT backup schedule and settings"
+        ],
+        "sub_controls": [
+          "E3-2.5.1.1"
         ]
       },
       {
@@ -13388,6 +14201,9 @@
         "evidence": [
           "IoT continuity plan",
           "IoT response and recovery procedures"
+        ],
+        "sub_controls": [
+          "E3-2.5.2.1"
         ]
       },
       {
@@ -13402,6 +14218,9 @@
         "owner": "IT Asset Manager",
         "evidence": [
           "IoT asset inventory"
+        ],
+        "sub_controls": [
+          "E3-2.6.1.1"
         ]
       },
       {
@@ -13416,6 +14235,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "IoT device handling procedure"
+        ],
+        "sub_controls": [
+          "E3-2.6.1.2"
         ]
       },
       {
@@ -13430,6 +14252,9 @@
         "owner": "Security Architect",
         "evidence": [
           "IoT application security architecture"
+        ],
+        "sub_controls": [
+          "E3-2.6.2.2"
         ]
       },
       {
@@ -13444,6 +14269,9 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "IoT device installation and setup baseline"
+        ],
+        "sub_controls": [
+          "E3-2.6.3.1"
         ]
       },
       {
@@ -13458,6 +14286,9 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "IoT device management strategy"
+        ],
+        "sub_controls": [
+          "E3-2.6.3.3"
         ]
       },
       {
@@ -13472,6 +14303,9 @@
         "owner": "IT Asset Manager",
         "evidence": [
           "End-of-life device compensating measures"
+        ],
+        "sub_controls": [
+          "E3-2.6.3.6"
         ]
       },
       {
@@ -13486,6 +14320,11 @@
         "owner": "Network Security Lead",
         "evidence": [
           "IoT network architecture diagram"
+        ],
+        "sub_controls": [
+          "E3-2.7.1.2",
+          "E3-2.7.1.3",
+          "E3-2.7.1.6"
         ]
       },
       {
@@ -13504,7 +14343,8 @@
         "evidence": [
           "Approved cryptographic algorithms and key lengths",
           "Approved secure transport protocols"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-209",
@@ -13518,7 +14358,8 @@
         "owner": "Risk Manager",
         "evidence": [
           "Encryption risk assessment"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-210",
@@ -13532,7 +14373,8 @@
         "owner": "Risk Manager",
         "evidence": [
           "Encryption risk remediation tracker"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-211",
@@ -13546,7 +14388,8 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Encryption legal and regulatory requirements map"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-212",
@@ -13560,7 +14403,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Encryption requirements by classification level"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-213",
@@ -13578,7 +14422,8 @@
         "evidence": [
           "Data at rest encryption coverage register",
           "Database encryption inventory"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-214",
@@ -13592,7 +14437,8 @@
         "owner": "CISO",
         "evidence": [
           "Encryption exceptions register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-215",
@@ -13606,7 +14452,8 @@
         "owner": "IAM Lead",
         "evidence": [
           "System secrets protection register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-216",
@@ -13624,7 +14471,8 @@
         "evidence": [
           "Cryptographic key inventory",
           "Key archive register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-217",
@@ -13638,7 +14486,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Key backup and escrow arrangements"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-218",
@@ -13653,7 +14502,8 @@
         "evidence": [
           "Long-term data exposure assessment",
           "Cryptographic agility assessment"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-219",
@@ -13667,7 +14517,8 @@
         "owner": "CISO",
         "evidence": [
           "Remote work security policy"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-220",
@@ -13681,7 +14532,8 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Remote work security procedures"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-221",
@@ -13695,7 +14547,8 @@
         "owner": "Risk Manager",
         "evidence": [
           "Remote work risk assessment"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-222",
@@ -13709,7 +14562,8 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "Remote worker awareness material"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-223",
@@ -13723,7 +14577,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Zero Trust remote access model"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-224",
@@ -13737,7 +14592,8 @@
         "owner": "IT Operations Manager",
         "evidence": [
           "Approved mobile application list"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-225",
@@ -13755,7 +14611,8 @@
         "evidence": [
           "Remote work data location rules",
           "Approved remote data transfer methods"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-226",
@@ -13769,7 +14626,8 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Remote work obligations register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-227",
@@ -13783,7 +14641,8 @@
         "owner": "HR / Training Lead",
         "evidence": [
           "Third-party risk awareness material"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-228",
@@ -13797,7 +14656,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supplier criticality criteria"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-229",
@@ -13811,7 +14671,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supply chain dependency map"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-230",
@@ -13825,7 +14686,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Third-party risk register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-231",
@@ -13839,7 +14701,8 @@
         "owner": "Procurement Manager",
         "evidence": [
           "Supplier selection scoring sheet"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-232",
@@ -13853,7 +14716,8 @@
         "owner": "IT Asset Manager",
         "evidence": [
           "End-of-support register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-233",
@@ -13867,7 +14731,8 @@
         "owner": "Head of Application Security",
         "evidence": [
           "Software component inventory"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-234",
@@ -13881,7 +14746,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Minimum supplier security requirements"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-235",
@@ -13895,7 +14761,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supplier non-compliance tracker"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-236",
@@ -13909,7 +14776,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Enhanced controls for high-risk suppliers"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-237",
@@ -13923,7 +14791,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "High-risk supplier assurance schedule"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-238",
@@ -13937,7 +14806,8 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Supplier incident contact list"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-239",
@@ -13951,7 +14821,8 @@
         "owner": "Incident Response Lead",
         "evidence": [
           "Supplier incident response playbook"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-240",
@@ -13965,7 +14836,8 @@
         "owner": "Procurement Manager",
         "evidence": [
           "Alternate supplier register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-241",
@@ -13979,7 +14851,8 @@
         "owner": "Vendor Risk Manager",
         "evidence": [
           "Supplier exit and substitution plans"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-242",
@@ -13993,7 +14866,8 @@
         "owner": "BCM Manager",
         "evidence": [
           "Critical supplier failure impact analysis"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-243",
@@ -14007,7 +14881,8 @@
         "owner": "CISO",
         "evidence": [
           "Data exchange security policy"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-244",
@@ -14021,7 +14896,8 @@
         "owner": "CISO",
         "evidence": [
           "Data exchange roles and owners"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-245",
@@ -14035,7 +14911,8 @@
         "owner": "Risk Manager",
         "evidence": [
           "Data exchange risk assessment"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-246",
@@ -14049,7 +14926,8 @@
         "owner": "Risk Manager",
         "evidence": [
           "Data exchange risk treatment tracker"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-247",
@@ -14063,7 +14941,8 @@
         "owner": "Compliance Officer",
         "evidence": [
           "Data exchange obligations register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-248",
@@ -14077,7 +14956,8 @@
         "owner": "Information Security Manager",
         "evidence": [
           "Data exchange handling rules by classification"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-249",
@@ -14091,7 +14971,8 @@
         "owner": "Data Protection Officer",
         "evidence": [
           "Personal data exchange register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-250",
@@ -14105,7 +14986,8 @@
         "owner": "IAM Lead",
         "evidence": [
           "Partner and service account register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-251",
@@ -14119,7 +15001,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Data exchange channel encryption register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-252",
@@ -14137,7 +15020,8 @@
         "evidence": [
           "Data exchange network redundancy diagram",
           "DMZ architecture diagram"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-253",
@@ -14151,7 +15035,8 @@
         "owner": "Network Security Lead",
         "evidence": [
           "VPN connection register"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-254",
@@ -14165,7 +15050,8 @@
         "owner": "Security Architect",
         "evidence": [
           "Exchange endpoint certificate inventory"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-255",
@@ -14179,7 +15065,8 @@
         "owner": "IT Asset Manager",
         "evidence": [
           "Data exchange system inventory"
-        ]
+        ],
+        "sub_controls": []
       },
       {
         "artifact_id": "UAEIA-256",
@@ -14193,7 +15080,8 @@
         "owner": "Security Operations Lead",
         "evidence": [
           "Data exchange event recording coverage matrix"
-        ]
+        ],
+        "sub_controls": []
       }
     ]
   }

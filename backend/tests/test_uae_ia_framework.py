@@ -256,8 +256,9 @@ def test_the_annex_rows_are_the_staging_rows_but_for_their_evidence_entries(cata
     got = catalog["controls"][134:]
     assert len(got) == len(staged) == 128
     for g, s in zip(got, staged):
-        assert list(g) == list(s), g["control_id"]                                       # every key, in the staged order
-        assert {k: v for k, v in g.items() if k not in ("evidence_requirements", "original_reference")} == {
+        assert list(g)[:-1] == list(s), g["control_id"]                                  # every key, in the staged order ...
+        assert list(g)[-1] == "native_attributes"                                         # ... then the sub-control tree (test_uae_ia_structure.py)
+        assert {k: v for k, v in g.items() if k not in ("evidence_requirements", "original_reference", "native_attributes")} == {
             k: v for k, v in s.items() if k not in ("evidence_requirements", "original_reference")}
         # the printed number repeats across the policies, so the library's reference is the policy-qualified id that carries it
         assert g["original_reference"] == g["control_id"] == f"{g['annex']}-{s['original_reference']}", g["control_id"]

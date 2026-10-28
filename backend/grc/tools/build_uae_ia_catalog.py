@@ -6,7 +6,8 @@ paraphrased or AI-authored: control names, statements, sub-controls and implemen
 copied verbatim (line wraps and hyphenated line breaks repaired, page headers and footers dropped).
 
     python -I backend/grc/tools/build_uae_ia_catalog.py "UAE INFORMATION ASSURANCE STANDARD.pdf" \
-        backend/grc/seed_data/frameworks/uae_ia.json [--evidence backend/grc/seed_data/uae_ia_evidence.json]
+        backend/grc/seed_data/frameworks/uae_ia.json [--evidence backend/grc/seed_data/uae_ia_evidence.json] \
+        [--artifacts backend/grc/seed_data/artifact_catalog.json]
 
 Evidence recommendations are the one part that does not come from the PDF: the standard names no evidence. They are an
 authored layer, to be reviewed like code (seed_data/uae_ia_evidence.json, outside seed_data/frameworks/ because the loader
@@ -50,6 +51,17 @@ How a control lands in the seeder's fields (grc/seed_frameworks.py reads only th
                       (Year 1/2/3, P4 ignored). The exact level is kept in the extra key `priority_tier`
 Keys the seeder does not read (priority_tier, applicability, control_type, mappings, uae_ia_v1_1, ...)
 stay in the JSON for the crosswalk tools and reviewers.
+
+The standard's own hierarchy travels with the catalog for the framework page's Requirements view. metadata.document_structure.
+control_structure holds the 15 families and 47 sub-families as printed (objective, performance indicators, automation guidance, relevant
+threats and vulnerabilities), and the annex policies and their parts as families and sub-families that carry no such text. Each control's
+`native_attributes` (stored whole in ParsedFrameworkControl.native_attributes) holds what the seeder's columns cannot: priority tier,
+applicability, control types, the implementation guidance, the evidence items that evidence the control as a whole (`covers` is empty)
+and its sub-controls as a tree: code, the lead-in printed above it, its own words, the printed a./b./bullet points (as deep as printed),
+the criterion it ticks and the evidence items whose `covers` name it. A sub-control of the standard (n) ticks criterion n-1. An Annex E
+obligation is a sub-control and ticks the criterion at its place among the obligations that are not considerations (none where the
+row has no criteria); an Annex F row states an objective and has no sub-controls. `--artifacts` gives each artifact of the catalogue entry
+`uae_ia` the codes of the sub-controls its evidence items cover; nothing else in that file changes.
 
 Requires PyMuPDF. Run it isolated (python -I) on an untrusted download.
 """
@@ -100,6 +112,7 @@ SECTION_OF = {"Objective": "objective", "Performance Indicator": "performance_in
 MARKER_ONLY = re.compile(r"[a-z]{1,2}\.|\d+\)|•")        # "f." / "3)" / a bullet alone on a line
 ITEM_START = re.compile(r"([a-z]{1,2}\.|\d+[.)]|•)\s")
 NESTED = re.compile(r"([a-z]{1,2}|[ivx]+)\.\s|•\s")        # "a. " / "ii. " / bullet under a numbered item
+LETTERED = re.compile(r"[a-z]{1,2}\)\s")                    # "a) ": a point that full_text and the criteria keep inside the item's own text
 PARAGRAPH_GAP = 14.5                           # Word's line pitch is 13.2pt; a new paragraph adds 3pt
 PRIORITY_FILL = {(1.0, 0.0, 0.0): 0, (1.0, 0.753, 0.0): 1, (1.0, 1.0, 0.0): 2, (0.0, 0.69, 0.941): 3}  # P1..P4
 APPLICABILITY = {"always applicable": "Always applicable", "based on risk assessment": "Based on risk assessment"}
@@ -255,15 +268,18 @@ def split_header(node: Dict[str, Any]) -> Tuple[List[Line], Dict[str, List[Line]
 
 def parse_subcontrols(lines: List[Line]) -> List[Dict[str, Any]]:
     """The Sub-Control cell as entries in print order: {"lead": "The entity shall:"} for an unnumbered paragraph,
-    {"n", "text", "nested"} for a '1) ...' item with the 'a. ...' and bullet points under it. A numbered item's own
-    wrapped lines hang at x~193, so an unnumbered line at the item indent (x~175) is a paragraph of its own."""
+    {"n", "text", "nested", "depths", "parts"} for a '1) ...' item with the 'a. ...' and bullet points under it, `depths` being how
+    many 18pt steps deeper than the item's first level each point is printed. The two items in M1.3.2 and M6.2.1 print 'a) ...'
+    points, which stay inside `text` (full_text and the criteria have always read them inline); `parts` splits that text into the
+    item's own words and one string per such point. A numbered item's own wrapped lines hang at x~193, so an unnumbered line at
+    the item indent (x~175) is a paragraph of its own."""
     entries: List[Dict[str, Any]] = []
     for ln in lines:
         m = re.match(r"(\d+)\)\s", ln.text + " ")
         last = entries[-1] if entries else None
         if m and ln.x < 185:
             entries.append({"n": int(m.group(1)), "lines": [Line(ln.page, ln.x, ln.x1, ln.y, ln.y1, ln.size, ln.white,
-                                                                  re.sub(r"^\s*\d+\)\s*", "", ln.raw))], "nested": []})
+                                                                  re.sub(r"^\s*\d+\)\s*", "", ln.raw))], "nested": [], "marks": []})
         elif ln.x < 185:
             prev = last["lead"][-1] if last and "lead" in last else None
             if prev and (prev.page != ln.page or ln.y - prev.y <= PARAGRAPH_GAP):
@@ -277,18 +293,18 @@ def parse_subcontrols(lines: List[Line]) -> List[Dict[str, Any]]:
         elif last["nested"]:
             last["nested"][-1].append(ln)
         else:
+            if LETTERED.match(ln.text + " "):
+                last["marks"].append(len(last["lines"]))
             last["lines"].append(ln)
     out = []
     for e in entries:
         if "lead" in e:
             out.append({"lead": join(e["lead"])})
             continue
-        nested, after_letter = [], False
-        for n in e["nested"]:
-            text = join(n)
-            nested.append(("   " if text.startswith("•") and after_letter else "") + text)   # bullets under 'd.' sit deeper
-            after_letter = after_letter and text.startswith("•") or not text.startswith("•")
-        out.append({"n": e["n"], "text": join(e["lines"]), "nested": nested})
+        depths = [round((n[0].x - e["lines"][0].x) / 18) - 1 for n in e["nested"]]      # 18pt per level; bullets under 'd.' sit deeper
+        cuts = [0, *e["marks"], len(e["lines"])]
+        out.append({"n": e["n"], "text": join(e["lines"]), "nested": ["   " * d + join(n) for d, n in zip(depths, e["nested"])],
+                    "depths": depths, "parts": [join(e["lines"][a:b]) for a, b in zip(cuts, cuts[1:])]})
     return out
 
 
@@ -410,6 +426,100 @@ def full_text(c: Dict[str, Any]) -> str:
     return c["statement"] + "\n\n" + "\n".join(lines)
 
 
+def point_of(raw: str) -> Dict[str, Any]:
+    label, _, text = raw.strip().partition(" ")
+    if not text:
+        fail(f"a printed point with no words: {raw.strip()!r}")
+    return {"label": label, "text": text}
+
+
+def points_of(e: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The a) points, then the a./bullet points, under a numbered item as the tree they are printed in: {label, text}, and under a
+    point the deeper points it holds as `points` (left out when it holds none)."""
+    top = [point_of(p) for p in e["parts"][1:]]
+    if [p["label"] for p in top] != [f"{chr(97 + k)})" for k in range(len(top))]:
+        fail(f"sub-control {e['n']}: the a) points are {[p['label'] for p in top]}")
+    latest: List[Dict[str, Any]] = []                                           # the last point seen at each depth
+    for raw, depth in zip(e["nested"], e["depths"]):
+        point = point_of(raw)
+        if not 0 <= depth <= len(latest):
+            fail(f"sub-control {e['n']}: cannot place the point {raw.strip()[:60]!r} at depth {depth}")
+        (latest[depth - 1].setdefault("points", []) if depth else top).append(point)
+        del latest[depth:]
+        latest.append(point)
+    return top
+
+
+def flatten(points: List[Dict[str, Any]]) -> List[str]:
+    return [s for p in points for s in (f"{p['label']} {p['text']}", *flatten(p.get("points", [])))]
+
+
+def sentence(node: Dict[str, Any]) -> str:
+    """A sub-control as the one sentence `assessment_criteria` makes of it: its lead-in, its own words, then every point in print order."""
+    return " ".join(s for s in (node["lead_in"], node["text"], *flatten(node["points"])) if s)
+
+
+def core_nodes(c: Dict[str, Any], items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The numbered sub-controls of one control in print order, for the Requirements view: each with the lead-in printed above it (a
+    lead-in printed mid-list governs only the items after it), the points under it, the criterion it ticks (its place among the
+    numbered items, as `criteria` lists them) and the names of the evidence `items` whose `covers` name it."""
+    nodes: List[Dict[str, Any]] = []
+    lead = ""
+    for e in c["sub_controls"]:
+        if "lead" in e:
+            lead = e["lead"]
+        else:
+            nodes.append({"code": f"{c['id']}.{e['n']}", "number": e["n"], "text": e["parts"][0], "lead_in": lead or None,
+                          "criterion_index": len(nodes), "consideration": False, "points": points_of(e),
+                          "evidence": [i["name"] for i in items if e["n"] in i["covers"]]})
+    return nodes
+
+
+def annex_nodes(letter: str, row: Dict[str, Any], items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """An Annex E row's obligations as sub-controls, numbered as the evidence layer's `covers` number them (an Annex F row states an
+    objective and has none). The staging row keeps each obligation as one sentence, "lead-in bullet - sub-item ...", and its `full_text`
+    still has the printed bullets: an obligation that ends in the next bullet's words splits into its lead-in, the bullet and the
+    bullet's sub-items (points labelled "-"). A consideration (a bullet under "take the following into account") ticks nothing; the
+    others tick the criterion at their place among the obligations that are not considerations, if the row has criteria at all."""
+    if letter == "F":
+        return []
+    bullets: List[Tuple[str, List[str]]] = []
+    for ln in row["full_text"].split("\n"):
+        if ln.startswith("• "):
+            bullets.append((ln[2:], []))
+        elif ln.startswith("   - "):
+            bullets[-1][1].append(ln[5:])
+    nodes: List[Dict[str, Any]] = []
+    used = ticks = 0
+    for n, ob in enumerate(row["obligations"], 1):
+        lead, text, subs = None, ob, []
+        if used < len(bullets):
+            body, parts = bullets[used]
+            flat = " ".join([body, *(f"- {s}" for s in parts)])
+            if ob.endswith(" " + flat):
+                lead, text, subs, used = ob[:-len(flat) - 1], body, parts, used + 1
+                if not lead.endswith(":"):
+                    fail(f"{row['control_id']}: obligation {n} has a lead-in that does not end with a colon: {lead[:60]!r}")
+        consideration = bool(CONSIDERATION.search(ob))
+        tick = bool(row["assessment_criteria"]) and not consideration
+        nodes.append({"code": f"{row['control_id']}.{n}", "number": n, "text": text, "lead_in": lead,
+                      "criterion_index": ticks if tick else None, "consideration": consideration,
+                      "points": [{"label": "-", "text": s} for s in subs],
+                      "evidence": [i["name"] for i in items if n in i.get("covers", [])]})
+        ticks += tick
+    if used != len(bullets):
+        fail(f"{row['control_id']}: {len(bullets) - used} printed bullet(s) match no obligation")
+    return nodes
+
+
+def native_attributes(tier: Optional[str], applicability: str, types: List[str], guidance: Optional[str],
+                      items: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """What the Requirements view needs of a control beyond the seeder's columns. `control_evidence` names the items that evidence the
+    control as a whole: those whose `covers` is empty (every item of an Annex F row, which has no sub-controls)."""
+    return {"priority_tier": tier, "applicability": applicability, "control_types": types, "implementation_guidance": guidance,
+            "control_evidence": [i["name"] for i in items if not i.get("covers")], "sub_controls": nodes}
+
+
 def notes(c: Dict[str, Any], ref: Dict[str, List[str]], types: List[str], v1: List[str]) -> str:
     """Everything informational about a control, as plain text: where it sits in the standard, and the guidance."""
     def refs(key):
@@ -475,7 +585,8 @@ def annex_controls(annexes: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]], pd
     repeats across the policies, and the platform lists a control by its reference. The evidence entries get the keys the core
     entries carry: is_mandatory (evidences_a_shall), retention_period and
     ai_confidence null because no model generated the item, and ai_reasoning; no `type` and no `covers` (the seeder infers the
-    type, and the annex builders tuned the wording for that). Stops unless the staging files were built from this PDF and agree
+    type, and the annex builders tuned the wording for that). Each row ends with its `native_attributes` (annex_nodes: the obligations
+    as sub-controls, the evidence layer's `covers` naming them). Stops unless the staging files were built from this PDF and agree
     with their evidence layers, hold the rows the builders found, have ids that meet no other id of the library, map only to
     controls of the standard, carry evidence on every row, and repeat no evidence name anywhere in the library."""
     rows: List[Dict[str, Any]] = []
@@ -491,7 +602,8 @@ def annex_controls(annexes: Dict[str, Tuple[Dict[str, Any], Dict[str, Any]]], pd
                 fail(f"{r['control_id']}: the evidence items in {file} are not those of {layer_file}")
             rows.append({**r, "original_reference": r["control_id"], "evidence_requirements": [
                 {**e, "is_mandatory": evidences_a_shall(letter, r, i), "retention_period": None, "ai_confidence": None,
-                 "ai_reasoning": ANNEX_REASONING[letter]} for e, i in zip(r["evidence_requirements"], items)]})
+                 "ai_reasoning": ANNEX_REASONING[letter]} for e, i in zip(r["evidence_requirements"], items)],
+                "native_attributes": native_attributes(None, r["applicability"], [], None, items, annex_nodes(letter, r, items))})
     want = {a: n for a, (n, _) in ANNEX.items()}
     if [r["annex"] for r in rows] != [a for a, n in want.items() for _ in range(n)]:
         fail(f"the staging files hold {dict(Counter(r['annex'] for r in rows))}, the annex builders found {want}")
@@ -520,8 +632,103 @@ def annex_sections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             for a in ANNEX]
 
 
+def control_structure(families: List[Dict[str, Any]], annex: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """The hierarchy above the controls for the Requirements view: the standard's families and sub-families with the text it prints
+    for each, then each annex policy as a family (`kind` "Annex E" / "Annex F", its domain label without the id and the annex) and
+    each part of it as a sub-family, both with no text because the annexes print none. A sub-family's id is its controls' `parent_section`."""
+    fams = [{"id": f["id"], "name": f["name"], "kind": "Management" if f["id"][0] == "M" else "Technical", "objective": f["objective"],
+             "performance_indicators": f["performance_indicator"].split("\n")} for f in families]
+    subs = [{"id": s["id"], "family": f["id"], "name": s["name"], "objective": s["objective"],
+             "performance_indicators": s["performance_indicator"].split("\n"), "automation_guidance": s["automation_guidance"],
+             "threats": s["relevant_threats_and_vulnerabilities"]} for f in families for s in f["sub_families"]]
+    for sec in annex_sections(annex):
+        kind = f"Annex {sec['number'][0]}"
+        fams.append({"id": sec["number"], "name": re.sub(rf"^{sec['number']} | \({kind}\)$", "", sec["name"]), "kind": kind})
+        subs += [{"id": p["id"], "family": sec["number"], "name": p["name"]} for p in sec["sub_families"]]
+    return {"version": 1, "source": "UAE Information Assurance Standard v2.1, chapter 2", "families": fams, "subfamilies": subs}
+
+
+def check_structure(st: Dict[str, Any], rows: List[Dict[str, Any]]) -> None:
+    """The hierarchy has the counts of Annex A, the text the standard prints for every family and sub-family, unique ids, a place for every
+    control (its `parent_section`), and the names its controls carry in `domain` and `category`."""
+    fams, subs = st["families"], st["subfamilies"]
+    core_f, core_s = [f for f in fams if "objective" in f], [s for s in subs if "objective" in s]
+    ids = [x["id"] for x in fams + subs]
+    if (len(core_f), len(core_s)) != (EXPECT["Family"], EXPECT["Sub-Family"]) or len(set(ids)) != len(ids):
+        fail(f"the hierarchy has {len(core_f)} families and {len(core_s)} sub-families, ids unique: {len(set(ids)) == len(ids)}")
+    for x in core_f + core_s:
+        if not x["objective"] or not x["performance_indicators"] or not all(x["performance_indicators"]):
+            fail(f"{x['id']}: no objective or performance indicator")
+    for s in core_s:
+        if not s["automation_guidance"] or not s["threats"] or not all(s["threats"]):
+            fail(f"{s['id']}: no automation guidance or no threat")
+    family, sub = {f["id"]: f for f in fams}, {s["id"]: s for s in subs}
+    for r in rows:
+        s = sub.get(r["parent_section"])
+        f = family.get(s["family"]) if s else None
+        if "annex" in r:                                  # an annex row names its policy with the annex and its part without the id
+            fits = f and (r["domain"], r["category"].split(" ", 1)[1]) == (f"{f['id']} {f['name']} ({f['kind']})", s["name"])
+        else:
+            fits = f and (r["domain"], r["category"]) == (f"{f['id']} {f['name']}", f"{s['id']} {s['name']}")
+        if not fits:
+            fail(f"{r['control_id']}: the hierarchy has no sub-family {r['parent_section']!r} that fits the control's domain and category")
+
+
+def check_sub_controls(rows: List[Dict[str, Any]]) -> None:
+    """Every sub-control has a code of its own and at least one evidence item of its control; one that ticks a criterion is that
+    criterion's words; the standard's controls hold as many as they count."""
+    codes = Counter(n["code"] for r in rows for n in r["native_attributes"]["sub_controls"])
+    if max(codes.values(), default=0) > 1:
+        fail(f"sub-control codes repeat: {sorted(c for c, k in codes.items() if k > 1)[:5]}")
+    for r in rows:
+        names, nodes = {e["name"] for e in r["evidence_requirements"]}, r["native_attributes"]["sub_controls"]
+        if "annex" not in r and len(nodes) != r["sub_control_count"]:
+            fail(f"{r['control_id']}: {len(nodes)} sub-controls, the control counts {r['sub_control_count']}")
+        for n in nodes:
+            i = n["criterion_index"]
+            if not n["evidence"] or not set(n["evidence"]) <= names:
+                fail(f"{n['code']}: evidence {n['evidence']} is not among the control's items")
+            if i is not None and r["assessment_criteria"][i] != sentence(n):
+                fail(f"{n['code']}: criterion {i} is not the sub-control's words")
+
+
+def sync_artifacts(path: Path, rows: List[Dict[str, Any]]) -> int:
+    """Give each artifact of the catalogue entry `uae_ia` in `path` a `sub_controls` list right after its `evidence`: the codes of the
+    sub-controls that the evidence items it names cover, in the library's order (an artifact may provide items of several controls;
+    an item that covers no sub-control adds none). Only that entry is rewritten, in the file's own line ends; everything else in the
+    file stays byte for byte. Returns the number of artifacts."""
+    order: Dict[str, int] = {}
+    covered: Dict[str, List[str]] = defaultdict(list)                           # evidence name -> codes of the sub-controls it covers
+    for r in rows:
+        for n in r["native_attributes"]["sub_controls"]:
+            order[n["code"]] = len(order)
+            for name in n["evidence"]:
+                covered[name].append(n["code"])
+    known = {e["name"] for r in rows for e in r["evidence_requirements"]}
+    with open(path, encoding="utf-8", newline="") as f:
+        text = f.read()
+    marker = '"uae_ia": '
+    if text.count(marker) != 1:
+        fail(f"{path.name} does not have exactly one entry {marker.strip()}")
+    start, nl = text.index(marker) + len(marker), "\r\n" if "\r\n" in text else "\n"
+    entry, end = json.JSONDecoder().raw_decode(text, start)
+    dump = lambda e: json.dumps(e, indent=2, ensure_ascii=False).replace("\n", nl + "  ")      # the entry sits one level in
+    if text[start:end] != dump(entry):
+        fail(f"{path.name}: the uae_ia entry is not laid out the way json.dumps(indent=2) writes it")
+    for k, art in enumerate(entry["artifacts"]):
+        if set(art["evidence"]) - known:
+            fail(f"{art['artifact_id']}: evidence {sorted(set(art['evidence']) - known)} is not an item of the library")
+        pairs = [(key, value) for key, value in art.items() if key != "sub_controls"]
+        at = [key for key, _ in pairs].index("evidence") + 1
+        codes = sorted({c for name in art["evidence"] for c in covered[name]}, key=order.__getitem__)
+        entry["artifacts"][k] = dict(pairs[:at] + [("sub_controls", codes)] + pairs[at:])
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(text[:start] + dump(entry) + text[end:])
+    return len(entry["artifacts"])
+
+
 def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf_sha256: str,
-             annex: List[Dict[str, Any]]) -> Dict[str, Any]:
+             annex: List[Dict[str, Any]], structure: Dict[str, Any]) -> Dict[str, Any]:
     n_sub = sum(len(f["sub_families"]) for f in families)
     return {
         "name": "UAE Information Assurance Standard",
@@ -597,7 +804,7 @@ def metadata(families: List[Dict[str, Any]], controls: List[Dict[str, Any]], pdf
         "document_structure": {"sections": [
             {"number": f["id"], "name": f"{f['id']} {f['name']}", "description": f["objective"],
              "performance_indicator": f["performance_indicator"], "sub_families": f["sub_families"]} for f in families
-        ] + annex_sections(annex)},
+        ] + annex_sections(annex), "control_structure": structure},
         "source_framework_id": "UAE-IA-2.1",
         "source_pdf_sha256": pdf_sha256,
         "source_note": (
@@ -662,6 +869,7 @@ def build(pdf: Path, layer: Dict[str, Any]) -> Dict[str, Any]:
         types = [t.strip() for t in h[c["id"]][0].split(",") if t.strip()]
         v1 = re.findall(r"[MT]\d+\.\d+\.\d+", g[c["id"]][0])
         crit = criteria(c)
+        items = layer["controls"][c["id"]]
         out.append({
             "control_id": c["id"], "original_reference": c["id"], "title": c["name"],
             "description": c["statement"], "full_text": full_text(c),
@@ -672,10 +880,16 @@ def build(pdf: Path, layer: Dict[str, Any]) -> Dict[str, Any]:
             "assessment_criteria": crit, "ai_notes": notes(c, ref, types, v1), "evidence_requirements": evidence_items(layer, c),
             # not read by the seeder; kept so the crosswalk tools and reviewers need not re-read the PDF
             "priority_tier": c["priority"], "applicability": c["applicability"], "control_type": types,
-            "mappings": ref, "uae_ia_v1_1": v1, "sub_control_count": len(crit), "pdf_page": c["page"]})
+            "mappings": ref, "uae_ia_v1_1": v1, "sub_control_count": len(crit), "pdf_page": c["page"],
+            # the Requirements view's facts about the control, stored whole by the seeder (see the module doc)
+            "native_attributes": native_attributes(c["priority"], c["applicability"], types, "\n".join(c["guidance"]) or None, items,
+                                                   core_nodes(c, items))})
     sha256 = hashlib.sha256(pdf.read_bytes()).hexdigest()
     annex = annex_controls(read_annexes(), sha256, out)
-    return {"metadata": metadata(families, controls, sha256, annex), "controls": out + annex}
+    structure = control_structure(families, annex)
+    check_structure(structure, out + annex)
+    check_sub_controls(out + annex)
+    return {"metadata": metadata(families, controls, sha256, annex, structure), "controls": out + annex}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -683,6 +897,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("pdf", type=Path, help="the standard's PDF")
     ap.add_argument("out", type=Path, help="the catalog to write")
     ap.add_argument("--evidence", type=Path, default=EVIDENCE_LAYER, help="authored evidence layer (default: %(default)s)")
+    ap.add_argument("--artifacts", type=Path, help="the artifact catalogue whose entry uae_ia gets each artifact's sub_controls")
     args = ap.parse_args(argv)
     payload = build(args.pdf, json.loads(args.evidence.read_text(encoding="utf-8")))
     out = args.out
@@ -694,6 +909,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"wrote {out} ({out.stat().st_size:,} bytes): {len(core)} controls and {len(c) - len(core)} annex rows, "
           f"{sum(x['sub_control_count'] for x in core)} sub-controls, {sum(len(x['evidence_requirements']) for x in c)} evidence items, "
           f"{sum(x['is_mandatory'] for x in core)} always applicable, {Counter(x['priority_tier'] for x in core)}")
+    if args.artifacts:
+        print(f"updated {args.artifacts}: sub_controls on {sync_artifacts(args.artifacts, c)} artifacts")
     return 0
 
 

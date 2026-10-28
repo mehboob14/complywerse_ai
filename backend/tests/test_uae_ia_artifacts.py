@@ -114,9 +114,10 @@ def test_the_entry_has_the_shape_of_its_peers(catalog, entry, library):
     arts = entry["artifacts"]
     assert len(arts) >= 100                                  # one artifact per authored document the evidence asks for
     for a in arts:
-        # the peers' nine keys in the peers' order, then the two this entry adds: also_controls (optional) and evidence
+        # the peers' nine keys in the peers' order, then what this entry adds: also_controls (optional), evidence, and the sub-controls
+        # that evidence covers (test_uae_ia_structure.py)
         assert tuple(a)[:len(keys)] == keys, a["artifact_id"]
-        assert list(a)[len(keys):] in (["evidence"], ["also_controls", "evidence"]), a["artifact_id"]
+        assert list(a)[len(keys):] in (["evidence", "sub_controls"], ["also_controls", "evidence", "sub_controls"]), a["artifact_id"]
         assert {w.lower() for w in a["type"].split("/")} <= TYPE_WORDS, a["artifact_id"]
         assert a["format"] in {"DOCX", "XLSX", "PDF"} and a["stage"] in STAGES, a["artifact_id"]
         assert isinstance(a["mandatory"], bool)
