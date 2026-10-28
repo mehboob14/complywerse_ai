@@ -181,7 +181,7 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         seen.add((v.id, ev.id))
         add("certificate_expiring", "evidence_link", link.id, v, due,
             f"{ev.name or 'Evidence'} from {v.name} {'expired' if due < today else 'expires'} on {due:%d %b %Y}",
-            _countdown(due, today), f"/vendor-risk/vendors/{v.id}?stage=questionnaire",
+            _countdown(due, today), f"/vendor-risk/vendors/{v.id}?tab=paperwork",
             tone="red" if due < today else "amber", lapsed=due < today)
 
     # Risk acceptances running out — or already out with nobody deciding again: the
