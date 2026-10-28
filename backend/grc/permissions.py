@@ -538,9 +538,10 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete"]
             },
             {
+                # approve = record the decision; edit = chase an approval's conditions to closure
                 "name": "approvals",
                 "display_name": "Approval Decisions",
-                "actions": ["view", "approve"]
+                "actions": ["view", "approve", "edit"]
             },
             {
                 "name": "monitoring",
@@ -551,6 +552,12 @@ PERMISSION_MATRIX = [
                 "name": "templates",
                 "display_name": "Questionnaire Templates",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                # edit = tiering, reminders and monitoring settings, supplier fields, concentration aliases, examiner links
+                "name": "config",
+                "display_name": "Settings & Examiner Links",
+                "actions": ["view", "edit"]
             }
         ]
     }

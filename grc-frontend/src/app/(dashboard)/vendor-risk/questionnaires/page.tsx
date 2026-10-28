@@ -195,8 +195,11 @@ export default function VendorQuestionnairesPage() {
   const { data: categorySettings } = useModuleSettings('vendors');
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('vendor_risk:questionnaires:create');
-  const canDelete = hasPermission('vendor_risk:questionnaires:delete');
+  // The rights the server checks (routers/questionnaires.py), with its erm:risks:edit fallback.
+  const canCreate = hasPermission('vendor_risk:templates:create') || hasPermission('erm:risks:edit');
+  const canEdit = hasPermission('vendor_risk:templates:edit') || hasPermission('erm:risks:edit');
+  const canDelete = hasPermission('vendor_risk:templates:delete') || hasPermission('erm:risks:edit');
+  const canResend = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -653,7 +656,7 @@ export default function VendorQuestionnairesPage() {
                     >
                       <Eye className="h-4 w-4" strokeWidth={1.75} />
                     </button>
-                    {canCreate && (
+                    {canEdit && (
                       <button
                         onClick={() => openEditor(template)}
                         aria-label={`Edit template ${template.name}`}
@@ -840,7 +843,7 @@ export default function VendorQuestionnairesPage() {
                                 </a>
                               </>
                             )}
-                            {canCreate && waitingOnVendor && (
+                            {canResend && waitingOnVendor && (
                               <button
                                 onClick={() => {
                                   if (window.confirm('Send a new link? The current link stops working, and the new one is copied for you.')) {
