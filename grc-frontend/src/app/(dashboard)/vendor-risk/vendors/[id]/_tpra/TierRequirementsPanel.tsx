@@ -6,9 +6,10 @@
 // that has stopped being true is flagged, and where a tier is set by hand.
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, CircleDashed, Gauge, Loader2, Send, Tag, XCircle } from 'lucide-react';
-import { tpraApi, vendorRiskApi } from '@/lib/api';
+import { tpraApi } from '@/lib/api';
 
 interface Requirements {
   tier: string;
@@ -55,12 +56,6 @@ export default function TierRequirementsPanel({ vendorId, assessmentId, canEdit,
     qc.invalidateQueries({ queryKey: ['tpra-evidence', assessmentId] });
     onChanged?.();
   };
-  const send = useMutation({
-    mutationFn: async (templateId: number) =>
-      vendorRiskApi.sendQuestionnaire({ vendor_id: vendorId, template_id: templateId, assessment_id: assessmentId }),
-    onSuccess: () => { setError(null); refresh(); },
-    onError: (e) => setError(errorText(e)),
-  });
   const tag = useMutation({
     mutationFn: async (v: { linkId: number; kind: string }) => tpraApi.tagEvidence(v.linkId, v.kind),
     onSuccess: () => { setError(null); refresh(); },
@@ -108,7 +103,7 @@ export default function TierRequirementsPanel({ vendorId, assessmentId, canEdit,
           {canEdit && onRunTiering && (
             <button type="button" onClick={onRunTiering} disabled={tieringBusy}
               className={`${btn} border-red-300 bg-white text-red-700 hover:bg-red-100`}>
-              {tieringBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gauge className="h-3 w-3" />} Re-compute the tier
+              {tieringBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Gauge className="h-3 w-3" />} Re-tier
             </button>
           )}
         </div>
@@ -156,10 +151,10 @@ export default function TierRequirementsPanel({ vendorId, assessmentId, canEdit,
                     <span className="text-[10px] text-gray-400">{q.status === 'unsent' ? 'not sent' : q.status}</span>
                   </span>
                   {canEdit && q.status === 'unsent' && (
-                    <button type="button" disabled={send.isPending} onClick={() => send.mutate(q.template_id)}
+                    <Link href={`/vendor-risk/vendors/${vendorId}?tab=assessments`}
                       className={`${btn} border-gray-200 text-gray-600 hover:bg-gray-50`}>
                       <Send className="h-3 w-3" /> Send
-                    </button>
+                    </Link>
                   )}
                 </li>
               ))}
