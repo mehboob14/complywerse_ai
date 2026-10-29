@@ -73,6 +73,16 @@ class Vendor(Base):
     # An EU VAT number and what VIES last said about it (vendor_risk/tpra/vat.py).
     vat_number = Column(String(40), nullable=True)
     vat_check = Column(JSON, nullable=True)
+    # ── What the register slices by (TPRM parity) ─────────────────────────────
+    # Null is "not recorded", not "no". Owners are plain ids (the requested_by precedent): the business owner
+    # stays owner_id.
+    holds_personal_data = Column(Boolean, nullable=True)
+    data_classification = Column(String(20), nullable=True)      # public | internal | confidential | restricted
+    data_location = Column(String(255), nullable=True)
+    systems_in_scope = Column(JSON, nullable=True)               # names of the systems the supplier touches
+    tags = Column(JSON, nullable=True)
+    security_owner_id = Column(Integer, nullable=True)
+    relationship_owner_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

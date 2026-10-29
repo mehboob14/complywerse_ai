@@ -439,6 +439,12 @@ class TPRATieringConfig(Base):
     # The tenant's own onboarding questions, tiering factors and evidence types
     # (tpra/customisation.py).
     customisation = Column(JSON, default=dict)
+    # The vendor policy beyond bands and cadence (tpra/policy.py; its defaults fill any gap):
+    # days to fix a finding by severity {critical: days, …}, the stages each tier skips
+    # {tier: [stage keys]}, and the roster roles each tier needs as reviewers {tier: [role keys]}.
+    remediation_days = Column(JSON, default=dict)
+    skip_matrix = Column(JSON, default=dict)
+    required_reviewers = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
