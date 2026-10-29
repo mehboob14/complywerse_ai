@@ -255,7 +255,7 @@ def requirements(db: Session, vendor: Vendor, assessment: VendorAssessment, conf
         "cadence_days": cadence_days_for(tier, config.get("cadence_days")),
         "approver_role": rules.get("approver_role"),
         "reassess_on": rules.get("reassess_on"),
-        "reviewers": required_reviewers_for(tier),
+        "reviewers": required_reviewers_for(tier, config.get("required_reviewers")),
         "questionnaires": questionnaire_status(db, assessment, templates_for(db, vendor.tenant_id, tier, policy)),
         "evidence": evidence_status(db, vendor, kinds, labels=in_use, because=because),
     }

@@ -34,8 +34,8 @@ from . import contracts as contract_rules, rbac, tier_policy
 from .bootstrap import get_tiering_config
 from .reminders import _INACTIVE_VENDOR, _day
 from .schema_migrations import ensure_tpra_columns
+from .policy import held_to, remediation_days
 from .service import condition_due, write_audit
-from .stages import remediation_sla_days_for
 
 # condition → (label, base priority). Higher goes first.
 CONDITIONS: Dict[str, tuple] = {
@@ -120,13 +120,17 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             + _TIER_BONUS.get((vendor.tier or "").lower(), 0),
         })
 
-    # Critical findings open longer than their severity's remediation SLA.
-    for f in db.query(TPRAFinding).filter(
-            TPRAFinding.tenant_id == tenant_id, TPRAFinding.deleted_at.is_(None),
-            TPRAFinding.status.in_(_OPEN_FINDING), TPRAFinding.created_at.isnot(None),
-            or_(TPRAFinding.severity == "critical", TPRAFinding.is_critical_control_fail.is_(True))):
+    # Critical findings open longer than their severity's remediation SLA, the one their assessment was tiered under.
+    critical = db.query(TPRAFinding).filter(
+        TPRAFinding.tenant_id == tenant_id, TPRAFinding.deleted_at.is_(None),
+        TPRAFinding.status.in_(_OPEN_FINDING), TPRAFinding.created_at.isnot(None),
+        or_(TPRAFinding.severity == "critical", TPRAFinding.is_critical_control_fail.is_(True))).all()
+    config = get_tiering_config(db, tenant_id)
+    held = dict(db.query(VendorAssessment.id, VendorAssessment.policy_snapshot).filter(
+        VendorAssessment.id.in_({f.assessment_id for f in critical} or {-1})))
+    for f in critical:
         v = vendors.get(f.vendor_id)
-        sla = remediation_sla_days_for(f.severity)
+        sla = remediation_days(held_to(config, held.get(f.assessment_id)), f.severity)
         deadline = _day(f.created_at) + timedelta(days=sla)
         if v is None or deadline >= today:
             continue

@@ -30,10 +30,11 @@ from ....models import Vendor, GRCUser, VendorQuestionnaireResponse, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
 from ..lifecycle import (
-    TIER_CADENCE_DAYS, DEFAULT_OFFBOARDING_CHECKLIST, record_transition,
+    DEFAULT_OFFBOARDING_CHECKLIST, record_transition,
 )
 from ..tpra import service as tpra_service
 from ..tpra import stages as tpra_stages
+from ..tpra.bootstrap import get_tiering_config
 from ..tpra.contacts import revoke_all
 from ..tpra.portal import WAITING_ON_VENDOR
 from .vendors import archive_vendor, serialize_vendor, get_vendor_or_404
@@ -67,6 +68,12 @@ CANONICAL_TO_LEGACY = {
     "reassessment": "offboarding",
 }
 router = APIRouter(tags=["Vendor Lifecycle"])
+
+
+def _tier_cadence(db: Session, vendor: Vendor) -> int:
+    """Days between reviews for General's tier, from the tenant's Settings (not the old table in ../lifecycle.py)."""
+    return tpra_stages.cadence_days_for(tpra_service.scope_row(db, vendor).tier,
+                                        get_tiering_config(db, vendor.tenant_id).get("cadence_days"))
 
 
 @router.get("/lifecycle/stages")
@@ -129,7 +136,7 @@ def advance_stage(
     # Entering monitoring: seed a reassessment cadence from the tier if unset
     # (General's own tier: the supplier's may be the worst of its engagements).
     if target == "monitoring" and not vendor.reassessment_cadence_days:
-        days = TIER_CADENCE_DAYS.get((tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
+        days = _tier_cadence(db, vendor)
         vendor.reassessment_cadence_days = days
         vendor.next_reassessment_date = datetime.utcnow() + timedelta(days=days)
 
@@ -246,8 +253,7 @@ def schedule_reassessment(
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
     rbac.require_write(db, current_user, "vendors", "edit")
     # General's review: an engagement's is set on the engagement (PUT /engagements/{id}).
-    cadence = payload.cadence_days or TIER_CADENCE_DAYS.get(
-        (tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
+    cadence = payload.cadence_days or _tier_cadence(db, vendor)
     vendor.reassessment_cadence_days = cadence
     vendor.next_reassessment_date = payload.next_date or (datetime.utcnow() + timedelta(days=cadence))
     vendor.updated_at = datetime.utcnow()
