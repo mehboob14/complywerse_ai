@@ -17,6 +17,12 @@ supplier's request gets the same answer as a link that does not work.
 A questionnaire the supplier already sent opens read-only, with the comments a
 reviewer shared on its questions (never an internal one); the contact replies on
 the question, and the question's reviewers hear of it (tpra/reviews.py).
+
+An answer is saved on its own as it is given (`save_answer`, here for a personal link
+and for a questionnaire's own link): it changes that question and its note and leaves
+every other answer as it is, so colleagues answering at once, or a page left open, never
+overwrite each other. Sending afterwards needs no answers in the request: what is stored
+is what is checked and attested.
 """
 from __future__ import annotations
 
@@ -34,6 +40,7 @@ from ....models import (
 )
 from ..routers import questionnaires as routes
 from . import contacts, portal, reviews, supplier_requests, versions
+from . import questionnaire_evidence as qevidence
 
 router = APIRouter(tags=["Supplier portal"])
 
@@ -246,6 +253,55 @@ def save_questionnaire(token: str, qid: int, payload: routes.ExternalSubmitReque
                        db: Session = Depends(get_db)):
     contact, qr = _questionnaire(db, token, qid, request)
     return routes._save_answers(db, qr, payload, contact)
+
+
+class AnswerIn(BaseModel):
+    """One question's whole state: its answer (empty: none) and its note (empty: none)."""
+    value: Optional[str] = Field(None, max_length=8000)
+    comment: Optional[str] = Field(None, max_length=4000)
+
+
+def save_answer(db: Session, qr: VendorQuestionnaireResponse, question_id: str, body: AnswerIn,
+                contact: Optional[TPRAVendorContact] = None) -> dict:
+    """Save one answer, as a draft, through the same code as the whole-draft save.
+
+    The questionnaire row is locked first, so two answers arriving together are applied
+    one after the other and neither is lost. A question that cannot change now (not in
+    the questionnaire, answered by a certificate, not one the reviewer sent back) is
+    refused with a reason instead of being ignored."""
+    db.refresh(qr, with_for_update=True)
+    questions = versions.questions_for(db, qr)
+    question = next((q for q in questions if str(q.get("id")) == question_id), None)
+    if question is None:
+        raise HTTPException(404, "That question is not in this questionnaire")
+    if qr.status == "returned" and question_id not in portal.clarifications(qr.review):
+        raise HTTPException(409, "Only the questions your contact asked about can change now")
+    if question_id in qevidence.locked(qr, questions):
+        raise HTTPException(409, "This one is answered by your certificate and cannot change")
+    value = "" if portal._type(question) == "file" else (body.value or "").strip()    # a file is its own answer
+    comment = (body.comment or "").strip()
+    problem = portal.answer_problem(question, value, comment) if value else None
+    if problem:
+        raise HTTPException(400, problem)
+    answers = {k: v for k, v in (qr.responses or {}).items() if k != question_id}
+    if value:
+        answers[question_id] = value
+    return routes._save_answers(db, qr, routes.ExternalSubmitRequest(
+        responses=answers, comments={question_id: comment}, submit=False), contact)
+
+
+@router.put(_Q + "/answers/{question_id}")
+def save_questionnaire_answer(token: str, qid: int, question_id: str, body: AnswerIn, request: Request,
+                              db: Session = Depends(get_db)):
+    contact, qr = _questionnaire(db, token, qid, request)
+    return save_answer(db, qr, question_id, body, contact)
+
+
+@router.put("/questionnaires/external/{token}/answers/{question_id}")
+def save_own_link_answer(token: str, question_id: str, body: AnswerIn, request: Request,
+                         db: Session = Depends(get_db)):
+    """The same, for a questionnaire sent on a link of its own, before personal links."""
+    return save_answer(db, routes._validate_external_token(token, db, request=request), question_id, body)
 
 
 @router.post(_Q + "/evidence/{question_id}")
