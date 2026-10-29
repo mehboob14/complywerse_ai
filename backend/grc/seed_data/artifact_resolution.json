@@ -23179,6 +23179,708 @@
    "scf_ids": [],
    "match_mode": "exact",
    "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-409",
+   "name": "CSP Contract Personnel Clause Review Register",
+   "control_ref": "E1-2.1.3",
+   "codes": [
+    "E1-2.1.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-410",
+   "name": "CSP Onboarding Due Diligence Record",
+   "control_ref": "E1-2.2.1",
+   "codes": [
+    "E1-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-411",
+   "name": "CSP Non-Disclosure Agreement",
+   "control_ref": "E1-2.2.1",
+   "codes": [
+    "E1-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-412",
+   "name": "CSP Non-Disclosure, Service Level, Security and Privacy Terms Schedule",
+   "control_ref": "E1-2.2.2",
+   "codes": [
+    "E1-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-413",
+   "name": "CSP Service Availability Schedule",
+   "control_ref": "E1-2.2.2",
+   "codes": [
+    "E1-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-414",
+   "name": "CSP Sovereignty, Data Ownership and Location Schedule",
+   "control_ref": "E1-2.2.2",
+   "codes": [
+    "E1-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-415",
+   "name": "CSP Incident, Change and Audit Rights Schedule",
+   "control_ref": "E1-2.2.2",
+   "codes": [
+    "E1-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-416",
+   "name": "CSP Exit, Lock-In and Dispute Resolution Schedule",
+   "control_ref": "E1-2.2.2",
+   "codes": [
+    "E1-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-417",
+   "name": "CSP Data Portability and Export Test Record",
+   "control_ref": "E1-2.5.2",
+   "codes": [
+    "E1-2.5.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-418",
+   "name": "CSP Data Portability and Deletion Commitment",
+   "control_ref": "E1-2.5.2",
+   "codes": [
+    "E1-2.5.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-419",
+   "name": "CSP Change Control Procurement Check Sheet",
+   "control_ref": "E1-2.6.1",
+   "codes": [
+    "E1-2.6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-420",
+   "name": "CSP Application Security Procurement Check Sheet",
+   "control_ref": "E1-2.6.4",
+   "codes": [
+    "E1-2.6.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-421",
+   "name": "CSP Secure Coding Documentation Evidence",
+   "control_ref": "E1-2.6.4",
+   "codes": [
+    "E1-2.6.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-422",
+   "name": "CSP Application Security Testing Summary Evidence",
+   "control_ref": "E1-2.6.4",
+   "codes": [
+    "E1-2.6.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-423",
+   "name": "Privileged Cloud Account MFA Settings Evidence",
+   "control_ref": "E1-2.7.1",
+   "codes": [
+    "E1-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-424",
+   "name": "Privileged Cloud Access MFA Enforcement Test Record",
+   "control_ref": "E1-2.7.2",
+   "codes": [
+    "E1-2.7.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-425",
+   "name": "CSP Continuity Requirements Test Record",
+   "control_ref": "E1-2.9.2",
+   "codes": [
+    "E1-2.9.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-426",
+   "name": "AI/ML Change Security Approval Log",
+   "control_ref": "E2-2.1",
+   "codes": [
+    "E2-2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-427",
+   "name": "AI/ML Patch and Vulnerability Log",
+   "control_ref": "E2-2.2",
+   "codes": [
+    "E2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-428",
+   "name": "AI/ML Secure Development Records Evidence",
+   "control_ref": "E2-2.2",
+   "codes": [
+    "E2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-429",
+   "name": "AI/ML Environment Network Security Evidence",
+   "control_ref": "E2-2.2",
+   "codes": [
+    "E2-2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-430",
+   "name": "AI/ML Model Security Requirements Record",
+   "control_ref": "E2-2.3",
+   "codes": [
+    "E2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-431",
+   "name": "AI/ML Model Protection Measures Record",
+   "control_ref": "E2-2.3",
+   "codes": [
+    "E2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-432",
+   "name": "AI/ML Inference Data Safeguards Record",
+   "control_ref": "E2-2.3",
+   "codes": [
+    "E2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-433",
+   "name": "AI/ML Training Data Access Register",
+   "control_ref": "E2-2.3",
+   "codes": [
+    "E2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-434",
+   "name": "AI/ML Data Protection Settings Evidence",
+   "control_ref": "E2-2.3",
+   "codes": [
+    "E2-2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-435",
+   "name": "AI/ML Security Testing and Validation Report",
+   "control_ref": "E2-2.4",
+   "codes": [
+    "E2-2.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-436",
+   "name": "IoT Supplier Non-Disclosure, Service Level and Security Terms Schedule",
+   "control_ref": "E3-2.1.4",
+   "codes": [
+    "E3-2.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-437",
+   "name": "Third-Party IoT Access Review Log",
+   "control_ref": "E3-2.1.4",
+   "codes": [
+    "E3-2.1.4"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-438",
+   "name": "IoT Data Use and Rights Terms Schedule",
+   "control_ref": "E3-2.2.1",
+   "codes": [
+    "E3-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-439",
+   "name": "IoT Data Protection Controls Register",
+   "control_ref": "E3-2.2.1",
+   "codes": [
+    "E3-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-440",
+   "name": "IoT Data CSP Contract Extracts Evidence",
+   "control_ref": "E3-2.2.1",
+   "codes": [
+    "E3-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-441",
+   "name": "IoT Data Collection Justification Register",
+   "control_ref": "E3-2.2.1",
+   "codes": [
+    "E3-2.2.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-442",
+   "name": "IoT Root Key Issuing Log",
+   "control_ref": "E3-2.2.2",
+   "codes": [
+    "E3-2.2.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-443",
+   "name": "IoT Session Management Evidence",
+   "control_ref": "E3-2.2.3",
+   "codes": [
+    "E3-2.2.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-444",
+   "name": "IoT Authentication and MFA Settings Evidence",
+   "control_ref": "E3-2.3.1",
+   "codes": [
+    "E3-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-445",
+   "name": "IoT Access Review and Compensating Controls Log",
+   "control_ref": "E3-2.3.1",
+   "codes": [
+    "E3-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-446",
+   "name": "IoT Password Rules Settings Evidence",
+   "control_ref": "E3-2.3.1",
+   "codes": [
+    "E3-2.3.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-447",
+   "name": "IoT Post-Incident Analysis and Lessons Learned Report",
+   "control_ref": "E3-2.4.1",
+   "codes": [
+    "E3-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-448",
+   "name": "IoT Incident Evidence Collection Log",
+   "control_ref": "E3-2.4.1",
+   "codes": [
+    "E3-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-449",
+   "name": "IoT Threat Intelligence Resourcing Record",
+   "control_ref": "E3-2.4.1",
+   "codes": [
+    "E3-2.4.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-450",
+   "name": "IoT Device Maintenance Log",
+   "control_ref": "E3-2.6.1",
+   "codes": [
+    "E3-2.6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-451",
+   "name": "IoT Device Disposal Record",
+   "control_ref": "E3-2.6.1",
+   "codes": [
+    "E3-2.6.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-452",
+   "name": "IoT Component Authentication and Encryption Evidence",
+   "control_ref": "E3-2.6.2",
+   "codes": [
+    "E3-2.6.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-453",
+   "name": "IoT Gateway Placement and Settings Evidence",
+   "control_ref": "E3-2.6.2",
+   "codes": [
+    "E3-2.6.2"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-454",
+   "name": "IoT Remote Management Settings Evidence",
+   "control_ref": "E3-2.6.3",
+   "codes": [
+    "E3-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-455",
+   "name": "IoT Patch and Update Log",
+   "control_ref": "E3-2.6.3",
+   "codes": [
+    "E3-2.6.3"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-456",
+   "name": "IoT Secure Ports and Protocols Evidence",
+   "control_ref": "E3-2.7.1",
+   "codes": [
+    "E3-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-457",
+   "name": "IoT Segmentation and Traffic Rules Evidence",
+   "control_ref": "E3-2.7.1",
+   "codes": [
+    "E3-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-458",
+   "name": "IoT Unused Service Scan Report",
+   "control_ref": "E3-2.7.1",
+   "codes": [
+    "E3-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-459",
+   "name": "Consumer IoT Cryptography Documentation Evidence",
+   "control_ref": "E3-2.7.1",
+   "codes": [
+    "E3-2.7.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-460",
+   "name": "IoT Audit Logging Evidence",
+   "control_ref": "E3-2.8.1",
+   "codes": [
+    "E3-2.8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-461",
+   "name": "IoT Data and Operation Event Log Extract",
+   "control_ref": "E3-2.8.1",
+   "codes": [
+    "E3-2.8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
+  },
+  {
+   "framework_key": "uae_ia",
+   "slug": "uae_ia",
+   "artifact_id": "UAEIA-462",
+   "name": "IoT Update Failure and Physical Access Log Extract",
+   "control_ref": "E3-2.8.1",
+   "codes": [
+    "E3-2.8.1"
+   ],
+   "scf_ids": [],
+   "match_mode": "exact",
+   "status": "no_scf_mapping"
   }
  ]
 }

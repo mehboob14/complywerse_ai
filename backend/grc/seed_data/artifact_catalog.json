@@ -17694,6 +17694,988 @@
         "sub_controls": [
           "T9.1.1.2"
         ]
+      },
+      {
+        "artifact_id": "UAEIA-409",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Contract Personnel Clause Review Register",
+        "type": "Register",
+        "control_ref": "E1-2.1.3",
+        "mandatory": false,
+        "description": "Register of the review of each cloud service provider (CSP) contract for the clauses on background screening of CSP personnel, the roles and responsibilities matrix with segregation of duties, user awareness and training, the disciplinary process and an orderly exit including contract termination, with the CSP, the contract reference, the location of the extract that shows each clause, any clause missing, the reviewer, the review date and the action taken.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Cloud provider contract personnel clauses",
+          "CSP contract clause checklist"
+        ],
+        "sub_controls": [
+          "E1-2.1.3.1",
+          "E1-2.1.3.2",
+          "E1-2.1.3.3",
+          "E1-2.1.3.4",
+          "E1-2.1.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-410",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Onboarding Due Diligence Record",
+        "type": "Form/Template",
+        "control_ref": "E1-2.2.1",
+        "mandatory": false,
+        "description": "Form recording the security due diligence on a cloud service provider (CSP) before onboarding, with the questionnaire on its security posture and compliance and the answers received, the checks made on the answers and supporting documents, the findings, any conditions set and the decision to onboard, signed by the Vendor Risk Manager and the approver.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "CSP due diligence questionnaire",
+          "CSP due diligence assessment report",
+          "Onboarding approval record"
+        ],
+        "sub_controls": [
+          "E1-2.2.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-411",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Non-Disclosure Agreement",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.1",
+        "mandatory": false,
+        "description": "Non-disclosure agreement that the entity drafts for a cloud service provider (CSP) to acknowledge, with the parties, the information protected, the obligations of each party, the duration, the date drafted, the date acknowledged and the signatures of the entity and of the CSP, after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Non-disclosure agreement with the CSP"
+        ],
+        "sub_controls": [
+          "E1-2.2.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-412",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Non-Disclosure, Service Level, Security and Privacy Terms Schedule",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.2",
+        "mandatory": false,
+        "description": "Schedule attached to the contract with a cloud service provider (CSP) that states the non-disclosure terms, the service levels and the security and privacy requirements agreed for the cloud service, with the parties, the services and data covered, the effective date, the clause of the provider's standard terms that states each requirement where those terms apply instead of a negotiated schedule, and the signatures of the CSP and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Executed CSP contract"
+        ],
+        "sub_controls": [
+          "E1-2.2.2.1",
+          "E1-2.2.2.2",
+          "E1-2.2.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-413",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Service Availability Schedule",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.2",
+        "mandatory": false,
+        "description": "Schedule to the service level agreement with a cloud service provider (CSP) that sets the availability commitments for the service, with the service covered, each commitment, how it is measured and reported, the remedy if it is missed, the clause of the provider's standard terms that states each requirement where those terms apply instead of a negotiated schedule, and the signatures of the CSP and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Service level agreement with availability terms"
+        ],
+        "sub_controls": [
+          "E1-2.2.2.2",
+          "E1-2.2.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-414",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Sovereignty, Data Ownership and Location Schedule",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.2",
+        "mandatory": false,
+        "description": "Schedule to the agreement with a cloud service provider (CSP) that states the sovereignty requirements, who owns the entity's data and where the data may be held, with the services and data covered, the classification of that data, the permitted locations, the clause of the provider's standard terms that states each requirement where those terms apply instead of a negotiated schedule, and the signatures of the CSP and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Sovereignty, data ownership and location clauses"
+        ],
+        "sub_controls": [
+          "E1-2.2.2.4",
+          "E1-2.2.2.10",
+          "E1-2.2.2.11"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-415",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Incident, Change and Audit Rights Schedule",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.2",
+        "mandatory": false,
+        "description": "Schedule to the agreement with a cloud service provider (CSP) that states how incidents are reported to the entity, how changes to the service are managed and the entity's right to audit the CSP, with the reporting route and the notification time agreed, the change notice terms, the audit scope, any regulator access, the clause of the provider's standard terms that states each requirement where those terms apply instead of a negotiated schedule, and the signatures of the CSP and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Incident, change and audit rights clauses"
+        ],
+        "sub_controls": [
+          "E1-2.2.2.6",
+          "E1-2.2.2.8",
+          "E1-2.2.2.9"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-416",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Exit, Lock-In and Dispute Resolution Schedule",
+        "type": "Agreement",
+        "control_ref": "E1-2.2.2",
+        "mandatory": false,
+        "description": "Schedule to the agreement with a cloud service provider (CSP) that states the service exit requirements, the measures that minimize vendor lock-in and the arbitration and dispute resolution mechanism, with the exit steps, the dispute route, the forum the parties choose, the clause of the provider's standard terms that states each requirement where those terms apply instead of a negotiated schedule, and the signatures of the CSP and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "Exit, vendor lock-in and dispute clauses"
+        ],
+        "sub_controls": [
+          "E1-2.2.2.7",
+          "E1-2.2.2.12",
+          "E1-2.2.2.13"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-417",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "CSP Data Portability and Export Test Record",
+        "type": "Form/Template",
+        "control_ref": "E1-2.5.2",
+        "mandatory": false,
+        "description": "Form recording the data portability terms agreed with a cloud service provider (CSP), with the clause locations that give access to structured and unstructured data in an industry-standard format when the contract ends, and a test export, with the data exported, the format, the date, the result and the signatures of the tester and the data owner.",
+        "format": "DOCX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "CSP contract data portability clauses",
+          "Data export test result"
+        ],
+        "sub_controls": [
+          "E1-2.5.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-418",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Data Portability and Deletion Commitment",
+        "type": "Form/Template",
+        "control_ref": "E1-2.5.2",
+        "mandatory": false,
+        "description": "Form in which a cloud service provider (CSP) states its commitment to data portability, with how long the entity's data is stored, the protection controls applied and how the data is deleted, the deletion terms agreed for exit and, once the service has ended, the CSP's confirmation that the deletion was carried out, signed by the CSP and countersigned by the entity.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "CSP data portability commitment",
+          "Data deletion terms and confirmation"
+        ],
+        "sub_controls": [
+          "E1-2.5.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-419",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Change Control Procurement Check Sheet",
+        "type": "Form/Template",
+        "control_ref": "E1-2.6.1",
+        "mandatory": false,
+        "description": "Sheet completed during procurement that checks whether a cloud service provider (CSP) has change management controls that track the status, location and configuration of its service components throughout their lifecycle, with the CSP, the service, the document obtained from the CSP, the sample extract that shows the tracking, the finding on whether the controls are sufficient, the reviewer and the date.",
+        "format": "XLSX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "CSP change management documentation",
+          "Procurement check of CSP change controls",
+          "Service component tracking sample"
+        ],
+        "sub_controls": [
+          "E1-2.6.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-420",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Application Security Procurement Check Sheet",
+        "type": "Form/Template",
+        "control_ref": "E1-2.6.4",
+        "mandatory": false,
+        "description": "Sheet completed before a cloud service is procured that checks whether the cloud service provider (CSP) has adequate application security controls, including secure coding and security testing, with the CSP, the service, the provider documentation or independent evidence consulted, the finding for each area, the reviewer and the date.",
+        "format": "XLSX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "CSP application security assurance",
+          "Procurement check of application security"
+        ],
+        "sub_controls": [
+          "E1-2.6.4.1",
+          "E1-2.6.4.2",
+          "E1-2.6.4.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-421",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Secure Coding Documentation Evidence",
+        "type": "Evidence",
+        "control_ref": "E1-2.6.4",
+        "mandatory": false,
+        "description": "Collection guide for the provider documents or independent statements that describe the secure coding practices applied to a cloud service, labeled with the cloud service provider (CSP), the service, the document title, version and date and signed off by the Head of Application Security.",
+        "format": "ZIP/Drive",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "CSP secure coding documentation"
+        ],
+        "sub_controls": [
+          "E1-2.6.4.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-422",
+        "stage": "Stage 4: Implementation",
+        "name": "CSP Application Security Testing Summary Evidence",
+        "type": "Evidence",
+        "control_ref": "E1-2.6.4",
+        "mandatory": false,
+        "description": "Collection guide for the results or summaries of a cloud service provider's application security testing, such as penetration tests, labeled with the provider, the service, the test date, the scope and the findings reported and signed off by the Head of Application Security.",
+        "format": "Reports",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "CSP security testing results"
+        ],
+        "sub_controls": [
+          "E1-2.6.4.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-423",
+        "stage": "Stage 4: Implementation",
+        "name": "Privileged Cloud Account MFA Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E1-2.7.1",
+        "mandatory": false,
+        "description": "Collection guide for the multi-factor authentication settings applied to the root account, the privileged roles and any emergency access accounts of the cloud environment, with how the credentials of emergency accounts are protected, captured as dated screenshots showing the accounts or roles covered and the authentication factors required and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Privileged access MFA settings"
+        ],
+        "sub_controls": [
+          "E1-2.7.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-424",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Privileged Cloud Access MFA Enforcement Test Record",
+        "type": "Form/Template",
+        "control_ref": "E1-2.7.2",
+        "mandatory": false,
+        "description": "Form recording a test that privileged access to cloud resources is refused without a second authentication factor, with the account or role tested, the resource, the steps taken, the result, any configuration export attached, the date and the signatures of the tester and the reviewer.",
+        "format": "DOCX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Privileged access MFA enforcement test"
+        ],
+        "sub_controls": [
+          "E1-2.7.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-425",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "CSP Continuity Requirements Test Record",
+        "type": "Form/Template",
+        "control_ref": "E1-2.9.2",
+        "mandatory": false,
+        "description": "Form recording the continuity requirements agreed in the contract with a cloud service provider (CSP), such as uptime, redundancy, high availability and recovery priorities, with the clause locations, and the tests of whether each requirement is met, with the test method, the date, the result and the sign-off of the BCM Manager.",
+        "format": "DOCX",
+        "owner": "BCM Manager",
+        "evidence": [
+          "Continuity requirements in CSP contracts",
+          "Continuity requirements test results"
+        ],
+        "sub_controls": [
+          "E1-2.9.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-426",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Change Security Approval Log",
+        "type": "Log",
+        "control_ref": "E2-2.1",
+        "mandatory": false,
+        "description": "Log of the changes to AI/ML systems, such as a new model version, a change of training data, a pipeline or hosting change or a change to the configuration or guardrails of a model, with the change request and its requester, the system, the security check made, the approver (the change advisory board or an equivalent body), the approval date and the date the change went live.",
+        "format": "XLSX",
+        "owner": "Change Manager",
+        "evidence": [
+          "AI/ML change management records"
+        ],
+        "sub_controls": [
+          "E2-2.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-427",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Patch and Vulnerability Log",
+        "type": "Log",
+        "control_ref": "E2-2.2",
+        "mandatory": false,
+        "description": "Log of the vulnerability scans of AI/ML systems and of the weaknesses and patches they raise, with the system, the date, the weakness or patch identified, its rating, how it was tested, the date applied or remediated, the owner and the status.",
+        "format": "XLSX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "AI/ML patch and vulnerability management records"
+        ],
+        "sub_controls": [
+          "E2-2.2.3",
+          "E2-2.2.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-428",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Secure Development Records Evidence",
+        "type": "Evidence",
+        "control_ref": "E2-2.2",
+        "mandatory": false,
+        "description": "Collection guide for a sample of code review records, test results and similar documents for AI/ML applications, labeled with the application, version and date and showing the secure coding and development practices applied, signed off by the Head of Application Security.",
+        "format": "ZIP/Drive",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "AI/ML secure development and testing records"
+        ],
+        "sub_controls": [
+          "E2-2.2.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-429",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Environment Network Security Evidence",
+        "type": "Evidence",
+        "control_ref": "E2-2.2",
+        "mandatory": false,
+        "description": "Collection guide for the network diagrams, the firewall or segmentation settings and the access restrictions on the hosting infrastructure that protect the AI/ML environments, captured as dated screenshots or exports showing the environments and rule sets covered and signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "AI/ML environment network security settings"
+        ],
+        "sub_controls": [
+          "E2-2.2.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-430",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "AI/ML Model Security Requirements Record",
+        "type": "Form/Template",
+        "control_ref": "E2-2.3",
+        "mandatory": false,
+        "description": "Form completed at the start of each AI/ML model's development that records the security requirements and the threats considered, with the model, the owner, the date, how each requirement is carried through to deployment and the signatures of the model owner and the Head of Application Security.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "AI/ML model security requirements"
+        ],
+        "sub_controls": [
+          "E2-2.3.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-431",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Model Protection Measures Record",
+        "type": "Form/Template",
+        "control_ref": "E2-2.3",
+        "mandatory": false,
+        "description": "Form recording the measures that protect each AI/ML model from threats to its integrity, confidentiality or availability, such as access limits and integrity checks, with the model, the threat addressed, the measure, how it is applied, its owner and the date it was last confirmed, signed by the Security Architect.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "AI/ML model protection measures"
+        ],
+        "sub_controls": [
+          "E2-2.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-432",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Inference Data Safeguards Record",
+        "type": "Form/Template",
+        "control_ref": "E2-2.3",
+        "mandatory": false,
+        "description": "Form recording the safeguards that keep the inputs and outputs of AI/ML inference intact and confidential, with the model or service, the data flow, the safeguard applied to each input and output, its owner and the date it was last confirmed, signed by the Security Architect.",
+        "format": "DOCX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Inference data safeguards"
+        ],
+        "sub_controls": [
+          "E2-2.3.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-433",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Training Data Access Register",
+        "type": "Register",
+        "control_ref": "E2-2.3",
+        "mandatory": false,
+        "description": "Register of the access rights to the data used to train AI/ML models, with the data set, whether it holds personal data, the user or role, the access level, the approver, the grant and review dates and a link to the record of who accessed the data.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Model data access controls"
+        ],
+        "sub_controls": [
+          "E2-2.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-434",
+        "stage": "Stage 4: Implementation",
+        "name": "AI/ML Data Protection Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E2-2.3",
+        "mandatory": false,
+        "description": "Collection guide for the settings that protect AI/ML data at rest and in motion, such as training data sets and inference inputs and outputs, through encryption and integrity controls, captured as dated screenshots showing the data stores and channels covered and signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "AI/ML data protection settings"
+        ],
+        "sub_controls": [
+          "E2-2.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-435",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "AI/ML Security Testing and Validation Report",
+        "type": "Report",
+        "control_ref": "E2-2.4",
+        "mandatory": false,
+        "description": "Report of the security testing and validation of an AI/ML system, with the system and version tested, the scope, the methods used, the threats tested against, the findings, the remediation agreed and the sign-off of the Head of Application Security.",
+        "format": "DOCX",
+        "owner": "Head of Application Security",
+        "evidence": [
+          "AI/ML security testing and validation report"
+        ],
+        "sub_controls": [
+          "E2-2.4.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-436",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Supplier Non-Disclosure, Service Level and Security Terms Schedule",
+        "type": "Agreement",
+        "control_ref": "E3-2.1.4",
+        "mandatory": false,
+        "description": "Schedule attached to a contract with a manufacturer, integrator or service operator of IoT devices that states the non-disclosure terms, the service levels and the IoT security, availability and privacy requirements, in line with the standards, laws and regulations that apply, with the devices or services covered, the effective date and the signatures of the third party and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "IoT supplier contract terms"
+        ],
+        "sub_controls": [
+          "E3-2.1.4.2",
+          "E3-2.1.4.3",
+          "E3-2.1.4.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-437",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "Third-Party IoT Access Review Log",
+        "type": "Log",
+        "control_ref": "E3-2.1.4",
+        "mandatory": false,
+        "description": "Log of the reviews of third-party access to IoT devices, with the review date, the third party, the devices, the access granted, whether it is still needed, the access removed or changed and the reviewer.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "Third-party IoT access review results"
+        ],
+        "sub_controls": [
+          "E3-2.1.4.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-438",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Data Use and Rights Terms Schedule",
+        "type": "Agreement",
+        "control_ref": "E3-2.2.1",
+        "mandatory": false,
+        "description": "Schedule attached to a contract for an IoT device or service that states how the entity's data is used, by whom and for what purposes and the entity's rights to information, access, erasure, rectification, data portability, restriction of processing and objection to processing and its right not to be evaluated based on automated processing, with the parties, the device or service covered, the effective date and the signatures of the supplier and of the entity after review by Legal Counsel.",
+        "format": "DOCX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "IoT data use and rights contract terms"
+        ],
+        "sub_controls": [
+          "E3-2.2.1.2",
+          "E3-2.2.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-439",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Data Protection Controls Register",
+        "type": "Register",
+        "control_ref": "E3-2.2.1",
+        "mandatory": false,
+        "description": "Register of the controls that protect IoT data, including personally identifiable information, where it is collected, stored, handled and transmitted, with the data set, the location, the controls applied, the people or roles authorized to enter the physical and digital location and a link to the access list.",
+        "format": "XLSX",
+        "owner": "Information Security Manager",
+        "evidence": [
+          "IoT data protection and location access controls"
+        ],
+        "sub_controls": [
+          "E3-2.2.1.4",
+          "E3-2.2.1.16"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-440",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Data CSP Contract Extracts Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.2.1",
+        "mandatory": false,
+        "description": "Collection guide for extracts of the executed contracts with the cloud service providers (CSPs) that hold or handle IoT data, which can be the same extracts as for the cloud service contract where one contract covers both, labeled with the CSP, the contract reference and the clause location of each term, noting any term missing, and covering non-disclosure, service levels, security and privacy, sovereignty, availability, incident reporting, service exit, change management and the right to audit, signed off by the Vendor Risk Manager.",
+        "format": "ZIP/Drive",
+        "owner": "Vendor Risk Manager",
+        "evidence": [
+          "CSP contract clauses for IoT data"
+        ],
+        "sub_controls": [
+          "E3-2.2.1.5",
+          "E3-2.2.1.6",
+          "E3-2.2.1.7",
+          "E3-2.2.1.8",
+          "E3-2.2.1.9",
+          "E3-2.2.1.10",
+          "E3-2.2.1.11",
+          "E3-2.2.1.12",
+          "E3-2.2.1.13"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-441",
+        "stage": "Stage 3: Policy & Control Design",
+        "name": "IoT Data Collection Justification Register",
+        "type": "Register",
+        "control_ref": "E3-2.2.1",
+        "mandatory": false,
+        "description": "Register of the data that each IoT device or service collects, with the justification for collecting it, whether it is sensitive, the alternative considered to avoid it, the minimum data kept, the retention limit set by the entity and the approver.",
+        "format": "XLSX",
+        "owner": "Data Protection Officer",
+        "evidence": [
+          "Data collection justifications and retention limits"
+        ],
+        "sub_controls": [
+          "E3-2.2.1.14",
+          "E3-2.2.1.15"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-442",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Root Key Issuing Log",
+        "type": "Log",
+        "control_ref": "E3-2.2.2",
+        "mandatory": false,
+        "description": "Log of the operations in which the root private key signed other keys in the IoT key hierarchy, with the date, the key or certificate issued, the key that issued it, the purpose, the person who authorized it, the custodians present where a hardware security module is used and, for the issued key, a link to its public certificate or its identifier only, never key material, so the log also shows the chain beneath the root key.",
+        "format": "XLSX",
+        "owner": "Security Architect",
+        "evidence": [
+          "Key hierarchy certificate chain",
+          "Root key issuing records"
+        ],
+        "sub_controls": [
+          "E3-2.2.2.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-443",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Session Management Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.2.3",
+        "mandatory": false,
+        "description": "Collection guide for the session settings of IoT systems, such as unique session identifiers, timeout and invalidation of non-essential sessions and expiry after inactivity, captured as dated screenshots, and for the result of a test that session tokens are unique, cannot be predicted or shared and meet the minimum entropy the entity sets, recorded without live token values and signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "Session management settings",
+          "Session token strength test result"
+        ],
+        "sub_controls": [
+          "E3-2.2.3.1",
+          "E3-2.2.3.2",
+          "E3-2.2.3.3",
+          "E3-2.2.3.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-444",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Authentication and MFA Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.3.1",
+        "mandatory": false,
+        "description": "Collection guide for the strong authentication settings of IoT systems, covering user and administrator access with multi-factor authentication and, for devices and services that cannot take a second factor, the credential they present instead, captured as dated screenshots showing the systems covered and the factors or credentials required and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "IoT authentication and MFA settings"
+        ],
+        "sub_controls": [
+          "E3-2.3.1.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-445",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Access Review and Compensating Controls Log",
+        "type": "Log",
+        "control_ref": "E3-2.3.1",
+        "mandatory": false,
+        "description": "Log of the regular reviews of access to IoT resources, with the review date, the resource, the permissions reviewed, the access removed or changed, the compensating control put in place where needed and the reviewer.",
+        "format": "XLSX",
+        "owner": "IAM Lead",
+        "evidence": [
+          "IoT access review results"
+        ],
+        "sub_controls": [
+          "E3-2.3.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-446",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Password Rules Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.3.1",
+        "mandatory": false,
+        "description": "Collection guide for the password complexity and periodic update settings configured for IoT systems and for the entity's password standard they follow, captured as dated screenshots showing the systems covered and signed off by the IAM Lead.",
+        "format": "Configs",
+        "owner": "IAM Lead",
+        "evidence": [
+          "IoT password rules configuration"
+        ],
+        "sub_controls": [
+          "E3-2.3.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-447",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Post-Incident Analysis and Lessons Learned Report",
+        "type": "Report",
+        "control_ref": "E3-2.4.1",
+        "mandatory": false,
+        "description": "Report of the analysis made after an IoT incident, with the devices and services affected, how the incident was detected and contained, its root cause, the lessons learned, the improvements agreed to the IoT incident response procedure with their owners and the sign-off of the Incident Response Lead.",
+        "format": "DOCX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Post-incident analysis report"
+        ],
+        "sub_controls": [
+          "E3-2.4.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-448",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Incident Evidence Collection Log",
+        "type": "Log",
+        "control_ref": "E3-2.4.1",
+        "mandatory": false,
+        "description": "Log of the evidence collected during IoT incidents, with the incident, the evidence item, the device or system, the collection method, who collected it, the date and time, an integrity check of the copy, each transfer of custody and where it is stored.",
+        "format": "XLSX",
+        "owner": "Incident Response Lead",
+        "evidence": [
+          "Incident evidence collection records"
+        ],
+        "sub_controls": [
+          "E3-2.4.1.6"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-449",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Threat Intelligence Resourcing Record",
+        "type": "Form/Template",
+        "control_ref": "E3-2.4.1",
+        "mandatory": false,
+        "description": "Form recording the resources allocated to monitor and track security threats to the IoT ecosystem using threat intelligence, such as people, tools and feeds, with the owner, the period covered and an annex of examples of the threat information tracked, signed by the Security Operations Lead and the approver.",
+        "format": "DOCX",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Threat intelligence resourcing and outputs"
+        ],
+        "sub_controls": [
+          "E3-2.4.1.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-450",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Device Maintenance Log",
+        "type": "Log",
+        "control_ref": "E3-2.6.1",
+        "mandatory": false,
+        "description": "Log of the maintenance performed on IoT devices, with the device, the date, the maintenance carried out, who performed it, the result and the next maintenance due as set by the device owner.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "IoT device maintenance records"
+        ],
+        "sub_controls": [
+          "E3-2.6.1.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-451",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Device Disposal Record",
+        "type": "Form/Template",
+        "control_ref": "E3-2.6.1",
+        "mandatory": false,
+        "description": "Form completed for each IoT device taken out of service, with the device identifier, the credentials, keys and data removed or the device reset, the revocation of its access to the IoT platform, its removal from the inventory, the disposal method, the date, the person or contractor who carried it out and the sign-off of the IT Asset Manager.",
+        "format": "DOCX",
+        "owner": "IT Asset Manager",
+        "evidence": [
+          "IoT device disposal records"
+        ],
+        "sub_controls": [
+          "E3-2.6.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-452",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Component Authentication and Encryption Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.6.2",
+        "mandatory": false,
+        "description": "Collection guide for the settings of IoT applications, middleware, APIs and devices that show secure authentication and information exchange over encrypted channels, captured as dated screenshots showing the components covered and signed off by the Security Architect.",
+        "format": "Configs",
+        "owner": "Security Architect",
+        "evidence": [
+          "IoT component authentication and encryption settings"
+        ],
+        "sub_controls": [
+          "E3-2.6.2.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-453",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Gateway Placement and Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.6.2",
+        "mandatory": false,
+        "description": "Collection guide for the network placement and the settings of the secure and dedicated gateway that normalizes and processes data within IoT networks, captured as dated screenshots or diagrams showing the gateway and its connections and signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Dedicated IoT gateway placement and settings"
+        ],
+        "sub_controls": [
+          "E3-2.6.2.3"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-454",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Remote Management Settings Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.6.3",
+        "mandatory": false,
+        "description": "Collection guide for the settings that show IoT devices are managed remotely over encrypted channels and that security event recording is enabled, captured as dated screenshots showing the management tool and the devices covered and signed off by the IT Operations Manager.",
+        "format": "Configs",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "Remote management settings"
+        ],
+        "sub_controls": [
+          "E3-2.6.3.2"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-455",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Patch and Update Log",
+        "type": "Log",
+        "control_ref": "E3-2.6.3",
+        "mandatory": false,
+        "description": "Log of the security patches and updates applied to IoT devices, with the device group, the patch or update, its source and how its authenticity was checked, the compatibility test result, the risk and impact assessment, the approver, the method used to apply it securely and the deployment date.",
+        "format": "XLSX",
+        "owner": "IT Operations Manager",
+        "evidence": [
+          "IoT patch and update records"
+        ],
+        "sub_controls": [
+          "E3-2.6.3.4",
+          "E3-2.6.3.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-456",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Secure Ports and Protocols Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.7.1",
+        "mandatory": false,
+        "description": "Collection guide for the network settings that show IoT networks use secure ports and protocols with authentication and encryption enabled, captured as dated screenshots listing the networks, ports and protocols covered and signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Secure ports and protocols settings"
+        ],
+        "sub_controls": [
+          "E3-2.7.1.1"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-457",
+        "stage": "Stage 4: Implementation",
+        "name": "IoT Segmentation and Traffic Rules Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.7.1",
+        "mandatory": false,
+        "description": "Collection guide for the export of the firewall or segmentation rules that segregate the IoT networks from the corporate network, apply micro-segmentation and restrict and control information exchange and the management of IoT devices and applications, with the rule set, the networks covered and the date of the export, signed off by the Network Security Lead.",
+        "format": "Configs",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Segmentation and traffic restriction rules"
+        ],
+        "sub_controls": [
+          "E3-2.7.1.3",
+          "E3-2.7.1.4"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-458",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Unused Service Scan Report",
+        "type": "Evidence",
+        "control_ref": "E3-2.7.1",
+        "mandatory": false,
+        "description": "Collection guide for the results of the scans of IoT networks and devices that show unused and default network services, protocols and ports are disabled, or the configuration export for devices that cannot be scanned safely, with the tool, the targets, the date, the findings fixed and the re-scan result, signed off by the Network Security Lead.",
+        "format": "Reports",
+        "owner": "Network Security Lead",
+        "evidence": [
+          "Unused and default service scan results"
+        ],
+        "sub_controls": [
+          "E3-2.7.1.5"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-459",
+        "stage": "Stage 4: Implementation",
+        "name": "Consumer IoT Cryptography Documentation Evidence",
+        "type": "Evidence",
+        "control_ref": "E3-2.7.1",
+        "mandatory": false,
+        "description": "Collection guide for the specifications or test results that show the cryptography consumer IoT devices use for secure communications and that it follows best practice, checked against the algorithms and protocols the entity has approved, labeled with the device model, document version and date and signed off by the Security Architect.",
+        "format": "ZIP/Drive",
+        "owner": "Security Architect",
+        "evidence": [
+          "Consumer IoT device cryptography documentation"
+        ],
+        "sub_controls": [
+          "E3-2.7.1.7"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-460",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Audit Logging Evidence",
+        "type": "Record/Log",
+        "control_ref": "E3-2.8.1",
+        "mandatory": false,
+        "description": "Collection guide for the settings that show which events are recorded for IoT devices, systems and applications, for extracts of the logs of authentication, connection, authorization and access privilege events, and for the retention settings, access restrictions and analysis reports that show the IoT logs of every event type are stored, protected and analyzed, signed off by the Security Operations Lead.",
+        "format": "Logs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "IoT event recording settings",
+          "Authentication and access event log extracts",
+          "Log storage, protection and analysis records"
+        ],
+        "sub_controls": [
+          "E3-2.8.1.1",
+          "E3-2.8.1.2",
+          "E3-2.8.1.3",
+          "E3-2.8.1.4",
+          "E3-2.8.1.5",
+          "E3-2.8.1.6",
+          "E3-2.8.1.7",
+          "E3-2.8.1.8",
+          "E3-2.8.1.9",
+          "E3-2.8.1.10",
+          "E3-2.8.1.11",
+          "E3-2.8.1.12"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-461",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Data and Operation Event Log Extract",
+        "type": "Record/Log",
+        "control_ref": "E3-2.8.1",
+        "mandatory": false,
+        "description": "Collection guide for the extract of the IoT logs of access to sensitive data, import and export from removable media, creation, modification and deletion of data, impactful operations and remote operations, with the period, the devices and systems and the review made, the extract masking any personal or sensitive values, signed off by the Security Operations Lead.",
+        "format": "Logs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Data and operation event log extracts"
+        ],
+        "sub_controls": [
+          "E3-2.8.1.4",
+          "E3-2.8.1.5",
+          "E3-2.8.1.7",
+          "E3-2.8.1.8",
+          "E3-2.8.1.9"
+        ]
+      },
+      {
+        "artifact_id": "UAEIA-462",
+        "stage": "Stage 5: Operation & Monitoring",
+        "name": "IoT Update Failure and Physical Access Log Extract",
+        "type": "Record/Log",
+        "control_ref": "E3-2.8.1",
+        "mandatory": false,
+        "description": "Collection guide for the extract of the logs of security update failures and, where possible, of physical access attempts and emergency access attempts to IoT devices, with the period, the devices and the action taken, signed off by the Security Operations Lead.",
+        "format": "Logs",
+        "owner": "Security Operations Lead",
+        "evidence": [
+          "Update failure and physical access event logs"
+        ],
+        "sub_controls": [
+          "E3-2.8.1.10",
+          "E3-2.8.1.11",
+          "E3-2.8.1.12"
+        ]
       }
     ]
   }

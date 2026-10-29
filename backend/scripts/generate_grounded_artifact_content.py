@@ -86,8 +86,32 @@ def _framework_controls(framework_key: str) -> dict:
     return {c["control_id"]: c for c in data["controls"]}
 
 
+def _points(points: list, indent: str = "  ") -> list:
+    lines = []
+    for p in points or []:
+        lines.append(f"{indent}{p.get('label') or '-'} {p['text']}")
+        lines += _points(p.get("points"), indent + "  ")
+    return lines
+
+
+def _served_text(control: dict, served: set) -> str:
+    """The sub-controls of `control` that the artifact serves, as the standard words them (a lead-in shared by neighbours once, then one line
+    each, with their points); the whole control text when it serves none of them (artifacts without sub-controls, other frameworks)."""
+    subs = [s for s in (control.get("native_attributes") or {}).get("sub_controls") or [] if s["code"] in served]
+    if not subs:
+        return (control.get("full_text") or control.get("description") or "").strip()
+    lines, lead = [], None
+    for s in subs:
+        if s.get("lead_in") and s["lead_in"] != lead:
+            lead = s["lead_in"]
+            lines.append(lead)
+        lines.append(("- " if s.get("lead_in") else "") + s["text"])
+        lines += _points(s.get("points"))
+    return "\n".join(lines)
+
+
 def _grounded(art: dict, controls: dict) -> dict:
-    """The artifact plus `evidence_items` (name + description of the evidence it provides) and `requirement` (the control text)."""
+    """The artifact plus `evidence_items` (name + description of the evidence it provides) and `requirement` (the sub-controls it serves, else the control text)."""
     control_ids = [art["control_ref"]] + list(art.get("also_controls") or [])
     unknown = [c for c in control_ids if c not in controls]
     if unknown:
@@ -100,7 +124,8 @@ def _grounded(art: dict, controls: dict) -> dict:
     missing = [n for n in names if n not in by_name]
     if missing:
         raise SystemExit(f"{art['artifact_id']}: evidence not found under {control_ids}: {missing}")
-    requirement = "\n\n".join((controls[cid].get("full_text") or controls[cid].get("description") or "").strip() for cid in control_ids)
+    served = set(art.get("sub_controls") or [])
+    requirement = "\n\n".join(_served_text(controls[cid], served) for cid in control_ids)
     return {**art, "evidence_items": [{"name": n, "description": _no_ids(by_name[n].get("description", ""))} for n in names],
             "requirement": _no_ids(requirement).strip()}
 
