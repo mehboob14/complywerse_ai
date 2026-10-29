@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Send, CheckCircle2, ClipboardList } from 'lucide-react';
-import { tpraApi, vendorRiskApi, adminApi } from '@/lib/api';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TpraAssessment } from './types';
@@ -41,15 +41,12 @@ export default function PlanningPanel({
     },
   });
 
+  // The TPRA directory, which anyone working an assessment can read (/admin/users needs admin rights).
   const { data: users } = useQuery({
-    queryKey: ['admin-users-for-tpra-intake'],
+    queryKey: ['tpra-config-directory', 'people'],
     queryFn: async () => {
       try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
+        return ((await tpraApi.configDirectory()).data as { people: Array<{ id: number; name: string }> }).people || [];
       } catch { return []; }
     },
   });

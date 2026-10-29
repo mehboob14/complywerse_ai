@@ -122,11 +122,14 @@ def _maybe_reopen(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, actor_
     General's, and each open engagement's against that engagement's own tier. The
     signal records the first one it opened or joined. Then the tenant's alert rules
     act; one of them can reopen a scope its tier alone would not."""
-    policy = tier_policy.merged(get_tiering_config(db, vendor.tenant_id).get("tier_policy"))
+    live = get_tiering_config(db, vendor.tenant_id)
     rules = alert_rules.for_supplier(db, vendor)
     opened, scopes, reopened = [], {}, []
     for engagement in [None, *service.open_engagements(db, vendor)]:
         tier = service.scope_row(db, vendor, engagement).tier
+        active = service.get_active_assessment(db, vendor, engagement)
+        # The tier policy the scope's assessment was tiered under, else today's.
+        policy = tier_policy.merged((service.config_for(db, active) if active is not None else live).get("tier_policy"))
         hits = [r for r in rules if alert_rules.matches(r, sig, tier)]
         for r in hits:
             scopes.setdefault(r.id, []).append(engagement)
@@ -138,7 +141,6 @@ def _maybe_reopen(db: Session, vendor: Vendor, sig: TPRAMonitoringSignal, actor_
         # version already open in the diligence phase), attach this signal to it
         # rather than superseding + restarting, which would discard in-flight
         # progress and let a burst of signals spawn a storm of reassessments.
-        active = service.get_active_assessment(db, vendor, engagement)
         if engagement is not None and active is None:
             continue                                    # never assessed: nothing to reopen
         in_flight = (active is not None and (active.version_no or 1) > 1 and active.lifecycle_status == "active"

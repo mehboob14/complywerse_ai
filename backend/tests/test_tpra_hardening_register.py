@@ -134,6 +134,19 @@ def test_a_rule_reopens_where_the_tier_alone_would_not(db, told):
     assert _fired(db) == [(rule["id"], "open_reassessment")] * 2
 
 
+def test_a_signal_reopens_by_the_tier_policy_the_assessment_was_tiered_under(db, told):
+    """The reopen threshold follows the scope's own policy snapshot (F1), not today's settings."""
+    held = _vendor(db, "Held Co", tier="low")                          # today's policy: low reopens only from critical
+    a = service.ensure_active_assessment(db, held, actor_id=ADMIN)
+    a.policy_snapshot = {"tier_policy": {"low": {"reassess_on": "medium"}}}   # tiered when medium was enough
+    live = _vendor(db, "Live Co", tier="low")
+    service.ensure_active_assessment(db, live, actor_id=ADMIN)
+    db.commit()
+    _signal(db, held, kind="sla", severity="medium")
+    _signal(db, live, kind="sla", severity="medium")
+    assert (_versions(db, held), _versions(db, live)) == ([1, 2], [1])
+
+
 def test_bringing_forward_moves_the_date_to_today_and_opens_nothing(db, told):
     later = datetime.utcnow() + timedelta(days=200)
     v = _vendor(db, tier="medium", next_reassessment_date=later)       # a medium tier reopens from high
