@@ -15,7 +15,8 @@ already recorded is rewritten.
 An engagement is ended, never deleted: it keeps its history, its open assessment is
 archived and the supplier shows the worst of what is left. General is the supplier
 itself, so it is neither edited nor ended here: the supplier's own record and its
-offboarding do that.
+offboarding do that. An engagement can also be offboarded on its own, with an exit
+checklist kept on the engagement: finishing it ends the engagement the same way.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from ....models import BusinessUnit, GRCUser, TPRAEngagement, Vendor, VendorAssessment, get_db
 from ....routers.auth_router import get_user_tenants, refuse_imported_accounts, require_auth
+from ..lifecycle import exit_steps, stamp_steps
 from . import intake, rbac, service
 from .bootstrap import get_tiering_config
 from .tier_policy import _ACCESS_RANK
@@ -86,6 +88,32 @@ def _list(value) -> list:
     return list(value) if isinstance(value, list) else ([value] if value else [])
 
 
+def _starters(rows) -> list:
+    return [r.offboarding.get("started_by") for r in rows if isinstance(r.offboarding, dict)]
+
+
+def _exit_summary(state, names: Dict[int, str]) -> Optional[dict]:
+    """One engagement's exit as it is shown: why, when and by whom, the steps and how far, and whether it is done."""
+    if not isinstance(state, dict):
+        return None
+    items = [i for i in state.get("items") or [] if isinstance(i, dict)]
+    return {"reason": state.get("reason"), "started_at": state.get("started_at"),
+            "started_by": names.get(state.get("started_by")), "notes": state.get("notes"),
+            "completed_at": state.get("completed_at"), "items": items,
+            "done": sum(1 for i in items if i.get("done")), "total": len(items)}
+
+
+def exits(db: Session, vendor: Vendor) -> List[dict]:
+    """The exits of the supplier's single engagements (the supplier's own is its offboarding): those under way
+    first, then the finished, each with its engagement's id and name."""
+    rows = [r for r in db.query(TPRAEngagement).filter(TPRAEngagement.vendor_id == vendor.id,
+                                                       TPRAEngagement.is_general.is_(False))
+            .order_by(TPRAEngagement.id) if isinstance(r.offboarding, dict)]
+    names = _names(db, _starters(rows))
+    return [{"id": r.id, "name": r.name, "ended": r.status == "ended", **_exit_summary(r.offboarding, names)}
+            for r in sorted(rows, key=lambda r: r.status == "ended")]
+
+
 def _row(v: Vendor, e: Optional[TPRAEngagement], names: Dict[int, str], units: Dict[int, str],
          grade: Optional[str] = None) -> dict:
     """One engagement as the list shows it. General (no row yet, or its row) is the
@@ -117,6 +145,7 @@ def _row(v: Vendor, e: Optional[TPRAEngagement], names: Dict[int, str], units: D
         "ended_reason": e.ended_reason if e is not None else None,
         "archived_at": _iso(e.archived_at) if e is not None else None,
         "created_at": _iso(e.created_at) if e is not None else None,
+        "offboarding": None if general else _exit_summary(e.offboarding, names),
     }
 
 
@@ -126,7 +155,7 @@ def _units(db: Session, tenant_id: int) -> Dict[int, str]:
 
 
 def _one(db: Session, v: Vendor, e: TPRAEngagement) -> dict:
-    return _row(v, e, _names(db, [e.owner_id, v.owner_id]), _units(db, v.tenant_id))
+    return _row(v, e, _names(db, [e.owner_id, v.owner_id, *_starters([e])]), _units(db, v.tenant_id))
 
 
 @router.get("/vendors/{vendor_id}/engagements")
@@ -139,7 +168,7 @@ def list_engagements(vendor_id: int, db: Session = Depends(get_db), user: GRCUse
             .order_by(TPRAEngagement.is_general.desc(), case((TPRAEngagement.status == "ended", 1), else_=0),
                       func.lower(TPRAEngagement.name), TPRAEngagement.id).all())
     units = _units(db, v.tenant_id)
-    names = _names(db, [v.owner_id, *(r.owner_id for r in rows)])
+    names = _names(db, [v.owner_id, *(r.owner_id for r in rows), *_starters(rows)])
     if rows:
         items = [_row(v, r, names, units) for r in rows]
     else:
@@ -274,6 +303,30 @@ def ensure_general(db: Session, vendor: Vendor, actor_id: Optional[int]) -> TPRA
     return row
 
 
+def add_first(db: Session, vendor: Vendor, name: Optional[str], actor_id: Optional[int]) -> Optional[TPRAEngagement]:
+    """The engagement a request named, made when the request is picked up: General's row first, from the
+    supplier as it stands, then this one with the supplier's facts and the request's answers (it is tiered
+    when someone opens it). None when the request names none, names General, or the name is taken."""
+    name = " ".join((name or "").split())[:255]
+    if not name or name.lower() == "general" or db.query(TPRAEngagement.id).filter(
+            TPRAEngagement.vendor_id == vendor.id, TPRAEngagement.status != "ended",
+            func.lower(TPRAEngagement.name) == name.lower()).first():
+        return None
+    ensure_general(db, vendor, actor_id)
+    answers = (vendor.intake or {}).get("answers") or {}
+    row = TPRAEngagement(
+        tenant_id=vendor.tenant_id, vendor_id=vendor.id, name=name, status="active", created_by=actor_id,
+        description=answers.get("purpose"), owner_id=vendor.owner_id, business_unit_id=vendor.business_unit_id,
+        engagement_type=answers.get("engagement_type"), data_access_level=vendor.data_access_level,
+        data_types_accessed=_list(vendor.data_types_accessed), services_provided=_list(vendor.services_provided),
+        intake=vendor.intake)
+    db.add(row)
+    db.flush()
+    service.write_audit(db, vendor.tenant_id, entity="engagement", action="create", vendor_id=vendor.id,
+                        entity_id=row.id, actor_id=actor_id, to_value=row.name, reason="Named by the request")
+    return row
+
+
 @router.post("/vendors/{vendor_id}/engagements", status_code=status.HTTP_201_CREATED)
 def create_engagement(vendor_id: int, body: EngagementIn, db: Session = Depends(get_db),
                       user: GRCUser = Depends(require_auth)):
@@ -319,6 +372,29 @@ def update_engagement(engagement_id: int, body: EngagementIn, db: Session = Depe
     return _one(db, v, e)
 
 
+def _end(db: Session, v: Vendor, e: TPRAEngagement, actor_id: Optional[int], reason: str,
+         extra: Optional[dict] = None) -> None:
+    """The engagement is over: marked ended with when and why, its open assessment archived, the supplier recached
+    to the worst of the rest. Nothing is deleted. The caller commits."""
+    now = datetime.utcnow()
+    e.status, e.archived_at, e.ended_reason = "ended", now, reason[:2000]
+    if e.end_date is None or e.end_date > now.date():
+        e.end_date = now.date()
+    archived = []
+    for a in (db.query(VendorAssessment)
+              .filter(VendorAssessment.engagement_id == e.id, VendorAssessment.lifecycle_status == "active",
+                      VendorAssessment.deleted_at.is_(None))
+              .order_by(VendorAssessment.id)):
+        a.lifecycle_status = "archived"
+        a.row_version = (a.row_version or 1) + 1
+        archived.append(a.id)
+    db.flush()          # tenant sessions do not autoflush (PITFALLS 74): recache reads the ended status from the database
+    service.recache(db, v)
+    service.write_audit(db, v.tenant_id, entity="engagement", action="end", vendor_id=v.id, entity_id=e.id,
+                        actor_id=actor_id, from_value="active", to_value="ended", reason=reason,
+                        extra={"archived_assessments": archived, **(extra or {})})
+
+
 @router.post("/engagements/{engagement_id}/end")
 def end_engagement(engagement_id: int, body: EndIn, db: Session = Depends(get_db),
                    user: GRCUser = Depends(require_auth)):
@@ -334,21 +410,84 @@ def end_engagement(engagement_id: int, body: EndIn, db: Session = Depends(get_db
     reason = " ".join((body.reason or "").split())
     if len(reason) < 3:
         raise _bad("Say why the engagement ended")
-    now = datetime.utcnow()
-    e.status, e.archived_at, e.ended_reason = "ended", now, reason[:2000]
-    if e.end_date is None or e.end_date > now.date():
-        e.end_date = now.date()
-    archived = []
-    for a in (db.query(VendorAssessment)
-              .filter(VendorAssessment.engagement_id == e.id, VendorAssessment.lifecycle_status == "active",
-                      VendorAssessment.deleted_at.is_(None))
-              .order_by(VendorAssessment.id)):
-        a.lifecycle_status = "archived"
-        a.row_version = (a.row_version or 1) + 1
-        archived.append(a.id)
-    service.recache(db, v)
-    service.write_audit(db, v.tenant_id, entity="engagement", action="end", vendor_id=v.id, entity_id=e.id,
-                        actor_id=user.id, from_value="active", to_value="ended", reason=reason,
-                        extra={"archived_assessments": archived})
+    _end(db, v, e, user.id, reason)
+    db.commit()
+    return _one(db, v, e)
+
+
+# ── offboarding one engagement ───────────────────────────────────────────────
+# An exit of its own: a checklist kept on the engagement, started with a reason and finished when every step is
+# done, which ends the engagement as above. The supplier stays active with its portal links; offboarding the
+# whole relationship is the supplier's (routers/lifecycle.py).
+
+class ExitStart(BaseModel):
+    reason: str
+
+
+class ExitUpdate(BaseModel):
+    # The whole list as it now stands, {item, done}; notes alone leave it as it is.
+    items: Optional[list] = None
+    notes: Optional[str] = Field(None, max_length=8000)
+
+
+def _open_exit(e: TPRAEngagement) -> dict:
+    """The engagement's exit state while it is under way; 400 when there is none to work on."""
+    if e.status == "ended" or not isinstance(e.offboarding, dict) or e.offboarding.get("completed_at"):
+        raise _bad("There is no exit under way for this engagement")
+    return e.offboarding
+
+
+@router.post("/engagements/{engagement_id}/offboarding/start")
+def start_exit(engagement_id: int, body: ExitStart, db: Session = Depends(get_db),
+               user: GRCUser = Depends(require_auth)):
+    """Start the exit of one engagement: its own checklist opens. It stays in use until the exit is finished."""
+    e, v = _engagement(db, engagement_id, _tids(user, db))
+    rbac.require_write(db, user, "vendors", "edit")
+    if e.is_general:
+        raise _bad("General is the supplier itself: offboard the supplier instead")
+    if e.status == "ended":
+        raise _bad("This engagement has already ended")
+    if (v.status or "").lower() == "offboarded":
+        raise HTTPException(status.HTTP_409_CONFLICT, "The whole relationship is already being offboarded.")
+    if isinstance(e.offboarding, dict):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This exit is already under way. Finish it rather than starting another.")
+    reason = " ".join((body.reason or "").split())
+    if len(reason) < 3:
+        raise _bad("Say why the engagement is ending")
+    e.offboarding = {"items": exit_steps(), "reason": reason[:2000], "started_at": datetime.utcnow().isoformat(),
+                     "started_by": user.id, "notes": None, "completed_at": None}
+    service.write_audit(db, v.tenant_id, entity="engagement", action="offboard", vendor_id=v.id, entity_id=e.id,
+                        actor_id=user.id, to_value="offboarding", reason=reason)
+    db.commit()
+    return _one(db, v, e)
+
+
+@router.patch("/engagements/{engagement_id}/offboarding")
+def update_exit(engagement_id: int, body: ExitUpdate, db: Session = Depends(get_db),
+                user: GRCUser = Depends(require_auth)):
+    """Tick steps (the list replaces the old one; a step already done keeps who and when) and keep notes."""
+    e, v = _engagement(db, engagement_id, _tids(user, db))
+    rbac.require_write(db, user, "vendors", "edit")
+    state = dict(_open_exit(e))
+    if body.items is not None:
+        state["items"] = stamp_steps(body.items, state.get("items"), user.id)
+    if body.notes is not None:
+        state["notes"] = body.notes.strip() or None
+    e.offboarding = state
+    db.commit()
+    return _one(db, v, e)
+
+
+@router.post("/engagements/{engagement_id}/offboarding/complete")
+def complete_exit(engagement_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Finish the exit once every step is done: the engagement ends (as End engagement does) and the supplier stays active."""
+    e, v = _engagement(db, engagement_id, _tids(user, db))
+    rbac.require_write(db, user, "vendors", "edit")
+    state = _open_exit(e)
+    open_steps = [i.get("item") for i in state.get("items") or [] if isinstance(i, dict) and not i.get("done")]
+    if open_steps:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Some offboarding steps are not done.", "open": open_steps})
+    _end(db, v, e, user.id, state.get("reason") or "Offboarded", extra={"offboarding": True})
+    e.offboarding = {**state, "completed_at": datetime.utcnow().isoformat()}
     db.commit()
     return _one(db, v, e)

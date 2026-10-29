@@ -1,10 +1,11 @@
 'use client';
 
 // Software our people use that no one has assessed: brought in from a discovery
-// export or Grip, scored on what makes it risky here, and decided once —
-// onboarded as a supplier request, denied (and blocked), or dismissed.
+// export or Grip (or recorded by hand), scored on what makes it risky here, and decided
+// once — onboarded as a supplier request, linked to a supplier we already have, denied
+// (and blocked), or dismissed.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
@@ -12,15 +13,19 @@ import { Ban, ChevronDown, ChevronRight, Download, Loader2, RefreshCw, Search, S
 import { vendorShadowApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import { BTN, BTN_PRIMARY, Dialog } from '../_ui';
+import { shadowApi } from '../_lib/intakeApi';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { fmtDate } from '../_lib/tprmShared';
 import { errText } from '../_lib/intake/types';
 
-type Status = 'pending' | 'onboarded' | 'denied' | 'dismissed';
+type Status = 'pending' | 'onboarded' | 'linked' | 'denied' | 'dismissed';
 interface App {
   id: number; name: string; domain: string | null; category: string | null; description: string | null; users: number | null;
   owner_name: string | null; owner_email: string | null; source: string; source_risk: number | null; risk: number;
   level: 'high' | 'medium' | 'low'; why: string[]; status: Status; vendor_id: number | null; blocked: boolean;
+  /** the supplier it is linked to, and the one a pending app already is */
+  vendor_name: string | null; supplier: { id: number; name: string } | null;
   decided_by: string | null; decided_at: string | null; decision_note: string | null; last_seen: string;
   people_count: number;
 }
@@ -31,9 +36,10 @@ interface Board {
 }
 interface ImportResult { new: number; updated: number; suppliers: Array<{ name: string; supplier: string }>; rows: number; skipped: number }
 
-const TABS: Array<[Status | '', string]> = [['pending', 'To decide'], ['onboarded', 'Onboarded'], ['denied', 'Denied'], ['dismissed', 'Dismissed'], ['', 'All']];
+const TABS: Array<[Status | '', string]> = [['pending', 'To decide'], ['onboarded', 'Onboarded'], ['linked', 'Already ours'], ['denied', 'Denied'], ['dismissed', 'Dismissed'], ['', 'All']];
 const LEVEL_CLS = { high: 'border-rose-200 bg-rose-50 text-rose-700', medium: 'border-amber-200 bg-amber-50 text-amber-800', low: 'border-slate-200 bg-slate-50 text-slate-600' };
-const SOURCE = { csv: 'Import', grip: 'Grip', records: 'Our records' } as Record<string, string>;
+const SOURCE = { csv: 'Import', grip: 'Grip', records: 'Our records', manual: 'Entered by hand' } as Record<string, string>;
+const STATUS_WORD = { linked: 'Already ours' } as Record<string, string>;
 
 export default function ShadowSaasPage() {
   const qc = useQueryClient();
@@ -45,6 +51,7 @@ export default function ShadowSaasPage() {
   const [deciding, setDeciding] = useState<{ app: App; how: 'deny' | 'dismiss' } | null>(null);
   const [importing, setImporting] = useState(false);
   const [roster, setRoster] = useState<App | null>(null);
+  const [linking, setLinking] = useState<App | null>(null);
   const key = ['tprm-shadow', status];
   const { data, isLoading, isError } = useQuery<Board>({
     queryKey: key,
@@ -115,6 +122,8 @@ export default function ShadowSaasPage() {
         <Kpi label="Blocked at the web gateway" value={data?.blocked} />
       </div>
 
+      {canEdit && <RecordForm onDone={refresh} />}
+
       <div className="inline-flex flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
         {TABS.map(([k, label]) => (
           <button key={k || 'all'} type="button" onClick={() => setStatus(k)} aria-pressed={status === k}
@@ -151,7 +160,8 @@ export default function ShadowSaasPage() {
                 <Row key={a.id} app={a} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} canEdit={canEdit}
                   busy={onboard.isPending || reopen.isPending} onPeople={() => setRoster(a)}
                   onOnboard={() => onboard.mutate(a.id)} onDeny={() => setDeciding({ app: a, how: 'deny' })}
-                  onDismiss={() => setDeciding({ app: a, how: 'dismiss' })} onReopen={() => reopen.mutate(a.id)} />
+                  onDismiss={() => setDeciding({ app: a, how: 'dismiss' })} onReopen={() => reopen.mutate(a.id)}
+                  onLink={() => setLinking(a)} />
               ))}
             </tbody>
           </table>
@@ -182,13 +192,14 @@ export default function ShadowSaasPage() {
       {deciding && <DecideDialog app={deciding.app} how={deciding.how} gateway={!!data?.connected.zscaler} onClose={() => setDeciding(null)} onDone={refresh} />}
       {roster && <PeopleDialog app={roster} onClose={() => setRoster(null)} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={refresh} />}
+      <LinkDialog app={linking} onClose={() => setLinking(null)} onDone={refresh} />
     </div>
   );
 }
 
-function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismiss, onReopen, onPeople }: {
+function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismiss, onReopen, onPeople, onLink }: {
   app: App; open: boolean; onToggle: () => void; canEdit: boolean; busy: boolean;
-  onOnboard: () => void; onDeny: () => void; onDismiss: () => void; onReopen: () => void; onPeople: () => void;
+  onOnboard: () => void; onDeny: () => void; onDismiss: () => void; onReopen: () => void; onPeople: () => void; onLink: () => void;
 }) {
   return (
     <>
@@ -201,6 +212,7 @@ function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismi
         <td className="px-3 py-3">
           <p className="font-medium text-slate-900">{a.name}</p>
           <p className="text-xs text-slate-500">{[a.domain, a.category, SOURCE[a.source] || a.source].filter(Boolean).join(' · ')}</p>
+          {a.status === 'pending' && a.supplier && <p className="mt-0.5 text-xs text-amber-800">Looks like {a.supplier.name}, a supplier we already have</p>}
         </td>
         <td className="px-3 py-3 text-right tabular-nums text-slate-700">
           {a.people_count > 0 ? (
@@ -218,16 +230,24 @@ function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismi
         <td className="hidden px-3 py-3 text-slate-600 lg:table-cell">{fmtDate(a.last_seen)}</td>
         <td className="px-3 py-3 text-right">
           {a.status === 'pending' ? (canEdit && (
-            <div className="inline-flex gap-1.5">
-              <button type="button" onClick={onOnboard} disabled={busy} className="rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-60">Onboard</button>
+            <div className="inline-flex flex-wrap justify-end gap-1.5">
+              {a.supplier ? (
+                <button type="button" onClick={onLink} className="rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700">Link to vendor</button>
+              ) : (
+                <>
+                  <button type="button" onClick={onOnboard} disabled={busy} className="rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-60">Onboard</button>
+                  <button type="button" onClick={onLink} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Link to vendor</button>
+                </>
+              )}
               <button type="button" onClick={onDeny} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Deny</button>
               <button type="button" onClick={onDismiss} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Dismiss</button>
             </div>
           )) : (
             <div className="inline-flex items-center gap-2 text-xs">
-              <span className="capitalize text-slate-600">{a.status}{a.blocked ? ' · blocked' : ''}</span>
+              <span className="capitalize text-slate-600">{STATUS_WORD[a.status] ?? a.status}{a.blocked ? ' · blocked' : ''}</span>
               {a.status === 'onboarded' && a.vendor_id && <Link href={`/vendor-risk/intake/${a.vendor_id}`} className="text-primary-700 hover:underline">Request</Link>}
-              {canEdit && (a.status === 'denied' || a.status === 'dismissed') && (
+              {a.status === 'linked' && a.vendor_id && <Link href={`/vendor-risk/vendors/${a.vendor_id}`} className="text-primary-700 hover:underline">{a.vendor_name || 'Open vendor'}</Link>}
+              {canEdit && (a.status === 'denied' || a.status === 'dismissed' || a.status === 'linked') && (
                 <button type="button" onClick={onReopen} disabled={busy} className="rounded-lg border border-slate-200 px-2 py-0.5 text-slate-700 hover:bg-slate-50">Reopen</button>
               )}
             </div>
@@ -250,6 +270,91 @@ function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismi
         </tr>
       )}
     </>
+  );
+}
+
+// An app someone knows is in use, entered by hand: it joins the list to be decided like any other.
+function RecordForm({ onDone }: { onDone: () => void }) {
+  const { toast } = useToast();
+  const [name, setName] = useState('');
+  const [people, setPeople] = useState('');
+  const record = useMutation({
+    mutationFn: async () => (await shadowApi.record({ name: name.trim(), users: people.trim() === '' ? null : Number(people) })).data as App,
+    onSuccess: (a) => { onDone(); setName(''); setPeople(''); toast({ type: 'success', title: `${a.name} recorded` }); },
+    onError: (e) => toast({ type: 'error', title: 'Not recorded', message: errText(e, 'Try again.') }),
+  });
+  const field = 'h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-primary-500 focus:outline-none';
+  return (
+    <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (name.trim() && !record.isPending) record.mutate(); }}>
+      <label className="block text-xs font-medium text-slate-600">App in use
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Figma" maxLength={255} className={`${field} mt-1 block w-56`} />
+      </label>
+      <label className="block text-xs font-medium text-slate-600">People <span className="font-normal text-slate-500">(optional)</span>
+        <input type="number" min={0} value={people} onChange={(e) => setPeople(e.target.value)} className={`${field} mt-1 block w-28`} />
+      </label>
+      <button type="submit" disabled={!name.trim() || record.isPending}
+        className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+        {record.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Record
+      </button>
+    </form>
+  );
+}
+
+// The app is a supplier we already have: pick it from the register and it is settled as "Already ours".
+function LinkDialog({ app, onClose, onDone }: { app: App | null; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [search, setSearch] = useState('');
+  const [picked, setPicked] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+  const open = app !== null;
+  useEffect(() => {
+    if (!app) return;
+    setSearch(app.supplier?.name ?? app.name);
+    setPicked(app.supplier?.id ?? null);
+    setNote('');
+  }, [app]);
+  const { data, isFetching } = useQuery({
+    queryKey: ['tprm-shadow-vendors', search],
+    queryFn: async () => (await shadowApi.vendors(search.trim())).data.items,
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const link = useMutation({
+    mutationFn: async () => (await shadowApi.link((app as App).id, picked as number, note.trim())).data as App,
+    onSuccess: (a) => { onDone(); onClose(); toast({ type: 'success', title: `${a.name} is already ours`, message: a.vendor_name ? `Linked to ${a.vendor_name}.` : undefined }); },
+    onError: (e) => toast({ type: 'error', title: 'Not linked', message: errText(e, 'Try again.') }),
+  });
+  return (
+    <Dialog open={open} onClose={onClose} title={`Link ${app?.name ?? 'the app'} to a vendor`}
+      description="It is settled as already ours, and nothing is raised."
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className={BTN}>Cancel</button>
+          <button type="button" onClick={() => link.mutate()} disabled={picked === null || link.isPending} className={BTN_PRIMARY}>
+            {link.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Link
+          </button>
+        </>
+      )}>
+      <label className="block text-[13px] font-medium leading-5 text-[#26323d]">Find the vendor
+        <input data-autofocus type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the register"
+          className="mt-1 block h-10 w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 text-sm text-[#1f2933] focus:border-[#0f766e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30" />
+      </label>
+      <div role="radiogroup" aria-label="Vendors" className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-[#d5dbe1]">
+        {isFetching && !data ? <p className="px-3 py-3 text-[13px] text-[#586472]">Searching…</p>
+          : !data?.length ? <p className="px-3 py-3 text-[13px] text-[#586472]">No vendor matches.</p>
+          : data.map((v) => (
+            <label key={v.id} className="flex cursor-pointer items-center gap-2.5 border-b border-[#e1e6eb] px-3 py-2 text-[13px] text-[#26323d] last:border-b-0 hover:bg-[#f3f6f8] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-[#0f766e]">
+              <input type="radio" name="link-vendor" checked={picked === v.id} onChange={() => setPicked(v.id)} className="h-4 w-4 accent-[#0f766e]" />
+              <span className="min-w-0 flex-1 truncate font-medium">{v.name}</span>
+              {v.website && <span className="truncate text-[12px] text-[#64707e]">{v.website}</span>}
+            </label>
+          ))}
+      </div>
+      <label className="mt-3 block text-[13px] font-medium leading-5 text-[#26323d]">Note <span className="text-[12px] font-normal text-[#64707e]">(optional)</span>
+        <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
+          className="mt-1 block w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-2 text-sm text-[#1f2933] focus:border-[#0f766e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30" />
+      </label>
+    </Dialog>
   );
 }
 

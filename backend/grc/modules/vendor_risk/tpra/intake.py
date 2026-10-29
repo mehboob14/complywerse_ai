@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
 from ....models import Vendor
 
 STATUSES = ("draft", "submitted", "in_review", "approved", "rejected")
+OPEN = ("draft", "submitted")          # still to be decided by the review team: these are screened for duplicates
 VENDOR_STATUS = {"draft": "requested", "submitted": "requested", "in_review": "onboarding",
                  "approved": "active", "rejected": "rejected"}
 LEVELS = ("none", "low", "moderate", "high", "severe")
@@ -218,8 +220,45 @@ def clean(answers, justifications, custom: Optional[dict] = None) -> dict:
 
 def merge(current: Optional[dict], patch: dict) -> dict:
     now = current or {}
-    return {"answers": {**(now.get("answers") or {}), **patch["answers"]},
+    return {**now, "answers": {**(now.get("answers") or {}), **patch["answers"]},
             "justifications": {**(now.get("justifications") or {}), **patch["justifications"]}}
+
+
+# ── the request itself: not a question, but who it is for and how soon ───────
+
+URGENCIES = ("low", "normal", "high")
+
+
+def request_of(intake: Optional[dict]) -> dict:
+    """What a request says about itself beside its answers (`intake["request"]`): the department it
+    is for, how soon it is needed, and the name of the first engagement, if it gives one."""
+    r = (intake or {}).get("request")
+    r = r if isinstance(r, dict) else {}
+    return {"department": r.get("department") or None, "engagement": r.get("engagement") or None,
+            "urgency": r.get("urgency") if r.get("urgency") in URGENCIES else "normal"}
+
+
+def clean_request(raw) -> dict:
+    """The fields sent, checked; anything else is refused so a typo cannot look saved."""
+    out = {}
+    for key, value in (raw or {}).items():
+        text = " ".join(str(value or "").split())
+        if key == "urgency":
+            text = text.lower() or "normal"
+            if text not in URGENCIES:
+                raise ValueError("Urgency must be low, normal or high")
+            out[key] = text
+        elif key in ("department", "engagement"):
+            out[key] = text[:120 if key == "department" else 255] or None
+        else:
+            raise ValueError(f"'{key}' is not a request field")
+    return out
+
+
+def merge_request(current: Optional[dict], patch: dict) -> Optional[dict]:
+    if not patch:
+        return current
+    return {**(current or {}), "request": {**((current or {}).get("request") or {}), **patch}}
 
 
 def _asked(question: dict, answers: dict) -> bool:
@@ -465,14 +504,50 @@ def name_key(name: Optional[str]) -> str:
     return " ".join(words)
 
 
+def on_record(db, tenant_id: int):
+    """Every supplier and request on record, archived ones too, those in use first."""
+    return (db.query(Vendor.id, Vendor.name, Vendor.website, Vendor.deleted_at, Vendor.status, Vendor.intake_status)
+            .filter(Vendor.tenant_id == tenant_id)
+            .order_by(Vendor.deleted_at.isnot(None), Vendor.id))
+
+
 def duplicate(db, tenant_id: int, name: Optional[str], website: Optional[str] = None):
     """A supplier already on record by this name or website (archived ones too:
     the caller says so), one in use first; None when there is none."""
     key, site = name_key(name), host(website)
-    rows = (db.query(Vendor.id, Vendor.name, Vendor.website, Vendor.deleted_at)
-            .filter(Vendor.tenant_id == tenant_id)
-            .order_by(Vendor.deleted_at.isnot(None), Vendor.id))
-    return next((r for r in rows if (key and name_key(r.name) == key) or (site and host(r.website) == site)), None)
+    return next((r for r in on_record(db, tenant_id)
+                 if (key and name_key(r.name) == key) or (site and host(r.website) == site)), None)
+
+
+_WHY = {"name": "the name matches once case, punctuation and company endings are ignored",
+        "website": "the website is the same", "both": "the name and the website match"}
+
+
+def screen(rows, asked) -> Dict[int, List[dict]]:
+    """What each of `asked` (anything with id, name and website) may already be, from one read of what is on
+    record: {id: [{id, name, reason, match, archived, status, intake_status}]}, in-use first. A row is never a
+    match for itself, so a request can be screened against the register it is part of."""
+    known = [(r, name_key(r.name), host(r.website)) for r in rows]
+    out = {}
+    for q in asked:
+        key, site = name_key(q.name), host(q.website)
+        found = []
+        for r, k, h in known:
+            by_name, by_site = bool(key) and k == key, bool(site) and h == site
+            if r.id != q.id and (by_name or by_site):
+                kind = "both" if by_name and by_site else "name" if by_name else "website"
+                found.append({"id": r.id, "name": r.name, "reason": _WHY[kind], "match": kind,
+                              "archived": r.deleted_at is not None, "status": r.status,
+                              "intake_status": r.intake_status})
+        out[q.id] = found
+    return out
+
+
+def duplicates(db, tenant_id: int, name: Optional[str], website: Optional[str] = None,
+               exclude_id: Optional[int] = None) -> List[dict]:
+    """Everything on record this name or website may be (see `screen`); `exclude_id` is the request being screened."""
+    asked = SimpleNamespace(id=exclude_id, name=name, website=website)
+    return screen(on_record(db, tenant_id), [asked])[exclude_id]
 
 
 def mine(vendor: Vendor, user_id: int) -> bool:

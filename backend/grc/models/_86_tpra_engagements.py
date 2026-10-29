@@ -52,6 +52,9 @@ class TPRAEngagement(Base):
     next_reassessment_date = Column(DateTime, nullable=True)
     status = Column(String(20), nullable=False, default="active")   # active | ended
     ended_reason = Column(Text, nullable=True)
+    # The exit of this engagement alone (tpra/engagements.py): {items: [{item, done, at, by}], reason, started_at,
+    # started_by, notes, completed_at}; NULL until it starts. Finishing it ends the engagement; the supplier stays active.
+    offboarding = Column(JSON, nullable=True)
     archived_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

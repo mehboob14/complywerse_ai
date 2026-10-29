@@ -21,12 +21,12 @@ touches none of this: General is the supplier itself and only offboarding ends i
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ....models import Vendor, GRCUser, VendorQuestionnaireResponse, get_db
+from ....models import Vendor, GRCUser, TPRAAuditLog, VendorQuestionnaireResponse, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
 from ..lifecycle import (
@@ -37,9 +37,10 @@ from ..tpra import stages as tpra_stages
 from ..tpra.contacts import revoke_all
 from ..tpra.portal import WAITING_ON_VENDOR
 from .vendors import archive_vendor, serialize_vendor, get_vendor_or_404
-
-CONTRACTS_CLOSED = "Contracts closed out"
-OFFBOARDING_CHECKLIST = [*DEFAULT_OFFBOARDING_CHECKLIST, CONTRACTS_CLOSED]
+# The steps of an exit live in ../lifecycle.py (the engagements' own exits use them too); callers and tests also read
+# CONTRACTS_CLOSED, FINAL_PAYMENTS and OFFBOARDING_CHECKLIST from here.
+from ..lifecycle import CONTRACTS_CLOSED, FINAL_PAYMENTS, OFFBOARDING_CHECKLIST, exit_steps, stamp_steps  # noqa: F401
+from ..tpra import engagements as tpra_engagements
 
 # The eight stages this module used to own, against the canonical eleven. Kept so
 # an old client's stage name still resolves to something real.
@@ -258,8 +259,8 @@ def schedule_reassessment(
 
 # ── Stage 8 — Offboarding checklist ───────────────────────────────────────
 
-def _checklist() -> list:
-    return [{"item": i, "done": False, "at": None, "by": None} for i in OFFBOARDING_CHECKLIST]
+def _checklist(steps=None) -> list:
+    return exit_steps(steps)
 
 
 def close_supplier_side(db: Session, vendor: Vendor, by: Optional[int], reason: Optional[str]) -> dict:
@@ -291,7 +292,9 @@ def start_offboarding(db: Session, vendor: Vendor, by: Optional[int], reason: Op
     vendor.status = "offboarded"
     held = [i for i in vendor.offboarding_checklist or [] if isinstance(i, dict)]
     have = {i.get("item") for i in held}
-    vendor.offboarding_checklist = held + [i for i in _checklist() if i["item"] not in have]
+    # A list already laid out is brought up to the steps it was missing before the newest one, not given that one.
+    vendor.offboarding_checklist = held + [i for i in _checklist(OFFBOARDING_CHECKLIST[:-1] if held else None)
+                                           if i["item"] not in have]
     closed = close_supplier_side(db, vendor, by, reason or "Offboarding")
     tpra_service.write_audit(db, vendor.tenant_id, entity="vendor", action="offboard", vendor_id=vendor.id,
                              entity_id=vendor.id, actor_id=by, from_value=before, to_value="offboarded",
@@ -299,14 +302,37 @@ def start_offboarding(db: Session, vendor: Vendor, by: Optional[int], reason: Op
     return closed
 
 
-def _offboarding(vendor: Vendor, items: list) -> dict:
+def _last(db: Session, vendor: Vendor, action: str) -> Optional[TPRAAuditLog]:
+    return (db.query(TPRAAuditLog)
+            .filter(TPRAAuditLog.vendor_id == vendor.id, TPRAAuditLog.entity == "vendor", TPRAAuditLog.action == action)
+            .order_by(TPRAAuditLog.id.desc()).first())
+
+
+def _exit_meta(db: Session, vendor: Vendor) -> dict:
+    """What the audit trail says about the supplier's exit while it is under way: why, when, by whom, how many
+    portal links closed, and the latest note. The exit has no columns of its own: it is read from what was written."""
+    start = _last(db, vendor, "offboard") if (vendor.status or "").lower() == "offboarded" else None
+    note = _last(db, vendor, "offboarding_notes") if start is not None else None
+    who = db.query(GRCUser).filter(GRCUser.id == start.actor_id).first() if start is not None and start.actor_id else None
+    return {"reason": start.reason if start is not None else None,
+            "started_at": start.created_at.isoformat() if start is not None and start.created_at else None,
+            "started_by": (who.display_name or who.username or who.email) if who is not None else None,
+            "links_revoked": (start.extra or {}).get("links_revoked") if start is not None else None,
+            "notes": note.reason if note is not None else None}
+
+
+def _offboarding(db: Session, vendor: Vendor, items: list) -> dict:
+    """`items`, `started` and `archived_at` are the supplier's exit as ever; the rest tells its story and lists
+    the exits of single engagements beside it (tpra/engagements.py)."""
     return {"items": items, "started": (vendor.status or "").lower() == "offboarded",
-            "archived_at": vendor.deleted_at.isoformat() if vendor.deleted_at else None}
+            "archived_at": vendor.deleted_at.isoformat() if vendor.deleted_at else None,
+            **_exit_meta(db, vendor), "engagements": tpra_engagements.exits(db, vendor)}
 
 
 class OffboardingUpdate(BaseModel):
-    # Full replacement list of {item, done} — the UI sends the current state.
-    items: list
+    # Full replacement list of {item, done} — the UI sends the current state; notes alone leave the list as it is.
+    items: Optional[list] = None
+    notes: Optional[str] = Field(None, max_length=8000)
 
 
 class OffboardIn(BaseModel):
@@ -322,7 +348,7 @@ def get_offboarding(
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
     # Surface the standard checklist without persisting until the user acts.
-    return _offboarding(vendor, vendor.offboarding_checklist or _checklist())
+    return _offboarding(db, vendor, vendor.offboarding_checklist or _checklist())
 
 
 @router.post("/vendors/{vendor_id}/offboarding/start")
@@ -342,7 +368,7 @@ def begin_offboarding(
     closed = start_offboarding(db, vendor, current_user.id, " ".join((payload.reason or "").split()) or None)
     vendor.updated_at = datetime.utcnow()
     db.commit()
-    return {**_offboarding(vendor, vendor.offboarding_checklist), **closed}
+    return {**_offboarding(db, vendor, vendor.offboarding_checklist), **closed}
 
 
 @router.post("/vendors/{vendor_id}/offboarding/complete")
@@ -377,19 +403,16 @@ def update_offboarding(
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
     rbac.require_write(db, current_user, "vendors", "edit")
-    now = datetime.utcnow().isoformat()
-    normalized = []
-    for raw in (payload.items or []):
-        if not isinstance(raw, dict):
-            continue
-        done = bool(raw.get("done"))
-        normalized.append({
-            "item": str(raw.get("item") or ""),
-            "done": done,
-            "at": (raw.get("at") or now) if done else None,
-            "by": (raw.get("by") or current_user.id) if done else None,
-        })
-    vendor.offboarding_checklist = normalized
+    if payload.items is not None:
+        vendor.offboarding_checklist = stamp_steps(payload.items, vendor.offboarding_checklist, current_user.id)
+    if payload.notes is not None:
+        if (vendor.status or "").lower() != "offboarded":
+            raise HTTPException(status_code=400, detail="Start offboarding first.")
+        text = payload.notes.strip()
+        latest = _last(db, vendor, "offboarding_notes")
+        if text != ((latest.reason if latest is not None else None) or ""):
+            tpra_service.write_audit(db, vendor.tenant_id, entity="vendor", action="offboarding_notes", vendor_id=vendor.id,
+                                     entity_id=vendor.id, actor_id=current_user.id, reason=text)
     vendor.updated_at = datetime.utcnow()
     db.commit()
-    return _offboarding(vendor, normalized)
+    return _offboarding(db, vendor, vendor.offboarding_checklist or _checklist())
