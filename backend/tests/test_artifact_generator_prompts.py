@@ -81,7 +81,7 @@ def _of_mode(entry, prompts, mode):
 
 def test_a_guide_prompt_names_the_control_only_as_an_internal_scope_hint(entry, prompts):
     guides = _of_mode(entry, prompts, "guide")
-    assert len(guides) == 68 and all(int(a["artifact_id"].split("-")[1]) >= FIRST_TEMPLATE for a in guides)
+    assert len(guides) == 88 and all(int(a["artifact_id"].split("-")[1]) >= FIRST_TEMPLATE for a in guides)
     for a in guides:
         user = prompts[a["artifact_id"]]["user"]
         assert HINT.findall(user) == [a["control_ref"]], a["artifact_id"]               # once, and it is this artifact's control
@@ -149,3 +149,32 @@ def test_the_grounded_generators_dry_run_prints_the_hardened_prompts_and_calls_n
         assert "(Evidence, " in section.split("\n", 1)[0]
         assert HINT.findall(user) == [control] and NUMBER.search(HINT.sub("", user)) is None
         assert all(rule in user for rule in GUIDE_RULES)
+
+
+def test_a_template_is_told_the_sub_controls_it_serves_not_the_whole_control(grounded, entry, controls):
+    """UAEIA-441 serves two of the sixteen data requirements of its control and UAEIA-409 all five of its clauses: the prompt of each carries
+    exactly the sub-controls of the artifact, so the five contract schedules of one control no longer all get the whole clause list."""
+    for artifact_id, whole in (("UAEIA-441", False), ("UAEIA-409", True)):
+        art = next(a for a in entry["artifacts"] if a["artifact_id"] == artifact_id)
+        nodes = controls[art["control_ref"]]["native_attributes"]["sub_controls"]
+        assert (len(art["sub_controls"]) == len(nodes)) == whole, artifact_id
+        requirement = grounded._grounded(art, controls)["requirement"]
+        for node in nodes:
+            assert (grounded._no_ids(node["text"]).strip() in requirement) == (node["code"] in art["sub_controls"]), (artifact_id, node["code"])
+
+
+def test_an_artifact_that_serves_no_sub_control_is_still_told_its_control(grounded, entry, controls):
+    art = next(a for a in entry["artifacts"] if not a["sub_controls"])
+    control = controls[art["control_ref"]]
+    whole = (control.get("full_text") or control.get("description") or "").strip()
+    assert grounded._grounded(art, controls)["requirement"] == grounded._no_ids(whole).strip()
+
+
+def test_the_served_text_keeps_a_shared_lead_in_once_and_the_points_under_their_sub_control(grounded):
+    control = {"full_text": "WHOLE", "native_attributes": {"sub_controls": [
+        {"code": "X.1", "lead_in": "The entity shall:", "text": "do a.", "points": []},
+        {"code": "X.2", "lead_in": "The entity shall:", "text": "do b.",
+         "points": [{"label": "a.", "text": "first", "points": [{"label": "i.", "text": "nested"}]}]},
+        {"code": "X.3", "lead_in": "The entity shall:", "text": "not served.", "points": []}]}}
+    assert grounded._served_text(control, {"X.1", "X.2"}) == "The entity shall:\n- do a.\n- do b.\n  a. first\n    i. nested"
+    assert grounded._served_text(control, {"elsewhere"}) == "WHOLE"

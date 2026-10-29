@@ -409,13 +409,13 @@ def test_an_artifact_lists_the_sub_controls_its_evidence_items_cover(artifacts, 
     owner = {i["name"]: (cid, i.get("covers", [])) for cid, items in LAYERS.items() for i in items}      # names are unique over the library
     assert len(owner) == 860
     library = {n["code"] for r in rows for n in r["native_attributes"]["sub_controls"]}
-    assert len(artifacts) == 408                                            # 256 documents, then the 152 templates of records (round 5)
+    assert len(artifacts) == 462                          # 256 documents, the 152 templates of records (round 5), then the 54 for Annex E (round 5b)
     for a in artifacts:
         keys = list(a)
         assert keys.index("sub_controls") == keys.index("evidence") + 1 and keys[-1] == "sub_controls", a["artifact_id"]
         want = sorted({f"{owner[name][0]}.{k}" for name in a["evidence"] for k in owner[name][1]}, key=_natural)
         assert a["sub_controls"] == want and set(want) <= library, a["artifact_id"]
-    assert sum(bool(a["sub_controls"]) for a in artifacts) == 358                        # 206 documents and all 152 templates
+    assert sum(bool(a["sub_controls"]) for a in artifacts) == 412                        # 206 documents and all 206 templates
     # the 50 without any: the 49 Annex F artifacts (objectives only) and the post-quantum transition plan (a control-level item)
     assert sorted(a["artifact_id"] for a in artifacts if not a["sub_controls"] and not a["control_ref"].startswith("F")) == ["UAEIA-100"]
     assert sum(not a["sub_controls"] and a["control_ref"].startswith("F") for a in artifacts) == 49
@@ -424,7 +424,8 @@ def test_an_artifact_lists_the_sub_controls_its_evidence_items_cover(artifacts, 
     served = {c for a in artifacts for c in a["sub_controls"]}
     assert (len(core_codes & served), len(core_codes)) == (449, 449)        # 292 by the documents, the other 157 (records and outputs) by the templates
     assert len(core_codes & {c for a in artifacts[:256] for c in a["sub_controls"]}) == 292
-    assert (len(e_codes & served), len(e_codes)) == (80, 172)
+    assert (len(e_codes & served), len(e_codes)) == (172, 172)              # 80 by the documents, the other 92 (records and outputs) by round 5b
+    assert len(e_codes & {c for a in artifacts[:256] for c in a["sub_controls"]}) == 80
     assert next(a for a in artifacts if a["artifact_id"] == "UAEIA-001")["sub_controls"] == [f"M1.2.1.{k}" for k in range(1, 6)]
 
 
@@ -438,10 +439,10 @@ def test_the_builder_rewrites_only_that_entry_and_keeps_the_line_ends(catalog, t
     for name, text in (("as_committed.json", old), ("lf_only.json", old.replace(b"\r\n", b"\n"))):
         path = tmp_path / name
         path.write_bytes(text)
-        assert b.sync_artifacts(path, catalog["controls"]) == 408
+        assert b.sync_artifacts(path, catalog["controls"]) == 462
         want = committed if name == "as_committed.json" else committed.replace(b"\r\n", b"\n")
         assert path.read_bytes() == want                                             # same bytes, whichever line ends the file has
-        assert b.sync_artifacts(path, catalog["controls"]) == 408 and path.read_bytes() == want        # a second run changes nothing
+        assert b.sync_artifacts(path, catalog["controls"]) == 462 and path.read_bytes() == want        # a second run changes nothing
     # it stops on a file it cannot rewrite safely, and on evidence the library does not have
     path = tmp_path / "bad.json"
     path.write_bytes(old.replace(b'"name": "UAE Information Assurance Standard",\r\n    "artifacts"', b'"name": "UAE",\r\n    "artifacts"'))

@@ -9,15 +9,18 @@ The PDF is not needed here. On in-memory SQLite.
 The artifacts follow the evidence recommendations the library ships (seed_data/frameworks/uae_ia.json: 527 items on the standard's
 134 controls and 333 on its 128 annex rows, E1-E3 and F1-F4). Every item is classified once, in CLASSIFICATION at the end of this file:
   class A, an authored document: a policy, standard, procedure, plan, register, matrix, schedule, template, report, or a section
-          of one, that the entity writes and maintains; since round 5 also the template of a record or an output (UAEIA-257 on):
+          of one, that the entity writes and maintains; since round 5 also the template of a record or an output (UAEIA-257 on, and since
+          round 5b UAEIA-409 on for the rows of Annex E):
           a form, log, register, evaluation or report the entity fills in, or a guide to what a system or a sample has to show.
           The value is the id of the artifact that provides it, and that artifact lists the item's name in its `evidence`.
   class B, a record or an output of operating the control or of a system. The value is one reason code (REASONS). No artifact
           lists it: it is uploaded or generated, not authored. Since round 5 these are the 89 records of the standard's controls
-          that evidence a control as a whole or only sub-controls another artifact already serves, and the 191 Annex E and F records.
+          that evidence a control as a whole or only sub-controls another artifact already serves, and, since round 5b, the 124 Annex E and F
+          records.
 An artifact's `control_ref` is its primary control; `also_controls` are the other controls whose items it provides.
 Round 5 gave the 157 sub-controls that had no artifact (their evidence is only records and outputs) templates: UAEIA-257 to 408, one
-per sub-control that still had an item no artifact provided, providing exactly those items (169 items, 152 artifacts).
+per sub-control that still had an item no artifact provided, providing exactly those items (169 items, 152 artifacts). Round 5b did the
+same for the 92 sub-controls of Annex E that had none: UAEIA-409 to 462 (67 items, 54 artifacts).
 """
 import collections
 import importlib.util
@@ -54,6 +57,7 @@ STAGES = {"Stage 1: Governance & Scoping", "Stage 2: Risk Assessment", "Stage 3:
 AUTHORED_FORMATS = {"DOCX", "XLSX", "PDF"}
 COLLECTED_FORMATS = {"Configs", "Logs", "Reports", "ITSM", "ZIP/Drive"}
 FIRST_TEMPLATE = 257          # UAEIA-257 on are the round-5 templates of records and outputs; 001-256 are the authored documents
+FIRST_ANNEX_TEMPLATE = 409    # UAEIA-409 on are the round-5b templates for the Annex E sub-controls that had no artifact (409-462)
 REASONS = {
     "approval": "approval, sign-off, appointment, authorization or decision record; the approval or review history of a document",
     "minutes": "minutes of a meeting",
@@ -243,13 +247,13 @@ def test_every_evidence_item_is_classified_and_every_authored_one_has_an_artifac
 
 
 # -- the templates of records and outputs (round 5) ----------------------------------------------------------------------------
-# (type, format) -> (the content generator's mode for it, how many of the 152 templates are of that kind)
+# (type, format) -> (the content generator's mode for it, how many of the 152 round-5 templates and of the 54 round-5b templates are of that kind)
 KINDS = {
-    ("Form/Template", "DOCX"): ("markdown", 39), ("Assessment", "DOCX"): ("markdown", 4), ("Report", "DOCX"): ("markdown", 2),
-    ("Agreement", "DOCX"): ("markdown", 1),
-    ("Log", "XLSX"): ("table", 33), ("Register", "XLSX"): ("table", 4), ("Form/Template", "XLSX"): ("table", 1),
-    ("Evidence", "Configs"): ("guide", 38), ("Evidence", "Reports"): ("guide", 13), ("Evidence", "ZIP/Drive"): ("guide", 5),
-    ("Evidence", "ITSM"): ("guide", 5), ("Record/Log", "Logs"): ("guide", 7),
+    ("Form/Template", "DOCX"): ("markdown", 39, 10), ("Assessment", "DOCX"): ("markdown", 4, 0), ("Report", "DOCX"): ("markdown", 2, 2),
+    ("Agreement", "DOCX"): ("markdown", 1, 8),
+    ("Log", "XLSX"): ("table", 33, 8), ("Register", "XLSX"): ("table", 4, 4), ("Form/Template", "XLSX"): ("table", 1, 2),
+    ("Evidence", "Configs"): ("guide", 38, 11), ("Evidence", "Reports"): ("guide", 13, 2), ("Evidence", "ZIP/Drive"): ("guide", 5, 4),
+    ("Evidence", "ITSM"): ("guide", 5, 0), ("Record/Log", "Logs"): ("guide", 7, 3),
 }
 
 
@@ -273,7 +277,7 @@ def test_each_template_provides_what_no_earlier_artifact_does_for_one_sub_contro
     serves that still has an evidence item nobody provides gets one artifact, providing exactly those items; an item that covers
     several of them is provided by the first, whose artifact serves the others."""
     documents = [a for a in entry["artifacts"] if _number(a) < FIRST_TEMPLATE]
-    templates = [a for a in entry["artifacts"] if _number(a) >= FIRST_TEMPLATE]
+    templates = [a for a in entry["artifacts"] if FIRST_TEMPLATE <= _number(a) < FIRST_ANNEX_TEMPLATE]
     provided = {n for a in documents for n in a["evidence"]}
     served = {s for a in documents for s in a["sub_controls"]}
     open_nodes = [(c["control_id"], n) for c in controls.values() if "annex" not in c
@@ -294,12 +298,59 @@ def test_each_template_provides_what_no_earlier_artifact_does_for_one_sub_contro
     assert [n["code"] for _, n in open_nodes if n["code"] not in own] == ["M1.1.2.6", "M1.1.2.8", "M3.4.1.5", "T3.1.6.4", "T3.1.6.5"]
 
 
-def test_the_templates_are_named_and_owned_like_the_rest_of_the_catalogue(entry):
-    from grc.routers.artifacts_router import _get_platform_data_type
+def test_every_annex_e_sub_control_is_served_by_an_artifact(entry, controls):
+    """The point of round 5b: 92 of the 172 sub-controls of Annex E (cloud 28, AI/ML 11, IoT 53) had no artifact because their evidence is
+    only records and outputs (contract extracts, test results, screenshots of settings, log extracts). Each is served by a template now."""
+    codes = [n["code"] for c in controls.values() if c.get("annex", "")[:1] == "E" for n in c["native_attributes"]["sub_controls"]]
+    served = {s for a in entry["artifacts"] for s in a["sub_controls"]}
+    assert len(codes) == len(set(codes)) == 172
+    assert [c for c in codes if c not in served] == []
+    before = {s for a in entry["artifacts"] if _number(a) < FIRST_ANNEX_TEMPLATE for s in a["sub_controls"]}
+    assert (len(before & set(codes)), len(set(codes) - before)) == (80, 92)
+    assert collections.Counter(c.split("-")[0] for c in codes if c not in before) == {"E1": 28, "E2": 11, "E3": 53}
+
+
+def test_each_annex_e_template_provides_what_no_earlier_artifact_does_for_one_sub_control(entry, controls):
+    """Recomputed from the library and the 408 earlier artifacts, not from the builder: the rule of round 5 over the 172 sub-controls of
+    Annex E. In the library's order, every sub-control no earlier artifact serves that still has an evidence item nobody provides gets one
+    artifact, providing exactly those items; an item that covers several of them is provided by the first, whose artifact serves the others."""
+    earlier = [a for a in entry["artifacts"] if _number(a) < FIRST_ANNEX_TEMPLATE]
+    templates = [a for a in entry["artifacts"] if _number(a) >= FIRST_ANNEX_TEMPLATE]
+    provided = {n for a in earlier for n in a["evidence"]}
+    served = {s for a in earlier for s in a["sub_controls"]}
+    open_nodes = [(c["control_id"], n) for c in controls.values() if c.get("annex", "")[:1] == "E"
+                  for n in c["native_attributes"]["sub_controls"] if n["code"] not in served]
+    items = {e for _, n in open_nodes for e in n["evidence"]}
+    assert len(open_nodes) == 92 and sum(len(n["evidence"]) for _, n in open_nodes) == 133 and len(items) == 67
+    assert not items & provided                                                       # no earlier artifact provides any of their items
+    plan = []
+    for cid, n in open_nodes:
+        todo = [e for e in n["evidence"] if e not in provided]
+        if todo:
+            plan.append((cid, n["code"], todo))
+            provided.update(todo)
+    assert len(plan) == len(templates) == 54
+    for (cid, code, todo), a in zip(plan, templates):
+        assert (a["control_ref"], a["evidence"]) == (cid, todo) and code in a["sub_controls"] and "also_controls" not in a, a["artifact_id"]
+    own = {code for _, code, _ in plan}
+    # the sub-controls whose items are all provided by the template of an earlier one get no template of their own; that template serves them
+    assert [n["code"] for _, n in open_nodes if n["code"] not in own] == [
+        "E1-2.1.3.3", "E1-2.1.3.4", "E1-2.1.3.5", "E1-2.2.2.3", "E1-2.2.2.5", "E1-2.2.2.8", "E1-2.2.2.9", "E1-2.2.2.10", "E1-2.2.2.11",
+        "E1-2.2.2.12", "E1-2.2.2.13", "E2-2.2.4", "E3-2.1.4.3", "E3-2.1.4.4", "E3-2.2.1.3", "E3-2.2.1.6", "E3-2.2.1.7", "E3-2.2.1.8",
+        "E3-2.2.1.9", "E3-2.2.1.10", "E3-2.2.1.11", "E3-2.2.1.12", "E3-2.2.1.13", "E3-2.2.1.15", "E3-2.2.1.16", "E3-2.2.3.2", "E3-2.2.3.3",
+        "E3-2.2.3.4", "E3-2.6.3.5", "E3-2.8.1.2", "E3-2.8.1.3", "E3-2.8.1.5", "E3-2.8.1.6", "E3-2.8.1.7", "E3-2.8.1.8", "E3-2.8.1.9",
+        "E3-2.8.1.11", "E3-2.8.1.12"]
+    by_item = {e: a for a in templates for e in a["evidence"]}
+    for _, n in open_nodes:
+        assert all(n["code"] in by_item[e]["sub_controls"] for e in n["evidence"]), n["code"]      # served through each of its items
+
+
+def test_the_templates_are_named_and_owned_like_the_rest_of_the_catalogue(entry, controls):
+    from grc.routers.artifacts_router import PLATFORM_NATIVE_PATTERNS, _get_platform_data_type
 
     documents = [a for a in entry["artifacts"] if _number(a) < FIRST_TEMPLATE]
     templates = [a for a in entry["artifacts"] if _number(a) >= FIRST_TEMPLATE]
-    assert [a["artifact_id"] for a in templates] == [f"UAEIA-{i}" for i in range(FIRST_TEMPLATE, 409)]
+    assert [a["artifact_id"] for a in templates] == [f"UAEIA-{i}" for i in range(FIRST_TEMPLATE, 463)]
     roles = {a["owner"] for a in documents}
     lowered = [a["name"].lower() for a in entry["artifacts"]]
     assert len(set(lowered)) == len(lowered)                                         # unique, whatever the case
@@ -307,9 +358,15 @@ def test_the_templates_are_named_and_owned_like_the_rest_of_the_catalogue(entry)
         assert a["owner"] in roles, a["artifact_id"]                                  # a role the catalogue already uses
         assert _get_platform_data_type(a["name"]) is None, a["name"]                  # "... Risk Register" would link the platform's own register
         text = f"{a['name']} {a['description']}"
+        assert not re.search(r"\d", text), a["artifact_id"]                           # no frequency, retention period, sample size or acceptance value
         assert not re.search(r"\b[MTEF]\d|UAEIA", text), a["artifact_id"]             # a template does not quote the standard's numbers
         assert not re.search(r"\bgpt|openai|claude|anthropic|\bllm\b", text.lower()), a["artifact_id"]          # the UI says "AI", never a vendor
         assert re.fullmatch(r"[A-Za-z][A-Za-z0-9 ,'/&-]+", a["name"]) and len(a["name"]) <= 80, a["name"]      # a plain, short name
+    # round 5b: contiguous from 409, none linked to the platform's own registers by name, conditional like the Annex E documents
+    annex = [a for a in templates if _number(a) >= FIRST_ANNEX_TEMPLATE]
+    assert [a["artifact_id"] for a in annex] == [f"UAEIA-{i}" for i in range(FIRST_ANNEX_TEMPLATE, 463)]
+    assert not [a["name"] for a in annex if any(pattern in a["name"].lower() for pattern in PLATFORM_NATIVE_PATTERNS)]
+    assert {controls[a["control_ref"]]["annex"][:1] for a in annex} == {"E"} and not any(a["mandatory"] for a in annex)
 
 
 def test_the_generator_writes_each_kind_of_template_the_way_it_is_meant(catalog, entry, monkeypatch):
@@ -320,21 +377,33 @@ def test_the_generator_writes_each_kind_of_template_the_way_it_is_meant(catalog,
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
     templates = [a for a in entry["artifacts"] if _number(a) >= FIRST_TEMPLATE]
-    assert collections.Counter((a["type"], a["format"]) for a in templates) == {kind: n for kind, (_, n) in KINDS.items()}
-    assert collections.Counter(generator._content_mode(a["format"], a["type"]) for a in templates) == {"markdown": 46, "table": 38, "guide": 68}
-    for (kind, fmt), (mode, _) in KINDS.items():
+    for first, last, column, modes in ((FIRST_TEMPLATE, FIRST_ANNEX_TEMPLATE - 1, 1, {"markdown": 46, "table": 38, "guide": 68}),
+                                       (FIRST_ANNEX_TEMPLATE, 10 ** 6, 2, {"markdown": 20, "table": 14, "guide": 20})):
+        part = [a for a in templates if first <= _number(a) <= last]
+        assert collections.Counter((a["type"], a["format"]) for a in part) == {kind: v[column] for kind, v in KINDS.items() if v[column]}
+        assert collections.Counter(generator._content_mode(a["format"], a["type"]) for a in part) == modes
+    for (kind, fmt), (mode, *_) in KINDS.items():
         assert generator._content_mode(fmt, kind) == mode, (kind, fmt)
-    assert {kind for kind, (mode, _) in KINDS.items() if mode == "guide"} == {kind for kind in KINDS if kind[1] in COLLECTED_FORMATS}
+    assert {kind for kind, (mode, *_) in KINDS.items() if mode == "guide"} == {kind for kind in KINDS if kind[1] in COLLECTED_FORMATS}
     assert {a["format"] for a in entry["artifacts"] if _number(a) < FIRST_TEMPLATE} <= AUTHORED_FORMATS
     assert COLLECTED_FORMATS <= {a["format"] for k, v in catalog.items() if k != KEY for a in v["artifacts"]}      # the peers use them all
 
 
 def test_round_5_moved_169_records_from_class_b_to_class_a():
     moved = [(control, name) for control, row in CLASSIFICATION.items() for name, value in row.items()
-             if value not in REASONS and int(value.split("-")[1]) >= FIRST_TEMPLATE]
+             if value not in REASONS and FIRST_TEMPLATE <= int(value.split("-")[1]) < FIRST_ANNEX_TEMPLATE]
     assert len(moved) == 169 and len({control for control, _ in moved}) == 83
+
+
+def test_round_5b_moved_67_annex_e_records_from_class_b_to_class_a():
+    """Each of the 67 items is the template of a record, round 5b: provided by exactly one of UAEIA-409 to 462, on a row of Annex E."""
+    moved = [(control, name) for control, row in CLASSIFICATION.items() for name, value in row.items()
+             if value not in REASONS and int(value.split("-")[1]) >= FIRST_ANNEX_TEMPLATE]
+    assert len(moved) == 67 and len({name for _, name in moved}) == 67 and len({control for control, _ in moved}) == 24
+    assert all(control.startswith("E") for control, _ in moved)
     authored = sum(value not in REASONS for row in CLASSIFICATION.values() for value in row.values())
-    assert (authored, 860 - authored) == (580, 280)                                  # was 411 documents and 449 records
+    assert (authored, 860 - authored) == (647, 213)                      # was 580 documents and templates and 280 records
+    assert sum(value in REASONS for control, row in CLASSIFICATION.items() if control[0] in "EF" for value in row.values()) == 124
 
 
 def test_the_other_frameworks_entries_are_untouched(catalog):
@@ -1298,6 +1367,7 @@ CLASSIFICATION = {
         "Continuity lessons learned and plan updates": "UAEIA-129",
     },
     # -- the annex rows (Annex E: national technology policies, Annex F: national policy mappings) --
+    # an Annex E item that names UAEIA-409 to 462 is the template of a record, round 5b: class A like the templates of round 5
     "E1-2.1.1": {
         "Approved cloud security policy": "UAEIA-134",
         "Cloud security policy review record": "approval",
@@ -1311,9 +1381,9 @@ CLASSIFICATION = {
         "Cloud risk communication record": "notice",
     },
     "E1-2.1.3": {
-        "Cloud provider contract personnel clauses": "signed",
+        "Cloud provider contract personnel clauses": "UAEIA-409",
         "Shared responsibility matrix": "UAEIA-138",
-        "CSP contract clause checklist": "test",
+        "CSP contract clause checklist": "UAEIA-409",
     },
     "E1-2.1.4": {
         "CSP onboarding risk assessment": "sample",
@@ -1328,17 +1398,17 @@ CLASSIFICATION = {
         "CSP independent assessment register": "UAEIA-139",
     },
     "E1-2.2.1": {
-        "CSP due diligence questionnaire": "sample",
-        "CSP due diligence assessment report": "sample",
-        "Onboarding approval record": "approval",
-        "Non-disclosure agreement with the CSP": "signed",
+        "CSP due diligence questionnaire": "UAEIA-410",
+        "CSP due diligence assessment report": "UAEIA-410",
+        "Onboarding approval record": "UAEIA-410",
+        "Non-disclosure agreement with the CSP": "UAEIA-411",
     },
     "E1-2.2.2": {
-        "Executed CSP contract": "signed",
-        "Service level agreement with availability terms": "signed",
-        "Sovereignty, data ownership and location clauses": "signed",
-        "Incident, change and audit rights clauses": "signed",
-        "Exit, vendor lock-in and dispute clauses": "signed",
+        "Executed CSP contract": "UAEIA-412",
+        "Service level agreement with availability terms": "UAEIA-413",
+        "Sovereignty, data ownership and location clauses": "UAEIA-414",
+        "Incident, change and audit rights clauses": "UAEIA-415",
+        "Exit, vendor lock-in and dispute clauses": "UAEIA-416",
     },
     "E1-2.3.1": {
         "Data classification policy": "UAEIA-142",
@@ -1366,15 +1436,15 @@ CLASSIFICATION = {
         "Integration standards and API register": "UAEIA-152",
     },
     "E1-2.5.2": {
-        "CSP contract data portability clauses": "signed",
-        "CSP data portability commitment": "signed",
-        "Data export test result": "test",
-        "Data deletion terms and confirmation": "signed",
+        "CSP contract data portability clauses": "UAEIA-417",
+        "CSP data portability commitment": "UAEIA-418",
+        "Data export test result": "UAEIA-417",
+        "Data deletion terms and confirmation": "UAEIA-418",
     },
     "E1-2.6.1": {
-        "CSP change management documentation": "sample",
-        "Procurement check of CSP change controls": "test",
-        "Service component tracking sample": "sample",
+        "CSP change management documentation": "UAEIA-419",
+        "Procurement check of CSP change controls": "UAEIA-419",
+        "Service component tracking sample": "UAEIA-419",
     },
     "E1-2.6.2": {
         "CSP data center physical security assessment": "test",
@@ -1387,10 +1457,10 @@ CLASSIFICATION = {
         "Inventory reconciliation record": "test",
     },
     "E1-2.6.4": {
-        "CSP application security assurance": "test",
-        "CSP secure coding documentation": "sample",
-        "CSP security testing results": "test",
-        "Procurement check of application security": "test",
+        "CSP application security assurance": "UAEIA-420",
+        "CSP secure coding documentation": "UAEIA-421",
+        "CSP security testing results": "UAEIA-422",
+        "Procurement check of application security": "UAEIA-420",
     },
     "E1-2.6.5": {
         "Cloud system hardening guidelines": "UAEIA-154",
@@ -1402,14 +1472,14 @@ CLASSIFICATION = {
         "Identity lifecycle sample records": "sample",
         "Privileged account creation procedure": "UAEIA-155",
         "Privileged account restrictions": "export",
-        "Privileged access MFA settings": "export",
+        "Privileged access MFA settings": "UAEIA-423",
     },
     "E1-2.7.2": {
         "Cloud access control policy": "UAEIA-156",
         "Cloud resource permissions export": "export",
         "Cloud authentication settings": "export",
         "Authentication methods and procedures": "UAEIA-157",
-        "Privileged access MFA enforcement test": "test",
+        "Privileged access MFA enforcement test": "UAEIA-424",
     },
     "E1-2.7.3": {
         "Cloud access control procedure": "UAEIA-158",
@@ -1444,8 +1514,8 @@ CLASSIFICATION = {
         "Cloud backup restoration test results": "test",
     },
     "E1-2.9.2": {
-        "Continuity requirements in CSP contracts": "signed",
-        "Continuity requirements test results": "test",
+        "Continuity requirements in CSP contracts": "UAEIA-425",
+        "Continuity requirements test results": "UAEIA-425",
         "Business continuity and disaster recovery plans": "UAEIA-167",
         "Plan communication records": "notice",
         "Recovery objectives and responsibilities": "UAEIA-167",
@@ -1455,28 +1525,28 @@ CLASSIFICATION = {
         "AI/ML secure development and operation procedures": "UAEIA-169",
         "AI/ML cyber security risk register": "UAEIA-170",
         "AI/ML supply chain risk assessment": "UAEIA-171",
-        "AI/ML change management records": "record",
+        "AI/ML change management records": "UAEIA-426",
     },
     "E2-2.2": {
         "AI/ML asset inventory": "UAEIA-172",
         "AI/ML security baselines and compliance results": "UAEIA-173",
-        "AI/ML patch and vulnerability management records": "record",
-        "AI/ML secure development and testing records": "sample",
-        "AI/ML environment network security settings": "export",
+        "AI/ML patch and vulnerability management records": "UAEIA-427",
+        "AI/ML secure development and testing records": "UAEIA-428",
+        "AI/ML environment network security settings": "UAEIA-429",
     },
     "E2-2.3": {
-        "AI/ML model security requirements": "sample",
-        "AI/ML model protection measures": "export",
-        "Inference data safeguards": "export",
-        "Model data access controls": "export",
-        "AI/ML data protection settings": "export",
+        "AI/ML model security requirements": "UAEIA-430",
+        "AI/ML model protection measures": "UAEIA-431",
+        "Inference data safeguards": "UAEIA-432",
+        "Model data access controls": "UAEIA-433",
+        "AI/ML data protection settings": "UAEIA-434",
     },
     "E2-2.4": {
         "AI/ML application domain security analysis": "UAEIA-174",
         "AI/ML availability architecture": "UAEIA-175",
         "AI/ML continuity and recovery plans": "UAEIA-176",
         "AI/ML restoration and continuity test results": "test",
-        "AI/ML security testing and validation report": "test",
+        "AI/ML security testing and validation report": "UAEIA-435",
     },
     "E2-2.5": {
         "AI/ML attack awareness material": "UAEIA-177",
@@ -1511,9 +1581,9 @@ CLASSIFICATION = {
     "E3-2.1.4": {
         "IoT third-party security policy": "UAEIA-189",
         "Third-party adherence acknowledgements": "signed",
-        "IoT supplier contract terms": "signed",
+        "IoT supplier contract terms": "UAEIA-436",
         "Third-party IoT access rights": "UAEIA-196",
-        "Third-party IoT access review results": "test",
+        "Third-party IoT access review results": "UAEIA-437",
     },
     "E3-2.1.5": {
         "IoT compliance policy and program": "UAEIA-190",
@@ -1522,30 +1592,30 @@ CLASSIFICATION = {
     },
     "E3-2.2.1": {
         "IoT data inventory and classification": "UAEIA-192",
-        "IoT data use and rights contract terms": "signed",
-        "IoT data protection and location access controls": "export",
-        "CSP contract clauses for IoT data": "signed",
-        "Data collection justifications and retention limits": "sample",
+        "IoT data use and rights contract terms": "UAEIA-438",
+        "IoT data protection and location access controls": "UAEIA-439",
+        "CSP contract clauses for IoT data": "UAEIA-440",
+        "Data collection justifications and retention limits": "UAEIA-441",
     },
     "E3-2.2.2": {
         "IoT encryption policy and procedures": "UAEIA-193",
         "IoT encryption settings": "export",
-        "Key hierarchy certificate chain": "export",
-        "Root key issuing records": "record",
+        "Key hierarchy certificate chain": "UAEIA-442",
+        "Root key issuing records": "UAEIA-442",
     },
     "E3-2.2.3": {
-        "Session management settings": "export",
-        "Session token strength test result": "test",
+        "Session management settings": "UAEIA-443",
+        "Session token strength test result": "UAEIA-443",
         "IoT communication protocol specification": "UAEIA-194",
         "Encrypted channel verification results": "test",
         "Approved encryption techniques list": "UAEIA-195",
     },
     "E3-2.3.1": {
         "IoT access rights listing": "UAEIA-196",
-        "IoT authentication and MFA settings": "export",
+        "IoT authentication and MFA settings": "UAEIA-444",
         "IoT credential storage and hard-coding checks": "test",
-        "IoT access review results": "test",
-        "IoT password rules configuration": "export",
+        "IoT access review results": "UAEIA-445",
+        "IoT password rules configuration": "UAEIA-446",
     },
     "E3-2.3.2": {
         "IoT location access control list": "UAEIA-197",
@@ -1555,9 +1625,9 @@ CLASSIFICATION = {
     "E3-2.4.1": {
         "IoT incident response procedure": "UAEIA-198",
         "IoT incident records": "record",
-        "Post-incident analysis report": "record",
-        "Incident evidence collection records": "record",
-        "Threat intelligence resourcing and outputs": "sample",
+        "Post-incident analysis report": "UAEIA-447",
+        "Incident evidence collection records": "UAEIA-448",
+        "Threat intelligence resourcing and outputs": "UAEIA-449",
     },
     "E3-2.5.1": {
         "IoT backup schedule and settings": "UAEIA-199",
@@ -1572,35 +1642,35 @@ CLASSIFICATION = {
     "E3-2.6.1": {
         "IoT asset inventory": "UAEIA-201",
         "IoT device handling procedure": "UAEIA-202",
-        "IoT device maintenance records": "record",
-        "IoT device disposal records": "record",
+        "IoT device maintenance records": "UAEIA-450",
+        "IoT device disposal records": "UAEIA-451",
     },
     "E3-2.6.2": {
-        "IoT component authentication and encryption settings": "export",
+        "IoT component authentication and encryption settings": "UAEIA-452",
         "IoT application security architecture": "UAEIA-203",
         "Trusted service layer access control rules": "export",
-        "Dedicated IoT gateway placement and settings": "export",
+        "Dedicated IoT gateway placement and settings": "UAEIA-453",
     },
     "E3-2.6.3": {
         "IoT device installation and setup baseline": "UAEIA-204",
-        "Remote management settings": "export",
+        "Remote management settings": "UAEIA-454",
         "IoT device management strategy": "UAEIA-205",
-        "IoT patch and update records": "record",
+        "IoT patch and update records": "UAEIA-455",
         "End-of-life device compensating measures": "UAEIA-206",
     },
     "E3-2.7.1": {
         "IoT network architecture diagram": "UAEIA-207",
-        "Segmentation and traffic restriction rules": "export",
-        "Secure ports and protocols settings": "export",
-        "Unused and default service scan results": "test",
-        "Consumer IoT device cryptography documentation": "sample",
+        "Segmentation and traffic restriction rules": "UAEIA-457",
+        "Secure ports and protocols settings": "UAEIA-456",
+        "Unused and default service scan results": "UAEIA-458",
+        "Consumer IoT device cryptography documentation": "UAEIA-459",
     },
     "E3-2.8.1": {
-        "IoT event recording settings": "export",
-        "Authentication and access event log extracts": "log",
-        "Data and operation event log extracts": "log",
-        "Update failure and physical access event logs": "log",
-        "Log storage, protection and analysis records": "export",
+        "IoT event recording settings": "UAEIA-460",
+        "Authentication and access event log extracts": "UAEIA-460",
+        "Data and operation event log extracts": "UAEIA-461",
+        "Update failure and physical access event logs": "UAEIA-462",
+        "Log storage, protection and analysis records": "UAEIA-460",
     },
     "F1-2.1": {
         "National encryption conformance review": "test",
