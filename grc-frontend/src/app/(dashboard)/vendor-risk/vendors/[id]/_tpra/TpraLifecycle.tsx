@@ -274,7 +274,7 @@ export default function TpraLifecycle({
           blockedWhy={data?.retier_blocked} onTier={() => setTiering(true)} onOpenTiering={() => setSelected('tiering')} />
       </section>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <div className="grid items-start overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff] lg:grid-cols-[15rem_minmax(0,1fr)]">
         <StageRail stages={stages} current={current} selected={selectedKey} openChecks={open} tier={assessment.inherent_tier}
           onSelect={setSelected} />
         {selMeta && (

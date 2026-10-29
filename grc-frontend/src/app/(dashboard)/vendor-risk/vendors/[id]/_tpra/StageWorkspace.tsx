@@ -172,7 +172,7 @@ export default function StageWorkspace({
     ? `Entered ${fmt.date(stage.started_at)}${stage.completed_at ? ` · left ${fmt.date(stage.completed_at)}` : ''}` : 'Not entered';
 
   return (
-    <section aria-label={meta.label} className="rounded-xl border border-[#d5dbe1] bg-[#fff]">
+    <section aria-label={meta.label} className="min-w-0">
       <div className="space-y-3 border-b border-[#eef1f4] p-4">
         {/* Title, status, dates; the actions on the right */}
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">

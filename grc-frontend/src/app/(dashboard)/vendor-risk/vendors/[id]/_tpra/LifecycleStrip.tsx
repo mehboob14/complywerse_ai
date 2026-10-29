@@ -39,13 +39,14 @@ export function LifecycleChart({ stages, current, checks, cycle, selected, onSel
         </div>
         <span className="text-[13px] tabular-nums text-[#586472]">{facts.settled}/{STAGES.length}{cycle ? ` · Cycle ${cycle}` : ''}</span>
       </div>
-      <ol className="mt-6 flex gap-1" aria-label="Lifecycle progress">
+      <ol className="mt-7 flex gap-1" aria-label="Lifecycle progress">
         {bars.map((b, i) => (
           <li key={b.key} className="relative min-w-0 flex-1">
             {(b.state === 'current' || b.state === 'blocked') && (
-              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[11px] font-bold leading-4" style={{ color: b.state === 'blocked' ? TONE.warning.text : TONE.progress.text }}>
-                Now
-              </span>
+              <>
+                <span className="absolute -top-[22px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-[#1f2933] px-1.5 py-0.5 text-[11px] font-bold leading-none text-[#fff]">Now</span>
+                <span aria-hidden className="absolute -top-[7px] left-1/2 h-0 w-0 -translate-x-1/2 border-x-[4px] border-t-[4px] border-x-transparent border-t-[#1f2933]" />
+              </>
             )}
             <button
               type="button"

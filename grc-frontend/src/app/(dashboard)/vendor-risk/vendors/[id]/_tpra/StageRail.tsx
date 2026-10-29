@@ -40,7 +40,7 @@ export default function StageRail({ stages, current, selected, openChecks, tier,
   onSelect: (key: string) => void;
 }) {
   return (
-    <nav aria-label="Lifecycle stages" className="space-y-3 rounded-xl border border-[#d5dbe1] bg-[#fff] p-2.5">
+    <nav aria-label="Lifecycle stages" className="space-y-3 border-b border-[#e1e6eb] p-2.5 lg:border-b-0 lg:border-r">
       {GROUPS.map((group, g) => (
         <div key={group}>
           <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#64707e]">{group}</p>
