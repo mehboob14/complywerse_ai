@@ -1226,6 +1226,14 @@ _COLUMN_ADDS = [
     # ── TPRM hardening (F): add columns below this line ──
     # The tiering config and tier policy an assessment is held to (tpra/service.policy_snapshot).
     ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
+
+    # ── TPRM parity foundations: vendor fields, finding fields, policy (P0): add columns below this line ──
+
+    # ── TPRM parity lifecycle rules (B3): add columns below this line ──
+
+    # ── TPRM parity questionnaires (B4): add columns below this line ──
+
+    # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
 ]
 
 

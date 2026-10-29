@@ -13,6 +13,8 @@ from .tpra.attention import router as tpra_attention_router
 from .tpra.graph import router as tpra_graph_router
 from .tpra.reports import router as tpra_reports_router
 from .tpra.quantification import router as tpra_exposure_router
+from .tpra.policy import router as tpra_policy_router
+from .tpra.roster import router as tpra_roster_router
 from .tpra.onboarding import router as tpra_onboarding_router
 from .tpra.checkins import router as tpra_checkins_router
 from .tpra.contracts import router as tpra_contracts_router
@@ -92,6 +94,9 @@ router.include_router(tpra_graph_router)
 router.include_router(tpra_reports_router)
 # What a vendor could cost us in a year, as a range.
 router.include_router(tpra_exposure_router)
+# The vendor policy and the workspace roster (wired once; each file is its own).
+router.include_router(tpra_policy_router)
+router.include_router(tpra_roster_router)
 
 
 @router.get("")
