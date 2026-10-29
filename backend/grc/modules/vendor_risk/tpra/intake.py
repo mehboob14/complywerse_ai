@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 
 from ....models import Vendor
+from .stages import TIER_RANK
 
 STATUSES = ("draft", "submitted", "in_review", "approved", "rejected")
 OPEN = ("draft", "submitted")          # still to be decided by the review team: these are screened for duplicates
@@ -444,12 +445,24 @@ def apply_to_vendor(vendor: Vendor, intake: dict, custom: Optional[dict] = None)
         vendor.description = a["purpose"]
 
 
+def _holds_tier(q: dict) -> bool:
+    """Whether an answer to this question can hold the tier at a minimum (customisation `min_tier`, on a yes or on an option)."""
+    return bool(q.get("min_tier")) or any(o.get("min_tier") for o in q.get("options") or [])
+
+
+def _min_rank(q: dict, value) -> int:
+    """How high the answer holds the tier (a rank of stages.TIER_RANK), -1 when it holds it nowhere."""
+    picked = value if isinstance(value, list) else [value]
+    return max((TIER_RANK.get(o.get("min_tier"), -1) for o in q.get("options") or [] if o.get("value") in picked), default=-1)
+
+
 def fingerprint(vendor: Vendor, custom: Optional[dict] = None) -> dict:
     """The answers a tier rests on, recorded with it to notice when they change:
-    the built-in yes/no and level answers, and the tenant's own scored ones."""
+    the built-in yes/no and level answers, the tenant's own scored ones, and any answer that can hold the tier at a minimum."""
     a = ((vendor.intake or {}).get("answers") or {})
     return {k: a.get(k) for k, q in spec(custom)["questions"].items()
-            if (q.get("builtin") and q["type"] in ("yes_no", "level")) or (not q.get("builtin") and q.get("factor"))}
+            if (q.get("builtin") and q["type"] in ("yes_no", "level")) or (not q.get("builtin") and q.get("factor"))
+            or _holds_tier(q)}
 
 
 def changes_since(recorded: dict, vendor: Vendor, custom: Optional[dict] = None) -> List[str]:
@@ -464,7 +477,8 @@ def changes_since(recorded: dict, vendor: Vendor, custom: Optional[dict] = None)
             out.append(f"now yes: {label.lower()}")
         elif q["type"] == "level" and _LEVEL.get(value or "none", 0) > _LEVEL.get(before or "none", 0):
             out.append(f"{label.lower()} went from {before or 'none'} to {value}")
-        elif q["type"] in ("choice", "multi_choice") and _answer_points(q, value)[0] > _answer_points(q, before)[0]:
+        elif q["type"] in ("choice", "multi_choice") and (_answer_points(q, value)[0] > _answer_points(q, before)[0]
+                                                         or _min_rank(q, value) > _min_rank(q, before)):
             out.append(f"{label.lower()} changed to {_answer_points(q, value)[1].split(': ', 1)[-1]}")
     return out
 

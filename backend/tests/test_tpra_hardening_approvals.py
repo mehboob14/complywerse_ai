@@ -98,9 +98,11 @@ def _config(db, **values):
 
 
 def _at_approval(db, v, mover):
-    """A scored medium assessment that `mover` has just advanced into its Approval stage."""
+    """A scored medium assessment that `mover` has just advanced into its Approval stage. Medium asks for one reviewer, and
+    the Approval gate asks for it too (planning is skipped at Medium), so the plan names one."""
     a = service.ensure_active_assessment(db, v, actor_id=OWNER)
     a.inherent_tier, a.inherent_score, a.residual_score, a.residual_rating = "medium", 40.0, 20.0, "low"
+    a.reviewed_by = REVIEWER
     for s in service.get_stage_instances(db, a.id):
         s.status = "complete" if s.stage_order < 7 else "not_started"
     _stage(db, a, "contracting").status = "in_progress"
