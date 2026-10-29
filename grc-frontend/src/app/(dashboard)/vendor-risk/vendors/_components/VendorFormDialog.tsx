@@ -19,8 +19,9 @@ import { BTN, BTN_PRIMARY, Dialog } from '../../_ui';
 import { usePeople } from '../../_lib/actions/shared';
 import { engagementsApi, engagementsKey } from '../../_lib/engagementsApi';
 import { useDebounced, useDuplicates, useUnits } from '../../_lib/vendorRecordApi';
-import { createBody, emptyForm, formFrom, problems, updateBody, type VendorForm } from '../../_lib/vendorFormModel';
+import { emptyForm, formFrom, problems, type VendorForm } from '../../_lib/vendorFormModel';
 import { isTiered } from '../../_lib/vendorRecordModel';
+import { addVendor, editVendor, type VendorCalls } from '../../_lib/vendorSave';
 import DuplicateBox from '../../intake/_components/DuplicateBox';
 import { AREA, FIELD, GROUP, HINT, LABEL } from './formStyles';
 
@@ -32,6 +33,14 @@ export type VendorFormDialogProps = {
   onClose: () => void;
   /** Called with the saved vendor (as the API returns it) after a successful save. */
   onSaved?: (vendor: Record<string, any>) => void;
+};
+
+// The calls the save flow (_lib/vendorSave.ts) makes, as the server has them.
+const CALLS: VendorCalls = {
+  createVendor: async (body) => (await vendorRiskApi.createVendor(body)).data,
+  updateVendor: async (id, body) => (await vendorRiskApi.updateVendor(id, body)).data,
+  addEngagement: async (vendorId, name) => (await engagementsApi.create(vendorId, { name })).data.id ?? null,
+  startLifecycle: (vendorId, engagementId) => tpraApi.initLifecycle(vendorId, engagementId),
 };
 
 const TIERS = ['critical', 'high', 'medium', 'low'];
@@ -112,33 +121,13 @@ export default function VendorFormDialog({ open, mode, vendor, onClose, onSaved 
   const matches = useDuplicates(add && open && form.name.trim() ? name : '', site).data ?? [];
 
   const save = useMutation({
-    mutationFn: async () => {
-      if (!add && vendor) {
-        const body = updateBody(form, was as VendorForm);
-        const values = valuesToSave(settings, custom, vendor.custom_values);
-        if (values) body.custom_values = values;
-        if (Object.keys(body).length === 0) return { saved: vendor as Record<string, any>, note: null as string | null };
-        return { saved: (await vendorRiskApi.updateVendor(vendor.id, body)).data as Record<string, any>, note: null as string | null };
-      }
-      const body = createBody(form);
-      const values = valuesToSave(settings, custom);
-      if (values) body.custom_values = values;
-      if (matches.length > 0 || retryAnyway) body.allow_duplicate = true;      // it was warned about, and chose to add it
-      const created = (await vendorRiskApi.createVendor(body)).data as Record<string, any>;
-      let note: string | null = null;
-      let engagementId: number | null = null;
-      if (first.trim()) {
-        try {
-          engagementId = (await engagementsApi.create(created.id, { name: first.trim() })).data.id ?? null;
-        } catch (e) {
-          note = `The engagement was not added: ${apiErrorText(e, 'add it from the Overview.')}`;
-        }
-      }
-      if (startLifecycle) {
-        try { await tpraApi.initLifecycle(created.id, engagementId); } catch { /* it can be started from the vendor's page */ }
-      }
-      return { saved: created, note };
-    },
+    // The tenant's own fields go with the vendor, a new vendor's lifecycle starts when asked, an edit sends only what changed (vendorSave.ts).
+    mutationFn: () => (!add && vendor
+      ? editVendor(CALLS, vendor, { form, was: was as VendorForm, customValues: valuesToSave(settings, custom, vendor.custom_values) })
+      : addVendor(CALLS, {
+        form, customValues: valuesToSave(settings, custom), firstEngagement: first, startLifecycle,
+        allowDuplicate: matches.length > 0 || retryAnyway,                       // it was warned about, and chose to add it
+      })),
     onSuccess: ({ saved, note }) => {
       ['vendors', 'vendors-select', 'vendor-dashboard', 'vendor-assessments-all', 'tprm-vendor-duplicates'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       qc.invalidateQueries({ queryKey: ['vendor', saved.id] });
