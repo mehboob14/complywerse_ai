@@ -113,7 +113,7 @@ export function RaiseFindingDialog({ open, onClose, onRaise, busy, people, engag
             </select>
           </Field>
           {about && (
-            <Field id={`${formId}-for`} label="About" tip="The whole vendor, or one of its engagements. A finding on the vendor counts for every engagement.">
+            <Field id={`${formId}-for`} label="About" tip="The whole vendor, or one of its engagements.">
               <select id={`${formId}-for`} className={FIELD} value={form.engagement} onChange={(e) => set('engagement', e.target.value ? Number(e.target.value) : '')}>
                 <option value="">The vendor (General)</option>
                 {engagements!.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
