@@ -12,6 +12,8 @@ import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { commentsKey, reviewersKey, reviewsApi, type ReviewAssignment, type ReviewSection } from '../../_lib/reviewsApi';
 import { sentNote } from '../../_lib/requestsApi';
+import { CARDS_KEY } from '../../_lib/assessmentsApi';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 
 export interface ReviewEntry { status: 'accepted' | 'clarify' | 'answered'; note?: string | null; at?: string }
 
@@ -53,6 +55,7 @@ function useRefresh(assessmentId: number) {
   return () => {
     qc.invalidateQueries({ queryKey: ['assessment', assessmentId] });
     qc.invalidateQueries({ queryKey: ['tpra-reviewers'] });          // a decision moves a section towards done
+    qc.invalidateQueries({ queryKey: [CARDS_KEY] });                 // the vendor record's Assessments tab counts and status
   };
 }
 
@@ -64,9 +67,11 @@ const STATE: Record<string, { label: string; cls: string }> = {
 
 /** The questionnaire's reviewers: each section, who has it and where they stand. Assign people, move your own
  *  along (done needs a decision on every question of the section), or show only your sections' questions. */
-export function ReviewersStrip({ qr, canEdit, filtered, onFilter }: {
+export function ReviewersStrip({ qr, canEdit, filtered, onFilter, bare = false }: {
   qr: ReviewableResponse; canEdit: boolean;
   filtered: boolean; onFilter: (questionKeys: string[] | null) => void;
+  /** no frame and no title of its own, for a place that gives it a heading */
+  bare?: boolean;
 }) {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -113,9 +118,9 @@ export function ReviewersStrip({ qr, canEdit, filtered, onFilter }: {
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 font-semibold text-slate-800"><Users className="h-3.5 w-3.5 text-primary-600" /> Reviewers</p>
+    <div className={bare ? 'text-xs' : 'mt-3 rounded-lg border border-gray-200 bg-white p-3 text-xs'}>
+      <div className={`flex flex-wrap items-center gap-2 ${bare ? 'justify-end' : 'mb-2 justify-between'}`}>
+        {!bare && <p className="flex items-center gap-1.5 font-semibold text-slate-800"><Users className="h-3.5 w-3.5 text-primary-600" /> Reviewers</p>}
         {mine.length > 0 && (
           <label className="inline-flex items-center gap-1.5 text-gray-600">
             <input type="checkbox" checked={filtered}
@@ -220,7 +225,7 @@ function QuestionComments({ qr, questionKey, canEdit }: { qr: ReviewableResponse
               : m.visibility === 'internal' ? 'bg-[#fffbeb]' : 'bg-[#f0fdfa]'}`}>
               <p className="text-[11px] text-gray-500">
                 <span className="font-medium text-gray-700">{m.author || 'System'}</span>
-                {' · '}{m.from_supplier ? 'Supplier' : m.visibility === 'internal' ? 'Internal' : 'Shared'}
+                {' · '}{m.from_supplier ? 'Vendor' : m.visibility === 'internal' ? 'Internal' : 'Shared'}
                 {' · '}{parseUtc(m.created_at)?.toLocaleDateString() ?? ''}
               </p>
               <p className="whitespace-pre-wrap break-words text-xs text-gray-800">{m.body}</p>
@@ -231,13 +236,13 @@ function QuestionComments({ qr, questionKey, canEdit }: { qr: ReviewableResponse
               <label className="sr-only" htmlFor={`comment-${qr.id}-${questionKey}`}>Comment</label>
               <textarea id={`comment-${qr.id}-${questionKey}`} rows={2} maxLength={8000} value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder={who === 'shared' ? 'The supplier reads this' : 'Only we read this'}
+                placeholder={who === 'shared' ? 'The vendor reads this' : 'Only we read this'}
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs" />
               <div className="flex flex-wrap items-center gap-3">
                 {(['internal', 'shared'] as const).map((v) => (
                   <label key={v} className="inline-flex items-center gap-1 text-xs text-gray-600">
                     <input type="radio" name={`who-${qr.id}-${questionKey}`} checked={who === v} onChange={() => setWho(v)} />
-                    {v === 'internal' ? 'Internal' : 'Share with supplier'}
+                    {v === 'internal' ? 'Internal' : 'Share with vendor'}
                   </label>
                 ))}
                 <button type="submit" disabled={send.isPending || !body.trim()}
@@ -475,6 +480,7 @@ export function QuestionEvidence({ qr, questionKey, assessmentId, canEdit }: {
               <span className="truncate font-medium text-gray-800">{item.name}</span>
               <span className="text-gray-400">{item.source === 'vendor' ? 'from the vendor' : 'from the library'}</span>
               {item.expiry_date && <span className="text-gray-500">expires {new Date(item.expiry_date).toLocaleDateString()}</span>}
+              <EvidencePreviewButton evidenceId={item.evidence_id} label="View" className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium text-[#0f766e] hover:bg-[#f0fdfa]" />
               {open && (
                 <button type="button" onClick={() => detach.mutate(item.link_id)} aria-label={`Detach ${item.name}`}
                   className="ml-auto rounded p-0.5 text-gray-400 hover:text-red-600">

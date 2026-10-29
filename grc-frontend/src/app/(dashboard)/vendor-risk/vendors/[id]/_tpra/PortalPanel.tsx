@@ -131,7 +131,7 @@ function FreshLink({ link, onDone }: { link: string; onDone: () => void }) {
         </button>
         <button type="button" onClick={onDone} className="text-xs text-slate-500 hover:underline">Hide</button>
       </div>
-      <p className="mt-1 text-[11px] text-slate-600">Shown once. It opens this supplier’s portal until it expires.</p>
+      <p className="mt-1 text-[11px] text-slate-600">Shown once. It opens this vendor’s portal until it expires.</p>
     </div>
   );
 }
@@ -179,7 +179,7 @@ function ContactRow({ vendorId, contact, canEdit, onEdit }: {
               </span>
             )}
             {contact.id === null && (
-              <span className="rounded-full bg-[#f1f3f5] px-2 py-0.5 text-[11px] font-normal text-[#4b5563]">Supplier record</span>
+              <span className="rounded-full bg-[#f1f3f5] px-2 py-0.5 text-[11px] font-normal text-[#4b5563]">Vendor record</span>
             )}
             {!contact.portal_access && (
               <span className="rounded-full bg-[#fef3c7] px-2 py-0.5 text-[11px] font-normal text-[#92400e]">No portal access</span>
@@ -248,7 +248,7 @@ function ContactsSection({ vendorId, canEdit }: { vendorId: number; canEdit: boo
   const contacts = data || [];
   return (
     <Section title={`Contacts (${contacts.filter((c) => !c.archived_at).length})`}
-      tip="Each contact with an email and portal access can be sent a personal link. It opens this supplier’s portal, with everything waiting on the supplier, for 30 days."
+      tip="Each contact with an email and portal access can be sent a personal link. It opens this vendor’s portal, with everything waiting on the vendor, for 30 days."
       action={(
         <div className="flex items-center gap-3">
           <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
@@ -300,10 +300,10 @@ function LinksSection({ vendorId, canEdit }: { vendorId: number; canEdit: boolea
   const live = links.filter((l) => l.active);
   return (
     <Section title={`Links (${live.length} active)`}
-      tip="Every personal link sent to this supplier's contacts, newest first. Only a fingerprint of each is kept, so a lost link cannot be shown again: send a new one."
+      tip="Every personal link sent to this vendor's contacts, newest first. Only a fingerprint of each is kept, so a lost link cannot be shown again: send a new one."
       action={canEdit && live.length > 0 ? (
         <button type="button" className={quiet} disabled={revokeAll.isPending}
-          onClick={() => window.confirm(`Revoke all ${live.length} active links? The supplier's contacts will need new ones.`) && revokeAll.mutate()}>
+          onClick={() => window.confirm(`Revoke all ${live.length} active links? The vendor's contacts will need new ones.`) && revokeAll.mutate()}>
           Revoke all
         </button>
       ) : undefined}>
@@ -398,7 +398,7 @@ function Thread({ vendorId, subjectType, subjectId, canEdit }: {
       qc.invalidateQueries({ queryKey: key });
       if (who === 'shared') {
         const note = sentNote(res.data.sent);
-        toast({ type: note.ok ? 'success' : 'warning', title: 'Sent to supplier', message: note.text });
+        toast({ type: note.ok ? 'success' : 'warning', title: 'Sent to vendor', message: note.text });
       }
     },
     onError: (e) => toast({ type: 'error', title: 'Not sent', message: errText(e, 'Try again.') }),
@@ -428,7 +428,7 @@ function Thread({ vendorId, subjectType, subjectId, canEdit }: {
       {canEdit && (
         <form onSubmit={(e) => { e.preventDefault(); if (body.trim()) send.mutate(); }} className="space-y-2 border-t border-slate-100 px-4 py-3">
           <textarea className={input} rows={2} maxLength={8000} value={body} onChange={(e) => setBody(e.target.value)}
-            aria-label="Message" placeholder={who === 'shared' ? 'The supplier reads this' : 'Only we read this'} />
+            aria-label="Message" placeholder={who === 'shared' ? 'The vendor reads this' : 'Only we read this'} />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Segmented label="Who reads it" value={who} options={WHO_OPTIONS} onChange={(v) => setWho(v as 'internal' | 'shared')} />
             <button type="submit" disabled={!body.trim() || send.isPending} className={primaryBtn}>
@@ -547,7 +547,7 @@ function ReviewDrawer({ vendorId, r, canEdit, onClose }: {
           Finding
           <Segmented label="What happens to the finding" value={finding} options={FINDING_OPTIONS}
             onChange={(v) => setFinding(v as FindingAction)} />
-          <InfoTip text="Record plan adds the supplier's plan as a remediation due on its date. Close it also completes that remediation and closes the finding: only once the fix is verified." />
+          <InfoTip text="Record plan adds the vendor's plan as a remediation due on its date. Close it also completes that remediation and closes the finding: only once the fix is verified." />
         </div>
       )}
       <div className="flex justify-end gap-2">
@@ -562,7 +562,7 @@ function ReviewDrawer({ vendorId, r, canEdit, onClose }: {
   ) : (
     <div className="flex justify-end">
       <button type="button" className={quiet} disabled={busy}
-        onClick={() => window.confirm('Cancel this request? The supplier will no longer be asked for it.') && cancel.mutate()}>
+        onClick={() => window.confirm('Cancel this request? The vendor will no longer be asked for it.') && cancel.mutate()}>
         Cancel request
       </button>
     </div>
@@ -587,7 +587,7 @@ function ReviewDrawer({ vendorId, r, canEdit, onClose }: {
         {r.detail && <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{r.detail}</p>}
         {r.responded_at && (
           <div className="rounded-lg border border-slate-200 bg-white p-3">
-            <p className="text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wide">Answer</span> · {r.responded_by || 'Supplier'} · {day(r.responded_at)}</p>
+            <p className="text-[11px] text-slate-500"><span className="font-semibold uppercase tracking-wide">Answer</span> · {r.responded_by || 'Vendor'} · {day(r.responded_at)}</p>
             {r.response_text && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{r.response_text}</p>}
             {r.plan_text && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800"><span className="font-medium">Plan: </span>{r.plan_text}</p>}
             {r.target_date && <p className="mt-1 text-xs text-slate-600">Fixed by {fmtDate(r.target_date)}</p>}
@@ -634,7 +634,7 @@ function RequestsSection({ vendorId, canEdit }: { vendorId: number; canEdit: boo
   const shown = items.find((r) => r.id === openId);
   return (
     <Section title={`Requests (${items.filter((r) => LIVE.includes(r.status)).length} open)`}
-      tip="Documents and answers asked of this supplier, and findings shared with it. It answers in its portal; a sent document becomes its paperwork once you accept it."
+      tip="Documents and answers asked of this vendor, and findings shared with it. It answers in its portal; a sent document becomes its paperwork once you accept it."
       action={canEdit && !adding ? (
         <button type="button" onClick={() => setAdding(true)}
           className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700">
@@ -670,17 +670,23 @@ function RequestsSection({ vendorId, canEdit }: { vendorId: number; canEdit: boo
   );
 }
 
-export default function PortalPanel({ vendorId }: { vendorId: number }) {
+export type PortalSection = 'contacts' | 'requests' | 'messages' | 'links';
+const ALL_SECTIONS: PortalSection[] = ['contacts', 'requests', 'messages', 'links'];
+
+/** `sections` picks which parts to show (the Assessments tab shows requests and messages, and keeps contacts and links apart). */
+export default function PortalPanel({ vendorId, sections = ALL_SECTIONS }: { vendorId: number; sections?: PortalSection[] }) {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit');
   return (
     <div className="space-y-4">
-      <ContactsSection vendorId={vendorId} canEdit={canEdit} />
-      <RequestsSection vendorId={vendorId} canEdit={canEdit} />
-      <Section title="Messages" tip="Notes stay internal unless you choose Shared. The supplier reads shared messages in its portal and is emailed a link.">
-        <Thread vendorId={vendorId} subjectType="vendor" canEdit={canEdit} />
-      </Section>
-      <LinksSection vendorId={vendorId} canEdit={canEdit} />
+      {sections.includes('contacts') && <ContactsSection vendorId={vendorId} canEdit={canEdit} />}
+      {sections.includes('requests') && <RequestsSection vendorId={vendorId} canEdit={canEdit} />}
+      {sections.includes('messages') && (
+        <Section title="Messages" tip="Notes stay internal unless you choose Shared. The vendor reads shared messages in its portal and is emailed a link.">
+          <Thread vendorId={vendorId} subjectType="vendor" canEdit={canEdit} />
+        </Section>
+      )}
+      {sections.includes('links') && <LinksSection vendorId={vendorId} canEdit={canEdit} />}
     </div>
   );
 }
