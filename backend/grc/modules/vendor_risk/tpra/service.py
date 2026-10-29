@@ -6,6 +6,7 @@ acting user id; callers (the API layer) own the commit boundary unless noted.
 """
 from __future__ import annotations
 
+import copy
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -23,14 +24,14 @@ from ....models import (
 )
 from .stages import (
     TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
-    stages_at_or_after, can_skip, cadence_days_for, required_reviewers_for,
-    TIER_SKIPPABLE_STAGES, TIER_REQUIRED_REVIEWERS, TIER_RANK,
+    stages_at_or_after, can_skip, cadence_days_for, TIER_RANK,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity, is_answered,
 )
-from . import intake as intake_answers, rbac, tier_policy, versions
+from . import intake as intake_answers, policy as vendor_policy, rbac, roster as workspace_roster, tier_policy, versions
+from .policy import POLICY_KEYS
 from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
@@ -383,20 +384,19 @@ def enforce_critical_invariant(
                        getattr(vendor, "id", "?"), exc_info=True)
 
 
-# The team-roster seats that review an assessment: the disciplines a tier asks
-# for. The business owner, the TPRM lead and analyst running it, procurement, IT
-# and the approver are not its reviewers.
-REVIEWER_SEATS = {seat for seats in TIER_REQUIRED_REVIEWERS.values() for seat in seats}
-
-
 def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
     """How many different people are named to review this assessment: the plan's
     reviewer, whoever holds a reviewing seat in Assign duties (the roster), and
-    whoever is assigned a part of its questionnaires (tpra/reviews.py)."""
+    whoever is assigned a part of its questionnaires (tpra/reviews.py). The
+    reviewing seats are the disciplines the policy asks of some tier (the business
+    owner, the TPRM lead and analyst running it, procurement, IT and the approver
+    are not its reviewers); a seat the supplier left empty is the workspace
+    roster's first person for the role."""
     from ....models import TPRAReviewAssignment
 
-    roster = assessment.team_roster or {}
-    people = {assessment.reviewed_by, *(roster.get(seat) for seat in REVIEWER_SEATS)}
+    team = workspace_roster.effective_team(db, assessment.tenant_id, assessment.team_roster)
+    seats = vendor_policy.reviewer_seats(config_for(db, assessment))
+    people = {assessment.reviewed_by, *(team.get(seat) for seat in seats)}
     people.update(uid for (uid,) in db.query(TPRAReviewAssignment.reviewer_id).filter(
         TPRAReviewAssignment.assessment_id == assessment.id))
     return len({p for p in people if p})
@@ -407,11 +407,12 @@ def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
 # set (computed, set by hand, or carried into a reassessment), so a change to the
 # settings never moves the goalposts of an assessment under way: its gates,
 # approval rules and scoring read them. A re-tier takes the settings as they stand.
-POLICY_KEYS = ("weights", "thresholds", "cadence_days", "tier_policy")
+# POLICY_KEYS (tpra/policy.py) names them: the bands, cadence, tier policy, fix windows,
+# skipped stages and required reviewers.
 
 
 def policy_snapshot(cfg: dict) -> dict:
-    snap = {k: dict(cfg.get(k) or {}) for k in POLICY_KEYS}     # copies: a later edit stays out
+    snap = {k: copy.deepcopy(cfg.get(k) or {}) for k in POLICY_KEYS}     # copies: a later edit stays out
     snap["tier_policy"] = tier_policy.merged(cfg.get("tier_policy"))
     snap["at"] = datetime.utcnow().isoformat()
     return snap
@@ -420,8 +421,7 @@ def policy_snapshot(cfg: dict) -> dict:
 def config_for(db: Session, assessment: VendorAssessment) -> dict:
     """The tenant's config, with the assessment's own snapshot over it when it has one."""
     cfg = get_tiering_config(db, assessment.tenant_id)
-    snap = getattr(assessment, "policy_snapshot", None) or {}
-    return {**cfg, **{k: snap[k] for k in POLICY_KEYS if snap.get(k)}}
+    return vendor_policy.held_to(cfg, getattr(assessment, "policy_snapshot", None))
 
 
 def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> dict:
@@ -444,10 +444,11 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         ctx["templates_selected"] = 1 if assessment.template_id else (
             db.query(TPRAQuestionResponse.id).filter(TPRAQuestionResponse.assessment_id == assessment.id).first() and 1 or 0
         )
-        ctx["reviewer_roles"] = required_reviewers_for(tier)
+        cfg = config_for(db, assessment)
+        ctx["reviewer_roles"] = vendor_policy.required_reviewers(cfg, tier)
         ctx["required_reviewers"] = len(ctx["reviewer_roles"])
         ctx["reviewers_assigned"] = reviewers_assigned(db, assessment)
-        wanted = tier_policy.requirements(db, vendor, assessment, config_for(db, assessment))
+        wanted = tier_policy.requirements(db, vendor, assessment, cfg)
         ctx["tier_templates_unsent"] = [q["name"] for q in wanted["questionnaires"] if q["status"] == "unsent"]
     elif stage_key == "questionnaire":
         # Completeness from what the supplier answered, question by question
@@ -616,7 +617,7 @@ def skip_stage(
 ) -> dict:
     """Skip a non-gate stage where tier rules permit; record who & why."""
     tier = assessment.inherent_tier or (engagement_of(db, assessment) or vendor).tier or "medium"
-    if not can_skip(tier, stage_key):
+    if not can_skip(tier, stage_key, vendor_policy.skip_matrix(config_for(db, assessment))):
         raise ValueError(f"stage '{stage_key}' is not skippable for tier '{tier}'")
     row = _stage_row(db, assessment.id, stage_key)
     if not row:
@@ -685,7 +686,7 @@ def run_tiering(
     # (a Low vendor bypasses deep diligence) so the path visibly collapses instead of
     # relying on an analyst to remember to skip each one. advance_stage steps over
     # these skipped stages.
-    for _sk in TIER_SKIPPABLE_STAGES.get((result["tier"] or "medium").lower(), []):
+    for _sk in vendor_policy.skip_matrix(cfg).get((result["tier"] or "medium").lower(), []):
         _st = _stage_row(db, assessment.id, _sk)
         if _st and _st.status == "not_started":
             _st.status = "skipped"
@@ -976,7 +977,7 @@ def residual_from_inherent(db: Session, assessment: VendorAssessment, actor_id: 
     engagement = engagement_of(db, assessment)
     tier = assessment.inherent_tier or ((engagement or vendor).tier if vendor else None)
     if (vendor is None or assessment.inherent_score is None or scoring is None or scoring.status != "skipped"
-            or not can_skip(tier, "scoring")):
+            or not can_skip(tier, "scoring", vendor_policy.skip_matrix(config_for(db, assessment)))):
         return False
     assessment.residual_score = assessment.inherent_score
     assessment.residual_rating = tier
@@ -1018,11 +1019,12 @@ def conflicts(db: Session, assessment: VendorAssessment) -> Dict[int, str]:
     Assign duties); its business owner (the supplier's, or the engagement's, and
     the Business Owner seat); and whoever last moved it into approval. One reason
     each, the first that applies."""
-    roster = assessment.team_roster or {}
+    roster = workspace_roster.effective_team(db, assessment.tenant_id, assessment.team_roster)
+    seats = sorted(vendor_policy.reviewer_seats(config_for(db, assessment)))
     scope = engagement_of(db, assessment) or db.get(Vendor, assessment.vendor_id)
     named = (
         ("assessor", [assessment.assessed_by]),
-        ("reviewer", [assessment.reviewed_by, *(roster.get(seat) for seat in sorted(REVIEWER_SEATS))]),
+        ("reviewer", [assessment.reviewed_by, *(roster.get(seat) for seat in seats)]),
         ("business_owner", [getattr(scope, "owner_id", None), roster.get("business_owner")]),
         ("moved_to_approval", [moved_to_approval_by(db, assessment)]),
     )

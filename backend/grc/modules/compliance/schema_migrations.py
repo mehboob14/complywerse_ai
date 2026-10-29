@@ -1228,6 +1228,18 @@ _COLUMN_ADDS = [
     ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
 
     # ── TPRM parity foundations: vendor fields, finding fields, policy (P0): add columns below this line ──
+    # What the register slices a supplier by; owners are plain ids (routers/vendors.py).
+    ("grc_vendors", "holds_personal_data", "BOOLEAN", None),
+    ("grc_vendors", "data_classification", "VARCHAR(20)", None),
+    ("grc_vendors", "data_location", "VARCHAR(255)", None),
+    ("grc_vendors", "systems_in_scope", "JSON", None),
+    ("grc_vendors", "tags", "JSON", None),
+    ("grc_vendors", "security_owner_id", "INTEGER", None),
+    ("grc_vendors", "relationship_owner_id", "INTEGER", None),
+    # The vendor policy beyond bands and cadence (tpra/policy.py).
+    ("grc_tpra_tiering_config", "remediation_days", "JSON", None),
+    ("grc_tpra_tiering_config", "skip_matrix", "JSON", None),
+    ("grc_tpra_tiering_config", "required_reviewers", "JSON", None),
 
     # ── TPRM parity lifecycle rules (B3): add columns below this line ──
 

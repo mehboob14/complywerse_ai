@@ -1039,8 +1039,10 @@ def create_remediation(finding_id: int, body: RemediationIn, db: Session = Depen
     # Auto-populate a due date from the finding's severity SLA when the analyst
     # didn't set one, so every remediation carries an aging clock (a critical must
     # be fixed in days, not "whenever") and can actually surface as overdue.
-    from .stages import remediation_sla_days_for
-    _due = body.due_date or (datetime.utcnow() + timedelta(days=remediation_sla_days_for(f.severity)))
+    from .policy import remediation_days
+    _held = db.get(VendorAssessment, f.assessment_id)       # the window it was tiered under
+    _due = body.due_date or (datetime.utcnow() + timedelta(
+        days=remediation_days(service.config_for(db, _held) if _held is not None else None, f.severity)))
     r = TPRARemediation(
         tenant_id=f.tenant_id, finding_id=f.id, title=body.title, plan=body.plan,
         treatment_type=body.treatment_type or "remediate", owner_id=body.owner_id,
