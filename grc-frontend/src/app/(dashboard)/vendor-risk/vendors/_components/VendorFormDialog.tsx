@@ -151,7 +151,7 @@ export default function VendorFormDialog({ open, mode, vendor, onClose, onSaved 
       if ((e as { response?: { status?: number } })?.response?.status === 409) {
         setRetryAnyway(true);                                                    // a vendor with this name or website exists: the next try adds it
         qc.invalidateQueries({ queryKey: ['tprm-vendor-duplicates'] });
-        setError(`${apiErrorText(e, 'It may already be on record.')} Check it is not the same relationship, then add it again.`);
+        setError(`${apiErrorText(e, 'It may already be on record.')} Add it again to keep it as a new vendor.`);
       } else {
         setError(apiErrorText(e, 'The vendor could not be saved. Check the form and try again.'));
       }

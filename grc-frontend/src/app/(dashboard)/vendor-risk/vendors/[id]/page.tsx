@@ -142,7 +142,7 @@ export default function VendorDetailPage() {
   if (!vendor) {
     return (
       <div className="mx-auto max-w-2xl py-10">
-        {statusOf(vendorQuery.error) === 404 ? (
+        {!vendorId || statusOf(vendorQuery.error) === 404 ? (
           <EmptyState
             title="This vendor is not here"
             hint="It may have been archived, or the link may be wrong."
