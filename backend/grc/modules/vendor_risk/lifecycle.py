@@ -55,6 +55,34 @@ DEFAULT_OFFBOARDING_CHECKLIST = [
     "Confirm final compliance & contractual obligations",
     "Export audit trail and formally close the case",
 ]
+CONTRACTS_CLOSED = "Contracts closed out"
+FINAL_PAYMENTS = "Final payments settled"
+# Every step of an exit, the supplier's or one engagement's. An exit already laid out is only ever brought up
+# to the first six (routers/lifecycle.start_offboarding): the newest step is for the exits that start now.
+OFFBOARDING_CHECKLIST = [*DEFAULT_OFFBOARDING_CHECKLIST, CONTRACTS_CLOSED, FINAL_PAYMENTS]
+MAX_STEPS = 50
+
+
+def exit_steps(items=None) -> list:
+    """The steps of an exit as stored: {item, done, at, by}, from a list of names (the standard steps by default)."""
+    return [{"item": i, "done": False, "at": None, "by": None} for i in (OFFBOARDING_CHECKLIST if items is None else items)]
+
+
+def stamp_steps(raw, before, user_id: Optional[int]) -> list:
+    """The list a client sent ({item, done}) as it is stored. A step already done keeps who ticked it and when; a step
+    ticked now is stamped by the server, whatever the client says."""
+    now = datetime.utcnow().isoformat()
+    was = {i.get("item"): i for i in before or [] if isinstance(i, dict) and i.get("done")}
+    out = []
+    for r in list(raw or [])[:MAX_STEPS]:
+        name = " ".join(str(r.get("item") or "").split())[:255] if isinstance(r, dict) else ""
+        if not name or any(o["item"] == name for o in out):
+            continue
+        done = bool(r.get("done"))
+        kept = was.get(name, {})
+        out.append({"item": name, "done": done, "at": (kept.get("at") or now) if done else None,
+                    "by": (kept.get("by") or user_id) if done else None})
+    return out
 
 
 def is_valid_stage(stage: str) -> bool:

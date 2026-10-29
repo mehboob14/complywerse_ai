@@ -1234,6 +1234,8 @@ _COLUMN_ADDS = [
     # ── TPRM parity questionnaires (B4): add columns below this line ──
 
     # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
+    # One engagement's own exit checklist (tpra/engagements.py, B5b).
+    ("grc_tpra_engagements", "offboarding", "JSON", None),
 ]
 
 

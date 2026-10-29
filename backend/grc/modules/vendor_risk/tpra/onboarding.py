@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from ....models import GRCUser, TPRAAuditLog, TPRAStageInstance, Vendor, get_db
 from ....routers.auth_router import PLATFORM_GRANT, get_user_tenants, require_auth
-from . import customisation, intake, rbac, service
+from . import customisation, engagements, intake, rbac, service
 from .bootstrap import get_tiering_config
 from .engine_tiering import compute_inherent_tier
 from .stages import TPRA_STAGES
@@ -133,7 +133,39 @@ def preview(body: PreviewIn, db: Session = Depends(get_db), user: GRCUser = Depe
 
 # ── requests ─────────────────────────────────────────────────────────────────
 
-def _request_row(v: Vendor, names: dict, stages: dict, custom: Optional[dict] = None) -> dict:
+def _decisions(db: Session, vendors: List[Vendor]) -> dict:
+    """{request id: {by, at, reason}}: who last moved each request to where it is now (picked up, turned
+    down, or approved at the lifecycle's gate), when, and the reason they gave."""
+    state = {v.id: v.intake_status for v in vendors if v.intake_status in ("in_review", "approved", "rejected")}
+    if not state:
+        return {}
+    last = {}
+    for r in (db.query(TPRAAuditLog).filter(TPRAAuditLog.vendor_id.in_(list(state)))
+              .filter(((TPRAAuditLog.entity == "request") & (TPRAAuditLog.action == "status"))
+                      | ((TPRAAuditLog.entity == "approval") & (TPRAAuditLog.action == "create")))
+              .order_by(TPRAAuditLog.id)):
+        now = state[r.vendor_id]
+        if r.entity == "request":
+            hit = now in ("in_review", "rejected") and r.to_value == now
+        else:       # the lifecycle's approval decision
+            hit = r.to_value in {"approved": ("approve", "approve_with_conditions"), "rejected": ("reject",)}.get(now, ())
+        if hit:
+            last[r.vendor_id] = r
+    names = _names(db, [r.actor_id for r in last.values()])
+    return {vid: {"by": names.get(r.actor_id), "at": r.created_at, "reason": r.reason} for vid, r in last.items()}
+
+
+def _screening(found: List[dict], status: Optional[str]) -> dict:
+    """The duplicate flag of a request: only one the review team has yet to decide (a draft, or one waiting for
+    them) is screened; once it is picked up or turned down there is nothing left to decide."""
+    open_ = status in intake.OPEN
+    return {"screening": ("flagged" if found else "screened") if open_ else None, "duplicates": found if open_ else [],
+            "duplicate_of": found[0]["id"] if open_ and found else None}
+
+
+def _request_row(v: Vendor, names: dict, stages: dict, custom: Optional[dict] = None,
+                 found: Optional[List[dict]] = None, decision: Optional[dict] = None) -> dict:
+    asked = intake.request_of(v.intake)
     return {
         "id": v.id, "name": v.name, "website": v.website, "host": intake.host(v.website),
         "intake_status": v.intake_status, "vendor_status": v.status, "tier": v.tier,
@@ -142,6 +174,11 @@ def _request_row(v: Vendor, names: dict, stages: dict, custom: Optional[dict] = 
         "owner": {"id": v.owner_id, "name": names.get(v.owner_id)} if v.owner_id else None,
         "submitted_at": v.submitted_at, "created_at": v.created_at, "updated_at": v.updated_at,
         "stage": stages.get(v.id), "open_problems": len(intake.problems(v.intake, v, custom)),
+        # what a request card shows beside the above
+        "department": asked["department"], "urgency": asked["urgency"],
+        "purpose": ((v.intake or {}).get("answers") or {}).get("purpose") or v.description,
+        "data_shared": list(v.data_types_accessed or []), "decision": decision,
+        **_screening(found or [], v.intake_status),
     }
 
 
@@ -169,36 +206,45 @@ def list_requests(
     stages = {v.id: {"key": v.lifecycle_stage, "label": _STAGE_LABEL.get(v.lifecycle_stage or "")}
               for v in rows if v.intake_status in ("in_review", "approved")}
     custom = _custom(db, tids[0])
-    return {"items": [_request_row(v, names, stages, custom) for v in rows], "counts": counts,
+    open_rows = [v for v in rows if v.intake_status in intake.OPEN]
+    found = intake.screen(intake.on_record(db, tids[0]), open_rows) if open_rows else {}
+    said = _decisions(db, rows)
+    return {"items": [_request_row(v, names, stages, custom, found.get(v.id), said.get(v.id)) for v in rows],
+            "counts": counts,
             "can_create": _can(db, user, "intake", "create"), "can_review": _can(db, user, "intake", "review")}
 
 
 class NewRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     website: Optional[str] = None
+    department: Optional[str] = None
+    urgency: Optional[Literal["low", "normal", "high"]] = None
+    intended_use: Optional[str] = None       # what they will do for us: the answer to the purpose question
 
 
 @router.post("/intake/requests", status_code=status.HTTP_201_CREATED)
 def create_request(body: NewRequest, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Raise a request. Something already on record is not a reason to refuse it: the request is filed
+    and the answer lists what it may be, so the requester and the review team can look before going on."""
     tids = _tids(user, db)
     rbac.require_write(db, user, "intake", "create")
     name = " ".join(body.name.split())
-    existing = intake.duplicate(db, tids[0], name, body.website)
-    if existing is not None and existing.deleted_at is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            f"{existing.name} is on record but archived (ID {existing.id}); restore it instead of requesting it again.")
-    if existing is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            f"{existing.name} is already on record (ID {existing.id}); open it instead of requesting it again.")
+    found = intake.duplicates(db, tids[0], name, body.website)
+    try:
+        started = intake.clean({"purpose": body.intended_use} if (body.intended_use or "").strip() else {}, {},
+                               _custom(db, tids[0]))
+        asked = intake.clean_request({"department": body.department, "urgency": body.urgency or "normal"})
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     v = Vendor(tenant_id=tids[0], name=name, website=(body.website or "").strip() or None, tier="medium",
                status="requested", intake_status="draft", requested_by=user.id, owner_id=user.id,
-               intake={"answers": {}, "justifications": {}})
+               intake={**started, "request": asked})
     db.add(v)
     db.flush()
     service.write_audit(db, v.tenant_id, entity="request", action="create", vendor_id=v.id, actor_id=user.id,
-                        to_value="draft")
+                        to_value="draft", extra={"duplicates": [d["id"] for d in found]} if found else None)
     db.commit()
-    return {"id": v.id}
+    return {"id": v.id, "duplicates": found}
 
 
 # ── one request's intake ─────────────────────────────────────────────────────
@@ -224,6 +270,9 @@ def _payload(db: Session, user: GRCUser, v: Vendor) -> dict:
         "can_review": _can(db, user, "intake", "review"),
         "next": list(intake.next_statuses(v.intake_status)),
         "updated_at": v.updated_at,
+        "request": intake.request_of(v.intake),
+        **_screening(intake.duplicates(db, v.tenant_id, v.name, v.website, exclude_id=v.id)
+                     if v.intake_status in intake.OPEN else [], v.intake_status),
     }
 
 
@@ -245,8 +294,15 @@ class VendorPart(BaseModel):
     industry: Optional[str] = None
 
 
+class RequestPart(BaseModel):
+    department: Optional[str] = None
+    urgency: Optional[str] = None
+    engagement: Optional[str] = None      # the first engagement, made when the request is picked up
+
+
 class IntakeIn(BaseModel):
     vendor: Optional[VendorPart] = None
+    request: Optional[RequestPart] = None
     answers: dict = Field(default_factory=dict)
     justifications: dict = Field(default_factory=dict)
 
@@ -302,13 +358,14 @@ def save_intake(vendor_id: int, body: IntakeIn, db: Session = Depends(get_db), u
     try:
         patch = intake.clean(body.answers, body.justifications, custom)
         _may_answer(db, user, custom, patch)
+        asked = intake.clean_request(body.request.model_dump(exclude_unset=True)) if body.request is not None else {}
         if body.vendor is not None:
             _apply_vendor_part(db, v, body.vendor)
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    v.intake = intake.merge(v.intake, patch)
+    v.intake = intake.merge_request(intake.merge(v.intake, patch), asked)
     intake.apply_to_vendor(v, v.intake, custom)
     v.updated_at = datetime.utcnow()
     db.commit()
@@ -348,10 +405,14 @@ def start_review(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = 
     _move(db, v, user, "in_review")
     assessment = service.ensure_active_assessment(db, v, actor_id=user.id)
     tier = service.run_tiering(db, v, assessment, actor_id=user.id) if intake.has_answers(v.intake) else None
+    # The engagement the request named is made next to General, after General is tiered: the approval gate of
+    # General's assessment is what decides the request, so General's lifecycle is the one that starts.
+    first = engagements.add_first(db, v, intake.request_of(v.intake)["engagement"], user.id)
     db.commit()
     payload = _payload(db, user, v)
     payload["assessment_id"] = assessment.id
     payload["tiering"] = tier
+    payload["engagement_id"] = first.id if first is not None else None
     return payload
 
 

@@ -401,17 +401,17 @@ def test_adding_a_supplier_finds_one_on_record_by_name_or_website_archived_too(d
 
 
 def test_a_request_finds_one_on_record_and_says_when_it_is_archived(db):
+    """A request for something on record is no longer refused (B5b, R7): it is filed and says what it may be."""
     _vendor(db, "Acme Ltd", website="https://www.acme.com")
     _vendor(db, "Old Co", deleted_at=datetime.utcnow())
-    with pytest.raises(HTTPException) as live:
-        onboarding.create_request(onboarding.NewRequest(name="ACME limited"), db=db, user=_user(db, ADMIN))
-    with pytest.raises(HTTPException) as site:
-        onboarding.create_request(onboarding.NewRequest(name="Other", website="http://acme.com/x"), db=db,
-                                  user=_user(db, ADMIN))
-    with pytest.raises(HTTPException) as archived:
-        onboarding.create_request(onboarding.NewRequest(name="Old Co LLC"), db=db, user=_user(db, ADMIN))
-    assert "open it instead" in live.value.detail and "open it instead" in site.value.detail
-    assert "archived" in archived.value.detail and "restore it" in archived.value.detail
+    admin = _user(db, ADMIN)
+    live = onboarding.create_request(onboarding.NewRequest(name="ACME limited"), db=db, user=admin)
+    site = onboarding.create_request(onboarding.NewRequest(name="Other", website="http://acme.com/x"), db=db, user=admin)
+    archived = onboarding.create_request(onboarding.NewRequest(name="Old Co LLC"), db=db, user=admin)
+    assert [(d["name"], d["match"], d["archived"]) for d in live["duplicates"]] == [("Acme Ltd", "name", False)]
+    assert [(d["name"], d["match"]) for d in site["duplicates"]] == [("Acme Ltd", "website")]
+    assert [(d["name"], d["archived"]) for d in archived["duplicates"]] == [("Old Co", True)]
+    assert all(db.get(Vendor, r["id"]).intake_status == "draft" for r in (live, site, archived))
 
 
 # ── 4. the register: one next action, and open engagements ─────────────────
