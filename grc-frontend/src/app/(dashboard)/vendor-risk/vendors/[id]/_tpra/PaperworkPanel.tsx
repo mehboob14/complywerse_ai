@@ -1,6 +1,6 @@
 'use client';
 
-// Paperwork tab of a supplier: its documents (what each covers, how long it holds, who
+// Paperwork tab of a vendor: its documents (what each covers, how long it holds, who
 // checked it) and its SOC reports read into fields, the verdict first.
 
 import { useId, useMemo, useRef, useState } from 'react';
@@ -20,6 +20,8 @@ import { errText } from '../../../_lib/intake/types';
 import {
   paperworkApi, type Cuec, type CuecStatus, type Opinion, type PaperDoc, type SocReview, type Subservice,
 } from '../../../_lib/paperworkApi';
+import { BTN, Panel, Skeleton } from '../../../_ui';
+import RenewalDialog from '../_record/RenewalDialog';
 
 type Tone = 'red' | 'amber' | 'green' | 'grey';
 const TONE: Record<Tone, string> = {
@@ -44,7 +46,6 @@ const CUEC_STATUS: Record<CuecStatus, { label: string; tone: Tone }> = {
 const SEVERITY_TONE: Record<string, Tone> = { critical: 'red', high: 'red', medium: 'amber', low: 'grey' };
 const FILE_ACCEPT = '.pdf,.docx,.txt,.rtf,.png,.jpg,.jpeg,.tif,.tiff';
 
-const card = 'rounded-xl border border-gray-200 bg-white p-3';
 const btn = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium disabled:opacity-60';
 const input = 'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
 
@@ -62,45 +63,49 @@ function Loading() {
 function refreshPaperwork(qc: QueryClient, vendorId: number) {
   qc.invalidateQueries({ queryKey: ['tprm-soc-reviews', vendorId] });
   qc.invalidateQueries({ queryKey: ['tprm-paperwork', vendorId] });
-  // a review can raise a finding, open an assessment, suspend the supplier or add a fourth party
+  // a review can raise a finding, open an assessment, suspend the vendor or add a fourth party
   qc.invalidateQueries({ predicate: (q) => ['tpra-findings', 'tpra-lifecycle', 'tpra-impact', 'vendor'].includes(String(q.queryKey[0])) });
 }
 
-export default function PaperworkPanel({ vendorId }: { vendorId: number }) {
+export type PaperworkSection = 'documents' | 'soc';
+
+/** `sections` picks which parts to show: the Paperwork tab places the documents and the assurance reports apart, in its own order. */
+export default function PaperworkPanel({ vendorId, sections = ['documents', 'soc'] }: { vendorId: number; sections?: PaperworkSection[] }) {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
   const canLink = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');
   return (
-    <div className="space-y-3">
-      <Documents vendorId={vendorId} canEdit={canEdit} />
-      <SocReports vendorId={vendorId} canEdit={canEdit} canLink={canLink} />
+    <div className="space-y-5">
+      {sections.includes('documents') && <Documents vendorId={vendorId} canEdit={canEdit} canRequest={canLink} />}
+      {sections.includes('soc') && <SocReports vendorId={vendorId} canEdit={canEdit} canLink={canLink} />}
     </div>
   );
 }
 
 // ── documents ────────────────────────────────────────────────────────────────
 
-function Documents({ vendorId, canEdit }: { vendorId: number; canEdit: boolean }) {
+function Documents({ vendorId, canEdit, canRequest }: { vendorId: number; canEdit: boolean; canRequest: boolean }) {
+  const [renewing, setRenewing] = useState<PaperDoc | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['tprm-paperwork', vendorId],
     queryFn: async () => (await paperworkApi.documents(vendorId)).data,
   });
+  const need = [data?.counts.expired ? `${data.counts.expired} expired` : null, data?.counts.expiring ? `${data.counts.expiring} expiring` : null].filter(Boolean).join(' · ');
   return (
-    <section className={card} aria-labelledby="paperwork-documents">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 id="paperwork-documents" className="text-xs font-semibold text-slate-800">Documents</h3>
-        <InfoTip text={`What the supplier gave us and the evidence linked to its assessments, each once. One holds until the earlier of its expiry and the end of the period it covers, and is expiring ${data?.expiring_days ?? 60} days before.`} />
-        {!!data?.counts.expired && <Chip tone="red">{data.counts.expired} expired</Chip>}
-        {!!data?.counts.expiring && <Chip tone="amber">{data.counts.expiring} expiring</Chip>}
-      </div>
-      {isLoading ? <Loading /> : !data?.items.length ? (
-        <p className="text-xs text-slate-500">No documents yet. Files the supplier uploads, and evidence linked to its assessments, show here.</p>
+    <Panel
+      title="Documents"
+      description={need || undefined}
+      info={`What the vendor gave us and the evidence linked to its assessments, each once. One holds until the earlier of its expiry and the end of the period it covers, and is expiring ${data?.expiring_days ?? 60} days before.`}
+    >
+      {isLoading ? <div className="space-y-2"><Skeleton className="h-14 w-full" /><Skeleton className="h-14 w-full" /></div> : !data?.items.length ? (
+        <p className="text-[13px] leading-5 text-[#64707e]">No documents yet. Files the vendor uploads, and evidence linked to its assessments, show here.</p>
       ) : (
         <ul className="space-y-1.5">
-          {data.items.map((d) => <DocRow key={d.link_id} d={d} vendorId={vendorId} canEdit={canEdit} />)}
+          {data.items.map((d) => <DocRow key={d.link_id} d={d} vendorId={vendorId} canEdit={canEdit} onRenew={canRequest ? () => setRenewing(d) : undefined} />)}
         </ul>
       )}
-    </section>
+      <RenewalDialog vendorId={vendorId} doc={renewing} onClose={() => setRenewing(null)} />
+    </Panel>
   );
 }
 
@@ -118,7 +123,7 @@ function Countdown({ d }: { d: PaperDoc }) {
   return <Chip tone={d.state === 'expiring' ? 'amber' : 'green'}>{plural(d.days_left, 'day')} left</Chip>;
 }
 
-function DocRow({ d, vendorId, canEdit }: { d: PaperDoc; vendorId: number; canEdit: boolean }) {
+function DocRow({ d, vendorId, canEdit, onRenew }: { d: PaperDoc; vendorId: number; canEdit: boolean; onRenew?: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
@@ -136,7 +141,7 @@ function DocRow({ d, vendorId, canEdit }: { d: PaperDoc; vendorId: number; canEd
         <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{d.name}</span>
         {kind && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] capitalize text-slate-600">{kind}</span>}
-        {d.from_supplier && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] text-teal-800">From supplier</span>}
+        {d.from_supplier && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] text-teal-800">From vendor</span>}
         <Countdown d={d} />
         <EvidencePreviewButton evidenceId={d.evidence_id} label="View" />
       </div>
@@ -144,16 +149,23 @@ function DocRow({ d, vendorId, canEdit }: { d: PaperDoc; vendorId: number; canEd
         {coverage(d)}{d.expiry_date && ` · expiry ${fmtDate(d.expiry_date)}`}
         {' · '}{d.reviewed_at ? `Reviewed by ${d.reviewed_by_name || 'a colleague'}, ${stamped(d.reviewed_at)}` : 'Not reviewed'}
       </p>
-      {canEdit && !editing && (
+      {(canEdit || (onRenew && (d.state === 'expired' || d.state === 'expiring'))) && !editing && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          <button type="button" className={`${btn} border-gray-200 text-gray-600`}
-            onClick={() => { setDates({ from: d.coverage_from || '', to: d.coverage_to || '' }); setEditing(true); }}>
-            Set coverage
-          </button>
-          {!d.reviewed_at && (
-            <button type="button" className={`${btn} border-primary-200 text-primary-700`} disabled={save.isPending} onClick={() => save.mutate({})}>
-              <Check className="h-3 w-3" aria-hidden /> Mark reviewed
-            </button>
+          {onRenew && (d.state === 'expired' || d.state === 'expiring') && (
+            <button type="button" className={`${btn} border-primary-200 text-primary-700`} onClick={onRenew}>Request renewal</button>
+          )}
+          {canEdit && (
+            <>
+              <button type="button" className={`${btn} border-gray-200 text-gray-600`}
+                onClick={() => { setDates({ from: d.coverage_from || '', to: d.coverage_to || '' }); setEditing(true); }}>
+                Set coverage
+              </button>
+              {!d.reviewed_at && (
+                <button type="button" className={`${btn} border-primary-200 text-primary-700`} disabled={save.isPending} onClick={() => save.mutate({})}>
+                  <Check className="h-3 w-3" aria-hidden /> Mark reviewed
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -188,20 +200,18 @@ function SocReports({ vendorId, canEdit, canLink }: { vendorId: number; canEdit:
   });
   const items = data?.items ?? [];
   return (
-    <section className={card} aria-labelledby="paperwork-soc">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h3 id="paperwork-soc" className="text-xs font-semibold text-slate-800">SOC reports</h3>
-        <InfoTip text="An auditor's report on the supplier's controls, read into fields: the opinion and what the auditor found, the period, the controls it expects us to run and the companies it leaves out. An opinion other than unqualified, material findings or exceptions raise a finding." />
-        <span className="flex-1" />
-        {canEdit && (
-          <button type="button" onClick={() => setOpen('new')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
-            <Plus className="h-3.5 w-3.5" aria-hidden /> Record review
-          </button>
-        )}
-      </div>
-      {isLoading ? <Loading /> : items.length === 0 ? (
-        <p className="text-xs text-slate-500">No SOC report reviewed yet.</p>
+    <Panel
+      title="Assurance reports"
+      count={items.length || undefined}
+      info="An auditor's report on the vendor's controls, read into fields: the opinion and what the auditor found, the period, the controls it expects us to run and the companies it leaves out. An opinion other than unqualified, material findings or exceptions raise a finding."
+      action={canEdit ? (
+        <button type="button" onClick={() => setOpen('new')} className={BTN}>
+          <Plus className="h-4 w-4" aria-hidden /> Record review
+        </button>
+      ) : undefined}
+    >
+      {isLoading ? <Skeleton className="h-20 w-full" /> : items.length === 0 ? (
+        <p className="text-[13px] leading-5 text-[#64707e]">No SOC report reviewed yet.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((r) => (
@@ -210,7 +220,7 @@ function SocReports({ vendorId, canEdit, canLink }: { vendorId: number; canEdit:
         </ul>
       )}
       {open !== null && <SocForm vendorId={vendorId} review={open === 'new' ? null : open} onClose={() => setOpen(null)} />}
-    </section>
+    </Panel>
   );
 }
 
@@ -275,7 +285,7 @@ function SocCard({ r, vendorId, canEdit, canLink, onEdit }: {
         <div className="mt-2">
           <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
             Controls we run{openCuecs ? ` · ${openCuecs} open` : ''}
-            <InfoTip text="The report's complementary user entity controls: what the supplier relies on us to do. Its opinion only covers us if we do them." />
+            <InfoTip text="The report's complementary user entity controls: what the vendor relies on us to do. Its opinion only covers us if we do them." />
           </p>
           <ul className="mt-1 space-y-0.5">
             {r.cuecs.map((c, i) => (
@@ -293,7 +303,7 @@ function SocCard({ r, vendorId, canEdit, canLink, onEdit }: {
         <div className="mt-2">
           <p className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
             Subservice organisations
-            <InfoTip text="Companies the supplier relies on to run the service. A carved-out one is outside this report, so its controls need assurance of their own." />
+            <InfoTip text="Companies the vendor relies on to run the service. A carved-out one is outside this report, so its controls need assurance of their own." />
           </p>
           <ul className="mt-1 space-y-0.5">
             {r.subservice_orgs.map((o, i) => (
@@ -549,7 +559,7 @@ function SocForm({ vendorId, review, onClose }: { vendorId: number; review: SocR
           </Block>
         )}
 
-        <Block title="Bridge letter" tip="A letter from the supplier vouching that nothing material changed between the end of the period and a later date.">
+        <Block title="Bridge letter" tip="A letter from the vendor vouching that nothing material changed between the end of the period and a later date.">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field id={fid('bridge')} label="Letter">
               <select id={fid('bridge')} className={input} value={form.bridge_letter} onChange={(e) => set('bridge_letter', e.target.value as Form['bridge_letter'])}>
@@ -566,7 +576,7 @@ function SocForm({ vendorId, review, onClose }: { vendorId: number; review: SocR
           </div>
         </Block>
 
-        <Block title="Controls we run" tip="The report's complementary user entity controls: what the supplier relies on us to do. Give each an owner.">
+        <Block title="Controls we run" tip="The report's complementary user entity controls: what the vendor relies on us to do. Give each an owner.">
           <div className="space-y-2">
             {form.cuecs.map((c, i) => (
               <div key={c.id || `new-${i}`} className="grid gap-2 rounded-lg border border-gray-100 p-2 sm:grid-cols-[1fr_9rem_8rem_auto]">
@@ -595,7 +605,7 @@ function SocForm({ vendorId, review, onClose }: { vendorId: number; review: SocR
           </div>
         </Block>
 
-        <Block title="Subservice organisations" tip="Companies the supplier relies on. Carved out means the report does not cover them; included means it does.">
+        <Block title="Subservice organisations" tip="Companies the vendor relies on. Carved out means the report does not cover them; included means it does.">
           <div className="space-y-2">
             {form.subservice_orgs.map((o, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">

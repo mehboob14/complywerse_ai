@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   cadenceFor, cadenceLabel, classificationTone, contactLine, dataShared, daysUntil, findingFrom, isTiered, lifecycleHref, metaParts,
-  localToServer, nextReview, openScopes, pickEngagement, recordHref, reviewClock, settled, sourceLabel, tabFor, targetTiered, tierHref, tierTarget,
+  localToServer, nextReview, openScopes, pickEngagement, recordHref, renewalNote, reviewClock, riskLine, settled, sourceLabel, tabFor, targetTiered, tierHref, tierTarget,
   webHost, webHref, type Scope,
 } from './vendorRecordModel.ts';
 import { fmt } from '../_ui/fmt.ts';
@@ -176,4 +176,18 @@ test('a time typed into a datetime-local box goes to the server as naive UTC', (
   assert.match(sent, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);                 // no zone, no milliseconds
   assert.equal(new Date(`${sent}Z`).getTime(), new Date('2026-10-29T14:30').getTime());   // the same moment, whatever the viewer's zone
   assert.equal(localToServer('not a time'), 'not a time');
+});
+
+test('the scores of a vendor read on one line', () => {
+  assert.equal(riskLine({ inherent_risk_score: 61.24, residual_risk_score: 33.4, risk_rating: 'medium' }), 'Inherent 61.2 · Residual 33.4 · Medium');
+  assert.equal(riskLine({ inherent_risk_score: 0, residual_risk_score: null, risk_rating: null }), 'Inherent 0');
+  assert.equal(riskLine({ inherent_risk_score: null, residual_risk_score: null, risk_rating: null }), 'Not scored');
+  assert.equal(riskLine(undefined), 'Not scored');
+});
+
+test('the renewal note says what happened to the document and what is wanted', () => {
+  assert.equal(renewalNote({ name: 'ISO 27001 certificate', state: 'expired', ends_on: '2026-09-01' }), 'Our copy of ISO 27001 certificate expired on 1 Sep 2026. Please upload the current one.');
+  assert.equal(renewalNote({ name: 'Policy', state: 'expiring', ends_on: '2026-12-01' }), 'Our copy of Policy expires on 1 Dec 2026. Please upload the current one.');
+  assert.equal(renewalNote({ name: 'Policy', state: 'expired', ends_on: null }), 'Our copy of Policy has expired. Please upload the current one.');
+  assert.equal(renewalNote({ name: 'Policy', state: 'expiring', ends_on: null }), 'Our copy of Policy is about to expire. Please upload the current one.');
 });

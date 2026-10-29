@@ -1,8 +1,8 @@
 'use client';
 
-// Contracting stage (07): this supplier's contracts, opened in the same drawer
+// Contracting stage (07) and the Paperwork tab: this vendor's contracts, opened in the same drawer
 // as the Contracts page — dates, renewal, money, the signed copy and obligations.
-// A contract for one engagement says which; the rest apply to the whole supplier.
+// A contract for one engagement says which; the rest apply to the whole vendor.
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -11,12 +11,14 @@ import { clsx } from 'clsx';
 import { FileSignature, Loader2, Paperclip, Plus } from 'lucide-react';
 import { vendorContractsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { BTN_PRIMARY, Panel } from '../../../_ui';
 import ContractDrawer from '../../../_lib/contracts/ContractDrawer';
 import { CLAUSES, STATE_META, countdown, money, type Register } from '../../../_lib/contracts/shared';
 import { useEngagements } from '../../../_lib/engagementsApi';
 import { fmtDate } from './constants';
 
-export default function ContractsPanel({ vendorId, assessmentId }: { vendorId: number; assessmentId?: number }) {
+/** `framed` draws the contracts as a panel of their own (the Paperwork tab); without it they sit in whatever frame the caller has (a lifecycle stage). */
+export default function ContractsPanel({ vendorId, assessmentId, framed = false }: { vendorId: number; assessmentId?: number; framed?: boolean }) {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:contracts:create') || hasPermission('vendor_risk:contracts:edit')
     || hasPermission('erm:risks:edit');
@@ -30,25 +32,26 @@ export default function ContractsPanel({ vendorId, assessmentId }: { vendorId: n
   const { data: engaged } = useEngagements(vendorId);
   const engagementName = (id: number | null) => (id ? engaged?.items.find((e) => e.id === id)?.name : undefined);
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Link href="/vendor-risk/contracts" className="text-xs text-primary-700 hover:underline">All contracts</Link>
-        {canCreate && (
-          <button onClick={() => setOpen('new')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700">
-            <Plus className="h-3.5 w-3.5" /> Add contract
-          </button>
-        )}
-      </div>
+  const actions = (
+    <>
+      <Link href="/vendor-risk/contracts" className="rounded-sm text-[13px] font-medium text-[#0f766e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">All contracts</Link>
+      {canCreate && (
+        <button type="button" onClick={() => setOpen('new')} className={BTN_PRIMARY}>
+          <Plus aria-hidden className="h-4 w-4" /> Add contract
+        </button>
+      )}
+    </>
+  );
 
+  const body = (
+    <>
       {isLoading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
       ) : contracts.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
           <FileSignature className="mx-auto mb-2 h-6 w-6 text-gray-400" />
           <p className="text-sm font-medium text-gray-700">No contracts yet</p>
-          <p className="text-xs text-gray-500">Record the MSA, DPA, service levels or security addendum, attach the signed copy, and list what it binds the supplier to.</p>
+          <p className="text-xs text-gray-500">Record the MSA, DPA, service levels or security addendum, attach the signed copy, and list what it binds the vendor to.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -91,6 +94,14 @@ export default function ContractsPanel({ vendorId, assessmentId }: { vendorId: n
         <ContractDrawer contractId={open === 'new' ? null : open} vendorId={vendorId} assessmentId={assessmentId}
           onClose={() => setOpen(null)} />
       )}
+    </>
+  );
+
+  if (framed) return <Panel title="Contracts" count={contracts.length || undefined} action={actions}>{body}</Panel>;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">{actions}</div>
+      {body}
     </div>
   );
 }

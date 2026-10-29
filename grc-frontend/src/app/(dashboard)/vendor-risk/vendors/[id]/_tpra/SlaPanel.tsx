@@ -1,6 +1,6 @@
 'use client';
 
-// SLA Tracking tab of a supplier: each service level measured against the contract it
+// Service levels of a vendor: each service level measured against the contract it
 // is promised in. With a target, a measurement and the way that is good, met or missed
 // follows from the numbers; a miss becomes a monitoring signal.
 
@@ -12,8 +12,7 @@ import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
-import { parseUtc } from '@/lib/serverTime';
-import { fmtDate } from '../../../_lib/tprmShared';
+import { BTN, Panel, StatusPill, fmt } from '../../../_ui';
 import { errText } from '../../../_lib/intake/types';
 import type { Register } from '../../../_lib/contracts/shared';
 import { paperworkApi, type SlaRecord } from '../../../_lib/paperworkApi';
@@ -25,8 +24,8 @@ type Form = {
 };
 
 const PERIODS = ['monthly', 'quarterly', 'yearly'];
-const th = 'px-3 py-2 text-left text-xs font-medium uppercase text-gray-500';
-const td = 'px-3 py-2 text-sm text-gray-600';
+const th = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[#64707e]';
+const td = 'px-3 py-2.5 text-[13px] leading-5 text-[#26323d]';
 const input = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500';
 
 const amount = (v: number | null, unit: string | null) =>
@@ -68,47 +67,47 @@ export default function SlaPanel({ vendorId }: { vendorId: number }) {
     return c ? c.title || c.type_label : id ? `Contract ${id}` : '-';
   };
 
+  const missed = (records ?? []).filter((s) => !s.is_compliant).length;
   return (
-    <div className="space-y-3">
-      {canCreate && (
-        <div className="flex justify-end">
-          <button type="button" onClick={() => setOpen('new')} className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
-            <Plus className="h-4 w-4" aria-hidden /> Add measurement
-          </button>
-        </div>
-      )}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className={th}>Metric</th><th className={th}>Target</th><th className={th}>Measured</th><th className={th}>Result</th>
-              <th className={th}>Contract</th><th className={th}>Period</th><th className={th}>Recorded</th>
-              {canEdit && <th className={th}><span className="sr-only">Edit</span></th>}
+    <Panel
+      title="Service levels"
+      count={(records ?? []).length || undefined}
+      description={missed ? `${missed} missed` : undefined}
+      info="Each service level measured against the contract that promises it. With a target, a measurement and the way that is good, met or missed follows from the numbers; a miss becomes a monitoring signal."
+      action={canCreate ? (
+        <button type="button" onClick={() => setOpen('new')} className={BTN}>
+          <Plus className="h-4 w-4" aria-hidden /> Add measurement
+        </button>
+      ) : undefined}
+    >
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Table of service levels">
+        <table className="min-w-full">
+          <thead>
+            <tr className="border-y border-[#e1e6eb] bg-[#f7f9fa]">
+              <th scope="col" className={th}>Metric</th><th scope="col" className={th}>Target</th><th scope="col" className={th}>Measured</th>
+              <th scope="col" className={th}>Result</th><th scope="col" className={th}>Contract</th><th scope="col" className={th}>Period</th>
+              <th scope="col" className={th}>Recorded</th>
+              {canEdit && <th scope="col" className={th}><span className="sr-only">Edit</span></th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <tbody className="divide-y divide-[#e1e6eb]">
             {isLoading ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-[#64707e]"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></td></tr>
             ) : (records ?? []).length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">No SLA records found</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-[13px] text-[#64707e]">No service levels measured yet.</td></tr>
             ) : (records ?? []).map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-3 py-2 text-sm font-medium text-gray-900">{s.sla_metric}</td>
+              <tr key={s.id}>
+                <td className={`${td} font-medium text-[#1f2933]`}>{s.sla_metric}</td>
                 <td className={td}>{amount(s.target_value, s.unit)}</td>
                 <td className={td}>{amount(s.actual_value, s.unit)}</td>
-                <td className="px-3 py-2">
-                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${s.is_compliant
-                    ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-                    {s.is_compliant ? 'Met' : 'Missed'}
-                  </span>
-                </td>
+                <td className={td}><StatusPill tone={s.is_compliant ? 'success' : 'danger'} variant="inline">{s.is_compliant ? 'Met' : 'Missed'}</StatusPill></td>
                 <td className={td}>{contractName(s.contract_id)}</td>
                 <td className={`${td} capitalize`}>{s.measurement_period || '-'}</td>
-                <td className={td}>{s.recorded_at ? fmtDate(parseUtc(s.recorded_at)?.toISOString()) : '-'}</td>
+                <td className={`${td} whitespace-nowrap`}>{s.recorded_at ? fmt.date(s.recorded_at) : '-'}</td>
                 {canEdit && (
-                  <td className="px-3 py-2 text-right">
-                    <button type="button" onClick={() => setOpen(s)} aria-label={`Edit ${s.sla_metric}`}
-                      className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Pencil className="h-3.5 w-3.5" /></button>
+                  <td className={`${td} text-right`}>
+                    <button type="button" onClick={() => setOpen(s)} aria-label={`Edit ${s.sla_metric}`} title="Edit"
+                      className="grid h-8 w-8 place-items-center rounded-lg text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"><Pencil aria-hidden className="h-4 w-4" /></button>
                   </td>
                 )}
               </tr>
@@ -119,7 +118,7 @@ export default function SlaPanel({ vendorId }: { vendorId: number }) {
       {open !== null && (
         <SlaForm vendorId={vendorId} record={open === 'new' ? null : open} contracts={contracts?.items ?? []} onClose={() => setOpen(null)} />
       )}
-    </div>
+    </Panel>
   );
 }
 

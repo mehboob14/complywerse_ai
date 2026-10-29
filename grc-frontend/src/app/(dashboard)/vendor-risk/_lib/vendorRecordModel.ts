@@ -168,6 +168,14 @@ export function classificationTone(value?: string | null): Tone {
   return key === 'restricted' ? 'danger' : key === 'confidential' ? 'warning' : 'neutral';
 }
 
+/** The scores a vendor carries, on one line: "Inherent 61.2 · Residual 33.4 · Medium"; "Not scored" before there are any. */
+export function riskLine(v?: { inherent_risk_score?: number | null; residual_risk_score?: number | null; risk_rating?: string | null } | null): string {
+  const n = (x?: number | null) => (typeof x === 'number' && Number.isFinite(x) ? String(Math.round(x * 10) / 10) : null);
+  const parts = [n(v?.inherent_risk_score) && `Inherent ${n(v?.inherent_risk_score)}`, n(v?.residual_risk_score) && `Residual ${n(v?.residual_risk_score)}`,
+    v?.risk_rating ? fmt.status(v.risk_rating) : null];
+  return parts.filter(Boolean).join(' · ') || 'Not scored';
+}
+
 /** The meta line under a vendor's name: type, industry, business unit (the website is a link of its own). */
 export function metaParts(v?: { vendor_type?: string | null; industry?: string | null; business_unit?: { name?: string | null } | null } | null): string[] {
   return [v?.vendor_type, v?.industry, v?.business_unit?.name].map((p) => String(p ?? '').trim()).filter(Boolean);
@@ -192,6 +200,13 @@ export function dataShared(v?: { data_types_accessed?: string[] | null; holds_pe
   const chips = (v?.data_types_accessed ?? []).map((t) => String(t).trim()).filter(Boolean);
   if (chips.length) return { chips, note: null };
   return { chips: [], note: v?.holds_personal_data ? 'Personal data, types not itemised' : 'None recorded' };
+}
+
+/** The note that goes with a renewal request, from what is known of the document: "Our copy of X expires on 1 Dec 2026. Please upload the current one." */
+export function renewalNote(d: { name: string; state?: string | null; ends_on?: string | null }): string {
+  const end = d.ends_on ? fmt.date(d.ends_on) : null;
+  const when = d.state === 'expired' ? (end ? `expired on ${end}` : 'has expired') : end ? `expires on ${end}` : 'is about to expire';
+  return `Our copy of ${d.name} ${when}. Please upload the current one.`;
 }
 
 /** A contact's line in the right column: "Security · dana@acme.example · +44 20 7946 0000" (the primary flag is a mark of its own). */
