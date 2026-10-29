@@ -1,976 +1,315 @@
 ﻿'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { vendorRiskApi, tenantApi } from '@/lib/api';
+// A vendor's record: the header (who it is, its tier, status and grade, what can be done), the exit card while an offboarding is open,
+// six tabs kept in `?tab=` (the old twelve map onto them, and the deep links ?stage=, ?finding= and ?engagement= still work), and a
+// 20rem column of facts beside every tab but the Lifecycle. The tabs are components of their own (`_tabs/`); the page owns the vendor,
+// the engagement picked, and the dialogs the header opens.
+import { useEffect, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { clsx } from 'clsx';
+import { BadgeCheck, Copy, FileText, Layers, LogOut, Pencil, UserPlus, Users } from 'lucide-react';
+import { vendorRiskApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
-  ArrowLeft,
-  Loader2,
-  AlertCircle,
-  Building2,
-  Shield,
-  Edit2,
-  Plus,
-  Calendar,
-  Mail,
-  User,
-  Globe,
-  Database,
-  Phone,
-  DollarSign,
-} from 'lucide-react';
-import Link from 'next/link';
-import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
-import TpraLifecycle from './_tpra/TpraLifecycle';
-import DependenciesPanel from './_tpra/DependenciesPanel';
-import ExposurePanel from './_tpra/ExposurePanel';
-import OutsideInPanel from './_tpra/OutsideInPanel';
-import ActionPlanPanel from './_tpra/ActionPlanPanel';
-import EngagementsPanel, { WorstOfNote } from './_tpra/EngagementsPanel';
-import PortalPanel from './_tpra/PortalPanel';
-import PaperworkPanel from './_tpra/PaperworkPanel';
-import SlaPanel from './_tpra/SlaPanel';
+  BTN, BTN_PRIMARY, DetailHeader, EmptyState, ErrorState, GradePill, Skeleton, StatusPill, TONE, TierBadge, fmt, tones, useUrlParams,
+  type Tone,
+} from '../../_ui';
 import VendorLogo from '../../_lib/VendorLogo';
-import VatCard from './_tpra/VatCard';
-import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
+import { engagementsKey, useEngagements } from '../../_lib/engagementsApi';
+import { useOffboarding } from '../../_lib/offboardingApi';
+import type { SupplierContact } from '../../_lib/portalApi';
+import { TPRM_QUERY_OPTS } from '../../_lib/tprmQuery';
+import {
+  TABS, classificationTone, findingFrom, isTiered, metaParts, openScopes, pickEngagement, recordHref, targetTiered, tabFor, tierHref,
+  tierTarget, webHost, webHref, type TabKey,
+} from '../../_lib/vendorRecordModel';
+import VendorFormDialog from '../_components/VendorFormDialog';
+import ActionsMenu, { type MenuItem } from './_record/ActionsMenu';
+import ContactDialog from './_record/ContactDialog';
+import RightColumn from './_record/RightColumn';
+import AssessmentsTab from './_tabs/AssessmentsTab';
+import FindingsTab from './_tabs/FindingsTab';
+import LifecycleTab from './_tabs/LifecycleTab';
+import MonitoringTab from './_tabs/MonitoringTab';
+import OverviewTab from './_tabs/OverviewTab';
+import PaperworkTab from './_tabs/PaperworkTab';
+import type { TabProps } from './_tabs/tabProps';
+import { EngagementForm, WorstOfNote } from './_tpra/EngagementsPanel';
+import OffboardingPanel, { StartOffboardingDialog } from './_tpra/OffboardingPanel';
 
-interface Vendor {
-  id: number;
-  name: string;
-  description: string | null;
-  tier: string;
-  status: string;
-  vendor_type: string | null;
-  industry: string | null;
-  website: string | null;
-  custom_values?: Record<string, unknown> | null;
-  vat_number?: string | null;
-  vat_check?: { valid: boolean; name: string | null; address: string | null; checked_at: string; name_matches?: boolean | null } | null;
-  inherent_risk_score: number | null;
-  residual_risk_score: number | null;
-  risk_rating: string | null;
-  data_access_level: string;
-  primary_contact_name: string | null;
-  primary_contact_email: string | null;
-  primary_contact_phone: string | null;
-  services_provided: string[] | null;
-  contract_start_date: string | null;
-  contract_end_date: string | null;
-  contract_value: number | null;
-  owner: { id: number; full_name: string; email: string } | null;
-  owner_id: number | null;
-  notes: string | null;
-  assessments_count: number;
-  incidents_count: number;
-  sla_records_count: number;
-  created_at: string;
-  updated_at: string;
-  // TPRA lifecycle (additive)
-  lifecycle_stage?: string;
-  reassessment_cadence_days?: number | null;
-  next_reassessment_date?: string | null;
-  contract_document_id?: number | null;
-}
-
-interface Assessment {
-  id: number;
-  assessment_type: string;
-  status: string;
-  inherent_score: number | null;
-  residual_score: number | null;
-  risk_rating: string | null;
-  due_date: string | null;
-  assessor: { id: number; full_name: string } | string | null;
-  created_at: string;
-}
-
-interface Incident {
-  id: number;
-  title: string;
-  severity: string;
-  status: string;
-  description: string | null;
-  occurred_at: string;
-  resolved_at: string | null;
-  created_at: string;
-}
-
-interface UserOption {
-  id: number;
-  username: string;
-  display_name: string | null;
-  email: string;
-}
-
-const titleCase = (s: string) =>
-  (s ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-// Sanctioned ramp: critical=rose, high=orange, medium=amber, low=emerald; neutral fallback slate.
-const getTierBadge = (tier: string) => {
-  const styles: Record<string, string> = {
-    critical: 'bg-rose-50 text-rose-700 border border-rose-200',
-    high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-amber-50 text-amber-700 border border-amber-200',
-    low: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  };
-  return styles[tier?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
+const TAB_COMPONENT: Record<TabKey, ComponentType<TabProps>> = {
+  overview: OverviewTab, lifecycle: LifecycleTab, assessments: AssessmentsTab, findings: FindingsTab, paperwork: PaperworkTab, monitoring: MonitoringTab,
 };
 
-const getStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    active: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    under_review: 'bg-primary-50 text-primary-700 border border-primary-200',
-    onboarding: 'bg-slate-50 text-slate-700 border border-slate-200',
-    offboarded: 'bg-slate-50 text-slate-700 border border-slate-200',
-    suspended: 'bg-rose-50 text-rose-700 border border-rose-200',
-    completed: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    reviewed: 'bg-primary-50 text-primary-700 border border-primary-200',
-    submitted: 'bg-amber-50 text-amber-700 border border-amber-200',
-    in_progress: 'bg-primary-50 text-primary-700 border border-primary-200',
-    draft: 'bg-slate-50 text-slate-700 border border-slate-200',
-    open: 'bg-rose-50 text-rose-700 border border-rose-200',
-    investigating: 'bg-orange-50 text-orange-700 border border-orange-200',
-    resolved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    closed: 'bg-slate-50 text-slate-700 border border-slate-200',
-  };
-  return styles[status?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
-};
+/** A small badge for a fact about the vendor ("Holds personal data", "Restricted"): a tone's tint, no dot. */
+function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
+  const c = TONE[tone];
+  return (
+    <span className="inline-flex items-center whitespace-nowrap rounded-md border px-2 py-[3px] text-[11px] font-semibold leading-none" style={{ background: c.tint, color: c.text, borderColor: c.border }}>
+      {children}
+    </span>
+  );
+}
 
-const getSeverityBadge = (severity: string) => {
-  const styles: Record<string, string> = {
-    critical: 'bg-rose-50 text-rose-700 border border-rose-200',
-    high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-amber-50 text-amber-700 border border-amber-200',
-    low: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  };
-  return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
-};
-
-type TabType = 'lifecycle' | 'overview' | 'engagements' | 'portal' | 'paperwork' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
-
-const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
-const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
-const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
-const ASSESSMENT_TYPES = [
-  { id: 'cybersecurity', label: 'Cybersecurity Assessment' },
-  { id: 'privacy_data_protection', label: 'Privacy & Data Protection' },
-  { id: 'operational_risk', label: 'Operational Risk Assessment' },
-  { id: 'compliance_regulatory', label: 'Compliance & Regulatory' },
-  { id: 'financial_risk', label: 'Financial Risk Assessment' },
-  { id: 'initial_onboarding', label: 'Initial Onboarding Assessment' },
-  { id: 'periodic_review', label: 'Periodic Review' },
-];
+const statusOf = (e: unknown) => (e as { response?: { status?: number } })?.response?.status;
 
 export default function VendorDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
-  const vendorId = Number(params.id);
-  const { data: vendorFieldSettings } = useModuleSettings('vendors');
+  const url = useUrlParams();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('vendor_risk:vendors:edit');
-  const canCreate = hasPermission('vendor_risk:vendors:create');
-  const [activeTab, setActiveTab] = useState<TabType>('lifecycle');
-  const tabRefs = useRef<Partial<Record<TabType, HTMLButtonElement | null>>>({});
+  const vendorId = Number(params.id);
+  const canEdit = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');
+  const canTier = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
 
-  // Deep-link receiver — ?stage=<key>&finding=<id> lands on the lifecycle tab,
-  // selects the stage, and (if a finding id is present) opens it in FindingsPanel.
-  // Read once on mount so later in-app tab clicks aren't overridden.
-  const deepLinkStage = searchParams?.get('stage') || null;
-  const deepLinkFindingRaw = searchParams?.get('finding');
-  const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
-  const deepLinkApplied = useRef(false);
-  const deepLinkTab = searchParams?.get('tab') as TabType | null;
-  // ?engagement=<id> opens that engagement's lifecycle; none is General, the supplier itself.
-  const [engagementId, setEngagementId] = useState<number | null>(Number(searchParams?.get('engagement')) || null);
-  useEffect(() => {
-    if (deepLinkApplied.current) return;
-    if (deepLinkStage || deepLinkFinding != null) {
-      setActiveTab('lifecycle');
-      deepLinkApplied.current = true;
-    } else if (deepLinkTab && ['lifecycle', 'overview', 'engagements', 'portal', 'paperwork', 'actions', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
-      setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
-      deepLinkApplied.current = true;
-    }
-  }, [deepLinkStage, deepLinkFinding, deepLinkTab]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
-  const [showIncidentModal, setShowIncidentModal] = useState(false);
-  const [editData, setEditData] = useState<Record<string, string>>({});
-  const [assessmentForm, setAssessmentForm] = useState({ assessment_type: 'cybersecurity', due_date: '', assessed_by: '' });
-  const [incidentForm, setIncidentForm] = useState({ title: '', severity: 'medium', description: '', occurred_at: '' });
-
-  const { data: vendor, isLoading } = useQuery({
+  const vendorQuery = useQuery({
     queryKey: ['vendor', vendorId],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getVendor(vendorId);
-      return res.data as Vendor;
-    },
+    queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, any>,
     enabled: !!vendorId,
+    retry: (n, e) => statusOf(e) !== 404 && n < 1,
   });
+  const vendor = vendorQuery.data;
+  const engagements = useEngagements(vendorId);
+  const offboarding = useOffboarding(vendorId);
 
-  const { data: users } = useQuery({
-    queryKey: ['tenant-users'],
-    queryFn: async () => {
-      const res = await tenantApi.getTenantUsers();
-      return (res.data ?? []) as UserOption[];
-    },
-  });
+  // The address says which tab, which stage or finding, and which engagement.
+  const rawTab = url.get('tab');
+  const stage = url.get('stage');
+  const findingId = findingFrom(url.get('finding'));
+  const tab = tabFor({ tab: rawTab, stage, finding: url.get('finding') });
+  const items = engagements.data?.items;
+  const engagementId = pickEngagement(items, Number(url.get('engagement')) || null);
 
-  const { data: assessments } = useQuery({
-    queryKey: ['vendor-assessments', vendorId],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getAssessments({ vendor_id: vendorId });
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as Assessment[];
-    },
-    enabled: activeTab === 'assessments' || showAssessmentModal,
-    placeholderData: keepPreviousData,
-  });
+  // An old ?tab= key is rewritten to the tab that holds its content now.
+  useEffect(() => {
+    if (rawTab && rawTab !== tab) url.set({ tab });
+  }, [rawTab, tab, url]);
 
-  const { data: incidents } = useQuery({
-    queryKey: ['vendor-incidents', vendorId],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getVendorIncidents(vendorId);
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as Incident[];
-    },
-    enabled: activeTab === 'incidents' || showIncidentModal,
-    placeholderData: keepPreviousData,
-  });
+  const [editing, setEditing] = useState(false);
+  const [addingEngagement, setAddingEngagement] = useState(false);
+  const [contact, setContact] = useState<SupplierContact | 'new' | null>(null);
+  const [startingExit, setStartingExit] = useState(false);
 
-  const updateMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.updateVendor(vendorId, data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
-      setShowEditModal(false);
-    },
-  });
+  // "VAT check" is a card on the Overview: go there, then bring it into view once it is drawn.
+  const [wantVat, setWantVat] = useState(false);
+  useEffect(() => {
+    if (!wantVat || tab !== 'overview') return undefined;
+    const timer = setTimeout(() => {
+      document.getElementById('vendor-vat-check')?.scrollIntoView({ block: 'center' });
+      document.getElementById('vendor-vat-input')?.focus({ preventScroll: true });
+      setWantVat(false);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [wantVat, tab]);
 
-  const createAssessmentMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.createAssessment({ ...data, vendor_id: vendorId });
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendor-assessments', vendorId] });
-      setShowAssessmentModal(false);
-      setAssessmentForm({ assessment_type: 'cybersecurity', due_date: '', assessed_by: '' });
-    },
-  });
+  const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({});
+  // A tab click drops the one-shot deep links (a stage, a finding, a request, the tiering popup) so they do not fire again.
+  const select = (key: TabKey) => url.set({ tab: key, stage: null, finding: null, tier: null, request: null });
+  const onTabKey = (e: KeyboardEvent) => {
+    const at = TABS.findIndex((t) => t.key === tab);
+    let next = at;
+    if (e.key === 'ArrowRight') next = (at + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft') next = (at - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    else return;
+    e.preventDefault();
+    select(TABS[next].key);
+    tabRefs.current[TABS[next].key]?.focus();
+  };
 
-  const createIncidentMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.createVendorIncident(vendorId, data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendor-incidents', vendorId] });
-      setShowIncidentModal(false);
-      setIncidentForm({ title: '', severity: 'medium', description: '', occurred_at: '' });
-    },
-  });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['vendor', vendorId] });
+    qc.invalidateQueries({ queryKey: engagementsKey(vendorId) });
+    qc.invalidateQueries({ queryKey: ['tpra-lifecycle', vendorId] });
+  };
 
-  if (isLoading) {
+  if (vendorQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <PageLoader size="md" />
+      <div className="mx-auto max-w-7xl space-y-4" aria-busy="true">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-16 w-2/3" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-72 w-full" />
       </div>
     );
   }
-
   if (!vendor) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-        <AlertCircle className="h-8 w-8 mb-2" />
-        <p>Vendor not found</p>
-        <Link href="/vendor-risk/vendors" className="text-primary-600 hover:underline mt-2 text-sm">Back to list</Link>
+      <div className="mx-auto max-w-2xl py-10">
+        {statusOf(vendorQuery.error) === 404 ? (
+          <EmptyState
+            title="This vendor is not here"
+            hint="It may have been archived, or the link may be wrong."
+            action={<Link href="/vendor-risk/vendors" className={BTN}>Back to the register</Link>}
+          />
+        ) : (
+          <ErrorState title="Couldn't load this vendor" onRetry={() => vendorQuery.refetch()} />
+        )}
       </div>
     );
   }
 
-  const ownerName = vendor.owner ? (typeof vendor.owner === 'object' ? vendor.owner.full_name : String(vendor.owner)) : null;
+  const tiered = isTiered(vendor);
+  const supplier = engagements.data?.supplier;
+  const closing = !!vendor.archived_at || !!offboarding.data?.started;
+  // The picker is on the Lifecycle and Assessments tabs: only there is the engagement picked on purpose (elsewhere "Tier engagement" and
+  // "Start offboarding" are for the vendor, and the first engagement still to be tiered).
+  const pickerTab = tab === 'lifecycle' || tab === 'assessments';
+  const picked = pickerTab ? engagementId : null;
+  const target = tierTarget(items, picked);
+  const several = openScopes(items).length > 1;
+  const website = webHref(vendor.website);
+  const meta = metaParts(vendor);
+  const Current = TAB_COMPONENT[tab];
+  const tabProps: TabProps = { vendorId, engagementId, onEngagementChange: (id) => url.set({ engagement: id == null ? null : String(id) }), vendor, stage, findingId, onChanged: refresh };
 
-  const tabs: { key: TabType; label: string; count?: number }[] = [
-    { key: 'lifecycle', label: 'Lifecycle' },
-    { key: 'overview', label: 'Overview' },
-    { key: 'engagements', label: 'Engagements' },
-    { key: 'portal', label: 'Supplier portal' },
-    { key: 'paperwork', label: 'Paperwork' },
-    { key: 'actions', label: 'Action plan' },
-    { key: 'dependencies', label: 'Dependencies' },
-    { key: 'exposure', label: 'Exposure' },
-    { key: 'outside-in', label: 'Outside-in' },
-    { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
-    { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
-    { key: 'incidents', label: 'Incidents', count: vendor.incidents_count },
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${recordHref(vendorId)}`);
+      toast({ type: 'success', title: 'Link copied' });
+    } catch {
+      toast({ type: 'error', title: 'Could not copy the link' });
+    }
+  };
+
+  const menu: MenuItem[] = [
+    { key: 'tier', label: targetTiered(items, target) ? 'Re-tier engagement' : 'Tier engagement', icon: Layers, onSelect: () => router.push(tierHref(vendorId, target)), hidden: !canTier || closing },
+    { key: 'engagement', label: 'Add engagement', icon: Users, onSelect: () => setAddingEngagement(true), hidden: !canEdit || !engagements.data || !!vendor.archived_at },
+    { key: 'contact', label: 'Add contact', icon: UserPlus, onSelect: () => setContact('new'), hidden: !canEdit },
+    { key: 'summary', label: 'Summary report', icon: FileText, onSelect: () => router.push(`/vendor-risk/vendors/${vendorId}/summary`) },
+    { key: 'vat', label: 'VAT check', icon: BadgeCheck, onSelect: () => { setWantVat(true); if (tab !== 'overview') select('overview'); } },
+    { key: 'copy', label: 'Copy link', icon: Copy, onSelect: copyLink },
+    { key: 'offboard', label: 'Start offboarding', icon: LogOut, danger: true, onSelect: () => setStartingExit(true), hidden: !canEdit || closing || !offboarding.data },
   ];
 
-  const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
-  const statusItems = STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
-  const severityItems = SEVERITY_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
-  const assessmentTypeItems = ASSESSMENT_TYPES.map((t) => ({ value: t.id, label: t.label }));
-  const userItems = (users ?? []).map((u) => ({
-    value: String(u.id),
-    label: u.display_name || u.username,
-    subLabel: u.email,
-  }));
-
-  const inputClass =
-    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-  const labelClass = 'block text-sm font-medium text-gray-800 mb-1';
-
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/vendor-risk/vendors')} className="text-gray-400 hover:text-gray-600">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <VendorLogo vendorId={vendor.id} name={vendor.name} size={32} />
-            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{vendor.name}</h1>
+    <div className="mx-auto max-w-7xl space-y-5">
+      <DetailHeader
+        backHref="/vendor-risk/vendors"
+        backLabel="Back to register"
+        logo={<VendorLogo vendorId={vendor.id} name={vendor.name} size={48} />}
+        title={vendor.name}
+        chips={(
+          <>
             <span className="inline-flex items-center">
-              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
-                {vendor.tier}
-              </span>
+              <TierBadge tier={tiered ? vendor.tier : null} suffix="tier" />
               <WorstOfNote vendorId={vendorId} />
             </span>
-            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(vendor.status)}`}>
-              {vendor.status?.replace(/_/g, ' ')}
-            </span>
-          </div>
-          <div className="flex items-center gap-4 mt-1 flex-wrap">
-            {vendor.risk_rating && (
-              <span className="text-sm text-gray-500">Risk: <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.risk_rating)}`}>{vendor.risk_rating}</span></span>
+            {vendor.status && <StatusPill tone={tones.lifecycle(vendor.status)}>{fmt.status(vendor.status)}</StatusPill>}
+            {vendor.archived_at && <StatusPill tone="neutral">Archived</StatusPill>}
+            {supplier?.rating_grade && (
+              <span title={supplier.residual_risk_score != null ? `Residual score ${Math.round(supplier.residual_risk_score * 10) / 10}` : undefined}>
+                <GradePill grade={supplier.rating_grade} prefix="Grade" />
+              </span>
             )}
-            {vendor.inherent_risk_score != null && (
-              <span className="text-sm text-gray-500">Inherent: <span className="font-semibold">{vendor.inherent_risk_score.toFixed(1)}</span></span>
-            )}
-            {vendor.residual_risk_score != null && (
-              <span className="text-sm text-gray-500">Residual: <span className="font-semibold">{vendor.residual_risk_score.toFixed(1)}</span></span>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-        <Link href={`/vendor-risk/vendors/${vendorId}/summary`}
-          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-          Summary report
-        </Link>
-        {canEdit && (
-          <button
-            onClick={() => {
-              setEditData({
-                name: vendor.name || '',
-                description: vendor.description || '',
-                tier: vendor.tier || 'medium',
-                status: vendor.status || 'active',
-                data_access_level: vendor.data_access_level || 'internal',
-                primary_contact_name: vendor.primary_contact_name || '',
-                primary_contact_email: vendor.primary_contact_email || '',
-                primary_contact_phone: vendor.primary_contact_phone || '',
-                website: vendor.website || '',
-                owner_id: vendor.owner_id ? String(vendor.owner_id) : '',
-                notes: vendor.notes || '',
-              });
-              setShowEditModal(true);
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-          >
-            <Edit2 className="h-4 w-4" />
-            Edit
-          </button>
+            {vendor.holds_personal_data === true && <Badge tone="warning">Holds personal data</Badge>}
+            {vendor.data_classification && <Badge tone={classificationTone(vendor.data_classification)}>{fmt.status(vendor.data_classification)}</Badge>}
+          </>
         )}
-        </div>
-      </div>
+        meta={(meta.length > 0 || website) ? (
+          <>
+            {meta.join(' · ')}
+            {website && (
+              <>
+                {meta.length > 0 ? ' · ' : ''}
+                <a href={website} target="_blank" rel="noopener noreferrer" className="rounded-sm font-medium text-[#0f766e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                  {webHost(vendor.website)}
+                </a>
+              </>
+            )}
+          </>
+        ) : undefined}
+        actions={(
+          <>
+            {canTier && !tiered && !closing && tab !== 'lifecycle' && (
+              <Link href={tierHref(vendorId, target)} className={BTN_PRIMARY}>Tier engagement</Link>
+            )}
+            {canEdit && (
+              <button type="button" onClick={() => setEditing(true)} className={BTN}>
+                <Pencil aria-hidden className="h-4 w-4" strokeWidth={1.75} /> Edit
+              </button>
+            )}
+            <ActionsMenu items={menu} />
+          </>
+        )}
+      />
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav
-          role="tablist"
-          aria-label="Vendor detail sections"
-          className="flex gap-6"
-          onKeyDown={(e) => {
-            const idx = tabs.findIndex((t) => t.key === activeTab);
-            if (idx < 0) return;
-            let next = idx;
-            if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
-            else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
-            else if (e.key === 'Home') next = 0;
-            else if (e.key === 'End') next = tabs.length - 1;
-            else return;
-            e.preventDefault();
-            const nextKey = tabs[next].key;
-            setActiveTab(nextKey);
-            tabRefs.current[nextKey]?.focus();
-          }}
-        >
-          {tabs.map((tab) => {
-            const selected = activeTab === tab.key;
+      <OffboardingPanel vendorId={vendorId} exitOnly />
+
+      <div className="border-b border-[#d5dbe1]">
+        <nav role="tablist" aria-label="Vendor record sections" className="flex gap-6 overflow-x-auto" onKeyDown={onTabKey}>
+          {TABS.map((t) => {
+            const selected = tab === t.key;
             return (
               <button
-                key={tab.key}
-                id={`vendor-tab-${tab.key}`}
-                ref={(el) => { tabRefs.current[tab.key] = el; }}
+                key={t.key}
+                id={`vendor-tab-${t.key}`}
+                ref={(el) => { tabRefs.current[t.key] = el; }}
                 role="tab"
                 type="button"
                 aria-selected={selected}
-                aria-controls={`vendor-tabpanel-${tab.key}`}
+                aria-controls={`vendor-tabpanel-${t.key}`}
                 tabIndex={selected ? 0 : -1}
-                onClick={() => setActiveTab(tab.key)}
-                className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 rounded-t ${
-                  selected
-                    ? 'border-primary-600 text-primary-700 font-semibold'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-                {tab.count != null && tab.count > 0 && (
-                  <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">{tab.count}</span>
+                onClick={() => select(t.key)}
+                className={clsx(
+                  'whitespace-nowrap border-b-2 px-1 pb-3 pt-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] focus-visible:ring-offset-1',
+                  selected ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:text-[#1f2933]',
                 )}
+              >
+                {t.label}
               </button>
             );
           })}
         </nav>
       </div>
 
-      {/* Lifecycle Tab — productionized 11-stage TPRA lifecycle */}
-      {activeTab === 'lifecycle' && (
-        <div role="tabpanel" id="vendor-tabpanel-lifecycle" aria-labelledby="vendor-tab-lifecycle" tabIndex={0} className="focus:outline-none">
-          <TpraLifecycle
+      {pickerTab && several && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#f3f6f8] px-3 py-2">
+          <label htmlFor="vendor-engagement" className="text-[13px] font-medium leading-5 text-[#26323d]">Engagement</label>
+          <select
+            id="vendor-engagement"
+            value={engagementId ?? ''}
+            onChange={(e) => url.set({ engagement: e.target.value || null })}
+            className="h-9 min-w-[14rem] rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+          >
+            {openScopes(items).map((e) => (
+              <option key={e.id ?? 'general'} value={e.is_general ? '' : (e.id as number)}>
+                {e.name}{' · '}{isTiered(e) ? fmt.status(e.tier) : 'Not tiered'}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className={tab === 'lifecycle' ? undefined : 'grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]'}>
+        <div role="tabpanel" id={`vendor-tabpanel-${tab}`} aria-labelledby={`vendor-tab-${tab}`} tabIndex={0} className="min-w-0 focus:outline-none">
+          <Current {...tabProps} />
+        </div>
+        {tab !== 'lifecycle' && (
+          <RightColumn
             vendorId={vendorId}
+            vendor={vendor}
             engagementId={engagementId}
-            onEngagementChange={setEngagementId}
-            initialStage={deepLinkStage}
-            initialFindingId={deepLinkFinding}
-            onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
+            engagements={engagements.data}
+            canEdit={canEdit}
+            onAddContact={() => setContact('new')}
+            onEditContact={setContact}
           />
-        </div>
+        )}
+      </div>
+
+      {editing && <VendorFormDialog open mode="edit" vendor={vendor} onClose={() => setEditing(false)} />}
+      {addingEngagement && engagements.data && (
+        <EngagementForm vendorId={vendorId} engagement={null} list={engagements.data} onClose={() => setAddingEngagement(false)} />
       )}
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div role="tabpanel" id="vendor-tabpanel-overview" aria-labelledby="vendor-tab-overview" tabIndex={0} className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 focus:outline-none">
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-slate-900">Contact Information</h3>
-            {[
-              { icon: User, label: 'Contact', value: vendor.primary_contact_name },
-              { icon: Mail, label: 'Email', value: vendor.primary_contact_email },
-              { icon: Phone, label: 'Phone', value: vendor.primary_contact_phone },
-              { icon: Globe, label: 'Website', value: vendor.website },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="flex items-center gap-3">
-                <Icon className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-500 w-20">{label}</span>
-                <span className="text-sm text-gray-900">{value || '-'}</span>
-              </div>
-            ))}
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-slate-900">Contract & Details</h3>
-            {[
-              { icon: Calendar, label: 'Start', value: vendor.contract_start_date ? new Date(vendor.contract_start_date).toLocaleDateString() : '-' },
-              { icon: Calendar, label: 'End', value: vendor.contract_end_date ? new Date(vendor.contract_end_date).toLocaleDateString() : '-' },
-              { icon: DollarSign, label: 'Value', value: vendor.contract_value != null ? `$${vendor.contract_value.toLocaleString()}` : '-' },
-              { icon: Database, label: 'Data Access', value: vendor.data_access_level?.replace(/_/g, ' ') },
-              { icon: User, label: 'Owner', value: ownerName },
-              { icon: Building2, label: 'Type', value: vendor.vendor_type },
-              { icon: Shield, label: 'Industry', value: vendor.industry },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="flex items-center gap-3">
-                <Icon className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-500 w-20">{label}</span>
-                <span className="text-sm text-gray-900 capitalize">{value || '-'}</span>
-              </div>
-            ))}
-          </div>
-          {vendor.description && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Description</h3>
-              <p className="text-sm text-gray-600">{vendor.description}</p>
-            </div>
-          )}
-          {vendor.services_provided && vendor.services_provided.length > 0 && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Services Provided</h3>
-              <div className="flex flex-wrap gap-2">
-                {(Array.isArray(vendor.services_provided) ? vendor.services_provided : [vendor.services_provided]).map((s, i) => (
-                  <span key={i} className="inline-flex px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
-                    {String(s)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {vendor.notes && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Notes</h3>
-              <p className="text-sm text-gray-600">{vendor.notes}</p>
-            </div>
-          )}
-          <VatCard vendorId={vendor.id} vatNumber={vendor.vat_number || null} check={vendor.vat_check || null}
-            onChecked={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })} />
-          {hasCustomFields(vendorFieldSettings, vendor.custom_values) && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Your fields</h3>
-              <CustomValuesEditor moduleKey="vendors" values={vendor.custom_values}
-                onSave={async (next) => {
-                  if (!next) return;
-                  await vendorRiskApi.updateVendor(vendorId, { custom_values: next });
-                  await queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
-                }} />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Assessments Tab */}
-      {activeTab === 'assessments' && (
-        <div role="tabpanel" id="vendor-tabpanel-assessments" aria-labelledby="vendor-tab-assessments" tabIndex={0} className="space-y-4 focus:outline-none">
-          <div className="flex justify-end">
-            {canCreate && (
-              <button
-                onClick={() => setShowAssessmentModal(true)}
-                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                New Assessment
-              </button>
-            )}
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Score</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assessor</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Questions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {(assessments ?? []).length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">No assessments found</td></tr>
-                ) : (
-                  (assessments ?? []).map((a) => (
-                    <tr
-                      key={a.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => router.push(`/vendor-risk/assessments/${a.id}?tab=questionnaire`)}
-                    >
-                      <td className="px-4 py-3 text-sm text-gray-900 capitalize">{a.assessment_type?.replace(/_/g, ' ')}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(a.status)}`}>
-                          {a.status?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{a.inherent_score?.toFixed(1) ?? '-'}</td>
-                      <td className="px-4 py-3">
-                        {a.risk_rating ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(a.risk_rating)}`}>
-                            {a.risk_rating}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {typeof a.assessor === 'object' && a.assessor ? a.assessor.full_name : (a.assessor ? String(a.assessor) : '-')}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/vendor-risk/assessments/${a.id}?tab=questionnaire`);
-                          }}
-                          className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-primary-700 bg-primary-50 border border-primary-200 hover:bg-primary-100"
-                        >
-                          View Linked Questions
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Action plan Tab — dated to-dos, and sends, check-ins and reassessments on a date */}
-      {activeTab === 'engagements' && (
-        <div role="tabpanel" id="vendor-tabpanel-engagements" aria-labelledby="vendor-tab-engagements" tabIndex={0} className="focus:outline-none">
-          <EngagementsPanel vendorId={vendorId}
-            onOpenLifecycle={(id) => { setEngagementId(id); setActiveTab('lifecycle'); }} />
-        </div>
-      )}
-
-      {activeTab === 'portal' && (
-        <div role="tabpanel" id="vendor-tabpanel-portal" aria-labelledby="vendor-tab-portal" tabIndex={0} className="focus:outline-none">
-          <PortalPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {activeTab === 'paperwork' && (
-        <div role="tabpanel" id="vendor-tabpanel-paperwork" aria-labelledby="vendor-tab-paperwork" tabIndex={0} className="focus:outline-none">
-          <PaperworkPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {activeTab === 'actions' && (
-        <div role="tabpanel" id="vendor-tabpanel-actions" aria-labelledby="vendor-tab-actions" tabIndex={0} className="focus:outline-none">
-          <ActionPlanPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {/* Dependencies Tab — what breaks if this vendor fails */}
-      {activeTab === 'dependencies' && (
-        <div role="tabpanel" id="vendor-tabpanel-dependencies" aria-labelledby="vendor-tab-dependencies" tabIndex={0} className="focus:outline-none">
-          <DependenciesPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {/* Exposure Tab — what this vendor could cost us in a year, as a range */}
-      {activeTab === 'exposure' && (
-        <div role="tabpanel" id="vendor-tabpanel-exposure" aria-labelledby="vendor-tab-exposure" tabIndex={0} className="focus:outline-none">
-          <ExposurePanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {/* Outside-in Tab — the supplier's websites and domains as the internet sees them */}
-      {activeTab === 'outside-in' && (
-        <div role="tabpanel" id="vendor-tabpanel-outside-in" aria-labelledby="vendor-tab-outside-in" tabIndex={0} className="focus:outline-none">
-          <OutsideInPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {/* SLA Tab — service levels measured against the contract; a miss is a monitoring signal */}
-      {activeTab === 'sla' && (
-        <div role="tabpanel" id="vendor-tabpanel-sla" aria-labelledby="vendor-tab-sla" tabIndex={0} className="focus:outline-none">
-          <SlaPanel vendorId={vendorId} />
-        </div>
-      )}
-
-      {/* Incidents Tab */}
-      {activeTab === 'incidents' && (
-        <div role="tabpanel" id="vendor-tabpanel-incidents" aria-labelledby="vendor-tab-incidents" tabIndex={0} className="space-y-4 focus:outline-none">
-          <div className="flex justify-end">
-            {canCreate && (
-              <button
-                onClick={() => setShowIncidentModal(true)}
-                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                Record Incident
-              </button>
-            )}
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Occurred</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Resolved</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {(incidents ?? []).length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500">No incidents recorded</td></tr>
-                ) : (
-                  (incidents ?? []).map((inc) => (
-                    <tr key={inc.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{inc.title}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getSeverityBadge(inc.severity)}`}>
-                          {inc.severity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(inc.status)}`}>
-                          {inc.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{inc.occurred_at ? new Date(inc.occurred_at).toLocaleDateString() : '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{inc.resolved_at ? new Date(inc.resolved_at).toLocaleDateString() : '-'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      <RightSlidePanel
-        isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
-        title="Edit Vendor"
-        width="w-full max-w-2xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowEditModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="vendor-edit-form"
-              disabled={updateMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {updateMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save'
-              )}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="vendor-edit-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const payload: Record<string, unknown> = { ...editData };
-            if (editData.owner_id) payload.owner_id = Number(editData.owner_id);
-            else delete payload.owner_id;
-            updateMutation.mutate(payload);
-          }}
-          className="space-y-4"
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Name</label>
-              <input type="text" value={editData.name || ''} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className={inputClass} />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>Description</label>
-              <textarea value={editData.description || ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className={inputClass} rows={2} />
-            </div>
-            <div>
-              <label className={labelClass}>Tier</label>
-              <MultiSelectDropdown
-                title="Tier"
-                items={tierItems}
-                selectedValues={editData.tier ? [editData.tier] : []}
-                onApply={(v) => setEditData({ ...editData, tier: v[0] || 'medium' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select tier"
-                size="md"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Status</label>
-              <MultiSelectDropdown
-                title="Status"
-                items={statusItems}
-                selectedValues={editData.status ? [editData.status] : []}
-                onApply={(v) => setEditData({ ...editData, status: v[0] || 'active' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select status"
-                size="md"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Contact Name</label>
-              <input type="text" value={editData.primary_contact_name || ''} onChange={(e) => setEditData({ ...editData, primary_contact_name: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Contact Email</label>
-              <input type="email" value={editData.primary_contact_email || ''} onChange={(e) => setEditData({ ...editData, primary_contact_email: e.target.value })} className={inputClass} />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>Owner</label>
-              <MultiSelectDropdown
-                title="Owner"
-                items={userItems}
-                selectedValues={editData.owner_id ? [String(editData.owner_id)] : []}
-                onApply={(v) => setEditData({ ...editData, owner_id: v[0] || '' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select owner"
-                size="md"
-                forceSearch
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>Notes</label>
-              <textarea value={editData.notes || ''} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} className={inputClass} rows={2} />
-            </div>
-          </div>
-        </form>
-      </RightSlidePanel>
-
-      {/* Assessment Modal */}
-      <RightSlidePanel
-        isOpen={showAssessmentModal}
-        onClose={() => setShowAssessmentModal(false)}
-        title="New Assessment"
-        width="w-full max-w-xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAssessmentModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="vendor-assessment-form"
-              disabled={createAssessmentMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {createAssessmentMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Create'
-              )}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="vendor-assessment-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const payload: Record<string, unknown> = { assessment_type: assessmentForm.assessment_type };
-            if (assessmentForm.due_date) payload.due_date = assessmentForm.due_date;
-            if (assessmentForm.assessed_by) payload.assessed_by = Number(assessmentForm.assessed_by);
-            createAssessmentMutation.mutate(payload);
-          }}
-          className="space-y-4"
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Assessment Type</label>
-              <MultiSelectDropdown
-                title="Assessment Type"
-                items={assessmentTypeItems}
-                selectedValues={assessmentForm.assessment_type ? [assessmentForm.assessment_type] : []}
-                onApply={(v) => setAssessmentForm({ ...assessmentForm, assessment_type: v[0] || 'cybersecurity' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select type"
-                size="md"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Due Date</label>
-              <input type="date" value={assessmentForm.due_date} onChange={(e) => setAssessmentForm({ ...assessmentForm, due_date: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Assign Assessor</label>
-              <MultiSelectDropdown
-                title="Assessor"
-                items={userItems}
-                selectedValues={assessmentForm.assessed_by ? [String(assessmentForm.assessed_by)] : []}
-                onApply={(v) => setAssessmentForm({ ...assessmentForm, assessed_by: v[0] || '' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Current user (default)"
-                size="md"
-                forceSearch
-              />
-            </div>
-          </div>
-        </form>
-      </RightSlidePanel>
-
-      {/* Incident Modal */}
-      <RightSlidePanel
-        isOpen={showIncidentModal}
-        onClose={() => setShowIncidentModal(false)}
-        title="Record Incident"
-        width="w-full max-w-xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowIncidentModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="vendor-incident-form"
-              disabled={createIncidentMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {createIncidentMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Record'
-              )}
-            </button>
-          </div>
-        }
-      >
-        <form
-          id="vendor-incident-form"
-          onSubmit={(e) => { e.preventDefault(); createIncidentMutation.mutate(incidentForm); }}
-          className="space-y-4"
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <label className={labelClass}>Title *</label>
-              <input type="text" required value={incidentForm.title} onChange={(e) => setIncidentForm({ ...incidentForm, title: e.target.value })} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Severity</label>
-              <MultiSelectDropdown
-                title="Severity"
-                items={severityItems}
-                selectedValues={incidentForm.severity ? [incidentForm.severity] : []}
-                onApply={(v) => setIncidentForm({ ...incidentForm, severity: v[0] || 'medium' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select severity"
-                size="md"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Occurred At</label>
-              <input type="datetime-local" value={incidentForm.occurred_at} onChange={(e) => setIncidentForm({ ...incidentForm, occurred_at: e.target.value })} className={inputClass} />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelClass}>Description</label>
-              <textarea value={incidentForm.description} onChange={(e) => setIncidentForm({ ...incidentForm, description: e.target.value })} className={inputClass} rows={3} />
-            </div>
-          </div>
-        </form>
-      </RightSlidePanel>
+      <ContactDialog vendorId={vendorId} contact={contact} onClose={() => setContact(null)} />
+      <StartOffboardingDialog vendorId={vendorId} open={startingExit} onClose={() => setStartingExit(false)} engagementId={picked} />
     </div>
   );
 }
