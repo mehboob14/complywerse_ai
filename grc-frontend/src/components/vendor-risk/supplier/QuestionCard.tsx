@@ -158,7 +158,7 @@ export default function QuestionCard(p: {
             {q.text}
             {!q.required && <span className="ml-2 text-xs text-gray-600">Optional</span>}
           </p>
-          {q.help_text && <p className="mt-0.5 text-sm text-gray-600">{q.help_text}</p>}
+          {(q.help || q.help_text) && <p className="mt-0.5 text-sm text-gray-600">{q.help || q.help_text}</p>}
           {q.locked && (
             <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
               <Lock aria-hidden className="h-3.5 w-3.5" /> Answered by your certificate

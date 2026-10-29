@@ -45,7 +45,7 @@ QUESTIONS = [
     {"id": "subs_list", "text": "List them.", "type": "text", "show_if": {"question": "subs", "in": ["yes"]}},
     {"id": "mfa", "text": "Is MFA enforced?", "type": "yes_no", "required": True, "section": "Access",
      "evidence": "required", "evidence_on": ["yes"], "help_text": "For staff and admins."},
-    {"id": "region", "text": "Where is the data held?", "type": "multiple_choice", "options": [
+    {"id": "region", "text": "Where is the data held?", "type": "multiple_choice", "help": "Pick the main place.", "options": [
         {"value": "eu", "label": "EU", "score": 1.0}, {"value": "us", "label": "US", "score": 0.4},
         {"value": "other", "label": "Somewhere else", "score": 0.0, "comment_required": True}]},
     {"id": "policy", "text": "Upload your policy.", "type": "file"},
@@ -133,6 +133,7 @@ def test_the_supplier_is_sent_what_to_ask_and_never_how_an_answer_scores(db, htt
         assert (questions["mfa"]["section"], questions["mfa"]["evidence"], questions["mfa"]["evidence_on"],
                 questions["mfa"]["help_text"]) == ("Access", "required", ["yes"], "For staff and admins.")
         assert questions["subs"]["domain"] == "fourth_party"                    # a section heading, not a score
+        assert questions["region"]["help"] == "Pick the main place."            # what the builder writes under a question
         assert questions["region"]["options"][2] == {"value": "other", "label": "Somewhere else", "comment_required": True}
         assert questions["policy"]["type"] == "file"
 

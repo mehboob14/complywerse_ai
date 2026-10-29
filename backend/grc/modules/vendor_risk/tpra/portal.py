@@ -165,7 +165,7 @@ def answer_problem(q: dict, value: str, comment: str) -> Optional[str]:
 
 
 # What a supplier is shown of a question. Anything not listed stays on our side.
-_SHOWN_QUESTION = ("id", "text", "required", "help_text", "show_if", "section", "category", "domain",
+_SHOWN_QUESTION = ("id", "text", "required", "help", "help_text", "show_if", "section", "category", "domain",
                    "evidence", "evidence_on", "evidence_required", "locked")
 _SHOWN_OPTION = ("value", "label", "na", "not_applicable", "comment_required")
 

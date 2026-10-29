@@ -25,6 +25,7 @@ export interface PortalQuestion extends RuleQuestion {
   text: string;
   type: QuestionType;
   required: boolean;
+  help?: string | null;                                // what the builder writes under a question
   help_text?: string | null;
   show_if?: { question: string; in: string[] };       // asked only when an earlier question was answered with one of these
   locked?: boolean;                                    // answered by a certificate; cannot be changed
