@@ -228,15 +228,16 @@ def impact(db: Session, tenant_id: int, vendor: Vendor) -> dict:
     fourth = db.query(TPRAFourthParty).filter(TPRAFourthParty.vendor_id == vendor.id,
                                               TPRAFourthParty.tenant_id == tenant_id,
                                               TPRAFourthParty.deleted_at.is_(None)).order_by(TPRAFourthParty.name)
+    groups = concentration(db, tenant_id, 1)
     shared = [{"platform": g["platform"], "vendor_count": g["vendor_count"]}
-              for g in concentration(db, tenant_id, 2) if any(v["id"] == vendor.id for v in g["vendors"])]
+              for g in groups if g["vendor_count"] >= 2 and any(v["id"] == vendor.id for v in g["vendors"])]
     rtos = [p["rto_hours"] for p in processes if p["rto_hours"] is not None]
     return {
         "vendor_id": vendor.id,
         "assets": assets, "assets_running_its_software": len(running),
         "controls": sorted(controls.values(), key=lambda c: c["code"] or ""),
         "processes": processes, "shortest_rto_hours": min(rtos) if rtos else None,
-        "fourth_parties": [s_fourth_party(fp) for fp in fourth],
+        "fourth_parties": with_shared(groups, vendor.id, fourth),
         "shared_platforms": shared,
         "products": [s_product(p) for p in products],
     }
@@ -347,6 +348,13 @@ def s_fourth_party(fp: TPRAFourthParty) -> dict:
             "notes": fp.notes, "created_at": fp.created_at.isoformat() if fp.created_at else None}
 
 
+def with_shared(groups: List[dict], vendor_id: int, rows) -> List[dict]:
+    """Fourth parties as the API gives them: each with `also_used_by`, how many of our other vendors in use rely on
+    the same platform (as a fourth party, or seen from outside), from `concentration(db, tenant, 1)`'s groups."""
+    others = {g["platform"].lower(): sum(1 for v in g["vendors"] if v["id"] != vendor_id) for g in groups}
+    return [{**s_fourth_party(fp), "also_used_by": others.get((fp.platform or "").lower(), 0)} for fp in rows]
+
+
 def _fill(db: Session, fp: TPRAFourthParty, body: FourthPartyIn, tenant_id: int) -> None:
     aliases = tenant_aliases(db, tenant_id)
     fp.name = " ".join(body.name.split())
@@ -368,7 +376,7 @@ def list_fourth_parties(vendor_id: int, db: Session = Depends(get_db), user: GRC
     rows = db.query(TPRAFourthParty).filter(TPRAFourthParty.vendor_id == vendor_id,
                                             TPRAFourthParty.tenant_id == tenant_id,
                                             TPRAFourthParty.deleted_at.is_(None)).order_by(TPRAFourthParty.name)
-    return {"items": [s_fourth_party(fp) for fp in rows]}
+    return {"items": with_shared(concentration(db, tenant_id, 1), vendor_id, rows)}
 
 
 @router.post("/vendors/{vendor_id}/fourth-parties", status_code=201)
@@ -384,7 +392,7 @@ def add_fourth_party(vendor_id: int, body: FourthPartyIn, db: Session = Depends(
     write_audit(db, tenant_id, entity="fourth_party", action="create", vendor_id=vendor.id, entity_id=fp.id,
                 actor_id=user.id, to_value=fp.name)
     db.commit()
-    return s_fourth_party(fp)
+    return with_shared(concentration(db, tenant_id, 1), vendor.id, [fp])[0]
 
 
 def _fourth_party(db: Session, tenant_id: int, fp_id: int) -> TPRAFourthParty:
@@ -405,7 +413,7 @@ def update_fourth_party(fp_id: int, body: FourthPartyIn, db: Session = Depends(g
     write_audit(db, tenant_id, entity="fourth_party", action="update", vendor_id=fp.vendor_id, entity_id=fp.id,
                 actor_id=user.id, to_value=fp.name)
     db.commit()
-    return s_fourth_party(fp)
+    return with_shared(concentration(db, tenant_id, 1), fp.vendor_id, [fp])[0]
 
 
 @router.delete("/fourth-parties/{fp_id}")

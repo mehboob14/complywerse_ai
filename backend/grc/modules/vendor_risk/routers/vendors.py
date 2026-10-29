@@ -10,7 +10,7 @@ from sqlalchemy import case, false, func, and_, or_
 from ....models import (
     Vendor, VendorAssessment, VendorSLARecord, VendorIncident,
     GRCUser, Tenant, get_db,
-    Evidence, TPRAEngagement, TPRAEvidenceLink, VendorQuestionnaireResponse,
+    BusinessUnit, Evidence, TPRAEngagement, TPRAEvidenceLink, VendorQuestionnaireResponse,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services.module_settings import clean_record_values
@@ -551,6 +551,33 @@ def create_vendor(
     db.commit()
     db.refresh(vendor)
     return serialize_vendor(vendor)
+
+
+@router.get("/vendors/duplicates")
+def vendor_duplicates(
+    name: str = Query(..., min_length=1, max_length=255, description="The name to check"),
+    website: Optional[str] = Query(None, max_length=500),
+    exclude_id: Optional[int] = Query(None, description="A supplier to leave out: the one the check is for"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What a name or website may already be on record, as POST /vendors checks it before it refuses with 409 (archived
+    suppliers and requests too): [{id, name, reason, match, archived, status, intake_status}], those in use first.
+    Read-only: the Add vendor dialog asks as the name is typed, and a supplier's page asks about itself with exclude_id."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"items": []}
+    return {"items": intake.duplicates(db, tenant_ids[0], name, website, exclude_id=exclude_id)}
+
+
+@router.get("/vendors/units")
+def vendor_units(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The business units a supplier can sit under, by name: what the Add / Edit vendor dialog offers. Read-only (the
+    tenant's own business-units list seeds demo units when there are none)."""
+    tenant_ids = get_user_tenants(current_user, db)
+    rows = (db.query(BusinessUnit).filter(BusinessUnit.tenant_id.in_(tenant_ids or [-1]))
+            .order_by(func.lower(BusinessUnit.name), BusinessUnit.id))
+    return {"items": [{"id": u.id, "name": u.name} for u in rows]}
 
 
 @router.get("/vendors/dashboard")
