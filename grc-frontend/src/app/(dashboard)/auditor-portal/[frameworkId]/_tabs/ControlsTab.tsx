@@ -43,7 +43,8 @@ interface ControlDetail extends ControlRow {
   section_number?: string | null;
   parent_section?: string | null;
   criticality_reason?: string | null;
-  evidence_requirements?: string[];
+  // Stored as plain names or as {name, description, filetype} objects, depending on the framework.
+  evidence_requirements?: Array<string | { name?: string; description?: string | null; filetype?: string | null }>;
   evidence: Array<{
     id: number;
     evidence_id: number | null;
@@ -660,11 +661,18 @@ function ControlDetailModal({
                 <section>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Expected evidence types</h4>
                   <div className="flex flex-wrap gap-1.5">
-                    {data.evidence_requirements.map((er, i) => (
-                      <span key={i} className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 text-[11px]">
-                        {er}
-                      </span>
-                    ))}
+                    {data.evidence_requirements.map((er, i) => {
+                      const name = typeof er === 'string' ? er : er?.name;
+                      return name ? (
+                        <span
+                          key={i}
+                          title={typeof er === 'string' ? undefined : er.description || undefined}
+                          className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 text-[11px]"
+                        >
+                          {name}
+                        </span>
+                      ) : null;
+                    })}
                   </div>
                 </section>
               )}
