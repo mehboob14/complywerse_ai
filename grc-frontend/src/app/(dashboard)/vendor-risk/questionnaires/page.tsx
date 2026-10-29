@@ -1,1770 +1,250 @@
-﻿'use client';
+'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { vendorRiskApi } from '@/lib/api';
-import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
-import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
-import { absoluteLink, portalApi } from '../_lib/portalApi';
-import { listOptions, useModuleSettings } from '@/components/settings/CustomFields';
-import {
-  ClipboardList,
-  Loader2,
-  Plus,
-  X,
-  Trash2,
-  Shield,
-  Lock,
-  FileCheck,
-  DollarSign,
-  Settings,
-  Sparkles,
-  FileText,
-  Paperclip,
-  Copy,
-  Check,
-  Eye,
-  ExternalLink,
-  Link2 as LinkIcon,
-  RotateCw,
-  Pencil,
-  BadgeCheck,
-} from 'lucide-react';
+// Questionnaires: the ones asked about a supplier to set its tier (the onboarding questions, kept in Settings) and the ones the
+// supplier answers (due diligence), each opening in its own builder. Archived ones are hidden until asked for.
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Archive, ArchiveRestore, ClipboardList, Copy, DollarSign, Eye, FileCheck, FileText, Lock, Pencil, Plus, Send, Settings, Shield, Star,
+  Trash2, type LucideIcon,
+} from 'lucide-react';
+import { SearchInput } from '@/components/ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import { usePermissions } from '@/hooks/usePermissions';
+import { apiErrorText } from '@/lib/apiError';
+import { RowActionsMenu, type RowAction } from '@/app/(dashboard)/governance/documents/_workspace/RowActionsMenu';
+import {
+  Dialog, EmptyState, ErrorState, SegmentedControl, Skeleton, StatusPill, TierBadge, useUrlParams, fmt, BTN, BTN_DANGER, BTN_PRIMARY,
+} from '@/app/(dashboard)/vendor-risk/_ui';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { builderHref, questionnairesApi, templatesKey } from '../_lib/questionnairesApi';
+import type { Template } from '../_lib/questionnaires/types';
+import { NewQuestionnaireDialog, type Purpose } from './_parts/NewQuestionnaireDialog';
+import { PreviewDialog } from './_parts/PreviewDialog';
+import { SendDialog } from './_parts/SendDialog';
+import { SentQuestionnaires } from './_parts/SentQuestionnaires';
+import { SettingsDialog } from './_parts/SettingsDialog';
+import { categoryLabel } from './_parts/categories';
+import { Check, Chip } from './_parts/ui';
 
-
-// An option carries a score (0..1) when the author gave one; a plain string is unscored.
-// na: "not applicable" (unscored; picking it needs a reason). comment_required: picking it needs a note.
-interface OptionDef { value: string; label?: string; score?: number | null; na?: boolean; comment_required?: boolean }
-
-type EvidenceMode = 'none' | 'optional' | 'required';
-
-interface Question {
-  id: string;
-  text: string;
-  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
-  required: boolean;
-  evidence_required: boolean;          // kept for older readers: evidence === 'required'
-  // Evidence the supplier gives with the answer; when required, owed on the answers in evidence_on (none listed: any).
-  evidence?: EvidenceMode;
-  evidence_on?: string[];
-  // Who reviews it: its section, else its risk domain (built-in templates), else General.
-  section?: string;
-  domain?: string;
-  weight: number;
-  options?: Array<string | OptionDef>;
-  // A current certificate (SOC 2, ISO 27001) can answer this yes/no question.
-  certificate_covers?: boolean;
-  // Ask only when an earlier question was answered with one of these values.
-  show_if?: { question: string; in: string[] };
-  // When answered one of these, accepting the questionnaire sends this follow-up questionnaire.
-  follow_up?: { when: string[]; template_id: number };
-}
-
-const optLabel = (o: string | OptionDef) => (typeof o === 'string' ? o : o.label ?? o.value);
-const optScore = (o: string | OptionDef) => (typeof o === 'string' ? null : o.score ?? null);
-const optValue = (o: string | OptionDef) => (typeof o === 'string' ? o : o.value);
-const optFlag = (o: string | OptionDef, flag: 'na' | 'comment_required') => typeof o !== 'string' && !!o[flag];
-
-// The answers a rule can name: Yes / Partial / No, or a choice's options.
-const answerValues = (q: Question) =>
-  q.type === 'yes_no' ? ['yes', 'partial', 'no'] : q.type === 'multiple_choice' ? (q.options || []).map(optValue) : [];
-// A question written before the evidence rules: evidence_required meant "on Yes or Partial".
-const evidenceOf = (q: Question): EvidenceMode => q.evidence ?? (q.evidence_required ? 'required' : 'optional');
-const evidenceOnOf = (q: Question) => (q.evidence ? q.evidence_on || []
-  : q.evidence_required && q.type === 'yes_no' ? ['yes', 'partial'] : []);
-// Saved as shown: the rule made explicit, answers it names that the question cannot have dropped.
-const withRules = (q: Question): Question => {
-  const evidence = q.type === 'file' ? 'none' : evidenceOf(q);
-  const values = answerValues(q);
-  return { ...q, evidence, evidence_on: evidence === 'required' ? evidenceOnOf(q).filter((v) => values.includes(v)) : [],
-           evidence_required: evidence === 'required' };
-};
-const EVIDENCE_LABEL: Record<EvidenceMode, string> = { none: 'No evidence', optional: 'Evidence optional', required: 'Evidence required' };
-
-interface QuestionnaireTemplate {
-  id: number;
-  name: string;
-  description: string | null;
-  category: string;
-  questions: Question[];
-  latest_version?: number | null;   // sent questionnaires keep the version they were sent on
-  created_at: string;
-  updated_at: string;
-}
-
-interface VendorOption {
-  id: number;
-  name: string;
-  primary_contact_email: string | null;
-  primary_contact_name: string | null;
-}
-
-interface AssessmentOption {
-  id: number;
-  vendor_id: number;
-  vendor_name?: string;
-  assessment_type: string;
-  status: string;
-}
-
-interface QuestionnaireResponseRecord {
-  id: number;
-  vendor_id: number;
-  assessment_id: number | null;
-  template_id: number | null;
-  respondent_name: string | null;
-  respondent_email: string | null;
-  responses: Record<string, unknown>;
-  status: string;
-  token: string | null;               // null once accepted, and on personal links (the contact has the link)
-  contact_id?: number | null;         // the supplier contact its personal links go to
-  expires_at: string | null;
-  due_date?: string | null;
-  submitted_at: string | null;
-  created_at: string | null;
-}
-
-
-const CATEGORIES = ['security', 'privacy', 'compliance', 'operational', 'financial', 'general'];
-
-// Single neutral chip for every category — keeps the page calm and consistent
-// with how other modules tag rows. The category is identifying metadata, not
-// a status that warrants its own colour.
-const getCategoryBadge = (_category: string) => 'bg-slate-100 text-slate-700';
-
-const getCategoryIcon = (category: string) => {
-  const icons: Record<string, typeof Shield> = {
-    security: Shield,
-    privacy: Lock,
-    compliance: FileCheck,
-    operational: Settings,
-    financial: DollarSign,
-    general: ClipboardList,
-  };
-  return icons[category?.toLowerCase()] || ClipboardList;
+const EXPLAINER: Record<Purpose, string> = {
+  tiering: 'Your team answers these about a supplier. The answers set its tier.',
+  due_diligence: 'Suppliers answer these in the portal. The answers set the residual score and raise findings.',
 };
 
-// Soft tone status pills, matching the convention used elsewhere
-// (compliance / risk / certifications). Heavier solid-tone pills were
-// visually loud against the neutral table rows.
-const getResponseStatusPill = (status: string) => {
-  const tones: Record<string, string> = {
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    in_progress: 'bg-primary-50 text-primary-700 border-primary-200',
-    submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    under_review: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    returned: 'bg-amber-50 text-amber-800 border-amber-200',
-    accepted: 'bg-green-50 text-green-700 border-green-200',
-    expired: 'bg-gray-100 text-gray-600 border-gray-200',
-  };
-  return tones[status?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  security: Shield, privacy: Lock, compliance: FileCheck, operational: Settings, financial: DollarSign, general: ClipboardList,
 };
 
-const formatAssessmentType = (value: string) =>
-  value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-
-const DEFAULT_QUESTIONS: Record<string, Question[]> = {
-  security: [
-    { id: 's1', text: 'Does your organization encrypt data at rest and in transit using industry-standard encryption (e.g., AES-256, TLS 1.2+)?', type: 'yes_no', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 's2', text: 'Do you enforce multi-factor authentication (MFA) for all system access?', type: 'yes_no', required: true, evidence_required: false, weight: 4, options: [] },
-    { id: 's3', text: 'Describe your access control policies (RBAC, least privilege, access reviews).', type: 'text', required: true, evidence_required: true, weight: 4, options: [] },
-    { id: 's4', text: 'Do you have a documented incident response plan that is tested at least annually?', type: 'yes_no', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 's5', text: 'How frequently do you perform vulnerability scanning on your systems?', type: 'multiple_choice', required: true, evidence_required: false, weight: 4, options: ['Continuous', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Never'] },
-    { id: 's6', text: 'When was your last third-party penetration test conducted? Provide the executive summary.', type: 'text', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 's7', text: 'Is your network segmented to isolate sensitive data and critical systems?', type: 'yes_no', required: true, evidence_required: false, weight: 3, options: [] },
-    { id: 's8', text: 'What endpoint protection solution do you use across your fleet?', type: 'text', required: true, evidence_required: false, weight: 3, options: [] },
-    { id: 's9', text: 'Do you conduct security awareness training for all employees? How frequently?', type: 'multiple_choice', required: true, evidence_required: true, weight: 3, options: ['Quarterly', 'Semi-annually', 'Annually', 'At onboarding only', 'No training program'] },
-    { id: 's10', text: 'What is your average patch management SLA for critical vulnerabilities?', type: 'multiple_choice', required: true, evidence_required: false, weight: 4, options: ['Within 24 hours', 'Within 72 hours', 'Within 7 days', 'Within 30 days', 'No formal SLA'] },
-  ],
-  privacy: [
-    { id: 'p1', text: 'Do you have a signed Data Processing Agreement (DPA) or equivalent data protection addendum?', type: 'yes_no', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 'p2', text: 'Describe your data retention and deletion policy. What are the retention periods?', type: 'text', required: true, evidence_required: true, weight: 4, options: [] },
-    { id: 'p3', text: 'How do you handle data subject access requests (DSARs) and right-to-erasure requests?', type: 'text', required: true, evidence_required: false, weight: 4, options: [] },
-    { id: 'p4', text: 'Do you transfer personal data across international borders? If yes, what transfer mechanisms are in place?', type: 'text', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 'p5', text: 'Do you conduct Privacy Impact Assessments (PIAs) for new processing activities?', type: 'yes_no', required: true, evidence_required: true, weight: 4, options: [] },
-    { id: 'p6', text: 'What is your data breach notification timeline to affected parties and regulators?', type: 'multiple_choice', required: true, evidence_required: false, weight: 5, options: ['Within 24 hours', 'Within 48 hours', 'Within 72 hours', 'Within 7 days', 'No defined timeline'] },
-    { id: 'p7', text: 'Describe your data minimization practices. How do you ensure only necessary data is collected?', type: 'text', required: true, evidence_required: false, weight: 3, options: [] },
-    { id: 'p8', text: 'Do you use sub-processors? If yes, provide a list and explain oversight mechanisms.', type: 'text', required: true, evidence_required: true, weight: 4, options: [] },
-  ],
-  compliance: [
-    { id: 'c1', text: 'Which security certifications does your organization currently hold?', type: 'multiple_choice', required: true, evidence_required: true, weight: 5, options: ['SOC 2 Type II', 'ISO 27001', 'PCI DSS', 'HIPAA', 'FedRAMP', 'CSA STAR', 'None'] },
-    { id: 'c2', text: 'When was your most recent external audit completed? Share the audit report or certification.', type: 'text', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 'c3', text: 'How do you monitor and respond to changes in regulatory requirements relevant to your services?', type: 'text', required: true, evidence_required: false, weight: 3, options: [] },
-    { id: 'c4', text: 'Do you provide compliance training to employees? How often?', type: 'multiple_choice', required: true, evidence_required: false, weight: 3, options: ['Quarterly', 'Semi-annually', 'Annually', 'At onboarding only', 'No training'] },
-    { id: 'c5', text: 'Do you screen against sanctions lists (OFAC, EU sanctions) for your customers and partners?', type: 'yes_no', required: true, evidence_required: false, weight: 4, options: [] },
-    { id: 'c6', text: 'Do you have an anti-bribery and anti-corruption policy in place?', type: 'yes_no', required: true, evidence_required: true, weight: 3, options: [] },
-  ],
-  operational: [
-    { id: 'o1', text: 'Do you have a documented Business Continuity Plan (BCP) and Disaster Recovery (DR) plan?', type: 'yes_no', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 'o2', text: 'What are your Recovery Time Objective (RTO) and Recovery Point Objective (RPO) targets?', type: 'text', required: true, evidence_required: false, weight: 4, options: [] },
-    { id: 'o3', text: 'Describe your change management process for production systems.', type: 'text', required: true, evidence_required: true, weight: 4, options: [] },
-    { id: 'o4', text: 'How do you monitor SLA compliance and system uptime? What is your guaranteed uptime?', type: 'text', required: true, evidence_required: false, weight: 4, options: [] },
-    { id: 'o5', text: 'Describe your incident escalation process and communication plan during outages.', type: 'text', required: true, evidence_required: true, weight: 3, options: [] },
-    { id: 'o6', text: 'What measures do you take to ensure staff continuity and knowledge transfer?', type: 'text', required: true, evidence_required: false, weight: 3, options: [] },
-  ],
-  financial: [
-    { id: 'f1', text: 'Can you provide audited financial statements or evidence of financial stability?', type: 'yes_no', required: true, evidence_required: true, weight: 5, options: [] },
-    { id: 'f2', text: 'What types of insurance coverage do you maintain (cyber liability, E&O, general liability)?', type: 'text', required: true, evidence_required: true, weight: 4, options: [] },
-    { id: 'f3', text: 'Describe your billing practices and payment terms.', type: 'text', required: true, evidence_required: false, weight: 2, options: [] },
-    { id: 'f4', text: 'What are the terms for contract termination, including data return and transition assistance?', type: 'text', required: true, evidence_required: false, weight: 3, options: [] },
-    { id: 'f5', text: 'Do you provide regular financial performance reports to clients upon request?', type: 'yes_no', required: false, evidence_required: false, weight: 2, options: [] },
-  ],
-};
-
-
-const inputClass =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-const labelClass = 'block text-sm font-medium text-gray-800 mb-1';
-
-
-export default function VendorQuestionnairesPage() {
-  const { data: categorySettings } = useModuleSettings('vendors');
-  const queryClient = useQueryClient();
+/** The rights the server checks (routers/questionnaires.py), each with its erm:risks:edit fallback. */
+function useRights() {
   const { hasPermission } = usePermissions();
-  // The rights the server checks (routers/questionnaires.py), with its erm:risks:edit fallback.
-  const canCreate = hasPermission('vendor_risk:templates:create') || hasPermission('erm:risks:edit');
-  const canEdit = hasPermission('vendor_risk:templates:edit') || hasPermission('erm:risks:edit');
-  const canDelete = hasPermission('vendor_risk:templates:delete') || hasPermission('erm:risks:edit');
-  const canResend = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
-  const canEditVendors = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');     // personal links are issued on the supplier
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<QuestionnaireTemplate | null>(null);
-  const [showSendModal, setShowSendModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState<QuestionnaireTemplate | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  // A send emails the contact a personal link, shown here once.
-  const [sendSuccess, setSendSuccess] = useState<{
-    link: string | null; emailed: boolean; contact: { name: string; email: string | null } | null; vendorId: number;
-  } | null>(null);
-  // '' = the supplier's primary contact, 'new' = someone typed in now, else a contact's id ('record': the supplier record's).
-  const [sendContact, setSendContact] = useState('');
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponseRecord | null>(null);
-
-  const copyLink = (value: string) => {
-    navigator.clipboard?.writeText(value);
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
+  const erm = hasPermission('erm:risks:edit');
+  return {
+    create: hasPermission('vendor_risk:templates:create') || erm,
+    edit: hasPermission('vendor_risk:templates:edit') || erm,
+    remove: hasPermission('vendor_risk:templates:delete') || erm,
+    send: hasPermission('vendor_risk:assessments:create') || erm,
+    config: hasPermission('vendor_risk:config:edit') || erm,
   };
+}
 
-  const emptyQuestion = (): Question => ({
-    id: crypto.randomUUID?.() || String(Date.now()),
-    text: '',
-    type: 'text',
-    required: true,
-    evidence_required: false,
-    evidence: 'optional',
-    weight: 3,
-    options: [],
-  });
-
-  const [templateForm, setTemplateForm] = useState({
-    name: '',
-    description: '',
-    category: 'security',
-    questions: [emptyQuestion()],
-  });
-
-  const [sendForm, setSendForm] = useState({
-    vendor_id: '',
-    assessment_id: '',
-    respondent_email: '',
-    respondent_name: '',
-    due_in_days: 14,
-    expires_in_days: 30,
-    // A certificate on file can answer the questions the template lets it.
-    certificate_evidence_id: '',
-    certificate_mode: 'off' as 'off' | 'prefill' | 'skip',
-  });
-
-
-  const { data: templates, isLoading } = useQuery({
-    queryKey: ['questionnaire-templates'],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getTemplates();
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as QuestionnaireTemplate[];
-    },
-    placeholderData: keepPreviousData,
-    ...TPRM_QUERY_OPTS,
-  });
-
-  const { data: vendors } = useQuery({
-    queryKey: ['vendors-select'],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getVendors();
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as VendorOption[];
-    },
-    placeholderData: keepPreviousData,
-    ...TPRM_QUERY_OPTS,
-  });
-
-  const { data: assessments } = useQuery({
-    queryKey: ['vendor-assessments-for-questionnaires'],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getAssessments({ limit: 1000 });
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as AssessmentOption[];
-    },
-    placeholderData: keepPreviousData,
-    ...TPRM_QUERY_OPTS,
-  });
-
-  const { data: vendorCertificates } = useQuery({
-    queryKey: ['vendor-certificates', sendForm.vendor_id],
-    queryFn: async () => (await vendorRiskApi.vendorCertificates(Number(sendForm.vendor_id))).data as
-      Array<{ id: number; name: string; expiry_date: string; read: boolean }>,
-    enabled: !!sendForm.vendor_id,
-    ...TPRM_QUERY_OPTS,
-  });
-
-  // Who at the supplier it can go to: contacts a personal link can reach.
-  const { data: vendorContacts } = useQuery({
-    queryKey: ['tprm-contacts', Number(sendForm.vendor_id), false],
-    queryFn: async () => (await portalApi.contacts(Number(sendForm.vendor_id))).data.items,
-    enabled: !!sendForm.vendor_id,
-    ...TPRM_QUERY_OPTS,
-  });
-  const reachableContacts = (vendorContacts || []).filter((c) => c.email && c.portal_access && !c.archived_at);
-  const primaryContact = reachableContacts.find((c) => c.is_primary);
-  const contactChoice = sendContact || (primaryContact ? String(primaryContact.id ?? 'record')
-    : reachableContacts[0] ? String(reachableContacts[0].id ?? 'record') : 'new');
-
-  const { data: questionnaireResponses } = useQuery({
-    queryKey: ['questionnaire-responses'],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getQuestionnaireResponses();
-      const data = res.data;
-      return (Array.isArray(data) ? data : []) as QuestionnaireResponseRecord[];
-    },
-    placeholderData: keepPreviousData,
-    ...TPRM_QUERY_OPTS,
-  });
-
-
-  const createMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.createTemplate(data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['questionnaire-templates'] });
-      setShowCreateModal(false);
-      setTemplateForm({ name: '', description: '', category: 'security', questions: [emptyQuestion()] });
-    },
-  });
-
-  // Editing is safe: questionnaires already sent keep the version they were sent on.
-  const updateMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.updateTemplate(editingTemplate!.id, data);
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['questionnaire-templates'] });
-      setShowCreateModal(false);
-      setEditingTemplate(null);
-      setTemplateForm({ name: '', description: '', category: 'security', questions: [emptyQuestion()] });
-    },
-  });
-
-  const openEditor = (template: QuestionnaireTemplate | null) => {
-    setEditingTemplate(template);
-    setTemplateForm(template
-      ? {
-          name: template.name,
-          description: template.description || '',
-          category: template.category || 'security',
-          questions: (template.questions || []).map((q) => ({ ...q, options: q.options || [] })),
-        }
-      : { name: '', description: '', category: 'security', questions: [emptyQuestion()] });
-    setShowCreateModal(true);
-  };
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await vendorRiskApi.deleteTemplate(id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['questionnaire-templates'] });
-    },
-  });
-
-  // A resend emails the contact a new personal link (copied here too); a link of the
-  // questionnaire's own, from before personal links, stops working.
-  const resendMutation = useMutation({
-    mutationFn: async (id: number) => (await vendorRiskApi.resendQuestionnaire(id)).data,
-    onSuccess: (data: { token?: string | null; link?: string | null }) => {
-      queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
-      if (data?.link) copyLink(absoluteLink(data.link));
-      else if (data?.token) copyLink(buildQuestionnaireLink(data.token));
-    },
-    onError: (e: any) => window.alert(e?.response?.data?.detail || 'The questionnaire could not be sent again.'),
-  });
-
-  // A questionnaire on personal links has no link of its own: a fresh one for its contact, to copy.
-  const copyContactLink = useMutation({
-    mutationFn: async (r: QuestionnaireResponseRecord) =>
-      `${absoluteLink((await portalApi.issueLink(r.vendor_id, r.contact_id as number, { send_email: false })).data.link)}?q=${r.id}`,
-    onSuccess: (link) => copyLink(link),
-    onError: (e: any) => window.alert(e?.response?.data?.detail || 'No link could be made.'),
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof vendorRiskApi.sendQuestionnaire>[0] & { contact_id?: number }) => {
-      const res = await vendorRiskApi.sendQuestionnaire(data);
-      return res.data;
-    },
-    onSuccess: (data: any, sent) => {
-      setSendSuccess({ link: data.link ? absoluteLink(data.link) : null, emailed: !!data.emailed,
-                       contact: data.contact || null, vendorId: Number(sent.vendor_id) });
-      queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
-      queryClient.invalidateQueries({ queryKey: ['tprm-contacts'] });
-    },
-  });
-
-
-  const addQuestion = () => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: [...prev.questions, emptyQuestion()],
-    }));
-  };
-
-  const removeQuestion = (idx: number) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.filter((_, i) => i !== idx),
-    }));
-  };
-
-  const updateQuestion = (idx: number, field: string, value: unknown) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) => (i === idx ? { ...q, [field]: value } : q)),
-    }));
-  };
-
-  const addOption = (qIdx: number) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) =>
-        i === qIdx ? { ...q, options: [...(q.options || []), ''] } : q
-      ),
-    }));
-  };
-
-  const updateOption = (qIdx: number, optIdx: number, value: string) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) =>
-        i === qIdx
-          ? { ...q, options: (q.options || []).map((o, j) => (j !== optIdx ? o
-              : typeof o === 'string' ? value : { ...o, value, label: value })) }
-          : q
-      ),
-    }));
-  };
-
-  // A score (0-100% of a full answer) makes the option count towards the vendor's score.
-  const updateOptionScore = (qIdx: number, optIdx: number, pct: string) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) =>
-        i === qIdx
-          ? { ...q, options: (q.options || []).map((o, j) => (j !== optIdx ? o : {
-              ...(typeof o === 'string' ? {} : o), value: optLabel(o), label: optLabel(o),
-              score: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))) / 100,
-            })) }
-          : q
-      ),
-    }));
-  };
-
-  const setEvidence = (qIdx: number, patch: { evidence?: EvidenceMode; evidence_on?: string[] }) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) => (i !== qIdx ? q
-        : { ...q, evidence: patch.evidence ?? evidenceOf(q), evidence_on: patch.evidence_on ?? evidenceOnOf(q) })),
-    }));
-  };
-
-  // N/A (unscored, needs a reason) or "Needs a note" on one option. A Yes / No question lists only the
-  // options it changes; the rest are the standard ones (filled in when it is sent).
-  const toggleOptionFlag = (qIdx: number, value: string, flag: 'na' | 'comment_required') => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) => {
-        if (i !== qIdx) return q;
-        if (q.type === 'yes_no') {
-          const given = (q.options || []).filter((o): o is OptionDef => typeof o !== 'string');
-          return { ...q, options: given.some((o) => o.value === value)
-            ? given.map((o) => (o.value === value ? { ...o, [flag]: !o[flag] } : o))
-            : [...given, { value, [flag]: true }] };
-        }
-        return { ...q, options: (q.options || []).map((o) => {
-          if (optValue(o) !== value) return o;
-          const def: OptionDef = typeof o === 'string' ? { value: o, label: o } : { ...o };
-          const on = !def[flag];
-          return { ...def, [flag]: on, ...(flag === 'na' && on ? { score: null } : {}) };
-        }) };
-      }),
-    }));
-  };
-
-  const removeOption = (qIdx: number, optIdx: number) => {
-    setTemplateForm((prev) => ({
-      ...prev,
-      questions: prev.questions.map((q, i) =>
-        i === qIdx ? { ...q, options: (q.options || []).filter((_, j) => j !== optIdx) } : q
-      ),
-    }));
-  };
-
-  const loadDefaultQuestions = (category: string) => {
-    const defaults = DEFAULT_QUESTIONS[category];
-    if (defaults) {
-      setTemplateForm((prev) => ({
-        ...prev,
-        questions: defaults.map((q) => ({ ...q, id: crypto.randomUUID?.() || String(Date.now() + Math.random()) })),
-      }));
-    }
-  };
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    (editingTemplate ? updateMutation : createMutation).mutate({
-      name: templateForm.name,
-      description: templateForm.description,
-      category: templateForm.category,
-      questions: templateForm.questions.filter((q) => q.text.trim()).map(withRules),
-    });
-  };
-
-  const handleSendSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMutation.mutate({
-      template_id: selectedTemplateId,
-      vendor_id: Number(sendForm.vendor_id),
-      assessment_id: sendForm.assessment_id ? Number(sendForm.assessment_id) : undefined,
-      // Nothing named: the server sends it to the supplier's primary contact.
-      ...(contactChoice === 'new'
-        ? { respondent_email: sendForm.respondent_email || undefined, respondent_name: sendForm.respondent_name || undefined }
-        : contactChoice === 'record' ? {} : { contact_id: Number(contactChoice) }),
-      due_in_days: sendForm.due_in_days,
-      expires_in_days: Math.max(sendForm.expires_in_days, sendForm.due_in_days),
-      ...(sendForm.certificate_mode !== 'off' && sendForm.certificate_evidence_id
-        ? { certificate_evidence_id: Number(sendForm.certificate_evidence_id), certificate_mode: sendForm.certificate_mode }
-        : {}),
-    });
-  };
-
-  const filtered = useMemo(() => {
-    if (!templates) return [];
-    if (!searchTerm) return templates;
-    const term = searchTerm.toLowerCase();
-    return templates.filter(
-      (t) => t.name.toLowerCase().includes(term) || t.category?.toLowerCase().includes(term)
-    );
-  }, [templates, searchTerm]);
-
-  const templatesById = useMemo(() => {
-    const map = new Map<number, QuestionnaireTemplate>();
-    (templates || []).forEach((template) => map.set(template.id, template));
-    return map;
-  }, [templates]);
-
-  const vendorsById = useMemo(() => {
-    const map = new Map<number, VendorOption>();
-    (vendors || []).forEach((vendor) => map.set(vendor.id, vendor));
-    return map;
-  }, [vendors]);
-
-  const assessmentsById = useMemo(() => {
-    const map = new Map<number, AssessmentOption>();
-    (assessments || []).forEach((assessment) => map.set(assessment.id, assessment));
-    return map;
-  }, [assessments]);
-
-  const sendAssessmentOptions = useMemo(() => {
-    const vendorId = Number(sendForm.vendor_id);
-    if (!vendorId || Number.isNaN(vendorId)) return [];
-    return (assessments || []).filter((assessment) => assessment.vendor_id === vendorId);
-  }, [assessments, sendForm.vendor_id]);
-
-  const buildQuestionnaireLink = (token: string) =>
-    typeof window === 'undefined'
-      ? `/vendor-risk/questionnaires/${token}`
-      : `${window.location.origin}/vendor-risk/questionnaires/${token}`;
-
-  const formatAnswer = (answer: unknown) => {
-    if (answer === null || answer === undefined || answer === '') {
-      return 'No answer provided';
-    }
-    if (typeof answer === 'string' || typeof answer === 'number' || typeof answer === 'boolean') {
-      return String(answer);
-    }
-    if (typeof answer === 'object' && answer !== null && 'answer' in (answer as Record<string, unknown>)) {
-      const nested = (answer as Record<string, unknown>).answer;
-      if (nested === null || nested === undefined || nested === '') return 'No answer provided';
-      return typeof nested === 'object' ? JSON.stringify(nested) : String(nested);
-    }
-    return JSON.stringify(answer);
-  };
-
-  const selectedResponseTemplate = selectedResponse?.template_id
-    ? templatesById.get(selectedResponse.template_id)
-    : undefined;
-
-  // Items for dropdowns
-  // The organisation's own categories (Settings), the shipped ones until it sets them.
-  const categoryItems = listOptions(categorySettings, 'questionnaire_category', undefined,
-    CATEGORIES.map((c) => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) })))
-    .map((o) => ({ value: o.value, label: o.label }));
-
-  const questionTypeItems = [
-    { value: 'text', label: 'Text Answer' },
-    { value: 'yes_no', label: 'Yes / No' },
-    { value: 'multiple_choice', label: 'Multiple Choice' },
-    { value: 'rating', label: 'Rating (1-5)' },
-    { value: 'file', label: 'File upload' },
-  ];
-  // Sections already used in this template, offered as choices.
-  const sectionsUsed = Array.from(new Set(templateForm.questions.map((q) => (q.section || '').trim()).filter(Boolean)));
-
-  const weightItems = [1, 2, 3, 4, 5].map((w) => ({ value: String(w), label: String(w) }));
-
-  const vendorItems = (vendors ?? []).map((v) => ({
-    value: String(v.id),
-    label: v.name,
-    subLabel: v.primary_contact_email || undefined,
-  }));
-
-  const assessmentItems = sendAssessmentOptions.map((a) => ({
-    value: String(a.id),
-    label: `#${a.id} - ${formatAssessmentType(a.assessment_type)} (${a.status.replace(/_/g, ' ')})`,
-  }));
-
-
-  if (isLoading && !templates) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <PageLoader size="md" />
+function Card({ icon: Icon, title, href, version, meta, description, chips, footer, menu, muted }: {
+  icon: LucideIcon; title: string; href: string; version?: number | null; meta: string; description?: string | null;
+  chips?: React.ReactNode; footer?: React.ReactNode; menu?: React.ReactNode; muted?: boolean;
+}) {
+  return (
+    // an archived card is subdued with lighter fills and a quieter title, not with CSS opacity: 70% opacity takes the words below 4.5:1
+    <article className={`flex flex-col rounded-xl border p-4 ${muted ? 'border-[#e1e6eb] bg-[#f7f9fa]' : 'border-[#d5dbe1] bg-[#fff]'}`}>
+      <div className="flex items-start gap-3">
+        <span aria-hidden className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${muted ? 'bg-[#eef1f4] text-[#64707e]' : 'bg-[#e6f6f3] text-[#0f766e]'}`}><Icon className="h-5 w-5" strokeWidth={1.75} /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className={`truncate text-[15px] font-semibold leading-5 ${muted ? 'text-[#4a5563]' : 'text-[#1f2933]'}`}>
+            <Link href={href} className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">{title}</Link>
+            {version ? <span className="ml-1.5 align-middle text-[11px] font-medium text-[#64707e]" title="Questionnaires already sent keep the version they were sent on">v{version}</span> : null}
+          </h3>
+          <p className="text-[13px] leading-5 text-[#586472]">{meta}</p>
+        </div>
+        {menu}
       </div>
-    );
-  }
+      <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-[#586472]">{description || ''}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">{chips}</div>
+      {footer && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#eef1f4] pt-3">{footer}</div>}
+    </article>
+  );
+}
+
+export default function QuestionnairesPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const rights = useRights();
+  const url = useUrlParams();
+  const purpose: Purpose = url.get('purpose') === 'tiering' ? 'tiering' : 'due_diligence';
+  const showArchived = url.get('archived') === '1';
+  const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [previewing, setPreviewing] = useState<Template | null>(null);
+  const [tiers, setTiers] = useState<Template | null>(null);
+  const [sending, setSending] = useState<Template | null>(null);
+  const [deleting, setDeleting] = useState<Template | null>(null);
+
+  const list = useQuery({
+    queryKey: [...templatesKey, 'all'],
+    queryFn: async () => (await questionnairesApi.list(true)).data.items,
+    placeholderData: keepPreviousData,
+    ...TPRM_QUERY_OPTS,
+  });
+  const onboarding = useQuery({
+    queryKey: ['tprm-onboarding-questions'],
+    queryFn: async () => (await questionnairesApi.onboardingQuestions()).data,
+    ...TPRM_QUERY_OPTS,
+  });
+  const templates = useMemo(() => list.data ?? [], [list.data]);
+  const live = templates.filter((t) => !t.archived_at);
+  const shown = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return templates.filter((t) => (showArchived || !t.archived_at)
+      && (!term || t.name.toLowerCase().includes(term) || (t.category || '').toLowerCase().includes(term)));
+  }, [templates, showArchived, search]);
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: templatesKey });
+  const failed = (title: string) => (e: unknown) => toast({ type: 'error', title, message: apiErrorText(e, 'Try again.') });
+  const archive = useMutation({
+    mutationFn: async (t: Template) => (await (t.archived_at ? questionnairesApi.restore(t.id) : questionnairesApi.archive(t.id))).data,
+    onSuccess: (t) => { refresh(); toast({ type: 'success', title: t.archived_at ? 'Archived' : 'Restored' }); },
+    onError: failed('Could not do that'),
+  });
+  const duplicate = useMutation({
+    mutationFn: async (t: Template) => (await questionnairesApi.duplicate(t.id)).data,
+    onSuccess: (copy) => { refresh(); toast({ type: 'success', title: 'Questionnaire copied' }); router.push(builderHref(copy.id)); },
+    onError: failed('Could not copy it'),
+  });
+  const remove = useMutation({
+    mutationFn: async (t: Template) => { await questionnairesApi.remove(t.id); },
+    onSuccess: () => { refresh(); setDeleting(null); toast({ type: 'success', title: 'Questionnaire deleted' }); },
+    onError: failed('Could not delete it'),
+  });
+
+  const setPurpose = (next: Purpose) => url.set({ purpose: next === 'due_diligence' ? null : next });
+  const questionCount = (onboarding.data?.sections ?? []).reduce((n, s) => n + s.questions.length, 0);
+
+  const actions = (t: Template): RowAction[] => [
+    { key: 'edit', label: rights.edit && !t.archived_at ? 'Edit' : 'Open', icon: Pencil, onClick: () => router.push(builderHref(t.id)) },
+    { key: 'preview', label: 'Preview', icon: Eye, onClick: () => setPreviewing(t), hidden: t.question_count === 0 },
+    { key: 'copy', label: 'Duplicate', icon: Copy, onClick: () => duplicate.mutate(t), hidden: !rights.create },
+    { key: 'default', label: 'Make default…', icon: Star, onClick: () => setTiers(t), hidden: !rights.edit || !!t.archived_at },
+    { key: 'archive', label: t.archived_at ? 'Restore' : 'Archive', icon: t.archived_at ? ArchiveRestore : Archive, onClick: () => archive.mutate(t), hidden: !rights.edit },
+    { key: 'delete', label: 'Delete', icon: Trash2, variant: 'danger', onClick: () => setDeleting(t), hidden: !rights.remove || t.used },
+  ];
 
   return (
-    <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 max-w-7xl mx-auto">
-      {/* Header — wraps on small screens so the action buttons don't push
-          off-canvas; tighter typography to match the rest of the platform. */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-lg font-semibold text-slate-900">Questionnaire Templates</h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-            Create and manage vendor assessment questionnaires with evidence requirements
-          </p>
+    <div className="space-y-4">
+      <h2 className="sr-only">Questionnaires</h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          <SegmentedControl<Purpose>
+            ariaLabel="Kind of questionnaire"
+            value={purpose}
+            onChange={setPurpose}
+            options={[{ value: 'tiering', label: 'Tiering', count: 1 }, { value: 'due_diligence', label: 'Due diligence', count: live.length }]}
+          />
+          <p className="max-w-xl text-[13px] leading-5 text-[#586472]">{EXPLAINER[purpose]}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/vendor-risk/vendors"
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Vendors
-          </Link>
-          <Link
-            href="/vendor-risk/assessments"
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Assessments
-          </Link>
-          {canCreate && (
-            <button
-              onClick={() => openEditor(null)}
-              className="cw-btn-primary inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Create Template
-            </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {purpose === 'due_diligence' && (
+            <>
+              <div className="w-56"><SearchInput value={search} onChange={setSearch} placeholder="Search questionnaires" size="sm" aria-label="Search questionnaires" /></div>
+              <Check checked={showArchived} onChange={(on) => url.set({ archived: on ? '1' : null })}>Show archived</Check>
+            </>
+          )}
+          {rights.create && (
+            <button type="button" onClick={() => setCreating(true)} className={BTN_PRIMARY}><Plus aria-hidden className="h-4 w-4" /> New questionnaire</button>
           )}
         </div>
       </div>
 
-      {/* Filter / Search row */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
-              <SearchInput
-                value={searchTerm}
-                onChange={setSearchTerm}
-                placeholder="Search templates..."
-              />
-            </div>
-          </div>
+      {purpose === 'tiering' ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Card
+            icon={ClipboardList}
+            title="Onboarding questions"
+            href="/vendor-risk/settings#questions"
+            meta={onboarding.data ? `${questionCount} questions · ${onboarding.data.sections.length} sections` : 'Loading…'}
+            description="Asked of whoever requests a supplier. Each answer adds to a tiering factor, and some can hold the tier at a minimum."
+            chips={<span className="inline-flex items-center gap-1 rounded bg-[#e6f6f3] px-1.5 py-0.5 text-[12px] font-medium leading-4 text-[#0f766e]"><Star aria-hidden className="h-3 w-3" /> Default</span>}
+            footer={<Link href="/vendor-risk/settings#questions" className={BTN}><Pencil aria-hidden className="h-4 w-4" /> Edit in Settings</Link>}
+          />
         </div>
-      </div>
-
-      {/* Template Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {filtered.length === 0 ? (
-          <div className="col-span-full bg-white rounded-xl border border-gray-200 p-8 text-center">
-            <ClipboardList className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 mb-2">No templates found. Create your first questionnaire template.</p>
-            <p className="text-xs text-gray-400">Use pre-built question sets for Security, Privacy, Compliance and more.</p>
-          </div>
-        ) : (
-          filtered.map((template) => {
-            const Icon = getCategoryIcon(template.category);
-            const evidenceCount = (template.questions || []).filter((q: any) => q.evidence_required).length;
-            return (
-              <div key={template.id} className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col hover:border-gray-300 hover:shadow-sm transition-all">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-start gap-2 flex-1 min-w-0">
-                    <div className="p-1.5 rounded-md bg-gray-100 flex-shrink-0">
-                      <Icon className="h-3.5 w-3.5 text-gray-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-slate-900 truncate">
-                        {template.name}
-                        {template.latest_version ? (
-                          <span className="ml-1.5 align-middle text-[10px] font-medium text-gray-400"
-                            title="Questionnaires already sent keep the version they were sent on">
-                            v{template.latest_version}
-                          </span>
-                        ) : null}
-                      </h3>
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide mt-1 ${getCategoryBadge(template.category)}`}>
-                        {template.category}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-0.5 flex-shrink-0">
-                    <button
-                      onClick={() => setShowPreviewModal(template)}
-                      aria-label={`Preview questions in ${template.name}`}
-                      className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors"
-                      title="Preview questions"
-                    >
-                      <Eye className="h-4 w-4" strokeWidth={1.75} />
-                    </button>
-                    {canEdit && (
-                      <button
-                        onClick={() => openEditor(template)}
-                        aria-label={`Edit template ${template.name}`}
-                        className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-md transition-colors"
-                        title="Edit template"
-                      >
-                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
-                        }}
-                        aria-label={`Delete template ${template.name}`}
-                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                        title="Delete template"
-                      >
-                        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {template.description && (
-                  <p className="text-xs text-gray-500 mb-2 line-clamp-2">{template.description}</p>
-                )}
-
-                {/* Stats */}
-                <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
-                  <span className="flex items-center gap-1">
-                    <FileText className="h-3 w-3" />
-                    {template.questions?.length ?? 0} questions
-                  </span>
-                  {evidenceCount > 0 && (
-                    <span className="flex items-center gap-1 text-amber-700">
-                      <Paperclip className="h-3 w-3" />
-                      {evidenceCount} evidence required
-                    </span>
-                  )}
-                </div>
-
-                {/* Preview first 3 questions */}
-                <div className="mb-3 space-y-0.5">
-                  {(template.questions || []).slice(0, 3).map((q: any, i: number) => (
-                    <p key={i} className="text-xs text-gray-500 truncate">
-                      <span className="text-gray-400 font-mono mr-1">{i + 1}.</span>
-                      {q.text}
-                    </p>
-                  ))}
-                  {(template.questions?.length || 0) > 3 && (
-                    <p className="text-xs text-gray-400">+{template.questions.length - 3} more questions...</p>
-                  )}
-                </div>
-
-                <div className="mt-auto">
-                  <button
-                    onClick={() => {
-                      setSelectedTemplateId(template.id);
-                      setSendSuccess(null);
-                      setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
-                      setShowSendModal(true);
-                    }}
-                    className="w-full px-3 py-1.5 bg-primary-50 text-primary-700 rounded-md text-xs font-medium hover:bg-primary-100 flex items-center justify-center gap-1.5"
-                  >
-                    <LinkIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    Generate vendor link
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Sent Questionnaire Tracking */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-3 sm:px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-slate-900">Sent Questionnaires</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Track sent links, response status, and review questions/answers for each vendor submission.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Template</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assessment</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Questions</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {(questionnaireResponses || []).length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    No sent questionnaires yet.
-                  </td>
-                </tr>
-              ) : (
-                (questionnaireResponses || [])
-                  .slice()
-                  .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-                  .map((response) => {
-                    const template = response.template_id ? templatesById.get(response.template_id) : undefined;
-                    const vendor = vendorsById.get(response.vendor_id);
-                    const assessment = response.assessment_id ? assessmentsById.get(response.assessment_id) : undefined;
-                    const answeredCount = Object.keys(response.responses || {}).length;
-                    const questionCount = template?.questions?.length || answeredCount;
-                    const responseLink = response.token ? buildQuestionnaireLink(response.token) : null;
-                    const waitingOnVendor = ['pending', 'in_progress', 'returned'].includes(response.status);
-
-                    return (
-                      <tr key={response.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-500 font-mono">#{response.id}</td>
-                        <td className="px-4 py-3 text-sm text-gray-800">
-                          {vendor ? (
-                            <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-primary-600 hover:text-primary-800">
-                              {vendor.name}
-                            </Link>
-                          ) : (
-                            `Vendor #${response.vendor_id}`
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {template?.name || (response.template_id ? `Template #${response.template_id}` : 'No template')}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {assessment ? (
-                            <Link href={`/vendor-risk/assessments/${assessment.id}`} className="text-primary-600 hover:text-primary-800">
-                              #{assessment.id} {formatAssessmentType(assessment.assessment_type)}
-                            </Link>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getResponseStatusPill(response.status)}`}>
-                            {response.status?.replace(/_/g, ' ')}
-                          </span>
-                          {waitingOnVendor && response.due_date && (
-                            <div className="mt-0.5 text-[11px] text-gray-500">Due {new Date(response.due_date).toLocaleDateString()}</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {questionCount > 0 ? `${answeredCount}/${questionCount}` : `${answeredCount}`}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {response.submitted_at ? new Date(response.submitted_at).toLocaleString() : '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setSelectedResponse(response)}
-                              aria-label={`View questions and answers for response #${response.id}`}
-                              className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
-                              title="View questions and answers"
-                            >
-                              <Eye className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                            {responseLink && (
-                              <>
-                                <button
-                                  onClick={() => navigator.clipboard.writeText(responseLink)}
-                                  aria-label={`Copy response link for response #${response.id}`}
-                                  className="p-1.5 text-gray-500 hover:text-gray-700 rounded"
-                                  title="Copy response link"
-                                >
-                                  <Copy className="h-4 w-4" strokeWidth={1.75} />
-                                </button>
-                                <a
-                                  href={responseLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  aria-label={`Open response link for response #${response.id} in a new tab`}
-                                  className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
-                                  title="Open response link"
-                                >
-                                  <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
-                                </a>
-                              </>
-                            )}
-                            {!responseLink && waitingOnVendor && response.contact_id && canEditVendors && (
-                              <button
-                                onClick={() => copyContactLink.mutate(response)}
-                                disabled={copyContactLink.isPending}
-                                aria-label={`Copy the contact's link for response #${response.id}`}
-                                className="p-1.5 text-gray-500 hover:text-gray-700 rounded disabled:opacity-50"
-                                title="Copy the contact's personal link"
-                              >
-                                <Copy className="h-4 w-4" strokeWidth={1.75} />
-                              </button>
-                            )}
-                            {canResend && waitingOnVendor && (
-                              <button
-                                onClick={() => {
-                                  if (window.confirm(response.token
-                                    ? 'Send a new link? The current link stops working, and the new one is copied for you.'
-                                    : 'Email the contact a new link? It is copied for you too.')) {
-                                    resendMutation.mutate(response.id);
-                                  }
-                                }}
-                                disabled={resendMutation.isPending}
-                                aria-label={`Send a new link for response #${response.id}`}
-                                className="p-1.5 text-gray-500 hover:text-primary-700 rounded disabled:opacity-50"
-                                title="Send a new link"
-                              >
-                                {resendMutation.isPending && resendMutation.variables === response.id
-                                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                                  : <RotateCw className="h-4 w-4" strokeWidth={1.75} />}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Response Detail Slide Panel */}
-      <RightSlidePanel
-        isOpen={!!selectedResponse}
-        onClose={() => setSelectedResponse(null)}
-        title={selectedResponse ? `Questionnaire Response #${selectedResponse.id}` : ''}
-        subtitle={selectedResponseTemplate?.name || 'Template unavailable'}
-        width="w-full max-w-3xl"
-      >
-        {selectedResponse && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                <p className="text-xs text-gray-500">Vendor</p>
-                <p className="text-sm font-medium text-slate-900 mt-1">
-                  {vendorsById.get(selectedResponse.vendor_id)?.name || `Vendor #${selectedResponse.vendor_id}`}
-                </p>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                <p className="text-xs text-gray-500">Respondent</p>
-                <p className="text-sm font-medium text-slate-900 mt-1">
-                  {selectedResponse.respondent_name || selectedResponse.respondent_email || 'Not provided'}
-                </p>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                <p className="text-xs text-gray-500">Status</p>
-                <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getResponseStatusPill(selectedResponse.status)}`}>
-                  {selectedResponse.status?.replace(/_/g, ' ')}
-                </span>
-              </div>
-              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                <p className="text-xs text-gray-500">Submitted</p>
-                <p className="text-sm font-medium text-slate-900 mt-1">
-                  {selectedResponse.submitted_at ? new Date(selectedResponse.submitted_at).toLocaleString() : '-'}
-                </p>
-              </div>
-            </div>
-
-            {selectedResponseTemplate?.questions?.length ? (
-              <div className="space-y-3">
-                {selectedResponseTemplate.questions.map((question, index) => {
-                  const answer = (selectedResponse.responses || {})[String(question.id)];
-                  return (
-                    <div key={`${question.id}-${index}`} className="rounded-lg border border-gray-200 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium text-slate-900 flex-1">
-                          <span className="text-gray-400 font-mono mr-2">Q{index + 1}.</span>
-                          {question.text}
-                        </p>
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
-                          {question.type.replace(/_/g, '/')}
-                        </span>
-                      </div>
-                      <div className="mt-2 rounded bg-gray-50 border border-gray-200 p-2 text-sm text-gray-800">
-                        {formatAnswer(answer)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-gray-200 p-3">
-                <p className="text-sm font-medium text-gray-700 mb-2">Raw Responses</p>
-                {Object.keys(selectedResponse.responses || {}).length === 0 ? (
-                  <p className="text-sm text-gray-400">No responses submitted yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {Object.entries(selectedResponse.responses || {}).map(([questionId, answer]) => (
-                      <div key={questionId} className="text-sm text-gray-800 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                        <p className="text-xs text-gray-500 mb-1">{questionId}</p>
-                        <p>{formatAnswer(answer)}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </RightSlidePanel>
-
-      {/* Create Template Slide Panel */}
-      <RightSlidePanel
-        isOpen={showCreateModal}
-        onClose={() => { setShowCreateModal(false); setEditingTemplate(null); }}
-        title={editingTemplate ? 'Edit Questionnaire Template' : 'Create Questionnaire Template'}
-        width="w-full max-w-4xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="create-template-form"
-              disabled={createMutation.isPending || updateMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {createMutation.isPending || updateMutation.isPending ? (
+      ) : list.isError && !list.data ? (
+        <ErrorState title="Couldn't load the questionnaires" message={apiErrorText(list.error, 'Try again.')} onRetry={() => list.refetch()} />
+      ) : list.isLoading && !list.data ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-48" />)}</div>
+      ) : shown.length === 0 ? (
+        <EmptyState
+          title="No questionnaires here yet"
+          hint={search ? 'Nothing matches the search.' : 'Start one from the library or build it question by question.'}
+          action={rights.create && !search ? <button type="button" onClick={() => setCreating(true)} className={BTN_PRIMARY}><Plus aria-hidden className="h-4 w-4" /> New questionnaire</button> : undefined}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {shown.map((t) => (
+            <Card
+              key={t.id}
+              muted={!!t.archived_at}
+              icon={CATEGORY_ICON[(t.category || '').toLowerCase()] ?? FileText}
+              title={t.name}
+              href={builderHref(t.id)}
+              version={t.latest_version}
+              meta={`${t.question_count} questions · ${t.section_count} sections`}
+              description={t.description}
+              menu={<RowActionsMenu actions={actions(t)} />}
+              chips={(
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
+                  {t.category && <Chip>{categoryLabel(t.category)}</Chip>}
+                  {t.default_tiers.map((tier) => <TierBadge key={tier} tier={tier} suffix="tier" />)}
+                  {t.archived_at && <StatusPill tone="warning">Archived</StatusPill>}
                 </>
-              ) : editingTemplate ? 'Save changes' : (
-                'Create Template'
               )}
-            </button>
-          </div>
-        }
-      >
-        <form id="create-template-form" onSubmit={handleCreateSubmit} className="space-y-4">
-          {editingTemplate?.latest_version ? (
-            <p className="rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-800">
-              Questionnaires already sent keep version {editingTemplate.latest_version}, the one they were sent on.
-              Your changes apply to questionnaires sent from now on.
-            </p>
-          ) : null}
-          {(updateMutation.isError || createMutation.isError) && (
-            <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-              {((updateMutation.error || createMutation.error) as any)?.response?.data?.detail || 'The template could not be saved.'}
-            </p>
-          )}
-          {/* Name + Category */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2">
-              <label className={labelClass}>Template Name *</label>
-              <input
-                type="text"
-                required
-                value={templateForm.name}
-                onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                className={inputClass}
-                placeholder="e.g., Annual Security Assessment"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Category</label>
-              <MultiSelectDropdown
-                title="Category"
-                items={categoryItems}
-                selectedValues={[templateForm.category]}
-                onApply={(values) =>
-                  setTemplateForm({ ...templateForm, category: values[0] || 'security' })
-                }
-                multiSelect={false}
-                triggerVariant="input"
-                size="md"
-                placeholder="Select category"
-              />
-            </div>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className={labelClass}>Description</label>
-            <textarea
-              value={templateForm.description}
-              onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
-              className={inputClass}
-              rows={2}
-              placeholder="Brief description of this questionnaire's purpose..."
+              footer={(
+                <>
+                  {rights.send && !t.archived_at && t.question_count > 0
+                    ? <button type="button" onClick={() => setSending(t)} className={BTN}><Send aria-hidden className="h-4 w-4" /> Send to a vendor</button>
+                    : <span />}
+                  <span className="text-[12px] leading-4 text-[#64707e]">Updated {fmt.date(t.updated_at)}{t.updated_by_name ? ` · ${t.updated_by_name}` : ''}</span>
+                </>
+              )}
             />
-          </div>
+          ))}
+        </div>
+      )}
 
-          {/* Questions Builder */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-800">
-                Questions ({templateForm.questions.filter((q) => q.text.trim()).length})
-              </label>
-              <div className="flex items-center gap-2">
-                {DEFAULT_QUESTIONS[templateForm.category] && (
-                  <button
-                    type="button"
-                    onClick={() => loadDefaultQuestions(templateForm.category)}
-                    className="flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs text-primary-700 hover:bg-primary-100"
-                  >
-                    <Sparkles className="h-3 w-3" strokeWidth={1.75} />
-                    Load {templateForm.category.charAt(0).toUpperCase() + templateForm.category.slice(1)} Defaults
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={addQuestion}
-                  className="flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs text-primary-700 hover:bg-primary-100"
-                >
-                  <Plus className="h-3 w-3" strokeWidth={1.75} /> Add Question
-                </button>
-              </div>
-            </div>
-            <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-              {templateForm.questions.map((q, idx) => (
-                <div key={q.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50/50">
-                  {/* Row 1: Question text + type */}
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs text-gray-400 font-mono mt-2 shrink-0 w-6">Q{idx + 1}</span>
-                    <div className="flex-1 space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Enter your question..."
-                        value={q.text}
-                        onChange={(e) => updateQuestion(idx, 'text', e.target.value)}
-                        className={inputClass}
-                      />
-                      {/* Row 2: Controls */}
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="min-w-[160px]">
-                          <MultiSelectDropdown
-                            title="Type"
-                            items={questionTypeItems}
-                            selectedValues={[q.type]}
-                            onApply={(values) => updateQuestion(idx, 'type', values[0] || 'text')}
-                            multiSelect={false}
-                            triggerVariant="input"
-                            size="md"
-                            placeholder="Type"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <label className="text-xs text-gray-500">Weight:</label>
-                          <div className="w-20">
-                            <MultiSelectDropdown
-                              title="Weight"
-                              items={weightItems}
-                              selectedValues={[String(q.weight)]}
-                              onApply={(values) => updateQuestion(idx, 'weight', Number(values[0] || 3))}
-                              multiSelect={false}
-                              triggerVariant="input"
-                              size="md"
-                              placeholder="Weight"
-                            />
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={q.required}
-                            onChange={(e) => updateQuestion(idx, 'required', e.target.checked)}
-                            className="rounded border-gray-300 text-primary-600"
-                          />
-                          Required
-                        </label>
-                        {q.type !== 'file' && (
-                          <label className="flex items-center gap-1.5 text-xs text-orange-700">
-                            <Paperclip className="h-3 w-3" />
-                            <span className="sr-only">Evidence for question {idx + 1}</span>
-                            <select value={evidenceOf(q)} onChange={(e) => setEvidence(idx, { evidence: e.target.value as EvidenceMode })}
-                              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700">
-                              <option value="none">No evidence</option>
-                              <option value="optional">Evidence optional</option>
-                              <option value="required">Evidence required</option>
-                            </select>
-                          </label>
-                        )}
-                        <label className="flex items-center gap-1.5 text-xs text-gray-500"
-                          title="Questions in the same section are reviewed together">
-                          Section
-                          <input value={q.section || ''} list={`sections-${idx}`} maxLength={100}
-                            placeholder={q.domain ? q.domain.replace(/_/g, ' ') : 'General'}
-                            onChange={(e) => updateQuestion(idx, 'section', e.target.value || undefined)}
-                            className="w-32 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900" />
-                          <datalist id={`sections-${idx}`}>{sectionsUsed.map((s) => <option key={s} value={s} />)}</datalist>
-                        </label>
-                        {q.type === 'yes_no' && (
-                          <label className="flex items-center gap-1.5 text-xs text-emerald-700 cursor-pointer"
-                            title="When the vendor's SOC 2 or ISO 27001 certificate is on file, in date and names them, it can answer this question">
-                            <input
-                              type="checkbox"
-                              checked={!!q.certificate_covers}
-                              onChange={(e) => updateQuestion(idx, 'certificate_covers', e.target.checked)}
-                              className="rounded border-emerald-300 text-emerald-600"
-                            />
-                            <BadgeCheck className="h-3 w-3" />
-                            A certificate can answer this
-                          </label>
-                        )}
-                      </div>
+      {purpose === 'due_diligence' && <SentQuestionnaires templates={templates} />}
 
-                      {/* Evidence owed only on some answers (none picked: any answer) */}
-                      {evidenceOf(q) === 'required' && answerValues(q).length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                          <span>Needed when the answer is</span>
-                          {answerValues(q).map((v) => {
-                            const on = evidenceOnOf(q).includes(v);
-                            return (
-                              <button key={v} type="button" aria-pressed={on}
-                                onClick={() => setEvidence(idx, { evidence_on: on ? evidenceOnOf(q).filter((x) => x !== v) : [...evidenceOnOf(q), v] })}
-                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-gray-200 bg-white text-gray-600'}`}>
-                                {v}
-                              </button>
-                            );
-                          })}
-                          {evidenceOnOf(q).length === 0 && <span className="text-gray-400">any answer</span>}
-                        </div>
-                      )}
-
-                      {/* A Yes / No answer that needs a note (N/A always needs a reason) */}
-                      {q.type === 'yes_no' && (
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                          <span title="Not applicable always needs a reason">Needs a note on</span>
-                          {['yes', 'partial', 'no'].map((v) => {
-                            const on = (q.options || []).some((o) => optValue(o) === v && optFlag(o, 'comment_required'));
-                            return (
-                              <button key={v} type="button" aria-pressed={on} onClick={() => toggleOptionFlag(idx, v, 'comment_required')}
-                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-600'}`}>
-                                {v}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Conditional: ask only when an earlier question was answered a certain way */}
-                      {idx > 0 && (() => {
-                        const earlier = templateForm.questions.slice(0, idx)
-                          .map((p, pIdx) => ({ p, pIdx }))
-                          .filter(({ p }) => p.type === 'yes_no' || p.type === 'multiple_choice');
-                        if (earlier.length === 0) return null;
-                        const ctrl = templateForm.questions.find((p) => p.id === q.show_if?.question);
-                        const values = ctrl?.type === 'yes_no' ? ['yes', 'partial', 'no'] : (ctrl?.options || []).map(optLabel);
-                        return (
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                            <span>Ask</span>
-                            <select
-                              aria-label={`When to ask question ${idx + 1}`}
-                              value={q.show_if?.question || ''}
-                              onChange={(e) => updateQuestion(idx, 'show_if', e.target.value ? { question: e.target.value, in: [] } : undefined)}
-                              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
-                            >
-                              <option value="">always</option>
-                              {earlier.map(({ p, pIdx }) => (
-                                <option key={p.id} value={p.id}>only when Q{pIdx + 1} is answered</option>
-                              ))}
-                            </select>
-                            {q.show_if?.question && (
-                              <select
-                                aria-label={`Answer that makes question ${idx + 1} apply`}
-                                value={q.show_if.in[0] || ''}
-                                onChange={(e) => updateQuestion(idx, 'show_if', { question: q.show_if!.question, in: e.target.value ? [e.target.value] : [] })}
-                                className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
-                              >
-                                <option value="">choose an answer</option>
-                                {values.map((v) => <option key={v} value={v}>{v}</option>)}
-                              </select>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Follow-up: this answer calls for another questionnaire, sent when this one is accepted */}
-                      {(q.type === 'yes_no' || q.type === 'multiple_choice') && (templates || []).length > 1 && (
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                          <span>Follow up when answered</span>
-                          <select
-                            aria-label={`Answer to question ${idx + 1} that calls for a follow-up`}
-                            value={q.follow_up?.when[0] || ''}
-                            onChange={(e) => updateQuestion(idx, 'follow_up', e.target.value
-                              ? { when: [e.target.value], template_id: q.follow_up?.template_id || 0 } : undefined)}
-                            className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
-                          >
-                            <option value="">never</option>
-                            {(q.type === 'yes_no' ? ['yes', 'partial', 'no'] : (q.options || []).map(optLabel)).map((v) => (
-                              <option key={v} value={v}>{v}</option>
-                            ))}
-                          </select>
-                          {q.follow_up && (
-                            <>
-                              <span>by sending</span>
-                              <select
-                                aria-label={`Follow-up questionnaire for question ${idx + 1}`}
-                                value={q.follow_up.template_id || ''}
-                                onChange={(e) => updateQuestion(idx, 'follow_up', { when: q.follow_up!.when, template_id: Number(e.target.value) || 0 })}
-                                className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
-                              >
-                                <option value="">choose a questionnaire</option>
-                                {(templates || []).filter((t) => t.id !== editingTemplate?.id).map((t) => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Options for multiple choice */}
-                      {q.type === 'multiple_choice' && (
-                        <div className="pl-2 space-y-1">
-                          <p className="text-xs text-gray-400">Options:</p>
-                          {(q.options || []).map((opt, optIdx) => (
-                            <div key={optIdx} className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full border-2 border-gray-300 shrink-0" />
-                              <input
-                                type="text"
-                                value={optLabel(opt)}
-                                onChange={(e) => updateOption(idx, optIdx, e.target.value)}
-                                placeholder={`Option ${optIdx + 1}`}
-                                className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              />
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={optScore(opt) === null ? '' : Math.round((optScore(opt) as number) * 100)}
-                                onChange={(e) => updateOptionScore(idx, optIdx, e.target.value)}
-                                placeholder="score %"
-                                aria-label={`Score for option ${optIdx + 1}`}
-                                title="How good this answer is, 0 to 100. Leave empty for an answer that does not count."
-                                disabled={optFlag(opt, 'na')}
-                                className="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-right disabled:opacity-50"
-                              />
-                              {([['na', 'N/A', 'Not applicable: not scored, and picking it needs a reason'],
-                                 ['comment_required', 'Note', 'Picking it needs a note']] as const).map(([flag, text, tip]) => (
-                                <button key={flag} type="button" title={tip} aria-pressed={optFlag(opt, flag)}
-                                  disabled={!optLabel(opt).trim()}
-                                  onClick={() => toggleOptionFlag(idx, optValue(opt), flag)}
-                                  className={`rounded-full border px-2 py-0.5 text-[11px] disabled:opacity-40 ${optFlag(opt, flag)
-                                    ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-500'}`}>
-                                  {text}
-                                </button>
-                              ))}
-                              <button type="button" onClick={() => removeOption(idx, optIdx)} className="text-gray-400 hover:text-red-500">
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => addOption(idx)}
-                            className="mt-1 flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800"
-                          >
-                            <Plus className="h-3 w-3" strokeWidth={1.75} /> Add Option
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {templateForm.questions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeQuestion(idx)}
-                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors mt-1 shrink-0"
-                        title="Remove question"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </form>
-      </RightSlidePanel>
-
-      {/* Preview Slide Panel */}
-      <RightSlidePanel
-        isOpen={!!showPreviewModal}
-        onClose={() => setShowPreviewModal(null)}
-        title={showPreviewModal?.name || ''}
-        subtitle={showPreviewModal?.category ? showPreviewModal.category.charAt(0).toUpperCase() + showPreviewModal.category.slice(1) : undefined}
-        width="w-full max-w-3xl"
-      >
-        {showPreviewModal && (
-          <div className="space-y-4">
-            {showPreviewModal.description && (
-              <p className="text-sm text-gray-500">{showPreviewModal.description}</p>
-            )}
-            <div className="space-y-3">
-              {(showPreviewModal.questions || []).map((q: any, idx: number) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <span className="text-xs font-mono text-gray-400 mt-0.5">{idx + 1}.</span>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-800">{q.text}</p>
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
-                          {q.type?.replace('_', '/')}
-                        </span>
-                        <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
-                        {q.required && <span className="text-xs text-primary-600">Required</span>}
-                        {q.type !== 'file' && evidenceOf(q) !== 'optional' && (
-                          <span className="text-xs text-orange-600 flex items-center gap-1">
-                            <Paperclip className="h-3 w-3" /> {EVIDENCE_LABEL[evidenceOf(q)]}
-                            {evidenceOf(q) === 'required' && evidenceOnOf(q).length > 0 && ` (${evidenceOnOf(q).join(', ')})`}
-                          </span>
-                        )}
-                        {(q.section || q.domain) && <span className="text-xs text-gray-500">{q.section || q.domain.replace(/_/g, ' ')}</span>}
-                      </div>
-                      {q.type === 'multiple_choice' && q.options?.length > 0 && (
-                        <div className="mt-2 pl-2 space-y-1">
-                          {q.options.map((opt: string | OptionDef, i: number) => (
-                            <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
-                              <div className="w-3 h-3 rounded-full border-2 border-gray-300" />
-                              {optLabel(opt)}
-                              {optScore(opt) !== null && <span className="text-gray-400">({Math.round((optScore(opt) as number) * 100)}%)</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <NewQuestionnaireDialog open={creating} purpose={purpose} templates={templates} onClose={() => setCreating(false)} />
+      <PreviewDialog open={!!previewing} name={previewing?.name ?? ''} questions={previewing?.questions ?? []} onClose={() => setPreviewing(null)} />
+      {tiers && (
+        <SettingsDialog open template={tiers} canConfig={rights.config} onClose={() => setTiers(null)} onSaved={() => refresh()} />
+      )}
+      <SendDialog templateId={sending?.id ?? null} templateName={sending?.name ?? ''} onClose={() => setSending(null)} />
+      <Dialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Delete this questionnaire?"
+        description={deleting ? `“${deleting.name}” has never been sent, so nothing is recorded against it.` : undefined}
+        footer={(
+          <>
+            <button type="button" onClick={() => setDeleting(null)} className={BTN}>Cancel</button>
+            <button type="button" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)} className={BTN_DANGER}>
+              {remove.isPending ? 'Deleting…' : 'Delete questionnaire'}
+            </button>
+          </>
         )}
-      </RightSlidePanel>
-
-      {/* Generate Vendor Link Slide Panel */}
-      <RightSlidePanel
-        isOpen={showSendModal}
-        onClose={() => {
-          setShowSendModal(false);
-          setSendSuccess(null);
-          setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
-        }}
-        title="Send questionnaire"
-        subtitle="The contact is emailed a personal link to the supplier portal."
-        width="w-full max-w-3xl"
-        footer={
-          sendSuccess ? (
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSendModal(false);
-                  setSendSuccess(null);
-                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
-                }}
-                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-              >
-                Done
-              </button>
-            </div>
-          ) : (
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSendModal(false);
-                  setSendSuccess(null);
-                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="send-questionnaire-form"
-                disabled={sendMutation.isPending}
-                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {sendMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon className="h-4 w-4" strokeWidth={1.75} />
-                    Send
-                  </>
-                )}
-              </button>
-            </div>
-          )
-        }
       >
-        {sendSuccess ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-center">
-              <LinkIcon className="mx-auto mb-2 h-8 w-8 text-primary-600" strokeWidth={1.75} />
-              <p className="text-sm font-medium text-primary-800">
-                {!sendSuccess.link ? 'Questionnaire saved' : sendSuccess.emailed
-                  ? `Sent to ${sendSuccess.contact?.name || 'the contact'}` : 'Email not sent'}
-              </p>
-              <p className="mt-1 text-xs text-primary-700">
-                {!sendSuccess.link ? (
-                  <>No contact to send it to. Add one under the supplier’s{' '}
-                    <Link href={`/vendor-risk/vendors/${sendSuccess.vendorId}?tab=portal`} className="font-medium underline">Supplier portal</Link> tab.</>
-                ) : sendSuccess.emailed ? sendSuccess.contact?.email : 'Copy the link and send it yourself.'}
-              </p>
-            </div>
-            {sendSuccess.link && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <label className="mb-1 block text-xs font-medium text-slate-600">Personal link</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={sendSuccess.link}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className={`${inputClass} font-mono text-xs`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => copyLink(sendSuccess.link as string)}
-                    aria-label="Copy the personal link"
-                    className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
-                  >
-                    {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
-                    {linkCopied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-                <p className="mt-2 text-[11px] text-slate-500">
-                  Shown once. It opens the supplier’s portal, with this questionnaire, for 30 days.
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <form id="send-questionnaire-form" onSubmit={handleSendSubmit} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className={labelClass}>Vendor *</label>
-                <MultiSelectDropdown
-                  title="Vendor"
-                  items={vendorItems}
-                  selectedValues={sendForm.vendor_id ? [sendForm.vendor_id] : []}
-                  onApply={(values) => {
-                    const vendorId = values[0] || '';
-                    const vendorAssessments = (assessments || []).filter(
-                      (item) => String(item.vendor_id) === vendorId
-                    );
-                    setSendContact('');                // the new supplier's primary contact, unless changed
-                    setSendForm({
-                      ...sendForm,
-                      vendor_id: vendorId,
-                      assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
-                      respondent_email: '',
-                      respondent_name: '',
-                    });
-                  }}
-                  multiSelect={false}
-                  triggerVariant="input"
-                  size="md"
-                  placeholder="Select vendor..."
-                  forceSearch
-                />
-                {/* Hidden required input to keep native form validation */}
-                <input
-                  type="text"
-                  required
-                  value={sendForm.vendor_id}
-                  onChange={() => {}}
-                  className="sr-only"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Link to Assessment (optional)</label>
-                <MultiSelectDropdown
-                  title="Assessment"
-                  items={assessmentItems}
-                  selectedValues={sendForm.assessment_id ? [sendForm.assessment_id] : []}
-                  onApply={(values) =>
-                    setSendForm({ ...sendForm, assessment_id: values[0] || '' })
-                  }
-                  multiSelect={false}
-                  triggerVariant="input"
-                  size="md"
-                  placeholder={sendForm.vendor_id ? 'No linked assessment' : 'Select vendor first'}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelClass} htmlFor="send-contact">Send to</label>
-                <select id="send-contact" value={contactChoice} disabled={!sendForm.vendor_id}
-                  onChange={(e) => setSendContact(e.target.value)} className={inputClass}>
-                  {reachableContacts.map((c) => (
-                    <option key={c.id ?? 'record'} value={String(c.id ?? 'record')}>
-                      {c.name} · {c.email}{c.is_primary ? ' (primary)' : ''}
-                    </option>
-                  ))}
-                  <option value="new">New contact…</option>
-                </select>
-              </div>
-              {contactChoice === 'new' && (
-                <>
-                  <div>
-                    <label className={labelClass} htmlFor="send-new-name">Name</label>
-                    <input
-                      id="send-new-name"
-                      type="text"
-                      value={sendForm.respondent_name}
-                      onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
-                      className={inputClass}
-                      placeholder="Contact name"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass} htmlFor="send-new-email">Email</label>
-                    <input
-                      id="send-new-email"
-                      type="email"
-                      required
-                      value={sendForm.respondent_email}
-                      onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
-                      className={inputClass}
-                      placeholder="contact@supplier.com"
-                    />
-                  </div>
-                </>
-              )}
-              <div>
-                <label className={labelClass} htmlFor="send-due-days">Answers due in (days)</label>
-                <input
-                  id="send-due-days"
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={sendForm.due_in_days}
-                  onChange={(e) => setSendForm({ ...sendForm, due_in_days: Math.max(1, Number(e.target.value) || 1) })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="send-expiry-days">Link expires in (days)</label>
-                <input
-                  id="send-expiry-days"
-                  type="number"
-                  min={1}
-                  max={365}
-                  value={sendForm.expires_in_days}
-                  onChange={(e) => setSendForm({ ...sendForm, expires_in_days: Math.max(1, Number(e.target.value) || 1) })}
-                  className={inputClass}
-                />
-                <p className="mt-1 text-[11px] text-gray-500">The vendor is reminded before and after the due date until the link expires.</p>
-              </div>
-              {sendForm.vendor_id && (
-                <div className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
-                  <p className="text-xs font-medium text-gray-700">Answer questions from a certificate on file</p>
-                  {(vendorCertificates || []).length === 0 ? (
-                    <p className="text-[11px] text-gray-500">
-                      No in-date certificate is held for this vendor. Add its SOC 2 report or ISO 27001 certificate, with
-                      the expiry date, to the vendor&apos;s evidence to use one.
-                    </p>
-                  ) : (
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <select
-                        aria-label="Certificate"
-                        value={sendForm.certificate_evidence_id}
-                        onChange={(e) => setSendForm({ ...sendForm, certificate_evidence_id: e.target.value,
-                          certificate_mode: e.target.value ? (sendForm.certificate_mode === 'off' ? 'prefill' : sendForm.certificate_mode) : 'off' })}
-                        className={inputClass}
-                      >
-                        <option value="">No certificate</option>
-                        {(vendorCertificates || []).map((c) => (
-                          <option key={c.id} value={c.id} disabled={!c.read}>
-                            {c.name} (valid until {new Date(c.expiry_date).toLocaleDateString()}){c.read ? '' : ' - not read yet'}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label="How the certificate answers"
-                        value={sendForm.certificate_mode}
-                        disabled={!sendForm.certificate_evidence_id}
-                        onChange={(e) => setSendForm({ ...sendForm, certificate_mode: e.target.value as 'off' | 'prefill' | 'skip' })}
-                        className={inputClass}
-                      >
-                        <option value="off">Do not use it</option>
-                        <option value="prefill">Prefill: answered Yes, the vendor can change them</option>
-                        <option value="skip">Skip: answered Yes and not asked</option>
-                      </select>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-gray-500">
-                    Only questions the template marks &ldquo;a certificate can answer this&rdquo;. The certificate must be in date and
-                    name the vendor; the AI review of it must not find that it fails to.
-                  </p>
-                </div>
-              )}
-              {sendMutation.isError && (
-                <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg md:col-span-2">
-                  {(sendMutation.error as any)?.response?.data?.detail || 'Failed to send questionnaire'}
-                </div>
-              )}
-            </div>
-          </form>
-        )}
-      </RightSlidePanel>
+        <p className="text-sm leading-5 text-[#26323d]">This cannot be undone.</p>
+      </Dialog>
     </div>
   );
 }

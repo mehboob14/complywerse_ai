@@ -106,6 +106,9 @@ class VendorQuestionnaireTemplate(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Retired, not deleted, once it has been sent: hidden, cannot be sent or edited, restorable (routers/questionnaires.py).
+    archived_at = Column(DateTime, nullable=True)
+    updated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
 
     tenant = relationship("Tenant")
     creator = relationship("GRCUser", foreign_keys=[created_by])

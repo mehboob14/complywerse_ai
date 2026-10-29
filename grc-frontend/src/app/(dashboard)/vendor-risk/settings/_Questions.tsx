@@ -11,13 +11,15 @@ import { clsx } from 'clsx';
 import { ArrowDown, ArrowUp, ChevronDown, EyeOff, Plus, RotateCcw, Trash2, Undo2 } from 'lucide-react';
 import { fieldCls } from './_ui';
 
-export interface Opt { value: string; label: string; archived?: boolean; points?: number }
+/** `min_tier`: picking this answer holds the supplier at that tier at least, whatever its score says. */
+export interface Opt { value: string; label: string; archived?: boolean; points?: number; min_tier?: string | null }
 export interface CustomQuestion {
   key: string; section: string; type: string; label: string; help?: string; required?: boolean; justify?: boolean;
   show_if?: string | null; options?: Opt[]; factor?: string | null; points?: number; evidence?: string | null;
+  min_tier?: string | null;            // a yes holds the supplier at this tier at least
   order?: number; archived?: boolean;
 }
-export interface BuiltinChange { label?: string; help?: string; required?: boolean; hidden?: boolean; options?: Opt[]; evidence?: string }
+export interface BuiltinChange { label?: string; help?: string; required?: boolean; hidden?: boolean; options?: Opt[]; evidence?: string; min_tier?: string }
 export interface QuestionsDraft {
   sections: Array<{ key: string; title: string; archived?: boolean }>;
   builtin_sections: Record<string, { title: string }>;
@@ -37,6 +39,14 @@ export const TYPE_LABEL: Record<string, string> = {
   number: 'Number', date: 'Date', text: 'Text',
 };
 const SCORED = ['yes_no', 'choice', 'multi_choice', 'level'];
+/** What an answer can hold a supplier at: nothing, or a tier (low would hold nothing). */
+const MIN_TIERS: Array<[string, string]> = [['', 'No minimum'], ['medium', 'Min Medium'], ['high', 'Min High'], ['critical', 'Min Critical']];
+const TIER_WORD: Record<string, string> = { medium: 'Medium', high: 'High', critical: 'Critical' };
+const TIER_RANK: Record<string, number> = { medium: 1, high: 2, critical: 3 };
+/** The worst of the minimums a question can set, for its chip ("Can set High"). */
+function worstMin(tiers: Array<string | null | undefined>): string | undefined {
+  return tiers.filter((t): t is string => !!t && t in TIER_RANK).sort((a, b) => TIER_RANK[b] - TIER_RANK[a])[0];
+}
 const slug = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'item';
 
 /** A key made from a name, not yet taken; keys never change once saved. */
@@ -236,9 +246,10 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
               return (
                 <QuestionRow key={q.key} open={openKey === q.key} onToggle={() => setOpenKey(openKey === q.key ? null : q.key)}
                   label={change.label || q.label} type={q.type} builtin hidden={!!change.hidden}
-                  required={change.required ?? !!q.required} evidence={change.evidence ? evidence[change.evidence] : undefined}>
+                  required={change.required ?? !!q.required} evidence={change.evidence ? evidence[change.evidence] : undefined}
+                  minTier={worstMin(q.type === 'yes_no' ? [change.min_tier] : (change.options || q.options || []).map((o) => (o as Opt).min_tier))}>
                   <BuiltinEditor q={q} change={change} canEdit={canEdit} evidence={evidence}
-                    onChange={(patch) => editB(q.key, patch)} onReset={() => editB(q.key, { label: undefined, help: undefined, required: undefined, hidden: undefined, options: undefined, evidence: undefined })} />
+                    onChange={(patch) => editB(q.key, patch)} onReset={() => editB(q.key, { label: undefined, help: undefined, required: undefined, hidden: undefined, options: undefined, evidence: undefined, min_tier: undefined })} />
                 </QuestionRow>
               );
             })}
@@ -247,6 +258,7 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
                 label={q.label || 'New question'} type={q.type} required={!!q.required}
                 factor={q.factor ? `${factors.find((f) => f.key === q.factor)?.label || q.factor}` : undefined}
                 evidence={q.evidence ? evidence[q.evidence] : undefined}
+                minTier={worstMin(q.type === 'yes_no' ? [q.min_tier] : (q.options || []).filter((o) => !o.archived).map((o) => o.min_tier))}
                 showIf={q.show_if ? yesNo.find((y) => y.key === q.show_if)?.label : undefined}>
                 <CustomEditor q={q} canEdit={canEdit} typeLocked={savedKeys.has(q.key)} factors={factors} evidence={evidence}
                   yesNo={yesNo.filter((y) => y.key !== q.key)} sections={sections}
@@ -298,9 +310,9 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
   );
 }
 
-function QuestionRow({ open, onToggle, label, type, builtin, hidden, required, factor, evidence, showIf, children }: {
+function QuestionRow({ open, onToggle, label, type, builtin, hidden, required, factor, evidence, showIf, minTier, children }: {
   open: boolean; onToggle: () => void; label: string; type: string; builtin?: boolean; hidden?: boolean; required?: boolean;
-  factor?: string; evidence?: string; showIf?: string; children: React.ReactNode;
+  factor?: string; evidence?: string; showIf?: string; minTier?: string; children: React.ReactNode;
 }) {
   const chip = 'rounded-full border px-1.5 py-px text-[10px] font-medium';
   return (
@@ -316,6 +328,7 @@ function QuestionRow({ open, onToggle, label, type, builtin, hidden, required, f
             {hidden && <span className={clsx(chip, 'border-slate-300 text-slate-500')}><EyeOff className="mr-0.5 inline h-2.5 w-2.5" />Hidden</span>}
             {factor && <span className={clsx(chip, 'border-primary-200 bg-primary-50 text-primary-800')}>Feeds {factor}</span>}
             {evidence && <span className={clsx(chip, 'border-emerald-200 bg-emerald-50 text-emerald-800')}>Asks for {evidence}</span>}
+            {minTier && <span className={clsx(chip, 'border-amber-200 bg-amber-50 text-amber-800')} title="An answer holds the supplier at this tier at least">Can set {TIER_WORD[minTier]}</span>}
             {showIf && <span className={clsx(chip, 'border-slate-200 text-slate-500')}>Only if yes to: {showIf}</span>}
           </span>
         </span>
@@ -366,6 +379,12 @@ function OptionsEditor({ options, scored, canEdit, onChange, fixed = [] }: {
               </select>
             </label>
           )}
+          <select value={o.min_tier || ''} disabled={!canEdit || o.archived} aria-label={`Minimum tier for ${o.label || `option ${i + 1}`}`}
+            title="Picking this holds the supplier at this tier at least, whatever its score says"
+            onChange={(e) => onChange(options.map((x, j) => (j === i ? { ...x, min_tier: e.target.value || undefined } : x)))}
+            className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+            {MIN_TIERS.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+          </select>
           {canEdit && (
             o.archived ? (
               <button type="button" onClick={() => onChange(options.map((x, j) => (j === i ? { ...x, archived: false } : x)))}
@@ -417,12 +436,19 @@ function BuiltinEditor({ q, change, canEdit, evidence, onChange, onReset }: {
         </p>
       )}
       {q.type === 'yes_no' && (
-        <Field label="A yes also asks the supplier for" hint="On top of what its tier asks for.">
-          <select className={fieldCls} value={change.evidence || ''} onChange={(e) => onChange({ evidence: e.target.value || undefined })}>
-            <option value="">Nothing more</option>
-            {Object.entries(evidence).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-        </Field>
+        <>
+          <Field label="A yes also asks the supplier for" hint="On top of what its tier asks for.">
+            <select className={fieldCls} value={change.evidence || ''} onChange={(e) => onChange({ evidence: e.target.value || undefined })}>
+              <option value="">Nothing more</option>
+              {Object.entries(evidence).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </Field>
+          <Field label="A yes holds the tier at" hint="Whatever the score says, never lower.">
+            <select className={fieldCls} value={change.min_tier || ''} onChange={(e) => onChange({ min_tier: e.target.value || undefined })}>
+              {MIN_TIERS.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+            </select>
+          </Field>
+        </>
       )}
       {q.type === 'choice' && (
         <div className="sm:col-span-2">
@@ -507,12 +533,19 @@ function CustomEditor({ q, canEdit, typeLocked, factors, evidence, yesNo, sectio
         </div>
       )}
       {q.type === 'yes_no' && (
-        <div className="sm:col-span-2"><Field label="A yes asks the supplier for" hint="On top of what its tier asks for.">
-          <select className={fieldCls} value={q.evidence || ''} onChange={(e) => onChange({ evidence: e.target.value || null })}>
-            <option value="">Nothing more</option>
-            {Object.entries(evidence).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-        </Field></div>
+        <>
+          <Field label="A yes asks the supplier for" hint="On top of what its tier asks for.">
+            <select className={fieldCls} value={q.evidence || ''} onChange={(e) => onChange({ evidence: e.target.value || null })}>
+              <option value="">Nothing more</option>
+              {Object.entries(evidence).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </Field>
+          <Field label="A yes holds the tier at" hint="Whatever the score says, never lower.">
+            <select className={fieldCls} value={q.min_tier || ''} onChange={(e) => onChange({ min_tier: e.target.value || null })}>
+              {MIN_TIERS.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+            </select>
+          </Field>
+        </>
       )}
       {canEdit && (
         <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-2">

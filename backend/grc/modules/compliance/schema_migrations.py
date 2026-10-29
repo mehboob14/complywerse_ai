@@ -1232,6 +1232,9 @@ _COLUMN_ADDS = [
     # ── TPRM parity lifecycle rules (B3): add columns below this line ──
 
     # ── TPRM parity questionnaires (B4): add columns below this line ──
+    # A questionnaire retired instead of deleted, and who changed it last (routers/questionnaires.py).
+    ("grc_vendor_questionnaire_templates", "archived_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_templates", "updated_by", "INTEGER", None),
 
     # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
     # One engagement's own exit checklist (tpra/engagements.py, B5b).

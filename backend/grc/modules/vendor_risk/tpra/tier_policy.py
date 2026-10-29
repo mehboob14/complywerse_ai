@@ -96,9 +96,11 @@ def clean(raw: dict, current: Dict[str, dict], kinds: Optional[Dict[str, str]] =
 
 def templates_for(db: Session, tenant_id: int, tier: str, policy: Dict[str, dict]) -> List[VendorQuestionnaireTemplate]:
     """The questionnaires a tier calls for: the tenant's choice, or else the
-    built-in templates suggested for the tier, where the tenant has them."""
+    built-in templates suggested for the tier, where the tenant has them. An
+    archived questionnaire cannot be sent, so it is never called for."""
     ids = policy[_tier(tier)].get("template_ids") or []
-    q = db.query(VendorQuestionnaireTemplate).filter(VendorQuestionnaireTemplate.tenant_id == tenant_id)
+    q = db.query(VendorQuestionnaireTemplate).filter(VendorQuestionnaireTemplate.tenant_id == tenant_id,
+                                                     VendorQuestionnaireTemplate.archived_at.is_(None))
     if ids:
         found = {t.id: t for t in q.filter(VendorQuestionnaireTemplate.id.in_(ids))}
         return [found[i] for i in ids if i in found]

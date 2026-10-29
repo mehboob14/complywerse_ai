@@ -85,7 +85,7 @@ def _custom(db: Session, tenant_id: int) -> dict:
 def _preview(db: Session, v: Vendor) -> dict:
     cfg = get_tiering_config(db, v.tenant_id)
     scores, why = intake.factors(v.intake, cfg.get("customisation"))
-    result = compute_inherent_tier(scores, cfg)
+    result = compute_inherent_tier(scores, cfg, v.intake)
     result["reasons"] = why
     return result
 
@@ -126,7 +126,7 @@ def preview(body: PreviewIn, db: Session = Depends(get_db), user: GRCUser = Depe
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     scores, why = intake.factors(cleaned, cfg.get("customisation"))
-    result = compute_inherent_tier(scores, cfg)
+    result = compute_inherent_tier(scores, cfg, cleaned)
     result["reasons"] = why
     return result
 
