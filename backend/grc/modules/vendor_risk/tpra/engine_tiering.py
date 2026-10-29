@@ -5,12 +5,18 @@ thresholds), produce a 0..100 inherent score and a tier in
 critical/high/medium/low. The tier drives assessment depth, suggested templates,
 reviewer requirements and reassessment cadence elsewhere. Weights/thresholds are
 configurable (DEFAULT_TIERING_CONFIG or a tenant's TPRATieringConfig row).
+
+An onboarding answer can also hold the tier at a minimum whatever the score says
+(customisation: `min_tier` on a yes or on an option); the tier is then the worse
+of the score's band and the worst minimum among the answers picked.
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
+from . import intake as intake_answers
 from .bootstrap import DEFAULT_TIERING_CONFIG
+from .stages import TIER_RANK
 
 FACTOR_KEYS = [
     "data_sensitivity",
@@ -45,11 +51,40 @@ def score_to_tier(score: float, thresholds: Dict[str, float]) -> str:
     return "low"
 
 
-def compute_inherent_tier(factors: Dict[str, float], config: Optional[dict] = None) -> dict:
+def minimum_tier(answers: Optional[dict], custom: Optional[dict] = None) -> Tuple[Optional[str], Optional[str]]:
+    """The worst minimum tier the answers hold the supplier at, and the wording of
+    the (first) question that set it: (None, None) when no answer sets one. Only
+    questions asked count: not a hidden or removed one, nor one a no kept off."""
+    given = (answers or {}).get("answers") or {}
+    if not given:
+        return None, None
+    changed = (custom or {}).get("builtin") if isinstance((custom or {}).get("builtin"), dict) else {}
+    worst, source = None, None
+    for key, q in intake_answers.spec(custom)["questions"].items():
+        if key not in given or q.get("archived") or q.get("hidden") or not intake_answers._asked(q, given):
+            continue
+        value = given[key]
+        if q["type"] == "yes_no":
+            held = [(changed.get(key) or {}).get("min_tier") if q.get("builtin") else q.get("min_tier")] if value == "yes" else []
+        elif q["type"] in ("choice", "multi_choice"):
+            picked = value if isinstance(value, list) else [value]
+            held = [o.get("min_tier") for o in q.get("options") or [] if o.get("value") in picked]
+        else:
+            held = []
+        for tier in held:
+            if tier in TIER_RANK and (worst is None or TIER_RANK[tier] > TIER_RANK[worst]):
+                worst, source = tier, q["label"]
+    return worst, source
+
+
+def compute_inherent_tier(factors: Dict[str, float], config: Optional[dict] = None,
+                          intake: Optional[dict] = None) -> dict:
     """Weighted inherent-risk score (0..100) + tier + per-factor contributions.
 
     Each factor is 0..4; normalized to 0..1, multiplied by its weight (weights
-    sum to ~1.0), summed, then scaled to 0..100.
+    sum to ~1.0), summed, then scaled to 0..100. The onboarding `intake` the
+    factors came from, when given, can hold the tier at a minimum: the result
+    then says which (`minimum_tier`, and the question it came from).
     """
     cfg = config or DEFAULT_TIERING_CONFIG
     weights = cfg.get("weights") or DEFAULT_TIERING_CONFIG["weights"]
@@ -70,11 +105,16 @@ def compute_inherent_tier(factors: Dict[str, float], config: Optional[dict] = No
 
     score = round(weighted * 100, 2)
     tier = score_to_tier(score, thresholds)
+    held, source = minimum_tier(intake, cfg.get("customisation"))
+    if held and TIER_RANK[held] > TIER_RANK[tier]:
+        tier = held
     return {
         "score": score,
         "tier": tier,
         "contributions": contributions,
         "factors": {k: _clamp_factor(factors.get(k, 0)) for k in keys},
+        "minimum_tier": held,
+        "minimum_from": source,
     }
 
 

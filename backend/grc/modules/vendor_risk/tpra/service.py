@@ -667,7 +667,8 @@ def run_tiering(
             # last tier here, as it always has (a loop: the tier feeds itself).
             "business_criticality": engagement.criticality if engagement is not None else row.tier,
         })
-    result = compute_inherent_tier(factors, cfg)
+    # The answers can also hold the tier at a minimum (engine_tiering.minimum_tier).
+    result = compute_inherent_tier(factors, cfg, facts.intake if reasons is not None else None)
     if reasons:
         result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons),

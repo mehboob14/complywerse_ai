@@ -12,6 +12,8 @@ rules, the reports and the exposure model read them. Around them a tenant can:
   raises that factor to at least so many points out of 4, and a level answer
   raises it to its level;
 * name evidence a yes asks the supplier for, on top of what its tier asks;
+* have a yes, or an option of a choice, hold the supplier at a minimum tier
+  whatever its score says (engine_tiering.minimum_tier reads it);
 * add its own tiering factors, which join the weights, and its own evidence
   types, which join the list each tier picks from;
 * say which roles see a section of the form and which answer it (the review
@@ -49,6 +51,7 @@ BUILTIN_EVIDENCE: Dict[str, str] = {
 }
 PARTS = ("factors", "evidence", "evidence_builtin", "sections", "builtin_sections", "builtin", "questions",
          "section_roles")
+MIN_TIERS = ("medium", "high", "critical")           # what an answer can hold a supplier at (low holds nothing)
 KEY = re.compile(r"^c_[a-z0-9_]{1,36}$")
 _VALUE = re.compile(r"^[a-z0-9_]{1,40}$")
 _MAX = {"factors": 15, "evidence": 60, "sections": 10, "questions": 150, "options": 30}
@@ -117,6 +120,15 @@ def _points(value, name: str) -> int:
     return number
 
 
+def _min_tier(value, name: str) -> Optional[str]:
+    """The tier an answer holds a supplier at, whatever the score says; nothing is no minimum."""
+    if value in (None, ""):
+        return None
+    if value not in MIN_TIERS:
+        raise ValueError(f"{name} must be medium, high or critical")
+    return value
+
+
 def _items(raw, existing: List[dict], noun: str, limit: int, most: int, reserved, label_key: str = "label") -> List[dict]:
     """A list of named things with generated keys. Left out means archived."""
     if not isinstance(raw, list):
@@ -162,6 +174,9 @@ def _options(raw, existing: List[dict], name: str, *, scored: bool, fixed: List[
         item = {"value": value, "label": label, "archived": bool(option.get("archived"))}
         if scored:
             item["points"] = _points(option.get("points"), f"The points for '{label}'")
+        held = _min_tier(option.get("min_tier"), f"The minimum tier for '{label}'")
+        if held:
+            item["min_tier"] = held
         out.append(item)
     for old in list(fixed) + list(existing):
         if old["value"] not in seen:
@@ -186,7 +201,7 @@ def _builtin_questions(raw, current: dict) -> dict:
         if q["type"] == "choice":
             allowed.add("options")
         if q["type"] == "yes_no":
-            allowed.add("evidence")
+            allowed.update(("evidence", "min_tier"))
         unknown = set(change) - allowed
         if unknown:
             raise ValueError(f"'{q['label']}' cannot change {', '.join(sorted(unknown))}")
@@ -200,6 +215,9 @@ def _builtin_questions(raw, current: dict) -> dict:
                 kept[flag] = bool(change[flag])
         if change.get("evidence"):
             kept["evidence"] = str(change["evidence"])
+        held = _min_tier(change.get("min_tier"), f"The minimum tier for '{q['label']}'")
+        if held:
+            kept["min_tier"] = held
         if change.get("options"):
             before = ((current.get("builtin") or {}).get(key) or {}).get("options") or []
             kept["options"] = _options(change["options"], before, q["label"], scored=False,
@@ -246,6 +264,9 @@ def _questions(raw, current: dict) -> List[dict]:
             "order": int(item.get("order") or index + 1),
             "archived": bool(item.get("archived")),
         }
+        held = _min_tier(item.get("min_tier"), f"The minimum tier for '{label}'") if kind == "yes_no" else None
+        if held:
+            question["min_tier"] = held
         out.append(question)
     for old in before.values():
         if old["key"] not in seen:
