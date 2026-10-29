@@ -1191,6 +1191,41 @@ _COLUMN_ADDS = [
     ("grc_scf_scope", "locations", "JSON", None),
     ("grc_scf_control_state", "assigned_user_ids", "JSON", None),
     ("grc_uploaded_frameworks", "slug", "VARCHAR(64)", "ix_grc_uploaded_frameworks_slug"),
+
+    # ── TPRM supplier contacts and portal links (A/C0): add columns below this line ──
+    ("grc_vendor_questionnaire_responses", "contact_id", "INTEGER", None),
+
+    # ── TPRM paperwork (E): add columns below this line ──
+    # The period a supplier's document vouches for, and who checked it (tpra/paperwork.py).
+    ("grc_tpra_evidence_links", "coverage_from", "DATE", None),
+    ("grc_tpra_evidence_links", "coverage_to", "DATE", None),
+    ("grc_tpra_evidence_links", "reviewed_by", "INTEGER", None),
+    ("grc_tpra_evidence_links", "reviewed_at", "TIMESTAMP", None),
+    # The clauses a security review asks about (tpra/contracts.py).
+    ("grc_tpra_contracts", "right_to_audit", "BOOLEAN", None),
+    ("grc_tpra_contracts", "subprocessor_terms", "BOOLEAN", None),
+    ("grc_tpra_contracts", "exit_data_return", "BOOLEAN", None),
+    ("grc_tpra_contracts", "security_addendum", "BOOLEAN", None),
+    ("grc_tpra_contracts", "breach_notification_hours", "INTEGER", None),
+    # Service levels measured against the contract (routers/monitoring.py).
+    ("grc_vendor_sla_records", "contract_id", "INTEGER", None),
+    ("grc_vendor_sla_records", "unit", "VARCHAR(20)", None),
+    ("grc_vendor_sla_records", "direction", "VARCHAR(20)", None),
+
+    # ── TPRM engagements (B): add columns below this line ──
+    # What each record is for; NULL is the General scope, the supplier as it always was.
+    ("grc_vendor_assessments", "engagement_id", "INTEGER", "ix_grc_vendor_assessments_engagement_id"),
+    ("grc_tpra_contracts", "engagement_id", "INTEGER", None),
+    ("grc_tpra_risk_snapshots", "engagement_id", "INTEGER", None),
+    ("grc_tpra_action_items", "engagement_id", "INTEGER", None),
+
+    # ── TPRM supplier requests and messages (C1): add columns below this line ──
+
+    # ── TPRM reviews and question rules (D): add columns below this line ──
+
+    # ── TPRM hardening (F): add columns below this line ──
+    # The tiering config and tier policy an assessment is held to (tpra/service.policy_snapshot).
+    ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
 ]
 
 

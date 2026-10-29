@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from contextlib import contextmanager
 from datetime import datetime
@@ -12,6 +13,9 @@ from .models import SessionLocal, AuditLog, GRCUser
 from .routers.auth_router import decode_token
 from .rich_audit import brief_data_url, is_sensitive_key
 
+
+# A supplier's personal link is in its path; only the link's hash is kept anywhere.
+PORTAL_TOKEN_IN_PATH = re.compile(r"(/vendor-risk/portal/)(?!request-link(?:/|$))[^/]+")
 
 AUDIT_EXCLUDED_PATH_PREFIXES = (
     "/docs",
@@ -625,7 +629,7 @@ def write_audit_log(
             module, submodule = place(endpoint, path, db=db, slug=slug, payload=request_payload, query=query)
             details = {
                 "method": method,
-                "path": path,
+                "path": PORTAL_TOKEN_IN_PATH.sub(r"\1***", path),
                 # The function that handled it — the workflow engine raises
                 # that endpoint's own trigger event from this row.
                 "endpoint": endpoint,

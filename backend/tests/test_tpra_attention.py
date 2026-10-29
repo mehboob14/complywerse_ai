@@ -16,6 +16,8 @@ from grc.models import TPRAActionItem  # read by the action plan, check-in and a
 from grc.models import TPRAEmailTemplate  # read when a reminder or assignment is worded
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import UserRole  # read by who is a platform account (auth_router.platform_account), before an alert
+from grc.models import TPRAEngagement  # each engagement's own review date
+from grc.models import TPRASupplierRequest  # read by the supplier-request conditions
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal,
@@ -29,7 +31,7 @@ _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireRespons
            TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation, TPRAApproval,
            Evidence, TPRAEvidenceLink, TPRARiskSnapshot, TPRATieringConfig, TPRAAuditLog,
            TPRAMonitoringSignal, AttentionState, AttentionActivity, WorkflowNotification, TPRACheckin, TPRAEmailTemplate, TPRAActionItem,
-           UserRole]
+           UserRole, TPRAEngagement, TPRASupplierRequest]
 
 
 @pytest.fixture()
@@ -145,16 +147,19 @@ def test_acceptances_running_out_or_lapsed_with_nobody_deciding_again(db):
     v = _vendor(db)
     f = lambda title, status: TPRAFinding(tenant_id=1, vendor_id=v.id, assessment_id=1, title=title,
                                           severity="high", status=status, created_at=_at(ago(5)))
-    running_out, lapsed, reopened, renewed = _add(db, f("Running out", "accepted"), f("Lapsed", "accepted"),
-                                                  f("Reopened", "open"), f("Renewed", "accepted"))
+    running_out, lapsed, reopened, remediating, renewed = _add(
+        db, f("Running out", "accepted"), f("Lapsed", "accepted"), f("Reopened", "open"),
+        f("Remediating", "in_remediation"), f("Renewed", "accepted"))
     _add(db,
          TPRARiskAcceptance(tenant_id=1, finding_id=running_out.id, status="active", expiry=_at(ahead(5))),
          TPRARiskAcceptance(tenant_id=1, finding_id=lapsed.id, status="expired", expiry=_at(ago(3))),
          TPRARiskAcceptance(tenant_id=1, finding_id=reopened.id, status="expired", expiry=_at(ago(3))),
+         TPRARiskAcceptance(tenant_id=1, finding_id=remediating.id, status="expired", expiry=_at(ago(3))),
          TPRARiskAcceptance(tenant_id=1, finding_id=renewed.id, status="expired", expiry=_at(ago(30))),
          TPRARiskAcceptance(tenant_id=1, finding_id=renewed.id, status="active", expiry=_at(ahead(200))))
     items = {i["title"].split("'")[1]: i for i in _items(db) if i["condition"] == "acceptance_expiring"}
-    assert set(items) == {"Running out", "Lapsed"}
+    # Reopened by the lapse (the reminder sweep does that) with nothing decided since: still listed.
+    assert set(items) == {"Running out", "Lapsed", "Reopened"}
     assert items["Running out"]["badge"] == "Expires in 5 days" and items["Lapsed"]["tone"] == "red"
 
 

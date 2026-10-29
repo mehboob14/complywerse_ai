@@ -12,14 +12,21 @@ so anything reading that column keeps working.
 
 Reassessment cadence and the offboarding checklist stay here: they are the only
 store for those, and the canonical stage workspace reads them.
+
+Offboarding closes the door. Starting it (here, or by setting the supplier's status
+to offboarded anywhere) makes the supplier offboarded, stops every personal portal
+link it has and expires its unanswered questionnaires; completing it, once every
+step of the checklist is done, archives the supplier. Ending one engagement
+touches none of this: General is the supplier itself and only offboarding ends it.
 """
 from datetime import datetime, timedelta
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ....models import Vendor, GRCUser, get_db
+from ....models import Vendor, GRCUser, VendorQuestionnaireResponse, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
 from ..lifecycle import (
@@ -27,7 +34,12 @@ from ..lifecycle import (
 )
 from ..tpra import service as tpra_service
 from ..tpra import stages as tpra_stages
-from .vendors import serialize_vendor, get_vendor_or_404
+from ..tpra.contacts import revoke_all
+from ..tpra.portal import WAITING_ON_VENDOR
+from .vendors import archive_vendor, serialize_vendor, get_vendor_or_404
+
+CONTRACTS_CLOSED = "Contracts closed out"
+OFFBOARDING_CHECKLIST = [*DEFAULT_OFFBOARDING_CHECKLIST, CONTRACTS_CLOSED]
 
 # The eight stages this module used to own, against the canonical eleven. Kept so
 # an old client's stage name still resolves to something real.
@@ -114,17 +126,16 @@ def advance_stage(
     target = CANONICAL_TO_LEGACY.get(result.get("to") or "", vendor.lifecycle_stage or "intake")
     record_transition(vendor, target, current_user.id, payload.note or "")
 
-    # Entering monitoring: seed a reassessment cadence from the tier if unset.
+    # Entering monitoring: seed a reassessment cadence from the tier if unset
+    # (General's own tier: the supplier's may be the worst of its engagements).
     if target == "monitoring" and not vendor.reassessment_cadence_days:
-        days = TIER_CADENCE_DAYS.get((vendor.tier or "medium").lower(), 730)
+        days = TIER_CADENCE_DAYS.get((tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
         vendor.reassessment_cadence_days = days
         vendor.next_reassessment_date = datetime.utcnow() + timedelta(days=days)
 
     # Entering offboarding: seed the standard checklist if empty.
     if target == "offboarding" and not (vendor.offboarding_checklist or []):
-        vendor.offboarding_checklist = [
-            {"item": i, "done": False, "at": None, "by": None} for i in DEFAULT_OFFBOARDING_CHECKLIST
-        ]
+        vendor.offboarding_checklist = _checklist()
 
     vendor.updated_at = datetime.utcnow()
     db.commit()
@@ -234,7 +245,9 @@ def schedule_reassessment(
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
     rbac.require_write(db, current_user, "vendors", "edit")
-    cadence = payload.cadence_days or TIER_CADENCE_DAYS.get((vendor.tier or "medium").lower(), 730)
+    # General's review: an engagement's is set on the engagement (PUT /engagements/{id}).
+    cadence = payload.cadence_days or TIER_CADENCE_DAYS.get(
+        (tpra_service.scope_row(db, vendor).tier or "medium").lower(), 730)
     vendor.reassessment_cadence_days = cadence
     vendor.next_reassessment_date = payload.next_date or (datetime.utcnow() + timedelta(days=cadence))
     vendor.updated_at = datetime.utcnow()
@@ -245,9 +258,59 @@ def schedule_reassessment(
 
 # ── Stage 8 — Offboarding checklist ───────────────────────────────────────
 
+def _checklist() -> list:
+    return [{"item": i, "done": False, "at": None, "by": None} for i in OFFBOARDING_CHECKLIST]
+
+
+def close_supplier_side(db: Session, vendor: Vendor, by: Optional[int], reason: Optional[str]) -> dict:
+    """Every way the supplier has in stops: its personal portal links, and the
+    questionnaires still waiting on it, which expire now. Audited; the caller commits."""
+    links = revoke_all(db, vendor.id, by, reason)
+    now = datetime.utcnow()
+    expired = []
+    for qr in (db.query(VendorQuestionnaireResponse)
+               .filter(VendorQuestionnaireResponse.vendor_id == vendor.id,
+                       VendorQuestionnaireResponse.status.in_(WAITING_ON_VENDOR),
+                       or_(VendorQuestionnaireResponse.expires_at.is_(None), VendorQuestionnaireResponse.expires_at > now))
+               .order_by(VendorQuestionnaireResponse.id)):
+        qr.expires_at = now
+        expired.append(qr.id)
+    if expired:
+        tpra_service.write_audit(db, vendor.tenant_id, entity="questionnaire", action="expire", vendor_id=vendor.id,
+                                 actor_id=by, to_value=len(expired), reason=reason, extra={"questionnaire_ids": expired})
+    from ..tpra.supplier_requests import cancel_open       # late: that module imports the TPRA API
+    cancelled = cancel_open(db, vendor, by, reason)
+    return {"links_revoked": links, "questionnaires_expired": expired, "requests_cancelled": cancelled}
+
+
+def start_offboarding(db: Session, vendor: Vendor, by: Optional[int], reason: Optional[str]) -> dict:
+    """The supplier is offboarded and its side closed; the exit checklist is laid
+    out, with every standard step. Again on a supplier already offboarded, it
+    closes whatever was opened since. Audited; the caller commits."""
+    before = vendor.status
+    vendor.status = "offboarded"
+    held = [i for i in vendor.offboarding_checklist or [] if isinstance(i, dict)]
+    have = {i.get("item") for i in held}
+    vendor.offboarding_checklist = held + [i for i in _checklist() if i["item"] not in have]
+    closed = close_supplier_side(db, vendor, by, reason or "Offboarding")
+    tpra_service.write_audit(db, vendor.tenant_id, entity="vendor", action="offboard", vendor_id=vendor.id,
+                             entity_id=vendor.id, actor_id=by, from_value=before, to_value="offboarded",
+                             reason=reason, extra=closed)
+    return closed
+
+
+def _offboarding(vendor: Vendor, items: list) -> dict:
+    return {"items": items, "started": (vendor.status or "").lower() == "offboarded",
+            "archived_at": vendor.deleted_at.isoformat() if vendor.deleted_at else None}
+
+
 class OffboardingUpdate(BaseModel):
     # Full replacement list of {item, done} — the UI sends the current state.
     items: list
+
+
+class OffboardIn(BaseModel):
+    reason: Optional[str] = None
 
 
 @router.get("/vendors/{vendor_id}/offboarding")
@@ -258,11 +321,50 @@ def get_offboarding(
 ):
     tenant_ids = get_user_tenants(current_user, db)
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
-    checklist = vendor.offboarding_checklist or []
-    if not checklist:
-        # Surface the standard checklist without persisting until the user acts.
-        checklist = [{"item": i, "done": False, "at": None, "by": None} for i in DEFAULT_OFFBOARDING_CHECKLIST]
-    return {"items": checklist}
+    # Surface the standard checklist without persisting until the user acts.
+    return _offboarding(vendor, vendor.offboarding_checklist or _checklist())
+
+
+@router.post("/vendors/{vendor_id}/offboarding/start")
+def begin_offboarding(
+    vendor_id: int,
+    payload: OffboardIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Offboard the supplier: its portal links stop working and its unanswered
+    questionnaires expire. Its records stay."""
+    tenant_ids = get_user_tenants(current_user, db)
+    vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "vendors", "edit")
+    if vendor.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="This supplier is archived. Restore it first.")
+    closed = start_offboarding(db, vendor, current_user.id, " ".join((payload.reason or "").split()) or None)
+    vendor.updated_at = datetime.utcnow()
+    db.commit()
+    return {**_offboarding(vendor, vendor.offboarding_checklist), **closed}
+
+
+@router.post("/vendors/{vendor_id}/offboarding/complete")
+def complete_offboarding(
+    vendor_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Offboarding is done once every step is: the supplier is archived (restore
+    brings it back)."""
+    tenant_ids = get_user_tenants(current_user, db)
+    vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
+    rbac.require_write(db, current_user, "vendors", "delete")
+    if (vendor.status or "").lower() != "offboarded":
+        raise HTTPException(status_code=400, detail="Start offboarding first.")
+    open_steps = [i.get("item") for i in vendor.offboarding_checklist or [] if isinstance(i, dict) and not i.get("done")]
+    if open_steps:
+        raise HTTPException(status_code=409, detail={"message": "Some offboarding steps are not done.",
+                                                     "open": open_steps})
+    archive_vendor(db, vendor, current_user.id, "Offboarding complete")
+    db.commit()
+    return serialize_vendor(vendor)
 
 
 @router.patch("/vendors/{vendor_id}/offboarding")
@@ -290,4 +392,4 @@ def update_offboarding(
     vendor.offboarding_checklist = normalized
     vendor.updated_at = datetime.utcnow()
     db.commit()
-    return {"items": normalized}
+    return _offboarding(vendor, normalized)

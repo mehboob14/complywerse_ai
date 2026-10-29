@@ -6,6 +6,7 @@ import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { absoluteLink, portalApi } from '../_lib/portalApi';
 import { listOptions, useModuleSettings } from '@/components/settings/CustomFields';
 import {
   ClipboardList,
@@ -34,14 +35,23 @@ import Link from 'next/link';
 
 
 // An option carries a score (0..1) when the author gave one; a plain string is unscored.
-interface OptionDef { value: string; label?: string; score?: number | null }
+// na: "not applicable" (unscored; picking it needs a reason). comment_required: picking it needs a note.
+interface OptionDef { value: string; label?: string; score?: number | null; na?: boolean; comment_required?: boolean }
+
+type EvidenceMode = 'none' | 'optional' | 'required';
 
 interface Question {
   id: string;
   text: string;
-  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating';
+  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
   required: boolean;
-  evidence_required: boolean;
+  evidence_required: boolean;          // kept for older readers: evidence === 'required'
+  // Evidence the supplier gives with the answer; when required, owed on the answers in evidence_on (none listed: any).
+  evidence?: EvidenceMode;
+  evidence_on?: string[];
+  // Who reviews it: its section, else its risk domain (built-in templates), else General.
+  section?: string;
+  domain?: string;
   weight: number;
   options?: Array<string | OptionDef>;
   // A current certificate (SOC 2, ISO 27001) can answer this yes/no question.
@@ -54,6 +64,24 @@ interface Question {
 
 const optLabel = (o: string | OptionDef) => (typeof o === 'string' ? o : o.label ?? o.value);
 const optScore = (o: string | OptionDef) => (typeof o === 'string' ? null : o.score ?? null);
+const optValue = (o: string | OptionDef) => (typeof o === 'string' ? o : o.value);
+const optFlag = (o: string | OptionDef, flag: 'na' | 'comment_required') => typeof o !== 'string' && !!o[flag];
+
+// The answers a rule can name: Yes / Partial / No, or a choice's options.
+const answerValues = (q: Question) =>
+  q.type === 'yes_no' ? ['yes', 'partial', 'no'] : q.type === 'multiple_choice' ? (q.options || []).map(optValue) : [];
+// A question written before the evidence rules: evidence_required meant "on Yes or Partial".
+const evidenceOf = (q: Question): EvidenceMode => q.evidence ?? (q.evidence_required ? 'required' : 'optional');
+const evidenceOnOf = (q: Question) => (q.evidence ? q.evidence_on || []
+  : q.evidence_required && q.type === 'yes_no' ? ['yes', 'partial'] : []);
+// Saved as shown: the rule made explicit, answers it names that the question cannot have dropped.
+const withRules = (q: Question): Question => {
+  const evidence = q.type === 'file' ? 'none' : evidenceOf(q);
+  const values = answerValues(q);
+  return { ...q, evidence, evidence_on: evidence === 'required' ? evidenceOnOf(q).filter((v) => values.includes(v)) : [],
+           evidence_required: evidence === 'required' };
+};
+const EVIDENCE_LABEL: Record<EvidenceMode, string> = { none: 'No evidence', optional: 'Evidence optional', required: 'Evidence required' };
 
 interface QuestionnaireTemplate {
   id: number;
@@ -90,7 +118,8 @@ interface QuestionnaireResponseRecord {
   respondent_email: string | null;
   responses: Record<string, unknown>;
   status: string;
-  token: string | null;               // null once accepted: the vendor's link is closed
+  token: string | null;               // null once accepted, and on personal links (the contact has the link)
+  contact_id?: number | null;         // the supplier contact its personal links go to
   expires_at: string | null;
   due_date?: string | null;
   submitted_at: string | null;
@@ -195,15 +224,24 @@ export default function VendorQuestionnairesPage() {
   const { data: categorySettings } = useModuleSettings('vendors');
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('vendor_risk:questionnaires:create');
-  const canDelete = hasPermission('vendor_risk:questionnaires:delete');
+  // The rights the server checks (routers/questionnaires.py), with its erm:risks:edit fallback.
+  const canCreate = hasPermission('vendor_risk:templates:create') || hasPermission('erm:risks:edit');
+  const canEdit = hasPermission('vendor_risk:templates:edit') || hasPermission('erm:risks:edit');
+  const canDelete = hasPermission('vendor_risk:templates:delete') || hasPermission('erm:risks:edit');
+  const canResend = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
+  const canEditVendors = hasPermission('vendor_risk:vendors:edit') || hasPermission('erm:risks:edit');     // personal links are issued on the supplier
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<QuestionnaireTemplate | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<QuestionnaireTemplate | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sendSuccess, setSendSuccess] = useState<{ token: string } | null>(null);
+  // A send emails the contact a personal link, shown here once.
+  const [sendSuccess, setSendSuccess] = useState<{
+    link: string | null; emailed: boolean; contact: { name: string; email: string | null } | null; vendorId: number;
+  } | null>(null);
+  // '' = the supplier's primary contact, 'new' = someone typed in now, else a contact's id ('record': the supplier record's).
+  const [sendContact, setSendContact] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponseRecord | null>(null);
 
@@ -219,6 +257,7 @@ export default function VendorQuestionnairesPage() {
     type: 'text',
     required: true,
     evidence_required: false,
+    evidence: 'optional',
     weight: 3,
     options: [],
   });
@@ -284,6 +323,18 @@ export default function VendorQuestionnairesPage() {
     ...TPRM_QUERY_OPTS,
   });
 
+  // Who at the supplier it can go to: contacts a personal link can reach.
+  const { data: vendorContacts } = useQuery({
+    queryKey: ['tprm-contacts', Number(sendForm.vendor_id), false],
+    queryFn: async () => (await portalApi.contacts(Number(sendForm.vendor_id))).data.items,
+    enabled: !!sendForm.vendor_id,
+    ...TPRM_QUERY_OPTS,
+  });
+  const reachableContacts = (vendorContacts || []).filter((c) => c.email && c.portal_access && !c.archived_at);
+  const primaryContact = reachableContacts.find((c) => c.is_primary);
+  const contactChoice = sendContact || (primaryContact ? String(primaryContact.id ?? 'record')
+    : reachableContacts[0] ? String(reachableContacts[0].id ?? 'record') : 'new');
+
   const { data: questionnaireResponses } = useQuery({
     queryKey: ['questionnaire-responses'],
     queryFn: async () => {
@@ -344,23 +395,36 @@ export default function VendorQuestionnairesPage() {
     },
   });
 
-  // A resend issues a new link; the old one stops working.
+  // A resend emails the contact a new personal link (copied here too); a link of the
+  // questionnaire's own, from before personal links, stops working.
   const resendMutation = useMutation({
     mutationFn: async (id: number) => (await vendorRiskApi.resendQuestionnaire(id)).data,
-    onSuccess: (data: { token?: string | null }) => {
+    onSuccess: (data: { token?: string | null; link?: string | null }) => {
       queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
-      if (data?.token) copyLink(buildQuestionnaireLink(data.token));
+      if (data?.link) copyLink(absoluteLink(data.link));
+      else if (data?.token) copyLink(buildQuestionnaireLink(data.token));
     },
+    onError: (e: any) => window.alert(e?.response?.data?.detail || 'The questionnaire could not be sent again.'),
+  });
+
+  // A questionnaire on personal links has no link of its own: a fresh one for its contact, to copy.
+  const copyContactLink = useMutation({
+    mutationFn: async (r: QuestionnaireResponseRecord) =>
+      `${absoluteLink((await portalApi.issueLink(r.vendor_id, r.contact_id as number, { send_email: false })).data.link)}?q=${r.id}`,
+    onSuccess: (link) => copyLink(link),
+    onError: (e: any) => window.alert(e?.response?.data?.detail || 'No link could be made.'),
   });
 
   const sendMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
+    mutationFn: async (data: Parameters<typeof vendorRiskApi.sendQuestionnaire>[0] & { contact_id?: number }) => {
       const res = await vendorRiskApi.sendQuestionnaire(data);
       return res.data;
     },
-    onSuccess: (data: any) => {
-      setSendSuccess({ token: data.token });
+    onSuccess: (data: any, sent) => {
+      setSendSuccess({ link: data.link ? absoluteLink(data.link) : null, emailed: !!data.emailed,
+                       contact: data.contact || null, vendorId: Number(sent.vendor_id) });
       queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
+      queryClient.invalidateQueries({ queryKey: ['tprm-contacts'] });
     },
   });
 
@@ -414,11 +478,42 @@ export default function VendorQuestionnairesPage() {
       questions: prev.questions.map((q, i) =>
         i === qIdx
           ? { ...q, options: (q.options || []).map((o, j) => (j !== optIdx ? o : {
-              value: optLabel(o), label: optLabel(o),
+              ...(typeof o === 'string' ? {} : o), value: optLabel(o), label: optLabel(o),
               score: pct === '' ? null : Math.max(0, Math.min(100, Number(pct))) / 100,
             })) }
           : q
       ),
+    }));
+  };
+
+  const setEvidence = (qIdx: number, patch: { evidence?: EvidenceMode; evidence_on?: string[] }) => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => (i !== qIdx ? q
+        : { ...q, evidence: patch.evidence ?? evidenceOf(q), evidence_on: patch.evidence_on ?? evidenceOnOf(q) })),
+    }));
+  };
+
+  // N/A (unscored, needs a reason) or "Needs a note" on one option. A Yes / No question lists only the
+  // options it changes; the rest are the standard ones (filled in when it is sent).
+  const toggleOptionFlag = (qIdx: number, value: string, flag: 'na' | 'comment_required') => {
+    setTemplateForm((prev) => ({
+      ...prev,
+      questions: prev.questions.map((q, i) => {
+        if (i !== qIdx) return q;
+        if (q.type === 'yes_no') {
+          const given = (q.options || []).filter((o): o is OptionDef => typeof o !== 'string');
+          return { ...q, options: given.some((o) => o.value === value)
+            ? given.map((o) => (o.value === value ? { ...o, [flag]: !o[flag] } : o))
+            : [...given, { value, [flag]: true }] };
+        }
+        return { ...q, options: (q.options || []).map((o) => {
+          if (optValue(o) !== value) return o;
+          const def: OptionDef = typeof o === 'string' ? { value: o, label: o } : { ...o };
+          const on = !def[flag];
+          return { ...def, [flag]: on, ...(flag === 'na' && on ? { score: null } : {}) };
+        }) };
+      }),
     }));
   };
 
@@ -447,7 +542,7 @@ export default function VendorQuestionnairesPage() {
       name: templateForm.name,
       description: templateForm.description,
       category: templateForm.category,
-      questions: templateForm.questions.filter((q) => q.text.trim()),
+      questions: templateForm.questions.filter((q) => q.text.trim()).map(withRules),
     });
   };
 
@@ -457,8 +552,10 @@ export default function VendorQuestionnairesPage() {
       template_id: selectedTemplateId,
       vendor_id: Number(sendForm.vendor_id),
       assessment_id: sendForm.assessment_id ? Number(sendForm.assessment_id) : undefined,
-      respondent_email: sendForm.respondent_email || undefined,
-      respondent_name: sendForm.respondent_name || undefined,
+      // Nothing named: the server sends it to the supplier's primary contact.
+      ...(contactChoice === 'new'
+        ? { respondent_email: sendForm.respondent_email || undefined, respondent_name: sendForm.respondent_name || undefined }
+        : contactChoice === 'record' ? {} : { contact_id: Number(contactChoice) }),
       due_in_days: sendForm.due_in_days,
       expires_in_days: Math.max(sendForm.expires_in_days, sendForm.due_in_days),
       ...(sendForm.certificate_mode !== 'off' && sendForm.certificate_evidence_id
@@ -535,7 +632,10 @@ export default function VendorQuestionnairesPage() {
     { value: 'yes_no', label: 'Yes / No' },
     { value: 'multiple_choice', label: 'Multiple Choice' },
     { value: 'rating', label: 'Rating (1-5)' },
+    { value: 'file', label: 'File upload' },
   ];
+  // Sections already used in this template, offered as choices.
+  const sectionsUsed = Array.from(new Set(templateForm.questions.map((q) => (q.section || '').trim()).filter(Boolean)));
 
   const weightItems = [1, 2, 3, 4, 5].map((w) => ({ value: String(w), label: String(w) }));
 
@@ -653,7 +753,7 @@ export default function VendorQuestionnairesPage() {
                     >
                       <Eye className="h-4 w-4" strokeWidth={1.75} />
                     </button>
-                    {canCreate && (
+                    {canEdit && (
                       <button
                         onClick={() => openEditor(template)}
                         aria-label={`Edit template ${template.name}`}
@@ -840,17 +940,30 @@ export default function VendorQuestionnairesPage() {
                                 </a>
                               </>
                             )}
-                            {canCreate && waitingOnVendor && (
+                            {!responseLink && waitingOnVendor && response.contact_id && canEditVendors && (
+                              <button
+                                onClick={() => copyContactLink.mutate(response)}
+                                disabled={copyContactLink.isPending}
+                                aria-label={`Copy the contact's link for response #${response.id}`}
+                                className="p-1.5 text-gray-500 hover:text-gray-700 rounded disabled:opacity-50"
+                                title="Copy the contact's personal link"
+                              >
+                                <Copy className="h-4 w-4" strokeWidth={1.75} />
+                              </button>
+                            )}
+                            {canResend && waitingOnVendor && (
                               <button
                                 onClick={() => {
-                                  if (window.confirm('Send a new link? The current link stops working, and the new one is copied for you.')) {
+                                  if (window.confirm(response.token
+                                    ? 'Send a new link? The current link stops working, and the new one is copied for you.'
+                                    : 'Email the contact a new link? It is copied for you too.')) {
                                     resendMutation.mutate(response.id);
                                   }
                                 }}
                                 disabled={resendMutation.isPending}
                                 aria-label={`Send a new link for response #${response.id}`}
                                 className="p-1.5 text-gray-500 hover:text-primary-700 rounded disabled:opacity-50"
-                                title="Send a new link (the old one stops working)"
+                                title="Send a new link"
                               >
                                 {resendMutation.isPending && resendMutation.variables === response.id
                                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1113,15 +1226,26 @@ export default function VendorQuestionnairesPage() {
                           />
                           Required
                         </label>
-                        <label className="flex items-center gap-1.5 text-xs text-orange-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={q.evidence_required}
-                            onChange={(e) => updateQuestion(idx, 'evidence_required', e.target.checked)}
-                            className="rounded border-orange-300 text-orange-600"
-                          />
-                          <Paperclip className="h-3 w-3" />
-                          Evidence Required
+                        {q.type !== 'file' && (
+                          <label className="flex items-center gap-1.5 text-xs text-orange-700">
+                            <Paperclip className="h-3 w-3" />
+                            <span className="sr-only">Evidence for question {idx + 1}</span>
+                            <select value={evidenceOf(q)} onChange={(e) => setEvidence(idx, { evidence: e.target.value as EvidenceMode })}
+                              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700">
+                              <option value="none">No evidence</option>
+                              <option value="optional">Evidence optional</option>
+                              <option value="required">Evidence required</option>
+                            </select>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500"
+                          title="Questions in the same section are reviewed together">
+                          Section
+                          <input value={q.section || ''} list={`sections-${idx}`} maxLength={100}
+                            placeholder={q.domain ? q.domain.replace(/_/g, ' ') : 'General'}
+                            onChange={(e) => updateQuestion(idx, 'section', e.target.value || undefined)}
+                            className="w-32 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900" />
+                          <datalist id={`sections-${idx}`}>{sectionsUsed.map((s) => <option key={s} value={s} />)}</datalist>
                         </label>
                         {q.type === 'yes_no' && (
                           <label className="flex items-center gap-1.5 text-xs text-emerald-700 cursor-pointer"
@@ -1137,6 +1261,40 @@ export default function VendorQuestionnairesPage() {
                           </label>
                         )}
                       </div>
+
+                      {/* Evidence owed only on some answers (none picked: any answer) */}
+                      {evidenceOf(q) === 'required' && answerValues(q).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                          <span>Needed when the answer is</span>
+                          {answerValues(q).map((v) => {
+                            const on = evidenceOnOf(q).includes(v);
+                            return (
+                              <button key={v} type="button" aria-pressed={on}
+                                onClick={() => setEvidence(idx, { evidence_on: on ? evidenceOnOf(q).filter((x) => x !== v) : [...evidenceOnOf(q), v] })}
+                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-orange-300 bg-orange-50 text-orange-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                {v}
+                              </button>
+                            );
+                          })}
+                          {evidenceOnOf(q).length === 0 && <span className="text-gray-400">any answer</span>}
+                        </div>
+                      )}
+
+                      {/* A Yes / No answer that needs a note (N/A always needs a reason) */}
+                      {q.type === 'yes_no' && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                          <span title="Not applicable always needs a reason">Needs a note on</span>
+                          {['yes', 'partial', 'no'].map((v) => {
+                            const on = (q.options || []).some((o) => optValue(o) === v && optFlag(o, 'comment_required'));
+                            return (
+                              <button key={v} type="button" aria-pressed={on} onClick={() => toggleOptionFlag(idx, v, 'comment_required')}
+                                className={`rounded-full border px-2 py-0.5 ${on ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                {v}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {/* Conditional: ask only when an earlier question was answered a certain way */}
                       {idx > 0 && (() => {
@@ -1233,8 +1391,19 @@ export default function VendorQuestionnairesPage() {
                                 placeholder="score %"
                                 aria-label={`Score for option ${optIdx + 1}`}
                                 title="How good this answer is, 0 to 100. Leave empty for an answer that does not count."
-                                className="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-right"
+                                disabled={optFlag(opt, 'na')}
+                                className="w-20 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-right disabled:opacity-50"
                               />
+                              {([['na', 'N/A', 'Not applicable: not scored, and picking it needs a reason'],
+                                 ['comment_required', 'Note', 'Picking it needs a note']] as const).map(([flag, text, tip]) => (
+                                <button key={flag} type="button" title={tip} aria-pressed={optFlag(opt, flag)}
+                                  disabled={!optLabel(opt).trim()}
+                                  onClick={() => toggleOptionFlag(idx, optValue(opt), flag)}
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] disabled:opacity-40 ${optFlag(opt, flag)
+                                    ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-gray-200 bg-white text-gray-500'}`}>
+                                  {text}
+                                </button>
+                              ))}
                               <button type="button" onClick={() => removeOption(idx, optIdx)} className="text-gray-400 hover:text-red-500">
                                 <X className="h-3 w-3" />
                               </button>
@@ -1294,11 +1463,13 @@ export default function VendorQuestionnairesPage() {
                         </span>
                         <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
                         {q.required && <span className="text-xs text-primary-600">Required</span>}
-                        {q.evidence_required && (
+                        {q.type !== 'file' && evidenceOf(q) !== 'optional' && (
                           <span className="text-xs text-orange-600 flex items-center gap-1">
-                            <Paperclip className="h-3 w-3" /> Evidence Required
+                            <Paperclip className="h-3 w-3" /> {EVIDENCE_LABEL[evidenceOf(q)]}
+                            {evidenceOf(q) === 'required' && evidenceOnOf(q).length > 0 && ` (${evidenceOnOf(q).join(', ')})`}
                           </span>
                         )}
+                        {(q.section || q.domain) && <span className="text-xs text-gray-500">{q.section || q.domain.replace(/_/g, ' ')}</span>}
                       </div>
                       {q.type === 'multiple_choice' && q.options?.length > 0 && (
                         <div className="mt-2 pl-2 space-y-1">
@@ -1328,8 +1499,8 @@ export default function VendorQuestionnairesPage() {
           setSendSuccess(null);
           setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30, certificate_evidence_id: '', certificate_mode: 'off' });
         }}
-        title="Generate vendor link"
-        subtitle="Mints a private response link — no email is sent automatically."
+        title="Send questionnaire"
+        subtitle="The contact is emailed a personal link to the supplier portal."
         width="w-full max-w-3xl"
         footer={
           sendSuccess ? (
@@ -1368,12 +1539,12 @@ export default function VendorQuestionnairesPage() {
                 {sendMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
+                    Sending...
                   </>
                 ) : (
                   <>
                     <LinkIcon className="h-4 w-4" strokeWidth={1.75} />
-                    Generate link
+                    Send
                   </>
                 )}
               </button>
@@ -1385,35 +1556,43 @@ export default function VendorQuestionnairesPage() {
           <div className="space-y-4">
             <div className="rounded-lg border border-primary-200 bg-primary-50 p-4 text-center">
               <LinkIcon className="mx-auto mb-2 h-8 w-8 text-primary-600" strokeWidth={1.75} />
-              <p className="text-sm font-medium text-primary-800">Vendor link generated</p>
+              <p className="text-sm font-medium text-primary-800">
+                {!sendSuccess.link ? 'Questionnaire saved' : sendSuccess.emailed
+                  ? `Sent to ${sendSuccess.contact?.name || 'the contact'}` : 'Email not sent'}
+              </p>
               <p className="mt-1 text-xs text-primary-700">
-                No email is sent yet — copy this link and share it with the vendor.
+                {!sendSuccess.link ? (
+                  <>No contact to send it to. Add one under the supplier’s{' '}
+                    <Link href={`/vendor-risk/vendors/${sendSuccess.vendorId}?tab=portal`} className="font-medium underline">Supplier portal</Link> tab.</>
+                ) : sendSuccess.emailed ? sendSuccess.contact?.email : 'Copy the link and send it yourself.'}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Vendor response link</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={buildQuestionnaireLink(sendSuccess.token)}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className={`${inputClass} font-mono text-xs`}
-                />
-                <button
-                  type="button"
-                  onClick={() => copyLink(buildQuestionnaireLink(sendSuccess.token))}
-                  aria-label="Copy vendor response link"
-                  className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
-                >
-                  {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
-                  {linkCopied ? 'Copied' : 'Copy'}
-                </button>
+            {sendSuccess.link && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">Personal link</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={sendSuccess.link}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className={`${inputClass} font-mono text-xs`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyLink(sendSuccess.link as string)}
+                    aria-label="Copy the personal link"
+                    className="cw-btn-primary inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-2 text-sm"
+                  >
+                    {linkCopied ? <Check className="h-4 w-4" strokeWidth={1.75} /> : <Copy className="h-4 w-4" strokeWidth={1.75} />}
+                    {linkCopied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Shown once. It opens the supplier’s portal, with this questionnaire, for 30 days.
+                </p>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">
-                The link is private to this vendor. Anyone with it can complete the questionnaire until it expires.
-              </p>
-            </div>
+            )}
           </div>
         ) : (
           <form id="send-questionnaire-form" onSubmit={handleSendSubmit} className="space-y-4">
@@ -1426,16 +1605,16 @@ export default function VendorQuestionnairesPage() {
                   selectedValues={sendForm.vendor_id ? [sendForm.vendor_id] : []}
                   onApply={(values) => {
                     const vendorId = values[0] || '';
-                    const v = (vendors ?? []).find((x) => String(x.id) === vendorId);
                     const vendorAssessments = (assessments || []).filter(
                       (item) => String(item.vendor_id) === vendorId
                     );
+                    setSendContact('');                // the new supplier's primary contact, unless changed
                     setSendForm({
                       ...sendForm,
                       vendor_id: vendorId,
                       assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
-                      respondent_email: v?.primary_contact_email || sendForm.respondent_email,
-                      respondent_name: v?.primary_contact_name || sendForm.respondent_name,
+                      respondent_email: '',
+                      respondent_name: '',
                     });
                   }}
                   multiSelect={false}
@@ -1470,26 +1649,45 @@ export default function VendorQuestionnairesPage() {
                   placeholder={sendForm.vendor_id ? 'No linked assessment' : 'Select vendor first'}
                 />
               </div>
-              <div>
-                <label className={labelClass}>Respondent Name</label>
-                <input
-                  type="text"
-                  value={sendForm.respondent_name}
-                  onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
-                  className={inputClass}
-                  placeholder="Vendor contact name"
-                />
+              <div className="md:col-span-2">
+                <label className={labelClass} htmlFor="send-contact">Send to</label>
+                <select id="send-contact" value={contactChoice} disabled={!sendForm.vendor_id}
+                  onChange={(e) => setSendContact(e.target.value)} className={inputClass}>
+                  {reachableContacts.map((c) => (
+                    <option key={c.id ?? 'record'} value={String(c.id ?? 'record')}>
+                      {c.name} · {c.email}{c.is_primary ? ' (primary)' : ''}
+                    </option>
+                  ))}
+                  <option value="new">New contact…</option>
+                </select>
               </div>
-              <div>
-                <label className={labelClass}>Respondent Email</label>
-                <input
-                  type="email"
-                  value={sendForm.respondent_email}
-                  onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
-                  className={inputClass}
-                  placeholder="vendor-contact@example.com"
-                />
-              </div>
+              {contactChoice === 'new' && (
+                <>
+                  <div>
+                    <label className={labelClass} htmlFor="send-new-name">Name</label>
+                    <input
+                      id="send-new-name"
+                      type="text"
+                      value={sendForm.respondent_name}
+                      onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
+                      className={inputClass}
+                      placeholder="Contact name"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass} htmlFor="send-new-email">Email</label>
+                    <input
+                      id="send-new-email"
+                      type="email"
+                      required
+                      value={sendForm.respondent_email}
+                      onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
+                      className={inputClass}
+                      placeholder="contact@supplier.com"
+                    />
+                  </div>
+                </>
+              )}
               <div>
                 <label className={labelClass} htmlFor="send-due-days">Answers due in (days)</label>
                 <input

@@ -24,6 +24,7 @@ class TPRAActionItem(Base):
     due_on = Column(Date, nullable=False)
     assignee_ids = Column(JSON, nullable=True)          # user ids; none means the supplier's owner
     template_id = Column(Integer, nullable=True)        # the questionnaire to send
+    engagement_id = Column(Integer, nullable=True)      # the engagement it is for; none means General
     status = Column(String(20), nullable=False, default="scheduled")   # scheduled | done | failed | cancelled
     done_at = Column(DateTime, nullable=True)
     done_by = Column(Integer, nullable=True)            # null when the sweep did it

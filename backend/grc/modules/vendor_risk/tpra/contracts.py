@@ -39,6 +39,10 @@ BILLING = ("monthly", "quarterly", "annually")
 PRICING_NUMBERS = ("unit_price", "included_units", "overage_price", "one_time_fees", "price_cap_pct")
 TERM_FIELDS = ("reference", "record_link", "renewal_type", "notice_days", "annual_value", "currency",
                "billing", "pricing", "termination")
+# The clauses a security review asks about: yes, no, or None until someone has checked.
+# Written by PUT /contracts/{id}/clauses (the general contract write in api.py knows only the terms).
+CLAUSE_FIELDS = ("right_to_audit", "subprocessor_terms", "exit_data_return", "security_addendum",
+                 "breach_notification_hours")
 INBOX_DAYS = 90        # a contract ending within this is in the inbox
 DECIDE_DAYS = 30       # this close to the last day to give notice, somebody must decide
 FILE_TYPES = {".pdf", ".docx", ".txt", ".rtf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
@@ -149,6 +153,13 @@ def clean(raw: Dict[str, object]) -> Dict[str, object]:
                 raise ValueError("The link must be a web address starting with http:// or https://")
         elif key == "termination":
             value = str(value).strip()[:2000]
+        elif key == "breach_notification_hours":
+            value = int(_number(key, value, whole=True, high=8760))
+        elif key in CLAUSE_FIELDS:
+            if not isinstance(value, bool):
+                if str(value).strip().lower() not in ("true", "yes", "false", "no"):
+                    raise ValueError(f"{key.replace('_', ' ').capitalize()} must be yes or no")
+                value = str(value).strip().lower() in ("true", "yes")
         elif key == "pricing":
             if not isinstance(value, dict):
                 raise ValueError("Pricing must be an object")
@@ -228,8 +239,9 @@ def describe(c: TPRAContract, v: Vendor, today: date, decide: int) -> dict:
         "effective_date": _plain(c.effective_date), "renewal_date": _plain(c.renewal_date),
         "expiry_date": _plain(c.expiry_date), "ends_on": _plain(end), "act_by": _plain(due),
         "days_left": (due - today).days if due else None,
-        **{k: getattr(c, k) for k in TERM_FIELDS}, "terms": c.terms,
+        **{k: getattr(c, k) for k in TERM_FIELDS}, **{k: getattr(c, k) for k in CLAUSE_FIELDS}, "terms": c.terms,
         "evidence_id": c.evidence_id, "assessment_id": c.assessment_id, "row_version": c.row_version,
+        "engagement_id": c.engagement_id,   # None: the whole supplier
     }
 
 
@@ -327,6 +339,33 @@ def renew(contract_id: int, body: RenewIn, db: Session = Depends(get_db), user: 
     service.write_audit(db, c.tenant_id, entity="contract", action="renew", vendor_id=v.id, entity_id=c.id,
                         actor_id=user.id, from_value=_plain(old_end), to_value=_plain(new_end),
                         reason=" ".join((body.note or "").split()) or None, extra={"changes": changes})
+    db.commit()
+    return describe(c, v, datetime.utcnow().date(), decide_days(db, c.tenant_id))
+
+
+# ── the clauses a security review asks about ─────────────────────────────────
+
+class ClausesIn(BaseModel):
+    right_to_audit: Optional[bool] = None
+    subprocessor_terms: Optional[bool] = None
+    exit_data_return: Optional[bool] = None
+    security_addendum: Optional[bool] = None
+    breach_notification_hours: Optional[int] = None
+
+
+@router.put("/contracts/{contract_id}/clauses")
+def set_clauses(contract_id: int, body: ClausesIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Record what the contract says on each clause; a field left out keeps its value. The
+    contract's row version is left alone, so the drawer can save its terms after this."""
+    c, v = _contract(db, contract_id, _tids(user, db))
+    rbac.require_write(db, user, "contracts", "edit")
+    try:
+        changes = apply(c, clean({k: getattr(body, k) for k in body.model_fields_set}))
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if changes:
+        service.write_audit(db, c.tenant_id, entity="contract", action="update", vendor_id=v.id, entity_id=c.id,
+                            actor_id=user.id, to_value=", ".join(changes)[:500], extra={"changes": changes})
     db.commit()
     return describe(c, v, datetime.utcnow().date(), decide_days(db, c.tenant_id))
 

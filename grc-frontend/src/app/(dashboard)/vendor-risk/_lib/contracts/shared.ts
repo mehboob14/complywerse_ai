@@ -17,8 +17,28 @@ export interface ContractRow {
   reference: string | null; record_link: string | null; renewal_type: RenewalType | null; notice_days: number | null;
   annual_value: number | null; currency: string | null; billing: string | null; pricing: Pricing | null;
   termination: string | null; terms: string | null; evidence_id: number | null; assessment_id: number | null;
+  /** The engagement it covers; null: the whole supplier. */
+  engagement_id: number | null;
   row_version: number;
+  // The clauses a security review asks about: null until someone has checked.
+  right_to_audit: boolean | null; subprocessor_terms: boolean | null; exit_data_return: boolean | null;
+  security_addendum: boolean | null; breach_notification_hours: number | null;
 }
+
+export type ClauseKey = 'right_to_audit' | 'subprocessor_terms' | 'exit_data_return' | 'security_addendum';
+
+/** Each yes/no clause, with why it matters in one line. */
+export const CLAUSES: Array<{ key: ClauseKey; label: string; gap: string; tip: string }> = [
+  { key: 'right_to_audit', label: 'Right to audit', gap: 'No right to audit',
+    tip: 'Lets us, or an auditor we name, check the supplier’s controls ourselves instead of relying only on its reports.' },
+  { key: 'subprocessor_terms', label: 'Sub-processor terms', gap: 'No sub-processor terms',
+    tip: 'The supplier must tell us before another company handles our data, and hold that company to the same terms.' },
+  { key: 'exit_data_return', label: 'Exit and data return', gap: 'No exit terms',
+    tip: 'When the contract ends our data comes back in a usable form and is then deleted, so we can leave without losing it.' },
+  { key: 'security_addendum', label: 'Security terms', gap: 'No security terms',
+    tip: 'Security commitments written into the contract, so falling short of them is a breach we can act on.' },
+];
+export const BREACH_TIP = 'How soon the supplier must tell us of a breach. Regulators often give us 72 hours, so the supplier’s window must be shorter.';
 
 export interface Obligation {
   id: number; obligation: string; control_ref: string | null; renewal_date: string | null; status: string; row_version: number;
@@ -70,6 +90,9 @@ export const FIELD_LABEL: Record<string, string> = {
   effective_date: 'start date', renewal_date: 'renewal date', expiry_date: 'end date', renewal_type: 'renewal',
   notice_days: 'notice', annual_value: 'annual value', currency: 'currency', billing: 'billing', pricing: 'pricing',
   termination: 'termination', terms: 'notes', assessment_id: 'assessment', document_id: 'document',
+  engagement_id: 'applies to',
+  right_to_audit: 'right to audit', subprocessor_terms: 'sub-processor terms', exit_data_return: 'exit and data return',
+  security_addendum: 'security terms', breach_notification_hours: 'breach notice',
 };
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

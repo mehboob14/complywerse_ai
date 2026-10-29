@@ -17,6 +17,9 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import TPRAActionItem  # read by the action plan, check-in and alert sweeps
 from grc.models import TPRACheckin  # read by the check-in schedule
+from grc.models import TPRAEngagement  # where a scope keeps its own tier, and each one's review date
+from grc.models import TPRAReviewAssignment  # planning counts the people assigned to review
+from grc.models import TPRASupplierRequest  # read by the supplier-request conditions
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Role, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRAQuestion,
@@ -34,7 +37,8 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAApproval,
            TPRAStageInstance, TPRAContract, TPRAControlObligation, TPRARemediation, TPRARiskAcceptance,
-           TPRARiskSnapshot, AttentionState, AttentionActivity, TPRACheckin, TPRAActionItem]
+           TPRARiskSnapshot, AttentionState, AttentionActivity, TPRACheckin, TPRAActionItem, TPRAEngagement, TPRASupplierRequest,
+           TPRAReviewAssignment]
 TODAY = datetime.utcnow().date()
 
 
@@ -172,6 +176,7 @@ def test_the_approval_route_enforces_the_tiers_approver(db, monkeypatch):
     monkeypatch.setattr(rbac, "_is_admin_or_primary", lambda *a, **k: False)
     _policy(db, critical={"approver_role": "CISO"})
     vendor = _vendor(db, tier="critical")
+    vendor.owner_id = None              # the approver is not its business owner (segregation of duties)
     a = VendorAssessment(tenant_id=1, vendor_id=vendor.id, status="reviewed", inherent_tier="critical",
                          residual_score=30.0, residual_rating="medium", lifecycle_status="active")
     db.add(a)

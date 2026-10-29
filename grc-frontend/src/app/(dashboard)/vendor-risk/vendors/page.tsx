@@ -9,7 +9,8 @@ import {
   AlertCircle,
   Plus,
   Eye,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   Upload,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -41,8 +42,19 @@ interface Vendor {
   description: string | null;
   services_provided: string[] | null;
   lifecycle_stage?: string | null;
+  archived_at?: string | null;
   created_at: string;
+  /** Engagements still in use, General left out. */
+  open_engagements?: number;
+  /** The one thing to do next, worked out on the server; null when nothing waits. */
+  next_action?: { code: string; label: string; link: string } | null;
 }
+
+// Next actions that are already late, shown in red.
+const LATE_ACTIONS = new Set(['suspended', 'reassessment_overdue', 'documents_expired']);
+
+// The register fetches every supplier, this many at a time.
+const PAGE_SIZE = 500;
 
 interface UserOption {
   id: number;
@@ -109,17 +121,19 @@ export default function VendorListPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:vendors:create');
-  const canDelete =
+  // Archive and restore: what the server checks (vendors:delete, or its erm:risks:edit fallback).
+  const canArchive =
     hasPermission('vendor_risk:vendors:delete') ||
-    hasPermission('vendor_risk:vendors:edit');
+    hasPermission('erm:risks:edit');
   const [showModal, setShowModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [deletingVendorId, setDeletingVendorId] = useState<number | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Vendor | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [busyVendorId, setBusyVendorId] = useState<number | null>(null);
+  const [pendingArchive, setPendingArchive] = useState<Vendor | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -146,12 +160,17 @@ export default function VendorListPage() {
   const [customValues, setCustomValues] = useState<CustomValues>({});
   const { data: fieldSettings } = useModuleSettings('vendors');
 
+  // Every supplier, archived ones included (the Archived view shows them), a page at a time.
   const { data: vendors, isLoading, error, refetch } = useQuery({
     queryKey: ['vendors'],
     queryFn: async () => {
-      const res = await vendorRiskApi.getVendors();
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as Vendor[];
+      const all: Vendor[] = [];
+      for (;;) {
+        const { data } = await vendorRiskApi.getVendors({ include_archived: true, skip: all.length, limit: PAGE_SIZE });
+        const page = (Array.isArray(data) ? data : data.items ?? []) as Vendor[];
+        all.push(...page);
+        if (Array.isArray(data) || page.length === 0 || all.length >= (data.total ?? 0)) return all;
+      }
     },
     placeholderData: keepPreviousData,
     ...TPRM_QUERY_OPTS,
@@ -195,12 +214,13 @@ export default function VendorListPage() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (vendorId: number) => {
-      await vendorRiskApi.deleteVendor(vendorId);
+  // Archive (DELETE, nothing is removed) or restore.
+  const archiveMutation = useMutation({
+    mutationFn: async ({ vendorId, restore }: { vendorId: number; restore?: boolean }) => {
+      await (restore ? vendorRiskApi.restoreVendor(vendorId) : vendorRiskApi.deleteVendor(vendorId));
     },
-    onMutate: (vendorId) => {
-      setDeletingVendorId(vendorId);
+    onMutate: ({ vendorId }) => {
+      setBusyVendorId(vendorId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
@@ -209,7 +229,7 @@ export default function VendorListPage() {
       queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
     },
     onSettled: () => {
-      setDeletingVendorId(null);
+      setBusyVendorId(null);
     },
   });
 
@@ -253,20 +273,22 @@ export default function VendorListPage() {
     createMutation.mutate(payload);
   };
 
+  const archivedCount = vendors?.filter((v) => v.archived_at).length ?? 0;
   const filtered = useMemo(() => {
     if (!vendors) return [];
     return vendors.filter((v) => {
+      const matchArchived = !!v.archived_at === showArchived;
       const matchSearch = !searchTerm || v.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchTier = tierFilter === 'all' || v.tier?.toLowerCase() === tierFilter;
       const matchStatus = statusFilter === 'all' || v.status?.toLowerCase() === statusFilter;
-      return matchSearch && matchTier && matchStatus;
+      return matchArchived && matchSearch && matchTier && matchStatus;
     });
-  }, [vendors, searchTerm, tierFilter, statusFilter]);
+  }, [vendors, searchTerm, tierFilter, statusFilter, showArchived]);
 
-  const confirmDeleteVendor = () => {
-    if (!pendingDelete) return;
-    deleteMutation.mutate(pendingDelete.id, {
-      onSuccess: () => setPendingDelete(null),
+  const confirmArchiveVendor = () => {
+    if (!pendingArchive) return;
+    archiveMutation.mutate({ vendorId: pendingArchive.id }, {
+      onSuccess: () => setPendingArchive(null),
     });
   };
 
@@ -369,6 +391,17 @@ export default function VendorListPage() {
             onApply={(v) => setStatusFilter(v[0] || 'all')}
             multiSelect={false}
           />
+          <button
+            type="button"
+            aria-pressed={showArchived}
+            onClick={() => setShowArchived((on) => !on)}
+            className={`inline-flex h-10 items-center gap-2 rounded-full border bg-white px-3 text-sm text-slate-900 transition-colors ${
+              showArchived ? 'border-primary-500 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]' : 'border-slate-300 hover:border-slate-400'
+            }`}
+          >
+            <Archive className="h-4 w-4 text-slate-600" />
+            Archived{archivedCount ? ` (${archivedCount})` : ''}
+          </button>
         </div>
       </div>
 
@@ -383,6 +416,7 @@ export default function VendorListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Risk Rating</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lifecycle</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Next action</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data Access</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contract End</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Owner</th>
@@ -392,9 +426,9 @@ export default function VendorListPage() {
             <tbody className="bg-white divide-y divide-slate-200">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
                     <AlertCircle className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                    No vendors found
+                    {showArchived ? 'No archived vendors' : 'No vendors found'}
                   </td>
                 </tr>
               ) : (
@@ -405,6 +439,11 @@ export default function VendorListPage() {
                         <VendorLogo vendorId={vendor.id} name={vendor.name} size={22} cachedOnly />
                         {vendor.name}
                       </Link>
+                      {!!vendor.open_engagements && (
+                        <Link href={`/vendor-risk/vendors/${vendor.id}?tab=engagements`} className="ml-[30px] block text-[11px] text-slate-500 hover:text-slate-700">
+                          {vendor.open_engagements} engagement{vendor.open_engagements === 1 ? '' : 's'}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
@@ -433,6 +472,16 @@ export default function VendorListPage() {
                         <span className="text-[11px] text-slate-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3">
+                      {vendor.next_action ? (
+                        <Link href={vendor.next_action.link}
+                          className={`text-xs font-medium hover:underline ${LATE_ACTIONS.has(vendor.next_action.code) ? 'text-rose-700' : 'text-primary-700'}`}>
+                          {vendor.next_action.label}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-slate-400">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-slate-500">
                       {vendor.contract_end_date ? new Date(vendor.contract_end_date).toLocaleDateString() : '-'}
@@ -450,18 +499,22 @@ export default function VendorListPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
-                        {canDelete && (
+                        {canArchive && (
                           <button
-                            onClick={() => setPendingDelete(vendor)}
-                            disabled={deleteMutation.isPending && deletingVendorId === vendor.id}
-                            className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                            aria-label={`Delete vendor ${vendor.name}`}
-                            title="Delete vendor"
+                            onClick={() => (vendor.archived_at
+                              ? archiveMutation.mutate({ vendorId: vendor.id, restore: true })
+                              : setPendingArchive(vendor))}
+                            disabled={archiveMutation.isPending && busyVendorId === vendor.id}
+                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                            aria-label={`${vendor.archived_at ? 'Restore' : 'Archive'} vendor ${vendor.name}`}
+                            title={vendor.archived_at ? 'Restore' : 'Archive'}
                           >
-                            {deleteMutation.isPending && deletingVendorId === vendor.id ? (
+                            {archiveMutation.isPending && busyVendorId === vendor.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : vendor.archived_at ? (
+                              <ArchiveRestore className="h-4 w-4" />
                             ) : (
-                              <Trash2 className="h-4 w-4" />
+                              <Archive className="h-4 w-4" />
                             )}
                           </button>
                         )}
@@ -732,36 +785,36 @@ export default function VendorListPage() {
         </form>
       </RightSlidePanel>
 
-      {/* Accessible delete confirmation — replaces window.confirm */}
+      {/* Accessible archive confirmation — replaces window.confirm */}
       <AnimatedModal
-        isOpen={pendingDelete !== null}
-        onClose={() => { if (!deleteMutation.isPending) setPendingDelete(null); }}
-        title="Delete vendor"
-        subtitle={pendingDelete ? pendingDelete.name : undefined}
+        isOpen={pendingArchive !== null}
+        onClose={() => { if (!archiveMutation.isPending) setPendingArchive(null); }}
+        title="Archive vendor"
+        subtitle={pendingArchive ? pendingArchive.name : undefined}
         size="md"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setPendingDelete(null)}
-              disabled={deleteMutation.isPending}
+              onClick={() => setPendingArchive(null)}
+              disabled={archiveMutation.isPending}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={confirmDeleteVendor}
-              disabled={deleteMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              onClick={confirmArchiveVendor}
+              disabled={archiveMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {deleteMutation.isPending ? (
+              {archiveMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Deleting…
+                  Archiving…
                 </>
               ) : (
-                'Delete vendor'
+                'Archive'
               )}
             </button>
           </div>
@@ -769,10 +822,9 @@ export default function VendorListPage() {
       >
         <div className="p-5">
           <p className="text-sm text-slate-700">
-            Delete <span className="font-semibold text-slate-900">{pendingDelete?.name}</span>? This also removes
-            related assessments, questionnaire responses, SLA records, and incidents.
+            <span className="font-semibold text-slate-900">{pendingArchive?.name}</span> leaves the register, dashboards
+            and reminders. Its records stay; restore it from Archived.
           </p>
-          <p className="mt-2 text-xs text-slate-500">This action cannot be undone.</p>
         </div>
       </AnimatedModal>
     </div>

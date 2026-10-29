@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from ....models import (
     AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRACheckin, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
-    TPRAActionItem, TPRARiskSnapshot,
+    TPRAActionItem, TPRARiskSnapshot, TPRAEngagement, TPRASupplierRequest,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
@@ -34,7 +34,7 @@ from . import contracts as contract_rules, rbac, tier_policy
 from .bootstrap import get_tiering_config
 from .reminders import _INACTIVE_VENDOR, _day
 from .schema_migrations import ensure_tpra_columns
-from .service import write_audit
+from .service import condition_due, write_audit
 from .stages import remediation_sla_days_for
 
 # condition → (label, base priority). Higher goes first.
@@ -59,6 +59,9 @@ CONDITIONS: Dict[str, tuple] = {
     "questionnaire_untouched": ("Questionnaire not started", 40),
     "action_due": ("Planned action due", 57),
     "action_failed": ("Planned action could not happen", 68),
+    "supplier_responded": ("Supplier responded", 52),
+    "supplier_request_overdue": ("Supplier request overdue", 45),
+    "approval_condition_overdue": ("Approval condition overdue", 65),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
 _TIER_BONUS = {"critical": 6, "high": 3, "low": -3}
@@ -163,26 +166,30 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             _countdown(due, today, "Due"), f"/vendor-risk/contracts?contract={c.id}",
             tone="red" if due < today else "amber", lapsed=due < today)
 
-    # Certificates and other evidence a vendor supplied, expired or about to.
+    # Certificates and other documents a vendor supplied, expired or about to: the
+    # earlier of the expiry and the end of the period it covers, as its Paperwork tab says.
+    from .paperwork import EXPIRING_DAYS, ends_on
+    doc_horizon = max(horizon, today + timedelta(days=EXPIRING_DAYS))
     seen = set()
     for link, ev in (db.query(TPRAEvidenceLink, Evidence)
                      .join(Evidence, Evidence.id == TPRAEvidenceLink.evidence_id)
                      .filter(TPRAEvidenceLink.tenant_id == tenant_id, TPRAEvidenceLink.deleted_at.is_(None),
-                             Evidence.expiry_date.isnot(None))
+                             or_(Evidence.expiry_date.isnot(None), TPRAEvidenceLink.coverage_to.isnot(None)))
                      .order_by(TPRAEvidenceLink.id)):
         v = vendors.get(link.vendor_id)
-        due = _day(ev.expiry_date)
-        if (v is None or due > horizon or (v.id, ev.id) in seen
+        due = ends_on(link, ev)
+        if (v is None or due > doc_horizon or (v.id, ev.id) in seen
                 or (ev.status or "").lower() in _EVIDENCE_RETIRED):
             continue
         seen.add((v.id, ev.id))
         add("certificate_expiring", "evidence_link", link.id, v, due,
             f"{ev.name or 'Evidence'} from {v.name} {'expired' if due < today else 'expires'} on {due:%d %b %Y}",
-            _countdown(due, today), f"/vendor-risk/vendors/{v.id}?stage=questionnaire",
+            _countdown(due, today), f"/vendor-risk/vendors/{v.id}?tab=paperwork",
             tone="red" if due < today else "amber", lapsed=due < today)
 
-    # Risk acceptances running out — or already out while the finding still reads
-    # "accepted", so nobody has decided again. Only each finding's latest counts.
+    # Risk acceptances running out — or already out with nobody deciding again: the
+    # finding still reads "accepted", or the lapse reopened it and no remediation or
+    # new acceptance has followed. Only each finding's latest counts.
     latest: Dict[int, TPRARiskAcceptance] = {}
     for a in db.query(TPRARiskAcceptance).filter(
             TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
@@ -196,7 +203,7 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         due = _day(a.expiry)
         if v is None or due is None or due > horizon or f.status == "closed":
             continue
-        if a.status == "expired" and f.status != "accepted":
+        if a.status == "expired" and f.status not in ("accepted", "open"):
             continue
         add("acceptance_expiring", "acceptance", a.id, v, due,
             f"Risk acceptance of '{f.title or 'finding'}' on {v.name} "
@@ -218,13 +225,46 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"The {kind} assessment of {v.name} was due on {due:%d %b %Y}",
             _countdown(due, today, "Due"), f"/vendor-risk/assessments/{a.id}", tone="red")
 
-    # Reassessments whose date has passed.
+    # Conditions of a decision still open past their due date, on an assessment in
+    # use: one item per decision, for the conditions' owners.
+    for ap, a in (db.query(TPRAApproval, VendorAssessment)
+                  .join(VendorAssessment, VendorAssessment.id == TPRAApproval.assessment_id)
+                  .filter(TPRAApproval.tenant_id == tenant_id, VendorAssessment.deleted_at.is_(None),
+                          or_(VendorAssessment.lifecycle_status == "active", VendorAssessment.lifecycle_status.is_(None)))
+                  .order_by(TPRAApproval.id)):
+        v = vendors.get(ap.vendor_id)
+        late = [c for c in ap.conditions or [] if isinstance(c, dict) and c.get("status") != "closed"
+                and condition_due(c) is not None and condition_due(c).date() < today]
+        if v is None or not late:
+            continue
+        due = min(condition_due(c).date() for c in late)
+        what = "; ".join(str(c.get("text") or "condition")[:100] for c in late[:2]) + ("; …" if len(late) > 2 else "")
+        add("approval_condition_overdue", "approval", ap.id, v, due,
+            f"{len(late)} condition{'s' if len(late) != 1 else ''} of the decision on {v.name} "
+            f"{'are' if len(late) != 1 else 'is'} overdue: {what}",
+            _countdown(due, today, "Due"),
+            f"/vendor-risk/vendors/{v.id}?stage=approval" + (f"&engagement={a.engagement_id}" if a.engagement_id else ""),
+            tone="red", lapsed=True, people=[c.get("owner_id") for c in late if c.get("owner_id")])
+
+    # Reassessments whose date has passed: the supplier's (General's), and each
+    # open engagement's own.
     for v in vendors.values():
         due = _day(v.next_reassessment_date)
         if due is not None and due < today:
             add("reassessment_overdue", "vendor", v.id, v, due,
                 f"Reassessment of {v.name} was due on {due:%d %b %Y}",
                 _countdown(due, today, "Due"), f"/vendor-risk/vendors/{v.id}?stage=reassessment", tone="red")
+    for e in db.query(TPRAEngagement).filter(
+            TPRAEngagement.tenant_id == tenant_id, TPRAEngagement.is_general.is_(False),
+            TPRAEngagement.status != "ended", TPRAEngagement.next_reassessment_date.isnot(None)
+    ).order_by(TPRAEngagement.id):
+        v = vendors.get(e.vendor_id)
+        due = _day(e.next_reassessment_date)
+        if v is not None and due < today:
+            add("reassessment_overdue", "engagement", e.id, v, due,
+                f"Reassessment of {v.name} — {e.name} was due on {due:%d %b %Y}",
+                _countdown(due, today, "Due"),
+                f"/vendor-risk/vendors/{v.id}?stage=reassessment&engagement={e.id}", tone="red", people=[e.owner_id])
 
     # Vendors approved, or already in use, whose inherent risk was never tiered.
     tiered = {vid for (vid,) in db.query(VendorAssessment.vendor_id).filter(
@@ -299,18 +339,20 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         v = vendors.get(a.vendor_id)
         if v is None:
             continue
+        # An engagement's assessment is named, and opens on that engagement.
+        e = db.get(TPRAEngagement, a.engagement_id) if a.engagement_id else None
+        who = f"{v.name} — {e.name}" if e is not None else v.name
+        link = f"/vendor-risk/vendors/{v.id}?stage=tiering" + (f"&engagement={e.id}" if e is not None else "")
         reasons = tier_policy.retier_reasons(db, v, a, custom)
         if reasons:
             add("retier_needed", "assessment", a.id, v, _day(v.updated_at) or today,
-                f"{v.name} may need re-tiering: {'; '.join(reasons)}", "Re-tier",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering", tone="red")
+                f"{who} may need re-tiering: {'; '.join(reasons)}", "Re-tier", link, tone="red")
         override = a.tier_override or {}
         if override.get("at"):
             add("tier_overridden", "assessment", a.id, v, _day(datetime.fromisoformat(override["at"])),
-                f"{v.name}'s tier was set to {override.get('to')} by hand "
+                f"{who}'s tier was set to {override.get('to')} by hand "
                 f"(computed {override.get('computed') or 'nothing'}): {override.get('justification')}",
-                f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering")
+                f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}", link)
 
     # Monitoring signals nobody has acknowledged — typed in or fetched. The queue is
     # where they are seen; there is no second inbox. An unverified alert is shown,
@@ -397,6 +439,27 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             add("action_due", "action", item.id, v, item.due_on, f"{v.name}: {item.title}",
                 _countdown(item.due_on, today, "Due") if late else "Due today", link_for(item),
                 lapsed=late > 0, people=people_for(item, v))
+
+    # Requests to suppliers: answers waiting for a reviewer, and requests the supplier
+    # let pass their date (tpra/supplier_requests.py). Whoever asked sees them as theirs.
+    for r in db.query(TPRASupplierRequest).filter(
+            TPRASupplierRequest.tenant_id == tenant_id,
+            or_(TPRASupplierRequest.status == "submitted",
+                and_(TPRASupplierRequest.status.in_(("open", "returned")), TPRASupplierRequest.due_date < today))):
+        v = vendors.get(r.vendor_id)
+        if v is None:
+            continue
+        link, asker = f"/vendor-risk/vendors/{v.id}?tab=portal&request={r.id}", [r.requested_by] if r.requested_by else []
+        if r.status == "submitted":
+            answered = _day(r.responded_at) or today
+            add("supplier_responded", "supplier_request", r.id, v, answered,
+                f"{v.name} answered the request '{r.title}'",
+                f"Answered {_days((today - answered).days)} ago" if answered < today else "Answered today", link,
+                people=asker)
+        else:
+            add("supplier_request_overdue", "supplier_request", r.id, v, r.due_date,
+                f"{v.name} has not answered the request '{r.title}', due {r.due_date:%d %b %Y}",
+                _countdown(r.due_date, today, "Due"), link, tone="red", lapsed=True, people=asker)
 
     return items
 

@@ -28,6 +28,10 @@ import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
 import ActionPlanPanel from './_tpra/ActionPlanPanel';
+import EngagementsPanel, { WorstOfNote } from './_tpra/EngagementsPanel';
+import PortalPanel from './_tpra/PortalPanel';
+import PaperworkPanel from './_tpra/PaperworkPanel';
+import SlaPanel from './_tpra/SlaPanel';
 import VendorLogo from '../../_lib/VendorLogo';
 import VatCard from './_tpra/VatCard';
 import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
@@ -80,17 +84,6 @@ interface Assessment {
   due_date: string | null;
   assessor: { id: number; full_name: string } | string | null;
   created_at: string;
-}
-
-interface SLARecord {
-  id: number;
-  sla_metric: string;
-  target_value: number | null;
-  actual_value: number | null;
-  measurement_period: string;
-  is_compliant: boolean;
-  notes: string | null;
-  recorded_at: string;
 }
 
 interface Incident {
@@ -156,7 +149,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'engagements' | 'portal' | 'paperwork' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -192,12 +185,14 @@ export default function VendorDetailPage() {
   const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
   const deepLinkApplied = useRef(false);
   const deepLinkTab = searchParams?.get('tab') as TabType | null;
+  // ?engagement=<id> opens that engagement's lifecycle; none is General, the supplier itself.
+  const [engagementId, setEngagementId] = useState<number | null>(Number(searchParams?.get('engagement')) || null);
   useEffect(() => {
     if (deepLinkApplied.current) return;
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
-    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
+    } else if (deepLinkTab && ['lifecycle', 'overview', 'engagements', 'portal', 'paperwork', 'actions', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
       setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
       deepLinkApplied.current = true;
     }
@@ -234,17 +229,6 @@ export default function VendorDetailPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as Assessment[];
     },
     enabled: activeTab === 'assessments' || showAssessmentModal,
-    placeholderData: keepPreviousData,
-  });
-
-  const { data: slaRecords } = useQuery({
-    queryKey: ['vendor-sla', vendorId],
-    queryFn: async () => {
-      const res = await vendorRiskApi.getVendorSLA(vendorId);
-      const data = res.data;
-      return (Array.isArray(data) ? data : data.items ?? []) as SLARecord[];
-    },
-    enabled: activeTab === 'sla',
     placeholderData: keepPreviousData,
   });
 
@@ -317,6 +301,9 @@ export default function VendorDetailPage() {
   const tabs: { key: TabType; label: string; count?: number }[] = [
     { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
+    { key: 'engagements', label: 'Engagements' },
+    { key: 'portal', label: 'Supplier portal' },
+    { key: 'paperwork', label: 'Paperwork' },
     { key: 'actions', label: 'Action plan' },
     { key: 'dependencies', label: 'Dependencies' },
     { key: 'exposure', label: 'Exposure' },
@@ -351,8 +338,11 @@ export default function VendorDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <VendorLogo vendorId={vendor.id} name={vendor.name} size={32} />
             <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{vendor.name}</h1>
-            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
-              {vendor.tier}
+            <span className="inline-flex items-center">
+              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
+                {vendor.tier}
+              </span>
+              <WorstOfNote vendorId={vendorId} />
             </span>
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(vendor.status)}`}>
               {vendor.status?.replace(/_/g, ' ')}
@@ -457,6 +447,8 @@ export default function VendorDetailPage() {
         <div role="tabpanel" id="vendor-tabpanel-lifecycle" aria-labelledby="vendor-tab-lifecycle" tabIndex={0} className="focus:outline-none">
           <TpraLifecycle
             vendorId={vendorId}
+            engagementId={engagementId}
+            onEngagementChange={setEngagementId}
             initialStage={deepLinkStage}
             initialFindingId={deepLinkFinding}
             onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
@@ -617,6 +609,25 @@ export default function VendorDetailPage() {
       )}
 
       {/* Action plan Tab — dated to-dos, and sends, check-ins and reassessments on a date */}
+      {activeTab === 'engagements' && (
+        <div role="tabpanel" id="vendor-tabpanel-engagements" aria-labelledby="vendor-tab-engagements" tabIndex={0} className="focus:outline-none">
+          <EngagementsPanel vendorId={vendorId}
+            onOpenLifecycle={(id) => { setEngagementId(id); setActiveTab('lifecycle'); }} />
+        </div>
+      )}
+
+      {activeTab === 'portal' && (
+        <div role="tabpanel" id="vendor-tabpanel-portal" aria-labelledby="vendor-tab-portal" tabIndex={0} className="focus:outline-none">
+          <PortalPanel vendorId={vendorId} />
+        </div>
+      )}
+
+      {activeTab === 'paperwork' && (
+        <div role="tabpanel" id="vendor-tabpanel-paperwork" aria-labelledby="vendor-tab-paperwork" tabIndex={0} className="focus:outline-none">
+          <PaperworkPanel vendorId={vendorId} />
+        </div>
+      )}
+
       {activeTab === 'actions' && (
         <div role="tabpanel" id="vendor-tabpanel-actions" aria-labelledby="vendor-tab-actions" tabIndex={0} className="focus:outline-none">
           <ActionPlanPanel vendorId={vendorId} />
@@ -644,41 +655,10 @@ export default function VendorDetailPage() {
         </div>
       )}
 
-      {/* SLA Tab */}
+      {/* SLA Tab — service levels measured against the contract; a miss is a monitoring signal */}
       {activeTab === 'sla' && (
-        <div role="tabpanel" id="vendor-tabpanel-sla" aria-labelledby="vendor-tab-sla" tabIndex={0} className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4 focus:outline-none">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Metric</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actual</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Compliant</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recorded</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {(slaRecords ?? []).length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500">No SLA records found</td></tr>
-              ) : (
-                (slaRecords ?? []).map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{s.sla_metric}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.target_value ?? '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{s.actual_value ?? '-'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.is_compliant ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                        {s.is_compliant ? 'Met' : 'Missed'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 capitalize">{s.measurement_period}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{s.recorded_at ? new Date(s.recorded_at).toLocaleDateString() : '-'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div role="tabpanel" id="vendor-tabpanel-sla" aria-labelledby="vendor-tab-sla" tabIndex={0} className="focus:outline-none">
+          <SlaPanel vendorId={vendorId} />
         </div>
       )}
 

@@ -15,10 +15,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
-    Base, GRCUser, Risk, Tenant, TPRAAuditLog, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRARiskSnapshot,
-    TPRATemplateVersion, TPRATieringConfig, Vendor, VendorAssessment, VendorQuestionnaireEvidence,
-    VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
+    Base, GRCUser, Risk, Tenant, TPRAAuditLog, TPRAFinding, TPRAPortalToken, TPRAQuestion, TPRAQuestionResponse,
+    TPRARiskSnapshot, TPRATemplateVersion, TPRATieringConfig, TPRAVendorContact, Vendor, VendorAssessment,
+    VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
+from grc.models import TPRAEngagement  # where a scope keeps its own tier and scores
 from grc.modules.vendor_risk.routers import questionnaires as questionnaire_routes
 from grc.modules.vendor_risk.tpra import rbac, service, versions
 from grc.modules.vendor_risk.tpra.engine_scoring import answer_score, score_assessment
@@ -26,7 +27,7 @@ from grc.routers.auth_router import require_auth
 
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
-           TPRATieringConfig, TPRARiskSnapshot, TPRAAuditLog, Risk]
+           TPRATieringConfig, TPRARiskSnapshot, TPRAAuditLog, Risk, TPRAVendorContact, TPRAPortalToken, TPRAEngagement]
 
 QUESTIONS = [
     {"id": "mfa", "text": "Is MFA enforced for administrators?", "domain": "cybersecurity", "weight": 1.5,
@@ -237,7 +238,9 @@ def test_the_portal_shows_the_version_that_was_sent(db, http):
     db.commit()
     sent = http.post("/vendor-risk/questionnaires/send", json={"vendor_id": vendor.id, "template_id": template.id})
     assert sent.status_code == 201, sent.text
-    token = sent.json()["token"]
+    qr = db.get(VendorQuestionnaireResponse, sent.json()["questionnaire_response"]["id"])
+    qr.token = token = "own-link"                  # a link of its own, as sent before personal links
+    db.commit()
     _edit(db, template, text="Edited after sending")
 
     shown = http.get(f"/vendor-risk/questionnaires/external/{token}").json()

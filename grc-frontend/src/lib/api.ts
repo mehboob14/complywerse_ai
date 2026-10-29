@@ -2269,13 +2269,17 @@ export const vendorRiskApi = {
     search?: string;
     vendor_type?: string;
     data_access_level?: string;
+    include_archived?: boolean;   // archived suppliers are left out unless asked for
+    include_requests?: boolean;   // so are requests not yet in review, and turned-down ones
     skip?: number;
     limit?: number;
   }) => apiClient.get('/vendor-risk/vendors', { params }),
   createVendor: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/vendors', data),
   getVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}`),
   updateVendor: (vendorId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/vendors/${vendorId}`, data),
+  // Archives the supplier (nothing is deleted); restoreVendor brings it back.
   deleteVendor: (vendorId: number) => apiClient.delete(`/vendor-risk/vendors/${vendorId}`),
+  restoreVendor: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/restore`),
 
   // Assessments
   getAssessments: (params?: {
@@ -2417,8 +2421,11 @@ export const tpraApi = {
   // Lifecycle
   getStages: () => apiClient.get('/vendor-risk/tpra/stages'),
   getBoard: () => apiClient.get('/vendor-risk/tpra/board'),
-  getLifecycle: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`),
-  initLifecycle: (vendorId: number) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, {}),
+  // engagementId: one engagement's lifecycle; omitted, the supplier's General one.
+  getLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  initLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, engagementId ? { engagement_id: engagementId } : {}),
   listAssessmentVersions: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/assessments`),
   advance: (assessmentId: number, data?: { note?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/advance`, data || {}),
@@ -2432,7 +2439,7 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-tiering`, data || {}),
   runScoring: (assessmentId: number) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-scoring`, {}),
-  reassess: (vendorId: number, data: { reason: string; assessment_type?: string }) =>
+  reassess: (vendorId: number, data: { reason: string; assessment_type?: string; engagement_id?: number | null }) =>
     apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/reassess`, data),
 
   // Findings + remediation + acceptance
@@ -2494,7 +2501,11 @@ export const tpraApi = {
 
   // Approvals (append-only)
   listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
-  createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
+  listApprovers: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvers`),
+  createApproval: (assessmentId: number, data: {
+    decision: string; rationale?: string;
+    conditions?: Array<string | { text: string; owner_id?: number | null; due_date?: string | null }>;
+  }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
   resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
     apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),

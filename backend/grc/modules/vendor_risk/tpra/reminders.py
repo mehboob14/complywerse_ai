@@ -17,8 +17,8 @@ key of what it is about, who it is for and which period it belongs to. The sweep
 can therefore run any number of times a day and still tell each person once per
 period; and a delivery that fails leaves no row, so the next run tries again.
 
-An expired risk acceptance is marked expired here, so it stops mitigating the
-finding it covered.
+An expired risk acceptance is marked expired here, and the finding it covered
+is open again, so it counts in every gate and count once more.
 """
 from __future__ import annotations
 
@@ -27,16 +27,18 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Role, Tenant, TPRAActionItem, TPRAContract, TPRAFinding, TPRAMonitoringSignal, TPRAReminder, TPRARemediation,
-    TPRARiskAcceptance, TPRASurfaceWaiver, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
+    Role, Tenant, TPRAActionItem, TPRAContract, TPRAEngagement, TPRAFinding, TPRAMonitoringSignal, TPRAReminder,
+    TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver, TPRAVendorContact, UserRole, Vendor, VendorAssessment,
+    VendorQuestionnaireResponse,
 )
-from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
-from . import contracts as contract_rules, tier_policy
+from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, is_sealed, link as portal_link, supplier_link
+from . import contracts as contract_rules, service, tier_policy
+from .contacts import for_questionnaire, issue as issue_link
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +129,7 @@ class Notice:
     link: str
     recipients: List[int] = field(default_factory=list)
     email: Optional[str] = None      # someone outside the platform: a vendor's respondent
+    contact_id: Optional[int] = None  # a supplier contact on personal links: a fresh one goes in each email
 
 
 def _day(value) -> Optional[date]:
@@ -154,7 +157,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     notices: List[Notice] = []
 
     def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False, email=None,
-            before_days=None):
+            before_days=None, contact_id=None):
         if due is None:
             return
         period = reminder_period(due, today, before if before_days is None else before_days, every, once_overdue=once)
@@ -162,12 +165,13 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             return
         notices.append(Notice(kind, subject_type, subject_id, vendor_id, due, period,
                               max(0, (today - due).days), title, link,
-                              [int(r) for r in dict.fromkeys(recipients) if r], email))
+                              [int(r) for r in dict.fromkeys(recipients) if r], email, contact_id))
 
     vendors = {v.id: v for v in db.query(Vendor).filter(
         Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None))}
 
-    # 1. Reassessments falling due.
+    # 1. Reassessments falling due: the supplier's (General's), and each open
+    #    engagement's own, which its owner hears about.
     for v in vendors.values():
         if (v.status or "").lower() in _INACTIVE_VENDOR or not v.next_reassessment_date:
             continue
@@ -175,6 +179,17 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
         add("reassessment_due", "vendor", v.id, v.id, due,
             f"Reassessment of {v.name} is {_when(due, today)}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id])
+    for e in db.query(TPRAEngagement).filter(
+            TPRAEngagement.tenant_id == tenant_id, TPRAEngagement.is_general.is_(False),
+            TPRAEngagement.status != "ended", TPRAEngagement.next_reassessment_date.isnot(None)
+    ).order_by(TPRAEngagement.id):
+        v = vendors.get(e.vendor_id)
+        if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
+            continue
+        due = _day(e.next_reassessment_date)
+        add("reassessment_due", "engagement", e.id, v.id, due,
+            f"Reassessment of {v.name} — {e.name} is {_when(due, today)}",
+            f"/vendor-risk/vendors/{v.id}?stage=reassessment&engagement={e.id}", [e.owner_id or v.owner_id])
 
     # 2. Questionnaires still waiting on the vendor: the owner hears as the due date
     #    nears and once when it passes; the respondent is emailed on the usual
@@ -185,7 +200,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             or_(VendorQuestionnaireResponse.due_date.isnot(None),
                 VendorQuestionnaireResponse.expires_at.isnot(None))):
         v = vendors.get(qr.vendor_id)
-        if v is None:
+        if v is None or (v.status or "").lower() in ("retired", "offboarded", "inactive", "terminated"):
             continue
         due = _day(qr.due_date or qr.expires_at)
         state = (f"{(today - due).days} days overdue" if due < today
@@ -194,12 +209,17 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"Questionnaire for {v.name} is {state}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id], once=True)
         expires = _day(qr.expires_at)
-        if qr.respondent_email and (expires is None or expires >= today):
+        email, contact = qr.respondent_email, None
+        if is_sealed(qr.token):                 # on personal links: its contact, with a fresh link in each email
+            contact = for_questionnaire(db, qr)
+            email = contact.email if contact else None
+        if email and (expires is None or expires >= today):
             returned = qr.status == "returned"
             add("questionnaire_vendor", "questionnaire", qr.id, v.id, due,
                 f"{'Clarification needed on' if returned else 'Reminder:'} the questionnaire for {v.name}, "
                 f"{_when(due, today)}",
-                portal_link(qr.token) or "", [], email=qr.respondent_email)
+                "" if contact else portal_link(qr.token) or "", [], email=email,
+                contact_id=contact.id if contact else None)
 
     findings: Dict[int, TPRAFinding] = {}
 
@@ -208,10 +228,13 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             findings[finding_id] = db.query(TPRAFinding).filter(TPRAFinding.id == finding_id).first()
         return findings[finding_id]
 
+    # An archived supplier's remediations and acceptances are not chased.
+    archived = select(TPRAFinding.id).join(Vendor, Vendor.id == TPRAFinding.vendor_id).where(Vendor.deleted_at.isnot(None))
+
     # 3. Remediation falling due.
     for r in db.query(TPRARemediation).filter(
             TPRARemediation.tenant_id == tenant_id, TPRARemediation.deleted_at.is_(None),
-            TPRARemediation.due_date.isnot(None)):
+            TPRARemediation.due_date.isnot(None), ~TPRARemediation.finding_id.in_(archived)):
         if (r.status or "").lower() in _REMEDIATION_DONE:
             continue
         f = finding(r.finding_id)
@@ -223,11 +246,14 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"/vendor-risk/vendors/{v.id}" if v else "/vendor-risk/findings",
             [r.owner_id or (v.owner_id if v else None)])
 
-    # 4. Risk acceptances expiring. One that has lapsed is marked expired, so it
-    #    stops mitigating the finding it covered.
+    # 4. Risk acceptances expiring. One that has lapsed is marked expired, and the
+    #    finding it covered is open again unless another acceptance still holds,
+    #    with the system as the actor. A finding an earlier lapse left "accepted"
+    #    is caught too; once reopened nothing matches, so a second run does nothing.
     for a in db.query(TPRARiskAcceptance).filter(
             TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
-            TPRARiskAcceptance.status == "active", TPRARiskAcceptance.expiry.isnot(None)):
+            TPRARiskAcceptance.status == "active", TPRARiskAcceptance.expiry.isnot(None),
+            ~TPRARiskAcceptance.finding_id.in_(archived)):
         f = finding(a.finding_id)
         v = vendors.get(f.vendor_id) if f else None
         due = _day(a.expiry)
@@ -237,6 +263,15 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"Risk acceptance{f' on {v.name}' if v else ''} is {_when(due, today, 'past its expiry')}",
             f"/vendor-risk/vendors/{v.id}" if v else "/vendor-risk/findings",
             [a.accepted_by, v.owner_id if v else None], once=True)
+    start = datetime.combine(today, time.min)
+    for a, f in (db.query(TPRARiskAcceptance, TPRAFinding)
+                 .join(TPRAFinding, TPRAFinding.id == TPRARiskAcceptance.finding_id)
+                 .filter(TPRARiskAcceptance.tenant_id == tenant_id, TPRARiskAcceptance.deleted_at.is_(None),
+                         TPRARiskAcceptance.expiry < start, TPRAFinding.deleted_at.is_(None),
+                         TPRAFinding.status == "accepted")
+                 .order_by(TPRARiskAcceptance.expiry.desc(), TPRARiskAcceptance.id)):
+        if f.status == "accepted" and not service.acceptance_holds(db, f, start):
+            service.reopen_finding(db, f, None, f"Acceptance expired on {a.expiry:%d %b %Y}")
 
     # 5. Contracts needing a decision: due on the last day to give notice (the end
     #    date when the contract asks for none), then weekly until someone records
@@ -266,9 +301,11 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             continue
         reasons = tier_policy.retier_reasons(db, v, a, custom)
         if reasons:
+            e = db.get(TPRAEngagement, a.engagement_id) if a.engagement_id else None   # an engagement's, named
             add("retier_needed", "assessment", a.id, v.id, _day(v.updated_at) or today,
-                f"{v.name} may need re-tiering: {'; '.join(reasons)}",
-                f"/vendor-risk/vendors/{v.id}?stage=tiering", [v.owner_id], once=True)
+                f"{v.name}{f' — {e.name}' if e is not None else ''} may need re-tiering: {'; '.join(reasons)}",
+                f"/vendor-risk/vendors/{v.id}?stage=tiering" + (f"&engagement={e.id}" if e is not None else ""),
+                [v.owner_id], once=True)
 
     # 7. Yearly check-ins falling due: the owner and whoever else looks after it.
     from .checkins import schedule  # here: checkins reads this module's vendor statuses
@@ -365,6 +402,11 @@ def _deliver_external(db: Session, tenant_id: int, email: str, subject: str, mes
         raise RuntimeError(result.get("message") or "email is not configured")
 
 
+def _fresh_link(db: Session, notice: Notice) -> str:
+    raw, _ = issue_link(db, db.get(TPRAVendorContact, notice.contact_id), "reminder")
+    return supplier_link(raw, notice.subject_id)
+
+
 def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         deliver: Callable[[Session, int, int, str, str], None] = _deliver,
         deliver_external: Callable[[Session, int, str, str, str], None] = _deliver_external) -> Dict[str, int]:
@@ -385,9 +427,6 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         if notice.email:
             # The respondent has no account: recipient 0 stands for them, and the
             # notice id keeps it to one email per questionnaire per period.
-            subject, message, _ = words.render("questionnaire_reminder", {
-                "title": notice.title, "vendor": vendor_names.get(notice.vendor_id), "when": _when(notice.due_on, today),
-                "link": notice.link or "the link in your original invitation", "organisation": organisation})
             try:
                 with db.begin_nested():
                     db.add(TPRAReminder(
@@ -396,6 +435,13 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
                         period=notice.period, escalation=0, due_on=notice.due_on, detail=notice.email[:255],
                     ))
                     db.flush()
+                    # A personal link only for an email that goes: one owed already, or
+                    # one that fails, takes its link back with it.
+                    link = _fresh_link(db, notice) if notice.contact_id else notice.link
+                    subject, message, _ = words.render("questionnaire_reminder", {
+                        "title": notice.title, "vendor": vendor_names.get(notice.vendor_id),
+                        "when": _when(notice.due_on, today),
+                        "link": link or "the link in your original invitation", "organisation": organisation})
                     deliver_external(db, tenant_id, notice.email, subject, message)
                 counts["sent"] += 1
             except IntegrityError:

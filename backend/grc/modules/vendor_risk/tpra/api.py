@@ -20,7 +20,7 @@ from ....models import (
     get_db, GRCUser, Vendor, VendorAssessment,
     TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance,
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
-    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
+    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment, TPRAEngagement,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services import evidence_review
@@ -57,6 +57,24 @@ def _assessment(db: Session, assessment_id: int, tids: List[int]) -> VendorAsses
     if not a:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Assessment not found")
     return a
+
+
+def _engagement(db: Session, v: Vendor, engagement_id: Optional[int]) -> Optional[TPRAEngagement]:
+    """The engagement of this supplier a call names; None is General (nothing named,
+    or General's own row)."""
+    if not engagement_id:
+        return None
+    e = db.query(TPRAEngagement).filter(TPRAEngagement.id == engagement_id, TPRAEngagement.vendor_id == v.id).first()
+    if e is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Engagement not found")
+    return None if e.is_general else e
+
+
+def _open_engagement(db: Session, v: Vendor, engagement_id: Optional[int]) -> Optional[TPRAEngagement]:
+    e = _engagement(db, v, engagement_id)
+    if e is not None and e.status == "ended":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This engagement has ended")
+    return e
 
 
 def _get(db: Session, model, obj_id: int, tids: List[int], allow_deleted=False):
@@ -124,7 +142,7 @@ def s_acceptance(a: TPRARiskAcceptance) -> dict:
 
 def s_contract(c: TPRAContract) -> dict:
     return {
-        "id": c.id, "vendor_id": c.vendor_id, "assessment_id": c.assessment_id,
+        "id": c.id, "vendor_id": c.vendor_id, "assessment_id": c.assessment_id, "engagement_id": c.engagement_id,
         "contract_type": c.contract_type, "title": c.title, "terms": c.terms,
         "document_id": c.document_id, "effective_date": c.effective_date,
         "renewal_date": c.renewal_date, "expiry_date": c.expiry_date, "status": c.status,
@@ -143,8 +161,9 @@ def s_obligation(o: TPRAControlObligation) -> dict:
 
 def _condition_stats(conditions) -> tuple:
     """(open, overdue) counts over an approval's tracked conditions. A legacy plain
-    -string condition counts as open/untracked."""
-    now = datetime.utcnow()
+    -string condition counts as open/untracked. Overdue is due before today, as the
+    attention queue counts it."""
+    today = datetime.utcnow().date()
     open_ct = overdue_ct = 0
     for c in (conditions or []):
         if not isinstance(c, dict):
@@ -153,13 +172,9 @@ def _condition_stats(conditions) -> tuple:
         if c.get("status") == "closed":
             continue
         open_ct += 1
-        due = c.get("due_date")
-        if due:
-            try:
-                if datetime.fromisoformat(str(due).replace("Z", "")) < now:
-                    overdue_ct += 1
-            except (ValueError, TypeError):
-                pass
+        due = service.condition_due(c)
+        if due is not None and due.date() < today:
+            overdue_ct += 1
     return open_ct, overdue_ct
 
 
@@ -200,6 +215,7 @@ def s_assessment(a: VendorAssessment) -> dict:
         "status": a.status, "row_version": a.row_version,
         "template_id": a.template_id, "reviewed_by": a.reviewed_by, "due_date": a.due_date,
         "team_roster": getattr(a, "team_roster", None) or {},
+        "engagement_id": a.engagement_id,
         "created_at": a.created_at, "updated_at": a.updated_at,
     }
 
@@ -237,6 +253,11 @@ class EvidenceRequirementIn(BaseModel):
 class ReassessIn(BaseModel):
     reason: str
     assessment_type: Optional[str] = "reassessment"
+    engagement_id: Optional[int] = None     # omitted: General
+
+
+class ScopeIn(BaseModel):
+    engagement_id: Optional[int] = None     # omitted: General
 
 # Controlled vocabularies (no free-text severity/status that a typo can slip past
 # the gate/suspension logic, which string-matches on these exact values).
@@ -275,6 +296,7 @@ class AcceptanceIn(BaseModel):
 
 class ContractIn(BaseModel):
     assessment_id: Optional[int] = None
+    engagement_id: Optional[int] = None     # the engagement it covers; omitted: the whole supplier
     contract_type: str = "master"
     title: Optional[str] = None
     terms: Optional[str] = None
@@ -302,7 +324,7 @@ class ContractUpdate(ContractIn):
     reason: Optional[str] = None
 
 _CONTRACT_FIELDS = ("contract_type", "title", "terms", "document_id", "effective_date", "renewal_date",
-                    "expiry_date", "status", "assessment_id") + contracts.TERM_FIELDS
+                    "expiry_date", "status", "assessment_id", "engagement_id") + contracts.TERM_FIELDS
 
 class ObligationIn(BaseModel):
     obligation: str
@@ -413,7 +435,9 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
         .order_by(Vendor.name.asc())
         .all()
     )
-    # Active assessment per vendor (highest version wins if several are active).
+    # Active assessment per vendor (highest version wins if several are active):
+    # its General one; an engagement's has its own lifecycle on the vendor page,
+    # and a stand-alone one from the Assessments page is not the lifecycle's.
     amap: dict = {}
     for a in (
         db.query(VendorAssessment)
@@ -421,6 +445,8 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
             VendorAssessment.tenant_id.in_(tids),
             VendorAssessment.lifecycle_status == "active",
             VendorAssessment.deleted_at.is_(None),
+            VendorAssessment.engagement_id.is_(None),
+            service.IN_LIFECYCLE,
         )
         .all()
     ):
@@ -475,41 +501,49 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
 
 
 @router.get("/vendors/{vendor_id}/lifecycle")
-def get_lifecycle(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def get_lifecycle(vendor_id: int, engagement_id: Optional[int] = None,
+                  db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """One scope's lifecycle: an engagement's (`engagement_id`), or General's."""
     tids = _tids(user, db)
     ensure_tpra_columns(db)
     v = _vendor(db, vendor_id, tids)
-    a = service.get_active_assessment(db, v)
+    e = _engagement(db, v, engagement_id)
+    a = service.get_active_assessment(db, v, e)
+    scope = {"vendor_id": v.id, "engagement_id": e.id if e is not None else None}
     if not a:
-        return {"vendor_id": v.id, "assessment": None, "stages": [], "current": None, "gate": None}
+        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None}
     stages = service.get_stage_instances(db, a.id)
     cur = a.current_stage
     gate = service.evaluate_current(db, v, a, cur) if cur else None
     return {
-        "vendor_id": v.id, "assessment": s_assessment(a),
+        **scope, "assessment": s_assessment(a),
         "stages": [s_stage(s) for s in stages], "current": cur, "gate": gate,
     }
 
 
 @router.post("/vendors/{vendor_id}/lifecycle/init")
-def init_lifecycle(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def init_lifecycle(vendor_id: int, engagement_id: Optional[int] = None, body: Optional[ScopeIn] = None,
+                   db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "assessments", "create")
-    a = service.ensure_active_assessment(db, v, actor_id=user.id)
+    e = _open_engagement(db, v, engagement_id or (body.engagement_id if body else None))
+    a = service.ensure_active_assessment(db, v, actor_id=user.id, engagement=e)
     db.commit()
     return {"assessment": s_assessment(a), "stages": [s_stage(s) for s in service.get_stage_instances(db, a.id)]}
 
 
 @router.get("/vendors/{vendor_id}/assessments")
-def list_assessment_versions(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def list_assessment_versions(vendor_id: int, engagement_id: Optional[int] = None,
+                             db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Every version, or one scope's when `engagement_id` names it (General's own id: General)."""
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
-    rows = (
-        db.query(VendorAssessment)
-        .filter(VendorAssessment.vendor_id == v.id, VendorAssessment.deleted_at.is_(None))
-        .order_by(VendorAssessment.version_no.desc()).all()
-    )
+    q = db.query(VendorAssessment).filter(VendorAssessment.vendor_id == v.id, VendorAssessment.deleted_at.is_(None))
+    if engagement_id:
+        e = _engagement(db, v, engagement_id)
+        q = q.filter(VendorAssessment.engagement_id == e.id if e is not None else VendorAssessment.engagement_id.is_(None))
+    rows = q.order_by(VendorAssessment.version_no.desc(), VendorAssessment.id.desc()).all()
     return {"items": [s_assessment(a) for a in rows], "total": len(rows)}
 
 
@@ -590,10 +624,10 @@ def run_scoring(assessment_id: int, db: Session = Depends(get_db), user: GRCUser
     # Completeness precondition — don't score out of band against no/empty answers
     # (a residual computed from nothing collapses to inherent and can silently drive
     # a go decision). The lifecycle stage gate enforces all-answered; this guards the
-    # raw endpoint when called directly.
-    from .engine_scoring import normalize_answer as _norm
+    # raw endpoint when called directly. Any answer that scores counts: Yes/No, a
+    # rating, a scored choice.
     _resp = service.collect_responses_for_scoring(db, a.id)
-    if not _resp or not any(_norm(r.get("answer")) is not None for r in _resp):
+    if not any(r.get("score") is not None for r in _resp):
         raise HTTPException(
             status_code=400,
             detail="No answered questionnaire responses to score — issue and collect the questionnaire first.",
@@ -604,12 +638,15 @@ def run_scoring(assessment_id: int, db: Session = Depends(get_db), user: GRCUser
 
 
 @router.post("/vendors/{vendor_id}/reassess")
-def reassess(vendor_id: int, body: ReassessIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+def reassess(vendor_id: int, body: ReassessIn, engagement_id: Optional[int] = None,
+             db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "assessments", "create")
+    e = _open_engagement(db, v, engagement_id or body.engagement_id)
     new = service.create_reassessment_version(db, v, actor_id=user.id, reason=body.reason,
-                                              assessment_type=body.assessment_type or "reassessment")
+                                              assessment_type=body.assessment_type or "reassessment",
+                                              engagement=e)
     db.commit()
     return s_assessment(new)
 
@@ -648,6 +685,14 @@ def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(ge
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
     rbac.require_write(db, user, "findings", "create")
+    # A new finding is open: 'accepted' needs a signed acceptance and 'closed' a
+    # completed remediation, as update_finding holds them to.
+    if body.status in ("accepted", "closed"):
+        raise HTTPException(
+            status_code=400,
+            detail="A new finding starts open: record a risk acceptance with 'Accept risk', "
+                   "or close it once a remediation is completed.",
+        )
     f = TPRAFinding(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         domain=body.domain, severity=body.severity, title=body.title,
@@ -726,10 +771,10 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
         db.flush()
         service.snapshot_after_finding_change(db, f)
     # TPRM-003: keep the linked Issue in sync — close it when the finding closes/
-    # accepts; (re)create it when the finding is (re)opened.
+    # accepts; (re)create or reopen it when the finding is (re)opened.
     if f.status in _closed:
         service.close_finding_issue(db, f, user.id)
-    elif f.status == "open":
+    elif f.status in ("open", "in_remediation"):
         service.ensure_finding_issue(db, f, user.id)
     # TPRM-002: re-evaluate the critical invariant on any status change (reopen →
     # suspend the onboarded vendor; resolve → auto-reactivate).
@@ -803,11 +848,16 @@ async def _save_evidence_file(db: Session, tenant_id: int, name: Optional[str],
     import os
     import uuid
     from ...evidence.routers.evidence import EVIDENCE_UPLOAD_DIR
+    from ..routers.questionnaires import _MAX_EVIDENCE_BYTES
+    # Bounded read, as the supplier's own upload: never an unbounded file in memory.
+    contents = await file.read(_MAX_EVIDENCE_BYTES + 1)
+    if len(contents) > _MAX_EVIDENCE_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            f"File exceeds the {_MAX_EVIDENCE_BYTES // (1024 * 1024)} MB limit.")
     tenant_dir = os.path.join(EVIDENCE_UPLOAD_DIR, str(tenant_id))
     os.makedirs(tenant_dir, exist_ok=True)
     ext = os.path.splitext(file.filename or "")[1].lower()
     path = os.path.join(tenant_dir, f"{uuid.uuid4()}{ext}")
-    contents = await file.read()
     with open(path, "wb") as fh:
         fh.write(contents)
     ev = Evidence(
@@ -938,7 +988,7 @@ def tier_requirements(assessment_id: int, db: Session = Depends(get_db), user: G
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
     v = _vendor(db, a.vendor_id, tids)
-    return tier_policy.requirements(db, v, a, service.get_tiering_config(db, a.tenant_id))
+    return tier_policy.requirements(db, v, a, service.config_for(db, a))
 
 
 @router.post("/assessments/{assessment_id}/tier-override")
@@ -955,7 +1005,7 @@ def override_tier(assessment_id: int, body: TierOverrideIn, db: Session = Depend
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
     service.record_tier_override(db, v, a, body.tier, reason, user.id)
     db.commit()
-    return tier_policy.requirements(db, v, a, service.get_tiering_config(db, a.tenant_id))
+    return tier_policy.requirements(db, v, a, service.config_for(db, a))
 
 
 @router.delete("/evidence-links/{link_id}")
@@ -1090,17 +1140,12 @@ def revoke_acceptance(acc_id: int, db: Session = Depends(get_db), user: GRCUser 
     a.deleted_at = datetime.utcnow()
     _bump(a)
     f = db.query(TPRAFinding).filter(TPRAFinding.id == a.finding_id).first()
-    if f and f.status == "accepted":
-        f.status = "open"
     service.write_audit(db, a.tenant_id, entity="risk_acceptance", action="delete", entity_id=a.id, actor_id=user.id)
-    # TPRM-002/003: revoking acceptance reopens the finding → reopen/recreate its
-    # issue and re-suspend the onboarded vendor if the critical is unmitigated.
-    if f:
-        service.ensure_finding_issue(db, f, user.id)
-        v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
-        asmt = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
-        if v and asmt:
-            service.enforce_critical_invariant(db, v, asmt, user.id)
+    # TPRM-002/003: revoking acceptance reopens the finding (unless another
+    # acceptance still covers it) → reopen/recreate its issue and re-suspend the
+    # onboarded vendor if the critical is unmitigated.
+    if f and not service.acceptance_holds(db, f):
+        service.reopen_finding(db, f, user.id, "Risk acceptance revoked.")
     db.commit()
     return {"revoked": True, "id": a.id}
 
@@ -1126,8 +1171,10 @@ def create_contract(vendor_id: int, body: ContractIn, db: Session = Depends(get_
         terms = contracts.clean({k: getattr(body, k) for k in ("contract_type", "status", *contracts.TERM_FIELDS)})
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    e = _engagement(db, v, body.engagement_id)
     c = TPRAContract(
         tenant_id=v.tenant_id, vendor_id=v.id, assessment_id=body.assessment_id, title=body.title, terms=body.terms,
+        engagement_id=e.id if e is not None else None,
         document_id=body.document_id, effective_date=body.effective_date,
         renewal_date=body.renewal_date, expiry_date=body.expiry_date,
         **{**terms, "contract_type": terms.get("contract_type") or "master", "status": terms.get("status") or "draft"},
@@ -1154,6 +1201,9 @@ def update_contract(contract_id: int, body: ContractUpdate, db: Session = Depend
     for required in ("contract_type", "status"):           # these can change but never be emptied
         if required in given and not given[required]:
             given.pop(required)
+    if "engagement_id" in given:                           # the whole supplier (None), or one of its engagements
+        e = _engagement(db, db.get(Vendor, c.vendor_id), given["engagement_id"])
+        given["engagement_id"] = e.id if e is not None else None
     try:
         changes = contracts.apply(c, contracts.clean(given))
         contracts.check_dates(c)
@@ -1248,7 +1298,19 @@ def list_approvals(assessment_id: int, db: Session = Depends(get_db), user: GRCU
     a = _assessment(db, assessment_id, tids)
     if a.residual_rating is not None:
         rec = service.recommend_decision(a.residual_rating, service.count_open_critical(db, a.id))
-    return {"items": [s_approval(x) for x in rows], "total": len(rows), "recommendation": rec}
+    # The one decision the Approval gate goes by, if any (service.approval_in_force).
+    in_force = getattr(service.approval_in_force(db, a), "id", None)
+    return {"items": [{**s_approval(x), "in_force": x.id == in_force} for x in rows], "total": len(rows),
+            "recommendation": rec}
+
+
+@router.get("/assessments/{assessment_id}/approvers")
+def list_approvers(assessment_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Everyone who holds the approve right and whether each may approve this
+    assessment, with why not. `me` is the caller's own line (None: no such right)."""
+    tids = _tids(user, db)
+    items = service.approvers(db, _assessment(db, assessment_id, tids))
+    return {"items": items, "me": next((i for i in items if i["user_id"] == user.id), None)}
 
 
 @router.post("/assessments/{assessment_id}/approvals", status_code=status.HTTP_201_CREATED)
@@ -1258,33 +1320,17 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     # approvals:approve is high-sensitivity — no broad erm:risks:edit backdoor.
     rbac.require_write(db, user, "approvals", "approve", allow_fallback=False)
     if body.decision in ("approve", "approve_with_conditions"):
-        # Segregation of duties — the approver must be independent of whoever
-        # performed or reviewed the assessment.
-        if user.id is not None and user.id in (a.assessed_by, a.reviewed_by):
-            raise HTTPException(
-                status_code=403,
-                detail="Segregation of duties: the assessor/reviewer cannot approve their own assessment — an independent approver is required.",
-            )
-        # Approval authority follows the tier.
-        _vendor_row = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
-        _problem = tier_policy.approver_problem(
-            db, user, a.inherent_tier or (_vendor_row.tier if _vendor_row else None),
-            tier_policy.merged(service.get_tiering_config(db, a.tenant_id).get("tier_policy")),
-            is_admin=rbac._is_admin_or_primary(db, user))
+        # Segregation of duties, the tier's approver role and no unmitigated
+        # critical finding: the rules every approve route applies.
+        _problem = service.approval_problem(db, user, a)
         if _problem:
-            raise HTTPException(status_code=403, detail=_problem)
-        # Preconditions — a positive decision requires a computed residual and no
-        # unmitigated critical findings (the gate can otherwise be pre-stamped).
-        if a.residual_score is None:
+            raise HTTPException(*_problem)
+        # A positive decision requires a residual (the gate can otherwise be
+        # pre-stamped): a scored one, or the inherent score where the tier skips scoring.
+        if a.residual_score is None and not service.residual_from_inherent(db, a, user.id):
             raise HTTPException(
                 status_code=400,
                 detail="Score the assessment before recording an approval decision.",
-            )
-        _open_crit = service.count_open_critical(db, a.id)
-        if _open_crit > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve while {_open_crit} unmitigated critical finding(s) remain — remediate or formally accept them first.",
             )
     rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
     # Conditions are TRACKED items chased to closure, not write-once text: each
@@ -1315,12 +1361,14 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     )
     db.add(ap)
     db.flush()
+    service.mirror_conditions(db, ap, user.id)        # each condition a Task Management task
     service.write_audit(db, a.tenant_id, entity="approval", action="create",
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=ap.id, actor_id=user.id,
                         to_value=body.decision, reason=body.rationale)
-    # An onboarding request is decided by the same decision.
+    # An onboarding request is decided by the same decision: the supplier's own
+    # (General) assessment's, not an engagement's.
     _requested = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
-    if _requested is not None and _requested.intake_status in ("submitted", "in_review"):
+    if _requested is not None and a.engagement_id is None and _requested.intake_status in ("submitted", "in_review"):
         if body.decision in ("approve", "approve_with_conditions"):
             intake.set_status(_requested, "approved")
         elif body.decision == "reject":
@@ -1356,6 +1404,7 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
     if not found:
         raise HTTPException(status_code=404, detail="Condition not found")
     ap.conditions = new_conditions  # new list + copied dicts flags the JSON column dirty
+    service.mirror_conditions(db, ap, user.id)        # and its Task Management task follows
     service.write_audit(db, ap.tenant_id, entity="approval", action="update",
                         vendor_id=ap.vendor_id, assessment_id=ap.assessment_id, entity_id=ap.id,
                         actor_id=user.id, extra={"condition": condition_id, "status": body.status})

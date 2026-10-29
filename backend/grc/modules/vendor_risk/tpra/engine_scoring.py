@@ -40,6 +40,22 @@ def residual_to_grade(residual: float, bands: Optional[list] = None) -> str:
     return "F"
 
 
+def grade_for(residual: float, rating: Optional[str] = None, thresholds: Optional[dict] = None,
+              bands: Optional[list] = None) -> str:
+    """The A–F grade of a residual, never better than its rating. A rating worse
+    than its score (a failed critical control floors it at high) is graded at the
+    score where that rating starts on the thresholds: D for high, by default."""
+    starts = float((thresholds or DEFAULT_TIERING_CONFIG["thresholds"]).get((rating or "").lower(), 0))
+    return residual_to_grade(max(float(residual), starts), bands)
+
+
+def is_answered(ans) -> bool:
+    """Whether a question has an answer: anything not blank, of any type — text,
+    a choice, a rating, Yes/No or N/A."""
+    ans = _unwrap(ans)
+    return ans is not None and str(ans).strip() != ""
+
+
 def normalize_answer(ans) -> Optional[str]:
     """Coerce assorted answer encodings to Yes/Partial/No/N-A (or None if blank)."""
     if ans is None:
@@ -238,7 +254,8 @@ def score_assessment(
     # the weighted-average residual score (score_to_tier), NOT the inherent tier.
     # The only exception is that a failed CRITICAL control floors the rating at
     # "high" (and is always blocking) regardless of the numeric score. `rating_basis`
-    # makes that derivation explicit so the UI can show WHY a rating is what it is.
+    # makes that derivation explicit so the UI can show WHY a rating is what it is,
+    # and the grade follows the floored rating rather than the score.
     residual_rating = score_to_tier(overall_residual, thresholds)
     rating_basis = "residual_score"
     if critical_failures and residual_rating in ("low", "medium"):
@@ -250,7 +267,7 @@ def score_assessment(
         "overall_residual": overall_residual,
         "residual_rating": residual_rating,
         "rating_basis": rating_basis,
-        "rating_grade": residual_to_grade(overall_residual, cfg.get("grade_bands")),
+        "rating_grade": grade_for(overall_residual, residual_rating, thresholds, cfg.get("grade_bands")),
         "domain_scores": domain_scores,
         "critical_failures": critical_failures,
         "blocking": bool(critical_failures),

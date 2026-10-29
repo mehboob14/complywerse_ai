@@ -161,6 +161,9 @@ class VendorAssessment(Base):
     # and a tier set by hand instead: {from, to, computed, justification, by, at}.
     tiering_basis = Column(JSON, nullable=True)
     tier_override = Column(JSON, nullable=True)
+    # The tiering config and tier policy this assessment is held to, taken when its
+    # tier was set: {weights, thresholds, cadence_days, tier_policy, at} (tpra/service.py).
+    policy_snapshot = Column(JSON, nullable=True)
     residual_rating = Column(String(20), nullable=True)
     rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
     # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.
@@ -168,6 +171,8 @@ class VendorAssessment(Base):
     # Assessment-level RACI team roster (assign once, reused across all stages):
     # {role_key: user_id} e.g. {"business_owner": 4, "tprm_lead": 7, ...}.
     team_roster = Column(JSON, default=dict)
+    # The engagement this assesses (grc_tpra_engagements); NULL is the General scope.
+    engagement_id = Column(Integer, nullable=True, index=True)
     # Optimistic-concurrency token for edits.
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
@@ -225,6 +230,8 @@ class VendorQuestionnaireResponse(Base):
     # "<parent>:<question>:<template>" that stops it being sent twice.
     parent_response_id = Column(Integer, nullable=True)
     trigger_key = Column(String(200), nullable=True, index=True)
+    # The supplier contact its personal links go to (grc_tpra_vendor_contacts); none on one sent before them.
+    contact_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")
@@ -273,7 +280,12 @@ class VendorSLARecord(Base):
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     sla_metric = Column(String(255), nullable=False)
     target_value = Column(Float, nullable=True)
-    actual_value = Column(Float, nullable=True)
+    actual_value = Column(Float, nullable=True)          # what was measured
+    # The contract the level is promised in, the unit, and which way is good; with
+    # both values and a direction, is_compliant follows from them (routers/monitoring.py).
+    contract_id = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=True)
+    direction = Column(String(20), nullable=True)        # higher_is_better | lower_is_better
     measurement_period = Column(String(50), default="monthly")
     is_compliant = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)

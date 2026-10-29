@@ -57,3 +57,9 @@ from ._81_document_routes import *  # noqa: F401,F403 - a document's approval ro
 from ._82_document_change_proposals import *  # noqa: F401,F403 - changes by anyone but the owner or author, waiting for their accept
 from ._78_ai_result_cache import *  # noqa: F401,F403 - answers to AI requests that repeat exactly, encrypted, expiring
 from ._83_department_roles import *  # noqa: F401,F403 - the roles a department takes its members from
+from ._84_tpra_supplier_contacts import *  # noqa: F401,F403 - TPRM: a supplier's contacts and their personal portal links
+from ._85_tpra_paperwork import *  # noqa: F401,F403 - TPRM: a supplier's paperwork: SOC report reviews and documents' coverage
+from ._86_tpra_engagements import *  # noqa: F401,F403 - TPRM: what we use a supplier for, each with its own tier and lifecycle
+from ._87_tpra_supplier_requests import *  # noqa: F401,F403 - TPRM: what we ask a supplier for outside a questionnaire, and messages with them
+from ._88_tpra_reviews import *  # noqa: F401,F403 - TPRM: who reviews which part of a supplier's answers
+from ._89_tpra_alert_rules import *  # noqa: F401,F403 - TPRM: what a monitoring signal sets off

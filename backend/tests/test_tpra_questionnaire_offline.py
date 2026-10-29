@@ -7,27 +7,31 @@ version it was made from, so it is refused anywhere else, and an answer that is
 not among a question's answers is refused with its row rather than guessed.
 """
 import io
+import uuid
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import object_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
     Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAAuditLog, TPRAEvidenceLink, TPRAFinding,
-    TPRAQuestion, TPRAQuestionResponse, TPRATemplateVersion, TPRATieringConfig, Vendor, VendorAssessment,
-    VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
+    TPRAPortalToken, TPRAQuestion, TPRAQuestionResponse, TPRATemplateVersion, TPRATieringConfig, TPRAVendorContact,
+    Vendor, VendorAssessment, VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
+    get_db,
 )
+from grc.models import TPRAReviewAssignment  # accepting waits for the questionnaire's reviewers
 from grc.modules.vendor_risk.routers import questionnaires as routes
 from grc.modules.vendor_risk.tpra import follow_ups, portal, rbac, versions
 from grc.routers.auth_router import require_auth
 
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
-           TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink]
+           TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAVendorContact,
+           TPRAPortalToken, TPRAReviewAssignment]
 ATTEST = {"name": "Sam Vendor", "email": "sam@vendor.test", "confirm": True}
 
 
@@ -75,10 +79,14 @@ def _templates(db):
 
 
 def _send(http, vendor, template):
+    """Sent, then put on a link of its own as before personal links (still honoured)."""
     body = http.post("/vendor-risk/questionnaires/send",
                      json={"vendor_id": vendor.id, "template_id": template.id,
                            "respondent_email": "sam@vendor.test"}).json()
-    return body["token"], body["questionnaire_response"]["id"]
+    qr = object_session(vendor).get(VendorQuestionnaireResponse, body["questionnaire_response"]["id"])
+    qr.token = str(uuid.uuid4())
+    object_session(vendor).commit()
+    return qr.token, qr.id
 
 
 # ── follow-ups ───────────────────────────────────────────────────────────────
