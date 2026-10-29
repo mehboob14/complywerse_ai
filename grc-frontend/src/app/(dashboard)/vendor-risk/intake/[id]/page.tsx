@@ -8,19 +8,23 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Loader2, RotateCcw, Send, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Clock, Loader2, RotateCcw, Send, XCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { vendorOnboardingApi, tpraApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
 import IntakeForm, { useIntake } from '../../_lib/intake/IntakeForm';
 import { IntakePayload, STATUS_CLS, STATUS_LABEL, errText } from '../../_lib/intake/types';
+import { URGENCY_WORD } from '../../_lib/intakeModel';
 import { fmtDate } from '../../_lib/tprmShared';
+import DuplicateBox from '../_components/DuplicateBox';
+import ReasonDialog from '../_components/ReasonDialog';
 
 const EXPLAIN: Record<string, string> = {
   draft: 'Answer the questions, then submit. Your answers save as you type.',
-  submitted: 'With the TPRM team. They can pick it up, send it back to you with a note, or turn it down.',
-  in_review: 'Being reviewed. The lifecycle has started from these answers; approval happens at its approval gate.',
+  submitted: 'With the TPRM team. They can approve it, send it back to you with a note, or decline it.',
+  in_review: 'Approved and created. The lifecycle has started from these answers; final approval happens at its approval gate.',
   approved: 'Approved. The supplier is now in the vendor register.',
-  rejected: 'Turned down. The requester can reopen it with changes.',
+  rejected: 'Declined. The requester can reopen it with changes.',
 };
 
 export default function RequestPage() {
@@ -28,6 +32,7 @@ export default function RequestPage() {
   const router = useRouter();
   const id = Number(params?.id);
   const qc = useQueryClient();
+  const { toast } = useToast();
   const flushRef = useRef<(() => Promise<void>) | null>(null);
   const { data, isLoading, isError } = useIntake(id);
   const [asking, setAsking] = useState<null | 'reject' | 'return' | 'reopen'>(null);
@@ -69,7 +74,7 @@ export default function RequestPage() {
     <div className="space-y-5">
       <div>
         <Link href="/vendor-risk/intake" className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800">
-          <ArrowLeft className="h-3.5 w-3.5" /> Onboarding requests
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to intake
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -81,6 +86,8 @@ export default function RequestPage() {
               {requester ? `Requested by ${requester}` : 'Requested'}
               {data.submitted_at ? ` · submitted ${fmtDate(data.submitted_at)}` : ''}
               {data.vendor.website ? ` · ${data.vendor.website}` : ''}
+              {data.request?.department ? ` · ${data.request.department}` : ''}
+              {data.request ? ` · ${URGENCY_WORD[data.request.urgency] ?? ''}` : ''}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -99,11 +106,11 @@ export default function RequestPage() {
                 </button>
                 <button type="button" disabled={busy} className={clsx(button, 'border border-rose-200 text-rose-700 hover:bg-rose-50')}
                   onClick={() => setAsking('reject')}>
-                  <XCircle className="h-4 w-4" /> Turn down
+                  <XCircle className="h-4 w-4" /> Decline
                 </button>
                 <button type="button" disabled={busy} className={clsx(button, 'bg-primary-600 text-white hover:bg-primary-700')}
-                  onClick={() => act.mutate(() => vendorOnboardingApi.startReview(id))}>
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Pick up for review
+                  onClick={() => act.mutate(() => vendorOnboardingApi.startReview(id), { onSuccess: () => toast({ type: 'success', title: `${data.vendor.name} added to the register` }) })}>
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve and create
                 </button>
               </>
             )}
@@ -137,51 +144,24 @@ export default function RequestPage() {
         </div>
       </div>
       {error && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-sm text-rose-700">{error}</p>}
+      <DuplicateBox title="Already in the register" matches={data.duplicates ?? []}
+        footnote={status === 'submitted' ? 'Approving creates a duplicate unless these are different organisations.' : undefined} />
 
       <IntakeForm vendorId={id} flushRef={flushRef} onSaved={() => qc.invalidateQueries({ queryKey: ['tprm-requests'] })} />
 
-      {asking && (
-        <ReasonDialog
-          title={asking === 'reject' ? 'Turn this request down' : asking === 'return' ? 'Send it back to the requester' : 'Reopen the request'}
-          hint={asking === 'reject' ? 'Say why, so the requester knows what to do instead.'
-            : asking === 'return' ? 'Say what they need to change or add.' : 'Say what has changed since it was turned down.'}
-          confirm={asking === 'reject' ? 'Turn down' : asking === 'return' ? 'Send back' : 'Reopen'}
-          danger={asking === 'reject'}
-          busy={busy}
-          onClose={() => setAsking(null)}
-          onConfirm={(reason) => act.mutate(
-            () => (asking === 'reject' ? vendorOnboardingApi.reject(id, reason) : vendorOnboardingApi.sendBack(id, reason)),
-            { onSuccess: () => setAsking(null) },
-          )}
-        />
-      )}
-    </div>
-  );
-}
-
-function ReasonDialog({ title, hint, confirm, danger, busy, onClose, onConfirm }: {
-  title: string; hint: string; confirm: string; danger?: boolean; busy: boolean;
-  onClose: () => void; onConfirm: (reason: string) => void;
-}) {
-  const [reason, setReason] = useState('');
-  const ok = reason.trim().length >= 10;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label={title}>
-      <form className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); if (ok) onConfirm(reason.trim()); }}>
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        <p className="mt-1 text-sm text-slate-500">{hint}</p>
-        <textarea autoFocus rows={4} value={reason} onChange={(e) => setReason(e.target.value)}
-          className="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-        {!ok && <p className="text-[11px] text-slate-400">At least 10 characters.</p>}
-        <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="submit" disabled={!ok || busy}
-            className={clsx('inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-white disabled:opacity-50',
-              danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-primary-600 hover:bg-primary-700')}>
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} {confirm}
-          </button>
-        </div>
-      </form>
+      <ReasonDialog
+        open={asking !== null} busy={busy} error={error}
+        title={asking === 'reject' ? 'Decline this request' : asking === 'return' ? 'Send it back to the requester' : 'Reopen the request'}
+        description={asking === 'reject' ? 'The requester sees this reason.'
+          : asking === 'return' ? 'Say what they need to change or add.' : 'Say what has changed since it was declined.'}
+        confirmLabel={asking === 'reject' ? 'Decline request' : asking === 'return' ? 'Send back' : 'Reopen'}
+        danger={asking === 'reject'}
+        onClose={() => setAsking(null)}
+        onConfirm={(reason) => act.mutate(
+          () => (asking === 'reject' ? vendorOnboardingApi.reject(id, reason) : vendorOnboardingApi.sendBack(id, reason)),
+          { onSuccess: () => setAsking(null) },
+        )}
+      />
     </div>
   );
 }
