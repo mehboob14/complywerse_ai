@@ -1,0 +1,158 @@
+'use client';
+
+// The old Assessments tab, kept whole: every assessment of the vendor in a table, each opening its review page, and "New
+// assessment" for one made and approved on its own page rather than through the lifecycle. The lifecycle's questionnaires are
+// the cards above; this is what they replaced and the one thing they do not do.
+import { useState } from 'react';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
+import { BTN, BTN_PRIMARY, Dialog, Panel, StatusPill, TierBadge, fmt, tones } from '@/app/(dashboard)/vendor-risk/_ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import { usePermissions } from '@/hooks/usePermissions';
+import { apiErrorText } from '@/lib/apiError';
+import { tenantApi, vendorRiskApi } from '@/lib/api';
+
+interface Legacy {
+  id: number;
+  assessment_type: string;
+  status: string;
+  inherent_score: number | null;
+  risk_rating: string | null;
+  due_date: string | null;
+  assessor: { id: number; full_name: string } | string | null;
+}
+interface UserOption { id: number; username: string; display_name: string | null; email: string }
+
+const TYPES = [
+  { id: 'cybersecurity', label: 'Cybersecurity assessment' },
+  { id: 'privacy_data_protection', label: 'Privacy & data protection' },
+  { id: 'operational_risk', label: 'Operational risk assessment' },
+  { id: 'compliance_regulatory', label: 'Compliance & regulatory' },
+  { id: 'financial_risk', label: 'Financial risk assessment' },
+  { id: 'initial_onboarding', label: 'Initial onboarding assessment' },
+  { id: 'periodic_review', label: 'Periodic review' },
+];
+const FIELD = 'h-9 w-full rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 text-sm text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+const LABEL = 'mb-1 block text-[13px] font-medium text-[#26323d]';
+const TH = 'whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[#64707e]';
+const TD = 'px-3 py-2.5 text-[13px] text-[#26323d]';
+const words = (s: string) => s.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+export default function LegacyAssessments({ vendorId }: { vendorId: number }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('vendor_risk:assessments:create') || hasPermission('erm:risks:edit');
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ assessment_type: 'cybersecurity', due_date: '', assessed_by: '' });
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['vendor-assessments', vendorId],
+    queryFn: async () => {
+      const d = (await vendorRiskApi.getAssessments({ vendor_id: vendorId })).data;
+      return (Array.isArray(d) ? d : d.items ?? []) as Legacy[];
+    },
+  });
+  const { data: users } = useQuery({
+    queryKey: ['tenant-users'],
+    queryFn: async () => ((await tenantApi.getTenantUsers()).data ?? []) as UserOption[],
+    enabled: adding,
+  });
+
+  const create = useMutation({
+    mutationFn: async () => (await vendorRiskApi.createAssessment({
+      assessment_type: form.assessment_type, vendor_id: vendorId,
+      ...(form.due_date ? { due_date: form.due_date } : {}),
+      ...(form.assessed_by ? { assessed_by: Number(form.assessed_by) } : {}),
+    })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vendor-assessments', vendorId] });
+      setAdding(false);
+      setForm({ assessment_type: 'cybersecurity', due_date: '', assessed_by: '' });
+      toast({ type: 'success', title: 'Assessment created' });
+    },
+    onError: (e) => toast({ type: 'error', title: 'Not created', message: apiErrorText(e, 'Try again.') }),
+  });
+
+  const items = data ?? [];
+  return (
+    <>
+      <Panel
+        title="Legacy assessments"
+        count={items.length}
+        info="Assessments made on their own, outside the lifecycle. The questionnaires of a review are the cards above."
+        action={canCreate ? (
+          <button type="button" className={BTN} onClick={() => setAdding(true)}><Plus aria-hidden className="h-4 w-4" /> New assessment</button>
+        ) : undefined}
+        flush
+      >
+        {isLoading ? (
+          <p className="px-5 pb-5 text-[13px] text-[#64707e]">Loading…</p>
+        ) : isError ? (
+          <p role="alert" className="px-5 pb-5 text-[13px] text-[#b42318]">The assessments could not be loaded.</p>
+        ) : items.length === 0 ? (
+          <p className="px-5 pb-5 text-[13px] text-[#64707e]">None yet.</p>
+        ) : (
+          <div className="overflow-x-auto pb-2" tabIndex={0} role="region" aria-label="Table of legacy assessments">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-y border-[#e1e6eb] bg-[#f7f9fa]">
+                  {['Type', 'Status', 'Score', 'Rating', 'Assessor', 'Due', 'Questions'].map((h) => <th key={h} scope="col" className={TH}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e1e6eb]">
+                {items.map((a) => {
+                  const review = `/vendor-risk/assessments/${a.id}?tab=questionnaire`;
+                  return (
+                    <tr key={a.id}>
+                      <td className={TD}><Link href={review} className="font-medium text-[#0f766e] hover:underline">{words(a.assessment_type || 'assessment')}</Link></td>
+                      <td className={TD}><StatusPill tone={tones.assessment(a.status)} variant="inline">{words(a.status || '')}</StatusPill></td>
+                      <td className={`${TD} tabular-nums`}>{a.inherent_score != null ? a.inherent_score.toFixed(1) : '-'}</td>
+                      <td className={TD}>{a.risk_rating ? <TierBadge tier={a.risk_rating} variant="dot" /> : '-'}</td>
+                      <td className={TD}>{typeof a.assessor === 'object' && a.assessor ? a.assessor.full_name : a.assessor ? String(a.assessor) : '-'}</td>
+                      <td className={`${TD} whitespace-nowrap`}>{a.due_date ? fmt.date(a.due_date) : '-'}</td>
+                      <td className={TD}><Link href={review} className="whitespace-nowrap text-[#0f766e] hover:underline">View linked questions</Link></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <Dialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        title="New assessment"
+        footer={(
+          <>
+            <button type="button" className={BTN} onClick={() => setAdding(false)}>Cancel</button>
+            <button type="submit" form="legacy-assessment-form" className={BTN_PRIMARY} disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create'}</button>
+          </>
+        )}
+      >
+        <form id="legacy-assessment-form" className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
+          <div>
+            <label htmlFor="legacy-type" className={LABEL}>Type</label>
+            <select id="legacy-type" className={FIELD} value={form.assessment_type} onChange={(e) => setForm({ ...form, assessment_type: e.target.value })}>
+              {TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="legacy-due" className={LABEL}>Due date <span className="font-normal text-[#64707e]">(optional)</span></label>
+            <input id="legacy-due" type="date" className={FIELD} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+          </div>
+          <div>
+            <label htmlFor="legacy-assessor" className={LABEL}>Assessor</label>
+            <select id="legacy-assessor" className={FIELD} value={form.assessed_by} onChange={(e) => setForm({ ...form, assessed_by: e.target.value })}>
+              <option value="">Me</option>
+              {(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
+            </select>
+          </div>
+        </form>
+      </Dialog>
+    </>
+  );
+}

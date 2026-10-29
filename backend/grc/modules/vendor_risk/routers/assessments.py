@@ -11,13 +11,13 @@ from sqlalchemy import func, null
 from ....models import (
     Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
-    TPRAFinding, TPRAStageInstance,
+    TPRAFinding, TPRAStageInstance, TPRAEngagement,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import portal, rbac, versions
+from ..tpra import assessment_view, portal, rbac, versions
 from ..tpra import service as tpra_service
 from ..tpra.engine_tiering import score_to_tier
-from .questionnaires import serialize_questionnaire_response
+from .questionnaires import _response_or_404, serialize_questionnaire_response
 from ..tpra import questionnaire_evidence as qevidence
 
 logger = logging.getLogger(__name__)
@@ -565,3 +565,39 @@ def approve_assessment(
         "message": "Assessment approved and vendor risk scores updated",
         "assessment": serialize_assessment(assessment),
     }
+
+
+# ── The supplier's Assessments tab (tpra/assessment_view.py) ──────
+
+@router.get("/vendors/{vendor_id}/assessment-cards")
+def assessment_cards(
+    vendor_id: int,
+    engagement_id: Optional[int] = Query(None, description="The engagement; omitted, General (the supplier itself)"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """One scope's questionnaires, newest review first, and what its buttons depend on."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.tenant_id.in_(tenant_ids)).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    engagement = None
+    if engagement_id:
+        engagement = db.query(TPRAEngagement).filter(
+            TPRAEngagement.id == engagement_id, TPRAEngagement.vendor_id == vendor.id).first()
+        if engagement is None:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+    return assessment_view.cards(db, vendor, engagement)
+
+
+@router.get("/questionnaire-responses/{response_id}/detail")
+def questionnaire_detail(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A questionnaire read in full: answers by section, what moved since the last cycle, the score's steps."""
+    qr = _response_or_404(db, current_user, response_id)
+    return {**serialize_questionnaire_response(qr), **assessment_view.detail(db, qr)}
