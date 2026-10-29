@@ -384,9 +384,12 @@ def reopen(db: Session, f: TPRAFinding, actor_id: Optional[int], reason: Optiona
     if was == "accepted":
         _revoke_acceptances(db, f, actor_id, why[:4000])
     else:
+        ct = twin(db, f)
         for rem in db.query(TPRARemediation).filter(TPRARemediation.finding_id == f.id, TPRARemediation.deleted_at.is_(None),
                                                     TPRARemediation.status == "completed"):
             rem.status, rem.completed_at = "open", None
+            if ct is not None and ct.source_entity_id == rem.id:
+                rem.owner_id = f.owner_id               # the fix under way is the finding's owner's, who may have changed
             _bump(rem)
             mirror(db, rem, actor_id)
     f.status = status or service.reopened_status(f)

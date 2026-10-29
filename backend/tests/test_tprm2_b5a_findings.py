@@ -472,10 +472,14 @@ def test_reopening_a_finding_with_a_task_puts_it_back_in_remediation_and_the_tas
     assert c.post(f"{T}/findings/{f.id}/close", json={"note": "Done and verified"}).status_code == 200
     db.expire_all()
     assert db.get(TPRAFinding, f.id).status == "closed" and db.get(CriticalTask, task.id).status == "Completed"
+    assert c.put(f"{T}/findings/{f.id}", json={"owner_id": OWNER}).json()["owner_id"] == OWNER       # handed on while closed
     back = c.post(f"{T}/findings/{f.id}/reopen", json={"reason": "It came back"}).json()
     assert (back["status"], back["task"]) == ("in_remediation", {"id": task.id, "status": "Open"})
     db.expire_all()
     assert db.get(TPRARemediation, rem.id).status == "open" and db.get(CriticalTask, task.id).completed_at is None
+    # the fix under way is the new owner's, and the finding keeps the owner it was given
+    assert (db.get(TPRAFinding, f.id).owner_id, db.get(TPRARemediation, rem.id).owner_id,
+            db.get(CriticalTask, task.id).assigned_user_ids) == (OWNER, OWNER, [OWNER])
 
 
 def test_reopening_an_accepted_finding_revokes_the_acceptance(db):
