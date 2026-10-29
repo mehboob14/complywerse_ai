@@ -97,7 +97,7 @@ export default function TieringDialog({
   useEffect(() => {
     if (!open || !draft) return undefined;
     const answers = given(draft.answers);
-    if (Object.keys(answers).length === 0) { setPreview(null); return undefined; }
+    if (Object.keys(answers).length === 0) return undefined;           // nothing to score: the box says so
     const timer = setTimeout(async () => {
       try {
         setPreview((await lifecycleApi.previewTier(answers)).data);
@@ -117,6 +117,8 @@ export default function TieringDialog({
     onClose();
   };
 
+  // The score shown is for the answers as they stand: with none given there is none, whatever came back earlier.
+  const score = draft && Object.keys(given(draft.answers)).length > 0 ? preview : null;
   const left = useMemo(() => (draft ? sections.reduce((n, s) => n + owed(s, draft.answers, draft.reasons, minReason).length, 0) : 0),
     [sections, draft, minReason]);
   const total = sections.reduce((n, s) => n + s.questions.length, 0);
@@ -167,7 +169,7 @@ export default function TieringDialog({
   const current = sections.find((s) => s.key === step);
   const at = step === OVERRIDE ? sections.length : sections.findIndex((s) => s.key === step);
   const steps = [...sections.map((s) => s.key), OVERRIDE];
-  const shown = draft?.tier || preview?.tier || null;
+  const shown = draft?.tier || score?.tier || null;
   const moved = changesFrom(currentTier, shown);
   const ready = !!draft && left === 0 && overrideReady(draft.tier, draft.why) && !blockedWhy && !!saved;
   const title = `${currentTier ? 'Re-tier' : 'Tier'} ${engagementName}`;
@@ -199,25 +201,25 @@ export default function TieringDialog({
           {blockedWhy && <p className="px-5 pt-3 text-[13px]" style={{ color: TONE.warning.text }}>{blockedWhy}</p>}
           {/* The score */}
           <div className="border-b border-[#eef1f4] px-5 py-3">
-            {!preview ? (
-              <p className="text-[13px] text-[#64707e]">{previewError ?? 'Answer to see the tier'}</p>
+            {!score ? (
+              <p className="text-[13px] text-[#64707e]">{previewError && draft && Object.keys(given(draft.answers)).length > 0 ? previewError : 'Answer to see the tier'}</p>
             ) : (
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-[13px] font-semibold text-[#586472]">{draft.tier ? 'Tier' : 'Likely tier'}</span>
                   <TierBadge tier={shown} />
-                  <span className="text-[13px] tabular-nums text-[#586472]">Score {Math.round(preview.score * 10) / 10}</span>
+                  <span className="text-[13px] tabular-nums text-[#586472]">Score {Math.round(score.score * 10) / 10}</span>
                   {draft.tier && <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.pending.tint, color: TONE.pending.text }}>Overridden</span>}
-                  {preview.minimum_tier && (
+                  {score.minimum_tier && (
                     <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.progress.tint, color: TONE.progress.text }}
-                      title={preview.minimum_from ? `An answer sets a minimum tier, whatever the score: ${preview.minimum_from}` : 'An answer sets a minimum tier, whatever the score.'}>
-                      Minimum {preview.minimum_tier[0].toUpperCase() + preview.minimum_tier.slice(1)} from an answer
+                      title={score.minimum_from ? `An answer sets a minimum tier, whatever the score: ${score.minimum_from}` : 'An answer sets a minimum tier, whatever the score.'}>
+                      Minimum {score.minimum_tier[0].toUpperCase() + score.minimum_tier.slice(1)} from an answer
                     </span>
                   )}
                   {moved && <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: TONE.warning.tint, color: TONE.warning.text }}>Changes from {moved}</span>}
                   <span className="ml-auto text-[13px] tabular-nums text-[#64707e]">{answered}/{total}</span>
                 </div>
-                <ThresholdRuler score={preview.score} thresholds={policy?.thresholds ?? BANDS} compact showNext />
+                <ThresholdRuler score={score.score} thresholds={policy?.thresholds ?? BANDS} compact showNext />
               </div>
             )}
           </div>
@@ -265,7 +267,7 @@ export default function TieringDialog({
               ) : (
                 <div className="space-y-3">
                   <p className="text-[13px] text-[#26323d]">
-                    Computed tier is <span className="font-semibold">{preview ? preview.tier[0].toUpperCase() + preview.tier.slice(1) : 'not known yet'}</span>.
+                    Computed tier is <span className="font-semibold">{score ? score.tier[0].toUpperCase() + score.tier.slice(1) : 'not known yet'}</span>.
                   </p>
                   <div>
                     <label className="mb-1 block text-[13px] font-medium text-[#26323d]" htmlFor="tier-override">Tier</label>

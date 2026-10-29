@@ -84,14 +84,14 @@ function Overflow({ items }: { items: Array<{ key: string; label: string; onClic
   if (items.length === 0) return null;
   return (
     <div ref={box} className="relative">
-      <button type="button" className={BTN_ICON} aria-haspopup="menu" aria-expanded={open} aria-label="More actions" title="More actions" onClick={() => setOpen((v) => !v)}>
+      <button type="button" className={BTN_ICON} aria-expanded={open} aria-label="More actions" title="More actions" onClick={() => setOpen((v) => !v)}>
         <MoreHorizontal aria-hidden className="h-4 w-4" />
       </button>
       {open && (
-        <ul role="menu" className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-[#d5dbe1] bg-[#fff] py-1 shadow-card">
+        <ul className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-[#d5dbe1] bg-[#fff] py-1 shadow-card">
           {items.map((i) => (
-            <li key={i.key} role="none">
-              <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-[13px] text-[#26323d] hover:bg-[#f3f6f8] focus-visible:bg-[#f3f6f8] focus-visible:outline-none"
+            <li key={i.key}>
+              <button type="button" className="block w-full px-3 py-2 text-left text-[13px] text-[#26323d] hover:bg-[#f3f6f8] focus-visible:bg-[#f3f6f8] focus-visible:outline-none"
                 onClick={() => { setOpen(false); i.onClick(); }}>
                 {i.label}
               </button>
