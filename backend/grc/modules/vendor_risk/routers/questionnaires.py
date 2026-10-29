@@ -728,13 +728,15 @@ def vendor_view(db: Session, qr: VendorQuestionnaireResponse, contact=None) -> d
     shown = {
         "questionnaire_id": qr.id,
         "title": version.name if version else None,
+        "organisation": db.query(Tenant.name).filter(Tenant.id == qr.tenant_id).scalar(),
         "vendor_name": vendor.name if vendor else None,
         "respondent_name": qr.respondent_name,
         "respondent_email": qr.respondent_email,
         "status": qr.status,
         "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
         "due_date": qr.due_date.isoformat() if qr.due_date else None,
-        "questions": questions,
+        "submitted_at": qr.submitted_at.isoformat() if qr.submitted_at else None,
+        "questions": portal.vendor_questions(questions),       # what is asked, never how an answer scores
         "existing_responses": qr.responses or {},
         "comments": qr.vendor_comments or {},
         # While returned, only these can change: {question key: what the reviewer asked}.
@@ -788,7 +790,10 @@ def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: Externa
     returned, only the questions the reviewer asked about can change. Submitting
     takes a named person attesting to the answers. Through a personal link the
     contact is the respondent and attester unless the answers name someone, and
-    the questionnaire's links go to them from now on."""
+    the questionnaire's links go to them from now on. A request with no `responses` at
+    all (a send after answers saved one by one) leaves the stored answers as they are."""
+    if "responses" not in payload.model_fields_set:
+        payload = payload.model_copy(update={"responses": dict(qr.responses or {})})
     if contact is not None:
         qr.contact_id = contact.id
         given = {k: v for k, v in (payload.attestation or {}).items() if v not in (None, "")}
