@@ -569,7 +569,8 @@ def _settle(db: Session, finding: TPRAFinding, r: TPRASupplierRequest, how: str,
         due_date=datetime.combine(r.target_date, time.min) if r.target_date else None), db=db, user=user)
     if how == "close":
         api.update_remediation(made["id"], api.RemediationUpdate(status="completed"), db=db, user=user)
-        api.update_finding(finding.id, api.FindingUpdate(status="closed"), db=db, user=user)
+        api.update_finding(finding.id, api.FindingUpdate(
+            status="closed", note=f"Verified: the vendor's plan for '{r.title}' was carried out."[:4000]), db=db, user=user)
 
 
 @router.post("/vendors/{vendor_id}/supplier-requests/{request_id}/accept")

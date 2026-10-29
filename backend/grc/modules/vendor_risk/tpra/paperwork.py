@@ -239,7 +239,7 @@ def sync_finding(db: Session, vendor: Vendor, r: TPRASocReview, actor_id: Option
     assessment = service.ensure_active_assessment(db, vendor, actor_id)
     finding = TPRAFinding(tenant_id=vendor.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id,
                           status="open", is_critical_control_fail=want["severity"] == "critical",
-                          created_by=actor_id, **want)
+                          created_by=actor_id, source="document_review", **want)
     db.add(finding)
     db.flush()
     service.write_audit(db, vendor.tenant_id, entity="finding", action="create", vendor_id=vendor.id,
