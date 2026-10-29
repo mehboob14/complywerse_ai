@@ -11,11 +11,12 @@ import { clsx } from 'clsx';
 import { FileSignature, Loader2, Paperclip, Plus } from 'lucide-react';
 import { vendorContractsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { BTN_PRIMARY, Panel } from '../../../_ui';
+import { BTN_PRIMARY, Panel, fmt } from '../../../_ui';
 import ContractDrawer from '../../../_lib/contracts/ContractDrawer';
 import { CLAUSES, STATE_META, countdown, money, type Register } from '../../../_lib/contracts/shared';
 import { useEngagements } from '../../../_lib/engagementsApi';
-import { fmtDate } from './constants';
+
+const fmtDate = (d?: string | null) => (d ? fmt.date(d) : '—');      // "5 Mar 2026", as everywhere in the module
 
 /** `framed` draws the contracts as a panel of their own (the Paperwork tab); without it they sit in whatever frame the caller has (a lifecycle stage). */
 export default function ContractsPanel({ vendorId, assessmentId, framed = false }: { vendorId: number; assessmentId?: number; framed?: boolean }) {

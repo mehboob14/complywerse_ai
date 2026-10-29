@@ -19,7 +19,7 @@ import {
 import { titleCase } from '../../../_lib/tprmShared';
 import { isTiered } from '../../../_lib/vendorRecordModel';
 import { AREA, FIELD, HINT, LABEL } from '../../_components/formStyles';
-import { STAGE_META, fmtDate } from './constants';
+import { STAGE_META } from './constants';
 
 const CRITICALITY = ['low', 'medium', 'high', 'critical'];
 const DANGER_FILL = 'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#b42318] px-3 text-sm font-medium text-[#fff] hover:bg-[#912018] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
@@ -109,7 +109,7 @@ function Row({ e, list, canEdit, canTier, onOpen, onTier, onEdit, onEnd }: {
         {ended ? (
           <span className="inline-flex items-center gap-0.5">
             <StatusPill tone="neutral">Ended</StatusPill>
-            <InfoTip text={`${fmtDate(e.archived_at)}: ${e.ended_reason || ''}`} label="Why it ended" align="end" />
+            <InfoTip text={`${fmt.date(e.archived_at)}: ${e.ended_reason || ''}`} label="Why it ended" align="end" />
           </span>
         ) : (
           <StatusPill tone={e.active_assessment_id ? 'progress' : 'pending'}>{stageLabel(e)}</StatusPill>

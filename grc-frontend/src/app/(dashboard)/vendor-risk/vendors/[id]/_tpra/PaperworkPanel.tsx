@@ -13,14 +13,12 @@ import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
-import { parseUtc } from '@/lib/serverTime';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
-import { fmtDate } from '../../../_lib/tprmShared';
 import { errText } from '../../../_lib/intake/types';
 import {
   paperworkApi, type Cuec, type CuecStatus, type Opinion, type PaperDoc, type SocReview, type Subservice,
 } from '../../../_lib/paperworkApi';
-import { BTN, Panel, Skeleton } from '../../../_ui';
+import { BTN, Panel, Skeleton, fmt } from '../../../_ui';
 import RenewalDialog from '../_record/RenewalDialog';
 
 type Tone = 'red' | 'amber' | 'green' | 'grey';
@@ -50,7 +48,8 @@ const btn = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11
 const input = 'w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const stamped = (iso: string | null) => fmtDate(parseUtc(iso)?.toISOString());      // a server time, which is UTC
+const fmtDate = (d?: string | null) => (d ? fmt.date(d) : '—');      // "5 Mar 2026", as everywhere in the module (a server time is read as UTC)
+const stamped = (iso: string | null) => fmtDate(iso);
 
 function Chip({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return <span className={clsx('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium', TONE[tone])}>{children}</span>;
