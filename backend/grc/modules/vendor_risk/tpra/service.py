@@ -187,17 +187,22 @@ def acceptance_holds(db: Session, finding: TPRAFinding, now: Optional[datetime] 
     return finding.status == "accepted" and not rows
 
 
+def reopened_status(finding: TPRAFinding) -> str:
+    """Where a finding goes back to: in remediation when a task is tracking its fix, else open."""
+    return "in_remediation" if finding.task_id else "open"
+
+
 def reopen_finding(db: Session, finding: TPRAFinding, actor_id: Optional[int], reason: str) -> None:
     """A finding its acceptance no longer covers (revoked, or expired) is open
     again and counts in every gate and count: on the audit trail (no actor = the
     system), given an issue if it has none, and an onboarded vendor is suspended
     if a critical is left unmitigated (TPRM-002). Caller owns commit."""
     if finding.status == "accepted":
-        finding.status = "open"
+        finding.status = reopened_status(finding)
         finding.row_version = (finding.row_version or 1) + 1
         write_audit(db, finding.tenant_id, entity="finding", action="reopen", vendor_id=finding.vendor_id,
                     assessment_id=finding.assessment_id, entity_id=finding.id, actor_id=actor_id,
-                    from_value="accepted", to_value="open", reason=reason)
+                    from_value="accepted", to_value=finding.status, reason=reason)
     ensure_finding_issue(db, finding, actor_id)
     vendor = db.query(Vendor).filter(Vendor.id == finding.vendor_id).first()
     assessment = db.query(VendorAssessment).filter(VendorAssessment.id == finding.assessment_id).first()
@@ -924,7 +929,7 @@ def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessm
             source_response_id=r.get("response_id"), is_critical_control_fail=failed_critical,
             template_version_id=r.get("template_version_id"), question_key=str(key)[:100],
             answer_value=None if answered is None else str(answered)[:255],
-            status="open", created_by=actor_id,
+            status="open", created_by=actor_id, source="assessment", is_blocking=failed_critical,
         ))
         existing.add(str(key))
         created += 1
@@ -1187,10 +1192,15 @@ def mirror_conditions(db: Session, approval: TPRAApproval, user_id: Optional[int
 
 
 def sync_condition_from_task(db: Session, critical_task_id: int, user_id: Optional[int] = None) -> None:
-    """Task Management changed a twin: its condition follows (status, owner, due date). No-op for any other task."""
+    """Task Management changed a twin: its condition follows (status, owner, due date); a finding's fix is another kind of
+    twin (tpra/findings.py). No-op for any other task."""
+    from . import findings                     # late: findings reads this module
     from ...governance.regulatory_tasks import _ids
     ct = db.get(CriticalTask, critical_task_id)
-    if ct is None or ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
+    if ct is None:
+        return
+    findings.sync_from_task(db, ct, user_id)
+    if ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
         return
     approval = db.get(TPRAApproval, ct.source_entity_id)
     if approval is None:
@@ -1220,7 +1230,10 @@ def sync_condition_from_task(db: Session, critical_task_id: int, user_id: Option
 
 
 def on_condition_task_deleted(db: Session, ct: CriticalTask, user_id: Optional[int] = None) -> None:
-    """Task Management is deleting a twin: its condition stays on the approval as it was, without a twin."""
+    """Task Management is deleting a twin: its condition stays on the approval as it was, without a twin (a finding's
+    remediation, likewise: tpra/findings.py)."""
+    from . import findings                     # late: findings reads this module
+    findings.on_task_deleted(db, ct, user_id)
     if ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
         return
     approval = db.get(TPRAApproval, ct.source_entity_id)

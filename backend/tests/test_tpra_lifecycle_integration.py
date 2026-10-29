@@ -417,10 +417,13 @@ def test_finding_cannot_be_closed_without_completed_remediation(db):
     with pytest.raises(HTTPException) as ei:
         api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
     assert ei.value.status_code == 400
-    # After a completed remediation (evidence of fix), closing is allowed.
+    # After a completed remediation (evidence of fix), closing is allowed; a critical finding is closed with a note too.
     db.add(TPRARemediation(tenant_id=1, finding_id=f.id, title="Rolled out MFA", status="completed"))
     db.commit()
-    res = api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    with pytest.raises(HTTPException) as no_note:
+        api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert no_note.value.status_code == 400 and "note" in no_note.value.detail
+    res = api.update_finding(f.id, api.FindingUpdate(status="closed", note="MFA rolled out and verified"), db=db, user=u)
     assert res["status"] == "closed"
 
 

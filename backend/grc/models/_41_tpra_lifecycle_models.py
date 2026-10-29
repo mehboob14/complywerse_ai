@@ -169,6 +169,14 @@ class TPRAFinding(Base):
     template_version_id = Column(Integer, nullable=True)
     question_key = Column(String(100), nullable=True)
     answer_value = Column(String(255), nullable=True)
+    # Who sees it through (a platform user), whether it holds the approval gate whatever its
+    # severity, where it came from (assessment | manual | sla_breach | signal | document_review |
+    # offboarding; NULL on a row from before: tpra/findings.py source_of reads it) and the
+    # Task Management twin "Start remediation" opens.
+    owner_id = Column(Integer, nullable=True)
+    is_blocking = Column(Boolean, default=False)
+    source = Column(String(30), nullable=True)
+    task_id = Column(Integer, nullable=True)
     created_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)

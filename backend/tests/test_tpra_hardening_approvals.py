@@ -378,7 +378,7 @@ def test_a_reopened_finding_reopens_the_issue_its_acceptance_closed(db):
     api.update_finding(f["id"], api.FindingUpdate(status="closed"), db=db, user=admin)
     db.refresh(issue)
     assert issue.workflow_state == "closed"
-    api.update_finding(f["id"], api.FindingUpdate(status="in_remediation"), db=db, user=admin)
+    api.update_finding(f["id"], api.FindingUpdate(status="in_remediation", reason="The fix was rolled back"), db=db, user=admin)
     db.refresh(issue)
     assert issue.workflow_state == "in_progress"
     assert db.query(IssueActivity).filter(IssueActivity.issue_id == issue.id, IssueActivity.type == "reopened").count() == 2

@@ -190,7 +190,7 @@ def raise_finding(db: Session, signal: TPRAMonitoringSignal, vendor: Vendor,
         description=(f"Raised from a monitoring signal ({signal.source or 'manual'}, "
                      f"{signal.occurred_at:%d %b %Y}).\n\n{signal.detail or ''}"
                      + (f"\n\nSources:\n{links}" if links else "")).strip(),
-        status="open", created_by=actor_id,
+        status="open", created_by=actor_id, source="signal",
     )
     db.add(finding)
     db.flush()
@@ -208,6 +208,27 @@ def reject(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int], r
     signal.deleted_at = datetime.utcnow()
     service.write_audit(db, signal.tenant_id, entity="signal", action="reject", vendor_id=signal.vendor_id,
                         entity_id=signal.id, actor_id=actor_id, reason=reason)
+
+
+def status_of(signal: TPRAMonitoringSignal) -> str:
+    """What was decided about a signal: new, acknowledged, or dismissed (ruled not relevant, here or in breach triage)."""
+    if signal.triage_status == "not_relevant":
+        return "dismissed"
+    return "acknowledged" if signal.acknowledged else "new"
+
+
+def dismiss(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int]) -> None:
+    """Nothing to act on: the signal stays on the list, marked dismissed and acknowledged, and leaves the queue. The
+    articles behind a fetched one are remembered, so the same reports are not raised again."""
+    if status_of(signal) == "dismissed":
+        return
+    signal.triage_status = "not_relevant"
+    if not signal.acknowledged:
+        signal.acknowledged, signal.acknowledged_by, signal.acknowledged_at = True, actor_id, datetime.utcnow()
+    signal.row_version = (signal.row_version or 1) + 1
+    remember_rejection(db, signal, actor_id, None)
+    service.write_audit(db, signal.tenant_id, entity="signal", action="dismiss", vendor_id=signal.vendor_id,
+                        entity_id=signal.id, actor_id=actor_id)
 
 
 def remember_rejection(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int],

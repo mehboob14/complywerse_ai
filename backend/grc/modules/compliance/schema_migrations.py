@@ -1251,6 +1251,12 @@ _COLUMN_ADDS = [
     # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
     # One engagement's own exit checklist (tpra/engagements.py, B5b).
     ("grc_tpra_engagements", "offboarding", "JSON", None),
+    # A finding's owner, whether it holds the approval gate, where it came from and its Task Management twin
+    # (tpra/findings.py, B5a). A row from before reads NULL: no owner, not blocking, source worked out from the row.
+    ("grc_tpra_findings", "owner_id", "INTEGER", None),
+    ("grc_tpra_findings", "is_blocking", "BOOLEAN", None),
+    ("grc_tpra_findings", "source", "VARCHAR(30)", None),
+    ("grc_tpra_findings", "task_id", "INTEGER", None),
 ]
 
 

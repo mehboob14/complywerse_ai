@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, asc, desc, func, or_, select
+from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from ....models import (
@@ -21,6 +21,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from . import intake
+from . import findings
 from .engine_scoring import grade_for
 from .bootstrap import get_tiering_config, ensure_tpra_tenant_defaults
 from .schema_migrations import ensure_tpra_columns
@@ -366,6 +367,7 @@ def findings_register(
     domain: Optional[str] = Query(None),
     vendor_id: Optional[int] = Query(None),
     overdue_only: bool = Query(False),
+    scope: str = Query("all", pattern="^(open|accepted|closed|all)$"),
     sort: str = Query("created_at"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     skip: int = Query(0, ge=0),
@@ -374,7 +376,11 @@ def findings_register(
     user: GRCUser = Depends(require_auth),
 ):
     """Cross-portfolio findings register — every gap across vendors, with vendor
-    name, SLA due date and overdue flag. Filter / sort / paginate."""
+    name, SLA due date and overdue flag. Filter / sort / paginate. `scope` is open
+    (open + in remediation), accepted, closed or all; `status` still asks for one
+    status. `blocking_total` counts the open findings that hold the approval gate,
+    whatever the scope. `sort` also takes vendor, owner and due (the earliest fix
+    date, none last); severity sorts by seriousness, so desc is the worst first."""
     tids = _tids(user, db)
     _prep_tpra_db(db, tids)
     now = datetime.utcnow()
@@ -383,23 +389,45 @@ def findings_register(
     q = db.query(TPRAFinding).filter(
         TPRAFinding.tenant_id.in_(tids), TPRAFinding.deleted_at.is_(None),
     )
-    if status_filter:
-        q = q.filter(TPRAFinding.status == status_filter)
     if severity:
         q = q.filter(TPRAFinding.severity == severity)
     if domain:
         q = q.filter(TPRAFinding.domain == domain)
     if vendor_id:
         q = q.filter(TPRAFinding.vendor_id == vendor_id)
+    blocking_total = q.filter(TPRAFinding.status.in_(_OPEN_F), TPRAFinding.is_blocking.is_(True)).count()
+    if status_filter:
+        q = q.filter(TPRAFinding.status == status_filter)
+    if scope != "all":
+        q = q.filter(TPRAFinding.status.in_(_OPEN_F if scope == "open" else (scope,)))
     if overdue_only:
         q = q.filter(TPRAFinding.id.in_(overdue_ids or [-1]))
 
     total = q.count()
     sort_col = {
-        "created_at": TPRAFinding.created_at, "severity": TPRAFinding.severity,
-        "status": TPRAFinding.status, "domain": TPRAFinding.domain,
-    }.get(sort, TPRAFinding.created_at)
-    q = q.order_by(desc(sort_col) if order == "desc" else asc(sort_col))
+        "created_at": TPRAFinding.created_at, "status": TPRAFinding.status, "domain": TPRAFinding.domain,
+        # worst = highest: critical 4 … low 1, so `desc` lists the worst first
+        "severity": case((TPRAFinding.severity == "critical", 4), (TPRAFinding.severity == "high", 3),
+                         (TPRAFinding.severity == "medium", 2), (TPRAFinding.severity == "low", 1), else_=0),
+    }.get(sort)
+    if sort == "vendor":
+        q = q.join(Vendor, Vendor.id == TPRAFinding.vendor_id)
+        sort_col = func.lower(Vendor.name)
+    elif sort == "owner":
+        q = q.outerjoin(GRCUser, GRCUser.id == TPRAFinding.owner_id)
+        sort_col = func.lower(func.coalesce(GRCUser.display_name, GRCUser.username))
+    elif sort == "due":
+        sort_col = (select(func.min(TPRARemediation.due_date))
+                    .where(TPRARemediation.finding_id == TPRAFinding.id, TPRARemediation.deleted_at.is_(None),
+                           TPRARemediation.status != "completed")
+                    .correlate(TPRAFinding).scalar_subquery())
+    elif sort_col is None:
+        sort_col = TPRAFinding.created_at
+    ordered = desc(sort_col) if order == "desc" else asc(sort_col)
+    if sort in ("owner", "due"):
+        ordered = ordered.nulls_last()          # nobody, and no date, come last whichever way it runs
+    # the other sorts are as they were; a list ends in a fixed order, so the newest breaks a tie
+    q = q.order_by(ordered, desc(TPRAFinding.id))
     rows = q.offset(skip).limit(limit).all()
 
     fids = [f.id for f in rows] or [-1]
@@ -415,6 +443,7 @@ def findings_register(
         if cur is None or due < cur:
             due_by_finding[fid] = due
 
+    more = findings.extras(db, rows)
     items = [{
         "id": f.id, "vendor_id": f.vendor_id, "vendor_name": vname.get(f.vendor_id),
         "assessment_id": f.assessment_id, "domain": f.domain, "severity": f.severity,
@@ -422,8 +451,13 @@ def findings_register(
         "due_date": due_by_finding[f.id].isoformat() if f.id in due_by_finding else None,
         "overdue": f.id in overdue_ids,
         "created_at": f.created_at.isoformat() if f.created_at else None,
+        # who sees it through, whether it holds the approval gate, where it came from, how long an acceptance runs, its task,
+        # and when the policy's window for its severity ends
+        "owner": more[f.id]["owner"], "is_blocking": bool(f.is_blocking), "source": findings.source_of(f),
+        "accepted_until": more[f.id]["accepted_until"], "task_id": f.task_id, "sla_due": more[f.id]["sla_due"],
+        "engagement": more[f.id]["engagement"],
     } for f in rows]
-    return {"items": items, "total": total, "skip": skip, "limit": limit}
+    return {"items": items, "total": total, "blocking_total": blocking_total, "skip": skip, "limit": limit}
 
 
 @router.get("/risk-register")
