@@ -1,7 +1,7 @@
 'use client';
 
-// A heading over a panel that brings its own frame (the signals, the outside-in view, the dependencies): the same look as a kit Panel's
-// title, without a second border round the first.
+// A heading over a panel that brings its own frame (the signals, the outside-in view): the same look as a kit Panel's title, without a
+// second border round the first.
 import { useId, type ReactNode } from 'react';
 import { InfoTip } from '@/components/ui/InfoTip';
 
