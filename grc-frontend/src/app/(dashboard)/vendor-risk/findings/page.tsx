@@ -1,152 +1,157 @@
 'use client';
 
-// Findings & Remediation — cross-portfolio risk register. Every gap across all
-// vendors, with vendor name, SLA due date and overdue flag. Filter / sort /
-// paginate; click a row to open the vendor's lifecycle where it's edited.
+// Findings: every gap across all vendors, as one register, tracked to closure. A switch picks Open (open and in remediation),
+// Accepted, Closed or All; the severity, domain and overdue filters stay. A red line says how many findings are blocking an
+// approval. The list is read-only: a row opens the finding on the vendor's Findings tab, where it is worked. The scope, the filters
+// and the page live in the address. The title is the module header's (layout).
 
-import { useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { AlertTriangle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { tpraApi } from '@/lib/api';
-import { PageLoader } from '@/components/ui';
-import { sevBadgeCls, DOMAIN_LABELS, DOMAIN_KEYS, STATUS_LABELS, fmtDate, titleCase, TIER_ORDER } from '../_lib/tprmShared';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import {
+  BTN, ClearFilters, EmptyState, ErrorState, FilterFacet, PersonChip, SegmentedControl, SeverityChip, Skeleton, StatusPill, TONE, ToggleChip, fmt, tierLabel,
+  tones, useUrlParams,
+} from '../_ui';
+import Pager from '../_lib/Pager';
+import { DOMAIN_KEYS, DOMAIN_LABELS, titleCase } from '../_lib/tprmShared';
+import { errText } from '../_lib/intake/types';
+import { findingsKey, portfolioApi, type FindingRow } from '../_lib/portfolioApi';
+import {
+  CLEAR_FILTERS, PAGE_SIZE, SCOPES, acceptedLine, blockingLine, dueView, emptyCopy, filterPatch, hasFilters, listParams, readFilters, rowHref,
+  sourceLabel, vendorHref,
+} from '../_lib/findingsModel';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
-interface Finding {
-  id: number; vendor_id: number; vendor_name: string | null; domain: string;
-  severity: string; title: string | null; status: string; is_critical_control_fail: boolean;
-  due_date: string | null; overdue: boolean; created_at: string | null;
-}
-const PAGE = 25;
-const STATUSES = ['open', 'in_remediation', 'accepted', 'closed'];
+const SEVERITIES = ['critical', 'high', 'medium', 'low'].map((value) => ({ value, label: tierLabel(value) }));
+const DOMAINS = DOMAIN_KEYS.map((value) => ({ value, label: DOMAIN_LABELS[value] || titleCase(value) }));
 
-function Select({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: Array<{ v: string; l: string }>;
-}) {
+// `!`: the dashboard CSS gives a table header its own ink and size
+const TH = 'whitespace-nowrap !bg-[#f8fafb] px-4 text-left !text-[11px] !font-semibold uppercase tracking-wide !text-[#586472]';
+const MUTED = 'text-[13px] leading-5 text-[#64707e]';
+const LINK = 'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+
+function Row({ f, onOpen }: { f: FindingRow; onOpen: () => void }) {
+  const due = dueView(f);
+  const until = acceptedLine(f);
+  const source = sourceLabel(f.source);
   return (
-    <label className="flex items-center gap-1.5 text-xs text-gray-500">
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-slate-800">
-        {options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-      </select>
-    </label>
+    <tr onClick={(e) => { if (!(e.target as HTMLElement).closest('a, button')) onOpen(); }} className="h-14 cursor-pointer !bg-[#fff] hover:!bg-[#f8fafb]">
+      <td className="px-4 align-middle"><SeverityChip severity={f.severity} /></td>
+      <td className="min-w-[16rem] px-4 align-middle">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={rowHref(f)} className={`text-[14px] font-semibold leading-5 text-[#1f2933] hover:text-[#0f766e] hover:underline ${LINK}`}>{f.title || 'Untitled finding'}</Link>
+          {f.is_blocking && (
+            <span title="Blocks approval until closed or accepted" className="shrink-0 rounded border px-1.5 py-px text-[10px] font-bold uppercase leading-4"
+              style={{ borderColor: TONE.danger.dot, color: TONE.danger.text }}>Blocking</span>
+          )}
+          {f.is_critical_control_fail && (
+            <span className="shrink-0 rounded border px-1.5 py-px text-[10px] font-medium leading-4" style={{ borderColor: TONE.danger.border, background: TONE.danger.tint, color: TONE.danger.text }}>critical control</span>
+          )}
+        </div>
+        <p className="text-[12px] leading-4 text-[#64707e]">{DOMAIN_LABELS[f.domain] || titleCase(f.domain)}</p>
+      </td>
+      <td className="px-4 align-middle">
+        {f.vendor_name
+          ? <Link href={vendorHref(f)} className={`text-[13px] font-medium leading-5 text-[#0f766e] hover:underline ${LINK}`}>{f.vendor_name}</Link>
+          : <span className={MUTED}>—</span>}
+      </td>
+      <td className="px-4 align-middle">
+        <div className="flex flex-col items-start gap-0.5">
+          <StatusPill tone={tones.finding(f.status)} variant="inline">{f.status === 'in_remediation' ? 'In remediation' : fmt.status(f.status)}</StatusPill>
+          {until && <span className="text-[12px] leading-4 text-[#64707e]">{until}</span>}
+        </div>
+      </td>
+      <td className="px-4 align-middle">
+        <span title={due.title} className="whitespace-nowrap text-[13px] leading-5" style={{ color: due.late ? TONE.danger.text : due.text === '—' ? '#64707e' : '#26323d', fontWeight: due.late ? 600 : 400 }}>{due.text}</span>
+      </td>
+      <td className="px-4 align-middle">
+        {'owner' in f ? <PersonChip name={f.owner?.name} size="sm" /> : <span className={MUTED}>—</span>}
+      </td>
+      <td className="px-4 align-middle"><span className={source ? 'text-[13px] leading-5 text-[#26323d]' : MUTED}>{source ?? '—'}</span></td>
+    </tr>
   );
 }
 
 export default function FindingsRegisterPage() {
   const router = useRouter();
-  const [status, setStatus] = useState('');
-  const [severity, setSeverity] = useState('');
-  const [domain, setDomain] = useState('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
-  const [page, setPage] = useState(0);
+  const params = useUrlParams();
+  const filters = useMemo(() => readFilters(params), [params]);
+  const query = listParams(filters);
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['tprm-findings', status, severity, domain, overdueOnly, page],
-    queryFn: async () => (await tpraApi.findingsRegister({
-      status: status || undefined, severity: severity || undefined, domain: domain || undefined,
-      overdue_only: overdueOnly || undefined, sort: 'created_at', order: 'desc',
-      skip: page * PAGE, limit: PAGE,
-    })).data as { items: Finding[]; total: number; skip: number; limit: number },
+  const { data, isLoading, isError, error, refetch, isPlaceholderData } = useQuery({
+    queryKey: [...findingsKey, query],
+    queryFn: async () => (await portfolioApi.findings(query)).data,
     placeholderData: keepPreviousData,
     ...TPRM_QUERY_OPTS,
   });
 
-  const reset = (fn: () => void) => { fn(); setPage(0); };
-  const items = data?.items || [];
-  const total = data?.total || 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE));
+  const total = data?.total ?? 0;
+  const rows = data?.items ?? [];
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // a link to a page the list no longer reaches lands on the last one
+  useEffect(() => {
+    if (data && !isPlaceholderData && filters.page > pages) params.set({ page: pages > 1 ? String(pages) : null });
+  }, [data, isPlaceholderData, filters.page, pages, params]);
+
+  const blocking = blockingLine(data?.blocking_total);
+  const filtered = hasFilters(filters);
+  const empty = emptyCopy(filters.scope, filtered);
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Findings &amp; Remediation</h1>
-        <p className="text-sm text-gray-500">Every open and historical gap across the portfolio. Tracked to closure with SLA.</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <SegmentedControl ariaLabel="Show findings" value={filters.scope} onChange={(scope) => params.set(filterPatch({ scope }))}
+          options={SCOPES.map((s) => ({ value: s.value, label: s.label }))} />
+        {blocking && (
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold leading-5" style={{ color: TONE.danger.text }}>
+            <AlertTriangle aria-hidden className="h-4 w-4" strokeWidth={2} />
+            {blocking}
+          </p>
+        )}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-        <Select label="Status" value={status} onChange={(v) => reset(() => setStatus(v))}
-          options={[{ v: '', l: 'All' }, ...STATUSES.map((s) => ({ v: s, l: STATUS_LABELS[s] || titleCase(s) }))]} />
-        <Select label="Severity" value={severity} onChange={(v) => reset(() => setSeverity(v))}
-          options={[{ v: '', l: 'All' }, ...TIER_ORDER.map((s) => ({ v: s, l: titleCase(s) }))]} />
-        <Select label="Domain" value={domain} onChange={(v) => reset(() => setDomain(v))}
-          options={[{ v: '', l: 'All' }, ...DOMAIN_KEYS.map((d) => ({ v: d, l: DOMAIN_LABELS[d] }))]} />
-        <label className="flex items-center gap-1.5 text-xs text-gray-600">
-          <input type="checkbox" checked={overdueOnly} onChange={(e) => reset(() => setOverdueOnly(e.target.checked))}
-            className="h-3.5 w-3.5 rounded border-gray-300" /> Overdue only
-        </label>
-        <span className="ml-auto font-mono text-[11px] text-gray-400">{total} finding{total === 1 ? '' : 's'}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterFacet label="Severity" single options={SEVERITIES} selected={filters.severity ? [filters.severity] : []}
+          onChange={(next) => params.set(filterPatch({ severity: next[0] ?? null }))} />
+        <FilterFacet label="Domain" single options={DOMAINS} selected={filters.domain ? [filters.domain] : []}
+          onChange={(next) => params.set(filterPatch({ domain: next[0] ?? null }))} />
+        <ToggleChip on={filters.overdue} onClick={() => params.set(filterPatch({ overdue: !filters.overdue }))}>Overdue only</ToggleChip>
+        <ClearFilters visible={filtered} onClick={() => params.set(CLEAR_FILTERS)} />
       </div>
 
-      {isLoading && !data ? (
-        <div className="flex h-64 items-center justify-center"><PageLoader size="md" label="Loading findings…" /></div>
-      ) : error ? (
-        <div className="flex h-48 flex-col items-center justify-center text-red-500">
-          <AlertCircle className="mb-2 h-7 w-7" /><p className="text-sm">Failed to load findings.</p>
-          <button onClick={() => refetch()} className="mt-2 text-xs font-medium text-primary-600 hover:underline">Retry</button>
+      {isLoading ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Loading findings">
+          {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
-          <AlertTriangle className="mx-auto mb-2 h-7 w-7 text-emerald-500" />
-          <p className="text-sm font-medium text-gray-700">No findings match these filters</p>
-          <p className="text-xs text-gray-500">Adjust the filters above, or assess a vendor to surface gaps.</p>
-        </div>
+      ) : isError ? (
+        <ErrorState title="Couldn't load the findings" message={errText(error, 'Try again in a moment.')} onRetry={() => refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState icon={ShieldCheck} title={empty.title} hint={empty.hint}
+          action={filtered ? <button type="button" onClick={() => params.set(CLEAR_FILTERS)} className={BTN}>Clear filters</button> : undefined} />
       ) : (
-        <div className={`overflow-hidden rounded-xl border border-gray-200 bg-white ${isFetching ? 'opacity-70' : ''}`}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-500">
-                  <th className="px-4 py-2.5">Severity</th>
-                  <th className="px-4 py-2.5">Finding</th>
-                  <th className="px-4 py-2.5">Vendor</th>
-                  <th className="px-4 py-2.5">Domain</th>
-                  <th className="px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5">SLA due</th>
+        <section aria-label="Findings" className="overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
+          <div className={`overflow-x-auto ${isPlaceholderData ? 'opacity-60 transition-opacity' : ''}`}>
+            <table className="min-w-full">
+              <thead>
+                <tr className="h-10">
+                  <th scope="col" className={TH}>Severity</th>
+                  <th scope="col" className={TH}>Finding</th>
+                  <th scope="col" className={TH}>Vendor</th>
+                  <th scope="col" className={TH}>Status</th>
+                  <th scope="col" className={TH}>Remediation due</th>
+                  <th scope="col" className={TH}>Owner</th>
+                  <th scope="col" className={TH}>Source</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {items.map((f) => (
-                  <tr key={f.id} onClick={() => router.push(`/vendor-risk/vendors/${f.vendor_id}?stage=findings&finding=${f.id}`)}
-                    className="cursor-pointer hover:bg-gray-50">
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(f.severity)}`}>{titleCase(f.severity)}</span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span className="font-medium text-slate-800">{f.title || 'Untitled finding'}</span>
-                      {f.is_critical_control_fail && <span className="ml-2 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[9px] font-medium text-red-600">critical control</span>}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-600">{f.vendor_name || '—'}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{DOMAIN_LABELS[f.domain] || titleCase(f.domain)}</td>
-                    <td className="px-4 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{STATUS_LABELS[f.status] || titleCase(f.status)}</span></td>
-                    <td className="px-4 py-2.5">
-                      <span className={f.overdue ? 'font-medium text-red-600' : 'text-gray-500'}>
-                        {fmtDate(f.due_date)}{f.overdue && ' · overdue'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+              <tbody>
+                {rows.map((f) => <Row key={f.id} f={f} onOpen={() => router.push(rowHref(f))} />)}
               </tbody>
             </table>
           </div>
-          {/* Pagination */}
-          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
-            <span>Page {page + 1} of {pages}</span>
-            <div className="flex gap-1">
-              <button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 disabled:opacity-40 hover:bg-gray-50">
-                <ChevronLeft className="h-3.5 w-3.5" /> Prev
-              </button>
-              <button disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 disabled:opacity-40 hover:bg-gray-50">
-                Next <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
+          <Pager page={filters.page} pageSize={PAGE_SIZE} total={total} noun="findings" onPage={(page) => params.set({ page: page > 1 ? String(page) : null })} />
+        </section>
       )}
     </div>
   );

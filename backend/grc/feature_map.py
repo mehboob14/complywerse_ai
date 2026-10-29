@@ -88,6 +88,8 @@ BY_PREFIX: Dict[str, Place] = {
     "/vendor-risk/questionnaires": ("Third-Party Vendor Risk", "Questionnaires"),
     "/vendor-risk/questionnaire-templates": ("Third-Party Vendor Risk", "Questionnaires"),
     "/vendor-risk/questionnaire-responses": ("Third-Party Vendor Risk", "Questionnaires"),
+    "/vendor-risk/roster": ("Third-Party Vendor Risk", "Roster"),
+    "/vendor-risk/policy": ("Third-Party Vendor Risk", "Policy"),
     # Compliance Management
     "/compliance": ("Compliance Management", "Overview"),
     "/compliance/policies": ("Compliance Management", "Policy Statements"),

@@ -292,6 +292,19 @@ def portfolio_counts(db: Session = Depends(get_db), user: GRCUser = Depends(requ
     }
 
 
+@portfolio_router.get("/units")
+def portfolio_units(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The business units the register can be filtered by: the ones a supplier sits in, by name. Read-only (the tenant
+    list in /tenants/{id}/business-units seeds demo units on a GET, which a page of filters must not do)."""
+    from ....models import BusinessUnit             # late: this file's import block is shared with other pieces
+
+    tids = _tids(user, db)
+    rows = (db.query(BusinessUnit.id, BusinessUnit.name).join(Vendor, Vendor.business_unit_id == BusinessUnit.id)
+            .filter(BusinessUnit.tenant_id.in_(tids), Vendor.tenant_id.in_(tids))
+            .distinct().order_by(BusinessUnit.name, BusinessUnit.id))
+    return {"items": [{"id": uid, "name": name} for uid, name in rows]}
+
+
 @router.get("/risk-trend")
 def risk_trend(
     scope: str = Query("portfolio", pattern="^(portfolio|vendor)$"),

@@ -415,6 +415,7 @@ def list_vendors(
     # Archived suppliers, and onboarding requests not yet picked up (or turned down), are not suppliers in use: left
     # out unless asked for. A request in review is a supplier being onboarded and is listed.
     include_archived: bool = Query(False, description="Also list archived suppliers"),
+    archived_only: bool = Query(False, description="List only the archived suppliers (the register's Archived view)"),
     include_requests: bool = Query(False, description="Also list requests not yet in review, and turned-down ones"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, description="Page size; page with skip until `total` is reached"),
@@ -429,7 +430,9 @@ def list_vendors(
         joinedload(Vendor.owner), joinedload(Vendor.business_unit),
     ).filter(Vendor.tenant_id.in_(tenant_ids))
 
-    if not include_archived:
+    if archived_only:
+        query = query.filter(Vendor.deleted_at.isnot(None))
+    elif not include_archived:
         query = query.filter(Vendor.deleted_at.is_(None))
     if not include_requests:
         query = query.filter(or_(Vendor.intake_status.is_(None), Vendor.intake_status.in_(("in_review", "approved"))))
