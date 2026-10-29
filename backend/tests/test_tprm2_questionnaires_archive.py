@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -117,6 +117,18 @@ def test_who_changed_it_last_is_named_once_someone_has(db, http, can):
     http.who["id"] = 8
     assert http.put(f"{BASE}/{t.id}", json={"description": "Edited"}).status_code == 200
     assert listed(http)[t.id]["updated_by_name"] == "Bo Editor"
+
+
+def test_the_list_is_newest_first_and_always_ordered(db, http):
+    old = make(db, "Old", created_at=datetime.utcnow() - timedelta(days=5))
+    new = make(db, "New", created_at=datetime.utcnow() - timedelta(days=1))
+    same = make(db, "Same moment", created_at=new.created_at)         # a tie is broken by id, so a saved row never moves
+    seen = []
+    event.listen(db.get_bind(), "before_cursor_execute", lambda conn, cursor, statement, *rest: seen.append(statement))
+    ids = [t["id"] for t in http.get(BASE).json()["items"]]
+    assert ids == [same.id, new.id, old.id]
+    chosen = [s for s in seen if "FROM grc_vendor_questionnaire_templates" in s and "LIMIT" in s]
+    assert chosen and all("ORDER BY" in s for s in chosen)
 
 
 def test_a_questionnaire_is_used_once_it_has_been_sent(db, http):
