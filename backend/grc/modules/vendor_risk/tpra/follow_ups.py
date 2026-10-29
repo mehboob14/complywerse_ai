@@ -80,6 +80,10 @@ def send(db: Session, qr: VendorQuestionnaireResponse, questions: List[dict], ac
             logger.warning("follow-up template %s for questionnaire %s question %s no longer exists",
                            template_id, qr.id, key)
             continue
+        if template.archived_at is not None:                 # retired: it cannot be sent
+            logger.warning("follow-up template %s for questionnaire %s question %s is archived, so it was not sent",
+                           template_id, qr.id, key)
+            continue
         version = versions.publish(db, template, actor_id)
         child = VendorQuestionnaireResponse(
             tenant_id=qr.tenant_id, vendor_id=qr.vendor_id, assessment_id=qr.assessment_id,
