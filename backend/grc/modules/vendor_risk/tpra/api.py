@@ -26,7 +26,9 @@ from ....routers.auth_router import require_auth, get_user_tenants, refuse_impor
 from ....services import evidence_review
 from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
 from . import findings
-from .stages import stages_payload, is_valid_stage
+from . import policy as vendor_policy
+from .bootstrap import DEFAULT_TIERING_CONFIG
+from .stages import stages_payload, is_valid_stage, cadence_days_for
 from .schema_migrations import ensure_tpra_columns
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Lifecycle"])
@@ -106,7 +108,7 @@ def s_stage(s: TPRAStageInstance) -> dict:
         "is_gate": s.is_gate, "status": s.status,
         "started_at": s.started_at, "completed_at": s.completed_at,
         "assigned_roles": s.assigned_roles or [], "exit_criteria_result": s.exit_criteria_result or {},
-        "gate_decision": s.gate_decision or {}, "skipped_reason": s.skipped_reason,
+        "gate_decision": s.gate_decision or {}, "skipped_reason": s.skipped_reason, "skipped_by": s.skipped_by,
         "checklist": getattr(s, "checklist", None) or [],
         "row_version": s.row_version,
     }
@@ -248,13 +250,14 @@ class GateDecisionIn(BaseModel):
     decision: str
     rationale: Optional[str] = None
 
-class TieringIn(BaseModel):
-    factors: Optional[dict] = None
-
-
 class TierOverrideIn(BaseModel):
     tier: Literal["critical", "high", "medium", "low"]
     justification: str
+
+
+class TieringIn(BaseModel):
+    factors: Optional[dict] = None
+    override: Optional[TierOverrideIn] = None       # set the tier by hand over the computed one, in the same step
 
 
 class EvidenceRequirementIn(BaseModel):
@@ -382,6 +385,8 @@ class ConditionUpdate(BaseModel):
     status: Optional[Literal["open", "closed"]] = None
     owner_id: Optional[int] = None
     due_date: Optional[datetime] = None
+    waived: Optional[bool] = None     # closed without being met: needs a reason
+    reason: Optional[str] = None
 
 class PublishShareIn(BaseModel):
     expires_days: Optional[int] = 180
@@ -545,13 +550,31 @@ def get_lifecycle(vendor_id: int, engagement_id: Optional[int] = None,
     a = service.get_active_assessment(db, v, e)
     scope = {"vendor_id": v.id, "engagement_id": e.id if e is not None else None}
     if not a:
-        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None}
+        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None, "policy": None,
+                "history": service.stage_history(db, v, e), "retier_blocked": None}
     stages = service.get_stage_instances(db, a.id)
     cur = a.current_stage
     gate = service.evaluate_current(db, v, a, cur) if cur else None
     return {
         **scope, "assessment": s_assessment(a),
         "stages": [s_stage(s) for s in stages], "current": cur, "gate": gate,
+        # what the assessment is held to (the stages its tier skips, the bands its score sits on), what moved the work, and
+        # why its tier cannot change now (an exit under way), if so
+        "policy": _held_policy(db, a),
+        "history": service.stage_history(db, v, e),
+        "retier_blocked": service.retier_problem(db, v, a),
+    }
+
+
+def _held_policy(db: Session, a: VendorAssessment) -> dict:
+    cfg = service.config_for(db, a)
+    tier = (a.inherent_tier or "").lower()
+    return {
+        "tier": a.inherent_tier,
+        "skips": vendor_policy.skip_matrix(cfg).get(tier, []) if tier else [],
+        "thresholds": {**DEFAULT_TIERING_CONFIG["thresholds"], **(cfg.get("thresholds") or {})},
+        "cadence_days": cadence_days_for(tier, cfg.get("cadence_days")) if tier else None,
+        "reviewers": vendor_policy.required_reviewers(cfg, tier) if tier else [],
     }
 
 
@@ -644,7 +667,16 @@ def run_tiering(assessment_id: int, body: TieringIn, db: Session = Depends(get_d
     a = _assessment(db, assessment_id, tids)
     v = _vendor(db, a.vendor_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
-    result = service.run_tiering(db, v, a, actor_id=user.id, factors=body.factors)
+    override = None
+    if body.override is not None:
+        reason = " ".join((body.override.justification or "").split())
+        if len(reason) < 10:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
+        override = {"tier": body.override.tier, "justification": reason}
+    try:
+        result = service.run_tiering(db, v, a, actor_id=user.id, factors=body.factors, override=override)
+    except service.RetierRefused as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
     db.commit()
     return result
 
@@ -1132,9 +1164,12 @@ def override_tier(assessment_id: int, body: TierOverrideIn, db: Session = Depend
     reason = " ".join((body.justification or "").split())
     if len(reason) < 10:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
-    service.record_tier_override(db, v, a, body.tier, reason, user.id)
+    try:
+        moved = service.record_tier_override(db, v, a, body.tier, reason, user.id)
+    except service.RetierRefused as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
     db.commit()
-    return tier_policy.requirements(db, v, a, service.config_for(db, a))
+    return {**tier_policy.requirements(db, v, a, service.config_for(db, a)), "retier": moved}
 
 
 @router.delete("/evidence-links/{link_id}")
@@ -1428,7 +1463,7 @@ def list_approvals(assessment_id: int, db: Session = Depends(get_db), user: GRCU
     rec = None
     a = _assessment(db, assessment_id, tids)
     if a.residual_rating is not None:
-        rec = service.recommend_decision(a.residual_rating, service.count_open_critical(db, a.id))
+        rec = service.recommend_decision(a.residual_rating, service.gate_count(db, a))
     # The one decision the Approval gate goes by, if any (service.approval_in_force).
     in_force = getattr(service.approval_in_force(db, a), "id", None)
     return {"items": [{**s_approval(x), "in_force": x.id == in_force} for x in rows], "total": len(rows),
@@ -1463,7 +1498,7 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                 status_code=400,
                 detail="Score the assessment before recording an approval decision.",
             )
-    rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
+    rec = service.recommend_decision(a.residual_rating or "medium", service.gate_count(db, a))
     # Conditions are TRACKED items chased to closure, not write-once text: each
     # carries a stable id + status + owner + due date, so open/overdue conditions
     # can be surfaced instead of captured-and-forgotten. Accepts plain strings
@@ -1519,12 +1554,22 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
     rbac.require_write(db, user, "approvals", "edit")
     new_conditions = []
     found = False
+    waive_reason = " ".join((body.reason or "").split())
+    if body.waived and len(waive_reason) < 3:
+        raise HTTPException(status_code=400, detail="Say why the condition is waived")
     for c in (ap.conditions or []):
         c = dict(c) if isinstance(c, dict) else {"id": None, "text": str(c), "status": "open"}
         if str(c.get("id")) == str(condition_id):
-            if body.status is not None:
+            if body.waived:
+                # Closed, so every reader of the conditions counts it done; kept as waived, with who and why
+                c.update(status="closed", resolved_at=datetime.utcnow().isoformat(), waived=True,
+                         waived_reason=waive_reason[:1000], waived_by=user.id)
+            elif body.status is not None:
                 c["status"] = body.status
                 c["resolved_at"] = datetime.utcnow().isoformat() if body.status == "closed" else None
+                if body.status == "open":
+                    c.pop("waived", None)
+                    c.pop("waived_reason", None)
             if body.owner_id is not None:
                 refuse_imported_accounts(db, [body.owner_id], kept=[c.get("owner_id")])
                 c["owner_id"] = body.owner_id
@@ -1538,7 +1583,8 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
     service.mirror_conditions(db, ap, user.id)        # and its Task Management task follows
     service.write_audit(db, ap.tenant_id, entity="approval", action="update",
                         vendor_id=ap.vendor_id, assessment_id=ap.assessment_id, entity_id=ap.id,
-                        actor_id=user.id, extra={"condition": condition_id, "status": body.status})
+                        actor_id=user.id, extra={"condition": condition_id, "status": body.status,
+                                                 **({"waived": True, "reason": waive_reason} if body.waived else {})})
     db.commit()
     return s_approval(ap)
 

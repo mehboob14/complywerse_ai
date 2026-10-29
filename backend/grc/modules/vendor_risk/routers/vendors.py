@@ -763,7 +763,10 @@ def update_vendor(
             if len(justification) < 10:
                 raise HTTPException(status_code=400,
                                     detail="This vendor's tier was computed. Explain why it should change.")
-            tpra_service.record_tier_override(db, vendor, active, new_tier, justification, current_user.id)
+            try:
+                tpra_service.record_tier_override(db, vendor, active, new_tier, justification, current_user.id)
+            except tpra_service.RetierRefused as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
             update_data.pop("tier")
     if update_data.get("status") == "offboarded" and (vendor.status or "").lower() != "offboarded":
         from .lifecycle import start_offboarding       # offboarding closes the supplier's side, however it starts

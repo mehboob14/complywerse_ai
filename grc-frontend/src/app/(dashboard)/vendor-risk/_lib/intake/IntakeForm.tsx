@@ -274,7 +274,7 @@ export default function IntakeForm({
 
 // ── one question ─────────────────────────────────────────────────────────────
 
-function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer, onReason }: {
+export function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer, onReason }: {
   q: Question; value: unknown; reason: string; editable: boolean; minReason: number; problem?: string;
   onAnswer: (v: unknown) => void; onReason: (v: string) => void;
 }) {
