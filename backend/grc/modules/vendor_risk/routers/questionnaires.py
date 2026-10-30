@@ -981,6 +981,9 @@ def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: Externa
     contact is the respondent and attester unless the answers name someone, and
     the questionnaire's links go to them from now on. A request with no `responses` at
     all (a send after answers saved one by one) leaves the stored answers as they are."""
+    if payload.submit:                        # a send waits for an answer being saved, and checks what is stored now
+        db.refresh(qr, with_for_update=True)
+        open_for_vendor(qr)
     if "responses" not in payload.model_fields_set:
         payload = payload.model_copy(update={"responses": dict(qr.responses or {})})
     if contact is not None:

@@ -110,3 +110,48 @@ def test_seeding_the_defaults_survives_a_request_that_seeded_them_first(db, monk
     monkeypatch.undo()
     assert db.query(TPRARiskDomain).filter_by(tenant_id=1).count() == 0         # nothing half-written is left behind
     assert bootstrap.ensure_tpra_tenant_defaults(db, 1)["domains_created"] > 0   # and the next call seeds them as usual
+
+
+def test_a_critical_or_blocking_finding_is_closed_with_a_real_note(db):
+    from grc.models import TPRAFinding
+    from grc.modules.vendor_risk.tpra import findings
+
+    f = TPRAFinding(tenant_id=1, vendor_id=1, assessment_id=1, severity="critical", status="open", title="x", domain="cybersecurity")
+    assert "Say how" in findings.close_problem(db, f, None)
+    assert "at least 10" in findings.close_problem(db, f, "ok")
+    assert findings.close_problem(db, f, "MFA is now enforced") is None
+
+
+TIERS = {t: [] for t in ("critical", "high", "medium", "low")}
+
+
+def test_a_policy_of_the_wrong_shape_is_refused_not_a_server_error():
+    from grc.modules.vendor_risk.tpra import policy
+
+    for bad in ({"low": [{}]}, {"low": [["planning"]]}):
+        with pytest.raises(ValueError):
+            policy.clean_skip_matrix(bad, TIERS)
+    with pytest.raises(ValueError):
+        policy.clean_reviewers({"low": [{}]}, TIERS)
+
+
+def test_everyone_the_roster_names_for_an_empty_reviewing_seat_may_not_approve(db):
+    from grc.models import TPRARoster, VendorAssessment
+    from grc.modules.vendor_risk.tpra import service
+
+    db.add_all([GRCUser(id=uid, username=f"s{uid}", display_name=f"S{uid}", email=f"s{uid}@acme.test", is_active=True)
+                for uid in (2, 3, 4)])
+    db.add_all([TPRARoster(tenant_id=1, role="security", user_id=2), TPRARoster(tenant_id=1, role="security", user_id=3)])
+    v = Vendor(tenant_id=1, name="Acme Cloud", tier="high", status="active", owner_id=ADMIN)
+    db.add(v)
+    db.commit()
+    a = VendorAssessment(tenant_id=1, vendor_id=v.id, status="in_progress", lifecycle_status="active",
+                         current_stage="approval", version_no=1, team_roster={})
+    db.add(a)
+    db.commit()
+    barred = service.conflicts(db, a)
+    assert barred.get(2) == "reviewer" and barred.get(3) == "reviewer" and 4 not in barred       # both, not only the first
+    a.team_roster = {"security": 4}                                                                 # the supplier's own seat wins
+    db.commit()
+    barred = service.conflicts(db, a)
+    assert barred.get(4) == "reviewer" and 2 not in barred and 3 not in barred

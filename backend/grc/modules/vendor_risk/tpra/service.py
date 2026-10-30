@@ -860,7 +860,8 @@ def run_tiering(
             "business_criticality": engagement.criticality if engagement is not None else row.tier,
         })
     # The answers can also hold the tier at a minimum (engine_tiering.minimum_tier).
-    result = compute_inherent_tier(factors, cfg, facts.intake if reasons is not None else None)
+    answered = intake_answers.has_answers(getattr(facts, "intake", None))
+    result = compute_inherent_tier(factors, cfg, facts.intake if answered else None)       # whoever gave the factors
     if reasons:
         result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons),
@@ -1224,9 +1225,13 @@ def conflicts(db: Session, assessment: VendorAssessment) -> Dict[int, str]:
     roster = workspace_roster.effective_team(db, assessment.tenant_id, assessment.team_roster)
     seats = sorted(vendor_policy.reviewer_seats(config_for(db, assessment)))
     scope = engagement_of(db, assessment) or db.get(Vendor, assessment.vendor_id)
+    own = {k: v for k, v in (assessment.team_roster or {}).items() if v}
+    reviewers = [assessment.reviewed_by]
+    for seat in seats:             # the supplier's own seat, else everyone the roster names for the role
+        reviewers += [own[seat]] if own.get(seat) else [m["user_id"] for m in workspace_roster.members_for(db, assessment.tenant_id, seat)]
     named = (
         ("assessor", [assessment.assessed_by]),
-        ("reviewer", [assessment.reviewed_by, *(roster.get(seat) for seat in seats)]),
+        ("reviewer", reviewers),
         ("business_owner", [getattr(scope, "owner_id", None), roster.get("business_owner")]),
         ("moved_to_approval", [moved_to_approval_by(db, assessment)]),
     )

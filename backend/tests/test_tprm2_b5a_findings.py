@@ -410,7 +410,7 @@ def test_a_critical_or_blocking_finding_is_closed_with_a_note(db):
         assert c.put(f"{T}/findings/{f.id}", json={"status": "closed"}).status_code == 400      # PUT holds to it too
     done = c.post(f"{T}/findings/{critical.id}/close", json={"note": "MFA enabled, screenshot received"})
     assert done.status_code == 200 and done.json()["status"] == "closed"
-    assert c.put(f"{T}/findings/{blocking.id}", json={"status": "closed", "note": "Fixed"}).json()["status"] == "closed"
+    assert c.put(f"{T}/findings/{blocking.id}", json={"status": "closed", "note": "Fixed in the 4.2 release"}).json()["status"] == "closed"
     closed = db.query(TPRAAuditLog).filter_by(entity="finding", action="close", entity_id=critical.id).one()
     assert (closed.from_value, closed.to_value, closed.reason) == ("open", "closed", "MFA enabled, screenshot received")
     assert c.post(f"{T}/findings/{critical.id}/close", json={"note": "again"}).status_code == 400      # already closed
@@ -718,3 +718,26 @@ def test_a_level_missed_while_its_finding_is_accepted_raises_nothing(db):
     f = db.get(TPRAFinding, _miss(c, v).json()["finding_id"])
     c.post(f"{T}/findings/{f.id}/acceptances", json={"rationale": "Known, being replaced", "expiry": "2031-01-01"})
     assert _miss(c, v, actual=90.0).json()["finding_id"] is None and db.query(TPRAFinding).count() == 1
+
+
+def test_reopening_a_critical_on_an_onboarded_supplier_suspends_it_without_autoflush(db, monkeypatch):
+    """Tenant sessions do not autoflush: the reopened fix has to be in the database before the gate asks about it."""
+    monkeypatch.setattr(service, "_past_approval", lambda *a, **k: True)
+    v = _vendor(db)
+    a = _assessment(db, v)
+    f = _finding(db, a, "critical", status="closed")
+    db.add(TPRARemediation(tenant_id=1, finding_id=f.id, title="MFA rolled out", status="completed", completed_at=NOW))
+    db.commit()
+    db.autoflush = False
+    findings.reopen(db, f, ADMIN, "The fix was rolled back")
+    findings.after_status_change(db, f, "closed", ADMIN)
+    assert db.get(Vendor, v.id).status == "suspended"
+
+
+def test_lowering_a_finding_that_holds_the_gate_leaves_a_record_of_from_what_to_what(db):
+    v = _vendor(db)
+    a = _assessment(db, v)
+    f = _finding(db, a, "critical", is_blocking=True)
+    assert web(db).put(f"{T}/findings/{f.id}", json={"severity": "low", "is_blocking": False}).status_code == 200
+    row = db.query(TPRAAuditLog).filter_by(entity="finding", action="update", entity_id=f.id).one()
+    assert (row.from_value, row.to_value) == ("critical, blocking", "low")

@@ -270,6 +270,7 @@ def save_answer(db: Session, qr: VendorQuestionnaireResponse, question_id: str, 
     the questionnaire, answered by a certificate, not one the reviewer sent back) is
     refused with a reason instead of being ignored."""
     db.refresh(qr, with_for_update=True)
+    routes.open_for_vendor(qr)                # it may have been sent while this save waited for the lock
     questions = versions.questions_for(db, qr)
     question = next((q for q in questions if str(q.get("id")) == question_id), None)
     if question is None:

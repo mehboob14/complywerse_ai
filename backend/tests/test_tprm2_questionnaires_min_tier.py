@@ -173,14 +173,14 @@ def test_run_tiering_holds_the_tier_at_the_minimum(db):
     assert again["minimum_tier"] is None and a.inherent_tier != "high"
 
 
-def test_a_tier_set_from_given_factors_ignores_the_answers(db):
+def test_a_tier_set_from_given_factors_still_holds_to_the_minimum_an_answer_sets(db):
     v = Vendor(tenant_id=1, name="Code Shop", status="onboarding", owner_id=7, data_access_level="internal",
                intake={"answers": {"source_code": "yes"}})
     db.add(v)
     db.commit()
     a = service.ensure_active_assessment(db, v, actor_id=7)
     result = service.run_tiering(db, v, a, actor_id=7, factors=LOW)
-    assert result["tier"] == "low" and result["minimum_tier"] is None
+    assert result["minimum_tier"] is not None and result["tier"] == result["minimum_tier"]      # whoever gave the factors
 
 
 @pytest.fixture()

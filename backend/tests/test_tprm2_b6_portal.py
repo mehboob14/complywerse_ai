@@ -323,3 +323,14 @@ def test_a_questionnaire_on_its_own_link_is_sent_the_same_way(db, http):
     done = http.post(base, json={"attestation": who, "submit": True})
     assert done.status_code == 200 and done.json()["status"] == "submitted"
     assert _stored(db, own).responses == {"subs": "no", "mfa": "no"}
+
+
+def test_a_save_that_waited_for_the_lock_does_not_reopen_a_questionnaire_sent_meanwhile(db):
+    """The open check ran before the save took the row lock: a send that committed in between must win."""
+    from fastapi import HTTPException
+
+    qr = _questionnaire(db, status="submitted")
+    with pytest.raises(HTTPException) as refused:
+        supplier_portal.save_answer(db, qr, "mfa", supplier_portal.AnswerIn(value="no"))
+    assert refused.value.status_code == 400
+    assert _stored(db, qr).status == "submitted"

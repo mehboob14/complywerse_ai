@@ -273,8 +273,8 @@ def after_status_change(db: Session, f: TPRAFinding, was: str, actor_id: Optiona
     """What follows a finding moving between open, accepted and closed: the risk trend, its issue, and a critical on an
     onboarded vendor (suspended while one stands, reactivated once none does)."""
     settled = ("closed", "accepted")
+    db.flush()                                # tenant sessions do not autoflush: the gate below asks the database
     if f.status in settled and was not in settled:
-        db.flush()
         service.snapshot_after_finding_change(db, f)
     if f.status in settled:
         service.close_finding_issue(db, f, actor_id)
@@ -353,6 +353,8 @@ def close_problem(db: Session, f: TPRAFinding, note: Optional[str]) -> Optional[
         if not done:
             return ("A finding can only be closed after a remediation is completed (evidence of fix) or with a note saying "
                     "what was done; or record a risk acceptance instead.")
+    elif note_required(f) and len(clean(note)) < 10:
+        return "Say how this was resolved in a sentence (at least 10 characters)."
     return None
 
 

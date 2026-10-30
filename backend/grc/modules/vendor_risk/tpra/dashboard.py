@@ -285,7 +285,7 @@ def portfolio_counts(db: Session = Depends(get_db), user: GRCUser = Depends(requ
 
     return {
         "vendors": count(in_use),
-        "critical": count(in_use, Vendor.tier == "critical"),
+        "critical": count(in_use, Vendor.tier == "critical", Vendor.inherent_risk_score.isnot(None)),
         "open_findings": db.query(func.count(TPRAFinding.id)).filter(
             TPRAFinding.tenant_id.in_(tids), TPRAFinding.deleted_at.is_(None), TPRAFinding.status.in_(_OPEN_F),
             ~TPRAFinding.vendor_id.in_(archived)).scalar() or 0,

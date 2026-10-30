@@ -128,7 +128,7 @@ def clean_skip_matrix(raw, current: dict) -> Dict[str, List[str]]:
         if not isinstance(stages, list):
             raise ValueError("A tier's skipped stages are a list of stage keys")
         for stage in stages:
-            if stage not in {s["key"] for s in TPRA_STAGES}:
+            if not isinstance(stage, str) or stage not in {s["key"] for s in TPRA_STAGES}:
                 raise ValueError(f"There is no stage '{stage}'")
             if not skippable(stage):
                 raise ValueError(f"{stage_label(stage)} cannot be skipped: it runs for every vendor")
@@ -142,7 +142,7 @@ def clean_reviewers(raw, current: dict) -> Dict[str, List[str]]:
         if not isinstance(roles, list):
             raise ValueError("A tier's reviewers are a list of roster roles")
         for role in roles:
-            if role not in ROSTER_ROLE_KEYS:
+            if not isinstance(role, str) or role not in ROSTER_ROLE_KEYS:
                 raise ValueError(f"'{role}' is not a roster role")
         out[tier] = list(dict.fromkeys(roles))
     return out
@@ -228,7 +228,7 @@ def put_policy(body: PolicyIn, db: Session = Depends(get_db), user: GRCUser = De
                 raise ValueError("Approver roles have to be given tier by tier")
             names = {r.name for r in db.query(Role).filter(or_(Role.tenant_id == tenant_id, Role.tenant_id.is_(None)))}
             for role in asked.values():
-                if role and role not in names:
+                if role and (not isinstance(role, str) or role not in names):
                     raise ValueError(f"There is no role named '{role}'")
             patch = {t: {"approver_role": role} for t, role in asked.items()}
             merged = tier_policy.clean(patch, tier_policy.merged(cfg.get("tier_policy")))

@@ -208,7 +208,7 @@ def test_the_header_counts_are_suppliers_in_use_critical_ones_open_findings_and_
     for name in ("One", "Two"):
         _vendor(db, name, status="requested", intake_status="submitted")
     _vendor(db, "Drafted", status="requested", intake_status="draft")
-    _vendor(db, "In review", status="onboarding", intake_status="in_review", tier="critical")
+    _vendor(db, "In review", status="onboarding", intake_status="in_review", tier="critical", inherent_risk_score=80.0)
     got = web(db).get("/vendor-risk/portfolio/counts").json()
     # in use as the register lists them: Core, Cloud, Mail, Print, Old (retired), Closed, In review; not the archived or requests
     assert got == {"vendors": 7, "critical": 3, "open_findings": 4, "intake_pending": 2}

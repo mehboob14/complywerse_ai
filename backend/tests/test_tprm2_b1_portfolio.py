@@ -86,7 +86,7 @@ def test_the_register_filters_by_the_unit_the_options_name(db):
 
 def test_the_archived_view_lists_only_archived_suppliers(db):
     _vendor(db, "Live Co", tier="high")
-    _vendor(db, "Gone Co", tier="high", deleted_at=datetime.utcnow())
+    _vendor(db, "Gone Co", tier="high", inherent_risk_score=60.0, deleted_at=datetime.utcnow())
     _vendor(db, "Gone Low", tier="low", deleted_at=datetime.utcnow())
     api = web(db)
     names = lambda url: sorted(r["name"] for r in api.get(url).json()["items"])        # noqa: E731

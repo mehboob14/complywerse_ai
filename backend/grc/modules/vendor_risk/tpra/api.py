@@ -881,6 +881,7 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
             f.status = body.status
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    gate_before = (f.severity, bool(f.is_blocking))
     for field in ("domain", "severity", "title", "description"):
         val = getattr(body, field)
         if val is not None:
@@ -890,8 +891,12 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
     if "owner_id" in body.model_fields_set:
         findings.set_owner(db, f, owner, user.id)
     _bump(f)
+    gate_after = (f.severity, bool(f.is_blocking))
+    word = lambda g: f"{g[0]}{', blocking' if g[1] else ''}"
     service.write_audit(db, f.tenant_id, entity="finding", action="update",
-                        vendor_id=f.vendor_id, assessment_id=f.assessment_id, entity_id=f.id, actor_id=user.id)
+                        vendor_id=f.vendor_id, assessment_id=f.assessment_id, entity_id=f.id, actor_id=user.id,
+                        from_value=word(gate_before) if gate_before != gate_after else None,
+                        to_value=word(gate_after) if gate_before != gate_after else None)
     # Snapshot on close/accept, keep the linked Issue in step, re-evaluate the critical invariant (TPRM-002/003).
     findings.after_status_change(db, f, prev_status, user.id)
     db.commit()
