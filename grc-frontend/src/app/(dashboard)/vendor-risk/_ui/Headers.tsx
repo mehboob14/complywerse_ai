@@ -65,7 +65,7 @@ export function DetailHeader({ backHref, backLabel, icon: Icon, logo, title, chi
         {backLabel}
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-3.5">
+        <div className="flex min-w-0 flex-1 basis-[16rem] items-start gap-3.5">
           {(logo || Icon) && (
             // arbitrary 48px: the platform's compact density shrinks `h-12 w-12` to 40px
             <span className={clsx('flex h-[48px] w-[48px] shrink-0 items-center justify-center', !logo && 'rounded-lg bg-[#e6f6f3] text-[#0f766e]')}>
