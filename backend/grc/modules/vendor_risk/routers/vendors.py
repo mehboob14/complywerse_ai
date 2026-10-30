@@ -438,7 +438,9 @@ def list_vendors(
         query = query.filter(or_(Vendor.intake_status.is_(None), Vendor.intake_status.in_(("in_review", "approved"))))
     tiers, statuses = _many(tier), _many(vendor_status)
     if tiers:
-        query = query.filter(Vendor.tier.in_(tiers))
+        # A tier counts once someone has tiered the supplier (an inherent score): until then the column holds the default
+        # "medium", and the register shows "Not tiered".
+        query = query.filter(Vendor.tier.in_(tiers), Vendor.inherent_risk_score.isnot(None))
     if statuses:
         query = query.filter(Vendor.status.in_(statuses))
     if vendor_type:

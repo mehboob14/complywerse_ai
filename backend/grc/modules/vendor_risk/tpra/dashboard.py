@@ -135,6 +135,7 @@ def program_dashboard(
 
     vq = db.query(Vendor).filter(
         Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None), Vendor.status != "retired",
+        or_(Vendor.intake_status.is_(None), Vendor.intake_status.notin_(_REQUESTS)),     # requests are not suppliers yet
     )
     if scope == "mine":
         vq = vq.filter(Vendor.owner_id == user.id)
