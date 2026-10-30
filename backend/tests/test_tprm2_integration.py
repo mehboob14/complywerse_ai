@@ -87,3 +87,26 @@ def test_the_intake_stage_accepts_the_suppliers_own_classification(db):
     v.data_access_level = "confidential"                                                           # the older field still counts
     db.commit()
     assert service.build_stage_context(db, v, a, "intake")["has_data_classification"] is True
+
+
+def test_seeding_the_defaults_survives_a_request_that_seeded_them_first(db, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    from grc.models import TPRARiskDomain
+    from grc.modules.vendor_risk.tpra import bootstrap
+
+    real_commit, calls = db.commit, []
+
+    def raced():                          # the other request's rows are in by the time this commit runs
+        calls.append(1)
+        if len(calls) == 1:
+            db.rollback()
+            real_commit()
+            raise IntegrityError("insert", {}, Exception("duplicate key value violates unique constraint uq_tpra_domain_tenant_key"))
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", raced)
+    assert bootstrap.ensure_tpra_tenant_defaults(db, 1) == {"domains_created": 0, "config_created": False}
+    monkeypatch.undo()
+    assert db.query(TPRARiskDomain).filter_by(tenant_id=1).count() == 0         # nothing half-written is left behind
+    assert bootstrap.ensure_tpra_tenant_defaults(db, 1)["domains_created"] > 0   # and the next call seeds them as usual

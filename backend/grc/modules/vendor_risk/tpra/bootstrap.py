@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import TPRARiskDomain, TPRATieringConfig
@@ -108,7 +109,11 @@ def ensure_tpra_tenant_defaults(db: Session, tenant_id: int) -> dict:
         config_created = True
 
     if created_domains or config_created:
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:        # a request running at the same moment (a page asks for several things at once) seeded them first
+            db.rollback()
+            return {"domains_created": 0, "config_created": False}
     return {"domains_created": created_domains, "config_created": config_created}
 
 
