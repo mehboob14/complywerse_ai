@@ -66,3 +66,24 @@ def test_the_dashboard_counts_suppliers_not_requests(db, web):
         _vendor(db, f"Request {state}", intake_status=state, status="requested")
     kpis = web.get("/vendor-risk/tpra/dashboard").json()["kpis"]
     assert kpis["active_vendors"] == 3                            # the three the register lists, not the requests
+
+
+def test_the_intake_stage_accepts_the_suppliers_own_classification(db):
+    from grc.models import VendorAssessment
+    from grc.modules.vendor_risk.tpra import service
+
+    v = Vendor(tenant_id=1, name="Classified Co", tier="medium", status="active", owner_id=ADMIN,
+               data_classification="confidential", data_access_level="none")
+    db.add(v)
+    db.commit()
+    a = VendorAssessment(tenant_id=1, vendor_id=v.id, status="in_progress", lifecycle_status="active",
+                         current_stage="intake", version_no=1)
+    db.add(a)
+    db.commit()
+    assert service.build_stage_context(db, v, a, "intake")["has_data_classification"] is True
+    v.data_classification = None
+    db.commit()
+    assert service.build_stage_context(db, v, a, "intake")["has_data_classification"] is False     # neither field is set
+    v.data_access_level = "confidential"                                                           # the older field still counts
+    db.commit()
+    assert service.build_stage_context(db, v, a, "intake")["has_data_classification"] is True

@@ -477,10 +477,12 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     ctx: dict = {"tier": tier}
 
     if stage_key == "intake":
+        # The supplier's own classification (the Add / Edit dialog's Data box) counts as much as its data access level.
+        classified = bool(scope.data_access_level and scope.data_access_level != "none")
         ctx.update(
             has_name=bool(scope.name),
             has_owner=bool(scope.owner_id),
-            has_data_classification=bool(scope.data_access_level and scope.data_access_level != "none"),
+            has_data_classification=classified or (engagement is None and bool(vendor.data_classification)),
         )
     elif stage_key == "tiering":
         ctx["inherent_tier"] = assessment.inherent_tier
