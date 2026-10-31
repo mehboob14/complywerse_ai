@@ -30,3 +30,19 @@ export function detailText(detail: unknown): string {
 export function apiErrorText(error: unknown, fallback: string): string {
   return detailText((error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail) || fallback;
 }
+
+// What a person may be shown of the server's words. Plenty of endpoints answer `detail=str(e)`, so the text can carry an HTML error page from a
+// proxy, a stack trace, SQLAlchemy's echo of the statement and its values, or control characters.
+const MARKUP = /<(?:script|style)\b[\s\S]*?<\/(?:script|style)>|<\/?[a-z!][^>]*>/gi;
+const FRAME = /^\s*(?:File "[^"]*", line \d+.*|at\s.*:\d+(?::\d+)?\)?)\s*$/;          // a Python frame, a JS or Java frame
+const CONTROLS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;            // all but tab and line breaks, which become spaces below
+
+/** `text` as one short paragraph that is safe to put on screen: no markup, no stack frames or SQL echo, no control characters, at most `max` characters (cut with "…"). '' when nothing readable is left. */
+export function safeDetail(text: string | null | undefined, max = 240): string {
+  if (typeof text !== 'string') return '';
+  let t = text.replace(/\[SQL:[\s\S]*$/, '');                                            // the statement and its parameters follow the message
+  if (t.includes('Traceback (most recent call last)')) t = t.trim().split(/\r?\n/).pop() ?? '';          // Python prints the exception last
+  const flat = t.replace(MARKUP, ' ').replace(CONTROLS, '').split(/\r?\n/).filter((line) => !FRAME.test(line)).join(' ').replace(/\s+/g, ' ').trim();
+  if (flat.length <= max) return flat;
+  return `${flat.slice(0, Math.max(0, max - 1)).replace(/[\uD800-\uDBFF]$/, '').trimEnd()}…`;          // never end on half an emoji
+}
