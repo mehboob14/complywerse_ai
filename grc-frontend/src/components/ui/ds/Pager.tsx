@@ -43,15 +43,20 @@ export function Pager({ page, pageSize, total, onPage, onPageSize, pageSizes, no
             </select>
           </label>
         )}
-        <span className="text-ds-label tabular-nums text-ds-fg-muted">Page {formatCount(range.page)} of {formatCount(range.pages)}</span>
-        <div className="flex items-center gap-2">
-          <button type="button" aria-label="Previous page" title="Previous page" disabled={!range.hasPrev} onClick={() => onPage(range.page - 1)} className={BUTTON}>
-            <ChevronLeft aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
-          </button>
-          <button type="button" aria-label="Next page" title="Next page" disabled={!range.hasNext} onClick={() => onPage(range.page + 1)} className={BUTTON}>
-            <ChevronRight aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
-          </button>
-        </div>
+        {/* everything fits on one page: the count and the page size stay (the true total is the point), the page controls have nothing to do */}
+        {range.pages > 1 && (
+          <>
+            <span className="text-ds-label tabular-nums text-ds-fg-muted">Page {formatCount(range.page)} of {formatCount(range.pages)}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Previous page" title="Previous page" disabled={!range.hasPrev} onClick={() => onPage(range.page - 1)} className={BUTTON}>
+                <ChevronLeft aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
+              </button>
+              <button type="button" aria-label="Next page" title="Next page" disabled={!range.hasNext} onClick={() => onPage(range.page + 1)} className={BUTTON}>
+                <ChevronRight aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </nav>
   );
