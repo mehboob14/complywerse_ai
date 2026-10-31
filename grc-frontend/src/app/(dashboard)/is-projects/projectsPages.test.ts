@@ -165,3 +165,13 @@ test('loading, failure and empty are different states: a failed request is never
   assert.match(src['_ui.tsx'], /export const retryRead = \(failures: number, error: unknown\): boolean => failures < 2 && canRetry\(error\);/);
   assert.ok((all.match(/retry: retryRead/g) ?? []).length >= 14, 'a refusal is said at once, not after three tries with back-off');
 });
+
+test('a paragraph always carries a size: the platform CSS gives a bare <p> 11.5px, which the kit rules cannot see (six cell titles were found by the browser probe)', () => {
+  for (const f of files) {
+    for (const m of Array.from(src[f].matchAll(/<p\b([^>]*)>/g))) {
+      const cls = /className=(?:"([^"]*)"|\{([^}]*)\})/.exec(m[1]);
+      const text = cls ? (cls[1] ?? cls[2] ?? '') : '';
+      assert.ok(/text-ds-(body|label|section|title)|text-\[\d+px\]|TILE_LABEL|TILE_NUMBER|PARAGRAPH/.test(text), `${f}: ${m[0].slice(0, 90)}`);
+    }
+  }
+});

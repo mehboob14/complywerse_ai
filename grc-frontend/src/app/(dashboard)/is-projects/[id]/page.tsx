@@ -305,7 +305,7 @@ export default function ProjectDetailPage() {
   const applyAiMut = useReportedMutation({
     mutationFn: applyAi,
     success: 'Applied to the project',
-    failure: "Couldn't apply the suggestions",
+    failure: "Couldn't finish applying: some items may already be added",
     fallback: 'Some items may have been partially created.',
     retryable: false,                                              // a second try would add the items that were created a second time
     invalidate: [...CHANGED, ['is-project-budget', projectId]],
