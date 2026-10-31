@@ -59,9 +59,10 @@ test('no native dialog, no action hidden until hover, no hand-rolled overlay, no
   assert.match(page, /\{confirmDialog\}/);
 });
 
-test('after a delete focus goes back to the start of the list (the row it was on is gone), unless the person has moved on', () => {
+test('after a delete focus goes back to the start of the list (the row it was on is gone), unless the person is typing or a dialog is open', () => {
   assert.match(page, /const here = document\.activeElement;/);
-  assert.match(page, /if \(!here \|\| here === document\.body \|\| here\.closest\('table, \[role="list"\]'\)\) \(searchField\.current \?\? newButton\.current\)\?\.focus\(\);/);
+  assert.match(page, /here\.closest\('\[role="dialog"\]'\) \|\| here\.matches\('input, textarea, select'\)/);
+  assert.match(page, /if \(!busy\) \(searchField\.current \?\? newButton\.current\)\?\.focus\(\);/);
   assert.match(page, /ref=\{searchField\}/);
 });
 

@@ -150,11 +150,12 @@ export default function MetricReport({ kind }: { kind: Kind }) {
   const remove = useReportedMutation({
     mutationFn: async (m: Metric) => (await ermApi.kris.delete(m.id)).data,
     success: `${meta.noun} deleted`, failure: `Couldn't delete the ${meta.noun}`, invalidate: [key],
-    // the row the person was on is gone, and focus with it: put it back where the list starts (the search box, or "New" when the list is now empty),
-    // unless they have already moved on to something else while the server answered
+    // the row the person was on is gone, and focus with it (or with the toast's Retry that repeated the delete): put it back where the list starts (the
+    // search box, or "New" when the list is now empty), unless they are typing somewhere or have a dialog open
     onSuccess: () => {
       const here = document.activeElement;
-      if (!here || here === document.body || here.closest('table, [role="list"]')) (searchField.current ?? newButton.current)?.focus();
+      const busy = !!here && here !== document.body && !!(here.closest('[role="dialog"]') || here.matches('input, textarea, select'));
+      if (!busy) (searchField.current ?? newButton.current)?.focus();
     },
   });
   const askDelete = async (m: Metric) => {
