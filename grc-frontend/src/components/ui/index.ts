@@ -37,3 +37,12 @@ export { Menu, type MenuItem, type MenuProps } from './ds/Menu';
 export { Pager, type PagerProps } from './ds/Pager';
 export { Tabs, TabPanel, type TabItem, type TabPanelProps, type TabsProps } from './ds/Tabs';
 export { useTabParam } from './ds/useTabParam';
+export {
+  TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
+  type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,
+} from './ds/Table';
+export { RegisterTable, type RegisterTableProps, type RegisterColumn } from './ds/RegisterTable';
+export {
+  nextSort, ariaSort, sortRows, priorityClass, rowCountText,
+  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
+} from './ds/tableModel';
