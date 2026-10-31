@@ -29,3 +29,8 @@ export { SectionCard, type SectionCardProps } from './SectionCard';
 export { SaveBar, type SaveBarProps } from './SaveBar';
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';
 export { ReadOnlyNote, type ReadOnlyNoteProps } from './ReadOnlyNote';
+export { ConfirmDialog, type ConfirmDialogProps, type ConfirmRequest } from './ConfirmDialog';
+export { useConfirm, type ConfirmOptions } from './useConfirm';
+export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './useNotify';
+export { useReportedMutation, type ReportedMutationConfig } from './useReportedMutation';
+export { DiscardBar, useDiscardGuard } from './DiscardBar';
