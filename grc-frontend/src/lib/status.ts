@@ -130,6 +130,13 @@ export const committeeStatus = defineStatuses('committee', {
   inactive: 'neutral',
 });
 
+// Department has `is_active` (a boolean) too; Governance > Settings and Administration > Departments say "Active" / "Inactive". A department is never
+// deleted (decision D43): it is deactivated, so "inactive" is the only way one ends and the word that is not in force.
+export const departmentStatus = defineStatuses('department', {
+  active: 'success',
+  inactive: 'neutral',
+});
+
 // CommitteeMeeting.status: models/_29.
 export const meetingStatus = defineStatuses('meeting', {
   scheduled: 'pending',

@@ -208,6 +208,13 @@ export function departmentCreateBody(f: DepartmentForm): Record<string, unknown>
   return out;
 }
 
+/** Whether closing the form would throw something away: typed into a new department, or any field changed from the department being edited
+ *  (the same comparison the save makes, so "nothing to save" and "nothing to lose" are one answer). Drives the drawer's "Discard changes?". */
+export function departmentFormDirty(mode: 'create' | 'edit', department: DepartmentRecord | undefined, f: DepartmentForm): boolean {
+  if (mode === 'edit' && department) return Object.keys(departmentPatch(department, f)).length > 0;
+  return f.name.trim() !== '' || f.description.trim() !== '' || f.parentId != null || f.leadId != null || f.roleIds.length > 0;
+}
+
 // ── the Department pickers of other pages ────────────────────────────────────
 
 /** What the Department field of a document says when there is nothing to pick (not while it has options). */

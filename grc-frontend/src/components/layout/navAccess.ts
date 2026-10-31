@@ -14,8 +14,10 @@ export interface NavItem {
   icon: LucideIcon;
   requiredPermissions?: string[];
   requiredModules?: string[];
-  /** Path prefix for active-highlighting when it differs from href. */
-  activeMatch?: string;
+  /** Path prefix (or prefixes) that light this entry besides its href: pages that have no entry of their own (navActive.ts). */
+  activeMatch?: string | string[];
+  /** Lights on its own page only, not on the pages under it (an Overview: those belong to the entries beside it). */
+  exact?: boolean;
   /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
   requiredFeature?: string;
 }
@@ -36,6 +38,7 @@ export const navigation: NavEntry[] = [
     name: 'Performance Overview',
     href: '/dashboard',
     icon: LayoutDashboard,
+    exact: true,
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
   },
@@ -52,8 +55,9 @@ export const navigation: NavEntry[] = [
     icon: Landmark,
     requiredModules: ['governance'],
     items: [
-      { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Documents', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
+      // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
+      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations'], icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
@@ -66,7 +70,8 @@ export const navigation: NavEntry[] = [
     icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
     items: [
-      { name: 'Overview', href: '/erm', icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
+      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/appetite', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/mitigation-actions', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
       {
         name: 'Operational Risk',
         icon: Layers,
@@ -94,7 +99,7 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
-      { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
@@ -121,7 +126,7 @@ export const navigation: NavEntry[] = [
         icon: LifeBuoy,
         requiredModules: ['bcm'],
         items: [
-          { name: 'Overview', href: '/bcm', icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
+          { name: 'Overview', href: '/bcm', exact: true, icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
           { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
           { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
         ],
@@ -135,7 +140,7 @@ export const navigation: NavEntry[] = [
     icon: Zap,
     requiredModules: ['controls'],
     items: [
-      { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Overview', href: '/automation/overview', exact: true, icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },

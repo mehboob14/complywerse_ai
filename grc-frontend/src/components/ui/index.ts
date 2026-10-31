@@ -47,3 +47,12 @@ export {
   nextSort, ariaSort, sortRows, priorityClass, rowCountText,
   type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
 } from './ds/tableModel';
+export { SectionCard, type SectionCardProps } from './ds/SectionCard';
+export { SaveBar, type SaveBarProps } from './ds/SaveBar';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './ds/SegmentedControl';
+export { ReadOnlyNote, type ReadOnlyNoteProps } from './ds/ReadOnlyNote';
+export { ConfirmDialog, type ConfirmDialogProps, type ConfirmRequest } from './ds/ConfirmDialog';
+export { useConfirm, type ConfirmOptions } from './ds/useConfirm';
+export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './ds/useNotify';
+export { useReportedMutation, type ReportedMutationConfig } from './ds/useReportedMutation';
+export { DiscardBar, useDiscardGuard } from './ds/DiscardBar';

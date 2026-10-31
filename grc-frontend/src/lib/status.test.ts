@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { contrast } from './contrast.ts';
 import { EMPTY } from './format.ts';
 import {
-  TONE, actionStatus, attestationStatus, committeeStatus, defineStatuses, documentStatus, exceptionStatus, meetingStatus, norm, priority,
+  TONE, actionStatus, attestationStatus, committeeStatus, defineStatuses, departmentStatus, documentStatus, exceptionStatus, meetingStatus, norm, priority,
   reviewStatus, statusPill, toneOf, type Statuses, type Tone,
 } from './status.ts';
 import { TONE as VENDOR_TONE, tones } from '../app/(dashboard)/vendor-risk/_ui/tones.ts';
@@ -113,6 +113,11 @@ test('committees, meetings and their actions', () => {
   exhaustive(actionStatus, [
     ['open', 'pending', 'Open'], ['in_progress', 'progress', 'In progress'], ['completed', 'success', 'Completed'], ['overdue', 'danger', 'Overdue'],
   ]);
+});
+
+test('departments: the two words of a switched-on or switched-off department', () => {
+  exhaustive(departmentStatus, [['active', 'success', 'Active'], ['inactive', 'neutral', 'Inactive']]);
+  assert.deepEqual(statusPill(departmentStatus, 'inactive'), { tone: 'neutral', label: 'Inactive' });
 });
 
 test('review cycles and the review log', () => {

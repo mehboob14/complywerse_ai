@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 
 import {
-  canRetry, confirmationToast, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf,
+  canRetry, confirmationToast, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf, successWords,
   ERROR_TITLE, SUCCESS_MS, type ReportedMutationConfig,
 } from './reportOutcome.ts';
 
@@ -123,6 +123,32 @@ test('wording that fails or says nothing never turns a saved record into a failu
   assert.equal(reportOutcome({ ok: true, data: 0, variables: 0 }, { success: () => 5 as unknown as string, failure: 'x' }).message, 'Done');
 });
 
+test('a success can be a headline with a second line, { title, message }, or a function that gives one', () => {
+  const two = { success: { title: 'Settings saved', message: 'New requests use them from now on.' }, failure: 'x' };
+  assert.deepEqual(reportOutcome({ ok: true, data: 1, variables: 2 }, two), { kind: 'success', title: 'Settings saved', message: 'New requests use them from now on.' });
+  assert.deepEqual(reportOutcome({ ok: true, data: 1, variables: 2 }, { success: { title: 'Settings saved' }, failure: 'x' }), { kind: 'success', message: 'Settings saved' });
+  const dynamic = { success: (d: { n: number }) => (d.n > 0 ? { title: `Archived ${d.n}`, message: 'They are in the archive.' } : 'Nothing to archive'), failure: 'x' };
+  assert.deepEqual(reportOutcome({ ok: true, data: { n: 2 }, variables: 0 }, dynamic), { kind: 'success', title: 'Archived 2', message: 'They are in the archive.' });
+  assert.deepEqual(reportOutcome({ ok: true, data: { n: 0 }, variables: 0 }, dynamic), { kind: 'success', message: 'Nothing to archive' });
+});
+
+test('the parts of a two-line confirmation are trimmed, a part that is blank or not text is dropped, and nothing usable says "Done"', () => {
+  assert.deepEqual(successWords({ title: '  Saved ', message: ' Reminders use it. ' }), { title: 'Saved', message: 'Reminders use it.' });
+  assert.deepEqual(successWords({ title: '', message: 'Reminders use it.' }), { message: 'Reminders use it.' });       // a second line alone is the headline
+  assert.deepEqual(successWords({ title: 'Saved', message: '   ' }), { message: 'Saved' });
+  assert.deepEqual(successWords({ title: 'Saved', message: 7 }), { message: 'Saved' });
+  assert.deepEqual(successWords('  Saved '), { message: 'Saved' });
+  [{}, { title: '' }, { title: 5, message: null }, null, undefined, '', '  ', 0, [], () => 'x'].forEach((nothing, i) => {
+    assert.deepEqual(successWords(nothing), { message: 'Done' }, `case ${i}`);
+  });
+});
+
+test('wording that throws, or gives an object with nothing in it, still never turns a saved record into a failure', () => {
+  const throws = { success: (d: { items: unknown[] }) => ({ title: `Archived ${d.items.length}` }), failure: 'x' };
+  assert.deepEqual(reportOutcome({ ok: true, data: {} as { items: unknown[] }, variables: 0 }, throws), { kind: 'success', message: 'Done' });
+  assert.deepEqual(reportOutcome({ ok: true, data: 0, variables: 0 }, { success: { title: ' ', message: '' }, failure: 'x' }), { kind: 'success', message: 'Done' });
+});
+
 test('a failure is never reported as a success, whatever went wrong and whatever the wording does', () => {
   const wording = { success: () => { throw new Error('must not be asked'); }, failure: "Couldn't save" };
   for (const error of [undefined, null, 'oops', 0, {}, new Error('x'), http(500, 'x'), http(422, []), noAnswer(), { response: {} }]) {
@@ -136,6 +162,20 @@ test('a failure is never reported as a success, whatever went wrong and whatever
 test('the failure headline falls back when the caller gave none', () => {
   assert.equal(reportOutcome({ ok: false, error: http(500), variables: 1 }, { success: 'x', failure: '  ' }).title, ERROR_TITLE);
   assert.equal(reportOutcome({ ok: false, error: http(500), variables: 1 }, { success: 'x' } as unknown as typeof config).title, ERROR_TITLE);
+});
+
+test("a failure says the caller's fallback when the server gave no usable words; the server's own words always win", () => {
+  const fallback = 'The settings could not be saved. Try again.';
+  const say = (error: unknown, cfg: { success: string; failure: string; fallback?: string } = { ...config, fallback }) => reportOutcome({ ok: false, error, variables: 1 }, cfg).message;
+  assert.equal(say(http(500)), fallback);
+  assert.equal(say(http(422, [])), fallback);
+  assert.equal(say(http(502, '<html><body></body></html>')), fallback);
+  assert.equal(say(new Error('boom')), fallback);
+  assert.equal(say(noAnswer()), fallback);                                       // the same rule as errorMessage: the caller said better than "could not reach"
+  assert.equal(say(http(409, 'The document is locked by Rana.')), 'The document is locked by Rana.');
+  assert.equal(say(http(500), { ...config, fallback: '   ' }), 'Please try again.');      // a blank fallback is none
+  assert.equal(say(http(500), config), 'Please try again.');                              // no fallback: the fixed line it always said
+  assert.equal(say(noAnswer(), config), "Couldn't reach the server. Check your connection and try again.");
 });
 
 test('Retry runs the request again with the SAME variables, and is offered only when it can help', () => {
@@ -174,7 +214,7 @@ function run<D, V>(overrides: Partial<ReportedMutationConfig<D, V>> & Pick<Repor
   const observer: MutationObserver<D, Error, V> = new MutationObserver<D, Error, V>(new QueryClient(), reportedMutationOptions<D, V>(
     { success: 'Saved', failure: "Couldn't save", ...overrides },
     {
-      notifySuccess: (m) => log.push(`success: ${m}`),
+      notifySuccess: (m, o) => log.push(`success: ${o ? `${o.title} | ` : ''}${m}`),
       notifyError: (m, o) => { log.push(`error: ${o.title} | ${m}${o.retry ? ' | retry' : ''}`); retries.push(o.retry); },
       invalidate: (key) => log.push(`invalidate ${JSON.stringify(key)}`),
       rerun: (v) => { observer.mutate(v).catch(() => {}); },
@@ -192,6 +232,32 @@ test('nothing is said until the server has answered, then the confirmation is sa
   server.resolve('ok');
   await done;
   assert.deepEqual(m.log, ['success: Saved']);
+});
+
+test('a two-line confirmation reaches the toast as a headline and its detail, and only after the server has answered', async () => {
+  const server = deferred<string>();
+  const m = run<string, number>({ mutationFn: () => server.promise, success: { title: 'Settings saved', message: 'New requests use them from now on.' } });
+  const done = m.mutate(1);
+  await settle();
+  assert.deepEqual(m.log, []);
+  server.resolve('ok');
+  await done;
+  assert.deepEqual(m.log, ['success: Settings saved | New requests use them from now on.']);
+});
+
+test('a title-only confirmation is one line, exactly like a string', async () => {
+  const m = run<string, number>({ mutationFn: async () => 'ok', success: { title: 'Settings saved' } });
+  await m.mutate(1);
+  assert.deepEqual(m.log, ['success: Settings saved']);
+});
+
+test('the fallback is what the failure says when the server said nothing; the headline, the single report and the Retry rule are unchanged', async () => {
+  const m = run<string, number>({ mutationFn: async () => { throw http(500); }, fallback: 'The settings could not be saved. Try again.' });
+  await m.mutate(1);
+  assert.deepEqual(m.log, ["error: Couldn't save | The settings could not be saved. Try again. | retry"]);
+  const refused = run<string, number>({ mutationFn: async () => { throw http(409, 'Locked by Rana.'); }, fallback: 'The settings could not be saved. Try again.' });
+  await refused.mutate(1);
+  assert.deepEqual(refused.log, ["error: Couldn't save | Locked by Rana."]);
 });
 
 test('a failure is said once and stays reported; the confirmation is never said and nothing is refreshed', async () => {
