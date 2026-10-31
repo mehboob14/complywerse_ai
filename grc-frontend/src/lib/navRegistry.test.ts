@@ -227,7 +227,7 @@ test('the five pages that said only "Governance" in the top bar have their own n
   }
 });
 
-test('the old names stay findable (keywords), and no entry has two names for the same page', () => {
+test('the old names stay findable (keywords), and no keyword repeats the label', () => {
   assert.deepEqual(entry('/governance/committees').keywords, ['Board & Committee Management']);
   assert.deepEqual(entry('/is-projects').keywords, ['IS Projects']);
   assert.deepEqual(entry('/erm/kris').keywords, ['Key Risk Indicators']);
@@ -287,7 +287,8 @@ test('the Documents strip: five tabs in order; the Studio only where it is on, S
   assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Policy exceptions', 'Governance settings']);
   assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions']);
   assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Policy exceptions']);
-  assert.deepEqual(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 5);
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 5, 'the right asked for is governance:settings:*');
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 4);
   assert.deepEqual(tabsFor('nowhere'), []);
 });
 
