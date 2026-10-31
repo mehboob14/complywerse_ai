@@ -1,11 +1,12 @@
 'use client';
 
-// Buttons (Button, IconButton) and form controls (FormField, TextInput, Textarea, Select, Checkbox), each in every variant and state.
+// Buttons (Button, IconButton) and form controls (FormField, TextInput, Textarea, Select, MultiSelect, Combobox, Checkbox), each in every variant and state.
 import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { Bell, ChevronRight, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { Button, Checkbox, FormField, IconButton, InfoTip, Select, Textarea, TextInput } from '@/components/ui';
 import { Grid, GuideSection, MONO, Row, Spec, Specimen } from './Guide';
+import { ComboboxDemo, MultiSelectDemo } from './SelectsDemo';
 
 const VARIANTS = ['primary', 'secondary', 'ghost', 'danger', 'dangerOutline', 'link'] as const;
 
@@ -149,6 +150,10 @@ export function FormsSection() {
           <Specimen label="Disabled"><FormField label="Department"><Select disabled defaultValue="Security"><option>Security</option></Select></FormField></Specimen>
         </Grid>
       </Spec>
+
+      <Spec name="MultiSelect"><MultiSelectDemo /></Spec>
+
+      <Spec name="Combobox"><ComboboxDemo /></Spec>
 
       <Spec name="Checkbox">
         <Grid>

@@ -18,4 +18,6 @@ export const TOKEN_PAIRS: Array<[string, string, number]> = [
   ['ds-border-control', 'ds-surface', CONTROL], ['ds-border-control', 'ds-bg', CONTROL],
   ['ds-focus', 'ds-surface', CONTROL], ['ds-focus', 'ds-bg', CONTROL],
   ['ds-primary', 'ds-surface', CONTROL], ['ds-primary', 'ds-bg', CONTROL],
+  // a ProgressBar's fill against its track (--ds-border): the bar is a graphic that carries a value, so 3:1
+  ['ds-primary', 'ds-border', CONTROL], ['ds-success', 'ds-border', CONTROL], ['ds-warning', 'ds-border', CONTROL], ['ds-danger', 'ds-border', CONTROL],
 ];

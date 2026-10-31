@@ -1,11 +1,12 @@
 // node --test "src/lib/pagerModel.test.ts"
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-import { DEFAULT_PAGE_SIZES, pageRange, pageSizeOptions, rangeText } from './pagerModel.ts';
+import { DEFAULT_PAGE_SIZES, nounFor, pageRange, pageSizeOptions, rangeText, type PagerNoun } from './pagerModel.ts';
 
 const at = (page: number, size: number, total: number) => pageRange(page, size, total);
-const text = (page: number, size: number, total: number, noun = 'documents') => rangeText(at(page, size, total), total, noun);
+const text = (page: number, size: number, total: number, noun: PagerNoun = 'documents') => rangeText(at(page, size, total), total, noun);
 
 test('the first page of many', () => {
   assert.deepEqual(at(1, 25, 1243), { page: 1, pages: 50, from: 1, to: 25, hasPrev: false, hasNext: true });
@@ -84,4 +85,52 @@ test('page sizes on offer: ascending, no repeats, the size in use is always amon
   assert.deepEqual(pageSizeOptions([50, 10, 10, 20], 20), [10, 20, 50]);
   assert.deepEqual(pageSizeOptions([25, 0, -1, NaN], 5), [5, 25]);
   assert.deepEqual(DEFAULT_PAGE_SIZES, [10, 25, 50, 100]);
+});
+
+// ── a noun with a word for one ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+const COMMITTEE = { one: 'committee', other: 'committees' };
+
+test('a noun with a word for one reads "1–1 of 1 committee", and the plural for every other count', () => {
+  assert.equal(text(1, 25, 1, COMMITTEE), '1–1 of 1 committee');
+  assert.equal(text(1, 25, 2, COMMITTEE), '1–2 of 2 committees');
+  assert.equal(text(1, 25, 8, COMMITTEE), '1–8 of 8 committees');
+  assert.equal(text(2, 25, 1243, COMMITTEE), '26–50 of 1,243 committees');
+});
+
+test('nothing is "0 committees", not "0 committee"', () => {
+  assert.equal(text(1, 25, 0, COMMITTEE), '0 committees');
+  assert.equal(text(1, 25, NaN, COMMITTEE), '0 committees');
+  assert.equal(text(1, 25, -3, COMMITTEE), '0 committees');
+});
+
+test('one is the one the person is told: the true total (a list capped at 100 of one thousand is plural, a list of one is singular)', () => {
+  assert.equal(text(1, 100, 1000, COMMITTEE), '1–100 of 1,000 committees');
+  assert.equal(text(1, 1, 1, COMMITTEE), '1–1 of 1 committee');
+  assert.equal(text(1, 25, 1.9, COMMITTEE), '1–1 of 1 committee');            // a fraction is rounded down, like the count that is printed
+});
+
+test('a plain string is the plural as it has always been: it never changes with the count', () => {
+  assert.equal(text(1, 25, 1), '1–1 of 1 documents');                          // the old behaviour, kept for every caller that passes a string
+  assert.equal(text(1, 25, 1, 'actions'), '1–1 of 1 actions');
+  assert.equal(text(1, 25, 0, 'actions'), '0 actions');
+});
+
+test('nounFor: a string is the plural, { one, other } chooses', () => {
+  assert.equal(nounFor('documents', 1), 'documents');
+  assert.equal(nounFor(COMMITTEE, 1), 'committee');
+  assert.equal(nounFor(COMMITTEE, 0), 'committees');
+  assert.equal(nounFor(COMMITTEE, 2), 'committees');
+  assert.equal(nounFor(COMMITTEE, 1.5), 'committee');
+  assert.equal(nounFor(COMMITTEE, NaN), 'committees');
+  assert.equal(nounFor(COMMITTEE, Infinity), 'committees');
+  assert.equal(nounFor({ one: 'policy', other: 'policies' }, 1), 'policy');
+});
+
+// The Pager passes `noun` straight to rangeText, so the component needs no logic of its own for it.
+test('the Pager takes the noun in either form and hands it to rangeText untouched', () => {
+  const source = readFileSync('src/components/ui/ds/Pager.tsx', 'utf8').replace(/\r\n/g, '\n');
+  assert.match(source, /noun\?: PagerNoun;/);
+  assert.match(source, /rangeText\(range, total, noun\)/);
+  assert.match(source, /noun = 'items'/);                                          // the default is as it was
 });

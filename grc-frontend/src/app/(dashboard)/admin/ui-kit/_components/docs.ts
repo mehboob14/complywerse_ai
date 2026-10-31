@@ -45,6 +45,33 @@ const UI = '@/components/ui';
 const DS = 'src/components/ui/ds';
 const UIDIR = 'src/components/ui';
 
+const SELECT_BASE: PartDoc = {
+  name: 'SelectBaseProps', source: `${DS}/SelectPopover.tsx`, own: 'SelectBaseProps',
+  props: [
+    prop('label', 'string', 'The control\'s name ("Status"): it names the button ("Status: Draft, Approved") and the list for a screen reader, and is drawn before the choice with `showLabel`.'),
+    prop('options', 'readonly ListOption[]', 'What can be chosen.'),
+    prop('placeholder', 'string', 'What the button says while nothing is chosen ("All statuses").', "'Select…'"),
+    prop('searchable', 'boolean', 'A search box above the options (every word must be in the label or the description, any case, no accents: the library\'s fold). The default is yes from 9 options.', 'options > 8'),
+    prop('searchPlaceholder', 'string', 'What the empty search box says.', "'Search'"),
+    prop('emptyText', 'string', 'What the list says when a search leaves no option.', "'No matches'"),
+    prop('showLabel', 'boolean', 'Draws the name before the choice ("Status: Draft"): for a filter bar that has no FormField label.', 'false'),
+    prop('disabled', 'boolean', 'Shown, cannot be opened.', 'false'),
+    prop('invalid', 'boolean', 'A red outline (a FormField with an error does this by itself).', 'false'),
+    prop('id', 'string', 'The button\'s id, when the page needs a fixed one; a FormField gives it one and points its label at it.'),
+    CLASS_NAME,
+  ],
+};
+
+const LIST_OPTION: PartDoc = {
+  name: 'ListOption', source: `${DS}/listboxModel.ts`, own: 'ListOption',
+  props: [
+    prop('value', 'string', 'What the page stores (an id, a code).'),
+    prop('label', 'string', 'What the person reads; search and type-ahead look at it.'),
+    prop('description', 'string', 'A second line under the label (an email under a name); searched too.'),
+    prop('disabled', 'boolean', 'Shown, cannot be chosen; the arrow keys skip it.'),
+  ],
+};
+
 export const DOCS: Record<string, ComponentDoc> = {
   Button: {
     name: 'Button',
@@ -161,6 +188,45 @@ export const DOCS: Record<string, ComponentDoc> = {
           CLASS_NAME,
         ],
       },
+    ],
+  },
+  MultiSelect: {
+    name: 'MultiSelect',
+    importFrom: UI,
+    imports: ['MultiSelect'],
+    use: 'the person chooses several values from a list: statuses, owners, frameworks. A button that says what is chosen ("3 selected", or the first two as chips and "+N") opens a popover of options with checkboxes, a search box when the list is long, and Select all / Clear. The popover is drawn on the window, so a table, a card or a dialog cannot clip it. Keys: ArrowDown, ArrowUp, Home, End, a letter (type-ahead), Space or Enter to choose, Ctrl+A to choose all shown, Escape to close.',
+    dont: 'Do not use it for one value (Combobox) or for a few fixed choices (checkboxes in the form), and do not leave `label` out: it names the button and the list for a screen reader. A chosen value whose option has not loaded yet is shown as it is, never as "nothing chosen": do not hide a filter that is in force.',
+    parts: [
+      {
+        name: 'MultiSelect', source: `${DS}/MultiSelect.tsx`, own: 'MultiSelectProps',
+        props: [
+          prop('value', 'readonly string[]', 'The values chosen, in the order they were chosen.'),
+          prop('onChange', '(value: string[]) => void', 'The whole choice after a change: a new array.'),
+          prop('display', "'count' | 'chips'", 'How the button shows several: "3 selected" (one is its label), or the first two as chips and "+N".', "'count'"),
+          inherited(prop('...SelectBaseProps', '', 'label, options, placeholder, searchable, searchPlaceholder, emptyText, showLabel, disabled, invalid, id, className: see below.')),
+        ],
+      },
+      SELECT_BASE,
+      LIST_OPTION,
+    ],
+  },
+  Combobox: {
+    name: 'Combobox',
+    importFrom: UI,
+    use: 'the person chooses ONE value from a list that may be long (an owner, a department, a framework): the browser\'s own select cannot search. The same button, popover and keys as MultiSelect; choosing an option closes the list and gives focus back to the button, so the next Tab goes on.',
+    dont: 'Do not use it for a handful of options (Select: the browser\'s own list works on a phone and with a screen reader), and do not leave `label` out. It is the kit\'s: the older ComboBoxInput and MultiSelectDropdown keep their own looks until their pages move.',
+    parts: [
+      {
+        name: 'Combobox', source: `${DS}/Combobox.tsx`, own: 'ComboboxProps',
+        props: [
+          prop('value', 'string | null', 'The value chosen, or null for none.'),
+          prop('onChange', '(value: string | null) => void', 'The value chosen, or null when it was cleared.'),
+          prop('clearable', 'boolean', 'Choosing the chosen option again clears it: for a field that may stay empty.', 'false'),
+          inherited(prop('...SelectBaseProps', '', 'label, options, placeholder, searchable, searchPlaceholder, emptyText, showLabel, disabled, invalid, id, className: see below.')),
+        ],
+      },
+      SELECT_BASE,
+      LIST_OPTION,
     ],
   },
   Checkbox: {
@@ -335,6 +401,26 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  Notice: {
+    name: 'Notice',
+    importFrom: UI,
+    use: 'a page has something to say about the list or the card under it: the list is cut ("Showing 100 of 174"), a source is missing, a setting is off. The tone is also an icon, so it never rests on colour alone.',
+    dont: 'Do not use it for a failed request (ErrorState has Retry and says what failed), for the confirmation of something the person just did (a toast) or for what blocks the page (NoAccessState), and do not stack two: say the one that matters.',
+    parts: [
+      {
+        name: 'Notice', source: `${DS}/Notice.tsx`, own: 'NoticeProps',
+        props: [
+          prop('tone', "'info' | 'warning' | 'danger'", 'What kind of notice it is: its icon, its tint and its role.', "'info'"),
+          prop('title', 'string', 'The bold first line: what is the case ("Showing 100 of 174 exceptions").'),
+          prop('children', 'ReactNode', 'The line under the title, or the only line when there is no title. It may hold a link.'),
+          prop('action', 'ReactNode', 'What the person can do about it: a Button or a link, after the words. It drops under them on a narrow screen.'),
+          prop('icon', 'LucideIcon', 'Replaces the tone\'s icon (an info circle, a warning triangle, a danger circle).'),
+          prop('role', "'status' | 'alert'", 'status is polite, alert is assertive. The default follows the tone: an info notice is a status, a warning or a danger is an alert. Pass status for a notice that is on the page from the moment it loads.', 'by tone'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
   PageHeader: {
     name: 'PageHeader',
     importFrom: UI,
@@ -373,8 +459,8 @@ export const DOCS: Record<string, ComponentDoc> = {
         name: 'Tabs', source: `${DS}/Tabs.tsx`, own: 'TabsProps',
         props: [
           prop('tabs', 'TabItem[]', 'The strip.'),
-          prop('value', 'string', 'The key of the open tab.'),
-          prop('onChange', '(key) => void', 'Called when another tab is picked (click, arrow keys, Home, End).'),
+          prop('value', 'K extends string', 'The key of the open tab. Its type is the type of `onChange`\'s key: the union of the keys useTabParam was given, or plain string.', 'string'),
+          prop('onChange', '(key: K) => void', 'Called with the key of the tab that was picked (click, arrow keys, Home, End). Typed by `value`: a useTabParam setter is passed as it is, with no cast.'),
           prop('ariaLabel', 'string', 'Names the tab list for a screen reader.'),
           prop('children', 'ReactNode', 'The TabPanels.'),
           CLASS_NAME,
@@ -405,6 +491,43 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  useAddressState: {
+    name: 'useAddressState',
+    importFrom: UI,
+    use: 'a page keeps several things in its address (the search, the filters, the sort, the page) so a link, a reload and Back land where the person was. You give it a schema (a name, what its values mean and its default); it gives you the state and a setter that shows a change at once and rewrites the address: it replaces, it does not push, unless asked.',
+    dont: 'Do not define the schema inside the component (it would read the address again on every render), do not keep the same state in React state as well, and do not put anything private in an address: it is stored in history, shared by link and sent in emails. For the open tab alone use useTabParam.',
+    parts: [
+      {
+        name: 'useAddressState', fn: true,
+        props: [
+          prop('useAddressState(schema)', '[state, set]', 'The state the address stands for (every name, its default where the address has nothing usable) and a setter. A name the schema does not list is left alone, and so is the hash. When the address changes (a link, Back) it is the truth again, unless it already says what the page holds ("policy " in a search box and the trimmed "policy" the address keeps are one state).'),
+          prop('set(patch, options?)', 'void', 'Merges `patch` into the state, shows it at once and rewrites the address with history.replaceState (no navigation, no history entry, no scroll). Two changes in one event compose.'),
+        ],
+      },
+      {
+        name: 'AddressStateOptions', source: `${DS}/useAddressState.ts`, own: 'AddressStateOptions',
+        props: [prop('push', 'boolean', 'Add a history entry (pushState) instead of replacing the current one: for a step Back should undo, such as opening a record.', 'false')],
+      },
+    ],
+  },
+  'Address params': {
+    name: 'Address params',
+    importFrom: '@/lib/addressState',
+    imports: ['oneOf', 'text', 'listOf', 'flag', 'integer', 'sortOf', 'readAddress', 'writeAddress', 'sameAddressState'],
+    use: 'you write the schema for useAddressState, or you need the rules apart from React (tested): what an address means, what a state writes back. A value that is not usable is the default, so an address can never put a page in a state it cannot be in. A ParamSpec of your own is just a default, a read and a write.',
+    dont: 'Do not trust an address: every kind reads junk as the default. Do not put a comma in a list value (a list is written comma-separated), and do not keep two names for one thing: other params of the address are left alone, so a name the schema lists is the page\'s.',
+    parts: [
+      { name: 'oneOf', fn: true, props: [prop('oneOf(options, fallback)', 'ParamSpec<T>', 'One of the options, any case, spaces ignored. The first occurrence of a repeated name decides. Written as the option, and nothing when it is the fallback.')] },
+      { name: 'text', fn: true, props: [prop('text()', 'ParamSpec<string>', 'Free text (a search box): read as it is, written trimmed, nothing when blank. The default is the empty string.')] },
+      { name: 'listOf', fn: true, props: [prop('listOf(options?)', 'ParamSpec<string[]>', 'Every occurrence of the name and every comma-separated piece, trimmed, without blanks or repeats, in the order first seen. With `options` anything else is dropped. Written as one comma-separated value.')] },
+      { name: 'flag', fn: true, props: [prop('flag()', 'ParamSpec<boolean>', '`1` or `true` is on; anything else is off. Written as `1`, nothing when off.')] },
+      { name: 'integer', fn: true, props: [prop('integer(fallback, { min?, max? })', 'ParamSpec<number>', 'A whole number (a page): digits only, within min and max, else the fallback. Written when it is not the fallback.')] },
+      { name: 'sortOf', fn: true, props: [prop('sortOf(keys, fallback)', 'ParamSpec<SortState>', '`key:dir` with a key from `keys` and asc or desc. `none` is "no sort" (how a page that sorts by default says it was cleared). Written when it is not the fallback. Has the shape of the table kit\'s SortState.')] },
+      { name: 'readAddress', fn: true, props: [prop('readAddress(schema, search)', 'AddressState', 'The state an address stands for. Names the schema does not list are ignored; `search` may start with "?".')] },
+      { name: 'writeAddress', fn: true, props: [prop('writeAddress(schema, search, state)', 'string', 'The query string (no "?") for a state: the defaults are left out, every other param of `search` is kept in its place, the schema\'s own come after in the schema\'s order, so one state is one address.')] },
+      { name: 'sameAddressState', fn: true, props: [prop('sameAddressState(schema, a, b)', 'boolean', 'Whether two states write the same address.')] },
+    ],
+  },
   Pager: {
     name: 'Pager',
     importFrom: UI,
@@ -420,7 +543,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('onPage', '(page) => void', 'Previous or Next was pressed.'),
           prop('onPageSize', '(size) => void', 'Gives a "Rows per page" choice; the caller decides what else changes (usually back to page 1).'),
           prop('pageSizes', 'readonly number[]', 'The choices; the size in use is always among them.', '[10, 25, 50, 100]'),
-          prop('noun', 'string', 'What is counted, plural.', "'items'"),
+          prop('noun', 'string | { one; other }', 'What is counted: the plural ("documents"), or { one: "committee", other: "committees" } so a list of exactly one reads "1–1 of 1 committee". "0 committees" and every other count use `other`.', "'items'"),
           CLASS_NAME,
         ],
       },
@@ -504,7 +627,7 @@ export const DOCS: Record<string, ComponentDoc> = {
     name: 'RegisterTable',
     importFrom: UI,
     use: 'a list of one kind of record needs sortable columns, a row that opens, and a state for every moment (loading, failed, empty). A table from 768 px, cards below.',
-    dont: 'Do not put ids in a column `cell` (it is drawn twice, in the table and on the card), and never pass [] for a request that has not answered or has failed: use `loading` and `error`.',
+    dont: 'Do not put ids in a column `cell`, and do not put an input there that must exist once: a cell is drawn twice, in the table and on the card (a `cardCell` gives the card its own version). Never pass [] for a request that has not answered or has failed: use `loading` and `error`.',
     parts: [
       {
         name: 'RegisterTable', source: `${DS}/RegisterTable.tsx`, own: 'RegisterTableProps',
@@ -523,6 +646,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('empty', 'ReactNode', 'The page\'s own empty state, drawn in place of the table.'),
           prop('footer', 'ReactNode', 'Under the frame in every state but loading: the pager and count.'),
           prop('cardTitle', '(row) => ReactNode', 'The first thing on a card.'),
+          prop('cardActions', '(row) => ReactNode', 'The row\'s actions on a card, at the top right beside the title: a Menu ("⋯"). A press anywhere in the slot is not a press on the card. The table has no such slot (its actions are a column), so the card gets its own and the column gets card: \'hide\'.'),
           prop('stickyHead', 'boolean', 'The header stays in view while the rows scroll in the frame.', 'false'),
           prop('hideHeader', 'boolean', 'The header row is not drawn but is still read out (sr-only, never display:none): for a table whose columns the caption and the cells already make plain. A column `width` then applies to the cells; cards are unaffected.', 'false'),
           prop('maxHeight', 'string', 'A max-h-[70vh] class written out in full.'),
@@ -533,7 +657,7 @@ export const DOCS: Record<string, ComponentDoc> = {
         props: [
           prop('key', 'string', 'What `sort` holds.'),
           prop('header', 'string', 'The header text, and the label of the card line.'),
-          prop('cell', '(row) => ReactNode', 'Drawn in the table and on the card: no ids in it.'),
+          prop('cell', '(row) => ReactNode', 'Drawn in the table AND on the card (both are in the page, CSS shows one): no ids in it, and no control that must exist once. For an inline control give the column a `cardCell`.'),
           prop('priority', '1 | 2 | 3', '1 always; 2 from 768 px; 3 from 1024 px. Cards ignore it.', '1'),
           prop('align', "'left' | 'right' | 'center'", 'Text alignment.'),
           prop('sortable', 'boolean', 'A click on the header sorts (needs onSortChange).'),
@@ -542,6 +666,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('isRowHeader', 'boolean', 'The cell names its row (<th scope="row">).'),
           prop('card', "'meta' | 'hide'", 'meta makes it a "label: value" line under the card title; otherwise it is not on the card.'),
           prop('cardLabel', 'string', 'The card line\'s label when the header is not the right word.'),
+          prop('cardCell', '(row) => ReactNode', 'What the card\'s line holds instead of `cell`, when the cell is an inline control (an input, a select) that must not be drawn twice: show its value as words. Only for a column with card: \'meta\'.'),
         ],
       },
     ],
@@ -675,6 +800,81 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  StatTile: {
+    name: 'StatTile',
+    importFrom: UI,
+    use: 'a page opens with the numbers that matter: one tile each, with a 24px figure, what it counts, a line of facts, an (i) for what it rests on and, when the figure opens the records behind it, a link. Four states that never read alike: the figure, "Not recorded", loading and failed.',
+    dont: 'Do not pass 0 for a figure that failed to load or that nothing recorded (pass `error`, `loading` or `value={null}`: a 0 is a number the person will believe), do not make the whole tile a button (its (i) and its link are controls of their own), and do not write a sentence in `note`: facts.',
+    parts: [
+      {
+        name: 'StatTile', source: `${DS}/StatTile.tsx`, own: 'StatTileProps',
+        props: [
+          prop('label', 'string', 'What the figure is ("Open reviews"): 12px, above it.'),
+          prop('value', 'string | null', 'The figure as text (formatCount(n)). null means nothing is recorded: the tile says "Not recorded", never 0.'),
+          prop('unit', 'string', 'What the figure counts, after it: "documents".'),
+          prop('note', 'ReactNode', 'A line of facts under the figure: "3 archived", "32 of 41 documents mapped". It may hold a link.'),
+          prop('info', 'string', 'What the figure rests on, from an (i) beside the label. With no figure (value null) it says why there is none, beside "Not recorded".'),
+          prop('link', '{ href; label }', 'The figure opens the records behind it. The label is what a screen reader says for the link ("41 documents. Open the library"): it is required with the link.'),
+          prop('tone', "'default' | 'success' | 'warning' | 'danger'", 'The colour of the figure: danger for something wrong, success for something done.', "'default'"),
+          prop('progress', 'number | null', 'A bar under the figure, 0 to 100, for a figure that is a share. It is a ProgressBar named by the label; null draws none.'),
+          prop('loading', 'boolean', 'The request has not answered: a skeleton in place of the figure, announced as "Loading <label>".', 'false'),
+          prop('error', '{ title; message?; onRetry? } | null', 'The request failed: what, in the server\'s words, and Retry when trying again can help. Shown in place of the figure; it wins over `loading`.', 'null'),
+          prop('children', 'ReactNode', 'More under the figure: pills, links.'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  ProgressBar: {
+    name: 'ProgressBar',
+    importFrom: UI,
+    use: 'a share is drawn as a bar: project completion, coverage. A real progressbar (a name, aria-valuenow and the words as aria-valuetext) with the number beside it. It fills the width it is given: set the width with `className`.',
+    dont: 'Do not pass 0 for a value that is not recorded (pass null: the bar says so and draws nothing), and do not rely on colour alone: the number is beside the bar. A stored value outside 0-100 fills the track and no more, and the words still say the stored figure.',
+    parts: [
+      {
+        name: 'ProgressBar', source: `${DS}/ProgressBar.tsx`, own: 'ProgressBarProps',
+        props: [
+          prop('value', 'number | null | undefined', 'A percent: 72 is 72%. null or undefined is not recorded: no bar, a dash, and "<label>: not recorded" for a screen reader.'),
+          prop('label', 'string', 'What the bar measures ("Delivery progress"). Read out with the value; never drawn.'),
+          prop('valueText', 'string', 'The words beside the bar, instead of the percent ("3 of 5 steps"). The bar is still drawn from `value`.'),
+          prop('showValue', 'boolean', 'false draws the bar alone: a tile that already shows the figure.', 'true'),
+          prop('tone', "'primary' | 'success' | 'warning' | 'danger'", 'The colour of the fill; each keeps 3:1 against the track.', "'primary'"),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  ChartFrame: {
+    name: 'ChartFrame',
+    importFrom: UI,
+    imports: ['ChartFrame', 'chartFocusOff'],
+    use: 'a recharts chart is drawn: a visible title, the chart in a box of a set height, and its numbers as a table that only a screen reader sees. recharts 3 makes every chart a tab stop announced as an unnamed "application"; the frame hands the chart the props that turn that off, so it is neither a keyboard trap nor a picture without words.',
+    dont: 'Do not draw a chart without its numbers: `data` is required, and the table is what a screen reader reads in place of the picture. Do not forget `{...focusOff}` on the chart (and on a Pie) or the chart is a tab stop again, and do not hide a failed or empty request in a chart: say it with ErrorState or EmptyState before you draw a frame.',
+    parts: [
+      {
+        name: 'ChartFrame', source: `${DS}/ChartFrame.tsx`, own: 'ChartFrameProps',
+        props: [
+          prop('title', 'string', 'What the chart shows, drawn above it ("Documents created and published each month"). It also names the figure and the table of numbers.'),
+          prop('note', 'string', 'A line under the title, drawn: the unit, or what to read from the chart.'),
+          prop('data', 'ChartData', 'The numbers the chart draws, as a table: the chart\'s text alternative. Read out, never drawn.'),
+          prop('height', 'number', 'How tall the chart is, in px. It fills the box: <ResponsiveContainer width="100%" height="100%">.', '240'),
+          prop('children', 'ReactNode | (focusOff) => ReactNode', 'The chart. A function receives the props that turn off recharts\' keyboard layer: spread them on the chart, and on a Pie.'),
+          CLASS_NAME,
+        ],
+      },
+      {
+        name: 'ChartData', source: `${DS}/chartText.ts`, own: 'ChartData',
+        props: [
+          prop('columns', 'readonly string[]', 'The column names: the first names what each row is (the month, the status), the rest are the numbers drawn ("Created", "Published").'),
+          prop('rows', 'ReadonlyArray<readonly (string | number | null | undefined)[]>', 'One row per category, a cell per column. A number is read with its separators and up to two decimals; nothing is "No data", never 0. More than 60 rows are cut and the table says how many were left out.'),
+        ],
+      },
+      {
+        name: 'chartFocusOff', fn: true,
+        props: [prop('chartFocusOff()', '{ accessibilityLayer: false; rootTabIndex: -1 }', 'The props that turn off recharts 3\'s keyboard layer: accessibilityLayer on the chart (no tab stop, no "application" role) and rootTabIndex on a Pie (its group is a tab stop of its own). A fresh object each call.')],
+      },
+    ],
+  },
   InfoTip: {
     name: 'InfoTip',
     importFrom: UI,
@@ -695,7 +895,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   AnimatedModal: {
     name: 'AnimatedModal',
     importFrom: UI,
-    use: 'a centred dialog is needed. Focus moves in when it opens, Tab wraps inside, Escape closes, and focus goes back to what opened it.',
+    use: 'a centred dialog is needed. Focus moves in when it opens, Tab wraps inside, Escape closes, and focus goes back to what opened it. Stacked overlays (a preview over a drawer) close one layer per Escape: the top one, the one that holds focus; a list or a menu that is open takes the press first.',
     dont: 'Do not forget `dirty` when the dialog holds typed input: without it Escape and the X throw the input away. (Legacy look; the kit\'s ConfirmDialog is built on it.)',
     parts: [
       {
@@ -724,7 +924,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   RightSlidePanel: {
     name: 'RightSlidePanel',
     importFrom: UI,
-    use: 'a record\'s detail or a long form should sit in a drawer on the right and keep the list in view. Same focus rules as the dialog.',
+    use: 'a record\'s detail or a long form should sit in a drawer on the right and keep the list in view. Same focus rules as the dialog, and the same Escape: a dialog opened from the drawer closes first, the drawer on the next press.',
     dont: 'Do not forget `dirty` when the panel holds typed input; a full-width drawer on a phone has no backdrop to press.',
     parts: [
       {
@@ -857,8 +1057,9 @@ export const DOCS: Record<string, ComponentDoc> = {
         props: [
           prop('mutationFn', '(variables) => Promise<D>', 'The request.'),
           prop('onSuccess', '(data, variables) => unknown', 'The page\'s own work once the server has confirmed; it runs after the confirmation is shown.'),
-          prop('onError', '(error, variables) => unknown', 'The page\'s own work after a failure is shown.'),
+          prop('onError', '(error, variables) => unknown', 'The page\'s own work after a failure is shown (or, with toast \'success\' or \'none\', in place of the toast: errorMessage(error) has the cleaned words to show inline).'),
           prop('invalidate', 'ReadonlyArray<readonly unknown[]>', 'Query keys to refresh once the server has confirmed.'),
+          prop('toast', "'always' | 'success' | 'errors' | 'none'", "Which outcomes are toasted. always: the confirmation and the failure (what it has always done). success: only the confirmation, for a drawer or a dialog that shows a failure inline, so it says it once, not twice. errors: only the failure, for an action whose success is plain to see. none: the page reports for itself. The refresh and the page's own onSuccess and onError run in every mode.", "'always'"),
         ],
       },
     ],

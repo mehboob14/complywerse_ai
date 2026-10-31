@@ -1,9 +1,9 @@
 'use client';
 
-// EmptyState, ErrorState, Skeleton and NoAccessState in every variant (the States matrix that puts them side by side is StatesMatrix.tsx).
+// EmptyState, ErrorState, Skeleton, NoAccessState and Notice in every variant (the States matrix that puts the states side by side is StatesMatrix.tsx).
 import { useState } from 'react';
-import { Mail, Plus } from 'lucide-react';
-import { Button, EmptyState, ErrorState, NoAccessState, Skeleton, SkeletonLines, SkeletonRows } from '@/components/ui';
+import { Lock, Mail, Plus } from 'lucide-react';
+import { Button, EmptyState, ErrorState, NoAccessState, Notice, Skeleton, SkeletonLines, SkeletonRows } from '@/components/ui';
 import { Grid, GuideSection, Spec, Specimen } from './Guide';
 
 function Counter({ label, count }: { label: string; count: number }) {
@@ -55,6 +55,35 @@ function ErrorDemo() {
   );
 }
 
+function NoticeDemo() {
+  const [opened, setOpened] = useState(0);
+  return (
+    <Grid cols={2}>
+      <Specimen label="info (the default): a fact about what is below; a polite role=status">
+        <Notice title="Updated 5 minutes ago">The register refreshes by itself every ten minutes.</Notice>
+      </Specimen>
+      <Specimen label="warning: the list is cut; an assertive role=alert">
+        <Notice tone="warning" title="Showing 100 of 174 exceptions">Search, sort and the export use these 100 only. Pick a status or priority to narrow the list.</Notice>
+      </Specimen>
+      <Specimen label="danger, with an action">
+        <Notice tone="danger" title="Two reviewers have left the company" action={<Button size="sm" onClick={() => setOpened((n) => n + 1)}>Reassign</Button>}>Their reviews cannot be completed until someone else takes them.</Notice>
+        <Counter label="Reassign pressed" count={opened} />
+      </Specimen>
+      <Specimen label="No title: the line alone">
+        <Notice>Only active departments are listed.</Notice>
+      </Specimen>
+      <Specimen label="A warning on the page from the start: role=&quot;status&quot;, and an icon of its own">
+        <Notice tone="warning" role="status" icon={Lock} title="Saving is switched off">An administrator turned it off for this organisation, so the form is view only.</Notice>
+      </Specimen>
+      <Specimen label="Narrow (240 px): the action drops under the words, which stay readable">
+        <div className="w-[240px] max-w-full">
+          <Notice tone="warning" title="Showing 100 of 174" action={<Button size="sm">Open them all</Button>}>Search and sort use these 100 only.</Notice>
+        </div>
+      </Specimen>
+    </Grid>
+  );
+}
+
 function SkeletonDemo() {
   return (
     <Grid>
@@ -80,6 +109,7 @@ export function StatesSection() {
       <Spec name="EmptyState"><EmptyDemo /></Spec>
       <Spec name="ErrorState"><ErrorDemo /></Spec>
       <Spec name="Skeleton"><SkeletonDemo /></Spec>
+      <Spec name="Notice"><NoticeDemo /></Spec>
       <Spec name="NoAccessState">
         <Grid>
           <Specimen label="Default words"><NoAccessState /></Specimen>
