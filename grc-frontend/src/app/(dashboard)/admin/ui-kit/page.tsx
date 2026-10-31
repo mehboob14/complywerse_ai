@@ -16,6 +16,7 @@ import { PeopleSection, StatusSection } from './_components/DisplaySection';
 import { StatesSection } from './_components/StatesSection';
 import { StatesMatrix } from './_components/StatesMatrix';
 import { StructureSection } from './_components/StructureSection';
+import { SettingsSection } from './_components/SettingsSection';
 import { TablesSection } from './_components/TablesSection';
 import { OverlaysSection } from './_components/OverlaysSection';
 import { FormatSection } from './_components/FormatSection';
@@ -31,6 +32,7 @@ const SECTIONS = [
   { id: 'people', label: 'People' },
   { id: 'states', label: 'States' },
   { id: 'structure', label: 'Structure' },
+  { id: 'settings', label: 'Settings pages' },
   { id: 'tables', label: 'Tables' },
   { id: 'overlays', label: 'Overlays and feedback' },
   { id: 'formatting', label: 'Formatting' },
@@ -63,6 +65,7 @@ function Guide() {
       <PeopleSection />
       <StatesSection />
       <StructureSection />
+      <SettingsSection />
       <TablesSection />
       <OverlaysSection />
       <FormatSection />

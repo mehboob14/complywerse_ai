@@ -1,10 +1,10 @@
 'use client';
 
 // Buttons (Button, IconButton) and form controls (FormField, TextInput, Textarea, Select, Checkbox), each in every variant and state.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { Bell, ChevronRight, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { Button, Checkbox, FormField, IconButton, Select, Textarea, TextInput } from '@/components/ui';
+import { Button, Checkbox, FormField, IconButton, InfoTip, Select, Textarea, TextInput } from '@/components/ui';
 import { Grid, GuideSection, MONO, Row, Spec, Specimen } from './Guide';
 
 const VARIANTS = ['primary', 'secondary', 'ghost', 'danger', 'dangerOutline', 'link'] as const;
@@ -54,6 +54,31 @@ export function ButtonsSection() {
   );
 }
 
+/** The (i) with its real press area outlined and measured on this device: 24 px with a mouse, 44 px on a touch screen; the glyph stays 20 px. */
+function PressArea() {
+  const box = useRef<HTMLSpanElement>(null);
+  const [size, setSize] = useState('');
+  useEffect(() => {
+    const read = () => {
+      const button = box.current?.querySelector('button');
+      if (button) { const r = button.getBoundingClientRect(); setSize(`${Math.round(r.width)} × ${Math.round(r.height)} px`); }
+    };
+    read();
+    const touch = window.matchMedia('(pointer: coarse)');
+    touch.addEventListener('change', read);
+    return () => touch.removeEventListener('change', read);
+  }, []);
+  return (
+    <div className="flex flex-wrap items-center gap-[12px]">
+      {/* not a positioned box: a positioned wrapper would paint the larger press area over its neighbours */}
+      <span ref={box} className="[&_button]:outline [&_button]:outline-1 [&_button]:outline-dashed [&_button]:outline-ds-primary">
+        <InfoTip text="The (i) is 20 px; the dashed frame is what a press can hit." label="About the press area" />
+      </span>
+      <p className="text-ds-label text-ds-fg-muted">Press area on this device: {size || '…'}</p>
+    </div>
+  );
+}
+
 function ControlledTitle() {
   const [title, setTitle] = useState('');
   return (
@@ -80,6 +105,15 @@ export function FormsSection() {
         </Grid>
       </Spec>
 
+      <Spec name="InfoTip">
+        <Grid cols={2}>
+          <Specimen label="Beside a label: what FormField&apos;s info draws"><div className="flex items-center gap-[4px]"><span className="text-ds-label text-ds-fg">Review cycle</span><InfoTip text="How often the document is read again." label="About review cycle" /></div></Specimen>
+          <Specimen label="The press area on this device (hover, focus or press the (i); Escape closes the note)"><PressArea /></Specimen>
+          <Specimen label="align=&quot;end&quot; at the right edge: the note lines up with the right of the (i)"><div className="flex justify-end"><InfoTip align="end" text="The note stays on screen: it opens to the left here, and above the (i) when there is more room there." label="About this edge" /></div></Specimen>
+          <Specimen label="A long explanation wraps in a note 256 px wide"><InfoTip text="Documents are read again on this cycle. The person who owns the document is asked a month before, then every week, then the day it is due; a document that is not reviewed in time is marked as needing review, and is never archived by itself." label="About the review cycle" /></Specimen>
+        </Grid>
+      </Spec>
+
       <Spec name="TextInput">
         <Grid>
           <Specimen label="Alone: named with aria-label"><TextInput aria-label="Search documents" placeholder="Search documents" /></Specimen>
@@ -88,6 +122,12 @@ export function FormsSection() {
           <Specimen label="Invalid on its own"><TextInput aria-label="Email" invalid defaultValue="not-an-email" /></Specimen>
           <Specimen label="Disabled"><TextInput aria-label="Locked" disabled defaultValue="Locked" /></Specimen>
           <Specimen label="Read-only"><TextInput aria-label="Reference" readOnly defaultValue="POL-014" /></Specimen>
+          <Specimen label="unit on a number: the digits are right-aligned in tabular figures, no spin arrows (the arrow keys still step)"><FormField label="Remind after"><TextInput type="number" unit="days" defaultValue={3} className="w-[160px]" /></FormField></Specimen>
+          <Specimen label="unit on text: the box keeps room for it, so typing never runs under it"><FormField label="Memory limit"><TextInput unit="MB" defaultValue="512" /></FormField></Specimen>
+          <Specimen label="unit, invalid"><FormField label="Remind after" error="Enter a number from 1 to 30."><TextInput type="number" unit="days" defaultValue={45} className="w-[160px]" /></FormField></Specimen>
+          <Specimen label="unit, read-only and disabled">
+            <div className="space-y-[8px]"><TextInput aria-label="Retention" type="number" unit="months" readOnly defaultValue={24} className="w-[160px]" /><TextInput aria-label="Quota" type="number" unit="GB" disabled defaultValue={50} className="w-[160px]" /></div>
+          </Specimen>
         </Grid>
       </Spec>
 

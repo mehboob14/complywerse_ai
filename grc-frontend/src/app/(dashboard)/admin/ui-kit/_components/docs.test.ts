@@ -36,7 +36,7 @@ test('every prop a component declares is documented, and every documented prop s
     const documented = part.props.map((p) => p.name);
     for (const name of declared) if (!documented.includes(name)) problems.push(`${doc.name}/${part.name}: "${name}" is declared in ${part.own} and not documented`);
     for (const p of part.props) {
-      if (declared.includes(p.name) || p.native) continue;
+      if (declared.includes(p.name) || p.native || p.inherited) continue;
       if (!new RegExp(`(?<![\\w-])${escape(p.name)}(?![\\w-])`).test(source)) problems.push(`${doc.name}/${part.name}: "${p.name}" is documented and not in ${part.source}`);
     }
     assert.ok(declared.length > 0, `${part.name}: no props found in ${part.own}`);

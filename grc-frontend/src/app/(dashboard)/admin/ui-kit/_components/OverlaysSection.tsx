@@ -4,11 +4,7 @@
 // Each button that opens a dialog or a drawer carries data-guide-opener, which is how the accessibility probe finds it (it opens each one, checks
 // focus, Tab, Escape and focus return); the toast buttons carry data-guide-toast. Everything here is simulated: no request leaves the page.
 import { useEffect, useRef, useState } from 'react';
-import { AnimatedModal, Button, FormField, RightSlidePanel, Select, Textarea, TextInput } from '@/components/ui';
-import { DiscardBar } from '@/components/ui/ds/DiscardBar';
-import { useConfirm } from '@/components/ui/ds/useConfirm';
-import { useNotify } from '@/components/ui/ds/useNotify';
-import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import { AnimatedModal, Button, DiscardBar, FormField, RightSlidePanel, Select, Textarea, TextInput, useConfirm, useNotify, useReportedMutation } from '@/components/ui';
 import { GuideSection, MONO, Row, Spec, Specimen } from './Guide';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -134,7 +130,7 @@ function NotifyDemo() {
   );
 }
 
-type Mode = 'ok' | 'busy' | 'flaky' | 'refused';
+type Mode = 'ok' | 'headline' | 'busy' | 'silent' | 'flaky' | 'refused';
 
 function MutationDemo() {
   const attempts = useRef(0);
@@ -142,15 +138,17 @@ function MutationDemo() {
   const run = useReportedMutation<string, Mode>({
     mutationFn: async (mode) => {
       await sleep(600);
-      if (mode === 'ok') return 'saved';
+      if (mode === 'ok' || mode === 'headline') return 'saved';
       if (mode === 'busy') throw serverError(503, 'The register is read-only while the nightly backup runs.');
+      if (mode === 'silent') throw serverError(500, '');                                  // the server said nothing usable: `fallback` speaks
       if (mode === 'refused') throw serverError(403, 'You do not have permission to archive documents.');
       attempts.current += 1;
       if (attempts.current % 2 === 1) throw serverError(503, 'The server is busy. Try again.');
       return 'saved';
     },
-    success: () => 'Document archived',
+    success: (_data, mode) => (mode === 'headline' ? { title: 'Settings saved', message: 'New requests use them from now on.' } : 'Document archived'),
     failure: "Couldn't archive the document",
+    fallback: 'The document could not be archived.',
     onSuccess: () => setLast('the server answered ok'),
     onError: () => setLast('the server refused or failed'),
   });
@@ -159,7 +157,9 @@ function MutationDemo() {
     <div className="space-y-[8px]">
       <Row>
         <Button variant="primary" loading={run.isPending} onClick={() => run.mutate('ok')}>Succeeds</Button>
+        <Button loading={run.isPending} onClick={() => run.mutate('headline')}>Succeeds with a headline and a second line</Button>
         <Button loading={run.isPending} onClick={() => run.mutate('busy')}>Fails (503: Retry offered)</Button>
+        <Button loading={run.isPending} onClick={() => run.mutate('silent')}>Fails and the server says nothing (fallback)</Button>
         <Button loading={run.isPending} onClick={() => { attempts.current = 0; run.mutate('flaky'); }}>Fails once, works on Retry</Button>
         <Button loading={run.isPending} onClick={() => run.mutate('refused')}>Refused (403: no Retry)</Button>
       </Row>

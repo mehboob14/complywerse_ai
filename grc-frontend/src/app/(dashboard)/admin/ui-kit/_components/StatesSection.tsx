@@ -29,6 +29,9 @@ function EmptyDemo() {
           <EmptyState bare kind="firstUse" icon={Mail} title="No messages" description="Nothing has been sent to this supplier." />
         </div>
       </Specimen>
+      <Specimen label="info: the explanation sits in an (i) beside the title, for a page that prints labels and not sentences">
+        <EmptyState kind="firstUse" title="No departments yet" info="A department groups the people who own documents together. It is deactivated, never deleted." action={<Button variant="primary" leftIcon={<Plus />}>Add a department</Button>} />
+      </Specimen>
     </Grid>
   );
 }

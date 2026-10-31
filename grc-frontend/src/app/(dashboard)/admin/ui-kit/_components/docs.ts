@@ -10,6 +10,8 @@ export interface PropDoc {
   note: string;
   /** an attribute of the HTML element the kit passes through and does something with (documented, not declared by the component) */
   native?: boolean;
+  /** a row that stands for the props another interface adds ("...ConfirmRequest"): not a prop of its own */
+  inherited?: boolean;
 }
 
 export interface PartDoc {
@@ -37,6 +39,7 @@ export interface ComponentDoc {
 
 const prop = (name: string, type: string, note: string, def?: string): PropDoc => ({ name, type, note, default: def });
 const native = (p: PropDoc): PropDoc => ({ ...p, native: true });
+const inherited = (p: PropDoc): PropDoc => ({ ...p, inherited: true });
 const CLASS_NAME = prop('className', 'string', 'Layout only (width, margin). Colour and size come from the component.');
 const UI = '@/components/ui';
 const DS = 'src/components/ui/ds';
@@ -95,7 +98,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('label', 'ReactNode', 'The label; it points at the control.'),
           prop('required', 'boolean', 'Adds the red * (read out as "required") and aria-required on the control.', 'false'),
           prop('optional', 'boolean', 'Adds "(optional)" after the label; ignored when required.', 'false'),
-          prop('info', 'string', 'An explanation shown from the (i) beside the label.'),
+          prop('info', 'string', 'An explanation shown from the (i) beside the label; when the label is text the (i) is named "About <label>".'),
           prop('hint', 'ReactNode', 'Muted help under the control; the control is described by it.'),
           prop('error', 'ReactNode', 'Red, under the control, read out as it appears (role="alert"); the control becomes invalid.'),
           prop('id', 'string', 'The control\'s id, when the page needs a fixed one.', 'generated'),
@@ -120,6 +123,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('invalid', 'boolean', 'Red outline and aria-invalid; a FormField with an error does this by itself.', 'false'),
           prop('leftAdornment', 'ReactNode', 'An icon inside the box, decoration only (it does not take clicks).'),
           prop('rightAdornment', 'ReactNode', 'Inside the box on the right; may hold a button.'),
+          prop('unit', 'string', 'A word after the value, inside the box ("days"). The box keeps room for it, so typed text never runs under it; with type="number" the digits are right-aligned in tabular figures and the spin arrows are hidden (the arrow keys still step). The unit is read out with the field, before its hint.'),
           native(prop('readOnly', 'boolean', 'Greys the box and keeps the words at full contrast.')),
           CLASS_NAME,
         ],
@@ -258,6 +262,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('kind', "'firstUse' | 'noMatches'", 'Nothing yet, or the filters leave none.'),
           prop('title', 'string', 'What is empty.'),
           prop('description', 'string', 'One sentence under the title.'),
+          prop('info', 'string', 'What the state used to explain in a sentence, shown from an (i) beside the title: for a page that prints labels, not sentences.'),
           prop('icon', 'LucideIcon', 'A magnifier for noMatches, an inbox for firstUse.'),
           prop('action', 'ReactNode', 'The one primary action: what fills the page.'),
           prop('onClearFilters', '() => void', 'noMatches only: shows a "Clear filters" button.'),
@@ -519,6 +524,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('footer', 'ReactNode', 'Under the frame in every state but loading: the pager and count.'),
           prop('cardTitle', '(row) => ReactNode', 'The first thing on a card.'),
           prop('stickyHead', 'boolean', 'The header stays in view while the rows scroll in the frame.', 'false'),
+          prop('hideHeader', 'boolean', 'The header row is not drawn but is still read out (sr-only, never display:none): for a table whose columns the caption and the cells already make plain. A column `width` then applies to the cells; cards are unaffected.', 'false'),
           prop('maxHeight', 'string', 'A max-h-[70vh] class written out in full.'),
         ],
       },
@@ -580,6 +586,112 @@ export const DOCS: Record<string, ComponentDoc> = {
       { name: 'UNASSIGNED', fn: true, props: [prop('"Unassigned"', 'string', 'An owner or assignee nobody has been chosen for.')] },
     ],
   },
+  SectionCard: {
+    name: 'SectionCard',
+    importFrom: UI,
+    use: 'a settings or detail page splits into cards: a title with its (i), one line of facts, the card\'s own actions on the right, then the content. It is a region named by its heading and an anchor (#id) a link can point at.',
+    dont: 'Do not put prose in `meta` (facts, not sentences: "6 departments · 1 inactive"), and do not reuse an `id` on the page: it is the anchor and what names the region.',
+    parts: [
+      {
+        name: 'SectionCard', source: `${DS}/SectionCard.tsx`, own: 'SectionCardProps',
+        props: [
+          prop('id', 'string', 'The card\'s anchor and what names its heading: `#due`. Kept clear of a sticky header by scroll-margin.'),
+          prop('title', 'string', 'The card\'s h2.'),
+          prop('info', 'string', 'What the card used to explain in a sentence, shown from an (i) beside the title.'),
+          prop('meta', 'ReactNode', 'One line of facts after the title.'),
+          prop('actions', 'ReactNode', 'The card\'s actions, on the right of the title row (they wrap under it on a phone).'),
+          prop('children', 'ReactNode', 'The content.'),
+        ],
+      },
+    ],
+  },
+  SaveBar: {
+    name: 'SaveBar',
+    importFrom: UI,
+    use: 'a form saves as a whole: the strip sticks to the bottom of the page and says one thing at a time ("Unsaved changes", "Fix the fields in red to save", what the server refused with, "Saved"), with Discard and Save only while there is something to save.',
+    dont: 'Do not draw a save row of your own, show the bar to a person who cannot edit (canEdit false draws nothing), or word the states yourself: the words are the platform\'s, and only a refusal carries other words (the server\'s). A refusal outranks "fix the fields", which outranks "unsaved".',
+    parts: [
+      {
+        name: 'SaveBar', source: `${DS}/SaveBar.tsx`, own: 'SaveBarProps',
+        props: [
+          prop('label', 'string', 'Names the bar\'s region for a screen reader ("Save the settings").'),
+          prop('onSave', '() => void', 'Save was pressed.'),
+          prop('onDiscard', '() => void', 'Discard was pressed.'),
+          prop('saveLabel', 'string', 'The Save button\'s words.', "'Save'"),
+          prop('discardLabel', 'string', 'The Discard button\'s words.', "'Discard'"),
+          inherited(prop('…SaveBarInput', 'canEdit, dirty, invalid, saving, justSaved, error', 'What decides the state: see SaveBarInput below.')),
+        ],
+      },
+      {
+        name: 'SaveBarInput', source: `${DS}/saveBarModel.ts`, own: 'SaveBarInput',
+        props: [
+          prop('canEdit', 'boolean', 'The person may change the form at all: false (view-only) and the bar is never shown.'),
+          prop('dirty', 'boolean', 'The form differs from what is saved: the bar shows, with Discard and Save.'),
+          prop('invalid', 'boolean', 'A field is wrong: it says "Fix the fields in red to save" and Save is not offered until it is fixed.'),
+          prop('saving', 'boolean', 'The request is on its way: Save shows its spinner (and keeps focus), Discard is off.'),
+          prop('justSaved', 'boolean', 'The last save went through a moment ago: "Saved", with no buttons, and focus moves to the line. The page clears it again after a few seconds.'),
+          prop('error', 'string | null', 'What the server said when the last save was refused; blank or missing: nothing.'),
+        ],
+      },
+    ],
+  },
+  SegmentedControl: {
+    name: 'SegmentedControl',
+    importFrom: UI,
+    use: 'a short list of choices has one chosen ("In-app | Email | Both | Off"): a native radio group, so Tab enters and leaves it once, the arrow keys move the choice and a screen reader says "2 of 4".',
+    dont: 'Do not use it for a long list or for a choice that opens something (Select, Menu). Give each group its own `name` on the page and a `label` that says what it chooses: the group is named by it.',
+    parts: [
+      {
+        name: 'SegmentedControl', source: `${DS}/SegmentedControl.tsx`, own: 'SegmentedControlProps',
+        props: [
+          prop('label', 'string', 'What the group is called for a screen reader (read out, not drawn).'),
+          prop('name', 'string', 'The radio group\'s name: unique on the page.'),
+          prop('options', 'readonly SegmentedOption[]', 'The segments; they wrap onto more lines when there is not room.'),
+          prop('value', 'string', 'The chosen option\'s value.'),
+          prop('onChange', '(value) => void', 'Another segment was chosen (click, or the arrow keys).'),
+          prop('disabled', 'boolean', 'Stops answering presses and keeps the chosen segment readable (a view-only page still shows the value).', 'false'),
+          prop('className', 'string', 'Layout only (margin, alignment).'),
+        ],
+      },
+      {
+        name: 'SegmentedOption', source: `${DS}/SegmentedControl.tsx`, own: 'SegmentedOption',
+        props: [
+          prop('value', 'string', 'What onChange gives back.'),
+          prop('label', 'string', 'The words on the segment.'),
+          prop('quiet', 'boolean', 'Reads grey, not teal, while chosen: for the choice that means "nothing" ("Off").'),
+        ],
+      },
+    ],
+  },
+  ReadOnlyNote: {
+    name: 'ReadOnlyNote',
+    importFrom: UI,
+    use: 'a page or a card can be read and not changed: a lock and the page\'s words ("View only"), read out as a note where it stands. An (i) after the words says who can change it. For the `meta` of a page head or the `actions` of a SectionCard.',
+    dont: 'Do not leave the controls looking editable beside it: the fields are read-only (full-contrast words on grey) and the save bar is gone. It is a line of facts, not a banner.',
+    parts: [
+      {
+        name: 'ReadOnlyNote', source: `${DS}/ReadOnlyNote.tsx`, own: 'ReadOnlyNoteProps',
+        props: [prop('children', 'ReactNode', 'The words ("View only"), then an InfoTip if there is more to say.')],
+      },
+    ],
+  },
+  InfoTip: {
+    name: 'InfoTip',
+    importFrom: UI,
+    use: 'an explanation helps the person who wonders and is not needed to avoid a mistake: a small (i) that shows it on hover, focus or tap (Escape and scrolling close it). The words are always in the page for a screen reader. FormField, PageHeader, SectionCard and EmptyState draw one from their `info`.',
+    dont: 'Do not put text that prevents a mistake in an (i): that stays on the page as a hint. The press area is 24px with a mouse and 44px on a touch screen around the 20px glyph, without moving anything: do not wrap it in a positioned box (that would paint over its neighbours).',
+    parts: [
+      {
+        name: 'InfoTip', source: 'src/components/ui/InfoTip.tsx',
+        props: [
+          prop('text', 'string', 'The explanation.'),
+          prop('label', 'string', 'What a screen reader says for the button.', "'More information'"),
+          prop('align', "'start' | 'end'", 'Which edge of the (i) the note lines up with (either way it is kept on screen).', "'start'"),
+          prop('className', 'string', 'Layout only.'),
+        ],
+      },
+    ],
+  },
   AnimatedModal: {
     name: 'AnimatedModal',
     importFrom: UI,
@@ -636,7 +748,8 @@ export const DOCS: Record<string, ComponentDoc> = {
   },
   DiscardBar: {
     name: 'DiscardBar',
-    importFrom: '@/components/ui/ds/DiscardBar',
+    importFrom: UI,
+    imports: ['DiscardBar', 'useDiscardGuard'],
     use: 'a page-level guard needs the "Discard changes?" bar the two overlays show when `dirty`.',
     parts: [
       {
@@ -649,17 +762,31 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('onDiscard', '() => void', 'Throw the input away.'),
         ],
       },
+      {
+        name: 'useDiscardGuard', fn: true,
+        props: [prop('useDiscardGuard({ open, dirty, closeOnBackdrop, onClose, dialogRef })', '{ asking, requestClose(source), keep(), discard() }', 'The state and the focus behind the bar: AnimatedModal and RightSlidePanel use it, and so does an overlay of your own. requestClose decides whether Escape, the X or a press outside closes, asks, or goes back to editing.')],
+      },
     ],
   },
   ConfirmDialog: {
     name: 'ConfirmDialog',
-    importFrom: '@/components/ui/ds/useConfirm',
+    importFrom: UI,
+    imports: ['useConfirm', 'ConfirmDialog'],
     use: 'a destructive or far-reaching action needs asking first, instead of window.confirm: `await confirm({...})` resolves true or false exactly once. A danger question puts focus on Cancel.',
     dont: 'Do not write "OK": `confirmLabel` is the verb phrase of what will happen ("Archive 3 documents"). Do not render the dialog yourself; put `confirmDialog` in your JSX.',
     parts: [
       {
         name: 'useConfirm', fn: true,
         props: [prop('const { confirm, confirmDialog } = useConfirm()', '{ confirm(options): Promise<boolean>, confirmDialog }', 'Render `confirmDialog` once in your JSX. confirm() resolves true on the action; Cancel, Escape, a click outside, a newer question and the page going away are all false.')],
+      },
+      {
+        name: 'ConfirmDialog', source: `${DS}/ConfirmDialog.tsx`, own: 'ConfirmDialogProps',
+        props: [
+          prop('open', 'boolean', 'Open or shut (useConfirm holds it for you).'),
+          prop('onConfirm', '() => void', 'The action button was pressed.'),
+          prop('onCancel', '() => void', 'Cancel, Escape and a click on the backdrop.'),
+          inherited(prop('…ConfirmRequest', 'title, message, confirmLabel, cancelLabel, tone', 'The question itself: see ConfirmRequest below.')),
+        ],
       },
       {
         name: 'ConfirmRequest', source: `${DS}/ConfirmDialog.tsx`, own: 'ConfirmRequest',
@@ -675,7 +802,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   },
   useNotify: {
     name: 'useNotify',
-    importFrom: '@/components/ui/ds/useNotify',
+    importFrom: UI,
     use: 'the person needs to be told what happened: notify.success goes by itself after 3 seconds; notify.error stays until dismissed, says what the server said (cleaned) and can carry a Retry. Toasts wait while they are being read.',
     dont: 'Do not toast a success before the server has answered (useReportedMutation does it in the right order), and do not show a raw error object: pass the caught error and the helper cleans it.',
     parts: [
@@ -708,7 +835,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   },
   useReportedMutation: {
     name: 'useReportedMutation',
-    importFrom: '@/components/ui/ds/useReportedMutation',
+    importFrom: UI,
     use: 'a page would use a bare useMutation: it confirms only after the server answers ok, and a failure stays on screen with what the server said and a Retry that repeats the same call.',
     dont: 'Do not offer Retry on a create that is not safe to repeat: set `retryable: false`. Retry is withheld by itself for a refusal (4xx other than 408, 425, 429).',
     parts: [
@@ -719,8 +846,9 @@ export const DOCS: Record<string, ComponentDoc> = {
       {
         name: 'ReportConfig', source: 'src/components/ui/ds/reportOutcome.ts', own: 'ReportConfig',
         props: [
-          prop('success', 'string | (data, variables) => string', 'The confirmation.'),
+          prop('success', "string | { title, message? } | (data, variables) => either", 'The confirmation: one line, or a headline with a second line under it ({ title: "Settings saved", message: "New requests use them from now on." }); or a function of what the server returned that gives either.'),
           prop('failure', 'string', 'The headline of the failure ("Couldn\'t archive the document").'),
+          prop('fallback', 'string', 'Said when the server gave no usable words, instead of "Please try again."; what the server says always wins.'),
           prop('retryable', 'boolean', 'False: never offer Retry.'),
         ],
       },

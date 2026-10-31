@@ -37,6 +37,13 @@ const COLUMNS: RegisterColumn<Doc>[] = [
   { key: 'open', header: 'Open items', priority: 3, align: 'right', sortable: true, firstDir: 'desc', cell: (d) => formatCount(d.open) },
 ];
 
+/** For hideHeader: the caption and the cells already make the columns plain, and a width sits on the cells. */
+const QUIET_COLUMNS: RegisterColumn<Doc>[] = [
+  { key: 'title', header: 'Document', isRowHeader: true, width: 'w-[55%]', cell: (d) => <span className="line-clamp-2 font-medium text-ds-fg" title={d.title}>{d.title}</span> },
+  { key: 'status', header: 'Status', card: 'meta', cell: (d) => <StatusPill size="sm" {...statusPill(documentStatus, d.status)} /> },
+  { key: 'owner', header: 'Owner', card: 'meta', cell: (d) => <PersonChip name={d.owner} size={20} /> },
+];
+
 function PrimitivesDemo() {
   const [sort, setSort] = useState<SortState>({ key: 'title', dir: 'asc' });
   const [chosen, setChosen] = useState<number | null>(null);
@@ -174,6 +181,9 @@ export function TablesSection() {
         <Specimen label="Failed: the message and Retry in place of the rows, never an empty table (Retry fails once more, then works)"><FailedDemo /></Specimen>
         <Specimen label="Empty, first use: the page's own empty state"><RegisterTable caption="Documents (empty demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} empty={<EmptyState bare kind="firstUse" title="No documents yet" description="Documents you add appear here." action={<Button variant="primary">Add a document</Button>} />} /></Specimen>
         <Specimen label="Empty, nothing matches: say so and clear the filters"><RegisterTable caption="Documents (no matches demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} empty={<EmptyState bare kind="noMatches" title="No documents match" description="Try another search." onClearFilters={() => undefined} />} /></Specimen>
+        <Specimen label="hideHeader: the header row is read out and not drawn (the caption and the cells make the columns plain); the width moves to the cells">
+          <RegisterTable caption="Documents, header read out and not drawn" hideHeader columns={QUIET_COLUMNS} rows={DOCUMENTS.slice(0, 3)} getRowId={(d) => d.id} cardTitle={(d) => d.title} />
+        </Specimen>
         <Specimen label="No empty state given: the register's own plain line"><RegisterTable caption="Documents (plain empty demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} /></Specimen>
       </Spec>
       <Spec name="Table logic"><LogicTable /></Spec>
