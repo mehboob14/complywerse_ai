@@ -49,6 +49,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/controls': { title: 'Control Catalog' },
   '/erm': { title: 'Enterprise Risk Management', subtitle: 'Comprehensive risk identification, assessment, and monitoring' },
   '/erm/risks': { title: 'Risk Register' },
+  '/erm/risk-library': { title: 'Risk Library', subtitle: 'Risks listed in a standard, ready for your register' },
   '/erm/risk-assessments': { title: 'Risk Assessments', subtitle: 'Manage and track risk assessment activities' },
   '/erm/rcsa/templates': { title: 'RCSA Templates', subtitle: 'Upload and download RCSA templates' },
   '/erm/analytics': { title: 'Advanced Risk Analytics', subtitle: 'Comprehensive risk analysis tools for enterprise risk intelligence' },

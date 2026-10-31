@@ -2,7 +2,7 @@
 // An entry is shown to an administrator, or to someone who holds one of its requiredPermissions, inside the modules and the
 // client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone.
 import {
-  Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
+  Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, BookMarked, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
   ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
   type LucideIcon,
@@ -67,6 +67,7 @@ export const navigation: NavEntry[] = [
     requiredModules: ['risks', 'erm'],
     items: [
       { name: 'Overview', href: '/erm', icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Risk Library', href: '/erm/risk-library', icon: BookMarked, requiredPermissions: ['erm:risks:*'] },
       {
         name: 'Operational Risk',
         icon: Layers,
