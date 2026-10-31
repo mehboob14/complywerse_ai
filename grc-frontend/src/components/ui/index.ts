@@ -24,6 +24,7 @@ export {
   TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
   type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,
 } from './ds/Table';
+export { RegisterTable, type RegisterTableProps, type RegisterColumn } from './ds/RegisterTable';
 export {
   nextSort, ariaSort, sortRows, priorityClass, rowCountText,
   type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
