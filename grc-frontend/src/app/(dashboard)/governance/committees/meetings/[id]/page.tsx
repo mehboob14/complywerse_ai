@@ -1,39 +1,37 @@
 ﻿'use client';
 
+// Governance > Committees > a meeting: its agenda (with a vote on each item), minutes, attached documents, actions and details.
+// The data flow is what it has always been (the same requests, query keys and invalidations; one votes request per agenda item stays as it is). On the
+// design-system kit (components/ui/ds): the page head, the summary tiles (one column on a phone), the pills, drawers that ask "Discard changes?", every write a
+// useReportedMutation (a confirmation only after the server answered; a failure stays with the server's words and, where repeating helps, Retry), every
+// question a useConfirm. Edit and remove are buttons you can see (they were icons that appeared only under the mouse, so a keyboard or a phone never met them).
+// What is NOT here, on purpose: a meeting cannot be started, completed, rescheduled or cancelled, and attendance and the approval of minutes cannot be
+// recorded. That is the meeting life cycle, separate work (committeeApi.updateMeeting and updateMinutes have no callers); the page says "Not recorded" for what
+// it would fill and invents no transition. Quorum present is therefore always "Not recorded".
 import { useRef, useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import {
+  Calendar, CheckSquare, ChevronRight, Download, FileCheck, FileText, Lightbulb, Link as LinkIcon, ListOrdered, MapPin, Paperclip, Pencil, Plus, Save, Scale, Shield, Sparkles,
+  Trash2, Upload, Users,
+} from 'lucide-react';
 import { committeeApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useToast } from '@/components/ui/ToastProvider';
-import {
-  Calendar,
-  MapPin,
-  Users,
-  FileText,
-  CheckSquare,
-  Plus,
-  ArrowLeft,
-  Save,
-  ListOrdered,
-  Sparkles,
-  AlertCircle,
-  FileCheck,
-  Shield,
-  Scale,
-  Lightbulb,
-  Link as LinkIcon,
-  Pencil,
-  Trash2,
-  Upload,
-  Download,
-  Paperclip,
-  Loader2,
-  ChevronRight,
-} from 'lucide-react';
-import Link from 'next/link';
+import { PageHeader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import {
+  Button, Checkbox, ErrorState, FormField, IconButton, PersonChip, Select, Skeleton, SkeletonLines, StatusPill, Textarea, TextInput, type StatusPillProps,
+} from '@/components/ui/ds';
+import { errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { useConfirm } from '@/components/ui/ds/useConfirm';
+import { useNotify } from '@/components/ui/ds/useNotify';
+import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import { formatCount, formatDate, moreCount, statusLabel, truncate } from '@/lib/format';
+import { meetingStatus, statusPill } from '@/lib/status';
+import { ACTION_TYPES, cutNotice, dueDay, formChanged, listOf, meetingWhen } from '@/lib/committees';
+import { ActionStatusPills, ClampedText, DrawerFooter, FormProblem, NotRecorded, PickerField, StatTile } from '../../_ui';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -136,79 +134,52 @@ function formatFileSize(bytes?: number | null) {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MEETING_TYPE_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  regular:   { label: 'Regular',   bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  special:   { label: 'Special',   bg: 'bg-amber-50',   text: 'text-amber-700'   },
-  emergency: { label: 'Emergency', bg: 'bg-rose-50',     text: 'text-rose-700'     },
-};
-
-const MEETING_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  scheduled:   { label: 'Scheduled',   bg: 'bg-blue-50',   text: 'text-blue-700'   },
-  in_progress: { label: 'In Progress', bg: 'bg-amber-50',  text: 'text-amber-700'  },
-  completed:   { label: 'Completed',   bg: 'bg-emerald-50',text: 'text-emerald-700'},
-  cancelled:   { label: 'Cancelled',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
-};
-
-const AGENDA_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  pending:   { label: 'Pending',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
-  discussed: { label: 'Discussed', bg: 'bg-emerald-50',text: 'text-emerald-700'},
-  deferred:  { label: 'Deferred',  bg: 'bg-amber-50',  text: 'text-amber-700'  },
-};
-
-const ACTION_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  open:        { label: 'Open',        bg: 'bg-amber-50',  text: 'text-amber-700'  },
-  in_progress: { label: 'In Progress', bg: 'bg-blue-50',   text: 'text-blue-700'   },
-  completed:   { label: 'Completed',   bg: 'bg-emerald-50',text: 'text-emerald-700'},
-  overdue:     { label: 'Overdue',     bg: 'bg-rose-50',    text: 'text-rose-700'    },
-};
-
-const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
-  document:          { label: 'Document',           icon: FileCheck, bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200'   },
-  exception:         { label: 'Exception',          icon: Shield,    bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200'  },
-  regulatory_change: { label: 'Regulatory Change',  icon: Scale,     bg: 'bg-primary-50', text: 'text-slate-600', border: 'border-slate-200' },
-  manual:            { label: 'Manual',             icon: FileText,  bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200'   },
-};
-
-const ACTION_TYPES = [
-  { value: 'follow_up',          label: 'Follow Up'           },
-  { value: 'policy_approval',    label: 'Policy Approval'     },
-  { value: 'risk_review',        label: 'Risk Review'         },
-  { value: 'audit_response',     label: 'Audit Response'      },
-  { value: 'corrective_action',  label: 'Corrective Action'   },
-  { value: 'preventive_action',  label: 'Preventive Action'   },
-  { value: 'investigation',      label: 'Investigation'       },
-  { value: 'escalation',         label: 'Escalation'          },
-  { value: 'decision_record',    label: 'Decision Record'     },
-  { value: 'recommendation',     label: 'Recommendation'      },
-  { value: 'training',           label: 'Training'            },
-  { value: 'monitoring',         label: 'Monitoring'          },
-  { value: 'vendor_review',      label: 'Vendor Review'       },
-  { value: 'incident_review',    label: 'Incident Review'     },
-  { value: 'compliance_review',  label: 'Compliance Review'   },
-  { value: 'communication',      label: 'Communication'       },
-  { value: 'documentation',      label: 'Documentation'       },
-  { value: 'other',              label: 'Other'               },
-];
+const AGENDA_TONE: Record<string, StatusPillProps['tone']> = { pending: 'neutral', discussed: 'success', deferred: 'warning' };
+const SOURCE_LABEL: Record<string, string> = { document: 'Document', exception: 'Exception', regulatory_change: 'Regulatory change', manual: 'Manual' };
 
 const ITEM_TYPES = [
   { value: 'procedural', label: 'Procedural' },
-  { value: 'approval',   label: 'Approval'   },
+  { value: 'approval', label: 'Approval' },
   { value: 'discussion', label: 'Discussion' },
-  { value: 'information',label: 'Information'},
-  { value: 'decision',   label: 'Decision'   },
+  { value: 'information', label: 'Information' },
+  { value: 'decision', label: 'Decision' },
 ];
 
-function formatDate(d?: string | null) {
-  if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return d; }
-}
+const NEW_AGENDA = { title: '', description: '', duration_minutes: 15, item_type: 'discussion' };
+const NEW_ACTION = { title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '' };
+const NO_ATTENDANCE = 'Nobody has recorded how many attended: these screens cannot mark a meeting held or enter attendance yet.';
+const NO_STATUS_CHANGE = 'A meeting cannot be started, completed or cancelled from these screens yet, so its status stays as it was scheduled.';
+const SUB_HEAD = 'text-ds-label text-ds-fg-muted';
+const CARD = 'rounded-ds-card border border-ds-border bg-ds-surface';
 
-function Badge({ label, bg, text }: { label: string; bg: string; text: string }) {
+/** The related records of an agenda item: the first two, and "+N" for the rest (a press shows them). */
+function LinkChips({ links }: { links: { type: string; title: string; icon: React.ElementType }[] }) {
+  const [open, setOpen] = useState(false);
+  const { shown, rest, more } = moreCount(links, 2);
+  const list = open ? shown.concat(rest) : shown;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${bg} ${text}`}>
-      {label}
-    </span>
+    <div className="mt-[8px] flex flex-wrap items-center gap-[6px]">
+      {list.map((link, i) => {
+        const Icon = link.icon;
+        return (
+          <span key={i} className="inline-flex max-w-full items-center gap-[4px] rounded-ds-control bg-ds-surface-hover px-[8px] py-[2px] text-ds-label font-normal text-ds-fg-body">
+            <Icon aria-hidden className="h-[14px] w-[14px] shrink-0" />
+            <span className="break-words [overflow-wrap:anywhere]">{link.type}: {link.title}</span>
+          </span>
+        );
+      })}
+      {more > 0 && (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? 'Show fewer related records' : `Show ${more} more related ${more === 1 ? 'record' : 'records'}`}
+          onClick={() => setOpen(!open)}
+          className="inline-flex h-[24px] min-w-[24px] items-center justify-center rounded-full border border-ds-border-strong bg-ds-surface-hover px-[6px] text-ds-label text-ds-fg-body hover:bg-ds-border focus-visible:outline-none focus-visible:shadow-ds-ring"
+        >
+          {open ? 'Less' : `+${more}`}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -217,7 +188,8 @@ function Badge({ label, bg, text }: { label: string; bg: string; text: string })
 export default function MeetingDetailPage() {
   const params = useParams();
   const meetingId = parseInt(params.id as string);
-  const { toast } = useToast();
+  const notify = useNotify();
+  const { confirm, confirmDialog } = useConfirm();
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
@@ -233,30 +205,22 @@ export default function MeetingDetailPage() {
     include_regulatory_changes: true,
   });
 
-  const [newAgendaItem, setNewAgendaItem] = useState({
-    title: '', description: '', duration_minutes: 15, item_type: 'discussion',
-  });
+  const [newAgendaItem, setNewAgendaItem] = useState(NEW_AGENDA);
+  const [newAction, setNewAction] = useState(NEW_ACTION);
 
-  const [newAction, setNewAction] = useState({
-    title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '',
-  });
-
-  // Edit-agenda-item state. Holds the full draft so we can populate the same
-  // RightSlidePanel used for adding (no separate component) and submit a PUT.
+  // Edit-agenda-item state: the full draft, so the same drawer used for adding can be used for editing (a PUT).
   const [editingAgendaId, setEditingAgendaId] = useState<number | null>(null);
-  const [editAgendaDraft, setEditAgendaDraft] = useState({
-    title: '', description: '', time_allocated_minutes: 15, item_type: 'discussion',
-  });
+  const [editAgendaDraft, setEditAgendaDraft] = useState({ title: '', description: '', time_allocated_minutes: 15, item_type: 'discussion' });
+  const [editAgendaInitial, setEditAgendaInitial] = useState(editAgendaDraft);
 
-  // Meeting attachments — file upload state and the optional description for the
-  // file the user is about to upload.
+  // Meeting attachments: the file about to be uploaded and its optional description.
   const [attachmentDescription, setAttachmentDescription] = useState('');
   const [pendingAttachment, setPendingAttachment]         = useState<File | null>(null);
   const [isUploadAttachmentOpen, setIsUploadAttachmentOpen] = useState(false);
 
   // ─── Queries ──────────────────────────────────────────────────────────────
 
-  const { data: meeting, isLoading: meetingLoading, error: meetingError } = useQuery({
+  const { data: meeting, isLoading: meetingLoading, error: meetingError, refetch: refetchMeeting } = useQuery({
     queryKey: ['meeting', meetingId],
     queryFn: async () => {
       const res = await committeeApi.getMeeting(meetingId);
@@ -264,7 +228,7 @@ export default function MeetingDetailPage() {
     },
   });
 
-  const { data: agenda = [] } = useQuery<AgendaItem[]>({
+  const agendaQ = useQuery<AgendaItem[]>({
     queryKey: ['meeting-agenda', meetingId],
     queryFn: async () => {
       const res = await committeeApi.getAgenda(meetingId);
@@ -272,8 +236,9 @@ export default function MeetingDetailPage() {
     },
     enabled: !!meeting,
   });
+  const agenda = agendaQ.data ?? [];
 
-  const { data: suggestedItems = [], isLoading: suggestionsLoading } = useQuery<SuggestedItem[]>({
+  const suggestedQ = useQuery<SuggestedItem[]>({
     queryKey: ['meeting-suggested', meetingId],
     queryFn: async () => {
       const res = await committeeApi.getSuggestedAgendaItems(meetingId);
@@ -283,20 +248,22 @@ export default function MeetingDetailPage() {
     },
     enabled: !!meeting,
   });
+  const suggestedItems = suggestedQ.data ?? [];
 
-  const { data: actions = [] } = useQuery<Action[]>({
+  // the committee's first 100 actions (the API's cap), cut down to this meeting's: the meeting's own count (`action_count`) is what the tile says
+  const actionsQ = useQuery<Action[]>({
     queryKey: ['meeting-actions', meetingId],
     queryFn: async () => {
       if (!meeting?.committee_id) return [];
       const res = await committeeApi.getActions({ committee_id: meeting.committee_id });
-      const data = res.data as any;
-      const items: Action[] = Array.isArray(data) ? data : (data?.items ?? []);
+      const { items } = listOf<Action>(res.data);
       return items.filter((a) => a.meeting_id === meetingId);
     },
     enabled: !!meeting,
   });
+  const actions = actionsQ.data ?? [];
 
-  const { data: attachments = [] } = useQuery<MeetingAttachment[]>({
+  const attachmentsQ = useQuery<MeetingAttachment[]>({
     queryKey: ['meeting-attachments', meetingId],
     queryFn: async () => {
       const res = await committeeApi.getMeetingAttachments(meetingId);
@@ -304,6 +271,7 @@ export default function MeetingDetailPage() {
     },
     enabled: !!meeting,
   });
+  const attachments = attachmentsQ.data ?? [];
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
@@ -332,46 +300,33 @@ export default function MeetingDetailPage() {
           return { id, name };
         })
         .filter((u): u is { id: number; name: string } => !!u)
-        .map((u) => [u.id, u])
+        .map((u) => [u.id, u] as [number, { id: number; name: string }])
     ).values()
   );
 
-  // ─── Mutations ────────────────────────────────────────────────────────────
+  // ─── Writes: each one says what happened only after the server has answered ───
 
-  const addAgendaMutation = useMutation({
+  const addAgendaMutation = useReportedMutation({
     mutationFn: (data: any) => committeeApi.addAgendaItem(meetingId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      setIsAddAgendaOpen(false);
-      setNewAgendaItem({ title: '', description: '', duration_minutes: 15, item_type: 'discussion' });
-      toast({ title: 'Agenda item added', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Failed to add agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+    success: 'Agenda item added',
+    failure: "Couldn't add the agenda item",
+    retryable: false,                                              // a create is not safe to repeat blindly: the drawer stays open to try again
+    invalidate: [['meeting-agenda', meetingId]],
+    onSuccess: () => { setIsAddAgendaOpen(false); setNewAgendaItem(NEW_AGENDA); },
   });
 
-  // Upload + AI-parse: takes a PDF/DOCX agenda, parses it into items,
-  // appends them after the highest existing item_number.
+  // Upload + AI-parse: a PDF/DOCX agenda is parsed into items and appended after the highest existing item number.
   const uploadAgendaInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadAgendaMutation = useMutation({
+  const uploadAgendaMutation = useReportedMutation({
     mutationFn: (file: File) => committeeApi.uploadAgendaForParse(meetingId, file),
-    onSuccess: (r: any) => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+    success: (r: any) => {
       const count = r?.data?.inserted ?? 0;
-      toast({
-        title: `Imported ${count} agenda item${count === 1 ? '' : 's'}`,
-        message: 'Edit any item to refine the parsed details.',
-        type: 'success',
-      });
+      return { title: `Imported ${count} agenda item${count === 1 ? '' : 's'}`, message: 'Edit any item to refine the parsed details.' };
     },
-    onError: (err: any) => {
-      toast({
-        title: 'Could not parse agenda',
-        message: err?.response?.data?.detail || 'Try a more structured document or add items manually.',
-        type: 'error',
-      });
-    },
+    failure: "Couldn't parse the agenda",
+    fallback: 'Try a more structured document or add the items by hand.',
+    retryable: false,
+    invalidate: [['meeting-agenda', meetingId]],
   });
   const onPickAgendaUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -379,30 +334,22 @@ export default function MeetingDetailPage() {
     if (e.target) e.target.value = '';
   };
 
-  const updateAgendaMutation = useMutation({
+  const updateAgendaMutation = useReportedMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => committeeApi.updateAgendaItem(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      setEditingAgendaId(null);
-      toast({ title: 'Agenda item updated', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Failed to update agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+    success: 'Agenda item updated',
+    failure: "Couldn't update the agenda item",
+    invalidate: [['meeting-agenda', meetingId]],
+    onSuccess: () => setEditingAgendaId(null),
   });
 
-  const deleteAgendaMutation = useMutation({
-    mutationFn: (id: number) => committeeApi.deleteAgendaItem(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      toast({ title: 'Agenda item removed', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Failed to remove agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+  const deleteAgendaMutation = useReportedMutation({
+    mutationFn: (item: AgendaItem) => committeeApi.deleteAgendaItem(item.id),
+    success: 'Agenda item removed',
+    failure: "Couldn't remove the agenda item",
+    invalidate: [['meeting-agenda', meetingId]],
   });
 
-  const uploadAttachmentMutation = useMutation({
+  const uploadAttachmentMutation = useReportedMutation({
     mutationFn: async () => {
       if (!pendingAttachment) throw new Error('No file selected');
       const formData = new FormData();
@@ -412,27 +359,17 @@ export default function MeetingDetailPage() {
       }
       return committeeApi.uploadMeetingAttachment(meetingId, formData);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-attachments', meetingId] });
-      setIsUploadAttachmentOpen(false);
-      setPendingAttachment(null);
-      setAttachmentDescription('');
-      toast({ title: 'Attachment uploaded', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Upload failed', message: err?.response?.data?.detail || err?.message || 'Please try again', type: 'error' });
-    },
+    success: () => ({ title: 'Document uploaded', message: truncate(pendingAttachment?.name ?? '', 80).text || undefined }),
+    failure: "Couldn't upload the document",
+    invalidate: [['meeting-attachments', meetingId]],
+    onSuccess: () => { setIsUploadAttachmentOpen(false); setPendingAttachment(null); setAttachmentDescription(''); },
   });
 
-  const deleteAttachmentMutation = useMutation({
-    mutationFn: (id: number) => committeeApi.deleteMeetingAttachment(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-attachments', meetingId] });
-      toast({ title: 'Attachment removed', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Failed to remove attachment', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+  const deleteAttachmentMutation = useReportedMutation({
+    mutationFn: (att: MeetingAttachment) => committeeApi.deleteMeetingAttachment(att.id),
+    success: 'Document removed',
+    failure: "Couldn't remove the document",
+    invalidate: [['meeting-attachments', meetingId]],
   });
 
   const handleDownloadAttachment = async (attachmentId: number, fileName: string) => {
@@ -447,61 +384,41 @@ export default function MeetingDetailPage() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      toast({ title: 'Download failed', message: err?.message || 'Please try again', type: 'error' });
+    } catch (err) {
+      notify.error(err, { title: "Couldn't download the document", retry: () => { void handleDownloadAttachment(attachmentId, fileName); } });
     }
   };
 
-  const createActionMutation = useMutation({
+  const createActionMutation = useReportedMutation({
     mutationFn: (data: any) => committeeApi.createAction(meetingId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-actions', meetingId] });
-      setIsAddActionOpen(false);
-      setNewAction({ title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '' });
-      toast({ title: 'Action created', type: 'success' });
-    },
-    onError: (err: any) => {
-      toast({ title: 'Failed to create action', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+    success: (_r, v) => ({ title: 'Action created', message: truncate(String(v.title), 80).text }),
+    failure: "Couldn't create the action",
+    retryable: false,
+    invalidate: [['meeting-actions', meetingId]],
+    onSuccess: () => { setIsAddActionOpen(false); setNewAction(NEW_ACTION); },
   });
 
-  const saveMinutesMutation = useMutation({
+  const saveMinutesMutation = useReportedMutation({
     mutationFn: (data: any) => committeeApi.createMinutes(meetingId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meeting', meetingId] });
-      setIsEditMinutesOpen(false);
-      toast({ title: 'Minutes saved', type: 'success' });
-    },    onError: (err: any) => {
-      toast({ title: 'Failed to save minutes', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+    success: 'Minutes saved',
+    failure: "Couldn't save the minutes",
+    invalidate: [['meeting', meetingId]],
+    onSuccess: () => setIsEditMinutesOpen(false),
   });
 
-  // Upload a PDF / DOCX / TXT minutes document — server extracts text
-  // and saves it as the minutes content. Replaces existing minutes
-  // (dropping prior approval back to draft) if a record is already
-  // present for this meeting.
+  // Upload a PDF / DOCX / TXT minutes document: the server extracts the text and saves it as the minutes. It replaces existing minutes (dropping a prior
+  // approval back to draft) if a record is already there.
   const uploadMinutesInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadMinutesMutation = useMutation({
+  const uploadMinutesMutation = useReportedMutation({
     mutationFn: (file: File) => committeeApi.uploadMinutesDoc(meetingId, file),
-    onSuccess: (r: any) => {
-      queryClient.invalidateQueries({ queryKey: ['meeting', meetingId] });
-      setIsEditMinutesOpen(false);
-      const replaced = r?.data?.replaced_existing;
-      toast({
-        title: replaced ? 'Minutes replaced from document' : 'Minutes uploaded',
-        message: replaced
-          ? 'Previous content was overwritten and dropped back to draft.'
-          : 'Document extracted into draft minutes. Edit to refine.',
-        type: 'success',
-      });
-    },
-    onError: (err: any) => {
-      toast({
-        title: 'Could not upload minutes',
-        message: err?.response?.data?.detail || 'Try a text-based PDF, DOCX, or TXT.',
-        type: 'error',
-      });
-    },
+    success: (r: any) => (r?.data?.replaced_existing
+      ? { title: 'Minutes replaced from the document', message: 'The previous content was overwritten and dropped back to draft.' }
+      : { title: 'Minutes uploaded', message: 'The document was extracted into draft minutes. Edit them to refine.' }),
+    failure: "Couldn't upload the minutes",
+    fallback: 'Try a text-based PDF, DOCX or TXT.',
+    retryable: false,
+    invalidate: [['meeting', meetingId]],
+    onSuccess: () => setIsEditMinutesOpen(false),
   });
   const onPickMinutesUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -509,597 +426,412 @@ export default function MeetingDetailPage() {
     if (e.target) e.target.value = '';
   };
 
-  const autoPopulateMutation = useMutation({
+  const autoPopulateMutation = useReportedMutation({
     mutationFn: (opts: typeof autoPopulateOptions) => committeeApi.autoPopulateAgenda(meetingId, opts),
-    onSuccess: (res: any) => {
-      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
-      queryClient.invalidateQueries({ queryKey: ['meeting-suggested', meetingId] });
-      setIsAutoPopulateOpen(false);
+    success: (res: any) => {
       const added = res.data?.items_added ?? res.data?.total_created ?? 0;
-      toast({ title: `${added} item${added !== 1 ? 's' : ''} added to agenda`, type: 'success' });
+      return `${added} item${added !== 1 ? 's' : ''} added to the agenda`;
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed to auto-populate agenda', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
-    },
+    failure: "Couldn't fill the agenda",
+    retryable: false,
+    invalidate: [['meeting-agenda', meetingId], ['meeting-suggested', meetingId]],
+    onSuccess: () => setIsAutoPopulateOpen(false),
   });
 
   const userPickerItems = useMemo(
-    () =>
-      normalizedUsers.map((u) => ({
-        value: String(u.id),
-        label: u.name,
-        subLabel: u.name.includes('@') ? u.name : undefined,
-      })),
+    () => normalizedUsers.map((u) => ({ value: String(u.id), label: u.name, subLabel: u.name.includes('@') ? u.name : undefined })),
     [normalizedUsers],
   );
+
+  // ─── Questions asked before a change that cannot be taken back ───
+
+  const askRemoveAgendaItem = async (item: AgendaItem) => {
+    if (await confirm({
+      title: `Remove agenda item ${item.item_number}?`,
+      message: `“${truncate(item.title, 120).text}” is removed from the agenda. This cannot be undone. If votes have been cast on it, the server will not remove it.`,
+      confirmLabel: 'Remove item',
+      tone: 'danger',
+    })) deleteAgendaMutation.mutate(item);
+  };
+  const askRemoveAttachment = async (att: MeetingAttachment) => {
+    if (await confirm({
+      title: 'Remove this document?',
+      message: `“${truncate(att.file_name, 120).text}” is removed from the meeting. This cannot be undone.`,
+      confirmLabel: 'Remove document',
+      tone: 'danger',
+    })) deleteAttachmentMutation.mutate(att);
+  };
 
   // ─── Loading / Error States ───────────────────────────────────────────────
 
   if (meetingLoading) {
     return (
-      <div className="space-y-4 p-6">
-        <div className="h-8 w-64 animate-pulse rounded bg-gray-200" />
-        <div className="h-5 w-96 animate-pulse rounded bg-gray-200" />
-        <div className="h-48 animate-pulse rounded bg-gray-100" />
+      <div className="space-y-[16px]" aria-busy="true">
+        <Skeleton className="h-[32px] w-[280px]" />
+        <Skeleton className="h-[16px] w-[420px]" />
+        <div className={`${CARD} p-[16px]`}><SkeletonLines lines={5} label="Loading the meeting" /></div>
       </div>
     );
   }
 
   if (meetingError || !meeting) {
+    const notFound = statusOf(meetingError) === 404;
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <AlertCircle className="h-10 w-10 text-rose-500 mb-3" />
-        <p className="text-gray-700 font-medium">Meeting not found</p>
-        <Link href="/governance/committees" className="mt-4 text-primary-600 hover:underline text-sm">
-          Back to committees
-        </Link>
+      <div className="space-y-[16px]">
+        <Button href="/governance/committees" leftIcon={<ChevronRight aria-hidden className="rotate-180" />}>Back to committees</Button>
+        <ErrorState
+          title={notFound ? 'Meeting not found' : "Couldn't load this meeting"}
+          message={notFound ? "It doesn't exist or you don't have access to it." : errorMessage(meetingError)}
+          onRetry={notFound ? undefined : () => { void refetchMeeting(); }}
+        />
       </div>
     );
   }
 
-  const meetingTypeStyle  = MEETING_TYPE_STYLES[meeting.meeting_type]  ?? MEETING_TYPE_STYLES.regular;
-  const meetingStatusStyle = MEETING_STATUS_STYLES[meeting.status]     ?? MEETING_STATUS_STYLES.scheduled;
   const sortedAgenda = [...agenda].sort((a, b) => a.item_number - b.item_number);
+  const agendaCount = meeting.agenda_item_count ?? sortedAgenda.length;
+  const actionCount = meeting.action_count ?? actions.length;
+  const actionsCut = cutNotice({ shown: actions.length, total: actionCount, noun: 'actions' });
+  const hasMinutes = Boolean(meeting.has_minutes || meeting.minutes);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-[16px]">
 
       {/* ── Header ── */}
       <div>
-        <Link
-          href={`/governance/committees/${meeting.committee_id}`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to {meeting.committee_name || 'Committee'}
-        </Link>
-
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-50 border border-primary-100">
-            <Calendar className="h-6 w-6 text-primary-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold text-black">{meeting.title}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge {...meetingTypeStyle} />
-              <Badge {...meetingStatusStyle} />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-5 mt-4 text-sm text-gray-600">
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4 text-gray-400" />
-            {new Date(meeting.scheduled_date).toLocaleDateString('en-US', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            })}
-          </span>
+        <PageHeader
+          variant="page"
+          title={meeting.title}
+          back={{ href: `/governance/committees/${meeting.committee_id}`, label: `Back to ${truncate(meeting.committee_name || 'the committee', 60).text}` }}
+          chips={(
+            <>
+              <StatusPill tone="neutral" label={statusLabel(meeting.meeting_type)} />
+              <StatusPill {...statusPill(meetingStatus, meeting.status)} />
+              <InfoTip text={NO_STATUS_CHANGE} label="About the meeting status" />
+            </>
+          )}
+        />
+        <dl className="mt-[12px] flex flex-wrap items-center gap-x-[20px] gap-y-[8px] text-ds-body text-ds-fg-body">
+          <div className="flex items-center gap-[6px]"><dt className="sr-only">When</dt><dd className="inline-flex items-center gap-[6px]"><Calendar aria-hidden className="h-[16px] w-[16px] text-ds-fg-muted" />{meetingWhen(meeting.scheduled_date)}</dd></div>
           {meeting.location && (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              {meeting.location}
-            </span>
+            <div className="flex items-center gap-[6px]"><dt className="sr-only">Location</dt><dd className="inline-flex items-center gap-[6px] break-words"><MapPin aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />{meeting.location}</dd></div>
           )}
           {meeting.quorum_required != null && (
-            <span className="flex items-center gap-1.5">
-              <Users className="h-4 w-4 text-gray-400" />
-              Quorum: {meeting.quorum_required}
-              {meeting.quorum_present != null && ` / ${meeting.quorum_present} present`}
-            </span>
+            <div className="flex items-center gap-[6px]">
+              <dt className="inline-flex items-center gap-[6px] text-ds-fg-muted"><Users aria-hidden className="h-[16px] w-[16px]" />Quorum</dt>
+              <dd className="flex flex-wrap items-center gap-x-[8px]">
+                {meeting.quorum_required} required
+                <span className="text-ds-fg-muted">· present:</span>
+                {meeting.quorum_present != null ? meeting.quorum_present : <NotRecorded why={NO_ATTENDANCE} subject="Quorum present" />}
+              </dd>
+            </div>
           )}
           {meeting.virtual_link && (
-            <a href={meeting.virtual_link} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-primary-600 hover:underline">
-              <LinkIcon className="h-4 w-4" />
-              Virtual Link
-            </a>
+            <div className="flex items-center gap-[6px]">
+              <dt className="sr-only">Virtual link</dt>
+              <dd>
+                <a href={meeting.virtual_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-[6px] rounded-ds-control text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">
+                  <LinkIcon aria-hidden className="h-[16px] w-[16px]" />Virtual link
+                </a>
+              </dd>
+            </div>
           )}
-        </div>
+        </dl>
       </div>
 
-      {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Agenda Items',    value: sortedAgenda.length,    icon: ListOrdered, color: 'text-primary-600',   bg: 'bg-blue-50'   },
-          { label: 'Actions',         value: actions.length,          icon: CheckSquare, color: 'text-amber-600',  bg: 'bg-amber-50'  },
-          { label: 'Suggested Items', value: suggestedItems.length,   icon: Lightbulb,   color: 'text-primary-600', bg: 'bg-primary-50' },
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-4">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>
-              <Icon className={`h-5 w-5 ${color}`} />
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-black">{value}</p>
-              <p className="text-sm text-gray-500">{label}</p>
-            </div>
-          </div>
-        ))}
+      {/* ── Summary tiles: one column on a phone ── */}
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
+        <StatTile label="Agenda items" icon={ListOrdered} value={formatCount(agendaCount)} />
+        <StatTile label="Actions" icon={CheckSquare} value={formatCount(actionCount)} />
+        <StatTile label="Suggested items" icon={Lightbulb} value={suggestedQ.isError ? '—' : formatCount(suggestedItems.length)} note={suggestedQ.isError ? "Couldn't load them" : undefined} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
         {/* ── Main Column ── */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="min-w-0 space-y-[16px] lg:col-span-2">
 
           {/* Agenda */}
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="font-medium text-black flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-slate-400" />
+          <section aria-labelledby="agenda-h" className={CARD}>
+            <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-ds-border px-[16px] py-[12px]">
+              <h2 id="agenda-h" className="inline-flex items-center gap-[8px] !text-ds-section !text-ds-fg">
+                <ListOrdered aria-hidden className="h-[20px] w-[20px] text-ds-fg-muted" strokeWidth={1.75} />
                 Agenda
-              </h3>
+              </h2>
               {canCreate && (
-                <div className="flex items-center gap-2">
-                  {/* Hidden file input — Upload & AI parse button triggers it. */}
-                  <input
-                    ref={uploadAgendaInputRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt,.md"
-                    onChange={onPickAgendaUploadFile}
-                    className="hidden"
-                  />
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  {/* Hidden file input: the "Upload and AI parse" button triggers it. */}
+                  <input ref={uploadAgendaInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.md" onChange={onPickAgendaUploadFile} className="hidden" aria-hidden="true" tabIndex={-1} />
                   {suggestedItems.length > 0 && (
-                    <button
-                      onClick={() => setIsAutoPopulateOpen(true)}
-                      className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                      title="Add pending approvals, exceptions and regulatory changes to the agenda"
-                    >
-                      <Sparkles className="h-4 w-4 text-primary-600" />
+                    <Button leftIcon={<Sparkles aria-hidden />} onClick={() => setIsAutoPopulateOpen(true)} title="Add pending approvals, exceptions and regulatory changes to the agenda">
                       Auto-populate ({suggestedItems.length})
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    onClick={() => uploadAgendaInputRef.current?.click()}
-                    disabled={uploadAgendaMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                    title="Upload a PDF / DOCX agenda — we'll parse it into items via heuristic + AI"
-                  >
-                    {uploadAgendaMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                    {uploadAgendaMutation.isPending ? 'Parsing…' : 'Upload & AI parse'}
-                  </button>
-                  <button
-                    onClick={() => setIsAddAgendaOpen(true)}
-                    className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Item
-                  </button>
+                  <Button leftIcon={<Upload aria-hidden />} loading={uploadAgendaMutation.isPending} onClick={() => uploadAgendaInputRef.current?.click()} title="Upload a PDF or DOCX agenda: it is parsed into items by rules and AI">
+                    {uploadAgendaMutation.isPending ? 'Parsing…' : 'Upload and AI parse'}
+                  </Button>
+                  <Button leftIcon={<Plus aria-hidden />} onClick={() => setIsAddAgendaOpen(true)}>Add item</Button>
                 </div>
               )}
             </div>
 
-            <div className="divide-y divide-gray-100">
-              {sortedAgenda.length === 0 ? (
-                <div className="flex flex-col items-center py-10 text-center">
-                  <ListOrdered className="h-9 w-9 text-gray-300 mb-2" />
-                  <p className="text-gray-600 font-medium">No agenda items yet</p>
-                  <button
-                    onClick={() => setIsAddAgendaOpen(true)}
-                    className="mt-2 text-sm text-primary-600 hover:underline"
-                  >
-                    Add the first item
-                  </button>
+            <div className="divide-y divide-ds-border">
+              {agendaQ.isError && !agendaQ.data ? (
+                <ErrorState compact title="Couldn't load the agenda" message={errorMessage(agendaQ.error)} onRetry={() => { void agendaQ.refetch(); }} />
+              ) : agendaQ.isLoading ? (
+                <div className="p-[16px]"><SkeletonLines lines={4} label="Loading the agenda" /></div>
+              ) : sortedAgenda.length === 0 ? (
+                <div className="flex flex-col items-center px-[16px] py-[32px] text-center">
+                  <ListOrdered aria-hidden className="mb-[8px] h-[32px] w-[32px] text-ds-fg-muted" strokeWidth={1.5} />
+                  <p className="text-ds-body font-medium text-ds-fg">No agenda items yet</p>
+                  {canCreate && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsAddAgendaOpen(true)}>Add the first item</Button></div>}
                 </div>
               ) : sortedAgenda.map((item) => {
-                const statusStyle  = AGENDA_STATUS_STYLES[item.status] ?? AGENDA_STATUS_STYLES.pending;
-                const sourceConfig = SOURCE_TYPE_CONFIG[item.source_type ?? 'manual'];
                 const links = [
-                  item.linked_document_title         && { type: 'Document',           title: item.linked_document_title,          icon: FileCheck },
-                  item.linked_risk_title             && { type: 'Risk Exception',      title: item.linked_risk_title,              icon: Shield    },
-                  item.linked_regulatory_change_title && { type: 'Regulatory Change', title: item.linked_regulatory_change_title, icon: Scale     },
+                  item.linked_document_title          && { type: 'Document',          title: item.linked_document_title,          icon: FileCheck },
+                  item.linked_risk_title              && { type: 'Risk exception',    title: item.linked_risk_title,              icon: Shield    },
+                  item.linked_regulatory_change_title && { type: 'Regulatory change', title: item.linked_regulatory_change_title, icon: Scale     },
                 ].filter(Boolean) as { type: string; title: string; icon: React.ElementType }[];
 
                 return (
-                  <div key={item.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
-                        {item.item_number}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <h4 className="text-sm font-medium text-black">{item.title}</h4>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {item.source_type && item.source_type !== 'manual' && (
-                              <span className={`text-xs font-medium ${sourceConfig?.text}`}>{sourceConfig?.label}</span>
-                            )}
-                            <Badge {...statusStyle} />
+                  <div key={item.id} className="px-[16px] py-[16px]">
+                    <div className="flex items-start gap-[12px]">
+                      <span aria-hidden className="grid h-[28px] w-[28px] shrink-0 place-items-center rounded-full bg-ds-surface-hover text-ds-label tabular-nums text-ds-fg-body">{item.item_number}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-x-[12px] gap-y-[8px]">
+                          <h3 className="min-w-0 flex-1 basis-[14rem] break-words !text-ds-body !font-[600] !text-ds-fg"><ClampedText text={item.title} max={160} buttonLabel={`agenda item ${item.item_number}`} /></h3>
+                          <div className="flex flex-wrap items-center gap-[6px]">
+                            {item.source_type && item.source_type !== 'manual' && <span className="text-ds-label font-normal text-ds-fg-muted">{SOURCE_LABEL[item.source_type] ?? statusLabel(item.source_type)}</span>}
+                            <StatusPill size="sm" tone={AGENDA_TONE[item.status] ?? 'neutral'} label={statusLabel(item.status || 'pending')} />
                             {canCreate && (
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  type="button"
+                              <>
+                                <IconButton
+                                  label={`Edit agenda item ${item.item_number}`}
                                   onClick={() => {
-                                    setEditingAgendaId(item.id);
-                                    setEditAgendaDraft({
+                                    const draft = {
                                       title: item.title,
                                       description: item.description ?? '',
                                       time_allocated_minutes: item.time_allocated_minutes ?? 15,
                                       item_type: item.item_type ?? 'discussion',
-                                    });
+                                    };
+                                    setEditAgendaInitial(draft);
+                                    setEditAgendaDraft(draft);
+                                    setEditingAgendaId(item.id);
                                   }}
-                                  className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                                  title="Edit agenda item"
                                 >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (confirm(`Remove agenda item "${item.title}"? This cannot be undone.`)) {
-                                      deleteAgendaMutation.mutate(item.id);
-                                    }
-                                  }}
-                                  disabled={deleteAgendaMutation.isPending}
-                                  className="rounded p-1 text-gray-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                                  title="Remove agenda item"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
+                                  <Pencil aria-hidden />
+                                </IconButton>
+                                <IconButton label={`Remove agenda item ${item.item_number}`} disabled={deleteAgendaMutation.isPending} onClick={() => { void askRemoveAgendaItem(item); }}><Trash2 aria-hidden /></IconButton>
+                              </>
                             )}
                           </div>
                         </div>
                         {item.description && (
-                          <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                          <p className="mt-[4px] text-ds-body text-ds-fg-body"><ClampedText text={item.description} max={240} buttonLabel={`the description of agenda item ${item.item_number}`} /></p>
                         )}
-                        <div className="flex flex-wrap items-center gap-4 mt-1.5 text-xs text-gray-500">
+                        <div className="mt-[6px] flex flex-wrap items-center gap-x-[16px] gap-y-[2px] text-ds-label font-normal text-ds-fg-muted">
                           {item.presenter_name         && <span>Presenter: {item.presenter_name}</span>}
                           {item.time_allocated_minutes && <span>{item.time_allocated_minutes} min</span>}
-                          <span className="capitalize">{item.item_type.replace('_', ' ')}</span>
+                          <span>{statusLabel(item.item_type)}</span>
                         </div>
-                        {links.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {links.map((link, i) => {
-                              const Icon = link.icon;
-                              return (
-                                <span key={i} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                                  <Icon className="h-3 w-3" />
-                                  {link.type}: {link.title}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
+                        {links.length > 0 && <LinkChips links={links} />}
                         {item.decision_made && (
-                          <div className="mt-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs text-emerald-800">
+                          <div className="mt-[8px] rounded-ds-control border border-ds-border bg-ds-success-soft px-[12px] py-[6px] text-ds-body text-ds-fg">
                             <span className="font-medium">Decision:</span> {item.decision_made}
                           </div>
                         )}
-                        {/* Voting panel — committee members cast an
-                            agree / partial / disagree / abstain vote with
-                            an optional comment. Tally + per-vote details
-                            visible to everyone in the tenant. */}
-                        <AgendaVotePanel itemId={item.id} />
+                        {/* Voting panel: committee members cast an agree / partial / disagree / abstain vote with an optional comment. The tally and each
+                            vote are visible to everyone in the tenant. */}
+                        <AgendaVotePanel itemId={item.id} itemNumber={item.item_number} />
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="font-medium text-black flex items-center gap-2">
-                <FileText className="h-5 w-5 text-slate-400" />
-                Meeting Minutes
-              </h3>
-              {!isEditMinutesOpen && (
-                <div className="flex items-center gap-2">
-                  {/* Hidden file input — clicked programmatically by the
-                      Upload button below. Accepts PDF, Word, plain text,
-                      markdown, and RTF; the server extracts the text and
-                      stores it as the draft minutes content. */}
+          {/* Minutes */}
+          <section aria-labelledby="minutes-h" className={CARD}>
+            <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-ds-border px-[16px] py-[12px]">
+              <h2 id="minutes-h" className="inline-flex items-center gap-[8px] !text-ds-section !text-ds-fg">
+                <FileText aria-hidden className="h-[20px] w-[20px] text-ds-fg-muted" strokeWidth={1.75} />
+                Meeting minutes
+              </h2>
+              {!isEditMinutesOpen && canCreate && (
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  {/* Hidden file input: the Upload button below triggers it. Accepts PDF, Word, plain text, markdown and RTF; the server extracts the text and
+                      stores it as the draft minutes. */}
                   <input
                     ref={uploadMinutesInputRef}
                     type="file"
                     accept=".pdf,.doc,.docx,.txt,.md,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/rtf"
                     className="hidden"
+                    aria-hidden="true"
+                    tabIndex={-1}
                     onChange={onPickMinutesUploadFile}
                   />
-                  <button
-                    type="button"
+                  <Button
+                    leftIcon={<Upload aria-hidden />}
+                    loading={uploadMinutesMutation.isPending}
                     onClick={() => uploadMinutesInputRef.current?.click()}
-                    disabled={uploadMinutesMutation.isPending}
-                    title={
-                      meeting.has_minutes || meeting.minutes
-                        ? 'Upload a document to replace the current minutes (drops back to draft)'
-                        : 'Upload a PDF / DOCX / TXT — we extract the text into draft minutes'
-                    }
-                    className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    title={hasMinutes ? 'Upload a document to replace the current minutes (drops back to draft)' : 'Upload a PDF, DOCX or TXT: its text becomes the draft minutes'}
                   >
-                    <Upload className="h-4 w-4" />
-                    {uploadMinutesMutation.isPending
-                      ? 'Uploading…'
-                      : (meeting.has_minutes || meeting.minutes)
-                        ? 'Upload to Replace'
-                        : 'Upload Minutes'}
-                  </button>
-                  {(meeting.has_minutes || meeting.minutes) ? (
-                    <button
-                      onClick={() => {
-                        setMinutesContent(meeting.minutes?.content ?? '');
-                        setIsEditMinutesOpen(true);
-                      }}
-                      className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      Edit Minutes
-                    </button>
+                    {uploadMinutesMutation.isPending ? 'Uploading…' : hasMinutes ? 'Upload to replace' : 'Upload minutes'}
+                  </Button>
+                  {hasMinutes ? (
+                    <Button leftIcon={<Save aria-hidden />} onClick={() => { setMinutesContent(meeting.minutes?.content ?? ''); setIsEditMinutesOpen(true); }}>Edit minutes</Button>
                   ) : (
-                    <button
-                      onClick={() => setIsEditMinutesOpen(true)}
-                      className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Draft Minutes
-                    </button>
+                    <Button leftIcon={<Plus aria-hidden />} onClick={() => setIsEditMinutesOpen(true)}>Draft minutes</Button>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="p-6">
+            <div className="p-[16px]">
               {isEditMinutesOpen ? (
-                <div className="space-y-4">
-                  <textarea
-                    value={minutesContent}
-                    onChange={(e) => setMinutesContent(e.target.value)}
-                    rows={8}
-                    placeholder="Record meeting minutes here…"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-                  />
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => setIsEditMinutesOpen(false)}
-                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => saveMinutesMutation.mutate({ content: minutesContent })}
-                      disabled={!minutesContent.trim() || saveMinutesMutation.isPending}
-                      className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {saveMinutesMutation.isPending ? 'Saving…' : 'Save Draft'}
-                    </button>
+                <div className="space-y-[12px]">
+                  <FormField label="Minutes">
+                    <Textarea value={minutesContent} onChange={(e) => setMinutesContent(e.target.value)} rows={8} placeholder="Record the meeting minutes here…" />
+                  </FormField>
+                  <div className="flex justify-end gap-[8px]">
+                    <Button onClick={() => setIsEditMinutesOpen(false)}>Cancel</Button>
+                    <Button variant="primary" leftIcon={<Save aria-hidden />} loading={saveMinutesMutation.isPending} disabled={!minutesContent.trim()} onClick={() => saveMinutesMutation.mutate({ content: minutesContent })}>
+                      {saveMinutesMutation.isPending ? 'Saving…' : 'Save draft'}
+                    </Button>
                   </div>
                 </div>
-              ) : (meeting.has_minutes || meeting.minutes) && meeting.minutes?.content ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+              ) : hasMinutes && meeting.minutes?.content ? (
+                <div className="space-y-[8px]">
+                  <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px] text-ds-label font-normal text-ds-fg-muted">
                     {meeting.minutes.drafter_name && <span>Drafted by {meeting.minutes.drafter_name}</span>}
                     {meeting.minutes.drafted_at && <span>· {formatDate(meeting.minutes.drafted_at)}</span>}
-                    {meeting.minutes.status && (
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                        meeting.minutes.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {meeting.minutes.status === 'draft' ? 'Draft' : meeting.minutes.status === 'approved' ? 'Approved' : meeting.minutes.status}
-                      </span>
-                    )}
+                    {meeting.minutes.status && <StatusPill size="sm" tone={meeting.minutes.status === 'approved' ? 'success' : 'neutral'} label={statusLabel(meeting.minutes.status)} />}
                   </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-black whitespace-pre-wrap">
-                    {meeting.minutes.content}
+                  <div className="whitespace-pre-wrap rounded-ds-card border border-ds-border bg-ds-surface-subtle px-[16px] py-[12px] text-ds-body text-ds-fg">
+                    <ClampedText text={meeting.minutes.content} max={1200} buttonLabel="the minutes" />
                   </div>
                 </div>
-              ) : (meeting.has_minutes || meeting.minutes) ? (
-                <div className="text-center py-6">
-                  <FileText className="h-9 w-9 text-emerald-400 mx-auto mb-2" />
-                  <p className="text-gray-700 font-medium">Minutes recorded</p>
-                  <p className="text-sm text-gray-500 mt-1">Minutes have been saved for this meeting</p>
+              ) : hasMinutes ? (
+                <div className="py-[16px] text-center">
+                  <FileText aria-hidden className="mx-auto mb-[8px] h-[32px] w-[32px] text-ds-success" strokeWidth={1.5} />
+                  <p className="text-ds-body font-medium text-ds-fg">Minutes recorded</p>
+                  <p className="mt-[4px] text-ds-body text-ds-fg-muted">Minutes have been saved for this meeting.</p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center py-8 text-center">
-                  <FileText className="h-9 w-9 text-gray-300 mb-2" />
-                  <p className="text-gray-600 font-medium">No minutes yet</p>
-                  <button
-                    onClick={() => setIsEditMinutesOpen(true)}
-                    className="mt-2 text-sm text-primary-600 hover:underline"
-                  >
-                    Draft minutes
-                  </button>
+                <div className="flex flex-col items-center py-[24px] text-center">
+                  <FileText aria-hidden className="mb-[8px] h-[32px] w-[32px] text-ds-fg-muted" strokeWidth={1.5} />
+                  <p className="text-ds-body font-medium text-ds-fg">No minutes yet</p>
+                  {canCreate && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsEditMinutesOpen(true)}>Draft minutes</Button></div>}
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
           {/* Documents / Attachments */}
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h3 className="font-medium text-black flex items-center gap-2">
-                <Paperclip className="h-5 w-5 text-slate-400" />
+          <section aria-labelledby="documents-h" className={CARD}>
+            <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-ds-border px-[16px] py-[12px]">
+              <h2 id="documents-h" className="inline-flex items-center gap-[8px] !text-ds-section !text-ds-fg">
+                <Paperclip aria-hidden className="h-[20px] w-[20px] text-ds-fg-muted" strokeWidth={1.75} />
                 Documents
-                <span className="text-xs font-normal text-gray-500">({attachments.length})</span>
-              </h3>
-              {canCreate && (
-                <button
-                  onClick={() => setIsUploadAttachmentOpen(true)}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload
-                </button>
-              )}
+                <span className="text-ds-body font-normal text-ds-fg-muted">{attachmentsQ.data ? `(${attachments.length})` : ''}</span>
+              </h2>
+              {canCreate && <Button leftIcon={<Upload aria-hidden />} onClick={() => setIsUploadAttachmentOpen(true)}>Upload</Button>}
             </div>
 
-            <div className="divide-y divide-gray-100">
-              {attachments.length === 0 ? (
-                <div className="flex flex-col items-center py-10 text-center">
-                  <Paperclip className="h-9 w-9 text-gray-300 mb-2" />
-                  <p className="text-gray-600 font-medium">No documents attached yet</p>
-                  <p className="text-xs text-gray-500 mt-1">Upload agenda packets, briefing decks, spreadsheets, or supporting material</p>
-                  {canCreate && (
-                    <button
-                      onClick={() => setIsUploadAttachmentOpen(true)}
-                      className="mt-2 text-sm text-primary-600 hover:underline"
-                    >
-                      Upload the first document
-                    </button>
-                  )}
+            <div className="divide-y divide-ds-border">
+              {attachmentsQ.isError && !attachmentsQ.data ? (
+                <ErrorState compact title="Couldn't load the documents" message={errorMessage(attachmentsQ.error)} onRetry={() => { void attachmentsQ.refetch(); }} />
+              ) : attachmentsQ.isLoading ? (
+                <div className="p-[16px]"><SkeletonLines lines={2} label="Loading the documents" /></div>
+              ) : attachments.length === 0 ? (
+                <div className="flex flex-col items-center px-[16px] py-[32px] text-center">
+                  <Paperclip aria-hidden className="mb-[8px] h-[32px] w-[32px] text-ds-fg-muted" strokeWidth={1.5} />
+                  <p className="text-ds-body font-medium text-ds-fg">No documents attached yet</p>
+                  <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">Agenda packets, briefing decks, spreadsheets or supporting material.</p>
+                  {canCreate && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsUploadAttachmentOpen(true)}>Upload the first document</Button></div>}
                 </div>
               ) : attachments.map((att) => (
-                <div key={att.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50">
-                      <FileText className="h-5 w-5 text-slate-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-black truncate">{att.file_name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {att.file_type ? `${att.file_type.toUpperCase()} · ` : ''}
-                            {formatFileSize(att.file_size ?? undefined)}
-                            {att.uploaded_by_name ? ` · Uploaded by ${att.uploaded_by_name}` : ''}
-                            {att.uploaded_at ? ` · ${formatDate(att.uploaded_at)}` : ''}
-                          </p>
-                          {att.description && (
-                            <p className="text-xs text-gray-600 mt-1">{att.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadAttachment(att.id, att.file_name)}
-                            className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-primary-600"
-                            title="Download"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                          {canCreate && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Remove "${att.file_name}" from this meeting?`)) {
-                                  deleteAttachmentMutation.mutate(att.id);
-                                }
-                              }}
-                              disabled={deleteAttachmentMutation.isPending}
-                              className="rounded p-1.5 text-gray-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                              title="Remove"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                <div key={att.id} className="flex items-start gap-[12px] px-[16px] py-[12px]">
+                  <span aria-hidden className="grid h-[36px] w-[36px] shrink-0 place-items-center rounded-ds-card bg-ds-primary-soft text-ds-primary-text"><FileText className="h-[18px] w-[18px]" strokeWidth={1.75} /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-all text-ds-body font-medium text-ds-fg">{att.file_name}</p>
+                    <p className="mt-[2px] text-ds-label font-normal text-ds-fg-muted">
+                      {att.file_type ? `${att.file_type.toUpperCase()} · ` : ''}
+                      {formatFileSize(att.file_size ?? undefined)}
+                      {att.uploaded_by_name ? ` · Uploaded by ${att.uploaded_by_name}` : ''}
+                      {att.uploaded_at ? ` · ${formatDate(att.uploaded_at)}` : ''}
+                    </p>
+                    {att.description && <p className="mt-[4px] text-ds-body text-ds-fg-body">{att.description}</p>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-[4px]">
+                    <IconButton label={`Download ${att.file_name}`} onClick={() => { void handleDownloadAttachment(att.id, att.file_name); }}><Download aria-hidden /></IconButton>
+                    {canCreate && <IconButton label={`Remove ${att.file_name}`} disabled={deleteAttachmentMutation.isPending} onClick={() => { void askRemoveAttachment(att); }}><Trash2 aria-hidden /></IconButton>}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         </div>
 
         {/* ── Sidebar ── */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-[16px]">
 
           {/* Actions */}
-          <div className="rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="font-medium text-black flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-slate-400" />
+          <section aria-labelledby="actions-h" className={CARD}>
+            <div className="flex items-center justify-between gap-[8px] border-b border-ds-border px-[16px] py-[12px]">
+              <h2 id="actions-h" className="inline-flex items-center gap-[8px] !text-ds-section !text-ds-fg">
+                <CheckSquare aria-hidden className="h-[20px] w-[20px] text-ds-fg-muted" strokeWidth={1.75} />
                 Actions
-              </h3>
-              {canCreate && (
-              <button
-                onClick={() => setIsAddActionOpen(true)}
-                className="rounded-lg border border-gray-300 p-1.5 hover:bg-gray-50"
-                title="Create action"
-              >
-                <Plus className="h-4 w-4 text-gray-600" />
-              </button>
-              )}
+              </h2>
+              {canCreate && <IconButton label="Create action" variant="secondary" onClick={() => setIsAddActionOpen(true)}><Plus aria-hidden /></IconButton>}
             </div>
 
-            <div className="divide-y divide-gray-100">
-              {actions.length === 0 ? (
-                <div className="flex flex-col items-center py-8 text-center px-4">
-                  <CheckSquare className="h-8 w-8 text-gray-300 mb-2" />
-                  <p className="text-gray-600 text-sm font-medium">No actions yet</p>
-                  <button
-                    onClick={() => setIsAddActionOpen(true)}
-                    className="mt-2 text-xs text-primary-600 hover:underline"
-                  >
-                    Create first action
-                  </button>
+            <div className="divide-y divide-ds-border">
+              {actionsQ.isError && !actionsQ.data ? (
+                <ErrorState compact title="Couldn't load the actions" message={errorMessage(actionsQ.error)} onRetry={() => { void actionsQ.refetch(); }} />
+              ) : actionsQ.isLoading ? (
+                <div className="p-[16px]"><SkeletonLines lines={3} label="Loading the actions" /></div>
+              ) : actions.length === 0 ? (
+                <div className="flex flex-col items-center px-[16px] py-[24px] text-center">
+                  <CheckSquare aria-hidden className="mb-[8px] h-[28px] w-[28px] text-ds-fg-muted" strokeWidth={1.5} />
+                  <p className="text-ds-body font-medium text-ds-fg">{actionCount > 0 ? 'None of its actions could be loaded here' : 'No actions yet'}</p>
+                  {actionCount > 0 && <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">The meeting has {formatCount(actionCount)}; they are among the committee&apos;s other actions.</p>}
+                  {canCreate && actionCount === 0 && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsAddActionOpen(true)}>Create the first action</Button></div>}
                 </div>
-              ) : actions.map((action) => {
-                const statusStyle = action.is_overdue
-                  ? ACTION_STATUS_STYLES.overdue
-                  : ACTION_STATUS_STYLES[action.status] ?? ACTION_STATUS_STYLES.open;
-                return (
-                  <div key={action.id} className="px-5 py-3 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-black leading-snug">{action.title}</p>
-                      <Badge {...statusStyle} />
-                    </div>
-                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
-                      {action.due_date   && <p>Due: {formatDate(action.due_date)}</p>}
-                      <p>{action.assignee_name || 'Unassigned'}</p>
-                      {action.action_number && <p className="font-mono text-gray-400">{action.action_number}</p>}
-                    </div>
+              ) : actions.map((action) => (
+                <div key={action.id} className="px-[16px] py-[12px]">
+                  <div className="flex items-start justify-between gap-[8px]">
+                    <p className="min-w-0 break-words text-ds-body font-medium text-ds-fg">{action.title}</p>
+                    <ActionStatusPills size="sm" action={action} />
                   </div>
-                );
-              })}
+                  <div className="mt-[6px] flex flex-col items-start gap-[2px] text-ds-label font-normal text-ds-fg-muted">
+                    {action.due_date && <span>Due {dueDay(action.due_date)}</span>}
+                    <PersonChip name={action.assignee_name} size={20} />
+                    {action.action_number && <span className="font-mono">{action.action_number}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+            {actionsCut && <p className="border-t border-ds-border px-[16px] py-[10px] text-ds-label font-normal text-ds-fg-muted">{actionsCut}</p>}
+          </section>
 
           {/* Meeting Info */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
-            <h3 className="font-medium text-black text-sm">Meeting Details</h3>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-gray-500">Type</dt>
-                <dd className="text-black capitalize">{meeting.meeting_type.replace('_', ' ')}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-gray-500">Status</dt>
-                <dd><Badge {...meetingStatusStyle} /></dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-gray-500">Date</dt>
-                <dd className="text-black">{formatDate(meeting.scheduled_date)}</dd>
-              </div>
+          <section aria-labelledby="details-h" className={`${CARD} p-[16px]`}>
+            <h2 id="details-h" className="!text-ds-section !text-ds-fg">Meeting details</h2>
+            <dl className="mt-[12px] space-y-[8px] text-ds-body">
+              <div className="flex justify-between gap-[12px]"><dt className="text-ds-fg-muted">Type</dt><dd className="text-ds-fg">{statusLabel(meeting.meeting_type)}</dd></div>
+              <div className="flex justify-between gap-[12px]"><dt className="text-ds-fg-muted">Status</dt><dd><StatusPill size="sm" {...statusPill(meetingStatus, meeting.status)} /></dd></div>
+              <div className="flex justify-between gap-[12px]"><dt className="text-ds-fg-muted">Date</dt><dd className="text-ds-fg">{meetingWhen(meeting.scheduled_date)}</dd></div>
               {meeting.quorum_required != null && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Quorum</dt>
-                  <dd className="text-black">{meeting.quorum_required}</dd>
-                </div>
+                <div className="flex justify-between gap-[12px]"><dt className="text-ds-fg-muted">Quorum</dt><dd className="text-ds-fg">{meeting.quorum_required}</dd></div>
               )}
               {meeting.location && (
-                <div className="flex justify-between">
-                  <dt className="text-gray-500">Location</dt>
-                  <dd className="text-black truncate max-w-[140px]" title={meeting.location}>{meeting.location}</dd>
-                </div>
+                <div className="flex justify-between gap-[12px]"><dt className="shrink-0 text-ds-fg-muted">Location</dt><dd className="min-w-0 break-words text-right text-ds-fg">{meeting.location}</dd></div>
               )}
             </dl>
-          </div>
+          </section>
         </div>
       </div>
 
@@ -1108,61 +840,43 @@ export default function MeetingDetailPage() {
       {/* Auto-Populate Panel */}
       <RightSlidePanel
         isOpen={isAutoPopulateOpen}
-        onClose={() => setIsAutoPopulateOpen(false)}
-        title={
-          <span className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-slate-400" />
-            Auto-Populate Agenda
-          </span>
-        }
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setIsAutoPopulateOpen(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
+        onClose={() => { autoPopulateMutation.reset(); setIsAutoPopulateOpen(false); }}
+        title="Auto-populate the agenda"
+        footer={(
+          <div className="flex justify-end gap-[8px]">
+            <Button onClick={() => { autoPopulateMutation.reset(); setIsAutoPopulateOpen(false); }}>Cancel</Button>
+            <Button
+              variant="primary"
+              leftIcon={<Sparkles aria-hidden />}
+              loading={autoPopulateMutation.isPending}
+              disabled={!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes}
               onClick={() => autoPopulateMutation.mutate(autoPopulateOptions)}
-              disabled={
-                autoPopulateMutation.isPending ||
-                (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)
-              }
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
-              <Sparkles className="h-4 w-4" />
-              {autoPopulateMutation.isPending ? 'Populating…' : 'Populate Agenda'}
-            </button>
+              {autoPopulateMutation.isPending ? 'Populating…' : 'Populate agenda'}
+            </Button>
           </div>
-        }
+        )}
       >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            Automatically add relevant pending items to the agenda. Select which types to include:
-          </p>
-
+        <div className="space-y-[12px]">
+          {autoPopulateMutation.isError && <FormProblem message={errorMessage(autoPopulateMutation.error, 'The agenda could not be filled.')} />}
+          <p className="text-ds-body text-ds-fg-body">Add the relevant pending items to the agenda. Choose which kinds to include.</p>
           {([
-            { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-primary-600',   bg: 'bg-blue-50'   },
-            { key: 'include_exceptions'         as const, label: 'Risk Exceptions',             desc: 'Exceptions pending review',             Icon: Shield,    color: 'text-amber-600',  bg: 'bg-amber-50'  },
-            { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-primary-600', bg: 'bg-primary-50' },
-          ] as const).map(({ key, label, desc, Icon, color, bg }) => (
-            <label key={key}
-              className="flex items-center gap-4 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
-              <input
-                type="checkbox"
+            { key: 'include_documents'          as const, label: 'Pending document approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck },
+            { key: 'include_exceptions'         as const, label: 'Risk exceptions',             desc: 'Exceptions pending review',             Icon: Shield    },
+            { key: 'include_regulatory_changes' as const, label: 'Regulatory changes',          desc: 'Updates under assessment',              Icon: Scale     },
+          ] as const).map(({ key, label, desc, Icon }) => (
+            <div key={key} className="rounded-ds-card border border-ds-border px-[12px]">
+              <Checkbox
                 checked={autoPopulateOptions[key]}
                 onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, [key]: e.target.checked })}
-                className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                label={(
+                  <span className="flex items-start gap-[12px]">
+                    <Icon aria-hidden className="mt-[2px] h-[18px] w-[18px] shrink-0 text-ds-primary-text" />
+                    <span><span className="block font-medium text-ds-fg">{label}</span><span className="block text-ds-label font-normal text-ds-fg-muted">{desc}</span></span>
+                  </span>
+                )}
               />
-              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
-                <Icon className={`h-5 w-5 ${color}`} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-black">{label}</p>
-                <p className="text-xs text-gray-500">{desc}</p>
-              </div>
-            </label>
+            </div>
           ))}
         </div>
       </RightSlidePanel>
@@ -1170,27 +884,10 @@ export default function MeetingDetailPage() {
       {/* Add Agenda Item Panel */}
       <RightSlidePanel
         isOpen={isAddAgendaOpen}
-        onClose={() => setIsAddAgendaOpen(false)}
-        title="Add Agenda Item"
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsAddAgendaOpen(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="add-agenda-form"
-              disabled={!newAgendaItem.title.trim() || addAgendaMutation.isPending}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {addAgendaMutation.isPending ? 'Adding…' : 'Add Item'}
-            </button>
-          </div>
-        }
+        onClose={() => { addAgendaMutation.reset(); setIsAddAgendaOpen(false); }}
+        title="Add agenda item"
+        dirty={formChanged(NEW_AGENDA, newAgendaItem)}
+        footer={<DrawerFooter onCancel={() => { addAgendaMutation.reset(); setIsAddAgendaOpen(false); }} form="add-agenda-form" pending={addAgendaMutation.isPending} label="Add item" pendingLabel="Adding…" disabled={!newAgendaItem.title.trim()} />}
       >
         <form
           id="add-agenda-form"
@@ -1203,51 +900,24 @@ export default function MeetingDetailPage() {
               item_type: newAgendaItem.item_type,
             });
           }}
-          className="space-y-4"
+          className="flex flex-col gap-[16px]"
         >
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={newAgendaItem.title}
-              onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              placeholder="Agenda item title"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Description</label>
-            <textarea
-              value={newAgendaItem.description}
-              onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })}
-              rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-              placeholder="Optional description"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Type</label>
-              <MultiSelectDropdown
-                title="Type"
-                items={ITEM_TYPES}
-                selectedValues={[newAgendaItem.item_type]}
-                onApply={(values) => setNewAgendaItem({ ...newAgendaItem, item_type: values[0] || 'discussion' })}
-                multiSelect={false}
-                triggerVariant="input"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
-              <input
-                type="number"
-                min={1}
-                value={newAgendaItem.duration_minutes}
-                onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
+          {addAgendaMutation.isError && <FormProblem message={errorMessage(addAgendaMutation.error, 'The agenda item could not be added.')} />}
+          <FormField label="Title" required>
+            <TextInput value={newAgendaItem.title} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })} placeholder="Agenda item title" maxLength={500} required />
+          </FormField>
+          <FormField label="Description" optional>
+            <Textarea value={newAgendaItem.description} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })} rows={3} placeholder="Optional description" />
+          </FormField>
+          <div className="grid grid-cols-2 gap-[16px]">
+            <FormField label="Type">
+              <Select value={newAgendaItem.item_type} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })}>
+                {ITEM_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Duration">
+              <TextInput type="number" min={1} unit="min" value={newAgendaItem.duration_minutes} onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })} />
+            </FormField>
           </div>
         </form>
       </RightSlidePanel>
@@ -1255,27 +925,10 @@ export default function MeetingDetailPage() {
       {/* Create Action Panel */}
       <RightSlidePanel
         isOpen={isAddActionOpen}
-        onClose={() => setIsAddActionOpen(false)}
-        title="Create Action"
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsAddActionOpen(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="create-action-form"
-              disabled={!newAction.title.trim() || !newAction.due_date || createActionMutation.isPending}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {createActionMutation.isPending ? 'Creating…' : 'Create Action'}
-            </button>
-          </div>
-        }
+        onClose={() => { createActionMutation.reset(); setIsAddActionOpen(false); }}
+        title="Create action"
+        dirty={formChanged(NEW_ACTION, newAction)}
+        footer={<DrawerFooter onCancel={() => { createActionMutation.reset(); setIsAddActionOpen(false); }} form="create-action-form" pending={createActionMutation.isPending} label="Create action" pendingLabel="Creating…" disabled={!newAction.title.trim() || !newAction.due_date} />}
       >
         <form
           id="create-action-form"
@@ -1289,63 +942,39 @@ export default function MeetingDetailPage() {
               assigned_to: newAction.assigned_to ? parseInt(newAction.assigned_to as string) : null,
             });
           }}
-          className="space-y-4"
+          className="flex flex-col gap-[16px]"
         >
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={newAction.title}
-              onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              placeholder="Action title"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Description</label>
-            <textarea
-              value={newAction.description}
-              onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
-              rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Action Type</label>
-            <MultiSelectDropdown
-              title="Action Type"
-              items={ACTION_TYPES}
-              selectedValues={[newAction.action_type]}
-              onApply={(values) => setNewAction({ ...newAction, action_type: values[0] || 'follow_up' })}
-              multiSelect={false}
-              triggerVariant="input"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Due Date <span className="text-red-500">*</span></label>
-              <input
-                type="date"
-                value={newAction.due_date}
-                onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Assign To</label>
+          {createActionMutation.isError && <FormProblem message={errorMessage(createActionMutation.error, 'The action could not be created.')} />}
+          <FormField label="Title" required>
+            <TextInput value={newAction.title} onChange={(e) => setNewAction({ ...newAction, title: e.target.value })} placeholder="Action title" maxLength={500} required />
+          </FormField>
+          <FormField label="Description" optional>
+            <Textarea value={newAction.description} onChange={(e) => setNewAction({ ...newAction, description: e.target.value })} rows={2} />
+          </FormField>
+          <FormField label="Action type">
+            <Select value={newAction.action_type} onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })}>
+              {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </Select>
+          </FormField>
+          <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+            <FormField label="Due date" required>
+              <TextInput type="date" value={newAction.due_date} onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })} required />
+            </FormField>
+            <PickerField label="Assign to" optional>
               <MultiSelectDropdown
                 title="Assign To"
                 items={userPickerItems}
                 selectedValues={newAction.assigned_to ? [newAction.assigned_to] : []}
                 onApply={(values) => setNewAction({ ...newAction, assigned_to: values[0] || '' })}
                 multiSelect={false}
+                autoApply
                 triggerVariant="input"
                 forceSearch
+                size="sm"
+                triggerClassName="w-full"
                 placeholder="Unassigned"
               />
-            </div>
+            </PickerField>
           </div>
         </form>
       </RightSlidePanel>
@@ -1353,27 +982,10 @@ export default function MeetingDetailPage() {
       {/* Edit Agenda Item Panel */}
       <RightSlidePanel
         isOpen={editingAgendaId !== null}
-        onClose={() => setEditingAgendaId(null)}
-        title="Edit Agenda Item"
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setEditingAgendaId(null)}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="edit-agenda-form"
-              disabled={!editAgendaDraft.title.trim() || updateAgendaMutation.isPending}
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {updateAgendaMutation.isPending ? 'Saving…' : 'Save Changes'}
-            </button>
-          </div>
-        }
+        onClose={() => { updateAgendaMutation.reset(); setEditingAgendaId(null); }}
+        title="Edit agenda item"
+        dirty={formChanged(editAgendaInitial, editAgendaDraft)}
+        footer={<DrawerFooter onCancel={() => { updateAgendaMutation.reset(); setEditingAgendaId(null); }} form="edit-agenda-form" pending={updateAgendaMutation.isPending} label="Save changes" pendingLabel="Saving…" disabled={!editAgendaDraft.title.trim()} />}
       >
         <form
           id="edit-agenda-form"
@@ -1390,49 +1002,24 @@ export default function MeetingDetailPage() {
               },
             });
           }}
-          className="space-y-4"
+          className="flex flex-col gap-[16px]"
         >
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={editAgendaDraft.title}
-              onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Description</label>
-            <textarea
-              value={editAgendaDraft.description}
-              onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, description: e.target.value })}
-              rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Type</label>
-              <MultiSelectDropdown
-                title="Type"
-                items={ITEM_TYPES}
-                selectedValues={[editAgendaDraft.item_type]}
-                onApply={(values) => setEditAgendaDraft({ ...editAgendaDraft, item_type: values[0] || 'discussion' })}
-                multiSelect={false}
-                triggerVariant="input"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
-              <input
-                type="number"
-                min={1}
-                value={editAgendaDraft.time_allocated_minutes}
-                onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, time_allocated_minutes: parseInt(e.target.value) || 15 })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
+          {updateAgendaMutation.isError && <FormProblem message={errorMessage(updateAgendaMutation.error, 'The agenda item could not be saved.')} />}
+          <FormField label="Title" required>
+            <TextInput value={editAgendaDraft.title} onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, title: e.target.value })} maxLength={500} required />
+          </FormField>
+          <FormField label="Description" optional>
+            <Textarea value={editAgendaDraft.description} onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, description: e.target.value })} rows={3} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-[16px]">
+            <FormField label="Type">
+              <Select value={editAgendaDraft.item_type} onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, item_type: e.target.value })}>
+                {ITEM_TYPES.concat(ITEM_TYPES.some((t) => t.value === editAgendaDraft.item_type) ? [] : [{ value: editAgendaDraft.item_type, label: statusLabel(editAgendaDraft.item_type) }]).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Duration">
+              <TextInput type="number" min={1} unit="min" value={editAgendaDraft.time_allocated_minutes} onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, time_allocated_minutes: parseInt(e.target.value) || 15 })} />
+            </FormField>
           </div>
         </form>
       </RightSlidePanel>
@@ -1440,109 +1027,62 @@ export default function MeetingDetailPage() {
       {/* Upload Document Panel */}
       <RightSlidePanel
         isOpen={isUploadAttachmentOpen}
-        onClose={() => {
-          setIsUploadAttachmentOpen(false);
-          setPendingAttachment(null);
-          setAttachmentDescription('');
-        }}
-        title={
-          <span className="flex items-center gap-2">
-            <Upload className="h-5 w-5 text-slate-400" />
-            Upload Document
-          </span>
-        }
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setIsUploadAttachmentOpen(false);
-                setPendingAttachment(null);
-                setAttachmentDescription('');
-              }}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => uploadAttachmentMutation.mutate()}
-              disabled={!pendingAttachment || uploadAttachmentMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {uploadAttachmentMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading…
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Upload
-                </>
-              )}
-            </button>
+        onClose={() => { uploadAttachmentMutation.reset(); setIsUploadAttachmentOpen(false); setPendingAttachment(null); setAttachmentDescription(''); }}
+        title="Upload document"
+        dirty={pendingAttachment !== null || attachmentDescription !== ''}
+        footer={(
+          <div className="flex justify-end gap-[8px]">
+            <Button onClick={() => { uploadAttachmentMutation.reset(); setIsUploadAttachmentOpen(false); setPendingAttachment(null); setAttachmentDescription(''); }}>Cancel</Button>
+            <Button variant="primary" leftIcon={<Upload aria-hidden />} loading={uploadAttachmentMutation.isPending} disabled={!pendingAttachment} onClick={() => uploadAttachmentMutation.mutate()}>
+              {uploadAttachmentMutation.isPending ? 'Uploading…' : 'Upload'}
+            </Button>
           </div>
-        }
+        )}
       >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            Attach agenda packets, briefing decks, supporting spreadsheets, or any meeting documents (PDF, DOCX, XLSX, PPTX, images, etc.).
-          </p>
+        <div className="flex flex-col gap-[16px]">
+          {uploadAttachmentMutation.isError && <FormProblem message={errorMessage(uploadAttachmentMutation.error, 'The document could not be uploaded.')} />}
+          <p className="text-ds-body text-ds-fg-body">Attach agenda packets, briefing decks, supporting spreadsheets or any meeting documents (PDF, DOCX, XLSX, PPTX, images and more).</p>
 
-          <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-8 cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors">
-            <Upload className="h-8 w-8 text-gray-400 mb-2" />
+          <label className="flex cursor-pointer flex-col items-center justify-center rounded-ds-card border-2 border-dashed border-ds-border-strong bg-ds-surface-subtle px-[24px] py-[32px] text-center focus-within:shadow-ds-ring hover:bg-ds-primary-soft">
+            <Upload aria-hidden className="mb-[8px] h-[28px] w-[28px] text-ds-fg-muted" strokeWidth={1.5} />
             {pendingAttachment ? (
               <>
-                <p className="text-sm font-medium text-black">{pendingAttachment.name}</p>
-                <p className="text-xs text-gray-500 mt-1">{formatFileSize(pendingAttachment.size)} · click to choose a different file</p>
+                <span className="break-all text-ds-body font-medium text-ds-fg">{pendingAttachment.name}</span>
+                <span className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">{formatFileSize(pendingAttachment.size)} · choose a different file</span>
               </>
             ) : (
               <>
-                <p className="text-sm font-medium text-black">Click to choose a file</p>
-                <p className="text-xs text-gray-500 mt-1">PDF, DOCX, XLSX, PPTX, images and more</p>
+                <span className="text-ds-body font-medium text-ds-fg">Choose a file</span>
+                <span className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">PDF, DOCX, XLSX, PPTX, images and more</span>
               </>
             )}
-            <input
-              type="file"
-              className="hidden"
-              onChange={(e) => setPendingAttachment(e.target.files?.[0] || null)}
-            />
+            <input type="file" className="sr-only" onChange={(e) => setPendingAttachment(e.target.files?.[0] || null)} />
           </label>
 
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Description <span className="text-xs font-normal text-gray-500">(optional)</span></label>
-            <textarea
-              value={attachmentDescription}
-              onChange={(e) => setAttachmentDescription(e.target.value)}
-              rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-              placeholder="Short note about what this document contains…"
-            />
-          </div>
+          <FormField label="Description" optional>
+            <Textarea value={attachmentDescription} onChange={(e) => setAttachmentDescription(e.target.value)} rows={3} placeholder="A short note about what this document contains…" />
+          </FormField>
         </div>
       </RightSlidePanel>
+      {confirmDialog}
     </div>
   );
 }
 
 // ── AgendaVotePanel ─────────────────────────────────────────────────────────
-// Per-agenda-item voting surface. Compact by default (just the tally chips
-// + the user's own vote indicator); expands to show the cast/change UI +
-// the full vote list with comments. Re-clicking a vote you've already
-// cast toggles it off only via "Change vote" → no accidental flips.
+// Per-agenda-item voting. Compact by default (the tally and your own vote); it opens to the cast-or-change controls and the full list of votes with comments.
+// A vote already cast is changed only through "Change your vote", so nobody flips one by accident. One request per item, as before.
 
 type VoteValue = 'agreed' | 'disagreed' | 'partial' | 'abstain';
 
-const VOTE_STYLES: Record<VoteValue, { label: string; bg: string; text: string; border: string }> = {
-  agreed:    { label: 'Agreed',    bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-  partial:   { label: 'Partial',   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
-  disagreed: { label: 'Disagreed', bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200' },
-  abstain:   { label: 'Abstain',   bg: 'bg-slate-50',   text: 'text-slate-600',   border: 'border-slate-200' },
+const VOTE_TONE: Record<VoteValue, { label: string; tone: StatusPillProps['tone'] }> = {
+  agreed:    { label: 'Agreed',    tone: 'success' },
+  partial:   { label: 'Partial',   tone: 'warning' },
+  disagreed: { label: 'Disagreed', tone: 'danger' },
+  abstain:   { label: 'Abstain',   tone: 'neutral' },
 };
 
-function AgendaVotePanel({ itemId }: { itemId: number }) {
-  const qc = useQueryClient();
+function AgendaVotePanel({ itemId, itemNumber }: { itemId: number; itemNumber: number }) {
   const [expanded, setExpanded] = useState(false);
   const [draftVote, setDraftVote] = useState<VoteValue | null>(null);
   const [draftComment, setDraftComment] = useState('');
@@ -1553,14 +1093,12 @@ function AgendaVotePanel({ itemId }: { itemId: number }) {
     staleTime: 30 * 1000,
   });
 
-  const voteMutation = useMutation({
-    mutationFn: ({ vote, comment }: { vote: VoteValue; comment?: string }) =>
-      committeeApi.voteAgendaItem(itemId, vote, comment),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['agenda-votes', itemId] });
-      setDraftVote(null);
-      setDraftComment('');
-    },
+  const voteMutation = useReportedMutation({
+    mutationFn: ({ vote, comment }: { vote: VoteValue; comment?: string }) => committeeApi.voteAgendaItem(itemId, vote, comment),
+    success: (_r, v) => ({ title: 'Vote recorded', message: `Agenda item ${itemNumber}: ${VOTE_TONE[v.vote].label}` }),
+    failure: "Couldn't record the vote",
+    invalidate: [['agenda-votes', itemId]],
+    onSuccess: () => { setDraftVote(null); setDraftComment(''); },
   });
 
   const tally = data?.tally || { agreed: 0, disagreed: 0, partial: 0, abstain: 0 };
@@ -1571,93 +1109,55 @@ function AgendaVotePanel({ itemId }: { itemId: number }) {
   const orderedVotes: VoteValue[] = ['agreed', 'partial', 'disagreed', 'abstain'];
 
   return (
-    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50">
+    <div className="mt-[8px] rounded-ds-control border border-ds-border bg-ds-surface-subtle">
       <button
         type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-3 py-1.5 flex items-center justify-between gap-2 hover:bg-slate-100 rounded-t-md"
+        className="flex w-full items-center justify-between gap-[8px] rounded-ds-control px-[12px] py-[6px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]"
       >
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Votes {total > 0 ? `(${total})` : ''}
-          </span>
+        <span className="flex flex-wrap items-center gap-[6px]">
+          <span className="text-ds-label text-ds-fg-muted">Votes {total > 0 ? `(${total})` : ''}</span>
           {orderedVotes.map((v) => {
             const n = (tally as Record<string, number>)[v] || 0;
             if (n === 0) return null;
-            const s = VOTE_STYLES[v];
-            return (
-              <span key={v} className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text} ${s.border}`}>
-                {s.label}: {n}
-              </span>
-            );
+            return <StatusPill key={v} size="sm" tone={VOTE_TONE[v].tone} label={`${VOTE_TONE[v].label}: ${n}`} />;
           })}
-          {myVote && (
-            <span className="text-[10px] text-slate-500 ml-1">
-              · your vote: <span className={`font-semibold ${VOTE_STYLES[myVote].text}`}>{VOTE_STYLES[myVote].label}</span>
-            </span>
-          )}
-        </div>
-        <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          {myVote && <span className="text-ds-label font-normal text-ds-fg-muted">· your vote: <span className="font-medium text-ds-fg">{VOTE_TONE[myVote].label}</span></span>}
+        </span>
+        <ChevronRight aria-hidden className={`h-[16px] w-[16px] shrink-0 text-ds-fg-muted transition-transform ${expanded ? 'rotate-90' : ''}`} />
       </button>
 
       {expanded && (
-        <div className="px-3 pb-2 pt-1 border-t border-slate-200">
+        <div className="border-t border-ds-border px-[12px] pb-[12px] pt-[8px]">
           {/* Cast / change vote */}
-          <div className="mt-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
-              {myVote ? 'Change your vote' : 'Cast a vote'}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
+          <div>
+            <p className={SUB_HEAD}>{myVote ? 'Change your vote' : 'Cast a vote'}</p>
+            <div className="mt-[6px] flex flex-wrap gap-[6px]">
               {orderedVotes.map((v) => {
-                const s = VOTE_STYLES[v];
                 const isMine = myVote === v;
                 const isDraft = draftVote === v;
+                const on = isDraft || (!draftVote && isMine);
                 return (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setDraftVote(v)}
-                    disabled={voteMutation.isPending}
-                    className={`text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${
-                      isDraft || (!draftVote && isMine)
-                        ? `${s.bg} ${s.text} ${s.border} font-semibold`
-                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
+                  <Button key={v} size="sm" variant={on ? 'primary' : 'secondary'} aria-pressed={on} disabled={voteMutation.isPending} onClick={() => setDraftVote(v)}>
+                    {VOTE_TONE[v].label}
+                  </Button>
                 );
               })}
             </div>
             {draftVote && (
-              <div className="mt-2 space-y-2">
-                <textarea
-                  value={draftComment}
-                  onChange={(e) => setDraftComment(e.target.value)}
-                  rows={2}
-                  placeholder={myComment ? `Current comment: ${myComment}. Type to update…` : 'Optional comment'}
-                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900"
-                />
-                <div className="flex gap-1.5 justify-end">
-                  <button
-                    type="button"
-                    onClick={() => { setDraftVote(null); setDraftComment(''); }}
-                    className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={voteMutation.isPending}
-                    onClick={() => voteMutation.mutate({
-                      vote: draftVote,
-                      comment: draftComment.trim() || undefined,
-                    })}
-                    className="text-xs rounded-md bg-blue-600 px-2.5 py-1 text-white hover:bg-blue-700 inline-flex items-center gap-1 disabled:opacity-50"
-                  >
-                    {voteMutation.isPending && <Loader2 size={11} className="animate-spin" />}
-                    Submit vote
-                  </button>
+              <div className="mt-[8px] space-y-[8px]">
+                <FormField label="Comment" optional>
+                  <Textarea
+                    value={draftComment}
+                    onChange={(e) => setDraftComment(e.target.value)}
+                    rows={2}
+                    placeholder={myComment ? `Current comment: ${myComment}. Type to update…` : 'Optional comment'}
+                  />
+                </FormField>
+                <div className="flex justify-end gap-[8px]">
+                  <Button size="sm" onClick={() => { setDraftVote(null); setDraftComment(''); }}>Cancel</Button>
+                  <Button size="sm" variant="primary" loading={voteMutation.isPending} onClick={() => voteMutation.mutate({ vote: draftVote, comment: draftComment.trim() || undefined })}>Submit vote</Button>
                 </div>
               </div>
             )}
@@ -1665,24 +1165,18 @@ function AgendaVotePanel({ itemId }: { itemId: number }) {
 
           {/* Vote history */}
           {data?.votes && data.votes.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                Who voted what
-              </p>
-              <ul className="space-y-1">
+            <div className="mt-[12px]">
+              <p className={SUB_HEAD}>Who voted what</p>
+              <ul className="mt-[6px] space-y-[6px]">
                 {data.votes.map((v) => {
-                  const s = VOTE_STYLES[(v.vote as VoteValue)] || VOTE_STYLES.abstain;
+                  const s = VOTE_TONE[(v.vote as VoteValue)] || VOTE_TONE.abstain;
                   return (
-                    <li key={v.id} className="flex items-start justify-between gap-2 text-xs">
+                    <li key={v.id} className="flex items-start justify-between gap-[8px] text-ds-body">
                       <div className="min-w-0 flex-1">
-                        <span className="text-slate-700 font-medium">{v.user_name || `User #${v.user_id}`}</span>
-                        {v.comment && (
-                          <p className="text-slate-600 text-xs mt-0.5 break-words">{v.comment}</p>
-                        )}
+                        <span className="font-medium text-ds-fg">{v.user_name || `User #${v.user_id}`}</span>
+                        {v.comment && <p className="mt-[2px] break-words text-ds-label font-normal text-ds-fg-body">{v.comment}</p>}
                       </div>
-                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${s.bg} ${s.text} ${s.border}`}>
-                        {s.label}
-                      </span>
+                      <StatusPill size="sm" tone={s.tone} label={s.label} />
                     </li>
                   );
                 })}
