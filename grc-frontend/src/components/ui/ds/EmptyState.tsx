@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { Inbox, SearchX, type LucideIcon } from 'lucide-react';
+import { Button } from './Button';
 
 export type EmptyStateKind = 'noMatches' | 'firstUse';
 
@@ -27,8 +28,6 @@ export interface EmptyStateProps {
 }
 
 const MAX_TIPS = 3;
-
-const CLEAR = 'inline-flex h-ds-control shrink-0 items-center justify-center rounded-ds-control border border-ds-border-strong bg-ds-surface px-[12px] text-ds-body font-medium text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 export function EmptyState({ kind, title, description, icon, action, onClearFilters, tips, bare = false, className }: EmptyStateProps) {
   const Icon = icon ?? (kind === 'noMatches' ? SearchX : Inbox);
@@ -54,7 +53,7 @@ export function EmptyState({ kind, title, description, icon, action, onClearFilt
       {(action || clear) && (
         <div className="mt-[16px] flex flex-wrap items-center justify-center gap-2">
           {action}
-          {clear && <button type="button" onClick={clear} className={CLEAR}>Clear filters</button>}
+          {clear && <Button onClick={clear}>Clear filters</Button>}
         </div>
       )}
     </div>

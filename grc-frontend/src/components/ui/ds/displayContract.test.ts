@@ -58,14 +58,13 @@ test('EmptyState: first use and no matches; at most three tips; "Clear filters" 
   assert.match(empty, /MAX_TIPS = 3/);
   assert.match(empty, /\.slice\(0, MAX_TIPS\)/);
   assert.match(empty, /kind === 'noMatches' \? onClearFilters : undefined/);
-  assert.match(empty, />Clear filters<\/button>/);
+  assert.match(empty, /<Button onClick=\{clear\}>Clear filters<\/Button>/);      // the kit's own button, not classes of its own
 });
 
 test('ErrorState is an alert; Retry appears only when a page can retry; compact is a row for the inside of a card', () => {
   const error = code('ErrorState.tsx');
   assert.equal((error.match(/role="alert"/g) ?? []).length, 2);               // the framed state and the compact row
-  assert.match(error, /const retry = onRetry && \(/);
-  assert.match(error, /Retry\s*<\/button>/);
+  assert.match(error, /const retry = onRetry && <Button leftIcon=\{<RotateCw aria-hidden \/>\} onClick=\{onRetry\}>Retry<\/Button>/);      // the kit's own button
   assert.match(error, /compact = false/);
 });
 

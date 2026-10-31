@@ -5,6 +5,7 @@
 // It is an alert: it is read out as it appears.
 import { clsx } from 'clsx';
 import { AlertTriangle, RotateCw } from 'lucide-react';
+import { Button } from './Button';
 
 export interface ErrorStateProps {
   /** what failed (default "Couldn't load this") */
@@ -18,15 +19,8 @@ export interface ErrorStateProps {
   className?: string;
 }
 
-const RETRY = 'inline-flex h-ds-control shrink-0 items-center justify-center gap-[6px] rounded-ds-control border border-ds-border-strong bg-ds-surface px-[12px] text-ds-body font-medium text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
-
 export function ErrorState({ title = "Couldn't load this", message, onRetry, compact = false, className }: ErrorStateProps) {
-  const retry = onRetry && (
-    <button type="button" onClick={onRetry} className={RETRY}>
-      <RotateCw aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
-      Retry
-    </button>
-  );
+  const retry = onRetry && <Button leftIcon={<RotateCw aria-hidden />} onClick={onRetry}>Retry</Button>;
   if (compact) {
     return (
       <div role="alert" className={clsx('flex flex-wrap items-start gap-[12px] p-3', className)}>
