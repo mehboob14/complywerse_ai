@@ -6,6 +6,7 @@
 //   <ReadOnlyNote>View only <InfoTip text="Only an administrator can change them." label="Why these settings are view only" /></ReadOnlyNote>
 //
 // It is a line of facts, an inline element in the muted words colour: for the `meta` of a page head or the `actions` of a SectionCard.
+// The lock does not shrink: when the words wrap, a flex row squeezed it to 5px wide (found by the style guide's accessibility probe).
 import type { ReactNode } from 'react';
 import { Lock } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export interface ReadOnlyNoteProps {
 export function ReadOnlyNote({ children }: ReadOnlyNoteProps) {
   return (
     <span role="note" className="inline-flex items-center gap-[6px] text-ds-body text-ds-fg-muted">
-      <Lock size={14} aria-hidden />
+      <Lock size={14} aria-hidden className="shrink-0" />
       {children}
     </span>
   );
