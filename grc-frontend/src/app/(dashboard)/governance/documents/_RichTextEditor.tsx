@@ -23,6 +23,7 @@ import {
   Bold as BoldIcon, Italic as ItalicIcon, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Link as LinkIcon, Undo2, Redo2, Minus, Eye, Pencil,
 } from 'lucide-react';
+import { LinkDialog } from './_LinkDialog';
 
 interface RichTextEditorProps {
   value: string;
@@ -33,6 +34,7 @@ interface RichTextEditorProps {
 
 export default function RichTextEditor({ value, onChange, placeholder, minHeight = 240 }: RichTextEditorProps) {
   const [mode, setMode] = useState<'rich' | 'markdown'>('rich');
+  const [link, setLinkAsk] = useState<{ previous: string | null } | null>(null);     // the link address is asked in a dialog (_LinkDialog), not window.prompt
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -75,16 +77,9 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
     );
   }
 
-  const setLink = () => {
-    const prev = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Link URL', prev || 'https://');
-    if (url === null) return;
-    if (url.trim() === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
-  };
+  const setLink = () => setLinkAsk({ previous: (editor.getAttributes('link').href as string | undefined) ?? null });
+  const applyLink = (href: string) => { editor.chain().focus().extendMarkRange('link').setLink({ href }).run(); setLinkAsk(null); };
+  const removeLink = () => { editor.chain().focus().extendMarkRange('link').unsetLink().run(); setLinkAsk(null); };
 
   const Btn = ({ onClick, active, title, children, disabled }: {
     onClick: () => void; active?: boolean; title: string; children: React.ReactNode; disabled?: boolean;
@@ -151,6 +146,8 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
           placeholder={placeholder}
         />
       )}
+
+      {link && <LinkDialog previous={link.previous} onApply={applyLink} onRemove={removeLink} onClose={() => setLinkAsk(null)} />}
 
       {/* Scoped content styling (Tailwind preflight strips heading/list defaults,
           so we restore them only inside the editor). */}

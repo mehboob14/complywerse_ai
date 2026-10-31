@@ -38,6 +38,7 @@ import {
 import { lineRatio } from '@/lib/fontLines';
 import { oneTitle, sheetStyle } from './wordLook';
 import type { BlockLook, PageLook } from '@/lib/studio/api';
+import { LinkDialog } from '../../_LinkDialog';
 
 export type EditorMode = 'edit' | 'view' | 'source';
 
@@ -129,13 +130,12 @@ function TextBtn({ title, disabled, onClick, children }: { title: string; disabl
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
-  const setLink = () => {
-    const previous = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Link address', previous || 'https://');
-    if (url === null) return;
-    if (!url.trim()) editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    else editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
-  };
+  // the link address is asked in a dialog (the browser prompt it replaced had no name, no focus rules and no discard guard); the editor keeps its
+  // selection meanwhile, and the result is the prompt's: an address is linked to the selected text, "Remove link" takes the one under the cursor off
+  const [link, setLinkAsk] = useState<{ previous: string | null } | null>(null);
+  const setLink = () => setLinkAsk({ previous: (editor.getAttributes('link').href as string | undefined) ?? null });
+  const applyLink = (href: string) => { editor.chain().focus().extendMarkRange('link').setLink({ href }).run(); setLinkAsk(null); };
+  const removeLink = () => { editor.chain().focus().extendMarkRange('link').unsetLink().run(); setLinkAsk(null); };
   const level = ([1, 2, 3, 4, 5, 6] as const).find((l) => editor.isActive('heading', { level: l }));
   const inTable = editor.isActive('table');
   const inHeader = editor.isActive('tableHeader');
@@ -186,6 +186,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           <TextBtn title="Delete the whole table" onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TextBtn>
         </div>
       )}
+      {link && <LinkDialog previous={link.previous} onApply={applyLink} onRemove={removeLink} onClose={() => setLinkAsk(null)} />}
     </div>
   );
 }
