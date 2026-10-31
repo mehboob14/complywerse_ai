@@ -10,15 +10,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronRight, Loader2, Sparkles } from 'lucide-react';
-import { problemOf, studioApi, type Instructions, type Session, type SetupOptions } from '@/lib/studio/api';
-import { useToast } from '@/components/ui/ToastProvider';
+import { Check, ChevronRight, Sparkles } from 'lucide-react';
+import { studioApi, type Instructions, type Session, type SetupOptions } from '@/lib/studio/api';
 import { ComboBoxInput } from '@/components/ui/ComboBoxInput';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown, type MultiSelectDropdownItem } from '@/components/ui/MultiSelectDropdown';
+import { Button, ErrorState, Select, SkeletonLines, Textarea, TextInput, useNotify } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { queueFor } from './setupPatch';
-
-export const setupInputClass = 'w-full rounded-lg border border-[#b8c4c8] bg-[#fff] px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 
 /** The lists as this server sends them; the newer fields are optional so an older server still works. */
 type Options = SetupOptions & {
@@ -31,13 +30,13 @@ type Options = SetupOptions & {
 /** The document's instructions as the person edits them: saved a moment after typing, at once after a choice, one save at a time with
  * everything not saved yet in it, and never replaced by the server's copy while something is on its way. */
 export function useInstructionsDraft(session: Session, onChanged: () => void | Promise<void>) {
-  const { toast } = useToast();
+  const notify = useNotify();
   const queue = useMemo(() => queueFor(session.id), [session.id]);
   const [draft, setDraft] = useState<Instructions>(() => queue.view(session.instructions));
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef({ onChanged, toast, id: session.id, server: session.instructions, queue });
-  latest.current = { onChanged, toast, id: session.id, server: session.instructions, queue };
+  const latest = useRef({ onChanged, notify, id: session.id, server: session.instructions, queue });
+  latest.current = { onChanged, notify, id: session.id, server: session.instructions, queue };
   // the server's copy (after a save or a reload), with what is not saved yet still on top
   useEffect(() => { setDraft(queue.view(session.instructions)); }, [session.instructions, queue]);
 
@@ -58,7 +57,7 @@ export function useInstructionsDraft(session: Session, onChanged: () => void | P
       (e) => {
         q.failed();
         setSaved('idle');
-        latest.current.toast({ title: 'Could not save the instructions', message: problemOf(e), type: 'error' });
+        latest.current.notify.error(e, { title: 'Could not save the instructions' });
       });
   }, []);
   // leaving the tab mid-typing still saves it
@@ -81,13 +80,13 @@ export function SavedState({ saved }: { saved: 'idle' | 'saving' | 'saved' }) {
 /** A section that folds away to one line of what it holds. */
 export function Section({ title, summary, open, children }: { title: string; summary: string; open?: boolean; children: React.ReactNode }) {
   return (
-    <details open={open} className="group rounded-xl border border-[#d5dbe1] bg-[#fff]">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 hover:bg-[#f3f8f7] [&::-webkit-details-marker]:hidden">
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#586472] transition-transform group-open:rotate-90" aria-hidden />
-        <span className="text-[13px] font-semibold text-[#26323d]">{title}</span>
-        <span className="min-w-0 flex-1 truncate text-right text-xs text-[#586472] group-open:hidden" title={summary}>{summary || 'Not set'}</span>
+    <details open={open} className="group rounded-ds-card border border-ds-border bg-ds-surface">
+      <summary className="flex min-h-[var(--ds-control-h)] cursor-pointer list-none items-center gap-2 rounded-ds-card px-3 py-1 hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-fg-muted transition-transform group-open:rotate-90" aria-hidden />
+        <span className="text-ds-body font-[600] text-ds-fg">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-right text-ds-label text-ds-fg-muted group-open:hidden" title={summary}>{summary || 'Not set'}</span>
       </summary>
-      <div className="space-y-3 border-t border-[#e1e6eb] px-3 pb-3 pt-2.5">{children}</div>
+      <div className="space-y-3 border-t border-ds-border px-3 pb-3 pt-2.5">{children}</div>
     </details>
   );
 }
@@ -96,7 +95,7 @@ export function Section({ title, summary, open, children }: { title: string; sum
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-[#26323d]">{label}{hint && <InfoTip label={`About ${label.toLowerCase()}`} text={hint} />}</p>
+      <p className="mb-1 flex items-center gap-1 text-ds-label text-ds-fg">{label}{hint && <InfoTip label={`About ${label.toLowerCase()}`} text={hint} />}</p>
       {children}
     </div>
   );
@@ -112,11 +111,12 @@ function Many({ label, items, value, onChange, create = true, disabled }: {
   const chosen = all.filter((i) => value.includes(i.value)).map((i) => i.label);
   return (
     <Field label={label}>
-      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={take} triggerVariant="input" size="sm" showAvatars={false}
+      {/* compact: the button already says "3 selected"; the round 11px count beside it said it twice, under the platform's 12px floor */}
+      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={take} triggerVariant="input" size="sm" showAvatars={false} compact
         forceSearch placeholder="Choose…" searchPlaceholder={create ? 'Search or type your own' : 'Search'} className="w-full" triggerClassName="w-full"
         onCreate={create ? (t) => onChange([...value, t]) : undefined} disabled={disabled} />
       {/* one choice is named on the button; several are counted there and named here */}
-      {chosen.length > 1 && <p className="mt-1 truncate text-xs text-[#3f4b58]" title={chosen.join('; ')}>{chosen.join(' · ')}</p>}
+      {chosen.length > 1 && <p className="mt-1 truncate text-ds-label text-ds-fg-body" title={chosen.join('; ')}>{chosen.join(' · ')}</p>}
     </Field>
   );
 }
@@ -137,11 +137,11 @@ export function One({ label, value, options, onChange, hint, custom = true }: {
 function Plain({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   return (
     <Field label={label}>
-      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} className={`${setupInputClass} py-1.5`}>
+      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
         <option value="">Not set</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
         {value && !options.includes(value) && <option value={value}>{value}</option>}
-      </select>
+      </Select>
     </Field>
   );
 }
@@ -157,7 +157,7 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   /** the chat's setup card: the four choices that shape a draft most, the rest behind "More options" */
   compact?: boolean;
 }) {
-  const { toast } = useToast();
+  const notify = useNotify();
   const options = useQuery({ queryKey: ['studio', 'setup', session.id], queryFn: () => studioApi.setupOptions(session.id) as Promise<Options>, staleTime: 60_000, retry: false });
   const o = options.data;
   const list = (key: keyof Instructions) => (Array.isArray(draft[key]) ? (draft[key] as string[]) : []);
@@ -176,8 +176,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncFromDoc]);
 
-  if (options.isLoading) return <p role="status" className="relative text-[#586472]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Loading</span></p>;
-  if (!o) return <p className="text-xs text-[#8a1c1c]">Could not load the choices. {problemOf(options.error)}</p>;
+  if (options.isLoading) return <SkeletonLines lines={3} label="Loading the choices" />;
+  if (!o) return <ErrorState compact title="Couldn't load the choices" message={errorMessage(options.error)} onRetry={canRetry(options.error) ? () => { void options.refetch(); } : undefined} />;
 
   const followed = o.regulators_followed.filter((r) => !country || !r.country || r.country === country);
   const regulatorItems: MultiSelectDropdownItem[] = [
@@ -196,7 +196,7 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
       for (const r of session.references) if (r.kind === 'framework' && r.source_id != null && !want.has(String(r.source_id))) await studioApi.removeReference(session.id, r.id);
       for (const id of next) if (!attachedIds.includes(id)) await studioApi.addReference(session.id, { kind: 'framework', source_id: Number(id), scope: { mode: 'all' } });
       await onReferencesChanged();
-    } catch (e) { toast({ title: 'That framework could not be changed', message: problemOf(e), type: 'error' }); }
+    } catch (e) { notify.error(e, { title: 'That framework could not be changed' }); }
     finally { setFwBusy(false); }
   };
 
@@ -214,11 +214,10 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   const open = (i: number) => allOpen || (firstOpen && i === 0);
 
   const fillButton = Object.keys(fill).length > 0 && (
-    <button type="button" onClick={() => change(fill, true)}
-      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs font-semibold text-[#0f766e] hover:bg-[#e6f6ee]"
+    <Button fullWidth leftIcon={<Sparkles aria-hidden />} onClick={() => change(fill, true)}
       title={joined('Fill in from your organisation', fill.country as string, fill.entity_type as string, (fill.regulators as string[] | undefined)?.join(', '))}>
-      <Sparkles className="h-3.5 w-3.5" aria-hidden /> Fill from organisation
-    </button>
+      Fill from organisation
+    </Button>
   );
   const countryField = <One label="Country" value={country} options={plain(o.countries)} onChange={(v) => change({ country: v }, true)} />;
   const regulatorsField = <Many label="Regulators" items={regulatorItems} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
@@ -229,12 +228,13 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   ) : <p className="text-xs text-[#586472]">No frameworks available</p>;
   const lengthField = lengthOn && (
     <Field label="Length">
-      <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#b8c4c8] bg-[#fff] p-0.5" role="radiogroup" aria-label="Length">
+      {/* pressing the chosen one takes the choice back on an existing document (a new one is always written at a length): buttons that are pressed, not a radio group */}
+      <div className="grid grid-cols-3 gap-[2px] rounded-ds-control border border-ds-border-strong bg-ds-surface p-[2px]" role="group" aria-label="Length">
         {o.lengths.map((l) => {
           const on = length === l.value;
           return (
-            <button key={l.value} type="button" role="radio" aria-checked={on} title={l.detail} onClick={() => change({ length: on && session.kind !== 'new' ? '' : l.value }, true)}
-              className={`rounded-md px-2 py-1 text-xs font-semibold ${on ? 'bg-[#0f766e] text-[#fff]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>{l.label}</button>
+            <button key={l.value} type="button" aria-pressed={on} title={l.detail} onClick={() => change({ length: on && session.kind !== 'new' ? '' : l.value }, true)}
+              className={`min-h-[var(--ds-control-h-sm)] min-w-0 truncate rounded-[4px] px-[6px] text-ds-label font-[600] focus-visible:outline-none focus-visible:shadow-ds-ring ${on ? 'bg-ds-primary text-ds-on-primary' : 'text-ds-fg-body hover:bg-ds-surface-hover'}`}>{l.label}</button>
           );
         })}
       </div>
@@ -251,11 +251,11 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
           {countryField}
           {regulatorsField}
           {frameworksField}
-          {lengthField}
+          {lengthField && <div className="sm:col-span-2">{lengthField}</div>}
         </div>
-        <button type="button" onClick={() => setMore(true)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-xs hover:bg-[#eef6f3]">
-          <span className="font-semibold text-[#0f766e]">More options</span>
-          <span className="min-w-0 truncate text-[#586472]">{others || 'organisation, laws, subject areas, reader'}</span>
+        <button type="button" onClick={() => setMore(true)} className="flex min-h-[var(--ds-control-h-sm)] w-full items-center justify-between gap-2 rounded-ds-control px-1 text-left text-ds-label hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring">
+          <span className="font-[600] text-ds-primary-text">More options</span>
+          <span className="min-w-0 truncate text-ds-fg-muted">{others || 'organisation, laws, subject areas, reader'}</span>
         </button>
       </div>
     );
@@ -264,10 +264,10 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
   return (
     <div className="space-y-3">
       {doc && (
-        <p className="rounded-lg bg-[#f3f6f8] px-3 py-2 text-xs text-[#3f4b58]">
-          <span className="font-semibold text-[#26323d]">Document </span>
+        <p className="rounded-ds-control bg-ds-surface-hover px-3 py-2 text-ds-label text-ds-fg-body">
+          <span className="font-[600] text-ds-fg">Document </span>
           {joined(doc.classification, doc.review_cycle && `reviewed ${doc.review_cycle.toLowerCase()}`, doc.owner && `owner ${doc.owner}`, doc.department) || 'no details yet'}
-          {session.document_id && <> · <Link href={`/governance/documents/${session.document_id}?details=1`} className="font-semibold text-[#0f766e] underline" title="Change them in the document’s Details" aria-label="Change in Details">Change</Link></>}
+          {session.document_id && <> · <Link href={`/governance/documents/${session.document_id}?details=1`} className="font-[600] text-ds-primary-text underline" title="Change them in the document’s Details" aria-label="Change in Details">Change</Link></>}
         </p>
       )}
       {fillButton}
@@ -275,8 +275,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
       <Section title="Organisation" open={open(0)} summary={joined(text('entity_type'), country, count(list('other_countries').length, 'more country', 'more countries'))}>
         {/* the name is typed as the organisation writes it (a list pick would replace a shorter name with the first longer one) */}
         <Field label="Entity name" hint="Used exactly wherever the organisation is named, and checked for.">
-          <input value={text('entity_name')} onChange={(e) => change({ entity_name: e.target.value })} list={`entity-names-${session.id}`} aria-label="Entity name"
-            placeholder="Legal name" className={`${setupInputClass} py-1.5`} />
+          <TextInput value={text('entity_name')} onChange={(e) => change({ entity_name: e.target.value })} list={`entity-names-${session.id}`} aria-label="Entity name"
+            placeholder="Legal name" />
           <datalist id={`entity-names-${session.id}`}>{(o.entity_names ?? []).map((n) => <option key={n} value={n} />)}</datalist>
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -295,11 +295,11 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
         {frameworksField}
         {notes ? (
           <Field label="Other requirements">
-            <textarea value={text('regulatory_notes')} onChange={(e) => change({ regulatory_notes: e.target.value })} rows={2} autoFocus={!text('regulatory_notes')}
-              placeholder="Licence conditions, an inspection finding, a ruling…" aria-label="Other regulatory requirements" className={setupInputClass} />
+            <Textarea value={text('regulatory_notes')} onChange={(e) => change({ regulatory_notes: e.target.value })} rows={2} autoFocus={!text('regulatory_notes')}
+              placeholder="Licence conditions, an inspection finding, a ruling…" aria-label="Other regulatory requirements" />
           </Field>
         ) : (
-          <button type="button" onClick={() => setNotes(true)} className="text-xs font-semibold text-[#0f766e] hover:underline" title="Add a requirement in your own words">+ Other requirement</button>
+          <Button variant="link" size="sm" onClick={() => setNotes(true)} title="Add a requirement in your own words">+ Other requirement</Button>
         )}
       </Section>
 
@@ -316,7 +316,7 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
         )}
         {lengthField}
       </Section>
-      {compact && <button type="button" onClick={() => setMore(false)} className="text-xs font-semibold text-[#0f766e] hover:underline">Fewer options</button>}
+      {compact && <Button variant="link" size="sm" onClick={() => setMore(false)}>Fewer options</Button>}
     </div>
   );
 }
@@ -329,9 +329,9 @@ export function SetupCard({ session, onChanged }: { session: Session; onChanged:
   const label = ['policy', 'standard', 'procedure', 'guideline', 'charter'].includes(session.doc_type) ? session.doc_type : 'document';
   if (options.isError) return null;
   return (
-    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 text-left" aria-label={`Set up this ${label}`}>
+    <section className="rounded-ds-card border border-ds-border bg-ds-surface p-3 text-left" aria-label={`Set up this ${label}`}>
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-sm font-semibold text-[#1f2933]">
+        <p className="flex items-center gap-1 text-ds-body font-[600] text-ds-fg">
           Set up this {label}
           <InfoTip label="About the setup" text="Pick what you know, then tell Comply Agent below what to write. It asks about the rest." />
         </p>

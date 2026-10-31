@@ -6,9 +6,9 @@
  * was uploaded: it cannot be edited, so the changes are in the text, and saving makes a Word copy of it.
  */
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
 import WordView from '@/components/governance/WordView';
 import { InfoTip } from '@/components/ui/InfoTip';
+import { ErrorState, SkeletonRows } from '@/components/ui/ds';
 import { problemOfBlob, studioApi, type Session } from '@/lib/studio/api';
 import { fileNote } from './viewSwitch';
 
@@ -17,6 +17,7 @@ export default function FileView({ session, maySave }: { session: Session; maySa
   const [file, setFile] = useState<Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);                      // "Retry" reads the file again
   const revision = word ? session.revision : 0;                 // a PDF does not change with the text
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export default function FileView({ session, maySave }: { session: Session; maySa
       })
       .catch(async (e) => { const why = await problemOfBlob(e); if (!cancelled) setError(why); });
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
-  }, [session.id, word, revision]);
+  }, [session.id, word, revision, attempt]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#e8ecf0]">
@@ -41,13 +42,13 @@ export default function FileView({ session, maySave }: { session: Session; maySa
       </p>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {error ? (
-          <p role="alert" className="rounded-lg border border-[#f1b5b5] bg-[#fdf3f3] p-4 text-sm text-[#8a1c1c]">{error}</p>
+          <ErrorState title="Couldn't show the file" message={error} onRetry={() => setAttempt((n) => n + 1)} />
         ) : word ? (
           <WordView file={file} label={session.title} />
         ) : pdfUrl ? (
-          <iframe src={pdfUrl} title={`${session.title} (PDF)`} className="h-full min-h-[70vh] w-full rounded border border-[#d5dbe1] bg-white" />
+          <iframe src={pdfUrl} title={`${session.title} (PDF)`} className="h-full min-h-[70dvh] w-full rounded border border-[#d5dbe1] bg-white" />
         ) : (
-          <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" aria-label="Loading the PDF" /></div>
+          <SkeletonRows rows={4} columns={1} label="Loading the PDF" />
         )}
       </div>
     </div>

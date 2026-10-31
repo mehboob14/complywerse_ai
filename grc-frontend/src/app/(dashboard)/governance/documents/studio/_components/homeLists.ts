@@ -45,3 +45,11 @@ export function workAction(s: { document_id: number | null; may_save?: boolean }
   if (!s.document_id) return 'discard';
   return s.may_save === false ? 'remove' : null;
 }
+
+/** The most pieces of work the server lists (GET /studio/sessions: `.limit(100)`, newest first, no total). */
+export const WORK_LIMIT = 100;
+
+/** The count beside "Your work": "8", or "100+" when the list is cut at the server's limit, so it never claims a total it does not have. */
+export function workCount(shown: number): string {
+  return shown >= WORK_LIMIT ? `${WORK_LIMIT}+` : String(shown);
+}

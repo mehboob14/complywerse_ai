@@ -35,9 +35,11 @@ import {
   Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, WordLayout, blockRanges, findTextRange, headingLevels, marksKey, placeholderRanges,
   wordLayoutKey, type DocMark, type WordLayoutMeta,
 } from './editorExtensions';
+import { Button, IconButton, Select } from '@/components/ui/ds';
 import { lineRatio } from '@/lib/fontLines';
 import { oneTitle, sheetStyle } from './wordLook';
 import type { BlockLook, PageLook } from '@/lib/studio/api';
+import { LinkDialog } from '../../_LinkDialog';
 
 export type EditorMode = 'edit' | 'view' | 'source';
 
@@ -90,22 +92,14 @@ function load(editor: Editor, markdown: string, quiet: { current: boolean }): st
   }
 }
 
+/** A formatting button of the toolbar: the kit's icon button (32px, 44px on touch), named by its title, pressed while its format is on. A press does not
+ *  take focus from the text (onMouseDown), so the selection the format applies to stays. */
 function Btn({ title, active, disabled, onClick, children }: { title: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      className={`rounded p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-        active ? 'bg-[#d6f3ec] text-[#0f766e]' : 'text-[#3f4b58] hover:bg-[#eef1f4]'
-      }`}
-    >
+    <IconButton label={title} aria-pressed={active} disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={onClick}
+      className={active ? '!bg-ds-primary-soft !text-ds-primary-text' : ''}>
       {children}
-    </button>
+    </IconButton>
   );
 }
 
@@ -115,27 +109,17 @@ function Sep() {
 
 function TextBtn({ title, disabled, onClick, children }: { title: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      title={title}
-      disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      className="rounded px-2 py-1 text-[11px] font-medium text-[#3f4b58] hover:bg-[#eef1f4] disabled:cursor-not-allowed disabled:opacity-35"
-    >
-      {children}
-    </button>
+    <Button size="sm" variant="ghost" title={title} disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{children}</Button>
   );
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
-  const setLink = () => {
-    const previous = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Link address', previous || 'https://');
-    if (url === null) return;
-    if (!url.trim()) editor.chain().focus().extendMarkRange('link').unsetLink().run();
-    else editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
-  };
+  // the link address is asked in a dialog (the browser prompt it replaced had no name, no focus rules and no discard guard); the editor keeps its
+  // selection meanwhile, and the result is the prompt's: an address is linked to the selected text, "Remove link" takes the one under the cursor off
+  const [link, setLinkAsk] = useState<{ previous: string | null } | null>(null);
+  const setLink = () => setLinkAsk({ previous: (editor.getAttributes('link').href as string | undefined) ?? null });
+  const applyLink = (href: string) => { editor.chain().focus().extendMarkRange('link').setLink({ href }).run(); setLinkAsk(null); };
+  const removeLink = () => { editor.chain().focus().extendMarkRange('link').unsetLink().run(); setLinkAsk(null); };
   const level = ([1, 2, 3, 4, 5, 6] as const).find((l) => editor.isActive('heading', { level: l }));
   const inTable = editor.isActive('table');
   const inHeader = editor.isActive('tableHeader');
@@ -145,7 +129,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         <Btn title="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}><Undo2 className="h-4 w-4" /></Btn>
         <Btn title="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}><Redo2 className="h-4 w-4" /></Btn>
         <Sep />
-        <select
+        <Select
           aria-label="Paragraph style"
           value={level ? String(level) : 'p'}
           onChange={(e) => {
@@ -154,11 +138,11 @@ function Toolbar({ editor }: { editor: Editor }) {
             if (v === 'p') chain.setParagraph().run();
             else chain.setHeading({ level: Number(v) as 1 | 2 | 3 | 4 | 5 | 6 }).run();
           }}
-          className="rounded border border-[#d5dbe1] bg-white px-1.5 py-1 text-xs text-[#26323d]"
+          className="w-[9.5rem] shrink-0"
         >
           <option value="p">Paragraph</option>
           {[1, 2, 3, 4].map((l) => <option key={l} value={l}>{`Heading ${l}`}</option>)}
-        </select>
+        </Select>
         <Sep />
         <Btn title="Bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><BoldIcon className="h-4 w-4" /></Btn>
         <Btn title="Italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><ItalicIcon className="h-4 w-4" /></Btn>
@@ -186,6 +170,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           <TextBtn title="Delete the whole table" onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TextBtn>
         </div>
       )}
+      {link && <LinkDialog previous={link.previous} onApply={applyLink} onRemove={removeLink} onClose={() => setLinkAsk(null)} />}
     </div>
   );
 }
@@ -405,7 +390,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
             value={source}
             onChange={(e) => { setSource(e.target.value); onChange(cleanMarkdown(e.target.value)); }}
             spellCheck={false}
-            className="mx-auto block min-h-[60vh] w-full max-w-[860px] resize-y rounded-lg border border-[#c5ccd3] bg-white p-4 font-mono text-xs leading-relaxed text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"
+            className="mx-auto block min-h-[60dvh] w-full max-w-[860px] resize-y rounded-ds-control border border-ds-border-control bg-ds-surface p-[16px] font-mono text-ds-label leading-relaxed text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring"
           />
         ) : (
           <div className={`studio-sheet${titled ? ' studio-one-title' : ''}`} style={sheetStyle(word ? layout?.page : null, lineRatio) as React.CSSProperties}>
