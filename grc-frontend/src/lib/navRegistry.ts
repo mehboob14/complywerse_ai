@@ -37,7 +37,7 @@
 //   /governance/reviews/calendar             -                  (none)                                   Document Reviews              the same tab (its calendar view)         Document Reviews (an alias: it was "Review Calendar", now a view of the page)
 //   /governance/mappings                     -                  "Governance" + generic subtitle          Policy-Control Mappings       -                                        Policy-Control Mappings (bar: was "Governance")
 //   /governance/workflows                    -                  "Governance" + generic subtitle          Approval Workflows            -                                        Approval Workflows (bar: was "Governance")
-//   /governance/committees                   Committees         (none)                                   Board & Committee Management  back "Committees"                        Committees
+//   /governance/committees                   Committees         (none)                                   Committees (was Board & Committee Management)  back "Committees"                        Committees
 //   /governance/committees/:id               -                  (none)                                   the committee's name          back "Committees"                        Committee
 //   /governance/committees/meetings/:id      -                  (none)                                   the meeting's title           back "{committee}"                       Meeting
 //   /governance/committees/actions           -                  (none)                                   Oversight Actions             back "Committees"                        Oversight Actions
@@ -50,7 +50,7 @@
 //   /governance/regulatory-feeds             Regulatory Feeds   (none)                                   Regulatory Feeds              -                                        Regulatory Feeds
 //   /attest/:token                           -                  (none: outside the shell)                the campaign's name           -                                        Acknowledge
 // Page headings that still say another name (page files, left alone here; each page group aligns its heading to routeFor(pathname).label when it moves to the kit):
-// Document library (Documents), Board & Committee Management (Committees), Key Risk Indicators (KRIs), Regulatory changes (case), Pending Approvals (two sections of Document Reviews), and the back links "Reviews", "Campaigns", "Attestations", "Studio".
+// Document library (Documents), Key Risk Indicators (KRIs), Regulatory changes (case), Pending Approvals (two sections of Document Reviews), and the back links "Reviews", "Campaigns", "Attestations", "Studio".
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry, type NavItem } from '../components/layout/navAccess.ts';
 import { cleanPath, underPath } from '../components/layout/navActive.ts';
 
@@ -131,7 +131,7 @@ const OF_LEAF: Record<string, Extra> = {
   '/governance/kpi-report': { ownHeading: true },
   [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1 }, keywords: ['Document library'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
-  [COMMITTEES]: { keywords: ['Board & Committee Management'] },
+  [COMMITTEES]: { keywords: ['Board & Committee Management'], ownHeading: true },
   '/erm/kris': { keywords: ['Key Risk Indicators'] },
   [PROJECTS]: { subtitle: 'Track and manage information security projects across the organization', keywords: ['IS Projects'], ownHeading: true },
 };
@@ -164,9 +164,9 @@ const pages: RouteEntry[] = [
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),
   gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab' }),
   gov('/governance/workflows', 'Approval Workflows', { parent: DOCS, hidden: 'opens only from a document\'s menu ("Older approval requests") where the document lifecycle is off' }),
-  gov(`${COMMITTEES}/:id`, 'Committee', { parent: COMMITTEES, hidden: 'opens from the Committees list' }),
-  gov(`${COMMITTEES}/meetings/:id`, 'Meeting', { parent: COMMITTEES, hidden: 'opens from a committee' }),
-  gov(`${COMMITTEES}/actions`, 'Oversight Actions', { parent: COMMITTEES, hidden: 'opens from the Committees page and the Overview\'s overdue-actions counter' }),
+  gov(`${COMMITTEES}/:id`, 'Committee', { parent: COMMITTEES, hidden: 'opens from the Committees list', ownHeading: true }),
+  gov(`${COMMITTEES}/meetings/:id`, 'Meeting', { parent: COMMITTEES, hidden: 'opens from a committee', ownHeading: true }),
+  gov(`${COMMITTEES}/actions`, 'Oversight Actions', { parent: COMMITTEES, hidden: 'opens from the Committees page and the Overview\'s overdue-actions counter', ownHeading: true }),
   gov(`${REGULATORY}/:id`, 'Regulatory change', { parent: REGULATORY, hidden: 'opens from the Regulatory Changes list' }),
   gov(`${PROJECTS}/dashboard`, 'Overview', { title: 'Projects Overview', parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its Overview tab', ownHeading: true }),
   gov(`${PROJECTS}/my-projects`, 'My Projects', { parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its My Projects tab', ownHeading: true }),

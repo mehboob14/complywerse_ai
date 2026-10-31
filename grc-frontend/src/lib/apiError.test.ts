@@ -52,6 +52,15 @@ test('safeDetail keeps a plain sentence exactly as it is', () => {
   assert.equal(safeDetail(42 as unknown as string), '');
 });
 
+test('safeDetail never lets an AI vendor or a model name through: the UI says "AI"', () => {
+  assert.equal(safeDetail('OpenAI API key not configured'), 'AI API key not configured');
+  assert.equal(safeDetail('Model gpt-6-luna timed out'), 'Model AI timed out');
+  assert.equal(safeDetail('Anthropic returned 529; claude-fable-5-1 is overloaded'), 'AI returned 529; AI is overloaded');
+  assert.equal(safeDetail('Open AI and ChatGPT are unavailable'), 'AI and AI are unavailable');
+  assert.equal(safeDetail('The paid plan is not an AIM issue'), 'The paid plan is not an AIM issue');          // not a name
+  assert.equal(safeDetail('Open items remain'), 'Open items remain');
+});
+
 test('safeDetail strips markup, so a proxy error page reads as words', () => {
   assert.equal(safeDetail('<html><head><title>502</title></head><body><h1>Bad Gateway</h1><p>nginx</p></body></html>'), '502 Bad Gateway nginx');
   assert.equal(safeDetail('Saved <b>nothing</b>.<script>alert(1)</script> Try again'), 'Saved nothing . Try again');
