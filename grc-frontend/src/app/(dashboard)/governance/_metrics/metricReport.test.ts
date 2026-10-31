@@ -44,7 +44,7 @@ test('permissions are the same: erm:kris:create or erm:kris:edit changes anythin
   assert.match(page, /const canEdit = hasPermission\('erm:kris:create'\) \|\| hasPermission\('erm:kris:edit'\);/);
   assert.deepEqual(Array.from(page.matchAll(/hasPermission\('([^']+)'\)/g), (m) => m[1]), ['erm:kris:create', 'erm:kris:edit']);
   assert.match(page, /\.\.\.\(canEdit \? \[\{/, 'the Actions column exists only for someone who may change');
-  assert.match(page, /actions=\{canEdit \? <Button variant="primary"/);
+  assert.match(page, /actions=\{canEdit \? <Button ref=\{newButton\} variant="primary"/);
 });
 
 test('no native dialog, no action hidden until hover, no hand-rolled overlay, no developer text on screen', () => {
@@ -57,6 +57,12 @@ test('no native dialog, no action hidden until hover, no hand-rolled overlay, no
   assert.match(page, /const \{ confirm, confirmDialog \} = useConfirm\(\);/);
   assert.match(page, /tone: 'danger'/);
   assert.match(page, /\{confirmDialog\}/);
+});
+
+test('after a delete focus goes back to the start of the list (the row it was on is gone), unless the person has moved on', () => {
+  assert.match(page, /const here = document\.activeElement;/);
+  assert.match(page, /if \(!here \|\| here === document\.body \|\| here\.closest\('table, \[role="list"\]'\)\) \(searchField\.current \?\? newButton\.current\)\?\.focus\(\);/);
+  assert.match(page, /ref=\{searchField\}/);
 });
 
 test('the drawer and the dialog are the kit\'s and guard typed input', () => {

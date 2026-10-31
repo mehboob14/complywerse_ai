@@ -8,7 +8,7 @@
 // size is its own `summary.total`), StatusPill from the `rag` registry, RightSlidePanel and AnimatedModal with `dirty` (MetricForm, MeasureDialog), and every
 // request through useReportedMutation / useConfirm: it is said only after the server answers, the server's words are shown when it refuses, and Retry is offered
 // where repeating is safe. Only the --ds tokens and arbitrary values (the platform CSS repaints the named utilities inside the shell: ds/kitRules.ts).
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Hand, Pencil, PencilLine, Plus, Search, Trash2, Zap } from 'lucide-react';
 import { ermApi } from '@/lib/api';
@@ -109,8 +109,10 @@ export default function MetricReport({ kind }: { kind: Kind }) {
   const [pageSize, setPageSize] = useState<number>(25);
   const [editing, setEditing] = useState<Metric | null | undefined>(undefined);        // undefined: the drawer is shut; null: a new one
   const [measuring, setMeasuring] = useState<Metric | null>(null);
-  const [showCategories, setShowCategories] = useState(true);
+  const [showCategories, setShowCategories] = useState(false);                      // the summary by category is one click away: the list is what the page is for (on a phone it is a card per category)
   const { confirm, confirmDialog } = useConfirm();
+  const searchField = useRef<HTMLInputElement>(null);
+  const newButton = useRef<HTMLButtonElement | HTMLAnchorElement>(null);
 
   const report = useQuery({
     queryKey: key,
@@ -148,6 +150,12 @@ export default function MetricReport({ kind }: { kind: Kind }) {
   const remove = useReportedMutation({
     mutationFn: async (m: Metric) => (await ermApi.kris.delete(m.id)).data,
     success: `${meta.noun} deleted`, failure: `Couldn't delete the ${meta.noun}`, invalidate: [key],
+    // the row the person was on is gone, and focus with it: put it back where the list starts (the search box, or "New" when the list is now empty),
+    // unless they have already moved on to something else while the server answered
+    onSuccess: () => {
+      const here = document.activeElement;
+      if (!here || here === document.body || here.closest('table, [role="list"]')) (searchField.current ?? newButton.current)?.focus();
+    },
   });
   const askDelete = async (m: Metric) => {
     const yes = await confirm({
@@ -172,6 +180,15 @@ export default function MetricReport({ kind }: { kind: Kind }) {
   const readOnly = !permsLoading && !canEdit && !refused;
   const clearFilters = () => { setQ(''); setStatus('all'); setPage(1); };
 
+  /** what can be done to one metric: always visible (a "⋯" button), never behind a hover; a live-fed metric is not measured by hand */
+  const rowMenu = (m: Metric) => (
+    <Menu iconOnly label={`Actions for ${truncate(m.name, 60).text}`} items={[
+      { key: 'measure', label: 'Record measurement', icon: PencilLine, hidden: m.is_live, onSelect: () => setMeasuring(m) },
+      { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => setEditing(m) },
+      { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => { void askDelete(m); } },
+    ]} />
+  );
+
   const columns: RegisterColumn<Metric>[] = [
     { key: 'name', header: meta.noun, isRowHeader: true, sortable: true, cell: (m) => <span className="line-clamp-2 break-words font-[500] text-ds-fg" title={m.name}>{m.name}</span> },
     { key: 'status', header: 'Status', width: 'w-[112px]', sortable: true, card: 'meta', cell: (m) => <StatusPill size="sm" {...statusPill(rag, ragOf(m.current_status))} /> },
@@ -190,16 +207,7 @@ export default function MetricReport({ kind }: { kind: Kind }) {
     },
     { key: 'source', header: 'Source', width: 'w-[112px]', priority: 3, card: 'meta', cell: (m) => <SourceCell m={m} /> },
     { key: 'due', header: 'Next due', width: 'w-[136px]', priority: 3, sortable: true, card: 'meta', cell: (m) => <DueCell m={m} /> },
-    ...(canEdit ? [{
-      key: 'actions', header: 'Actions', width: 'w-[72px]', align: 'right' as const, card: 'meta' as const,
-      cell: (m: Metric) => (
-        <Menu iconOnly label={`Actions for ${truncate(m.name, 60).text}`} items={[
-          { key: 'measure', label: 'Record measurement', icon: PencilLine, hidden: m.is_live, onSelect: () => setMeasuring(m) },
-          { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => setEditing(m) },
-          { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => { void askDelete(m); } },
-        ]} />
-      ),
-    }] : []),
+    ...(canEdit ? [{ key: 'actions', header: 'Actions', width: 'w-[72px]', align: 'right' as const, cell: rowMenu }] : []),
   ];
 
   const filters: { value: StatusFilter; label: string }[] = summary ? [
@@ -221,7 +229,7 @@ export default function MetricReport({ kind }: { kind: Kind }) {
           <InfoTip text={`Only people who may create or edit ${meta.plural} can change them.`} label={`Why ${meta.plural} are view only`} />
         </ReadOnlyNote>
       ) : undefined}
-      actions={canEdit ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing(null)}>New {meta.noun}</Button> : undefined}
+      actions={canEdit ? <Button ref={newButton} variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing(null)}>New {meta.noun}</Button> : undefined}
     />
   );
 
@@ -246,7 +254,7 @@ export default function MetricReport({ kind }: { kind: Kind }) {
   const empty = metrics.length === 0
     ? (
       <EmptyState bare kind="firstUse" title={`No ${meta.plural} yet`}
-        description={canEdit ? 'Create one from a template, or build your own: manual or live-fed.' : `No ${meta.plural} have been set up yet.`}
+        description={canEdit ? 'Start from a template, or build your own.' : `No ${meta.plural} have been set up yet.`}
         action={canEdit ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing(null)}>New {meta.noun}</Button> : undefined} />
     ) : (
       <EmptyState bare kind="noMatches" title={`No ${meta.plural} match`} description="Try another search or status." onClearFilters={clearFilters} />
@@ -290,7 +298,7 @@ export default function MetricReport({ kind }: { kind: Kind }) {
       {!loading && metrics.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
           <TextInput
-            className="w-full sm:w-[280px]" aria-label={`Search ${meta.plural}`} placeholder={`Search ${meta.plural}`} maxLength={100} leftAdornment={<Search aria-hidden />}
+            ref={searchField} className="w-full sm:w-[280px]" aria-label={`Search ${meta.plural}`} placeholder={`Search ${meta.plural}`} maxLength={100} leftAdornment={<Search aria-hidden />}
             value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }}
           />
           <SegmentedControl label={`Show ${meta.plural} by status`} name="metric-status" options={filters} value={status} onChange={(v: StatusFilter) => { setStatus(v); setPage(1); }} />
@@ -307,7 +315,12 @@ export default function MetricReport({ kind }: { kind: Kind }) {
         onSortChange={(next) => { setSort(next); setPage(1); }}
         loading={loading}
         empty={empty}
-        cardTitle={(m) => <span className="line-clamp-3" title={m.name}>{m.name}</span>}
+        cardTitle={(m) => (
+          <div className="flex items-start justify-between gap-[8px]">
+            <span className="line-clamp-3 min-w-0" title={m.name}>{m.name}</span>
+            {canEdit && <span className="-mt-[6px] -mr-[6px] shrink-0">{rowMenu(m)}</span>}
+          </div>
+        )}
         footer={matches.length > 0 ? (
           <Pager page={range.page} pageSize={pageSize} total={matches.length} noun={meta.plural} pageSizes={PAGE_SIZES}
             onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
