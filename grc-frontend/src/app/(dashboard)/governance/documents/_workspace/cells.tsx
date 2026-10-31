@@ -1,35 +1,39 @@
 'use client';
 
 /**
- * The cells of the library table, each the CONTENT of one <td> (the table owns the <td>: its background, sticky edge and height).
- * Every text has an explicit size and colour, and no cell leans on the platform's bare <p>/<td> defaults (11.5px, dark) or on
- * slate-* / text-white, which the dashboard CSS repaints (PITFALLS: grc-frontend UI). The second line under a value is shown in the
- * comfortable density only; the compact one is a single line per cell.
+ * The cells of the library's register, each the CONTENT of one <td> (the table owns the <td>: its background, sticky edge and height). Written on the design-system
+ * tokens (only --ds colours, the 12/13px type, 4px-grid values): the register is on the kit, so a cell reads the same in the page and in a card. A status is a
+ * StatusPill from the document registry, a date goes through lib/format.ts (review dates are days: `calendar`), a person is a PersonChip. The second line under a value
+ * is shown in the comfortable density only; the compact one is a single line per cell.
+ * A row has no hover-only control: the title is the link that opens the document, and the row's menu (Open, Edit, Move to…, Download, Archive, Restore) is always there.
  */
 import Link from 'next/link';
-import type { MouseEvent } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
 import {
-  AlertCircle, Archive, ArchiveRestore, ChevronDown, ChevronRight, Clock3, Download, ExternalLink, Eye, File as FileIcon, FileSpreadsheet, FileText,
-  FileType, FolderInput, Pencil, Presentation, ShieldAlert, type LucideIcon,
+  AlertCircle, Archive, ArchiveRestore, ChevronDown, ChevronRight, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, FileType, FolderInput, Pencil,
+  Presentation, type LucideIcon,
 } from 'lucide-react';
+import { Menu, PersonChip, StatusPill, type MenuItem } from '@/components/ui/ds';
+import { EMPTY, formatDateTime, truncate } from '@/lib/format';
 import { parseUtc } from '@/lib/serverTime';
+import { TONE, documentStatus, statusPill } from '@/lib/status';
 import { AttestationRing, ReviewDate } from './atoms';
-import { InitialsAvatar, LifecycleDots, TypePill, inForceNote, verLabel, type GovDoc } from './lib';
+import { inForceNote, verLabel, type GovDoc } from './lib';
 import { LifecycleHover } from './LifecycleHover';
-import { RowActionsMenu } from './RowActionsMenu';
 import { GAP, STEP } from './Versions';
 import { fileKind, relativeTime, type FileKind } from './libraryFormat';
-import { STAGE_ORDER, reviewable, statusLabel } from './libraryModel';
+import { reviewable, typeLabel } from './libraryModel';
 import type { Open } from './libraryTableLogic';
 
 /** A plain left click; a click with a modifier (or the middle button) belongs to the browser: a new tab. */
 const plainClick = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
+const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 /** "—" for a value that is not there, said in words to a screen reader. */
 function Dash({ label }: { label: string }) {
   return (
-    <span className="text-[13px] text-[#586472]" title={label}>
-      <span aria-hidden>—</span>
+    <span className="text-ds-body text-ds-fg-muted" title={label}>
+      <span aria-hidden>{EMPTY}</span>
       <span className="sr-only">{label}</span>
     </span>
   );
@@ -37,32 +41,106 @@ function Dash({ label }: { label: string }) {
 
 // ─── Document ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const TILES: Record<FileKind | 'none', { Icon: LucideIcon; tone: string; label: string }> = {
-  pdf: { Icon: FileText, tone: 'bg-[#fff1f2] text-[#be123c]', label: 'PDF file' },
-  word: { Icon: FileType, tone: 'bg-[#eff6ff] text-[#1d4ed8]', label: 'Word file' },
-  excel: { Icon: FileSpreadsheet, tone: 'bg-[#ecfdf5] text-[#047857]', label: 'Excel file' },
-  powerpoint: { Icon: Presentation, tone: 'bg-[#fffbeb] text-[#b45309]', label: 'PowerPoint file' },
-  text: { Icon: FileText, tone: 'bg-[#f1f5f9] text-[#475569]', label: 'Text file' },
-  other: { Icon: FileIcon, tone: 'bg-[#f1f5f9] text-[#475569]', label: 'File' },
-  none: { Icon: FileText, tone: 'bg-[#f0fdfa] text-[#0f766e]', label: 'Written in the platform' },
+const TILES: Record<FileKind | 'none', { Icon: LucideIcon; tone: keyof typeof TONE | 'platform'; label: string }> = {
+  pdf: { Icon: FileText, tone: 'danger', label: 'PDF file' },
+  word: { Icon: FileType, tone: 'progress', label: 'Word file' },
+  excel: { Icon: FileSpreadsheet, tone: 'success', label: 'Excel file' },
+  powerpoint: { Icon: Presentation, tone: 'warning', label: 'PowerPoint file' },
+  text: { Icon: FileText, tone: 'neutral', label: 'Text file' },
+  other: { Icon: FileIcon, tone: 'neutral', label: 'File' },
+  none: { Icon: FileText, tone: 'platform', label: 'Written in the platform' },
 };
+const tileStyle = (tone: keyof typeof TONE | 'platform'): CSSProperties =>
+  tone === 'platform' ? { background: 'var(--ds-primary-soft)', color: 'var(--ds-primary-text)' } : { background: TONE[tone].tint, color: TONE[tone].text };
 
 /** The kind of file the document carries, as a tile; a document written on the platform has none and gets the teal one. */
-function FileTile({ doc, compact }: { doc: GovDoc; compact: boolean }) {
+export function FileTile({ doc, compact }: { doc: GovDoc; compact: boolean }) {
   const { Icon, tone, label } = TILES[fileKind(doc) ?? 'none'];
   return (
-    <span role="img" aria-label={label} title={label} className={`inline-flex shrink-0 items-center justify-center rounded-lg ${tone} ${compact ? 'h-6 w-6' : 'h-8 w-8'}`}>
-      <Icon className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} strokeWidth={1.75} aria-hidden />
+    <span role="img" aria-label={label} title={label} style={tileStyle(tone)} className={`inline-flex shrink-0 items-center justify-center rounded-ds-card ${compact ? 'h-[24px] w-[24px]' : 'h-[32px] w-[32px]'}`}>
+      <Icon className="h-[16px] w-[16px]" strokeWidth={1.75} aria-hidden />
     </span>
   );
 }
 
+/** The 24px arrow that opens a document's versions and the documents under it (44px on a touch screen). */
+export function ToggleArrow({ open, label, onToggle }: { open: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      aria-expanded={open}
+      aria-label={label}
+      title={label}
+      className={`inline-grid h-[24px] w-[24px] shrink-0 place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg [@media(pointer:coarse)]:h-[44px] [@media(pointer:coarse)]:w-[44px] ${FOCUS}`}
+    >
+      {open ? <ChevronDown className="h-[16px] w-[16px]" strokeWidth={1.75} aria-hidden /> : <ChevronRight className="h-[16px] w-[16px]" strokeWidth={1.75} aria-hidden />}
+    </button>
+  );
+}
+
+export const toggleLabel = (doc: { title: string }, open: Open, childCount: number): string =>
+  open === 'docs' ? `Hide the documents under ${doc.title}` : `${open ? 'Hide' : 'Show'} the versions of ${doc.title}${childCount ? ' and the documents under it' : ''}`;
+
+/** The title as the link that opens the document (a plain click opens it here, a modified one in a new tab), with the version, the code and the small tags under it. */
+export function TitleBlock({ doc, match, childCount, open, parentTitle, compact, showVersion = false, onOpenDoc }: {
+  doc: GovDoc;
+  match: boolean;
+  childCount: number;
+  open: Open;
+  parentTitle?: string;
+  compact: boolean;
+  showVersion?: boolean;
+  onOpenDoc: (id: number) => void;
+}) {
+  const archived = doc.status === 'archived';
+  // the clamp is on the wrapper and the link stays inline, so only the words are the link: a click beside a short title opens the details panel
+  const title = (
+    <div dir="auto" className={`relative min-w-0 text-ds-body [overflow-wrap:anywhere] ${compact ? 'truncate' : 'line-clamp-2'}`}>
+      <Link
+        href={`/governance/documents/${doc.id}`}
+        prefetch={false}
+        title={doc.title}
+        onClick={(e) => {
+          e.stopPropagation();                                 // the row behind it opens the details panel
+          if (plainClick(e)) { e.preventDefault(); onOpenDoc(doc.id); }
+        }}
+        className={`rounded-ds-control hover:text-ds-primary-text hover:underline focus-visible:bg-ds-primary-soft focus-visible:text-ds-primary-text focus-visible:underline focus-visible:outline-none ${match ? 'font-[600] text-ds-fg' : 'text-ds-fg-muted'}`}
+      >
+        {doc.title}
+        {parentTitle && <span className="sr-only">, under {parentTitle}</span>}
+      </Link>
+    </div>
+  );
+  const tags = (
+    <>
+      {archived && <span className="inline-flex items-center rounded-ds-control border border-ds-border-strong bg-ds-surface-hover px-[6px] text-ds-label text-ds-fg-muted">Archived</span>}
+      {!open && childCount > 0 && <span className="whitespace-nowrap text-ds-label text-ds-fg-muted" title={`${childCount} ${childCount === 1 ? 'document' : 'documents'} under it`}>+{childCount}</span>}
+      {!match && <span className="whitespace-nowrap text-ds-label text-ds-fg-muted" title="Shown because a document under it matches">Parent</span>}
+    </>
+  );
+  return compact ? (
+    <div className="flex min-w-0 items-center gap-2">
+      {title}
+      <span className="flex shrink-0 items-center gap-2">{tags}</span>
+    </div>
+  ) : (
+    <>
+      {title}
+      <div className="mt-[2px] flex flex-wrap items-center gap-x-2 gap-y-[2px] empty:hidden">
+        {doc.document_code && <span className="font-mono text-ds-label text-ds-fg-muted">{doc.document_code}</span>}
+        {showVersion && doc.current_version && <span className="text-ds-label tabular-nums text-ds-fg-muted" title={inForceNote(doc) ?? undefined}>v{doc.current_version.replace(/^v/i, '')}</span>}
+        {tags}
+      </div>
+    </>
+  );
+}
+
 /**
- * The first column's content (the tick box is the table's, beside it): the arrow that opens the versions and the documents under
- * this one, the file tile, and the title, a real link (a plain click opens the document here, a modified one in a new tab) over the
- * document's code. A row shown only for the documents under it ("Parent of a match") is greyed.
+ * The first column's content (the tick box is the table's, in its own column): the arrow that opens the versions and the documents under this one, the file tile, and
+ * the title block. A row shown only for the documents under it ("Parent of a match") is greyed.
  */
-export function DocumentCell({ doc, depth, match, childCount, open, parentTitle, compact, showVersion = false, onToggle, onOpenDoc }: {
+export function DocumentCell({ doc, depth, match, childCount, open, parentTitle, compact, showVersion = false, onToggle, onOpenDoc, step = STEP }: {
   doc: GovDoc;
   depth: number;
   /** false: shown only because a document under it matches */
@@ -76,65 +154,15 @@ export function DocumentCell({ doc, depth, match, childCount, open, parentTitle,
   showVersion?: boolean;
   onToggle: () => void;
   onOpenDoc: (id: number) => void;
+  /** px of indent for each level */
+  step?: number;
 }) {
-  const toggleLabel = open === 'docs' ? `Hide the documents under ${doc.title}`
-    : `${open ? 'Hide' : 'Show'} the versions of ${doc.title}${childCount ? ' and the documents under it' : ''}`;
-  const archived = doc.status === 'archived';
-  // the clamp is on the wrapper and the link stays inline, so only the words are the link: a click beside a short title opens the drawer
-  const title = (
-    <div className={`relative min-w-0 text-[13px] leading-[1.35] [overflow-wrap:anywhere] ${compact ? 'truncate' : 'line-clamp-2'}`}>
-      <Link
-        href={`/governance/documents/${doc.id}`}
-        prefetch={false}
-        title={doc.title}
-        onClick={(e) => {
-          e.stopPropagation();                                 // the row behind it opens the drawer
-          if (plainClick(e)) { e.preventDefault(); onOpenDoc(doc.id); }
-        }}
-        // the wrapper clips (line-clamp), so the focus mark is a fill inside the words, not a ring around them
-        className={`rounded-sm hover:text-[#0f766e] hover:underline focus-visible:bg-[#ccfbf1] focus-visible:text-[#115e59] focus-visible:underline focus-visible:outline-none ${match ? 'font-medium text-[#1f2933]' : 'text-[#586472]'}`}
-      >
-        {doc.title}
-        {parentTitle && <span className="sr-only">, under {parentTitle}</span>}
-      </Link>
-    </div>
-  );
-  const tags = (
-    <>
-      {archived && <span className="inline-flex items-center rounded border border-[#c3ccd5] bg-[#f3f6f8] px-1.5 text-[11px] font-medium leading-4 text-[#586472]">Archived</span>}
-      {!open && childCount > 0 && <span className="whitespace-nowrap text-[11px] text-[#586472]" title={`${childCount} ${childCount === 1 ? 'document' : 'documents'} under it`}>+{childCount}</span>}
-      {!match && <span className="whitespace-nowrap text-[11px] text-[#586472]" title="Shown because a document under it matches">Parent</span>}
-    </>
-  );
   return (
-    <div className="flex min-w-0 flex-1 items-center" style={{ paddingLeft: depth * STEP, gap: GAP }}>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        aria-expanded={open != null}
-        aria-label={toggleLabel}
-        title={toggleLabel}
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#586472] hover:bg-[#eef2f6] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
-      >
-        {open ? <ChevronDown className="h-4 w-4" strokeWidth={1.75} aria-hidden /> : <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
-      </button>
+    <div className="flex min-w-0 flex-1 items-center" style={{ paddingLeft: depth * step, gap: GAP }}>
+      <ToggleArrow open={open != null} label={toggleLabel(doc, open, childCount)} onToggle={onToggle} />
       <FileTile doc={doc} compact={compact} />
       <div className="min-w-0 flex-1 pl-1">
-        {compact ? (
-          <div className="flex min-w-0 items-center gap-2">
-            {title}
-            <span className="flex shrink-0 items-center gap-2">{tags}</span>
-          </div>
-        ) : (
-          <>
-            {title}
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 empty:hidden">
-              {doc.document_code && <span className="font-mono text-[11px] text-[#586472]">{doc.document_code}</span>}
-              {showVersion && doc.current_version && <span className="text-[11px] tabular-nums text-[#586472]" title={inForceNote(doc) ?? undefined}>v{doc.current_version.replace(/^v/i, '')}</span>}
-              {tags}
-            </div>
-          </>
-        )}
+        <TitleBlock doc={doc} match={match} childCount={childCount} open={open} parentTitle={parentTitle} compact={compact} showVersion={showVersion} onOpenDoc={onOpenDoc} />
       </div>
     </div>
   );
@@ -143,23 +171,14 @@ export function DocumentCell({ doc, depth, match, childCount, open, parentTitle,
 // ─── Type, lifecycle ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function TypeCell({ doc }: { doc: GovDoc }) {
-  return <TypePill docType={doc.doc_type} />;
+  return <span className="block truncate text-ds-body text-ds-fg-body" title={typeLabel(doc.doc_type)}>{typeLabel(doc.doc_type)}</span>;
 }
 
-/** The five workflow statuses show their dots; expired, archived and an applied exception are outside the workflow: a neutral pill. */
+/** The status as its pill (the library's own words are registered in lib/status.ts); where the card of the document's life cycle opens on hover or focus. */
 export function LifecycleCell({ doc }: { doc: GovDoc }) {
-  const inWorkflow = (STAGE_ORDER as readonly string[]).includes(doc.status);
-  const Icon = doc.status === 'archived' ? Archive : doc.status === 'expired' ? Clock3 : ShieldAlert;
   return (
     <LifecycleHover doc={doc} focusable>
-      {inWorkflow ? (
-        <LifecycleDots status={doc.status} />
-      ) : (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] px-2.5 py-0.5 text-[12px] font-medium text-[#586472]">
-          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-          {statusLabel(doc.status)}
-        </span>
-      )}
+      <StatusPill size="sm" {...statusPill(documentStatus, doc.status)} />
     </LifecycleHover>
   );
 }
@@ -171,28 +190,26 @@ export function OwnerCell({ doc, department, compact }: { doc: GovDoc; departmen
   const name = doc.owner_name?.trim() || null;
   const gap = !name && reviewable(doc);
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      {gap ? <AlertCircle className="h-4 w-4 shrink-0 text-[#b45309]" strokeWidth={1.75} aria-hidden /> : <InitialsAvatar name={name} size={compact ? 'sm' : 'md'} />}
-      <div className="min-w-0 leading-tight">
-        {name ? (
-          <span className="block truncate text-[13px] text-[#1f2933]" title={name}>{name}</span>
-        ) : (
-          <span className={`block truncate text-[13px] ${gap ? 'font-medium text-[#b45309]' : 'text-[#586472]'}`} title={gap ? 'In force with no owner' : 'No owner'}>Unassigned</span>
-        )}
-        {!compact && department && <span className="block truncate text-[11px] text-[#586472]" title={department}>{department}</span>}
-      </div>
+    <div className="min-w-0 leading-tight">
+      {name ? <PersonChip name={name} /> : gap ? (
+        <span className="inline-flex items-center gap-2 text-ds-body font-[600] text-ds-warning" title="In force with no owner">
+          <AlertCircle className="h-[16px] w-[16px] shrink-0" strokeWidth={1.75} aria-hidden />
+          Unassigned
+        </span>
+      ) : <PersonChip name={null} />}
+      {!compact && department && <span className="mt-[2px] block truncate text-ds-label text-ds-fg-muted" title={department}>{department}</span>}
     </div>
   );
 }
 
 export function DepartmentCell({ name }: { name?: string }) {
-  return name ? <span className="block truncate text-[13px] text-[#26323d]" title={name}>{name}</span> : <Dash label="No department" />;
+  return name ? <span className="block truncate text-ds-body text-ds-fg-body" title={name}>{name}</span> : <Dash label="No department" />;
 }
 
 // ─── Attestation, review, version, updated ──────────────────────────────────────────────────────────────────────────────
 
 export function AttestationCell({ pct, count, compact }: { pct: number | null | undefined; count?: { done: number; total: number }; compact: boolean }) {
-  return <AttestationRing pct={pct} done={count?.done} total={count?.total} size={compact ? 22 : 28} showCounts={!compact} />;
+  return <AttestationRing pct={pct} done={count?.done} total={count?.total} size={compact ? 24 : 28} showCounts={!compact} />;
 }
 
 export function ReviewCell({ doc, compact }: { doc: GovDoc; compact: boolean }) {
@@ -204,39 +221,26 @@ export function VersionCell({ doc, compact }: { doc: GovDoc; compact: boolean })
   const note = inForceNote(doc);
   return (
     <div className="leading-tight">
-      <span className="block whitespace-nowrap text-[13px] font-medium tabular-nums text-[#1f2933]">{verLabel(doc.current_version)}</span>
-      {!compact && note && <span className="block whitespace-nowrap text-[11px] text-[#586472]">{note}</span>}
+      <span className="block whitespace-nowrap text-ds-body font-[600] tabular-nums text-ds-fg">{verLabel(doc.current_version)}</span>
+      {!compact && note && <span className="block whitespace-nowrap text-ds-label text-ds-fg-muted">{note}</span>}
     </div>
   );
 }
 
-/** How long ago; the full local date and time is its tooltip. */
+/** How long ago; the full date and time is its tooltip. */
 export function UpdatedCell({ value }: { value: string | null | undefined }) {
   const at = parseUtc(value);
   const ago = relativeTime(value);
   if (!at || !ago) return <Dash label="No update time" />;
-  const full = at.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  return <time dateTime={at.toISOString()} title={full} className="whitespace-nowrap text-[12px] text-[#586472]">{ago}</time>;
+  return <time dateTime={at.toISOString()} title={formatDateTime(value)} className="whitespace-nowrap text-ds-body text-ds-fg-muted">{ago}</time>;
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** An icon button that shows with the row's hover or focus (the row is the `group/row`) and is always a real, labelled button. */
-function HoverButton({ label, icon: Icon, onClick }: { label: string; icon: LucideIcon; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      aria-label={label}
-      title={label}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#586472] opacity-0 hover:bg-[#eef2f6] hover:text-[#1f2933] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] group-hover/row:opacity-100 group-focus-within/row:opacity-100"
-    >
-      <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-    </button>
-  );
-}
+/** Where the row's menu button is, for the Move to… popover that opens beside it: the menu has just given focus back to its button. */
+const anchorOfFocus = (): DOMRect | undefined => (document.activeElement instanceof HTMLElement ? document.activeElement.getBoundingClientRect() : undefined);
 
-/** Open and Download as buttons that appear with the row's hover, and the row's menu (Open, Edit, Move to…, Download, Archive, Restore). */
+/** The row's menu: Open, Edit, Move to…, Download, Archive and Restore for the person who may. Always drawn (no hover to find it), reachable by Tab, Enter and the arrow keys. */
 export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArchive, onRestore, canMove = false, onMove }: {
   doc: GovDoc;
   /** what the menu offers beside Open and Download (libraryTableLogic.rowRights) */
@@ -250,20 +254,13 @@ export function ActionsCell({ doc, rights, onOpenDoc, onEdit, onDownload, onArch
   canMove?: boolean;
   onMove?: (doc: GovDoc, anchor?: DOMRect) => void;
 }) {
-  return (
-    <div className="flex items-center justify-end gap-0.5">
-      <HoverButton label={`Open ${doc.title}`} icon={ExternalLink} onClick={() => onOpenDoc(doc.id)} />
-      <HoverButton label={`Download ${doc.title}`} icon={Download} onClick={() => onDownload(doc)} />
-      <RowActionsMenu
-        actions={[
-          { key: 'open', label: 'Open', icon: Eye, onClick: () => onOpenDoc(doc.id) },
-          { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(doc), hidden: !rights.edit },
-          { key: 'move', label: 'Move to…', icon: FolderInput, onClick: (anchor) => onMove?.(doc, anchor), hidden: !(canMove && onMove) },
-          { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(doc) },
-          { key: 'archive', label: 'Archive', icon: Archive, onClick: () => onArchive(doc), variant: 'danger', hidden: !rights.archive },
-          { key: 'restore', label: 'Restore', icon: ArchiveRestore, onClick: () => onRestore?.(doc), hidden: !rights.restore },
-        ]}
-      />
-    </div>
-  );
+  const items: MenuItem[] = [
+    { key: 'open', label: 'Open', icon: Eye, onSelect: () => onOpenDoc(doc.id) },
+    { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => onEdit(doc), hidden: !rights.edit },
+    { key: 'move', label: 'Move to…', icon: FolderInput, onSelect: () => onMove?.(doc, anchorOfFocus()), hidden: !(canMove && onMove) },
+    { key: 'download', label: 'Download', icon: Download, onSelect: () => onDownload(doc) },
+    { key: 'archive', label: 'Archive', icon: Archive, onSelect: () => onArchive(doc), danger: true, hidden: !rights.archive },
+    { key: 'restore', label: 'Restore', icon: ArchiveRestore, onSelect: () => onRestore?.(doc), hidden: !rights.restore },
+  ];
+  return <Menu label={`Actions for ${truncate(doc.title, 60).text}`} iconOnly items={items} />;
 }

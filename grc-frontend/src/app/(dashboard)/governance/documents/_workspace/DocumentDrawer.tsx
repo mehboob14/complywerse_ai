@@ -1,29 +1,37 @@
 'use client';
 
 /**
- * DocumentDrawer — the "peek" of the Governance → Documents library: a panel docked to the right, just under the app header, that
- * opens when a table row is clicked. It shows the document's key facts, workflow, versions and framework mappings, with a button to
- * open the full page. It does not hide the table (no scrim): clicking another row swaps the content, and the tab chosen stays.
- * Portaled to <body> like the library's other overlays, so the governance-light rules that rewrite button sizes and spacing cannot
- * reach it; every size and colour is explicit (and arbitrary hex, as the platform CSS repaints slate/white). What it says (the facts,
- * the fallback timeline, the tabs, the attestation line) is decided in drawerLogic.ts, which node --test checks.
+ * DocumentDrawer — the "peek" of the Governance → Documents library: the document's key facts, workflow, versions and framework mappings, with a button to open the full
+ * page. It opens when a row (or a card) is clicked; clicking another row swaps the content and the tab chosen stays.
+ *
+ * It has two shapes, decided by the window (the page passes `mode`):
+ *   side   from 1024px: a panel BESIDE the register (in the page's flow, sticky under the app header), not over it. The register narrows to make room and keeps the columns the
+ *          person is reading (libraryColumns.PEEK_FROM); nothing is hidden behind the panel. It does not trap focus (the page stays usable): focus goes to its Close button
+ *          when it opens, Escape closes it from inside it or from the row it came from, and focus goes back to that row.
+ *   sheet  below 1024px: a full-screen sheet, modal: focus goes in and is kept inside (Tab wraps), the page behind does not scroll, Escape closes it, and focus goes back to the
+ *          row or card that opened it (useDialogFocus, the platform's overlay focus). Its Close button is the first thing focused.
+ * What it says (the facts, the fallback timeline, the tabs, the attestation line) is decided in drawerLogic.ts, which node --test checks. Written on the design-system kit:
+ * kit Buttons, Menu and Tabs, StatusPill, --ds tokens, 12px at the least, dates through lib/format.ts.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import Link from 'next/link';
+import { ArchiveRestore, Archive, ArrowUpRight, ChevronDown, ChevronUp, Download, Loader2, Pencil, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, ArrowUpRight, ChevronDown, ChevronUp, Download, Loader2, Pencil, X } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { dateTime, day, eventLabel, LIFECYCLE_KIND_LABEL, type LifecycleReply, type LifecycleRow } from '@/lib/documentLifecycle';
+import { Avatar, Button, IconButton, Menu, StatusPill, TabPanel, Tabs, type MenuItem } from '@/components/ui/ds';
+import { LIFECYCLE_KIND_LABEL, eventLabel, type LifecycleReply, type LifecycleRow } from '@/lib/documentLifecycle';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { documentStatus, statusPill } from '@/lib/status';
+import { useDialogFocus } from '@/components/ui/useDialogFocus';
+import { lockBodyScroll } from '@/components/ui/scrollLock';
 import { AttestationRing, ReviewDate, attestationColour, shortDate } from './atoms';
 import {
-  attestationSummary, inForceText, inWorkflow, keyInfoRows, mappedFrameworkIds, mappedLine, nextTab, tabsFor, timelineFromDates, versionText,
+  attestationSummary, inForceText, inWorkflow, keyInfoRows, mappedFrameworkIds, mappedLine, tabsFor, timelineFromDates, versionText,
   type InfoRow, type TabId,
 } from './drawerLogic';
 import { FrameworkList } from './FrameworkList';
-import { type GovDoc, InitialsAvatar, LifecycleDots, docTypeStyle } from './lib';
-import { type Lookups, statusLabel, typeLabel } from './libraryModel';
-import { type RowAction, RowActionsMenu } from './RowActionsMenu';
+import { type GovDoc, LifecycleDots } from './lib';
+import { type Lookups, typeLabel } from './libraryModel';
 import { Versions } from './Versions';
 
 export interface DocumentDrawerProps {
@@ -35,10 +43,12 @@ export interface DocumentDrawerProps {
   counts: Record<number, { done: number; total: number }>;
   /** the frameworks the library is already filtered by */
   activeFrameworks: string[];
+  /** `side`: beside the register (from 1024px, not modal); `sheet`: a full-screen modal sheet below that */
+  mode: 'side' | 'sheet';
   onClose: () => void;
   /** the full document page */
   onOpenDoc: (id: number) => void;
-  /** a framework row was clicked: the library filters by it (the drawer stays open) */
+  /** a framework row was clicked: the library filters by it (the panel stays open) */
   onPickFramework: (id: number) => void;
   onEdit: (doc: GovDoc) => void;
   canEdit: boolean;
@@ -56,49 +66,15 @@ export interface DocumentDrawerProps {
 const WAITING_SHOWN = 6;
 const ACTIVITY_SHOWN = 6;
 
-const MUTED = 'text-[12px] leading-snug text-[#586472]';
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-const BTN = `inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-white px-3 text-[13px] font-medium text-[#26323d] hover:bg-[#f3f6f8] ${FOCUS}`;
-// text-[#fff], not text-white: the platform CSS repaints text-white
-const BTN_PRIMARY = `inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#0f766e] bg-[#0f766e] px-3 text-[13px] font-medium text-[#fff] hover:border-[#115e59] hover:bg-[#115e59] ${FOCUS} focus-visible:ring-offset-2`;
-const ICON_BTN = `inline-flex h-8 w-8 items-center justify-center rounded-md text-[#586472] hover:bg-[#eef2f6] hover:text-[#1f2933] aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-transparent ${FOCUS}`;
-const TEXT_LINK = `inline-flex items-center gap-1 rounded text-[13px] font-medium text-[#0f766e] hover:text-[#115e59] hover:underline ${FOCUS}`;
-// RowActionsMenu draws its own small grey trigger: made the size and look of the other buttons here (the hover fill needs ! because
-// the platform CSS sets the trigger's hover:bg-slate-100 with !important, to a colour that is not defined)
-const MORE = 'inline-flex [&>button]:inline-flex [&>button]:h-8 [&>button]:w-8 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-lg [&>button]:border [&>button]:border-[#d5dbe1] [&>button]:p-0 [&>button]:text-[#586472] [&>button:hover]:!bg-[#f3f6f8] [&>button:hover]:text-[#1f2933] [&>button:focus-visible]:outline-none [&>button:focus-visible]:ring-2 [&>button:focus-visible]:ring-[#0f766e]';
-
-// the label next to the dots, in dark ink (the library's own label colours are repainted by the platform CSS: Approved comes out mint)
-const STATUS_INK: Record<string, string> = {
-  draft: 'text-[#475569]', pending_review: 'text-[#b45309]', pending_approval: 'text-[#b45309]', approved: 'text-[#1d4ed8]', published: 'text-[#047857]',
-};
+const MUTED = 'text-ds-label text-ds-fg-muted';
+const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 // ─── Small pieces ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-// dark text on a light tint of the type (the library's own tints are too pale for a letter)
-const TILE: Record<string, string> = {
-  policy: 'bg-[#f0fdfa] text-[#0f766e]', standard: 'bg-[#eff6ff] text-[#1d4ed8]', procedure: 'bg-[#fffbeb] text-[#b45309]',
-  guideline: 'bg-[#f5f3ff] text-[#6d28d9]', charter: 'bg-[#f1f5f9] text-[#475569]', framework: 'bg-[#ecfeff] text-[#0e7490]',
-};
-
-function IconButton({ label, onClick, disabled = false, innerRef, children }: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  innerRef?: Ref<HTMLButtonElement>;
-  children: ReactNode;
-}) {
-  // aria-disabled, not disabled: at the end of the list the button keeps the keyboard focus it was given
-  return (
-    <button ref={innerRef} type="button" title={label} aria-label={label} aria-disabled={disabled || undefined} onClick={() => { if (!disabled) onClick(); }} className={ICON_BTN}>
-      {children}
-    </button>
-  );
-}
-
 function Section({ title, first = false, children }: { title: string; first?: boolean; children: ReactNode }) {
   return (
-    <section className={first ? '' : 'mt-5 border-t border-[#e1e6eb] pt-4'}>
-      <h3 className="text-[13px] font-semibold text-[#1f2933]">{title}</h3>
+    <section className={first ? '' : 'mt-5 border-t border-ds-border pt-4'}>
+      <h3 className="!text-ds-body font-[600] !text-ds-fg">{title}</h3>
       <div className="mt-2.5">{children}</div>
     </section>
   );
@@ -108,7 +84,7 @@ function Chips({ items }: { items: readonly string[] }) {
   return (
     <ul className="flex flex-wrap gap-1.5">
       {items.map((t, i) => (
-        <li key={`${t}-${i}`} className="rounded-md border border-[#d5dbe1] bg-[#f3f6f8] px-2 py-0.5 text-[12px] text-[#26323d]">{t}</li>
+        <li key={`${t}-${i}`} className="rounded-ds-control border border-ds-border-strong bg-ds-surface-hover px-2 py-[2px] text-ds-label text-ds-fg-body">{t}</li>
       ))}
     </ul>
   );
@@ -116,8 +92,8 @@ function Chips({ items }: { items: readonly string[] }) {
 
 function Loading({ children }: { children: ReactNode }) {
   return (
-    <p role="status" className="flex items-center gap-2 text-[12px] text-[#586472]">
-      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden /> {children}
+    <p role="status" className="flex items-center gap-2 text-ds-label text-ds-fg-muted">
+      <Loader2 className="h-[16px] w-[16px] animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden /> {children}
     </p>
   );
 }
@@ -125,20 +101,20 @@ function Loading({ children }: { children: ReactNode }) {
 // ─── Overview ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function InfoItem({ row, doc }: { row: InfoRow; doc: GovDoc }) {
-  const value = <span className={row.empty ? 'text-[#586472]' : ''}>{row.value}</span>;
+  const value = <span className={row.empty ? 'text-ds-fg-muted' : ''}>{row.value}</span>;
   return (
     <div className={`min-w-0 ${row.wide ? 'col-span-2' : ''}`}>
-      <dt className="text-[12px] leading-4 text-[#586472]">{row.label}</dt>
-      <dd className="mt-0.5 min-w-0 break-words text-[13px] leading-snug text-[#1f2933]">
+      <dt className="text-ds-label text-ds-fg-muted">{row.label}</dt>
+      <dd className="mt-0.5 min-w-0 break-words text-ds-body text-ds-fg">
         {row.kind === 'review' ? <ReviewDate doc={doc} />
           : row.kind === 'person' ? (
             <span className="inline-flex items-center gap-2">
-              {!row.empty && <InitialsAvatar name={doc.owner_name} size="sm" />}
+              {!row.empty && <Avatar name={row.value} size={24} decorative />}
               {value}
             </span>
           )
           : value}
-        {row.note && <span className="block text-[12px] text-[#586472]">{row.note}</span>}
+        {row.note && <span className="block text-ds-label text-ds-fg-muted">{row.note}</span>}
       </dd>
     </div>
   );
@@ -154,12 +130,12 @@ function Description({ text }: { text: string | null }) {
     const el = ref.current;
     if (el && !open) setLong(el.scrollHeight > el.clientHeight + 1);
   }, [body, open]);
-  if (!body) return <p className="text-[13px] text-[#586472]">No description.</p>;
+  if (!body) return <p className="text-ds-body text-ds-fg-muted">No description.</p>;
   return (
     <div>
-      <p ref={ref} className={`whitespace-pre-line break-words text-[13px] leading-relaxed text-[#26323d] ${open ? '' : 'line-clamp-5'}`}>{body}</p>
+      <p ref={ref} dir="auto" className={`whitespace-pre-line break-words text-ds-body text-ds-fg-body ${open ? '' : 'line-clamp-5'}`}>{body}</p>
       {(long || open) && (
-        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`mt-1 ${TEXT_LINK}`}>{open ? 'Show less' : 'Show more'}</button>
+        <Button variant="link" size="sm" className="mt-1" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Show less' : 'Show more'}</Button>
       )}
     </div>
   );
@@ -180,11 +156,11 @@ function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; cou
         <div className="flex items-center gap-3">
           {att.requested && <AttestationRing pct={att.pct} done={att.done ?? undefined} total={att.total ?? undefined} size={44} />}
           <div className="min-w-0">
-            <p className="text-[13px] font-medium leading-snug text-[#1f2933]">{att.headline}</p>
+            <p className="text-ds-body font-[600] text-ds-fg">{att.headline}</p>
             {att.detail && <p className={MUTED}>{att.detail}</p>}
           </div>
         </div>
-        <Link href="/governance/documents/attestation" className={`mt-2.5 ${TEXT_LINK}`}>Manage attestation</Link>
+        <Button href="/governance/documents/attestation" variant="link" size="sm" className="mt-2">Manage attestation</Button>
       </Section>
       <Section title="Description"><Description text={doc.description} /></Section>
       {tags.length > 0 && <Section title="Tags"><Chips items={tags} /></Section>}
@@ -195,7 +171,7 @@ function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; cou
 
 // ─── Workflow ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const dueWords = (r: LifecycleRow): string => (!r.due_date ? 'no due date' : r.overdue ? `overdue since ${day(r.due_date)}` : `due ${day(r.due_date)}`);
+const dueWords = (r: LifecycleRow): string => (!r.due_date ? 'no due date' : r.overdue ? `overdue since ${formatDate(r.due_date)}` : `due ${formatDate(r.due_date)}`);
 
 /** What the document itself says when the workflow history cannot be read (the feature is off for the organisation, or the call failed). */
 function OwnDates({ doc, failed }: { doc: GovDoc; failed: boolean }) {
@@ -203,11 +179,11 @@ function OwnDates({ doc, failed }: { doc: GovDoc; failed: boolean }) {
   return (
     <div>
       {failed && <p role="status" className={`mb-3 ${MUTED}`}>Could not read the history.</p>}
-      <ol className="ml-1.5 border-l border-[#d5dbe1]">
+      <ol className="ml-1.5 border-l border-ds-border-strong">
         {events.map((e) => (
           <li key={e.key} className="relative pb-3 pl-4">
-            <span aria-hidden className="absolute -left-[4.5px] top-1.5 h-2 w-2 rounded-full bg-[#0f766e]" />
-            <p className="text-[13px] font-medium leading-snug text-[#1f2933]">{e.label}</p>
+            <span aria-hidden className="absolute -left-[4.5px] top-1.5 h-[8px] w-[8px] rounded-full bg-ds-primary" />
+            <p className="text-ds-body font-[600] text-ds-fg">{e.label}</p>
             <p className={MUTED}>{e.text}</p>
           </li>
         ))}
@@ -238,11 +214,11 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
         <>
           <Section title="Waiting for" first>
             {waiting.length === 0 ? <p className={MUTED}>Nobody waiting</p> : (
-              <ul className="divide-y divide-[#e1e6eb]">
+              <ul className="divide-y divide-ds-border">
                 {waiting.slice(0, WAITING_SHOWN).map((r) => (
                   <li key={r.id} className="flex items-baseline justify-between gap-3 py-1.5">
-                    <span className="min-w-0 truncate text-[13px] font-medium text-[#1f2933]">{r.user || 'Unknown person'}</span>
-                    <span className={`shrink-0 text-right text-[12px] ${r.overdue ? 'font-medium text-[#b42318]' : 'text-[#586472]'}`}>
+                    <span className="min-w-0 truncate text-ds-body font-[600] text-ds-fg">{r.user || 'Unknown person'}</span>
+                    <span className={`shrink-0 text-right text-ds-label ${r.overdue ? 'font-[600] text-ds-danger' : 'text-ds-fg-muted'}`}>
                       {LIFECYCLE_KIND_LABEL[r.kind]} · {dueWords(r)}
                     </span>
                   </li>
@@ -254,12 +230,12 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
           <Section title="Acknowledgements">
             {acks && acks.total > 0 ? (
               <>
-                <div role="progressbar" aria-label="Acknowledged" aria-valuemin={0} aria-valuemax={100} aria-valuenow={acks.percent} className="h-2 w-full overflow-hidden rounded-full bg-[#e1e6eb]">
-                  <div className="h-2 rounded-full" style={{ width: `${acks.percent}%`, backgroundColor: attestationColour(acks.percent) }} />
+                <div role="progressbar" aria-label="Acknowledged" aria-valuemin={0} aria-valuemax={100} aria-valuenow={acks.percent} className="h-[8px] w-full overflow-hidden rounded-full bg-ds-border">
+                  <div className="h-[8px] rounded-full" style={{ width: `${acks.percent}%`, backgroundColor: attestationColour(acks.percent) }} />
                 </div>
-                <p className="mt-1.5 text-[13px] text-[#26323d]">
+                <p className="mt-1.5 text-ds-body text-ds-fg-body">
                   {acks.done} of {acks.total} users ({acks.percent}%)
-                  {acks.overdue > 0 && <span className="font-medium text-[#b42318]"> · {acks.overdue} overdue</span>}
+                  {acks.overdue > 0 && <span className="font-[600] text-ds-danger"> · {acks.overdue} overdue</span>}
                 </p>
               </>
             ) : <p className={MUTED}>None requested</p>}
@@ -269,10 +245,10 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
               <ol className="space-y-2">
                 {recent.map((e, i) => (
                   <li key={i} className="flex gap-3">
-                    <span className="w-[7.5rem] shrink-0 whitespace-nowrap text-[12px] leading-snug text-[#586472]">{dateTime(e.at)}</span>
-                    <span className="min-w-0 text-[13px] leading-snug text-[#1f2933]">
-                      <span className="font-medium">{eventLabel(e.kind)}</span>
-                      {e.actor && <span className="text-[#586472]"> · {e.actor}</span>}
+                    <span className="w-[8.5rem] shrink-0 whitespace-nowrap text-ds-label text-ds-fg-muted">{formatDateTime(e.at)}</span>
+                    <span className="min-w-0 text-ds-body text-ds-fg">
+                      <span className="font-[600]">{eventLabel(e.kind)}</span>
+                      {e.actor && <span className="text-ds-fg-muted"> · {e.actor}</span>}
                     </span>
                   </li>
                 ))}
@@ -281,10 +257,8 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
           </Section>
         </>
       )}
-      <div className="mt-5 border-t border-[#e1e6eb] pt-3">
-        <button type="button" onClick={() => onOpenDoc(doc.id)} className={TEXT_LINK}>
-          Open workflow <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-        </button>
+      <div className="mt-5 border-t border-ds-border pt-3">
+        <Button variant="link" size="sm" onClick={() => onOpenDoc(doc.id)} rightIcon={<ArrowUpRight aria-hidden />}>Open workflow</Button>
       </div>
     </div>
   );
@@ -296,15 +270,15 @@ function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lo
   const ids = mappedFrameworkIds(doc);
   if (ids.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[#c3ccd5] px-4 py-8 text-center">
-        <p className="text-[13px] font-medium text-[#1f2933]">No frameworks</p>
+      <div className="rounded-ds-card border border-dashed border-ds-border-strong px-4 py-8 text-center">
+        <p className="text-ds-body font-[600] text-ds-fg">No frameworks</p>
         <p className={`mt-1 ${MUTED}`}>Map them from Edit.</p>
       </div>
     );
   }
   return (
     <div>
-      <p className="mb-3 text-[13px] font-medium text-[#1f2933]">{mappedLine(ids.length)}</p>
+      <p className="mb-3 text-ds-body font-[600] text-ds-fg">{mappedLine(ids.length)}</p>
       <FrameworkList ids={ids} info={lookups.frameworks} active={active} onPick={onPick} maxHeight={420} />
     </div>
   );
@@ -312,8 +286,8 @@ function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lo
 
 // ─── The panel ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Escape closes the drawer unless something else owns it: an open menu or dialog, or a search box with text to clear; and only when
- *  focus is in the drawer, on the page itself or on the table's row (never in a field elsewhere). */
+/** Escape closes the panel unless something else owns it: an open menu or dialog, or a search box with text to clear; and only when
+ *  focus is in the panel, on the page itself or on the table's row (never in a field elsewhere). */
 function escapeCloses(e: KeyboardEvent, panel: HTMLElement | null): boolean {
   if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return false;
   const over = document.querySelector('[role="menu"], [role="listbox"], [role="dialog"], [aria-modal="true"]');
@@ -324,23 +298,33 @@ function escapeCloses(e: KeyboardEvent, panel: HTMLElement | null): boolean {
   return !focus || focus === document.body || !!panel?.contains(focus) || !!focus.closest('[data-doc-row], [data-folder-row]');
 }
 
+/** The row or card of a document that is on screen (the table and the cards are both drawn, one hidden by the window's width). */
+function visibleRowOf(id: number): HTMLElement | null {
+  return Array.from(document.querySelectorAll<HTMLElement>(`[data-doc-row="${id}"]`)).find((el) => el.getClientRects().length > 0) ?? null;
+}
+
 function DrawerPanel({
-  doc, lookups, counts, activeFrameworks, onClose, onOpenDoc, onPickFramework, onEdit, canEdit, onDownload, onArchive, canArchive,
+  doc, lookups, counts, activeFrameworks, mode, onClose, onOpenDoc, onPickFramework, onEdit, canEdit, onDownload, onArchive, canArchive,
   onRestore, canRestore, onStep, hasPrev, hasNext,
 }: DocumentDrawerProps & { doc: GovDoc }) {
+  const sheet = mode === 'sheet';
   const uid = useId();
-  const [tab, setTab] = useState<TabId>('overview');         // kept while the drawer shows another document; gone when it closes
+  const [tab, setTab] = useState<TabId>('overview');         // kept while the panel shows another document; gone when it closes
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const latest = useRef({ id: doc.id, onClose });
   latest.current = { id: doc.id, onClose };
 
-  // opening: focus the close button, slide in (unless motion is reduced); closing: focus goes back to the row it came from
+  // the sheet is modal: focus is kept inside it and goes back to what opened it, and the page behind does not scroll (the platform's overlay focus and scroll lock)
+  useDialogFocus(sheet, panelRef);
+  useEffect(() => (sheet ? lockBodyScroll() : undefined), [sheet]);
+
+  // opening: focus the close button, the sheet slides in (unless motion is reduced); closing: the side panel puts focus back on the row it came from
   useEffect(() => {
     const panel = panelRef.current;
     closeRef.current?.focus({ preventScroll: true });
-    if (panel && typeof panel.animate === 'function' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (sheet && panel && typeof panel.animate === 'function' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       panel.animate([{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], { duration: 150, easing: 'ease-out' });
     }
     // capture phase: this looks at the page before a menu's own Escape handler closes it
@@ -348,50 +332,45 @@ function DrawerPanel({
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
+      if (sheet) return;                                      // the sheet's focus goes back through useDialogFocus
       const focus = document.activeElement;
       if (focus && focus !== document.body) return;           // focus went somewhere on purpose
-      const row = document.querySelector<HTMLElement>(`[data-doc-row="${latest.current.id}"]`);
+      const row = visibleRowOf(latest.current.id);
       if (!row) return;
       if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
       row.focus({ preventScroll: true });
     };
-  }, []);
+  }, [sheet]);
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [doc.id, tab]);
 
   const tabs = tabsFor(doc);
-  const onTabKey = (e: React.KeyboardEvent) => {
-    const next = nextTab(tabs.map((t) => t.id), tab, e.key);
-    if (!next) return;
-    e.preventDefault();
-    setTab(next);
-    document.getElementById(`${uid}-tab-${next}`)?.focus();
-  };
-
-  const menu: RowAction[] = [
-    { key: 'archive', label: 'Archive', icon: Archive, onClick: () => onArchive(doc), variant: 'danger', hidden: !canArchive },
-    { key: 'restore', label: 'Restore', icon: ArchiveRestore, onClick: () => onRestore?.(doc), hidden: !(onRestore && canRestore) },
+  const menu: MenuItem[] = [
+    { key: 'archive', label: 'Archive', icon: Archive, onSelect: () => onArchive(doc), danger: true, hidden: !canArchive },
+    { key: 'restore', label: 'Restore', icon: ArchiveRestore, onSelect: () => onRestore?.(doc), hidden: !(onRestore && canRestore) },
   ];
   const inForce = inForceText(doc);
+  const titleId = `${uid}-title`;
 
   return (
     <div
       ref={panelRef}
-      role="complementary"
-      aria-label="Document details"
+      role={sheet ? 'dialog' : 'complementary'}
+      aria-modal={sheet ? true : undefined}
+      aria-labelledby={sheet ? titleId : undefined}
+      aria-label={sheet ? undefined : 'Document details'}
+      tabIndex={sheet ? -1 : undefined}
       data-doc-drawer=""
-      // under the app header (h-12) and its menus (z-50), over the page; a full-width sheet below 768px
-      className="fixed bottom-0 right-0 top-12 z-40 flex w-full flex-col border-l border-[#d5dbe1] bg-white shadow-elevated md:w-[480px]"
+      className={sheet
+        ? 'fixed inset-0 z-[60] flex flex-col bg-ds-surface'
+        : 'sticky top-[64px] flex max-h-[calc(100vh-80px)] w-[400px] shrink-0 flex-col self-start overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface shadow-ds-pop'}
     >
-      <div className="shrink-0 border-b border-[#e1e6eb] px-5 pb-3.5 pt-4">
+      <div className="shrink-0 border-b border-ds-border px-[16px] pb-[12px] pt-[12px]">
         <div className="flex items-start gap-3">
-          <span aria-hidden title={typeLabel(doc.doc_type)} className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[16px] font-semibold ${TILE[doc.doc_type] ?? 'bg-[#f1f5f9] text-[#475569]'}`}>
-            {docTypeStyle(doc.doc_type).letter}
-          </span>
           <div className="min-w-0 flex-1">
-            <h2 title={doc.title} className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-[#1f2933]">{doc.title}</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px] leading-snug text-[#586472]">
-              {doc.document_code && <><span className="font-mono text-[#26323d]">{doc.document_code}</span><span aria-hidden>·</span></>}
+            <h2 id={titleId} dir="auto" title={doc.title} className="line-clamp-3 break-words !text-ds-section !text-ds-fg">{doc.title}</h2>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-ds-label text-ds-fg-muted">
+              {doc.document_code && <><span className="font-mono text-ds-fg-body">{doc.document_code}</span><span aria-hidden>·</span></>}
               <span>{typeLabel(doc.doc_type)}</span>
               {doc.current_version && <><span aria-hidden>·</span><span>{versionText(doc.current_version)}</span></>}
               {inForce && <><span aria-hidden>·</span><span>{inForce}</span></>}
@@ -400,80 +379,45 @@ function DrawerPanel({
           <div className="-mr-2 -mt-1 flex shrink-0 items-center gap-0.5">
             {onStep && (
               <>
-                <IconButton label="Previous document" disabled={hasPrev === false} onClick={() => onStep(-1)}><ChevronUp className="h-4 w-4" strokeWidth={1.75} aria-hidden /></IconButton>
-                <IconButton label="Next document" disabled={hasNext === false} onClick={() => onStep(1)}><ChevronDown className="h-4 w-4" strokeWidth={1.75} aria-hidden /></IconButton>
+                <IconButton label="Previous document" aria-disabled={hasPrev === false || undefined} onClick={() => { if (hasPrev !== false) onStep(-1); }}><ChevronUp aria-hidden /></IconButton>
+                <IconButton label="Next document" aria-disabled={hasNext === false || undefined} onClick={() => { if (hasNext !== false) onStep(1); }}><ChevronDown aria-hidden /></IconButton>
               </>
             )}
-            <IconButton label="Close details" onClick={onClose} innerRef={closeRef}><X className="h-4 w-4" strokeWidth={1.75} aria-hidden /></IconButton>
+            <IconButton label="Close details" ref={closeRef} data-autofocus="" onClick={onClose}><X aria-hidden /></IconButton>
           </div>
         </div>
 
-        <div className="mt-3">
-          {inWorkflow(doc.status) ? (
-            // the dots' unfilled track is bg-slate-200, which the platform CSS repaints white: made visible here
-            <div className="flex items-center gap-2 [&_.bg-slate-200]:!bg-[#d5dbe1]">
-              <LifecycleDots status={doc.status} showLabel={false} />
-              <span className={`text-[13px] font-medium ${STATUS_INK[doc.status] ?? 'text-[#26323d]'}`}>{statusLabel(doc.status)}</span>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <StatusPill {...statusPill(documentStatus, doc.status)} />
+          {inWorkflow(doc.status) && <span aria-hidden><LifecycleDots status={doc.status} showLabel={false} /></span>}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={() => onOpenDoc(doc.id)} rightIcon={<ArrowUpRight aria-hidden />}>Open document</Button>
+          <Button onClick={() => onDownload(doc)} leftIcon={<Download aria-hidden />}>Download</Button>
+          {canEdit && <Button onClick={() => onEdit(doc)} title="Edit the document's details" leftIcon={<Pencil aria-hidden />}>Edit</Button>}
+          <Menu label="More actions" iconOnly items={menu} />
+        </div>
+      </div>
+
+      <Tabs tabs={tabs.map((t) => ({ key: t.id, label: t.label }))} value={tab} onChange={(key) => setTab(key as TabId)} ariaLabel="Document sections" className="flex min-h-0 flex-1 flex-col">
+        {/* the strip above does not scroll; this body does. Focusable (the kit's tab panel), so the keyboard can scroll it */}
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[16px] pb-6 pt-4">
+          <TabPanel tabKey={tab}>
+            {/* keyed by the document: a search box, a "Show more" or a loading state never carries over to the next one */}
+            <div key={doc.id}>
+              {tab === 'overview' && <Overview doc={doc} lookups={lookups} counts={counts} />}
+              {tab === 'workflow' && <Workflow doc={doc} onOpenDoc={onOpenDoc} />}
+              {tab === 'versions' && (
+                <div>
+                  <Versions doc={doc} />
+                </div>
+              )}
+              {tab === 'frameworks' && <Frameworks doc={doc} lookups={lookups} active={activeFrameworks} onPick={onPickFramework} />}
             </div>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] px-2.5 py-0.5 text-[12px] font-medium text-[#3f4b58]">
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#7b8794]" />
-              {statusLabel(doc.status)}
-            </span>
-          )}
+          </TabPanel>
         </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <button type="button" onClick={() => onOpenDoc(doc.id)} className={BTN_PRIMARY}>
-            Open document <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-          </button>
-          <button type="button" onClick={() => onDownload(doc)} className={BTN}>
-            <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Download
-          </button>
-          {canEdit && (
-            <button type="button" onClick={() => onEdit(doc)} title="Edit the document's details" className={BTN}>
-              <Pencil className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Edit
-            </button>
-          )}
-          {menu.some((a) => !a.hidden) && <span className={MORE}><RowActionsMenu actions={menu} /></span>}
-        </div>
-      </div>
-
-      <div role="tablist" aria-label="Document sections" onKeyDown={onTabKey} className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#e1e6eb] px-3 scrollbar-thin">
-        {tabs.map((t) => {
-          const on = t.id === tab;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              id={`${uid}-tab-${t.id}`}
-              aria-selected={on}
-              aria-controls={`${uid}-panel`}
-              tabIndex={on ? 0 : -1}
-              onClick={() => setTab(t.id)}
-              className={`whitespace-nowrap border-b-2 px-2.5 py-2.5 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e] ${on ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:text-[#1f2933]'}`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* focusable, so the keyboard can scroll it when it holds nothing else to focus */}
-      <div ref={bodyRef} role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${tab}`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-4 scrollbar-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]">
-        {/* keyed by the document: a search box, a "Show more" or a loading state never carries over to the next one */}
-        <div key={doc.id}>
-          {tab === 'overview' && <Overview doc={doc} lookups={lookups} counts={counts} />}
-          {tab === 'workflow' && <Workflow doc={doc} onOpenDoc={onOpenDoc} />}
-          {tab === 'versions' && (
-            <div>
-              <Versions doc={doc} />
-            </div>
-          )}
-          {tab === 'frameworks' && <Frameworks doc={doc} lookups={lookups} active={activeFrameworks} onPick={onPickFramework} />}
-        </div>
-      </div>
+      </Tabs>
     </div>
   );
 }
@@ -481,7 +425,8 @@ function DrawerPanel({
 export function DocumentDrawer(props: DocumentDrawerProps): JSX.Element | null {
   const { doc } = props;
   if (!doc || typeof document === 'undefined') return null;
-  return createPortal(<DrawerPanel {...props} doc={doc} />, document.body);
+  const panel = <DrawerPanel {...props} doc={doc} />;
+  return props.mode === 'sheet' ? createPortal(panel, document.body) : panel;
 }
 
 export default DocumentDrawer;

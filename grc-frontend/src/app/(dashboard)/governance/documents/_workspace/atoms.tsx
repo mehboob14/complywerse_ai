@@ -1,12 +1,13 @@
 'use client';
 
 /**
- * The small things the library draws more than once (a table cell and the detail drawer say the same thing the same way): the
- * attestation ring, the review-date line, a framework chip. Colours are explicit hex classes on purpose: the platform's CSS repaints
- * slate/white inside the dashboard, and a bare <p>/<td> gets its own size and colour (PITFALLS: grc-frontend UI).
+ * The small things the library draws more than once (a table cell, a card and the details panel say the same thing the same way): the attestation ring, the review-date
+ * line, a framework chip. Written on the design-system tokens: 12px at the least, only --ds colours (a chip's tint is one of the six status tones, by its name, as an inline
+ * style), dates through lib/format.ts: a review date is a DAY, so it is the day as written, whatever the viewer's zone.
  */
-import type { ReactNode } from 'react';
-import { categoryTint } from './lib';
+import type { CSSProperties, ReactNode } from 'react';
+import { EMPTY, formatDate } from '@/lib/format';
+import { TONE, type Tone } from '@/lib/status';
 import { reviewState, type FrameworkChip as Chip, type LibDoc, type ReviewBucket } from './libraryModel';
 
 // ─── Attestation ring ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ export function AttestationRing({ pct, done, total, size = 28, showCounts = true
   size?: number;
   showCounts?: boolean;
 }) {
-  if (pct == null) return <span className="text-[13px] text-[#9aa5b1]" title="No acknowledgement requested" aria-label="No acknowledgement requested">—</span>;
+  if (pct == null) return <span className="text-ds-body text-ds-fg-muted" title="No acknowledgement requested" aria-label="No acknowledgement requested">{EMPTY}</span>;
   const value = Math.max(0, Math.min(100, Math.round(pct)));
   const r = (size - 4) / 2;
   const c = 2 * Math.PI * r;
@@ -34,8 +35,8 @@ export function AttestationRing({ pct, done, total, size = 28, showCounts = true
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={attestationColour(value)} strokeWidth={3} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - value / 100)} />
       </svg>
       <span className="leading-tight">
-        <span className="block text-[13px] font-semibold tabular-nums text-[#1f2933]">{value}%</span>
-        {hasCounts && <span className="block text-[11px] tabular-nums text-[#586472]">{done}/{total}</span>}
+        <span className="block text-ds-body font-[600] tabular-nums text-ds-fg">{value}%</span>
+        {hasCounts && <span className="block text-ds-label tabular-nums text-ds-fg-muted">{done}/{total}</span>}
       </span>
     </span>
   );
@@ -43,33 +44,34 @@ export function AttestationRing({ pct, done, total, size = 28, showCounts = true
 
 // ─── Review date ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const TONE: Record<ReviewBucket | 'none', { text: string; dot: string }> = {
-  overdue: { text: 'text-[#b42318]', dot: 'bg-[#e11d48]' },
-  due_soon: { text: 'text-[#b45309]', dot: 'bg-[#f59e0b]' },
-  ok: { text: 'text-[#047857]', dot: 'bg-[#10b981]' },
-  unscheduled: { text: 'text-[#586472]', dot: 'bg-[#cbd5e1]' },
-  none: { text: 'text-[#586472]', dot: 'bg-[#cbd5e1]' },
+const TONE_OF: Record<ReviewBucket | 'none', { text: string; dot: string }> = {
+  overdue: { text: 'text-ds-danger', dot: 'bg-ds-danger' },
+  due_soon: { text: 'text-ds-warning', dot: 'bg-ds-warning' },
+  ok: { text: 'text-ds-success', dot: 'bg-ds-success' },
+  unscheduled: { text: 'text-ds-fg-muted', dot: 'bg-ds-border-control' },
+  none: { text: 'text-ds-fg-muted', dot: 'bg-ds-border-control' },
 };
-export const reviewTone = (bucket: ReviewBucket | null) => TONE[bucket ?? 'none'];
+export const reviewTone = (bucket: ReviewBucket | null) => TONE_OF[bucket ?? 'none'];
 
-const dateFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-export const shortDate = (d: Date | null) => (d ? dateFmt.format(d) : '');
+/** A day for a cell, the drawer and the card: "12 Nov 2026" (the empty string for none). A Date from parseUtc is read by its UTC day, as the date is written. */
+export const shortDate = (d: Date | null): string => formatDate(d, { calendar: true, empty: '' });
 
-/** The date, and under it how far off it is ("Overdue by 5 days" in red, "Due in 12 days" in amber). Documents a review is not owed on
- *  (a draft) show the planned date, quietly; none at all shows a dash. */
+/** The date, and under it how far off it is ("5 d overdue" in red, "in 12 d" in amber). Documents a review is not owed on (a draft) show the planned date, quietly;
+ *  none at all shows a dash. */
 export function ReviewDate({ doc, now, compact = false }: { doc: Pick<LibDoc, 'status' | 'version_in_force' | 'next_review_date'>; now?: Date; compact?: boolean }) {
   const s = reviewState(doc, now);
   const tone = reviewTone(s.bucket);
   if (!s.due) {
-    return s.label ? <span className={`text-[12px] ${tone.text}`} title={s.long}>{s.label}</span> : <span className="text-[13px] text-[#9aa5b1]" aria-label="No review date">—</span>;
+    return s.label ? <span className={`text-ds-body ${tone.text}`} title={s.long}>{s.label}</span> : <span className="text-ds-body text-ds-fg-muted" aria-label="No review date"><span aria-hidden>{EMPTY}</span></span>;
   }
-  const label = s.long ? `${shortDate(s.due)}, ${s.long}` : shortDate(s.due);
+  const day = formatDate(doc.next_review_date, { calendar: true });
+  const label = s.long ? `${day}, ${s.long}` : day;
   return (
     <span className="inline-flex flex-col leading-tight" title={label}>
-      <span className={`text-[13px] ${s.bucket ? 'font-medium text-[#1f2933]' : 'text-[#586472]'}`}>{shortDate(s.due)}</span>
+      <span className={`whitespace-nowrap text-ds-body ${s.bucket ? 'font-[600] text-ds-fg' : 'text-ds-fg-muted'}`}>{day}</span>
       {s.label && !compact && (
-        <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${tone.text}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
+        <span className={`inline-flex items-center gap-1 text-ds-label ${tone.text}`}>
+          <span className={`h-[6px] w-[6px] rounded-full ${tone.dot}`} aria-hidden />
           {s.label}
         </span>
       )}
@@ -79,21 +81,32 @@ export function ReviewDate({ doc, now, compact = false }: { doc: Pick<LibDoc, 's
 
 // ─── Framework chip ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
+const CHIP_TONES: Tone[] = ['progress', 'success', 'pending', 'warning', 'danger', 'neutral'];
+/** One of the status tones by the framework's name, so the same framework is the same colour everywhere (a marker, not a meaning). */
+export function chipTone(label: string): Tone {
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+  return CHIP_TONES[h % CHIP_TONES.length];
+}
+export const chipStyle = (label: string, known = true): CSSProperties => {
+  const t = TONE[known ? chipTone(label) : 'neutral'];
+  return { background: t.tint, color: t.text, borderColor: t.border };
+};
+
 /** One framework's short label as a tinted chip; the full name is its tooltip. A framework the list does not know is grey, "#id". */
 export function FrameworkChip({ chip, onClick, active = false, children }: { chip: Chip; onClick?: () => void; active?: boolean; children?: ReactNode }) {
-  const tint = chip.known ? categoryTint(chip.label).soft : 'bg-slate-100 text-slate-600';
-  // shrinkable (two chips share a narrow cell: each gives way, with an ellipsis, before one is cut off); the label is its own span,
-  // because text-overflow does not apply to the text of a flex container
-  const base = `inline-flex h-5 min-w-[2.75rem] max-w-[7.5rem] shrink items-center rounded-md px-1.5 text-[11px] font-semibold leading-none ${tint} ${active ? 'ring-1 ring-[#0f766e]' : ''}`;
+  // shrinkable (two chips share a narrow cell: each gives way, with an ellipsis, before one is cut off); the label is its own span, because text-overflow does not
+  // apply to the text of a flex container
+  const base = `inline-flex h-[24px] min-w-[3rem] max-w-[7.5rem] shrink items-center rounded-ds-control border px-[6px] text-ds-label leading-none ${active ? 'shadow-[0_0_0_2px_var(--ds-primary)]' : ''}`;
   const label = <><span className="min-w-0 truncate">{chip.label}</span>{children}</>;
-  if (!onClick) return <span className={base} title={chip.name}>{label}</span>;
+  if (!onClick) return <span className={base} style={chipStyle(chip.label, chip.known)} title={chip.name}>{label}</span>;
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={`${chip.name} — show the documents mapped to it`}
-      // !text-[11px]: the governance pages give every <button> 12px, which would make a clickable chip bigger than a plain one
-      className={`${base} !text-[11px] hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]`}
+      style={chipStyle(chip.label, chip.known)}
+      className={`${base} hover:brightness-95 focus-visible:outline-none focus-visible:shadow-ds-ring`}
     >
       {label}
     </button>

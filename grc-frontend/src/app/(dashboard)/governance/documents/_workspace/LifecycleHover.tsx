@@ -41,7 +41,7 @@ function placeBeside(r: DOMRect): Placement {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
       {children}
     </div>
   );
@@ -70,7 +70,7 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
       <div>
         <div className="flex items-start justify-between gap-2">
           <p className="line-clamp-2 text-sm font-semibold text-slate-900">{doc.title}</p>
-          <span className="shrink-0 text-[11px] text-slate-500">{verLabel(doc.current_version)}</span>
+          <span className="shrink-0 text-[12px] text-slate-500">{verLabel(doc.current_version)}</span>
         </div>
         <div className="mt-1.5"><LifecycleDots status={doc.status} /></div>
         <p className="mt-1 text-slate-500">

@@ -43,7 +43,8 @@ const TAGS = ['privacy', 'hr', 'bcp', 'payments', 'cloud', 'vendor'];
 const PEOPLE: [number, string][] = [[1, 'Ayesha Admin'], [2, 'Olivia Owner'], [3, 'Edward Editor'], [4, 'Paula Publisher'], [5, 'Sara Reviewer'], [6, 'Zoë Müller']];
 const VERSIONS = ['1.0', '1.1', '2.0', '2.10', '2.9', 'v3.1', '', null, '4'];
 
-function corpus(): LibDoc[] {
+type Doc = LibDoc & { parent_document_id: number | null };
+function corpus(): Doc[] {
   const docs: Record<string, unknown>[] = [];
   for (let i = 1; i <= 150; i++) {
     const status = i % 17 === 0 ? 'exception_applied' : pick(STATUSES);
@@ -80,7 +81,7 @@ function corpus(): LibDoc[] {
       parent_document_id: i > 20 && rand() < 0.25 ? 1 + Math.floor(rand() * (i - 1)) : null,
     });
   }
-  return docs as unknown as LibDoc[];
+  return docs as unknown as Doc[];
 }
 
 const lookups: Lookups = {
