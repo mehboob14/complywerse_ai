@@ -7,14 +7,16 @@
 // (participants and signatures).
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, ChevronRight, Clock, FileCheck2, Loader2, Search } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, Check, ChevronRight, Clock, FileCheck2, Search } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { dateTime, day, eventLabel, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row } from '@/lib/documentLifecycle';
+import { eventLabel, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row } from '@/lib/documentLifecycle';
 import { askedAgain } from '@/lib/approvalRoutes';
 import { noAccess, retrySettings, type SettingsAnswer } from '@/lib/governanceSettings';
-import { useToast } from '@/components/ui/ToastProvider';
 import { InfoTip } from '@/components/ui/InfoTip';
+import { Button, ErrorState, SkeletonLines, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { dateTime, day } from '../_view/docDates';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
@@ -37,7 +39,7 @@ function Avatar({ name }: { name: string | null }) {
   );
 }
 
-const You = () => <span className="ml-1.5 rounded bg-primary-50 px-1 py-px text-[11px] font-semibold text-primary-800">You</span>;
+const You = () => <span className="ml-1.5 rounded bg-primary-50 px-1 py-px text-xs font-semibold text-primary-800">You</span>;
 
 type Tone = 'waiting' | 'overdue' | 'done' | 'rejected' | 'none' | 'delegated' | 'held' | 'changes';
 const TONE: Record<Tone, string> = {
@@ -59,7 +61,7 @@ function Badge({ row, doneLabel }: { row: Row; doneLabel: string }) {
   const label = { done: doneLabel, rejected: 'Rejected', none: 'Not needed', overdue: 'Overdue', waiting: 'Waiting', delegated: 'Delegated',
     held: 'On hold', changes: 'Asked for changes' }[t];
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE[t]}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${TONE[t]}`}>
       {label}{row.escalation_level > 0 && row.status === 'pending' ? ' · escalated' : ''}
     </span>
   );
@@ -100,7 +102,7 @@ function Stages({ status, signoff, acks }: { status: string; signoff?: Signoff; 
             </span>
             <span className="leading-tight">
               <span className={`block text-xs ${s.current ? 'font-semibold text-gray-900' : s.done ? 'font-medium text-gray-800' : 'text-gray-500'}`}>{s.label}</span>
-              {s.note && <span className="block text-[11px] text-gray-500">{s.note}</span>}
+              {s.note && <span className="block text-xs text-gray-500">{s.note}</span>}
             </span>
           </span>
           {i < steps.length - 1 && <span aria-hidden className={`mx-3 hidden h-px w-8 sm:inline-block md:w-12 ${s.done ? 'bg-primary-500' : 'bg-gray-300'}`} />}
@@ -118,7 +120,6 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
   /** told whether something was typed or drawn (a signature, a comment): a popup around this asks before it throws that away */
   onDirty?: (dirty: boolean) => void;
 }) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(startOpen);
   const [comment, setComment] = useState('');
@@ -126,15 +127,18 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
   const dirty = !!signature || comment.trim() !== '';
   useEffect(() => { onDirty?.(dirty); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps -- told when it changes
   useEffect(() => () => onDirty?.(false), []);     // eslint-disable-line react-hooks/exhaustive-deps -- and that it is gone
-  const acknowledge = useMutation({
+  // an acknowledgement is a record of the person's own (signed when they draw it): reported after the server answered; no Retry, the form stays to press again
+  const acknowledge = useReportedMutation({
     mutationFn: async () => (await apiClient.post(`${base}/acknowledge`, { comment: comment.trim() || null, signature_image: signature, version })).data,
-    // the toast first: onDone closes the popup this form is in
+    success: { title: 'Acknowledged', message: `You acknowledged${version ? ` version ${version}` : ' it'}; it is recorded with the document.` },
+    failure: 'Not acknowledged',
+    fallback: 'Could not record the acknowledgement.',
+    retryable: false,
+    // the confirmation is said first: onDone closes the popup this form is in
     onSuccess: () => {
-      toast({ type: 'success', title: 'Acknowledged', message: `You acknowledged${version ? ` version ${version}` : ' it'}; it is recorded with the document.` });
       queryClient.invalidateQueries({ queryKey: ['my-document-requests'] });     // the top bar's and My Approvals' "waiting for you"
       setOpen(false); setComment(''); setSignature(null); onDone();
     },
-    onError: (e: any) => toast({ type: 'error', title: 'Not acknowledged', message: e?.response?.data?.detail || 'Could not record the acknowledgement.' }),
   });
   return (
     <section className="rounded-xl border-2 border-primary-300 bg-white p-4 shadow-sm" aria-label="Your acknowledgement">
@@ -144,9 +148,7 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
           <h3 className="text-sm font-semibold text-gray-900">Acknowledge{row.due_date ? ` by ${day(row.due_date)}` : ''}</h3>
           <InfoTip label="About acknowledging" text="Read it first. Acknowledging records that you have read it and will follow it." />
         </div>
-        {!open && (
-          <button type="button" onClick={() => setOpen(true)} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">Acknowledge</button>
-        )}
+        {!open && <Button variant="primary" onClick={() => setOpen(true)}>Acknowledge</Button>}
       </div>
       {open && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -155,13 +157,9 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
             <SignaturePad onChange={setSignature} height={110} />
           </div>
           <div className="flex flex-col gap-2">
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)" rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-            <button type="button" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-              {acknowledge.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} I have read it and acknowledge it
-            </button>
-            <button type="button" onClick={() => (onCancel ? onCancel() : setOpen(false))} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
+            <Textarea aria-label="Comment (optional)" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)" rows={3} />
+            <Button variant="primary" fullWidth leftIcon={<Check aria-hidden />} loading={acknowledge.isPending} onClick={() => acknowledge.mutate()}>I have read it and acknowledge it</Button>
+            <Button variant="ghost" fullWidth onClick={() => (onCancel ? onCancel() : setOpen(false))}>Cancel</Button>
           </div>
         </div>
       )}
@@ -204,7 +202,7 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-gray-900">{r.user || 'Someone'}{r.user_id === meId && <You />}</span>
                         <Badge row={r} doneLabel={step.doneLabel} />
-                        {manyVersions && r.version && <span className="text-[11px] text-gray-500">version {r.version}</span>}
+                        {manyVersions && r.version && <span className="text-xs text-gray-500">version {r.version}</span>}
                       </div>
                       <p className="mt-0.5 text-xs text-gray-600">
                         {[r.status === 'pending' ? `Due ${day(r.due_date)}` : r.status === 'done' && r.done_at ? `${step.doneLabel} ${dateTime(r.done_at)}`
@@ -231,14 +229,15 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
 type Filter = 'waiting' | 'overdue' | 'done' | 'all';
 
 function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecycle; meId?: number; base: string; canRemind?: boolean }) {
-  const { toast } = useToast();
   const acks = data.acknowledgements;
   const [filter, setFilter] = useState<Filter>(acks.pending > 0 ? 'waiting' : 'all');
   const [q, setQ] = useState('');
-  const remind = useMutation({
+  const remind = useReportedMutation({
     mutationFn: async () => (await apiClient.post(`${base}/remind`)).data,
-    onSuccess: (r: any) => toast({ type: 'success', title: 'Reminders sent', message: `${r.reminded} ${r.reminded === 1 ? 'person was' : 'people were'} reminded.` }),
-    onError: () => toast({ type: 'error', title: 'Reminders failed', message: 'Could not send the reminders.' }),
+    success: (r: any) => ({ title: 'Reminders sent', message: `${r.reminded} ${r.reminded === 1 ? 'person was' : 'people were'} reminded.` }),
+    failure: 'Reminders failed',
+    fallback: 'Could not send the reminders.',
+    retryable: false,                                  // a second try could remind everyone twice
   });
   const matches = (p: Row) =>
     (filter === 'all' || (filter === 'done' ? p.status === 'done' : filter === 'overdue' ? p.status === 'pending' && p.overdue : p.status === 'pending'))
@@ -259,10 +258,7 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
         </div>
         {acks.total > 0 && <span className="text-xs text-gray-600" title={`${acks.done} of ${acks.total} people have acknowledged`}>{acks.done}/{acks.total} · {acks.percent}%</span>}
         {acks.pending > 0 && canRemind && (
-          <button type="button" onClick={() => remind.mutate()} disabled={remind.isPending} title="Remind everyone who has not acknowledged yet"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            {remind.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />} Remind waiting
-          </button>
+          <Button size="sm" className="ml-auto" leftIcon={<Bell aria-hidden />} loading={remind.isPending} title="Remind everyone who has not acknowledged yet" onClick={() => remind.mutate()}>Remind waiting</Button>
         )}
       </div>
       {acks.total === 0 ? (
@@ -281,13 +277,10 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
                 </button>
               ))}
             </div>
-            <label className="relative ml-auto">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" aria-hidden />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a person" aria-label="Find a person"
-                className="w-44 rounded-lg border border-gray-300 py-1 pl-7 pr-2 text-xs focus:border-primary-500 focus:outline-none" />
-            </label>
+            <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a person" aria-label="Find a person" className="ml-auto w-[11rem]" leftAdornment={<Search aria-hidden />} />
           </div>
-          <ul className="max-h-80 divide-y divide-gray-100 overflow-auto">
+          <div role="region" tabIndex={0} aria-label="People asked to acknowledge" className="max-h-80 overflow-auto focus-visible:outline-none focus-visible:shadow-ds-ring">
+          <ul className="divide-y divide-gray-100">
             {people.map((p) => {
               const seal = p.status === 'done' ? ownEsign(p) : null;
               return (
@@ -296,13 +289,13 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
                   <div className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-gray-900">
                       {p.user || 'Someone'}{p.user_id === meId && <You />}
-                      {p.version && <span className="ml-2 text-[11px] text-gray-500" title={p.status === 'done' ? 'The version this person acknowledged' : 'The version this person is asked to acknowledge'}>v{p.version}</span>}
+                      {p.version && <span className="ml-2 text-xs text-gray-500" title={p.status === 'done' ? 'The version this person acknowledged' : 'The version this person is asked to acknowledge'}>v{p.version}</span>}
                     </span>
                     {seal && <SignatureSeal id={seal.id} fingerprint={seal.image_sha256 ?? ''} />}
                     {(earlier.get(p.user_id) ?? []).map((e) => {
                       const s = ownEsign(e);
                       return (
-                        <div key={e.id} className="mt-1 border-l-2 border-emerald-200 pl-2 text-[11px] text-gray-600">
+                        <div key={e.id} className="mt-1 border-l-2 border-emerald-200 pl-2 text-xs text-gray-600">
                           Acknowledged v{e.version || '-'} · {day(e.done_at)}
                           {s && <SignatureSeal id={s.id} fingerprint={s.image_sha256 ?? ''} thumb={false} />}
                         </div>
@@ -316,6 +309,7 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
             })}
             {people.length === 0 && <li className="py-3 text-xs text-gray-600">{empty}</li>}
           </ul>
+          </div>
         </div>
       )}
     </section>
@@ -425,7 +419,7 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
 }) {
   const queryClient = useQueryClient();
   const base = `/governance/documents/${documentId}/lifecycle`;
-  const { data, isLoading } = useQuery<Lifecycle>({
+  const { data, isLoading, isError, error, refetch } = useQuery<Lifecycle>({
     queryKey: ['document-lifecycle', String(documentId)],
     queryFn: async () => (await apiClient.get(base)).data,
     refetchInterval: 10000,
@@ -433,7 +427,9 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
   const { data: signoff } = useSignoff(documentId);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['document-lifecycle'] });
 
-  if (isLoading || !data) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>;
+  if (isLoading) return <SkeletonLines lines={8} label="Loading the approvals" />;
+  // a failed read is not an empty page: it says so and offers Retry
+  if (!data) return <ErrorState title="Couldn't load the approvals" message={errorMessage(isError ? error : null)} onRetry={() => { void refetch(); }} />;
   const meId = data.me?.id ?? data.mine[0]?.user_id;
   const myAck = data.mine.find((r) => r.kind === 'acknowledgement');
   const mySign = data.mine.find((r) => r.kind === 'review' || r.kind === 'approval');

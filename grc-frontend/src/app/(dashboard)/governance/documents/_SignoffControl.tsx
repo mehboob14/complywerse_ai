@@ -7,16 +7,14 @@
 // Backend: /governance/documents/{id}/signoff/*.
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_PRIMARY, BTN_TEXT } from '@/components/governance/docUi';
-import { StatusPill } from '@/components/ui/ds';
-import { parseUtc } from '@/lib/serverTime';
-import { day } from '@/lib/documentLifecycle';
+import { Button, ErrorState, FormField, Select, SkeletonLines, StatusPill, Textarea, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { day, dateTime } from './_view/docDates';
 import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
 import { SIGN_LABEL, STEP_NOUN, againLine, seeChangesHref, type MyStep, type RouteView } from '@/lib/approvalRoutes';
 import { signRoleOf } from '@/lib/proposals';
@@ -25,7 +23,7 @@ import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
 import { DOC_STATUS_WORDS, docStatusPill } from './_view/docStatus';
 import {
-  Loader2, Send, CheckCircle, XCircle, Clock, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
+  Send, CheckCircle, XCircle, Clock, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
 } from 'lucide-react';
 
 export type Participant = { target_type: string; target_id: number; display?: string; stage_position?: number | null; position?: number | null };
@@ -164,7 +162,6 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
   /** told whether something was typed or drawn (a signature, a comment, a reason): a popup around this asks before it throws that away */
   onDirty?: (dirty: boolean) => void;
 }) {
-  const { toast } = useToast();
   const refresh = useRefreshAll(documentId);
   const { data } = useSignoff(documentId);
   const [comment, setComment] = useState('');
@@ -182,25 +179,39 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
   const people = options.filter((o) => o.value.startsWith('user:') && !onStage.has(o.value));
   const back = () => { setMode('sign'); setReason(''); setDelegateTo(''); };
 
-  const sign = useMutation({
+  // each of these is a decision on the document (an e-signature, a rejection, a request for changes, a delegation): reported after the server answered, with the
+  // server's words when it refuses; no Retry, because a second try could decide twice (the form stays as it is to press again on purpose)
+  const sign = useReportedMutation({
     mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: comment || undefined, signature_image: signature || undefined, version: shown ?? data?.version, round_at: data?.round_at }),
-    onSuccess: () => { toast({ type: 'success', title: 'Signed', message: 'Your electronic signature was recorded on the document.' }); setComment(''); setSignature(null); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not signed', message: e?.response?.data?.detail || 'Could not sign.' }),
+    success: { title: 'Signed', message: 'Your electronic signature was recorded on the document.' },
+    failure: 'Not signed',
+    fallback: 'Could not sign.',
+    retryable: false,
+    onSuccess: () => { setComment(''); setSignature(null); refresh(); },
   });
-  const reject = useMutation({
+  const reject = useReportedMutation({
     mutationFn: async () => governanceApi.rejectDocumentSignoff(documentId, { comment: reason, version: shown ?? data?.version, round_at: data?.round_at }),
-    onSuccess: () => { toast({ type: 'success', title: 'Rejected', message: 'The document went back to draft with your reason.' }); back(); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not rejected', message: e?.response?.data?.detail || 'Could not reject.' }),
+    success: { title: 'Rejected', message: 'The document went back to draft with your reason.' },
+    failure: 'Not rejected',
+    fallback: 'Could not reject.',
+    retryable: false,
+    onSuccess: () => { back(); refresh(); },
   });
-  const askChanges = useMutation({
+  const askChanges = useReportedMutation({
     mutationFn: async () => governanceApi.requestSignoffChanges(documentId, { comment: reason.trim(), version: shown ?? data?.version, round_at: data?.round_at }),
-    onSuccess: () => { toast({ type: 'success', title: 'Changes asked for', message: 'The author is asked to make them; it comes back to you when it is resubmitted.' }); back(); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not sent', message: e?.response?.data?.detail || 'Could not ask for changes.' }),
+    success: { title: 'Changes asked for', message: 'The author is asked to make them; it comes back to you when it is resubmitted.' },
+    failure: 'Not sent',
+    fallback: 'Could not ask for changes.',
+    retryable: false,
+    onSuccess: () => { back(); refresh(); },
   });
-  const delegate = useMutation({
+  const delegate = useReportedMutation({
     mutationFn: async () => governanceApi.delegateSignoff(documentId, { user_id: Number(delegateTo.split(':')[1]), note: reason.trim() || undefined }),
-    onSuccess: () => { toast({ type: 'success', title: 'Delegated', message: 'They are asked in your place, and told.' }); back(); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not delegated', message: e?.response?.data?.detail || 'Could not delegate.' }),
+    success: { title: 'Delegated', message: 'They are asked in your place, and told.' },
+    failure: 'Not delegated',
+    fallback: 'Could not delegate.',
+    retryable: false,
+    onSuccess: () => { back(); refresh(); },
   });
 
   // the proposer whose change the owner did not accept signs it as it is with their own step (lib/proposals.ts)
@@ -213,7 +224,7 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
   const kind = step?.kind ?? (review ? 'review' : 'approval');
   const canReject = step ? step.can_reject : true;
   const canDelegate = step ? step.can_delegate : false;
-  const dueText = due ? parseUtc(due)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: /^\d{4}-\d{2}-\d{2}$/.test(due) ? 'UTC' : undefined }) : null;
+  const dueText = due ? day(due) : null;
   // asked again after changes: what they did before and what changed since (servers from before leave it out)
   const again = step?.again ?? null;
   const changesHref = seeChangesHref(documentId, again);
@@ -226,7 +237,6 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
   const howItWorks = asIs
     ? 'Your change was not accepted. Your signature counts and the others stand, as nothing changed. Or propose another change from Proposed changes.'
     : `Read the document, then draw your signature and sign it. Or ask for changes: the author makes them and it comes back to you${canReject ? '; reject it with a reason to send it back to draft' : ''}.`;
-  const ACTION = 'w-full justify-center';
 
   return (
     <section className="rounded-xl border-2 border-primary-300 bg-[#fff] p-4 shadow-sm" aria-label={`Your ${STEP_NOUN[kind]}`}>
@@ -236,11 +246,7 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
             {againLine(again, day)}
             {again.note && <span className="mt-0.5 block text-xs text-amber-900">{again.by || 'The author'} wrote: “{again.note}”</span>}
           </p>
-          {changesHref && (
-            <Link href={changesHref} className={BTN}>
-              <GitCompare className="h-3.5 w-3.5" aria-hidden /> See what changed
-            </Link>
-          )}
+          {changesHref && <Button href={changesHref} leftIcon={<GitCompare aria-hidden />}>See what changed</Button>}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -261,67 +267,52 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
         <div className="flex flex-col gap-2">
           {mode === 'sign' && (
             <>
-              <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)" rows={3}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              <button type="button" onClick={() => sign.mutate()} disabled={sign.isPending || !signature} title={signature ? '' : 'Draw your signature first'}
-                className={`${BTN_PRIMARY} ${ACTION}`}>
-                {sign.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {SIGN_LABEL[kind]}
-              </button>
+              <Textarea aria-label="Comment (optional)" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)" rows={3} />
+              <Button variant="primary" fullWidth leftIcon={<CheckCircle aria-hidden />} loading={sign.isPending} disabled={!signature} title={signature ? '' : 'Draw your signature first'}
+                onClick={() => sign.mutate()}>
+                {SIGN_LABEL[kind]}
+              </Button>
               {!asIs && (
-                <button type="button" onClick={() => setMode('changes')} className={`${BTN} ${ACTION} !border-amber-300 !text-amber-900 hover:!bg-amber-50`}>
-                  <MessageSquareWarning className="h-4 w-4" /> Ask for changes
-                </button>
+                <Button fullWidth leftIcon={<MessageSquareWarning aria-hidden />} onClick={() => setMode('changes')}>Ask for changes</Button>
               )}
               {canReject && !asIs && (
-                <button type="button" onClick={() => setMode('reject')} title="Send it back to draft with a reason"
-                  className={`${BTN} ${ACTION} !border-rose-300 !text-[#9b1c1c] hover:!bg-rose-50`}>
-                  <XCircle className="h-4 w-4" /> Reject
-                </button>
+                <Button variant="dangerOutline" fullWidth leftIcon={<XCircle aria-hidden />} title="Send it back to draft with a reason" onClick={() => setMode('reject')}>Reject</Button>
               )}
               {canDelegate && !asIs && (
-                <button type="button" onClick={() => setMode('delegate')} title="Delegate to someone else" className={`${BTN_TEXT} ${ACTION} inline-flex items-center gap-1.5`}>
-                  <UserRoundPlus className="h-3.5 w-3.5" /> Delegate
-                </button>
+                <Button variant="link" fullWidth leftIcon={<UserRoundPlus aria-hidden />} title="Delegate to someone else" onClick={() => setMode('delegate')}>Delegate</Button>
               )}
             </>
           )}
           {mode === 'changes' && (
             <>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What should change? (required)" rows={4} autoFocus
-                className="w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none" />
+              <Textarea aria-label="What should change? (required)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What should change? (required)" rows={4} autoFocus />
               <p className="text-xs text-[#586472]">The review pauses until the author resubmits.</p>
-              <button type="button" onClick={() => askChanges.mutate()} disabled={askChanges.isPending || !reason.trim()}
-                className={`${BTN_PRIMARY} ${ACTION} !bg-amber-600 hover:!bg-amber-700`}>
-                {askChanges.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareWarning className="h-4 w-4" />} Ask for changes
-              </button>
-              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
+              <Button variant="primary" fullWidth leftIcon={<MessageSquareWarning aria-hidden />} loading={askChanges.isPending} disabled={!reason.trim()} onClick={() => askChanges.mutate()}>
+                Ask for changes
+              </Button>
+              <Button variant="ghost" fullWidth onClick={back}>Cancel</Button>
             </>
           )}
           {mode === 'reject' && (
             <>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" rows={4} autoFocus
-                className="w-full rounded-lg border border-rose-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none" />
-              <button type="button" onClick={() => reject.mutate()} disabled={reject.isPending || !reason.trim()}
-                className={`${BTN_PRIMARY} ${ACTION} !bg-[#b42318] hover:!bg-[#912018]`}>
-                {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Reject and send back
-              </button>
-              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
+              <Textarea aria-label="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" rows={4} autoFocus />
+              <Button variant="danger" fullWidth leftIcon={<XCircle aria-hidden />} loading={reject.isPending} disabled={!reason.trim()} onClick={() => reject.mutate()}>
+                Reject and send back
+              </Button>
+              <Button variant="ghost" fullWidth onClick={back}>Cancel</Button>
             </>
           )}
           {mode === 'delegate' && (
             <>
-              <label className="text-xs font-semibold text-[#26323d]" htmlFor={`delegate-${documentId}`}>Delegate to</label>
-              <select id={`delegate-${documentId}`} value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none">
-                <option value="">Choose a person…</option>
-                {people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Note (optional)" rows={2}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              <button type="button" onClick={() => delegate.mutate()} disabled={delegate.isPending || !delegateTo} className={`${BTN_PRIMARY} ${ACTION}`}>
-                {delegate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserRoundPlus className="h-4 w-4" />} Delegate
-              </button>
-              <button type="button" onClick={back} className={`${BTN_TEXT} ${ACTION}`}>Cancel</button>
+              <FormField label="Delegate to" id={`delegate-${documentId}`}>
+                <Select value={delegateTo} onChange={(e) => setDelegateTo(e.target.value)}>
+                  <option value="">Choose a person…</option>
+                  {people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </FormField>
+              <Textarea aria-label="Note (optional)" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Note (optional)" rows={2} />
+              <Button variant="primary" fullWidth leftIcon={<UserRoundPlus aria-hidden />} loading={delegate.isPending} disabled={!delegateTo} onClick={() => delegate.mutate()}>Delegate</Button>
+              <Button variant="ghost" fullWidth onClick={back}>Cancel</Button>
             </>
           )}
         </div>
@@ -336,6 +327,7 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
  */
 export function SignoffParticipants({ documentId, doc, readOnly = false }: { documentId: number; doc: any; readOnly?: boolean }) {
   const { toast } = useToast();
+  const notify = useNotify();
   const refresh = useRefreshAll(documentId);
   const options = useAssigneeOptions(doc?.tenant_id);
   const { data } = useSignoff(documentId);
@@ -352,15 +344,18 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
     }
   }, [data]);
 
-  const save = useMutation({
+  const save = useReportedMutation({
     mutationFn: async () => governanceApi.setSignoffParticipants(documentId, { prepared_by: prepared, reviewers, approvers }),
-    onSuccess: () => { toast({ type: 'success', title: 'Saved', message: 'Who reviews and approves was updated.' }); setEditing(false); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not saved', message: e?.response?.data?.detail || 'Could not save who reviews and approves.' }),
+    success: { title: 'Saved', message: 'Who reviews and approves was updated.' },
+    failure: 'Not saved',
+    fallback: 'Could not save who reviews and approves.',
+    onSuccess: () => { setEditing(false); refresh(); },
   });
+  // sending asks people (their tasks and e-mails): the words depend on what the server answered, and a second try could ask them twice, so no Retry
   const send = useMutation({
     mutationFn: async () => governanceApi.sendDocumentForReview(documentId),
     onSuccess: (r: any) => { toast(sentToast(r?.data, 'The reviewers and approvers were asked, in order.')); refresh(); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not sent', message: e?.response?.data?.detail || 'Add a reviewer or an approver first.' }),
+    onError: (e: any) => { notify.error(e, { title: 'Not sent', fallback: 'Add a reviewer or an approver first.' }); },
   });
 
   if (!data) return null;
@@ -377,9 +372,7 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
         <h3 className="text-sm font-semibold text-gray-900">Participants</h3>
         <InfoTip label="About participants" text="Choose people, a role or a department. With a role or a department, the first member to sign signs for all of them." />
         {editable && !open && (
-          <button type="button" onClick={() => setEditing(true)} className={`${BTN_TEXT} ml-auto inline-flex items-center gap-1`}>
-            <Pencil className="h-3.5 w-3.5" aria-hidden /> Change
-          </button>
+          <Button variant="link" size="sm" className="ml-auto" leftIcon={<Pencil aria-hidden />} onClick={() => setEditing(true)}>Change</Button>
         )}
       </div>
       {!open ? (
@@ -402,19 +395,17 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
             <AssigneeMultiSelect label="Approvers" value={approvers} onChange={setApprovers} options={options} />
           </div>
           <div className="flex justify-end gap-2">
-            {editing && <button type="button" onClick={() => setEditing(false)} className={BTN}>Cancel</button>}
-            <button type="button" onClick={() => save.mutate()} disabled={save.isPending} className={BTN_PRIMARY}>
-              {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save
-            </button>
+            {editing && <Button onClick={() => setEditing(false)}>Cancel</Button>}
+            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
           </div>
         </div>
       )}
       {status === 'draft' && !open && !readOnly && (
         <div className="mt-3 flex items-center justify-end gap-1.5 border-t border-[#e1e6eb] pt-3">
           <InfoTip align="end" label="About sending for review" text="The reviewers are asked first, then the approvers. Each gets it in their Task Management." />
-          <button type="button" onClick={() => send.mutate()} disabled={!canSend || send.isPending} title={canSend ? '' : 'Add a reviewer or an approver first'} className={BTN_PRIMARY}>
-            {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send for review
-          </button>
+          <Button variant="primary" leftIcon={<Send aria-hidden />} loading={send.isPending} disabled={!canSend} title={canSend ? '' : 'Add a reviewer or an approver first'} onClick={() => send.mutate()}>
+            Send for review
+          </Button>
         </div>
       )}
     </section>
@@ -422,7 +413,7 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
 }
 
 const RULE_WORDS = (s: { rule: string; min_count: number | null }) => (s.rule === 'any' ? 'any one signs' : s.rule === 'at_least' ? `at least ${s.min_count} sign` : 'everyone signs');
-const CHIP = 'rounded-full border border-[#d5dbe1] bg-[#f3f6f8] px-2 py-px text-[11px] text-[#3f4b58]';
+const CHIP = 'rounded-full border border-[#d5dbe1] bg-[#f3f6f8] px-2 py-px text-xs text-[#3f4b58]';
 
 /** A route of its own: its stages and their people, in order (changed in Submit for review while it is a draft). */
 function RouteSummaryCard({ data }: { data: Signoff }) {
@@ -445,7 +436,7 @@ function RouteSummaryCard({ data }: { data: Signoff }) {
               {s.kind !== 'information' && (!!rule || !!s.due_days) && (
                 <span className="inline-flex items-center gap-1.5">
                   {rule && <span className={CHIP}>{rule}</span>}
-                  {s.due_days ? <span className="text-[11px] text-[#586472]" title={`${s.due_days} days to act`}>{s.due_days} d</span> : null}
+                  {s.due_days ? <span className="text-xs text-[#586472]" title={`${s.due_days} days to act`}>{s.due_days} d</span> : null}
                 </span>
               )}
             </li>
@@ -476,8 +467,8 @@ export function SignoffTrail({ documentId }: { documentId: number }) {
                   {s.on_behalf_of_name && <span className="text-gray-600"> for {s.on_behalf_of_name}</span>}
                   <span className="text-gray-600"> · {s.role_label} · {s.decision === 'rejected' ? 'rejected' : 'signed'}{s.asked_again ? ' · asked again after changes' : ''}</span>
                 </p>
-                <p className="flex items-center gap-1 text-[11px] text-gray-500">
-                  <Clock className="h-3 w-3" />{s.signed_at ? (parseUtc(s.signed_at)?.toLocaleString() ?? '') : ''}
+                <p className="flex items-center gap-1 text-xs text-gray-500">
+                  <Clock className="h-3 w-3" aria-hidden />{s.signed_at ? dateTime(s.signed_at) : ''}
                 </p>
                 {s.comment && <p className="mt-0.5 text-xs italic text-gray-600">“{s.comment}”</p>}
                 {s.esign && <SignatureSeal id={s.esign.id} fingerprint={s.esign.image_sha256} />}
@@ -492,10 +483,10 @@ export function SignoffTrail({ documentId }: { documentId: number }) {
 
 /** The document's own Sign-off tab (organisations without the life cycle): where it stands, your step, who signs, the signatures. */
 export function SignOffControlTab({ documentId, doc, canEdit = true, version }: { documentId: number; doc: any; canEdit?: boolean; version?: string }) {
-  const { data, isLoading } = useSignoff(documentId);
-  if (isLoading) {
-    return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>;
-  }
+  const { data, isLoading, isError, error, refetch } = useSignoff(documentId);
+  if (isLoading) return <SkeletonLines lines={6} label="Loading the sign-off" />;
+  // a failed read is not an empty sign-off
+  if (isError && !data) return <ErrorState title="Couldn't load the sign-off" message={errorMessage(error)} onRetry={() => { void refetch(); }} />;
   const status = data?.status || doc?.status;
   const progress = data?.progress || {};
   return (
