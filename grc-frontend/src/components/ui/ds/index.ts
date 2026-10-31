@@ -25,3 +25,6 @@ export {
   nextSort, ariaSort, sortRows, priorityClass, rowCountText,
   type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
 } from './tableModel';
+export { SectionCard, type SectionCardProps } from './SectionCard';
+export { SaveBar, type SaveBarProps } from './SaveBar';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';

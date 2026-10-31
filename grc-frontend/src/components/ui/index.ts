@@ -46,3 +46,6 @@ export {
   nextSort, ariaSort, sortRows, priorityClass, rowCountText,
   type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
 } from './ds/tableModel';
+export { SectionCard, type SectionCardProps } from './ds/SectionCard';
+export { SaveBar, type SaveBarProps } from './ds/SaveBar';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './ds/SegmentedControl';
