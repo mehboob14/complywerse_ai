@@ -120,11 +120,12 @@ test('departments: the two words of a switched-on or switched-off department', (
   assert.deepEqual(statusPill(departmentStatus, 'inactive'), { tone: 'neutral', label: 'Inactive' });
 });
 
-test('review cycles and the review log', () => {
+test('review cycles, the review log and where a review date stands', () => {
   exhaustive(reviewStatus, [
     ['scheduled', 'pending', 'Scheduled'], ['in_progress', 'progress', 'In progress'], ['completed', 'success', 'Completed'], ['skipped', 'neutral', 'Skipped'],
     ['pending_review', 'pending', 'Pending review'], ['in_review', 'progress', 'In review'], ['approved', 'success', 'Approved'],
     ['rejected', 'danger', 'Rejected'], ['archived', 'neutral', 'Archived'],
+    ['overdue', 'danger', 'Overdue'], ['due_soon', 'warning', 'Due soon'], ['on_track', 'success', 'On track'],     // where a review date stands today (the statistics' by_status)
   ]);
 });
 

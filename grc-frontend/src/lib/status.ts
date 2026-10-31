@@ -155,6 +155,8 @@ export const actionStatus = defineStatuses('action', {
 
 // Governance > Reviews has two lists. PolicyReviewHistory.review_status is the review cycle of a document (models/_13); the other,
 // GovernanceActionReview.review_status, is the log of governance actions that ask for a review. The words do not overlap, so one registry.
+// The last three are where a document's review date stands against today: the keys of `by_status` in GET /governance/reviews/statistics (routers/reviews.py),
+// which the Reviews list and calendar show on every row (overdue = the date has begun, due soon = under eight days away, on track = further off).
 export const reviewStatus = defineStatuses('review', {
   scheduled: 'pending',
   in_progress: 'progress',
@@ -165,6 +167,9 @@ export const reviewStatus = defineStatuses('review', {
   approved: 'success',
   rejected: 'danger',
   archived: 'neutral',
+  overdue: 'danger',
+  due_soon: 'warning',
+  on_track: 'success',
 });
 
 // Attestation campaigns (models/_27: AttestationCampaign draft/active/closed/archived, AttestationRequest pending/completed/overdue/escalated;
