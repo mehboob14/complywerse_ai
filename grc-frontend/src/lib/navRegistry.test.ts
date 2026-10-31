@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { activeTab, breadcrumbFor, isInArea, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
+import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry } from '../components/layout/navAccess.ts';
 import { activeNavHref } from '../components/layout/navActive.ts';
 
@@ -113,7 +113,10 @@ test('the trail of every entry reaches a root without a cycle, through static pa
 
 test('a forward is another URL of an entry that is a page of its own, under the same name', () => {
   const aliases = routes.filter((e) => e.aliasOf);
-  assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [['/governance/attestations', '/governance/documents/attestation']]);
+  assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
+    ['/governance/attestations', '/governance/documents/attestation'],
+    ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
+  ]);
   for (const a of aliases) {
     const target = entry(a.aliasOf as string);
     assert.equal(target.aliasOf, undefined);
@@ -173,7 +176,16 @@ test('every URL of the contract resolves to an entry, with its query or hash ign
 
 test('the forward is real: the legacy attestations page replaces itself with the entry the registry names as its target', () => {
   const source = readFileSync(`${APP}(dashboard)/governance/attestations/page.tsx`, 'utf8');
-  for (const a of routes.filter((e) => e.aliasOf)) assert.ok(source.includes(`router.replace('${a.aliasOf}')`), `${a.path} does not forward to ${a.aliasOf}`);
+  const forward = routes.find((e) => e.path === '/governance/attestations') as RouteEntry;
+  assert.ok(source.includes(`router.replace('${forward.aliasOf}')`), `${forward.path} does not forward to ${forward.aliasOf}`);
+});
+
+test("the review calendar's URL is the Reviews page itself, opened on its calendar view: it renders the target's page, it does not redirect", () => {
+  const calendar = readFileSync(`${APP}(dashboard)/governance/reviews/calendar/page.tsx`, 'utf8');
+  assert.ok(/export \{ default \} from '\.\.\/page';/.test(calendar), 'the calendar URL re-exports the Reviews page');
+  assert.ok(!/redirect|router\./.test(calendar), 'no redirect: the address stays /governance/reviews/calendar');
+  assert.equal(entry('/governance/reviews/calendar').aliasOf, '/governance/reviews');
+  assert.equal(entry('/governance/reviews/calendar').hidden, undefined, "it is no hidden page: it is the Reviews tab's address");
 });
 
 test('a static page beats a :param page of the same shape, a :param matches one segment only, and a path that is no route is no entry', () => {
@@ -233,7 +245,7 @@ test('the old names stay findable (keywords), and no keyword repeats the label',
   assert.deepEqual(entry('/erm/kris').keywords, ['Key Risk Indicators']);
   assert.deepEqual(entry('/governance/documents').keywords, ['Document library']);
   assert.deepEqual(entry('/governance/approvals').keywords, ['Pending Approvals']);
-  assert.deepEqual(entry('/governance/reviews').keywords, ['Reviews']);
+  assert.deepEqual(entry('/governance/reviews').keywords, ['Reviews', 'Review Calendar']);
   assert.equal(titleFor('/is-projects/dashboard'), 'Projects Overview');
   for (const e of routes) for (const k of e.keywords ?? []) assert.notEqual(k, e.label, `${e.path}: a keyword repeats the label`);
 });
@@ -278,18 +290,39 @@ test('an unknown or odd path falls back (undefined, an empty trail) and never th
 
 // ---- tabs (the full pin of the Documents tab bar is documentsTabs.test.ts) ----
 
-test('the Documents strip: five tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
+test('the Documents strip: six tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
   assert.deepEqual(tabsFor('documents').map((t) => t.path), [
-    '/governance/documents', '/governance/documents/studio', '/governance/documents/attestation', '/governance/exceptions', '/governance/settings',
+    '/governance/documents', '/governance/documents/studio', '/governance/documents/attestation', '/governance/reviews', '/governance/exceptions', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions']);
-  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Policy exceptions']);
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 5, 'the right asked for is governance:settings:*');
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 4);
+  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 6, 'the right asked for is governance:settings:*');
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 5);
   assert.deepEqual(tabsFor('nowhere'), []);
+});
+
+test('Reviews is a door of its own: a tab of the Documents strip for everyone who sees the strip (no right of its own), lit on both of its URLs', () => {
+  const reviews = entry('/governance/reviews');
+  assert.equal(reviews.hidden, undefined, 'it is no longer reached only from the Overview counter');
+  assert.deepEqual([reviews.tab?.area, reviews.tab?.id, reviews.tab?.permission, reviews.tab?.studio], ['documents', 'reviews', undefined, undefined]);
+  assert.equal(reviews.label, 'Document Reviews');
+  assert.equal(reviews.shortLabel, 'Reviews');
+  assert.equal(reviews.permissions, null, 'the registry adds no right and no guard');
+  for (const ctx of [{ studio: true, can: () => false }, { studio: false, can: () => false }, { studio: false, can: () => true }]) {
+    assert.ok(tabsFor('documents', ctx).some((t) => t.path === '/governance/reviews'), JSON.stringify(ctx.studio));
+  }
+  for (const url of ['/governance/reviews', '/governance/reviews/calendar', '/governance/reviews/calendar?month=2026-11&day=2026-11-12', '/governance/reviews?view=calendar']) {
+    assert.equal(isInArea('documents', url), true, url);
+    assert.equal(activeTab('documents', url)?.path, '/governance/reviews', url);
+    assert.equal(titleFor(url), 'Document Reviews', url);
+  }
+  assert.deepEqual(breadcrumbFor('/governance/reviews/calendar').map((c) => c.label), ['Governance', 'Documents', 'Document Reviews']);
+  // the tabs on either side keep their places
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
 });
 
 test('a short label is only what the tab shows; the tooltip and the accessible name are the label', () => {
@@ -324,4 +357,13 @@ test('the Header names Governance pages from the registry and keeps no Governanc
   const keys = Array.from(table.matchAll(/^\s*'(\/[^']*)':/gm)).map((m) => m[1]);
   assert.ok(keys.length > 20, 'the title map of the other modules is still there');
   assert.deepEqual(keys.filter((k) => routeFor(k)?.area === 'governance' || k.startsWith('/governance') || k.startsWith('/is-projects')), [], 'a Governance title kept in the Header');
+});
+
+test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
+  assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), ['/governance', '/governance/kpi-report']);
+  assert.equal(ownHeadingSection('/governance'), 'Governance');
+  assert.equal(ownHeadingSection('/governance/kpi-report'), 'Governance');
+  assert.equal(ownHeadingSection('/governance/committees'), undefined, 'a page without the flag shows its own title in the top bar');
+  assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
+  assert.equal(ownHeadingSection(null), undefined);
 });

@@ -1,9 +1,11 @@
 // node --test "src/components/governance/documentsTabs.test.ts"
-// The Documents area's tab bar (Documents · Comply AI Studio · Attestation · Exceptions · Settings) in the top bar: which tabs there are, in which order,
+// The Documents area's tab bar (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Settings) in the top bar: which tabs there are, in which order,
 // which pages belong to the area (the Header swaps its title for the tabs there) and which tab is lit on which page. It was written inline in
 // DocumentsTabs.tsx and is now read from the navigation registry (lib/navRegistry.ts); this test is the pin of the behaviour it had BEFORE:
 // ORACLE is the old logic transcribed, TABLE is the same behaviour as a hand-written table, and the registry must give both.
-// The only deliberate difference: the Settings tab's tooltip and accessible name is the destination's full name, "Governance settings" (it was "Settings").
+// The deliberate differences from the bar as it was: the Settings tab's tooltip and accessible name is the destination's full name, "Governance settings" (it was
+// "Settings"); and the Reviews tab (UX Gate 4C), between Attestation and Exceptions, is in the oracle: Governance > Reviews had no door but the Overview's overdue
+// counter, so /governance/reviews and its calendar URL are now pages of the area (their tooltip is "Document Reviews", the tab says "Reviews"), for everyone who sees the bar.
 // A path that is no route is not part of the contract (the old rules matched on characters, the registry on whole path segments).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,14 +19,15 @@ type Ctx = { studio: boolean; settings: boolean };
 const DOCUMENTS: Tab = { name: 'Documents', label: 'Documents', href: '/governance/documents' };
 const ATTESTATION: Tab = { name: 'Attestation', label: 'Attestation', href: '/governance/documents/attestation' };
 const EXCEPTIONS: Tab = { name: 'Policy exceptions', label: 'Exceptions', href: '/governance/exceptions' };
+const REVIEWS: Tab = { name: 'Document Reviews', label: 'Reviews', href: '/governance/reviews' };
 const STUDIO: Tab = { name: 'Comply AI Studio', label: 'Comply AI Studio', href: '/governance/documents/studio' };
 const SETTINGS: Tab = { name: 'Settings', label: 'Settings', href: '/governance/settings', iconOnly: true };
 
 const oracleInArea = (pathname: string | null) =>
-  !!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions') || pathname.startsWith(SETTINGS.href));
+  !!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions') || pathname.startsWith(REVIEWS.href) || pathname.startsWith(SETTINGS.href));
 
 function oracleTabs({ studio, settings }: Ctx): Tab[] {
-  const tabs = studio ? [DOCUMENTS, STUDIO, ATTESTATION, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, EXCEPTIONS];
+  const tabs = studio ? [DOCUMENTS, STUDIO, ATTESTATION, REVIEWS, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, REVIEWS, EXCEPTIONS];
   if (settings) tabs.push(SETTINGS);
   return tabs;
 }
@@ -46,6 +49,8 @@ const TABLE: Array<[string, boolean, string | null, string | null]> = [
   ['/governance/documents/studio', true, 'Comply AI Studio', null],
   ['/governance/documents/studio/12', true, 'Comply AI Studio', null],
   ['/governance/documents/attestation', true, 'Attestation', 'Attestation'],
+  ['/governance/reviews', true, 'Document Reviews', 'Document Reviews'],
+  ['/governance/reviews/calendar', true, 'Document Reviews', 'Document Reviews'],            // the same tab: its calendar view
   ['/governance/exceptions', true, 'Policy exceptions', 'Policy exceptions'],
   ['/governance/settings', true, 'Settings', 'Settings'],
   // pages of the Documents family that keep the page's own title, not the tabs
@@ -55,8 +60,6 @@ const TABLE: Array<[string, boolean, string | null, string | null]> = [
   ['/governance/attestations/complete/4', false, null, null],
   ['/governance/attestations/my', false, null, null],
   ['/governance/approvals', false, null, null],
-  ['/governance/reviews', false, null, null],
-  ['/governance/reviews/calendar', false, null, null],
   ['/governance/mappings', false, null, null],
   ['/governance/workflows', false, null, null],
   ['/governance/committees', false, null, null],
@@ -89,10 +92,10 @@ test('the old logic and the table say the same thing (so the oracle is the behav
 test('the tabs, in order, by who sees them: the Studio where it is on, Settings with the right', () => {
   const names = ALL.map((ctx) => oracleTabs(ctx).map((t) => t.name));
   assert.deepEqual(names, [
-    ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions', 'Settings'],
-    ['Documents', 'Attestation', 'Policy exceptions', 'Settings'],
-    ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions'],
-    ['Documents', 'Attestation', 'Policy exceptions'],
+    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Settings'],
+    ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Settings'],
+    ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions'],
+    ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions'],
   ]);
 });
 
