@@ -87,7 +87,7 @@ function NavSubGroup({ group, activeHref, animated, touch, onNavigate }: GroupPr
                   childActive ? 'bg-[var(--sidebar-active-bg)] font-medium text-[var(--color-text)]' : 'font-normal text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
                 )}
               >
-                <item.icon size={15} strokeWidth={1.75} className={clsx('flex-shrink-0', childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
+                <item.icon size={15} strokeWidth={1.75} className={clsx('flex-shrink-0', childActive ? 'text-[var(--color-text)]' : 'text-[var(--sidebar-icon)]')} />
                 <span className="leading-tight break-words">{item.name}</span>
               </Link>
             );
@@ -121,7 +121,7 @@ export function NavItemLink({ item, active, collapsed = false, touch = false, on
         {...navIconProps}
         className={clsx(
           'flex-shrink-0 transition-colors duration-150',
-          active ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
+          active ? 'text-[var(--color-text)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
         )}
       />
       {!collapsed && <span className="leading-tight break-words">{item.name}</span>}
@@ -191,7 +191,7 @@ export function NavGroupSection({ group, activeHref, animated, touch, onNavigate
                   size={16}
                   strokeWidth={1.75}
                   className={clsx('flex-shrink-0',
-                    childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
+                    childActive ? 'text-[var(--color-text)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
                 />
                 <span className="leading-tight break-words">{item.name}</span>
               </Link>
@@ -345,7 +345,7 @@ function RailFlyoutItems({ entries, activeHref, onPick }: { entries: NavEntry[];
             active={active}
             onPick={onPick}
             size={16}
-            iconClass={clsx('flex-shrink-0', active ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')}
+            iconClass={clsx('flex-shrink-0', active ? 'text-[var(--color-text)]' : 'text-[var(--sidebar-icon)]')}
             className={clsx(
               'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
               active
@@ -377,7 +377,7 @@ function RailGroup({ group, activeHref }: { group: NavGroup; activeHref: string 
         className={clsx(
           'flex items-center justify-center w-full rounded-lg p-2 transition-colors duration-150', FOCUS,
           hasActiveChild
-            ? 'bg-[var(--sidebar-active-bg)] text-[var(--color-base)]'
+            ? 'bg-[var(--sidebar-active-bg)] text-[var(--color-text)]'
             : 'text-[var(--sidebar-icon)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
         title={group.name}

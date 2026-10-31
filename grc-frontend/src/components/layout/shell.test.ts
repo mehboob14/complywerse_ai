@@ -63,6 +63,18 @@ test('the keyboard focus ring reads (3:1) on the white menu and on the mint row 
   assert.ok(contrast(ring, mint) >= 3, `ring ${ring} on ${mint}: ${contrast(ring, mint).toFixed(2)}`);
 });
 
+test('the icon of the lit row is the text colour, readable on the mint it sits on (mint icons stay on white)', () => {
+  const tokens = read('styles/tokens.css');
+  const mint = /--sidebar-active-bg:\s*(#[0-9a-f]{6})/i.exec(tokens)?.[1] ?? '';
+  const text = /--color-text:\s*(#[0-9a-f]{6})/i.exec(tokens)?.[1] ?? '';
+  assert.ok(mint && text, 'both colours are found');
+  assert.ok(contrast(text, mint) >= 4.5, `the text colour on the mint: ${contrast(text, mint).toFixed(2)}`);
+  assert.doesNotMatch(tree, /(?:childActive|active) \? 'text-\[var\(--color-base\)\]'/, 'a lit leaf row with a mint icon on mint');
+  assert.doesNotMatch(tree, /bg-\[var\(--sidebar-active-bg\)\] text-\[var\(--color-base\)\]/, 'the lit group button of the rail with a mint icon on mint');
+  assert.equal((tree.match(/(?:childActive|active) \? 'text-\[var\(--color-text\)\]'/g) ?? []).length, 4, 'a page of its own, a group row, a sub-group row, a flyout row');
+  assert.match(tree, /bg-\[var\(--sidebar-active-bg\)\] text-\[var\(--color-text\)\]'/, 'the rail group button');
+});
+
 test('new text in the menu stays at or above the 12px floor: only the Administration heading, which was there before, is smaller', () => {
   const small = (tree.match(/text-\[\d+(?:\.\d+)?px\]/g) ?? []).filter((c) => parseFloat(c.slice(6)) < 12);
   assert.deepEqual(small, ['text-[10px]'], 'the Administration flyout heading');
