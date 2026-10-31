@@ -362,11 +362,12 @@ export function removeMemberPlan(
 }
 
 /** Deleting a committee: what the server removes (committees.py delete_committee: the ORM cascade over members, charters, meetings with their agenda, minutes
- *  and attached documents, and actions; the actions' Task Management copies are dropped first). Plan, not a change: G4_committee_deactivation_plan.md. */
+ *  and attached documents, and actions; the actions' Task Management copies are dropped first). A vote on any agenda item makes the server fail the whole delete
+ *  (500, nothing removed: tried on the scratch tenant), and the question says so. Plan, not a change: G4_committee_deactivation_plan.md. */
 export function deleteCommitteePlan(name: string): ConfirmPlan {
   return {
     title: `Delete ${name}?`,
-    message: 'This permanently deletes the committee with its members, charters, meetings (agendas, minutes and attached documents) and actions, and the copies of those actions in Task Management. It cannot be undone.',
+    message: 'This permanently deletes the committee with its members, charters, meetings (agendas, minutes and attached documents) and actions, and the copies of those actions in Task Management. It cannot be undone. If a vote was cast on any agenda item, the server refuses and nothing is deleted.',
     confirmLabel: 'Delete committee',
   };
 }

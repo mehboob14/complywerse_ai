@@ -292,7 +292,7 @@ test('the delete question names what the server removes, and its confirm button 
   const plan = deleteCommitteePlan('Audit Committee');
   assert.equal(plan.title, 'Delete Audit Committee?');
   assert.equal(plan.confirmLabel, 'Delete committee');
-  for (const word of ['members', 'charters', 'meetings', 'agendas', 'minutes', 'attached documents', 'actions', 'Task Management', 'cannot be undone']) {
+  for (const word of ['members', 'charters', 'meetings', 'agendas', 'minutes', 'attached documents', 'actions', 'Task Management', 'cannot be undone', 'a vote was cast on any agenda item']) {
     assert.ok(plan.message.includes(word), word);
   }
 });
