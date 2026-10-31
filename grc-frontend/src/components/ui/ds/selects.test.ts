@@ -37,6 +37,11 @@ test('the button names the control and what is chosen, and says it opens a listb
   assert.match(engine, /title=\{summary\.labels\.length > 1 \? summary\.labels\.join\(', '\) : undefined\}/);
 });
 
+test('chips: the comma between two is screen-reader text, so the name ("Draft, Approved +1") is exactly the words the button shows (found by the accessibility probe)', () => {
+  assert.match(engine, /\{chip\}\{i < summary\.chips\.length - 1 && <span className="sr-only">,<\/span>\}/);
+  assert.match(engine, /\{summary\.more > 0 && <span className="shrink-0 text-ds-label text-ds-fg-muted">\{`\+\$\{summary\.more\}`\}<\/span>\}/);
+});
+
 test('FormField wiring: the button takes its id and description from the field around it, and a red outline from its error', () => {
   assert.match(engine, /const a11y = useFieldControl\(\{ id, invalid \}\);/);
   assert.match(engine, /id=\{a11y\.id\}/);

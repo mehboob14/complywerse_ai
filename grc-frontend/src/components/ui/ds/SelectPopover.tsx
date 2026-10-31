@@ -349,7 +349,8 @@ export function SelectEngine({
         {showLabel && <span className="shrink-0 text-ds-fg-muted">{label}:</span>}
         {display === 'chips' && summary.chips.length > 0 ? (
           <span className="flex min-w-0 flex-1 items-center gap-[4px] overflow-hidden">
-            {summary.chips.map((chip, i) => <span key={i} className={CHIP}>{chip}</span>)}
+            {/* the comma between chips is for the words, not the eye: the name the button has ("Draft, Approved +1") is then exactly the text it shows */}
+            {summary.chips.map((chip, i) => <span key={i} className={CHIP}>{chip}{i < summary.chips.length - 1 && <span className="sr-only">,</span>}</span>)}
             {summary.more > 0 && <span className="shrink-0 text-ds-label text-ds-fg-muted">{`+${summary.more}`}</span>}
           </span>
         ) : (
