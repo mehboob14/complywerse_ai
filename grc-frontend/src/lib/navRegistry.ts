@@ -33,8 +33,8 @@
 //   /governance/approvals                    My Approvals       "Governance" + generic subtitle          My Approvals                  -                                        My Approvals (bar: was "Governance")
 //   /governance/exceptions                   -                  tabs                                     Policy exceptions             tab "Exceptions", tooltip "Policy exceptions"   Policy exceptions; shortLabel Exceptions
 //   /governance/settings                     -                  tabs                                     Governance settings           tab "Settings" (gear), tooltip "Settings"       Governance settings; shortLabel Settings (tooltip was "Settings")
-//   /governance/reviews                      -                  "Governance" + generic subtitle          Document Reviews              back "Reviews" (from the calendar)       Document Reviews (bar: was "Governance")
-//   /governance/reviews/calendar             -                  (none)                                   Review Calendar               back "Reviews"                           Review Calendar
+//   /governance/reviews                      -                  "Governance" + generic subtitle          Document Reviews              tab Reviews, tooltip "Document Reviews"  Document Reviews; shortLabel Reviews (bar: was "Governance"; now a tab of the Documents strip)
+//   /governance/reviews/calendar             -                  (none)                                   Document Reviews              the same tab (its calendar view)         Document Reviews (an alias: it was "Review Calendar", now a view of the page)
 //   /governance/mappings                     -                  "Governance" + generic subtitle          Policy-Control Mappings       -                                        Policy-Control Mappings (bar: was "Governance")
 //   /governance/workflows                    -                  "Governance" + generic subtitle          Approval Workflows            -                                        Approval Workflows (bar: was "Governance")
 //   /governance/committees                   Committees         (none)                                   Board & Committee Management  back "Committees"                        Committees
@@ -89,13 +89,17 @@ export interface RouteEntry {
   /** the page it is reached from (a path of another entry, without :params): the trail goes through it */
   parent?: string;
   tab?: TabSpec;
-  /** another URL that forwards to this destination's page: it has the same name */
+  /** another URL of this destination's page: it forwards to it (the legacy attestations page) or opens that same page in a given state (the review
+   *  calendar's URL opens Document Reviews on its calendar view); it has the same name */
   aliasOf?: string;
   /** why it has no menu entry or tab: where it is reached from */
   hidden?: string;
   /** what the page needs today, as navAccess says (any one of them); null: no right, any signed-in user */
   permissions: string[] | null;
   keywords?: string[];
+  /** the page draws its own heading in its body (PageHeader variant="page"): the top bar then names only its section, so the page's name is not on
+   *  screen twice. Set it on a page when it moves to the kit's page head. */
+  ownHeading?: boolean;
 }
 
 /** An entry that is a tab of a strip. */
@@ -114,7 +118,7 @@ function walk(entries: NavEntry[], groups: Crumb[]): void {
 }
 walk(navigation, []);
 
-type Extra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords'>>;
+type Extra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading'>>;
 
 const DOCS = '/governance/documents';
 const ATTEST = `${DOCS}/attestation`;
@@ -124,7 +128,8 @@ const PROJECTS = '/is-projects';
 
 // what the sidebar's own leaves add (by href)
 const OF_LEAF: Record<string, Extra> = {
-  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture' },
+  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true },
+  '/governance/kpi-report': { ownHeading: true },
   [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1 }, keywords: ['Document library'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'] },
@@ -154,10 +159,10 @@ const pages: RouteEntry[] = [
   gov('/governance/attestations/campaigns/:id', 'Attestation Campaign', { parent: '/governance/attestations/campaigns', hidden: 'opens from the legacy campaign list' }),
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
-  gov('/governance/exceptions', 'Policy exceptions', { shortLabel: 'Exceptions', parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 4 } }),
-  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 5, permission: 'governance:settings:*' } }),
-  gov('/governance/reviews', 'Document Reviews', { parent: DOCS, keywords: ['Reviews'], hidden: 'opens only from the Overview\'s overdue-reviews counter (shown while it is non-zero and among the first three)' }),
-  gov('/governance/reviews/calendar', 'Review Calendar', { parent: '/governance/reviews', hidden: 'opens from Document Reviews' }),
+  gov('/governance/exceptions', 'Policy exceptions', { shortLabel: 'Exceptions', parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 5 } }),
+  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 6, permission: 'governance:settings:*' } }),
+  gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 4 }, keywords: ['Reviews', 'Review Calendar'] }),
+  gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),
   gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab' }),
   gov('/governance/workflows', 'Approval Workflows', { parent: DOCS, hidden: 'opens only from a document\'s menu ("Older approval requests") where the document lifecycle is off' }),
   gov(`${COMMITTEES}/:id`, 'Committee', { parent: COMMITTEES, hidden: 'opens from the Committees list' }),
@@ -211,6 +216,16 @@ export function titleFor(pathname: string | null | undefined): string | undefine
 export function subtitleFor(pathname: string | null | undefined): string | undefined {
   const hit = routeFor(pathname);
   return hit ? hit.subtitle ?? canonical(hit).subtitle : undefined;
+}
+
+/** The area names the top bar shows for a page that draws its own heading (only Governance is registry-owned so far). */
+const SECTION: Record<string, string> = { governance: 'Governance' };
+
+/** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name; undefined when the
+ *  page has no own heading (the top bar then shows its title) or is no route. */
+export function ownHeadingSection(pathname: string | null | undefined): string | undefined {
+  const hit = routeFor(pathname);
+  return hit && canonical(hit).ownHeading ? SECTION[hit.area] : undefined;
 }
 
 /** The trail to a page: its sidebar groups, then the pages it hangs under, then the page itself (the last one is current). [] for a path that is no route. */
