@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { Inbox, SearchX, type LucideIcon } from 'lucide-react';
+import { InfoTip } from '../InfoTip';
 import { Button } from './Button';
 
 export type EmptyStateKind = 'noMatches' | 'firstUse';
@@ -14,6 +15,8 @@ export interface EmptyStateProps {
   kind: EmptyStateKind;
   title: string;
   description?: string;
+  /** what the state used to explain in a sentence, shown from an (i) beside the title (instead of a `description` on a page that prints labels, not sentences) */
+  info?: string;
   /** default: a magnifier for `noMatches`, an inbox for `firstUse` */
   icon?: LucideIcon;
   /** the one primary action: what fills the page ("Add a document"), a button or link drawn with the kit's classes */
@@ -29,7 +32,7 @@ export interface EmptyStateProps {
 
 const MAX_TIPS = 3;
 
-export function EmptyState({ kind, title, description, icon, action, onClearFilters, tips, bare = false, className }: EmptyStateProps) {
+export function EmptyState({ kind, title, description, info, icon, action, onClearFilters, tips, bare = false, className }: EmptyStateProps) {
   const Icon = icon ?? (kind === 'noMatches' ? SearchX : Inbox);
   const hints = (tips ?? []).slice(0, MAX_TIPS);
   const clear = kind === 'noMatches' ? onClearFilters : undefined;
@@ -38,7 +41,14 @@ export function EmptyState({ kind, title, description, icon, action, onClearFilt
       <span aria-hidden className="mb-3 grid h-[40px] w-[40px] place-items-center rounded-ds-card bg-ds-surface-hover text-ds-fg-muted">
         <Icon className="h-[20px] w-[20px]" strokeWidth={1.75} />
       </span>
-      <p className="text-ds-section text-ds-fg">{title}</p>
+      {info ? (
+        <div className="flex items-center justify-center gap-[4px]">
+          <p className="text-ds-section text-ds-fg">{title}</p>
+          <InfoTip text={info} label={`About ${title.toLowerCase()}`} />
+        </div>
+      ) : (
+        <p className="text-ds-section text-ds-fg">{title}</p>
+      )}
       {description && <p className="mt-1 max-w-[420px] text-ds-body text-ds-fg-muted">{description}</p>}
       {hints.length > 0 && (
         <ul className="mt-[12px] max-w-[420px] space-y-1 text-left">

@@ -7,93 +7,62 @@
 // holders of governance:settings:edit change them; anyone with a governance right reads them, nobody else. Helpers and rules:
 // lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
 // The page prints labels, not sentences: what a field used to explain in a line is an (i) next to it (InfoTip).
+// It is the first page on the design-system kit (components/ui/ds): PageHeader variant="page", SectionCard, FormField with TextInput / Select /
+// Textarea / Checkbox / SegmentedControl, Table, StatusPill, SaveBar, Skeleton / EmptyState / ErrorState, and useReportedMutation for the save.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowUpRight, Check, ChevronRight, Info, Loader2, Lock, PenLine, RotateCcw } from 'lucide-react';
-import { clsx } from 'clsx';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpRight, ChevronRight, Info, Lock, PenLine, RotateCcw } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { PageLoader } from '@/components/ui';
-import { useToast } from '@/components/ui/ToastProvider';
+import { priority as priorityStatus, statusPill } from '@/lib/status';
+import { PageHeader } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { DocPageHeader } from '@/components/governance/DocPageHeader';
-import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
+import {
+  Button, Checkbox, EmptyState, ErrorState, FormField, RowHeaderCell, SaveBar, SectionCard, SegmentedControl, Select, SkeletonLines, StatusPill,
+  Table, TableFrame, TBody, Td, Textarea, TextInput, Th, THead, Tr,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
 import { useAdminDepartments } from '@/components/admin/DepartmentForm';
 import {
   CHANNELS, EVENTS, KIND_LABEL, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, daysFor, noAccess, renderTemplate, retrySettings, sampleValues, shownKinds, validate,
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
 import { DepartmentsSection } from './_DepartmentsSection';
-import { Section } from './_Section';
 
 const SETTINGS_KEY = ['document-lifecycle-settings'];       // shared with the document page's summary card
 const SETTINGS_URL = '/governance/documents/lifecycle/settings';
 
-// (bg-[#fff], not bg-white: the platform CSS forces bg-white and would paint the disabled field white too)
-const INPUT = 'rounded-lg border bg-[#fff] px-2.5 py-1.5 text-sm text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/25 disabled:bg-[#f4f6f8] disabled:text-[#586472]';
 // Task Management's categories (tasks/page.tsx) and the ones the document and committee tasks have used; any other may be typed
 const TASK_CATEGORIES = ['Compliance', 'Governance', 'Review', 'Remediation', 'Implementation', 'Reporting', 'Other'];
-const LABEL = 'text-[13px] font-medium text-[#26323d]';
-const EMPTY = 'mx-auto flex max-w-sm flex-col items-center gap-2 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-8 text-center';
+const CHANNEL_OPTIONS = CHANNELS.map((c) => ({ ...c, quiet: c.value === 'off' }));          // "Off" reads grey when chosen
+const PAGE = 'mx-auto flex max-w-4xl flex-col gap-[12px]';
+const FIELDS = 'grid gap-x-[16px] gap-y-[12px] sm:grid-cols-3';
 
 // ── small pieces ─────────────────────────────────────────────────────────────
 /** The page when the lifecycle settings cannot be shown (they did not load, or approvals are not switched on): the departments,
  *  which do not depend on them, still can. */
 function WithDepartments({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto max-w-4xl space-y-3">
-      <DocPageHeader title="Governance settings" />
+    <div className={PAGE}>
+      <PageHeader variant="page" title="Governance settings" />
       <DepartmentsSection />
       {children}
     </div>
   );
 }
 
-// From the sm breakpoint up the fields sit three across: the note of the one in the last column opens leftwards, so it stays on screen
-// (the InfoTip is not portalled; below sm the fields are stacked and every note opens to the right as usual).
-const LAST_COLUMN = 'sm:[&>[role=tooltip]]:left-auto sm:[&>[role=tooltip]]:right-0';
-
-/** A label with its (i). `last`: it is in the last of the three columns. */
-function FieldLabel({ htmlFor, label, hint, last }: { htmlFor?: string; label: string; hint?: string; last?: boolean }) {
-  return (
-    <div className="flex items-center gap-1">
-      <label htmlFor={htmlFor} className={LABEL}>{label}</label>
-      {hint && <InfoTip text={hint} label={`About ${label.toLowerCase()}`} className={last ? LAST_COLUMN : ''} />}
-    </div>
-  );
-}
-
-function DaysField({ id, label, hint, unit = 'days', value, onChange, error, min, max, disabled, last }: {
-  id: string; label: string; hint?: string; unit?: string; value: number; onChange: (n: number) => void; error?: string; min: number; max: number; disabled: boolean; last?: boolean;
+/** A whole number of days (or days late / before due) with its label, (i) and error. A read-only person sees the number and cannot change it. */
+function DaysField({ id, label, hint, unit = 'days', value, onChange, error, min, max, readOnly }: {
+  id: string; label: string; hint?: string; unit?: string; value: number; onChange: (n: number) => void; error?: string; min: number; max: number; readOnly: boolean;
 }) {
   return (
-    <div className="min-w-0">
-      <FieldLabel htmlFor={id} label={label} hint={hint} last={last} />
-      <div className="mt-1 flex items-center gap-2">
-        <input id={id} type="number" inputMode="numeric" min={min} max={max} step={1} disabled={disabled}
-          value={Number.isFinite(value) ? value : ''} aria-invalid={!!error} aria-describedby={error ? `${id}-err` : undefined}
-          onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))}
-          className={clsx(INPUT, 'w-20 text-right', error ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
-        <span className="text-[13px] text-[#586472]">{unit}</span>
+    <FormField id={id} label={label} info={hint} error={error}>
+      <div className="flex items-center gap-[8px]">
+        <TextInput type="number" inputMode="numeric" min={min} max={max} step={1} readOnly={readOnly} className="w-[88px] shrink-0"
+          value={Number.isFinite(value) ? value : ''} onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))} />
+        <span className="min-w-0 text-ds-body text-ds-fg-muted">{unit}</span>
       </div>
-      {error && <p id={`${id}-err`} className="mt-1 max-w-[16rem] text-[12px] leading-4 text-[#b42318]">{error}</p>}
-    </div>
-  );
-}
-
-function ChannelPicker({ name, label, value, onChange, disabled }: { name: string; label: string; value: Channel; onChange: (c: Channel) => void; disabled: boolean }) {
-  return (
-    <div role="radiogroup" aria-label={label} className="inline-flex shrink-0 self-start rounded-lg border border-[#d5dbe1] bg-[#fff] p-0.5 sm:self-auto">
-      {CHANNELS.map((c) => (
-        <label key={c.value} className="relative">
-          <input type="radio" name={name} value={c.value} checked={value === c.value} disabled={disabled} onChange={() => onChange(c.value)} className="peer sr-only" />
-          <span className={clsx('block select-none rounded-md px-2.5 py-1 text-[12px] font-medium text-[#586472] peer-focus-visible:ring-2 peer-focus-visible:ring-[#0f766e]/40',
-            disabled ? 'cursor-default' : 'cursor-pointer hover:text-[#1f2933]',
-            c.value === 'off' ? 'peer-checked:bg-[#eef1f4] peer-checked:text-[#26323d]' : 'peer-checked:bg-[#0f766e] peer-checked:text-[#fff]')}>
-            {c.label}
-          </span>
-        </label>
-      ))}
-    </div>
+    </FormField>
   );
 }
 
@@ -103,7 +72,6 @@ const plural = (n: number) => `day${n === 1 ? '' : 's'}`;
 // ── the page ─────────────────────────────────────────────────────────────────
 export default function GovernanceSettingsPage() {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [draft, setDraft] = useState<GovernanceSettings | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -138,55 +106,47 @@ export default function GovernanceSettingsPage() {
     return () => window.clearTimeout(t);
   }, [savedAt]);
 
-  const save = useMutation({
+  // The confirmation is said only after the server has answered; a refusal stays on screen (with Retry when trying again can help) and is also
+  // the line of the save bar. (The one toast line carries what the toast used to say in two.)
+  const save = useReportedMutation({
     mutationFn: async () => (await apiClient.put(SETTINGS_URL, patch)).data as SettingsAnswer,
+    success: 'Settings saved. New requests, reminders and escalations use them from now on.',
+    failure: 'Not saved',
     onSuccess: (answer) => {
       queryClient.setQueryData(SETTINGS_KEY, answer);
       setDraft(null);
       setServerError(null);
       setSavedAt(Date.now());
-      toast({ type: 'success', title: 'Settings saved', message: 'New requests, reminders and escalations use them from now on.' });
     },
-    onError: (e: any) => {
-      const detail = e?.response?.data?.detail;
-      const message = typeof detail === 'string' ? detail : 'The settings could not be saved. Try again.';
-      setServerError(message);
-      toast({ type: 'error', title: 'Not saved', message });
-    },
+    onError: (e) => setServerError(errorMessage(e, 'The settings could not be saved. Try again.')),
   });
 
-  if (isLoading) return <PageLoader size="sm" className="h-60" />;
+  if (isLoading) {
+    return (
+      <div className={PAGE}>
+        <PageHeader variant="page" title="Governance settings" />
+        <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]"><SkeletonLines lines={5} label="Loading the settings" /></div>
+      </div>
+    );
+  }
   if (noAccess(error)) {
     return (
-      <div className={EMPTY}>
-        <Lock className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
-        <p className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
-          No access <InfoTip text="Only an administrator or someone with a governance right can see these settings." label="Who can see the settings" />
-        </p>
-      </div>
+      <EmptyState kind="firstUse" icon={Lock} title="No access" className="mx-auto max-w-sm"
+        info="Only an administrator or someone with a governance right can see these settings." />
     );
   }
   if (isError || !data) {
     return (
       <WithDepartments>
-        <div className={EMPTY}>
-          <AlertTriangle className="h-8 w-8 text-[#b42318]" strokeWidth={1.5} aria-hidden />
-          <p className="text-[15px] font-semibold text-[#1f2933]">Could not load the settings</p>
-          <button type="button" onClick={() => refetch()} className={BTN}>Try again</button>
-        </div>
+        <ErrorState title="Could not load the settings" onRetry={() => { void refetch(); }} />
       </WithDepartments>
     );
   }
   if (!data.enabled || !s || !saved) {
     return (
       <WithDepartments>
-        <div className={EMPTY}>
-          <Info className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
-          <p className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
-            Approvals are not switched on
-            <InfoTip text="Document approvals and acknowledgements are not switched on for this organisation. These settings apply once they are." label="Why there are no settings" />
-          </p>
-        </div>
+        <EmptyState kind="firstUse" icon={Info} title="Approvals are not switched on"
+          info="Document approvals and acknowledgements are not switched on for this organisation. These settings apply once they are." />
       </WithDepartments>
     );
   }
@@ -213,199 +173,179 @@ export default function GovernanceSettingsPage() {
       + (s.remind_every_days > 0 ? `, then every ${s.remind_every_days} ${plural(s.remind_every_days)} until it is done.` : '.'));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-3 pb-24">
-      <DocPageHeader
+    <div className={`${PAGE} pb-24`}>
+      <PageHeader
+        variant="page"
         title="Governance settings"
         info="How long people have to review, approve and acknowledge documents, who is reminded and told when it is late, and the task each person gets. They apply to the whole organisation."
         meta={ro ? (
-          <span className="inline-flex items-center gap-1.5">
-            <Lock size={13} aria-hidden /> View only
+          <span className="inline-flex items-center gap-[6px]">
+            <Lock size={14} aria-hidden /> View only
             <InfoTip text="Only an administrator, or someone given the Governance Settings right, can change them." label="Why these settings are view only" />
           </span>
         ) : undefined}
         actions={canEdit ? (
-          <button type="button" onClick={() => data.defaults && set(data.defaults)} disabled={atDefaults} className={BTN}
+          <Button leftIcon={<RotateCcw aria-hidden />} onClick={() => data.defaults && set(data.defaults)} disabled={atDefaults}
             title="Puts the default settings in the form; nothing changes until you save">
-            <RotateCcw size={14} aria-hidden /> Reset to defaults
-          </button>
+            Reset to defaults
+          </Button>
         ) : undefined}
       />
 
       <DepartmentsSection />
 
-      <Section id="due" title="Due dates" info="How many days each person has, counted from the day they are asked.">
-        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-          <DaysField id="review_days" label="Review" value={s.review_days} min={1} max={365} disabled={ro} error={errors.review_days}
+      <SectionCard id="due" title="Due dates" info="How many days each person has, counted from the day they are asked.">
+        <div className={FIELDS}>
+          <DaysField id="review_days" label="Review" value={s.review_days} min={1} max={365} readOnly={ro} error={errors.review_days}
             onChange={(n) => set({ review_days: n })} hint="For each reviewer." />
-          <DaysField id="approval_days" label="Approval" value={s.approval_days} min={1} max={365} disabled={ro} error={errors.approval_days}
+          <DaysField id="approval_days" label="Approval" value={s.approval_days} min={1} max={365} readOnly={ro} error={errors.approval_days}
             onChange={(n) => set({ approval_days: n })} hint="For each approver, once the review is done." />
-          <DaysField id="ack_days" label="Acknowledgement" last value={s.ack_days} min={1} max={365} disabled={ro} error={errors.ack_days}
+          <DaysField id="ack_days" label="Acknowledgement" value={s.ack_days} min={1} max={365} readOnly={ro} error={errors.ack_days}
             onChange={(n) => set({ ack_days: n })}
             hint="For everyone, once it is published. A new major version (2.0, 3.0) asks everyone again; a minor version (1.1) does not. That is the organisation's policy and is not changed here." />
         </div>
-      </Section>
+      </SectionCard>
 
       {s.four_eyes !== undefined && (
-        <Section id="approvals" title="Approvals"
+        <SectionCard id="approvals" title="Approvals"
           info="Documents go through their reviewers and approvers in turn; anyone whose turn it is can ask for changes, which waits for the author to make them and resubmit.">
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-            <label className={clsx(LABEL, 'inline-flex items-center gap-2')}>
-              <input type="checkbox" checked={s.four_eyes} disabled={!data.can_four_eyes} onChange={(e) => set({ four_eyes: e.target.checked })}
-                className="h-4 w-4 rounded border-[#b8c4c8] accent-[#0f766e]" />
-              Four-eyes approval
-            </label>
+          <div className="flex flex-wrap items-center gap-x-[4px] gap-y-[4px]">
+            <Checkbox label="Four-eyes approval" checked={s.four_eyes} disabled={!data.can_four_eyes} onChange={(e) => set({ four_eyes: e.target.checked })} />
             <InfoTip text="The person who wrote a document is not asked at an approval stage and cannot approve it; another approver does." label="About four-eyes approval" />
             {!data.can_four_eyes && (
-              <span className="ml-2 inline-flex items-center gap-1 text-[12px] text-[#586472]"><Lock size={12} aria-hidden /> Administrators only</span>
+              <span className="ml-[8px] inline-flex items-center gap-[4px] text-ds-label text-ds-fg-muted"><Lock size={12} aria-hidden /> Administrators only</span>
             )}
           </div>
-        </Section>
+        </SectionCard>
       )}
 
-      <Section id="reminders" title="Reminders" info={reminderNote}>
-        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-          <DaysField id="remind_days" label="First reminder" unit="days before due" value={s.remind_days} min={0} max={60} disabled={ro} error={errors.remind_days}
+      <SectionCard id="reminders" title="Reminders" info={reminderNote}>
+        <div className={FIELDS}>
+          <DaysField id="remind_days" label="First reminder" unit="days before due" value={s.remind_days} min={0} max={60} readOnly={ro} error={errors.remind_days}
             onChange={(n) => set({ remind_days: n })} hint="0: no reminder before the due date." />
-          <DaysField id="remind_every_days" label="Repeat every" value={s.remind_every_days} min={0} max={60} disabled={ro} error={errors.remind_every_days}
+          <DaysField id="remind_every_days" label="Repeat every" value={s.remind_every_days} min={0} max={60} readOnly={ro} error={errors.remind_every_days}
             onChange={(n) => set({ remind_every_days: n })} hint="0: remind once. Repeats go on after the due date, until it is done." />
         </div>
-      </Section>
+      </SectionCard>
 
-      <Section id="escalation" title="Escalation" info="When a request is late. The person asked is told on the day it becomes overdue.">
-        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-          <DaysField id="owner_after_days" label="Tell owner after" unit="days late" value={s.owner_after_days} min={0} max={365} disabled={ro} error={errors.owner_after_days}
+      <SectionCard id="escalation" title="Escalation" info="When a request is late. The person asked is told on the day it becomes overdue.">
+        <div className={FIELDS}>
+          <DaysField id="owner_after_days" label="Tell owner after" unit="days late" value={s.owner_after_days} min={0} max={365} readOnly={ro} error={errors.owner_after_days}
             onChange={(n) => set({ owner_after_days: n })} hint="Days overdue. 0: the day it becomes overdue." />
-          <DaysField id="admin_after_days" label="Escalate after" unit="days late" value={s.admin_after_days} min={1} max={365} disabled={ro} error={errors.admin_after_days}
+          <DaysField id="admin_after_days" label="Escalate after" unit="days late" value={s.admin_after_days} min={1} max={365} readOnly={ro} error={errors.admin_after_days}
             onChange={(n) => set({ admin_after_days: n })} hint="Days overdue, later than the owner." />
-          <div className="min-w-0">
-            <FieldLabel htmlFor="escalate_to" label="Escalate to" last hint="A role with nobody active in it falls back to the administrators." />
+          <FormField id="escalate_to" label="Escalate to" info="A role with nobody active in it falls back to the administrators.">
             {canEdit ? (
-              <select id="escalate_to" value={s.escalate_role_id ?? ''} onChange={(e) => set({ escalate_role_id: e.target.value ? Number(e.target.value) : null })}
-                className={clsx(INPUT, 'mt-1 w-full border-[#d5dbe1]')}>
+              <Select value={s.escalate_role_id ?? ''} onChange={(e) => set({ escalate_role_id: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">Administrators</option>
                 {(data.roles ?? []).map((r) => <option key={r.id} value={r.id}>Role: {r.name}</option>)}
-              </select>
+              </Select>
             ) : (
-              <p id="escalate_to" className="mt-1 rounded-lg border border-[#d5dbe1] bg-[#f4f6f8] px-2.5 py-1.5 text-sm text-[#26323d]">
-                {s.escalate_role_id ? `Role: ${roleName || 'a chosen role'}` : 'Administrators'}
-              </p>
+              <TextInput readOnly value={s.escalate_role_id ? `Role: ${roleName || 'a chosen role'}` : 'Administrators'} />
             )}
-          </div>
+          </FormField>
         </div>
-        <ol aria-label="What happens when a request is late" className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[12px] text-[#26323d]">
+        <ol aria-label="What happens when a request is late" className="mt-[12px] flex flex-wrap items-center gap-x-[6px] gap-y-[8px] text-ds-label font-normal text-ds-fg-body">
           {[`Due date: person told`,
             s.owner_after_days ? `${s.owner_after_days} ${plural(s.owner_after_days)} late: owner` : 'Same day: owner',
             `${Number.isFinite(s.admin_after_days) ? s.admin_after_days : '?'} ${plural(s.admin_after_days)} late: ${further}`].map((step, i, all) => (
-            <li key={step} className="flex items-center gap-1.5">
-              <span className="rounded-full border border-[#d5dbe1] bg-[#f4f6f8] px-2.5 py-1">{step}</span>
-              {i < all.length - 1 && <ChevronRight size={14} className="text-[#7b8794]" aria-hidden />}
+            <li key={step} className="flex items-center gap-[6px]">
+              <span className="rounded-full border border-ds-border-strong bg-ds-surface-subtle px-[10px] py-[3px]">{step}</span>
+              {i < all.length - 1 && <ChevronRight size={14} aria-hidden className="text-ds-fg-muted" />}
             </li>
           ))}
         </ol>
-      </Section>
+      </SectionCard>
 
-      <Section id="notifications" title="Notifications" info="Where each alert goes. Email is sent only where the organisation's email is set up.">
-        <ul className="divide-y divide-[#e1e6eb] rounded-lg border border-[#e1e6eb]">
+      <SectionCard id="notifications" title="Notifications" info="Where each alert goes. Email is sent only where the organisation's email is set up.">
+        <ul className="divide-y divide-ds-border rounded-ds-card border border-ds-border">
           {EVENTS.map((ev) => (
-            <li key={ev.key} className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-1">
-                <span className="text-[13px] font-medium text-[#1f2933]">{ev.label}</span>
+            <li key={ev.key} className="flex flex-col gap-[8px] px-[12px] py-[8px] sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-[4px]">
+                <span className="text-ds-body font-[500] text-ds-fg">{ev.label}</span>
                 <InfoTip text={`Goes to ${lowerFirst(ev.who)}.`} label={`Who gets: ${ev.label}`} />
               </div>
-              <ChannelPicker name={`notify-${ev.key}`} label={`${ev.label}: where it goes`} value={s.notify[ev.key]} disabled={ro}
-                onChange={(c) => setMap('notify', ev.key, c)} />
+              <SegmentedControl label={`${ev.label}: where it goes`} name={`notify-${ev.key}`} options={CHANNEL_OPTIONS} value={s.notify[ev.key]} disabled={ro}
+                onChange={(c: Channel) => setMap('notify', ev.key, c)} className="self-start sm:self-auto" />
             </li>
           ))}
         </ul>
         {Object.values(s.notify).every((c) => c === 'off') && (
-          <p className="mt-2 text-[12px] text-[#9a3412]">All alerts are off: people see requests only in their tasks and on Approvals.</p>
+          <p className="mt-[8px] text-ds-label font-normal text-ds-warning">All alerts are off: people see requests only in their tasks and on Approvals.</p>
         )}
-      </Section>
+      </SectionCard>
 
-      <Section id="tasks" title="Task creation"
+      <SectionCard id="tasks" title="Task creation"
         info="Each request can also become a task in Task Management, assigned to the person, due on the request's due date, with a button that opens their step in the document. It closes by itself when they do it there; its person, due date and status follow the request, and only an administrator can delete it.">
-        <div className="overflow-x-auto rounded-lg border border-[#e1e6eb]">
-          <table className="w-full text-left">
-            <thead className="bg-[#f4f6f8]">
-              <tr>
-                <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Request</th>
-                <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Make a task</th>
-                <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Priority</th>
-                <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Due in</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e1e6eb]">
+        <TableFrame aria-label="Task creation for each kind of request">
+          {/* min-w: below it the frame scrolls sideways (on a phone) and the words stay whole */}
+          <Table caption="Task creation for each kind of request" className="min-w-[520px]">
+            <THead>
+              <Tr>
+                <Th>Request</Th>
+                <Th>Make a task</Th>
+                <Th>Priority</Th>
+                <Th>Due in</Th>
+              </Tr>
+            </THead>
+            <TBody>
               {shownKinds(s).map((k) => (
-                <tr key={k}>
-                  <td className="px-2 py-2 sm:px-3 text-[13px] text-[#1f2933]">{KIND_LABEL[k]}</td>
-                  <td className="px-2 py-2 sm:px-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#26323d]">
-                      <input type="checkbox" checked={s.task_create[k]} disabled={ro} onChange={(e) => setMap('task_create', k, e.target.checked)}
-                        className="h-4 w-4 rounded border-[#7b8794] accent-[#0f766e]" />
-                      {s.task_create[k] ? 'Yes' : 'No'}
-                    </label>
-                  </td>
-                  <td className="px-2 py-2 sm:px-3">
-                    <select aria-label={`${KIND_LABEL[k]} task priority`} value={s.task_priority[k]} disabled={ro || !s.task_create[k]}
-                      onChange={(e) => setMap('task_priority', k, e.target.value as Priority)} className={clsx(INPUT, 'border-[#d5dbe1] py-1')}>
+                <Tr key={k}>
+                  <RowHeaderCell id={`task-kind-${k}`} className="font-normal">{KIND_LABEL[k]}</RowHeaderCell>
+                  <Td>
+                    <Checkbox label={s.task_create[k] ? 'Yes' : 'No'} checked={s.task_create[k]} disabled={ro} aria-describedby={`task-kind-${k}`}
+                      onChange={(e) => setMap('task_create', k, e.target.checked)} />
+                  </Td>
+                  <Td>
+                    <Select aria-label={`${KIND_LABEL[k]} task priority`} value={s.task_priority[k]} disabled={ro || !s.task_create[k]} className="w-[120px]"
+                      onChange={(e) => setMap('task_priority', k, e.target.value as Priority)}>
                       {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </td>
-                  <td className="px-2 py-2 sm:px-3 text-[12px] text-[#26323d]">
+                    </Select>
+                  </Td>
+                  <Td>
                     {/* the request's own due date: the days are set once, under Due dates (a proposed change's are not set there) */}
                     {k === 'decide' || k === 'revise' ? (
                       <span className="whitespace-nowrap" title="Days from when the change was proposed or not accepted">{daysFor(k, s)} days</span>
                     ) : (
-                      <a href="#due" className="whitespace-nowrap text-[#0b6b58] underline-offset-2 hover:underline" title="Days from when the person is asked. Change them under Due dates">
+                      <a href="#due" className="inline-flex min-h-[24px] items-center whitespace-nowrap text-ds-primary-text underline-offset-[2px] hover:underline"
+                        title="Days from when the person is asked. Change them under Due dates">
                         {daysFor(k, s) || '?'} days
                       </a>
                     )}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableFrame>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="min-w-0 space-y-3">
-            <div>
-              <label htmlFor="task_title" className={LABEL}>Task title</label>
-              <input id="task_title" ref={fieldRefs.task_title} value={s.task_title} disabled={ro} maxLength={200}
-                onFocus={() => { lastField.current = 'task_title'; }} onChange={(e) => set({ task_title: e.target.value })}
-                aria-invalid={!!errors.task_title} aria-describedby={errors.task_title ? 'task_title-err' : undefined}
-                className={clsx(INPUT, 'mt-1 w-full', errors.task_title ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
-              {errors.task_title && <p id="task_title-err" className="mt-1 text-[12px] text-[#b42318]">{errors.task_title}</p>}
-            </div>
-            <div>
-              <label htmlFor="task_description" className={LABEL}>Task description</label>
-              <textarea id="task_description" ref={fieldRefs.task_description} value={s.task_description} disabled={ro} rows={4} maxLength={2000}
-                onFocus={() => { lastField.current = 'task_description'; }} onChange={(e) => set({ task_description: e.target.value })}
-                aria-invalid={!!errors.task_description} aria-describedby={errors.task_description ? 'task_description-err' : undefined}
-                className={clsx(INPUT, 'mt-1 w-full resize-y leading-5', errors.task_description ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
-              {errors.task_description && <p id="task_description-err" className="mt-1 text-[12px] text-[#b42318]">{errors.task_description}</p>}
-            </div>
-            <div>
-              <FieldLabel htmlFor="task_category" label="Task category" hint="How Task Management files these tasks. Pick one or type your own." />
-              <input id="task_category" list="task_category-list" value={s.task_category ?? ''} disabled={ro} maxLength={100}
-                onChange={(e) => set({ task_category: e.target.value })}
-                aria-invalid={!!errors.task_category} aria-describedby={errors.task_category ? 'task_category-err' : undefined}
-                className={clsx(INPUT, 'mt-1 w-full sm:w-64', errors.task_category ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
+        <div className="mt-[16px] grid gap-[16px] lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-[12px]">
+            <FormField id="task_title" label="Task title" error={errors.task_title}>
+              <TextInput ref={fieldRefs.task_title} value={s.task_title} readOnly={ro} maxLength={200}
+                onFocus={() => { lastField.current = 'task_title'; }} onChange={(e) => set({ task_title: e.target.value })} />
+            </FormField>
+            <FormField id="task_description" label="Task description" error={errors.task_description}>
+              <Textarea ref={fieldRefs.task_description} value={s.task_description} readOnly={ro} rows={4} maxLength={2000}
+                onFocus={() => { lastField.current = 'task_description'; }} onChange={(e) => set({ task_description: e.target.value })} />
+            </FormField>
+            <FormField id="task_category" label="Task category" info="How Task Management files these tasks. Pick one or type your own." error={errors.task_category}>
+              <TextInput list="task_category-list" value={s.task_category ?? ''} readOnly={ro} maxLength={100} className="sm:w-[256px]"
+                onChange={(e) => set({ task_category: e.target.value })} />
               <datalist id="task_category-list">{TASK_CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
-              {errors.task_category && <p id="task_category-err" className="mt-1 text-[12px] text-[#b42318]">{errors.task_category}</p>}
-            </div>
+            </FormField>
             {canEdit && (
               <div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[12px] font-medium text-[#586472]">Placeholders</span>
+                <div className="flex items-center gap-[4px]">
+                  <span className="text-ds-label text-ds-fg-muted">Placeholders</span>
                   <InfoTip text="Click one to insert it where the cursor is." label="About placeholders" />
                 </div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
+                <div className="mt-[4px] flex flex-wrap gap-[6px]">
                   {PLACEHOLDERS.map((p) => (
-                    <button key={p.key} type="button" title={`Insert {${p.key}}: ${p.label}`} aria-label={`Insert {${p.key}}: ${p.label}`} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p.key}}`)}
-                      className="rounded-md border border-[#d5dbe1] bg-[#fff] px-2 py-0.5 font-mono !text-[12px] text-[#0b6b58] hover:border-[#0f766e] hover:bg-[#e6f4f1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/40">
+                    <Button key={p.key} size="sm" className="font-mono" title={`Insert {${p.key}}: ${p.label}`} aria-label={`Insert {${p.key}}: ${p.label}`}
+                      onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p.key}}`)}>
                       {`{${p.key}}`}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -413,39 +353,31 @@ export default function GovernanceSettingsPage() {
           </div>
 
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1">
-                <span className={LABEL}>Preview</span>
+            <div className="flex flex-wrap items-center justify-between gap-[8px]">
+              <div className="flex items-center gap-[4px]">
+                <span className="text-ds-label text-ds-fg">Preview</span>
                 <InfoTip text={`Filled with sample values: a document called “${values.document}”, version ${values.version}, owner ${values.owner}.`} label="About the preview" />
               </div>
-              <div role="radiogroup" aria-label="Preview the task for" className="inline-flex rounded-lg border border-[#d5dbe1] bg-[#fff] p-0.5">
-                {shownKinds(s).map((k) => (
-                  <label key={k} className="relative">
-                    <input type="radio" name="preview-kind" checked={previewKind === k} onChange={() => setPreviewKind(k)} className="peer sr-only" />
-                    <span className="block cursor-pointer select-none rounded-md px-2 py-0.5 text-[12px] font-medium text-[#586472] hover:text-[#1f2933] peer-checked:bg-[#e6f4f1] peer-checked:text-[#0b6b58] peer-focus-visible:ring-2 peer-focus-visible:ring-[#0f766e]/40">
-                      {KIND_LABEL[k]}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <SegmentedControl label="Preview the task for" name="preview-kind" value={previewKind} onChange={(k: Kind) => setPreviewKind(k)}
+                options={shownKinds(s).map((k) => ({ value: k, label: KIND_LABEL[k] }))} />
             </div>
-            <div aria-live="polite" className="mt-2 rounded-lg border border-[#d5dbe1] bg-[#fafbfc] p-3">
+            <div aria-live="polite" className="mt-[8px] rounded-ds-card border border-ds-border-strong bg-ds-surface-subtle p-[12px]">
               {s.task_create[previewKind] ? (
                 <>
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="min-w-0 break-words text-[14px] font-semibold text-[#1f2933]">{errors.task_title ? '—' : renderTemplate(s.task_title, values).slice(0, 255)}</p>
-                    <span className="shrink-0 rounded-full border border-[#d5dbe1] bg-[#fff] px-2 py-0.5 text-[11px] font-medium text-[#26323d]">{s.task_priority[previewKind]}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-[8px]">
+                    <p className="min-w-0 break-words text-ds-section text-ds-fg">{errors.task_title ? '—' : renderTemplate(s.task_title, values).slice(0, 255)}</p>
+                    <StatusPill size="sm" className="shrink-0" {...statusPill(priorityStatus, s.task_priority[previewKind])} />
                   </div>
-                  <p className="mt-1 text-[12px] text-[#586472]">{s.task_category?.trim() || '—'} · due {values.due_date}</p>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-5 text-[#26323d]">{errors.task_description ? '—' : renderTemplate(s.task_description, values)}</p>
+                  <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">{s.task_category?.trim() || '—'} · due {values.due_date}</p>
+                  <p className="mt-[8px] whitespace-pre-wrap break-words text-ds-body text-ds-fg-body">{errors.task_description ? '—' : renderTemplate(s.task_description, values)}</p>
                   {/* the buttons the task shows in Task Management (not links here) */}
-                  <div className="mt-3 flex flex-wrap gap-2" aria-label="Buttons on the task">
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1 text-[12px] font-semibold text-[#fff]"><PenLine size={12} aria-hidden /> {STEP_LABEL[previewKind]}</span>
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-[#fff] px-2.5 py-1 text-[12px] font-medium text-[#26323d]"><ArrowUpRight size={12} aria-hidden /> Open document</span>
+                  <div role="group" aria-label="Buttons on the task" className="mt-[12px] flex flex-wrap gap-[8px]">
+                    <span className="inline-flex items-center gap-[6px] rounded-ds-control bg-ds-primary px-[10px] py-[4px] text-ds-label font-[600] text-ds-on-primary"><PenLine size={12} aria-hidden /> {STEP_LABEL[previewKind]}</span>
+                    <span className="inline-flex items-center gap-[6px] rounded-ds-control border border-ds-border-strong bg-ds-surface px-[10px] py-[4px] text-ds-label text-ds-fg-body"><ArrowUpRight size={12} aria-hidden /> Open document</span>
                   </div>
                 </>
               ) : (
-                <p className="flex items-center gap-1 text-[13px] text-[#586472]">
+                <p className="flex items-center gap-[4px] text-ds-body text-ds-fg-muted">
                   No task is made for this request
                   <InfoTip text="People still get the alerts above and see the request on the Approvals page." label="What people still get" />
                 </p>
@@ -453,28 +385,10 @@ export default function GovernanceSettingsPage() {
             </div>
           </div>
         </div>
-      </Section>
+      </SectionCard>
 
-      {canEdit && (dirty || savedAt || serverError) && (
-        <div className="sticky bottom-3 z-10">
-          <div role="region" aria-label="Save the settings"
-            className="flex flex-col gap-2 rounded-xl border border-[#d5dbe1] bg-[#fff] px-4 py-2.5 shadow-card sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[13px] text-[#26323d]" aria-live="polite">
-              {serverError ? <span className="text-[#b42318]">{serverError}</span>
-                : dirty ? (invalid ? <span className="text-[#b42318]">Fix the fields in red to save</span> : 'Unsaved changes')
-                  : <span className="inline-flex items-center gap-1.5 text-[#0b6b58]"><Check size={14} aria-hidden /> Saved</span>}
-            </p>
-            {dirty && (
-              <div className="flex shrink-0 gap-2">
-                <button type="button" onClick={() => { setDraft(null); setServerError(null); }} disabled={save.isPending} className={BTN}>Discard</button>
-                <button type="button" onClick={() => save.mutate()} disabled={save.isPending || invalid} className={BTN_PRIMARY}>
-                  {save.isPending ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Check size={14} aria-hidden />} Save
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <SaveBar label="Save the settings" canEdit={canEdit} dirty={dirty} invalid={invalid} saving={save.isPending} justSaved={savedAt !== null} error={serverError}
+        onSave={() => save.mutate()} onDiscard={() => { setDraft(null); setServerError(null); }} />
     </div>
   );
 }

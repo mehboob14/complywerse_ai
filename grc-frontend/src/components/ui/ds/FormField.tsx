@@ -65,7 +65,7 @@ export function FormField({ label, required = false, optional = false, info, hin
     <FieldContext.Provider value={state}>
       <div className={clsx('flex min-w-0 flex-col gap-[4px]', className)}>
         {/* the (i) sits beside the label, not inside it: a press on it must not move focus into the control */}
-        {info ? <div className="flex min-w-0 items-center gap-[4px]">{labelEl}<InfoTip text={info} /></div> : labelEl}
+        {info ? <div className="flex min-w-0 items-center gap-[4px]">{labelEl}<InfoTip text={info} label={typeof label === 'string' ? `About ${label.toLowerCase()}` : undefined} /></div> : labelEl}
         {children}
         {hasHint && <p id={hintId} className="break-words text-ds-label font-normal text-ds-fg-muted">{hint}</p>}
         {hasError && <p id={errorId} role="alert" className="break-words text-ds-label font-normal text-ds-danger">{error}</p>}
