@@ -58,7 +58,7 @@ export function reviewsHref(loc: ReviewsLocation, door?: string | null): string 
   if (loc.section !== 'documents') q.set('section', loc.section);
   if (loc.section === 'documents') {
     if (calendar && !onDoor) q.set('view', 'calendar');
-    if (!calendar && loc.tab !== 'overdue') q.set('tab', loc.tab);
+    if (loc.tab !== 'overdue') q.set('tab', loc.tab);                // kept while the calendar shows, so the list is as it was left when the person comes back to it
     if (calendar && loc.month) q.set('month', monthKey(loc.month));
     if (calendar && loc.day) q.set('day', loc.day);
   }

@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { formatCount, formatDate, statusLabel } from '@/lib/format';
 import { reviewStatus, statusPill } from '@/lib/status';
 import { EmptyState, Pager, PersonChip, RegisterTable, SegmentedControl, StatusPill, type RegisterColumn } from '@/components/ui/ds';
-import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { useGovernanceActions, type GovernanceAction } from './_queries';
 import { ACTION_FILTERS, actionTypeLabel, coverage, pageOf } from './reviewsModel';
 
@@ -51,7 +51,7 @@ export function ActionsSection() {
         rows={visible}
         getRowId={(a) => a.id}
         loading={q.isPending}
-        error={q.isError ? { message: errorMessage(q.error, "Couldn't load the governance actions."), onRetry: () => { void q.refetch(); } } : null}
+        error={q.isError ? { message: errorMessage(q.error, "Couldn't load the governance actions."), onRetry: canRetry(q.error) ? () => { void q.refetch(); } : undefined } : null}
         cardTitle={(a) => a.action_description}
         empty={<EmptyState bare kind="firstUse" title="No governance actions" info="Actions that ask for a review appear here." />}
         footer={rows.length > 0 ? (

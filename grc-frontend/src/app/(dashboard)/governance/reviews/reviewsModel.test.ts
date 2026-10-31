@@ -53,9 +53,10 @@ test('the default state has the plain address; each choice adds its own param', 
   assert.equal(reviewsHref({ ...DEFAULT, view: 'calendar', month: { year: 2026, month: 3 } }), '/governance/reviews?view=calendar&month=2026-03');
 });
 
-test('what does not apply to the state is left out: the list has no month or day, the calendar no tab, the Actions section neither', () => {
+test('what does not apply to the state is left out: the list has no month or day, the Actions section nothing of the documents; the list tab is kept under the calendar', () => {
   assert.equal(reviewsHref({ ...DEFAULT, tab: 'upcoming', month: { year: 2026, month: 11 }, day: '2026-11-12' }), '/governance/reviews?tab=upcoming');
-  assert.equal(reviewsHref({ ...DEFAULT, view: 'calendar', tab: 'all' }), '/governance/reviews?view=calendar');
+  assert.equal(reviewsHref({ ...DEFAULT, view: 'calendar', tab: 'all' }), '/governance/reviews?view=calendar&tab=all');    // so that the list is as it was left when the person comes back
+  assert.equal(reviewsHref({ ...DEFAULT, view: 'calendar', tab: 'all', month: { year: 2026, month: 11 }, day: '2026-11-12' }), '/governance/reviews?view=calendar&tab=all&month=2026-11&day=2026-11-12');
   assert.equal(reviewsHref({ ...DEFAULT, section: 'actions', view: 'calendar', tab: 'all', month: { year: 2026, month: 11 }, day: '2026-11-12' }), '/governance/reviews?section=actions');
 });
 
@@ -73,6 +74,7 @@ test('an address read back gives the state it was made from', () => {
   const states: ReviewsLocation[] = [
     DEFAULT, { ...DEFAULT, section: 'actions' }, { ...DEFAULT, tab: 'upcoming' }, { ...DEFAULT, tab: 'all' }, { ...DEFAULT, view: 'calendar' },
     { ...DEFAULT, view: 'calendar', month: { year: 2028, month: 2 }, day: '2028-02-29' }, { ...DEFAULT, view: 'calendar', month: { year: 2026, month: 12 } },
+    { ...DEFAULT, view: 'calendar', tab: 'upcoming', month: { year: 2026, month: 11 }, day: '2026-11-05' },
   ];
   for (const state of states) {
     for (const door of [REVIEWS_PATH, CALENDAR_PATH]) {

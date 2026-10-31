@@ -73,6 +73,17 @@ test('every request keeps its endpoint call, its query key and its window', () =
   assert.equal((q.match(/governanceApi\.\w+\(/g) ?? []).length, 6, 'no other endpoint is called');
 });
 
+test('a failed request is said, never read as zero or as an empty list, and Retry is offered only where trying again can help (not for a refusal)', () => {
+  for (const f of ['_ReviewList.tsx', '_DocumentReviews.tsx', '_ReviewCalendar.tsx', '_ActionsSection.tsx']) {
+    const source = code(read(f));
+    assert.ok(source.includes('canRetry(') && source.includes('errorMessage('), `${f}: the server's words, Retry only when it can help`);
+  }
+  assert.ok(code(read('_queries.ts')).includes('failures < 3 && canRetry(error)'), 'a refused request is not tried three times');
+  const list = code(read('_ReviewList.tsx'));
+  assert.ok(list.includes('error={failed ?'), 'a failed list is an error row, not an empty table');
+  assert.ok(code(read('_DocumentReviews.tsx')).includes('stats.isError'), 'failed counts are an error, not 0');
+});
+
 test('who sees Complete Review is unchanged: the same permission key, read the same way, and no new guard', () => {
   const page = code(read('page.tsx'));
   assert.ok(page.includes("hasPermission('governance:document_management:edit')"));

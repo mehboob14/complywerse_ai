@@ -9,7 +9,7 @@ import { CheckCircle2, Search } from 'lucide-react';
 import { EMPTY, NOT_SET, formatCount, formatDate } from '@/lib/format';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, EmptyState, PersonChip, Pager, RegisterTable, SegmentedControl, Select, TextInput, type RegisterColumn, type SortState } from '@/components/ui/ds';
-import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import type { DayKey } from './calendarModel';
 import { DocumentLink, DueStatus } from './_parts';
 import { useOverdueReviews, useUpcomingReviews } from './_queries';
@@ -145,7 +145,7 @@ export function ReviewList({ tab, onTab, canEdit, today, onComplete, pendingId, 
         sort={sort}
         onSortChange={(next) => { setSort(next); setPage(1); }}
         loading={loading}
-        error={failed ? { message: errorMessage(failure, "Couldn't load the reviews."), onRetry: retry } : null}
+        error={failed ? { message: errorMessage(failure, "Couldn't load the reviews."), onRetry: canRetry(failure) ? retry : undefined } : null}
         cardTitle={(d) => (
           <div className="min-w-0">
             <DocumentLink id={d.id} title={d.title} />

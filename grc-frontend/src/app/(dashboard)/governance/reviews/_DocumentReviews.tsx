@@ -7,7 +7,7 @@ import { clsx } from 'clsx';
 import { EMPTY, formatCount } from '@/lib/format';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { ErrorState, Skeleton, TabPanel, Tabs } from '@/components/ui/ds';
-import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { monthOf, sameMonth, type DayKey } from './calendarModel';
 import { ReviewCalendar } from './_ReviewCalendar';
 import { ReviewList } from './_ReviewList';
@@ -47,7 +47,7 @@ export function DocumentReviews({ loc, go, canEdit, today, onComplete, pendingId
   return (
     <div className="flex flex-col gap-[12px]">
       {stats.isError ? (
-        <ErrorState compact title="Couldn't load the review counts" message={errorMessage(stats.error)} onRetry={() => { void stats.refetch(); }}
+        <ErrorState compact title="Couldn't load the review counts" message={errorMessage(stats.error)} onRetry={canRetry(stats.error) ? () => { void stats.refetch(); } : undefined}
           className="rounded-ds-card border border-ds-border bg-ds-surface" />
       ) : (
         <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">

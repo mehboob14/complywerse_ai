@@ -10,7 +10,7 @@ import { clsx } from 'clsx';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { formatCount, formatDate } from '@/lib/format';
 import { Button, EmptyState, ErrorState, IconButton, PersonChip, Skeleton } from '@/components/ui/ds';
-import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import {
   WEEKDAYS, addMonths, agendaOf, bucketByDay, dayKey, dayLabel, dueState, monthGrid, monthLabel, monthOf, moveDay, reviewsWord, sameMonth,
   type DayKey, type Month,
@@ -210,7 +210,7 @@ export function ReviewCalendar({ month, today, selected, onMonth, onSelect }: Re
       </div>
 
       {cal.isError ? (
-        <ErrorState title="Couldn't load the calendar" message={errorMessage(cal.error, 'The reviews of this month did not load.')} onRetry={() => { void cal.refetch(); }} />
+        <ErrorState title="Couldn't load the calendar" message={errorMessage(cal.error, 'The reviews of this month did not load.')} onRetry={canRetry(cal.error) ? () => { void cal.refetch(); } : undefined} />
       ) : cal.isPending ? (
         <div role="status" aria-busy="true">
           <span className="sr-only">Loading the calendar</span>
