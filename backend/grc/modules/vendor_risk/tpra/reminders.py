@@ -496,7 +496,7 @@ def _digest(db: Session, tenant_id: int, today: date, policy: dict, words,
     lines = [f"- {i['name']}: {i['stage']['label']}, waiting {i['days_waiting']} days"
              + (f"; last: {i['last_update']['what']}" if i["last_update"] else "") for i in items]
     subject, message, _ = words.render("procurement_digest", {
-        "count": len(items), "list": "\n".join(lines), "link": "/vendor-risk/procurement"})
+        "count": len(items), "list": "\n".join(lines), "link": "/vendor-risk/vendors"})
     sent = 0
     for user_id in people:
         try:
