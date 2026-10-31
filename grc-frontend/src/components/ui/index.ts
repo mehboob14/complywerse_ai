@@ -33,3 +33,7 @@ export { PersonStack, type PersonStackProps } from './ds/PersonStack';
 export { EmptyState, type EmptyStateProps, type EmptyStateKind } from './ds/EmptyState';
 export { ErrorState, type ErrorStateProps } from './ds/ErrorState';
 export { Skeleton, SkeletonLines, SkeletonRows, type SkeletonProps, type SkeletonLinesProps, type SkeletonRowsProps } from './ds/Skeleton';
+export { Menu, type MenuItem, type MenuProps } from './ds/Menu';
+export { Pager, type PagerProps } from './ds/Pager';
+export { Tabs, TabPanel, type TabItem, type TabPanelProps, type TabsProps } from './ds/Tabs';
+export { useTabParam } from './ds/useTabParam';

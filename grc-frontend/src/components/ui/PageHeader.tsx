@@ -4,6 +4,7 @@ import { type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 import { ReactNode } from 'react';
+import { PageHeading } from './ds/PageHeading';
 
 export interface PageHeaderProps {
   title: string;
@@ -15,6 +16,17 @@ export interface PageHeaderProps {
   filters?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
   showBreadcrumb?: boolean;
+  /** 'classic' (the default) is the header every page had until now and stays exactly as it was. 'page' is the unified head of the new standard
+   *  (ds/PageHeading): it draws title, meta, info, back, chips, actions and className, and ignores subtitle, icon, filters and the breadcrumbs. */
+  variant?: 'classic' | 'page';
+  /** variant="page": one line of facts, not prose ("44 documents · updated 5 d ago") */
+  meta?: ReactNode;
+  /** variant="page": what the page used to explain in a sentence, shown from an (i) beside the title */
+  info?: string;
+  /** variant="page": a link back to the list the record belongs to ("Back to vendors") */
+  back?: { href: string; label: string };
+  /** variant="page": status pills under the title */
+  chips?: ReactNode;
   className?: string;
 }
 
@@ -35,8 +47,17 @@ export function PageHeader({
   filters,
   breadcrumbs,
   showBreadcrumb = true,
+  variant = 'classic',
+  meta,
+  info,
+  back,
+  chips,
   className,
 }: PageHeaderProps) {
+  if (variant === 'page') {
+    return <PageHeading title={title} meta={meta} info={info} back={back} chips={chips} actions={actions} className={className} />;
+  }
+
   return (
     <div className={clsx('mb-4', className)}>
       {showBreadcrumb && (

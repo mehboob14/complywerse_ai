@@ -22,7 +22,7 @@ const CONTROL = 3;
 const PAIRS: Array<[string, string, number]> = [
   ['ds-fg', 'ds-surface', TEXT], ['ds-fg', 'ds-bg', TEXT], ['ds-fg', 'ds-surface-subtle', TEXT], ['ds-fg', 'ds-surface-hover', TEXT],
   ['ds-fg-body', 'ds-surface', TEXT], ['ds-fg-body', 'ds-bg', TEXT], ['ds-fg-body', 'ds-surface-hover', TEXT],
-  ['ds-fg-muted', 'ds-surface', TEXT], ['ds-fg-muted', 'ds-bg', TEXT], ['ds-fg-muted', 'ds-surface-subtle', TEXT], ['ds-fg-muted', 'ds-surface-hover', TEXT],
+  ['ds-fg-muted', 'ds-surface', TEXT], ['ds-fg-muted', 'ds-bg', TEXT], ['ds-fg-muted', 'ds-surface-subtle', TEXT], ['ds-fg-muted', 'ds-surface-hover', TEXT], ['ds-fg-muted', 'ds-border', TEXT],
   ['ds-on-primary', 'ds-primary', TEXT], ['ds-on-primary', 'ds-primary-hover', TEXT], ['ds-on-primary', 'ds-primary-active', TEXT],
   ['ds-primary-text', 'ds-surface', TEXT], ['ds-primary-text', 'ds-primary-soft', TEXT], ['ds-primary-text', 'ds-surface-hover', TEXT], ['ds-primary-text', 'ds-bg', TEXT],
   ['ds-danger', 'ds-surface', TEXT], ['ds-danger', 'ds-danger-soft', TEXT], ['ds-on-danger', 'ds-danger', TEXT], ['ds-on-danger', 'ds-danger-hover', TEXT],
