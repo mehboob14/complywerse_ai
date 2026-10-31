@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { contrast } from './contrast.ts';
+import { TOKEN_PAIRS as PAIRS } from './dsTokenPairs.ts';        // the same list the style guide prints
 
 const css = readFileSync('styles/tokens.css', 'utf8');
 const tokens = new Map<string, string>();
@@ -16,25 +17,7 @@ const hex = (name: string): string => {
   return v;
 };
 
-// [words/mark, background, minimum ratio]
-const TEXT = 4.5;
-const CONTROL = 3;
-const PAIRS: Array<[string, string, number]> = [
-  ['ds-fg', 'ds-surface', TEXT], ['ds-fg', 'ds-bg', TEXT], ['ds-fg', 'ds-surface-subtle', TEXT], ['ds-fg', 'ds-surface-hover', TEXT],
-  ['ds-fg-body', 'ds-surface', TEXT], ['ds-fg-body', 'ds-bg', TEXT], ['ds-fg-body', 'ds-surface-hover', TEXT],
-  ['ds-fg-muted', 'ds-surface', TEXT], ['ds-fg-muted', 'ds-bg', TEXT], ['ds-fg-muted', 'ds-surface-subtle', TEXT], ['ds-fg-muted', 'ds-surface-hover', TEXT], ['ds-fg-muted', 'ds-border', TEXT],
-  ['ds-on-primary', 'ds-primary', TEXT], ['ds-on-primary', 'ds-primary-hover', TEXT], ['ds-on-primary', 'ds-primary-active', TEXT],
-  ['ds-primary-text', 'ds-surface', TEXT], ['ds-primary-text', 'ds-primary-soft', TEXT], ['ds-primary-text', 'ds-surface-hover', TEXT], ['ds-primary-text', 'ds-bg', TEXT],
-  ['ds-danger', 'ds-surface', TEXT], ['ds-danger', 'ds-danger-soft', TEXT], ['ds-on-danger', 'ds-danger', TEXT], ['ds-on-danger', 'ds-danger-hover', TEXT],
-  ['ds-warning', 'ds-surface', TEXT], ['ds-warning', 'ds-warning-soft', TEXT],
-  ['ds-success', 'ds-surface', TEXT], ['ds-success', 'ds-success-soft', TEXT],
-  ['ds-info', 'ds-surface', TEXT], ['ds-info', 'ds-info-soft', TEXT],
-  // controls: an input's outline, the focus ring and a filled button must be seen against what they sit on
-  ['ds-border-control', 'ds-surface', CONTROL], ['ds-border-control', 'ds-bg', CONTROL],
-  ['ds-focus', 'ds-surface', CONTROL], ['ds-focus', 'ds-bg', CONTROL],
-  ['ds-primary', 'ds-surface', CONTROL], ['ds-primary', 'ds-bg', CONTROL],
-];
-
+// PAIRS = [words/mark, background, minimum ratio] (src/lib/dsTokenPairs.ts)
 test('every pair the kit can draw keeps its contrast (words 4.5:1, controls 3:1)', () => {
   const failures = PAIRS.map(([fg, bg, min]) => ({ fg, bg, min, ratio: contrast(hex(fg), hex(bg)) })).filter((p) => p.ratio < p.min);
   assert.deepEqual(failures.map((f) => `${f.fg} on ${f.bg}: ${f.ratio.toFixed(2)} < ${f.min}`), []);

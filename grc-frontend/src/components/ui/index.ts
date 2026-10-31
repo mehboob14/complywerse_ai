@@ -32,6 +32,7 @@ export { PersonChip, type PersonChipProps } from './ds/PersonChip';
 export { PersonStack, type PersonStackProps } from './ds/PersonStack';
 export { EmptyState, type EmptyStateProps, type EmptyStateKind } from './ds/EmptyState';
 export { ErrorState, type ErrorStateProps } from './ds/ErrorState';
+export { NoAccessState, type NoAccessStateProps } from './ds/NoAccessState';
 export { Skeleton, SkeletonLines, SkeletonRows, type SkeletonProps, type SkeletonLinesProps, type SkeletonRowsProps } from './ds/Skeleton';
 export { Menu, type MenuItem, type MenuProps } from './ds/Menu';
 export { Pager, type PagerProps } from './ds/Pager';

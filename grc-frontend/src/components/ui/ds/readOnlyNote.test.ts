@@ -13,7 +13,7 @@ const source = read('src/components/ui/ds/ReadOnlyNote.tsx');
 test('it is a note with a lock that the reader skips and the page\'s own words after it', () => {
   assert.ok(source.startsWith("'use client';"));
   assert.match(source, /<span role="note" className="[^"]*">/);
-  assert.match(source, /<Lock size=\{14\} aria-hidden \/>\s*\{children\}/);
+  assert.match(source, /<Lock size=\{14\} aria-hidden className="shrink-0" \/>\s*\{children\}/);                  // shrink-0: words that wrap squeezed the lock to 5px
   assert.match(source, /children: ReactNode;/);                                    // the words are the page's: it prints none of its own
   assert.ok(!/View only/.test(source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), 'no words of its own in the code (a comment may show an example)');
 });

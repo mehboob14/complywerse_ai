@@ -146,8 +146,9 @@ export interface ThProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, 's
   firstDir?: SortDir;
 }
 
-// The sort button is the whole header text; it reaches out of the cell's padding so the target is one control tall (28px, 44px on touch).
-const SORT_BUTTON = '-mx-[6px] -my-[6px] inline-flex min-h-ds-control-sm items-center gap-[4px] rounded-ds-control px-[6px] focus-visible:outline-none focus-visible:shadow-ds-ring';
+// The sort button is the whole header text; it reaches out of the cell's padding so the target is one control tall (28px, 44px on touch). Its focus ring
+// is drawn inside it (like the tabs' and the menu items'): the button sits 2px from the top of the scrolling frame, which cut off the outer ring.
+const SORT_BUTTON = '-mx-[6px] -my-[6px] inline-flex min-h-ds-control-sm items-center gap-[4px] rounded-ds-control px-[6px] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]';
 const ICON = 'h-[16px] w-[16px] shrink-0';
 
 export function Th({ align = 'left', priority, sticky = false, sortKey, sort = null, onSortChange, sortCycle, firstDir, className, children, ...rest }: ThProps) {
