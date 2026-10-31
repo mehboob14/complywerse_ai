@@ -45,6 +45,18 @@ test('dates and numbers come from lib/format (through _view/docDates), never fro
   assert.deepEqual(offenders(/\.toLocale(?:Date|Time)?String\(|\bIntl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\b/), []);
 });
 
+test('the counts that can pass a thousand (words, entries, clauses, statements, acknowledgements) are written through formatCount', () => {
+  for (const f of ['[id]/_ChainTab.tsx', '[id]/_GapAnalysisView.tsx', '[id]/_StatementsView.tsx', '[id]/_LifecycleTab.tsx']) {
+    assert.match(code(f), /import \{ formatCount \} from '@\/lib\/format'/, f);
+    assert.ok((code(f).match(/formatCount\(/g) ?? []).length >= 3, f);
+  }
+  assert.match(code('[id]/_ChainTab.tsx'), /\+\{formatCount\(added\)\}/);          // the words added and removed of a long document
+});
+
+test('a read the server answered with its own refusal (403, 404) offers no Retry: asking again cannot change the answer', () => {
+  assert.match(code('[id]/_DocumentStudio.tsx'), /onRetryHtml=\{loadFailure\(htmlQ\.error\) === 'failed'/);
+});
+
 test('every write goes through useReportedMutation, except the six that need their own handling', () => {
   // Each stays on a plain useMutation for a stated reason; a new plain useMutation fails here until it is added with its reason.
   const ALLOWED: Record<string, number> = {

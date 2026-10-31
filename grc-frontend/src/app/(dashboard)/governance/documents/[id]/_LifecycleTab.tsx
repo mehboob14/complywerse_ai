@@ -16,6 +16,7 @@ import { noAccess, retrySettings, type SettingsAnswer } from '@/lib/governanceSe
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, SkeletonLines, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount } from '@/lib/format';
 import { dateTime, day } from '../_view/docDates';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
@@ -256,7 +257,7 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
           <h3 className="text-sm font-semibold text-gray-900">Acknowledgements</h3>
           <InfoTip label="About acknowledgements" text="Once the document is published, everyone in the organisation is asked to read and acknowledge it; each new major version (2.0, 3.0) asks everyone again." />
         </div>
-        {acks.total > 0 && <span className="text-xs text-gray-600" title={`${acks.done} of ${acks.total} people have acknowledged`}>{acks.done}/{acks.total} · {acks.percent}%</span>}
+        {acks.total > 0 && <span className="text-xs text-gray-600" title={`${formatCount(acks.done)} of ${formatCount(acks.total)} people have acknowledged`}>{formatCount(acks.done)}/{formatCount(acks.total)} · {acks.percent}%</span>}
         {acks.pending > 0 && canRemind && (
           <Button size="sm" className="ml-auto" leftIcon={<Bell aria-hidden />} loading={remind.isPending} title="Remind everyone who has not acknowledged yet" onClick={() => remind.mutate()}>Remind waiting</Button>
         )}

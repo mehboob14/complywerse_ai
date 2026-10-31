@@ -10,12 +10,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowUpDown, BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
+  BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
   RotateCcw, Search, ShieldAlert, ShieldCheck, Sparkles, User, X,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
-import { parseUtc } from '@/lib/serverTime';
+import { formatCount } from '@/lib/format';
 import { MultiSelectDropdown } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -98,9 +98,9 @@ function ComplianceSummarySection({ summary, loading, failed, onRetry }: { summa
               <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-[#586472]">
-              {fw.total_clauses != null && <span>{fw.total_clauses} clauses</span>}
-              {fw.compliant_count != null && <span className="text-emerald-800">{fw.compliant_count} covered</span>}
-              {fw.gaps_count != null && <span className="text-rose-800">{fw.gaps_count} gaps</span>}
+              {fw.total_clauses != null && <span>{formatCount(fw.total_clauses)} clauses</span>}
+              {fw.compliant_count != null && <span className="text-emerald-800">{formatCount(fw.compliant_count)} covered</span>}
+              {fw.gaps_count != null && <span className="text-rose-800">{formatCount(fw.gaps_count)} gaps</span>}
             </div>
           </div>
         );
@@ -437,7 +437,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                       ? <div className="h-full rounded-full bg-[#0f766e] transition-all duration-300" style={{ width: `${Math.max(2, pct)}%` }} />
                       : <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-[#0f766e]" />}
                   </div>
-                  {total > 0 && <div className="mt-1 text-xs text-[#586472]">{done}/{total} clauses</div>}
+                  {total > 0 && <div className="mt-1 text-xs text-[#586472]">{formatCount(done)}/{formatCount(total)} clauses</div>}
                 </div>
               );
             })}
@@ -513,22 +513,24 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
           )
         ) : (
           <>
-            <TableFrame aria-label="The gap findings" className="rounded-none border-x-0 border-b-0">
+            {/* its own scroll frame (a tab stop, named): the header stays in view while the rows scroll, and no column is dropped on a narrower window;
+                the wrapper gives an opened row the frame's width to lay itself out in (100cqw) */}
+            <div className="[container-type:inline-size]"><TableFrame aria-label="The gap findings" maxHeight="max-h-[70vh]" className="rounded-none border-x-0 border-b-0">
               <Table caption="The gap findings of this document, one row per clause. The Clause, In the document, Coverage, Risk, Target date, Status and Updated columns can be sorted.">
                 <THead>
                   <tr>
-                    <Th className="w-[44px]"><span className="sr-only">Details</span></Th>
-                    <Th sortKey="clause_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Clause</Th>
-                    <Th sortKey="policy_section_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">In the document</Th>
-                    <Th sortKey="compliance_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Coverage</Th>
-                    <Th>Gap</Th>
-                    <Th sortKey="risk_severity" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Risk</Th>
-                    <Th>Recommendation</Th>
-                    <Th>Owner</Th>
-                    <Th sortKey="target_remediation_date" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Target date</Th>
-                    <Th sortKey="remediation_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Status</Th>
-                    <Th>Evidence</Th>
-                    <Th sortKey="updated_at" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Updated</Th>
+                    <Th sticky className="w-[44px]"><span className="sr-only">Details</span></Th>
+                    <Th sticky sortKey="clause_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Clause</Th>
+                    <Th sticky sortKey="policy_section_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">In the document</Th>
+                    <Th sticky sortKey="compliance_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Coverage</Th>
+                    <Th sticky>Gap</Th>
+                    <Th sticky sortKey="risk_severity" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Risk</Th>
+                    <Th sticky>Recommendation</Th>
+                    <Th sticky>Owner</Th>
+                    <Th sticky sortKey="target_remediation_date" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Target date</Th>
+                    <Th sticky sortKey="remediation_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Status</Th>
+                    <Th sticky>Evidence</Th>
+                    <Th sticky sortKey="updated_at" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Updated</Th>
                   </tr>
                 </THead>
                 <TBody>
@@ -570,10 +572,10 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                   ))}
                 </TBody>
               </Table>
-            </TableFrame>
+            </TableFrame></div>
             {totalPages > 1 && (
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e1e6eb] px-4 py-2.5">
-                <span className="text-[13px] tabular-nums text-[#586472]">{gapFilters.skip + 1}–{Math.min(gapFilters.skip + gapFilters.limit, totalFindings)} of {totalFindings}</span>
+                <span className="text-[13px] tabular-nums text-[#586472]">{formatCount(gapFilters.skip + 1)}–{formatCount(Math.min(gapFilters.skip + gapFilters.limit, totalFindings))} of {formatCount(totalFindings)}</span>
                 <div className="flex items-center gap-2">
                   <IconButton label={`Previous page (${currentPage + 1} of ${totalPages})`} variant="secondary" disabled={currentPage === 0}
                     onClick={() => setGapFilters((prev) => ({ ...prev, skip: Math.max(0, prev.skip - prev.limit) }))}><ChevronLeft aria-hidden /></IconButton>
@@ -790,17 +792,20 @@ function GapFindingRow({
         <Td onClick={onToggleExpand}><div className="max-w-[160px] truncate text-xs text-[#26323d]" title={finding.gap_description || undefined}>{finding.gap_description || '-'}</div></Td>
         <Td onClick={onToggleExpand}>{pill(priority.tone(finding.risk_severity), rs.label)}</Td>
         <Td onClick={onToggleExpand}><div className="max-w-[140px] truncate text-xs text-[#26323d]" title={finding.remediation_recommendation || undefined}>{finding.remediation_recommendation || '-'}</div></Td>
-        <Td onClick={onToggleExpand} className="text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="text-[#586472]" title="No owner">—<span className="sr-only">No owner</span></span>}</Td>
+        {/* a name and a date stay on one line (the frame scrolls sideways instead of breaking them letter by letter) */}
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="text-[#586472]" title="No owner">—<span className="sr-only">No owner</span></span>}</Td>
         {/* the target date is a day (what <input type=date> sends), the update a moment */}
-        <Td onClick={onToggleExpand} className="text-xs text-[#26323d]">{calendarDay(finding.target_remediation_date)}</Td>
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs text-[#26323d]">{calendarDay(finding.target_remediation_date)}</Td>
         <Td onClick={onToggleExpand}>{pill(REMEDIATION_TONE[finding.remediation_status] ?? 'neutral', rms.label)}</Td>
-        <Td onClick={onToggleExpand}><span className="inline-flex items-center justify-center rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#26323d]">{finding.evidence_count || finding.evidence?.length || 0}</span></Td>
-        <Td onClick={onToggleExpand} className="text-xs text-[#586472]">{day(finding.updated_at)}</Td>
+        <Td onClick={onToggleExpand}><span className="inline-flex items-center justify-center rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#26323d]">{formatCount(finding.evidence_count || finding.evidence?.length || 0)}</span></Td>
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs text-[#586472]">{day(finding.updated_at)}</Td>
       </Tr>
 
       {isExpanded && (
         <Tr>
-          <Td colSpan={12} className="!bg-[#f7f9fa] px-4 py-4 sm:px-6">
+          <Td colSpan={12} className="!bg-[#f7f9fa] !p-0">
+            {/* as wide as the visible frame, held at its left edge while the table scrolls sideways: the details and their actions never sit half outside the window */}
+            <div className="sticky left-0 w-[calc(100cqw-1rem)] max-w-full px-4 py-4 sm:px-6">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="space-y-4">
                 {finding.clause_requirement_text && (
@@ -951,6 +956,7 @@ function GapFindingRow({
                   </>
                 )}
               </div>
+            </div>
             </div>
           </Td>
         </Tr>

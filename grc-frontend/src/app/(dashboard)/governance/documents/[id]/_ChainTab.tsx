@@ -30,6 +30,7 @@ import {
 } from '@/lib/changeLog';
 import { problemOf, saveBlob, type Segment } from '@/lib/studio/api';
 import { ago, plural, wordDiff } from '@/lib/studio/text';
+import { formatCount } from '@/lib/format';
 import { clock, dateTime } from '../_view/docDates';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
@@ -132,9 +133,9 @@ const originLabel = (v: ChainVersion, isFirst: boolean) => (isFirst && v.origin 
 
 function Words({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" title={`${added} words added, ${removed} removed`}>
-      <span className="font-mono font-semibold text-emerald-700">+{added}</span>
-      <span className="font-mono font-semibold text-rose-700">−{removed}</span>
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" title={`${formatCount(added)} words added, ${formatCount(removed)} removed`}>
+      <span className="font-mono font-semibold text-emerald-700">+{formatCount(added)}</span>
+      <span className="font-mono font-semibold text-rose-700">−{formatCount(removed)}</span>
       <span className={MUTED}>words</span>
     </span>
   );
@@ -858,14 +859,14 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
         <Journey versions={oldestFirst} onPick={jumpTo} />
 
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#e1e6eb] pt-3 md:grid-cols-3 xl:grid-cols-5">
-          <Stat icon={History} label="Versions" value={s.versions} sub={oldestFirst[0]?.at ? `since ${dateTime(oldestFirst[0].at)}` : undefined} />
-          <Stat icon={GitCompare} label="Changes" value={s.changes} sub={<Words added={s.words_added} removed={s.words_removed} />} />
-          <Stat icon={Sparkles} label="Comply Agent" value={s.ai_assisted} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}%` : undefined}
+          <Stat icon={History} label="Versions" value={formatCount(s.versions)} sub={oldestFirst[0]?.at ? `since ${dateTime(oldestFirst[0].at)}` : undefined} />
+          <Stat icon={GitCompare} label="Changes" value={formatCount(s.changes)} sub={<Words added={s.words_added} removed={s.words_removed} />} />
+          <Stat icon={Sparkles} label="Comply Agent" value={formatCount(s.ai_assisted)} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}%` : undefined}
             title={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}% of the changes were made with Comply Agent` : undefined} />
-          <Stat icon={Users} label="People" value={s.people}
+          <Stat icon={Users} label="People" value={formatCount(s.people)}
             sub={<People names={Array.from(new Set([...oldestFirst.map((v) => v.by), ...chain.events.map((x) => x.actor ?? '')].filter(Boolean))).sort()} />} />
-          <Stat icon={BookOpenCheck} label="Sources" value={s.sources} sub={s.sources ? `${found}/${s.sources} verified` : undefined}
-            title={s.sources ? `${found} of ${s.sources} quoted passages were found in their source` : undefined} />
+          <Stat icon={BookOpenCheck} label="Sources" value={formatCount(s.sources)} sub={s.sources ? `${formatCount(found)}/${formatCount(s.sources)} verified` : undefined}
+            title={s.sources ? `${formatCount(found)} of ${formatCount(s.sources)} quoted passages were found in their source` : undefined} />
         </div>
       </section>
 
@@ -934,7 +935,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
             {groups.map((g) => (
               <section key={g.key} aria-label={`${g.label}: ${plural(g.entries.length, 'entry', 'entries')}`}>
                 <h4 className="sticky z-10 -mx-1 bg-[#f4f6f8] px-1 py-1 text-xs font-semibold text-[#26323d]" style={{ top: sticky.bar }}>
-                  {g.label} <span className="font-normal text-[#586472]">· {g.entries.length}</span>
+                  {g.label} <span className="font-normal text-[#586472]">· {formatCount(g.entries.length)}</span>
                 </h4>
                 <ul className="divide-y divide-[#e1e6eb] overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
                   {g.entries.map((en) => (

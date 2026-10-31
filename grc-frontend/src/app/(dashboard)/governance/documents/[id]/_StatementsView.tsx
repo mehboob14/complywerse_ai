@@ -22,6 +22,7 @@ import {
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import CreateControlDialog from '@/components/soc2/CreateControlDialog';
 import { fieldRows, goesToLine, pendingFor, proposedOf, proposedStatements, sendLabel, type Proposal } from '@/lib/proposals';
+import { formatCount } from '@/lib/format';
 import { dateTime } from '../_view/docDates';
 import DocumentSyncPanel from './_DocumentSyncPanel';
 import { ProposalActions, proposedWords, useProposalRole, useRefreshAfterProposal } from './_ProposalsView';
@@ -529,17 +530,17 @@ function StatementsList({ statements, statementsLoading, statementsError, statem
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h3 className="flex items-center gap-1 text-[15px] font-semibold text-[#1f2933]">
-            Statements <span className="font-normal text-[#586472]">· {stmts.length - removed}</span>
+            Statements <span className="font-normal text-[#586472]">· {formatCount(stmts.length - removed)}</span>
             <InfoTip label="About the statements" text="What the document requires, one statement each. Mapping and gap analysis work on them." />
           </h3>
           {removed > 0 && (
             <span className="rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#3f4b58]" title="A newer version of the document no longer says them; they are kept with their history">
-              {removed} no longer in the document
+              {formatCount(removed)} no longer in the document
             </span>
           )}
           {categoryKeys.filter((cat) => inDocument(grouped[cat]) > 0).map((cat) => {
             const colors = CATEGORY_COLORS[cat] || OTHER_COLORS;
-            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)} {inDocument(grouped[cat])}</span>;
+            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)} {formatCount(inDocument(grouped[cat]))}</span>;
           })}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -620,8 +621,8 @@ function StatementsList({ statements, statementsLoading, statementsError, statem
               <span className="flex items-center gap-3">
                 <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>{formatCategory(cat)}</span>
                 <span className="text-sm text-[#586472]">
-                  {inDocument(catStmts)}<span className="sr-only"> statements</span>
-                  {inDocument(catStmts) < catStmts.length && ` · ${catStmts.length - inDocument(catStmts)} no longer in the document`}
+                  {formatCount(inDocument(catStmts))}<span className="sr-only"> statements</span>
+                  {inDocument(catStmts) < catStmts.length && ` · ${formatCount(catStmts.length - inDocument(catStmts))} no longer in the document`}
                 </span>
               </span>
               {isExpanded ? <ChevronUp className="h-4 w-4 text-[#586472]" aria-hidden /> : <ChevronDown className="h-4 w-4 text-[#586472]" aria-hidden />}
