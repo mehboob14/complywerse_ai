@@ -3,11 +3,12 @@
 // (checked on React Query's own MutationObserver, so the lifecycle is the real one).
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
 
 import {
-  canRetry, confirmationToast, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf, successWords,
-  ERROR_TITLE, SUCCESS_MS, type ReportedMutationConfig,
+  canRetry, confirmationToast, errorMessage, errorToast, reportOutcome, reportedMutationOptions, statusOf, successWords, toastsOutcome,
+  ERROR_TITLE, SUCCESS_MS, type ReportedMutationConfig, type ToastMode,
 } from './reportOutcome.ts';
 
 // ── fakes of what axios throws ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -321,4 +322,91 @@ test('a mutation that returns nothing and takes no variables works the same', as
   const m = run<void, void>({ mutationFn: async () => {}, success: 'Submitted' });
   await m.mutate(undefined);
   assert.deepEqual(m.log, ['success: Submitted']);
+});
+
+// ── which outcomes are toasted (`toast`) ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('toastsOutcome: always is both, success only the confirmation, errors only the failure, none neither; no mode (or an unknown one) is always', () => {
+  const table = { always: [true, true], success: [true, false], errors: [false, true], none: [false, false] } as const;
+  for (const [mode, [onSuccess, onError]] of Object.entries(table)) {
+    assert.equal(toastsOutcome(mode as ToastMode, 'success'), onSuccess, `${mode} / success`);
+    assert.equal(toastsOutcome(mode as ToastMode, 'error'), onError, `${mode} / error`);
+  }
+  for (const mode of [undefined, 'sometimes', '', null] as unknown[]) {
+    assert.equal(toastsOutcome(mode as ToastMode | undefined, 'success'), true, String(mode));
+    assert.equal(toastsOutcome(mode as ToastMode | undefined, 'error'), true, String(mode));
+  }
+});
+
+test('with no toast option a mutation reports as it always did: the confirmation and the failure', async () => {
+  const ok = run<string, number>({ mutationFn: async () => 'ok' });
+  await ok.mutate(1);
+  assert.deepEqual(ok.log, ['success: Saved']);
+  const failed = run<string, number>({ mutationFn: async () => { throw http(409, 'Locked by Rana.'); } });
+  await failed.mutate(1);
+  assert.deepEqual(failed.log, ["error: Couldn't save | Locked by Rana."]);
+  const explicit = run<string, number>({ mutationFn: async () => { throw http(409, 'Locked by Rana.'); }, toast: 'always' });
+  await explicit.mutate(1);
+  assert.deepEqual(explicit.log, failed.log);
+});
+
+test('toast "success": the confirmation is said and a failure is not toasted, so a drawer that shows it inline does not say it twice; the page still hears it', async () => {
+  const heard: string[] = [];
+  const ok = run<string, number>({ mutationFn: async () => 'ok', toast: 'success' });
+  await ok.mutate(1);
+  assert.deepEqual(ok.log, ['success: Saved']);
+  const failed = run<string, number>({
+    mutationFn: async () => { throw http(409, 'Locked by Rana.'); },
+    toast: 'success',
+    onError: (error) => { heard.push(errorMessage(error)); },                         // the page shows this line itself
+  });
+  assert.equal(await failed.mutate(1), 'failed');
+  await settle();
+  assert.deepEqual(failed.log, []);                                                   // no toast, so no Retry button either
+  assert.deepEqual(heard, ['Locked by Rana.']);                                       // and the words are the cleaned ones
+});
+
+test('toast "errors": the failure is said, the confirmation is not; the refresh and the page\'s own work still run', async () => {
+  const order: string[] = [];
+  const ok = run<number, number>({ mutationFn: async (v) => v, toast: 'errors', invalidate: [['a']], onSuccess: (d) => { order.push(`page ${d}`); } });
+  await ok.mutate(5);
+  assert.deepEqual(ok.log, ['invalidate ["a"]']);                                     // refreshed, not said
+  assert.deepEqual(order, ['page 5']);
+  const failed = run<string, number>({ mutationFn: async () => { throw noAnswer(); }, toast: 'errors' });
+  await failed.mutate(1);
+  assert.deepEqual(failed.log, ["error: Couldn't save | Couldn't reach the server. Check your connection and try again. | retry"]);
+});
+
+test('toast "none": nothing is said either way, and the refresh, the page\'s handlers and the cleaned error are all still there', async () => {
+  const seen: string[] = [];
+  const ok = run<string, number>({ mutationFn: async () => 'ok', toast: 'none', invalidate: [['docs']], onSuccess: (d, v) => { seen.push(`ok ${d} ${v}`); } });
+  await ok.mutate(3);
+  assert.deepEqual(ok.log, ['invalidate ["docs"]']);
+  const failed = run<string, number>({ mutationFn: async () => { throw http(403, 'You do not have permission to archive documents.'); }, toast: 'none', onError: (e, v) => { seen.push(`${errorMessage(e)} (${v})`); } });
+  await failed.mutate(4);
+  assert.deepEqual(failed.log, []);
+  assert.deepEqual(seen, ['ok ok 3', 'You do not have permission to archive documents. (4)']);
+});
+
+test('a throw in the page\'s own onSuccess is still logged and the confirmation stands, in every mode', async () => {
+  const error = mock.method(console, 'error', () => {});
+  try {
+    for (const toast of ['always', 'success'] as const) {
+      const m = run<string, number>({ mutationFn: async () => 'ok', toast, onSuccess: () => { throw new Error('page bug'); } });
+      await m.mutate(1);
+      assert.deepEqual(m.log, ['success: Saved'], toast);
+    }
+    assert.equal(error.mock.callCount(), 2);
+  } finally {
+    error.mock.restore();
+  }
+});
+
+test('the option is on the mutation config, the hook re-exports its type, and no page had to change: the default is today\'s behaviour', () => {
+  const source = readFileSync('src/components/ui/ds/reportOutcome.ts', 'utf8').replace(/\r\n/g, '\n');
+  assert.match(source, /toast\?: ToastMode;/);
+  assert.match(source, /if \(toastsOutcome\(config\.toast, 'success'\)\) \{/);
+  assert.match(source, /if \(toastsOutcome\(config\.toast, 'error'\)\) sinks\.notifyError\(/);
+  assert.match(readFileSync('src/components/ui/ds/useReportedMutation.ts', 'utf8'), /export type \{ ReportedMutationConfig, ToastMode \};/);
+  assert.match(readFileSync('src/components/ui/ds/index.ts', 'utf8'), /type ReportedMutationConfig, type ToastMode \} from '\.\/useReportedMutation';/);
 });

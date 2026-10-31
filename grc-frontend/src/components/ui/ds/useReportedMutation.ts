@@ -18,11 +18,14 @@
 // `success` is a line, or `{ title: 'Settings saved', message: 'New requests use them from now on.' }` for a headline with a second line under it, or
 // a function of what the server returned that gives either. `fallback: "The settings could not be saved."` is what a failure says when the server
 // gave no usable words (the server's own words always win).
+//
+// `toast` says which outcomes are toasted: 'always' (the default: the confirmation and the failure), 'success' (a drawer that shows a failure inline
+// toasts only the confirmation: one message per failure, not two; its `onError` has the words, errorMessage(error)), 'errors' or 'none'.
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useNotify } from './useNotify';
-import { reportedMutationOptions, type ReportedMutationConfig } from './reportOutcome';
+import { reportedMutationOptions, type ReportedMutationConfig, type ToastMode } from './reportOutcome';
 
-export type { ReportedMutationConfig };
+export type { ReportedMutationConfig, ToastMode };
 
 export function useReportedMutation<TData = unknown, TVariables = void>(config: ReportedMutationConfig<TData, TVariables>): UseMutationResult<TData, Error, TVariables> {
   const notify = useNotify();

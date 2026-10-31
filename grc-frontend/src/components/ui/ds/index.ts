@@ -42,5 +42,5 @@ export { chartFocusOff } from './chartText';
 export { ConfirmDialog, type ConfirmDialogProps, type ConfirmRequest } from './ConfirmDialog';
 export { useConfirm, type ConfirmOptions } from './useConfirm';
 export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './useNotify';
-export { useReportedMutation, type ReportedMutationConfig } from './useReportedMutation';
+export { useReportedMutation, type ReportedMutationConfig, type ToastMode } from './useReportedMutation';
 export { DiscardBar, useDiscardGuard } from './DiscardBar';

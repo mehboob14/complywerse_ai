@@ -139,14 +139,31 @@ export function reportOutcome<D, V>(outcome: Outcome<D, V>, config: ReportConfig
   return { kind: 'error', title: (config.failure || '').trim() || ERROR_TITLE, message: errorMessage(outcome.error, config.fallback), retry };
 }
 
+/** Which outcomes are toasted. 'always' (the default, what it has always done): the confirmation and the failure. 'success': only the confirmation, for a
+ *  drawer or a dialog that shows a failure inline (one message per failure, not two). 'errors': only the failure, for an action whose success is plain to
+ *  see (the row changes). 'none': neither, the page reports for itself. The page's own onSuccess, onError and the refresh run in every mode. */
+export type ToastMode = 'always' | 'success' | 'errors' | 'none';
+
+/** Whether an outcome of `kind` is toasted in `mode`. A missing or unknown mode is 'always', so every caller that passes none is as it was. */
+export function toastsOutcome(mode: ToastMode | undefined, kind: 'success' | 'error'): boolean {
+  switch (mode) {
+    case 'success': return kind === 'success';
+    case 'errors': return kind === 'error';
+    case 'none': return false;
+    default: return true;
+  }
+}
+
 export interface ReportedMutationConfig<D, V> extends ReportConfig<D, V> {
   mutationFn: (variables: V) => Promise<D>;
   /** the page's own work once the server has confirmed (close the dialog, clear the form); it runs after the confirmation is shown */
   onSuccess?: (data: D, variables: V) => unknown;
-  /** the page's own work after a failure; it runs after the failure is shown */
+  /** the page's own work after a failure; it runs after the failure is shown (or, with toast 'success' or 'none', in its place: errorMessage(error) has the words) */
   onError?: (error: unknown, variables: V) => unknown;
   /** query keys to refresh once the server has confirmed */
   invalidate?: ReadonlyArray<readonly unknown[]>;
+  /** which outcomes are toasted: 'always' (default), 'success', 'errors' or 'none' (see ToastMode) */
+  toast?: ToastMode;
 }
 
 /** What carrying out a report touches; useReportedMutation supplies the real ones, the tests fakes. */
@@ -169,14 +186,16 @@ export function reportedMutationOptions<D, V>(config: ReportedMutationConfig<D, 
     mutationFn: config.mutationFn,
     onSuccess: async (data: D, variables: V): Promise<void> => {
       const report = reportOutcome({ ok: true, data, variables }, config);
-      if (report.title) sinks.notifySuccess(report.message, { title: report.title });
-      else sinks.notifySuccess(report.message);
+      if (toastsOutcome(config.toast, 'success')) {
+        if (report.title) sinks.notifySuccess(report.message, { title: report.title });
+        else sinks.notifySuccess(report.message);
+      }
       config.invalidate?.forEach((queryKey) => sinks.invalidate(queryKey));
       try { await config.onSuccess?.(data, variables); } catch (error) { console.error(error); }
     },
     onError: async (error: unknown, variables: V): Promise<void> => {
       const report = reportOutcome({ ok: false, error, variables }, config, sinks.rerun);
-      sinks.notifyError(report.message, { title: report.title, retry: report.retry });
+      if (toastsOutcome(config.toast, 'error')) sinks.notifyError(report.message, { title: report.title, retry: report.retry });
       await config.onError?.(error, variables);
     },
   };

@@ -1057,8 +1057,9 @@ export const DOCS: Record<string, ComponentDoc> = {
         props: [
           prop('mutationFn', '(variables) => Promise<D>', 'The request.'),
           prop('onSuccess', '(data, variables) => unknown', 'The page\'s own work once the server has confirmed; it runs after the confirmation is shown.'),
-          prop('onError', '(error, variables) => unknown', 'The page\'s own work after a failure is shown.'),
+          prop('onError', '(error, variables) => unknown', 'The page\'s own work after a failure is shown (or, with toast \'success\' or \'none\', in place of the toast: errorMessage(error) has the cleaned words to show inline).'),
           prop('invalidate', 'ReadonlyArray<readonly unknown[]>', 'Query keys to refresh once the server has confirmed.'),
+          prop('toast', "'always' | 'success' | 'errors' | 'none'", "Which outcomes are toasted. always: the confirmation and the failure (what it has always done). success: only the confirmation, for a drawer or a dialog that shows a failure inline, so it says it once, not twice. errors: only the failure, for an action whose success is plain to see. none: the page reports for itself. The refresh and the page's own onSuccess and onError run in every mode.", "'always'"),
         ],
       },
     ],

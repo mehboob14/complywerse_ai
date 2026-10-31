@@ -63,5 +63,5 @@ export { chartFocusOff } from './ds/chartText';
 export { ConfirmDialog, type ConfirmDialogProps, type ConfirmRequest } from './ds/ConfirmDialog';
 export { useConfirm, type ConfirmOptions } from './ds/useConfirm';
 export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './ds/useNotify';
-export { useReportedMutation, type ReportedMutationConfig } from './ds/useReportedMutation';
+export { useReportedMutation, type ReportedMutationConfig, type ToastMode } from './ds/useReportedMutation';
 export { DiscardBar, useDiscardGuard } from './ds/DiscardBar';

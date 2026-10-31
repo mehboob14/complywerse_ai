@@ -4,7 +4,8 @@
 // Each button that opens a dialog or a drawer carries data-guide-opener, which is how the accessibility probe finds it (it opens each one, checks
 // focus, Tab, Escape and focus return); the toast buttons carry data-guide-toast. Everything here is simulated: no request leaves the page.
 import { useEffect, useRef, useState } from 'react';
-import { AnimatedModal, Button, DiscardBar, FormField, RightSlidePanel, Select, Textarea, TextInput, useConfirm, useNotify, useReportedMutation } from '@/components/ui';
+import { AnimatedModal, Button, DiscardBar, FormField, Notice, RightSlidePanel, Select, Textarea, TextInput, useConfirm, useNotify, useReportedMutation } from '@/components/ui';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { GuideSection, MONO, Row, Spec, Specimen } from './Guide';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -188,6 +189,32 @@ function MutationDemo() {
   );
 }
 
+/** toast: 'success': a drawer or dialog that shows a failure inline says it once. The confirmation is a toast; the failure is the page's own line (errorMessage has the cleaned words). */
+function InlineErrorDemo() {
+  const [problem, setProblem] = useState<string | null>(null);
+  const save = useReportedMutation<string, 'ok' | 'fail'>({
+    mutationFn: async (mode) => {
+      await sleep(500);
+      if (mode === 'fail') throw serverError(409, 'Someone else changed this document. Reload it and try again.');
+      return 'saved';
+    },
+    success: 'Document saved',
+    failure: "Couldn't save the document",
+    toast: 'success',
+    onSuccess: () => setProblem(null),
+    onError: (error) => setProblem(errorMessage(error)),
+  });
+  return (
+    <div className="space-y-[8px]">
+      <Row>
+        <Button variant="primary" loading={save.isPending} onClick={() => { setProblem(null); save.mutate('ok'); }}>Save (a toast)</Button>
+        <Button loading={save.isPending} onClick={() => { setProblem(null); save.mutate('fail'); }}>Save and fail (the line below, no toast)</Button>
+      </Row>
+      {problem && <Notice tone="danger" title="Couldn't save the document">{problem}</Notice>}
+    </div>
+  );
+}
+
 export function OverlaysSection() {
   return (
     <GuideSection id="overlays" title="Overlays and feedback" lead="How the platform asks (dialogs, drawers, the confirm question), tells (toasts) and reports (a mutation that confirms only after the server does). Focus moves in, Tab wraps, Escape closes and focus goes back; typed input is never thrown away without asking.">
@@ -201,6 +228,7 @@ export function OverlaysSection() {
       <Spec name="useNotify"><Specimen label="Every kind of toast. A success goes by itself after 3 seconds; the others wait, and all of them wait while you read them (pointer over, or focus inside)"><NotifyDemo /></Specimen></Spec>
       <Spec name="useReportedMutation">
         <Specimen label="Simulated success, failure and retry (no request is sent)"><MutationDemo /></Specimen>
+        <Specimen label="toast=&quot;success&quot;: a failure is shown inline by the page, so it is said once, not also as a toast"><InlineErrorDemo /></Specimen>
         <p className="text-ds-label text-ds-fg-muted">Toasts appear at the top right: <code className={MONO}>role=&quot;alert&quot;</code> for an error, <code className={MONO}>role=&quot;status&quot;</code> for the rest.</p>
       </Spec>
     </GuideSection>
