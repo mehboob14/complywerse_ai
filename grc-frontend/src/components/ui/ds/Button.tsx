@@ -34,7 +34,11 @@ type NativeLink = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof ButtonOwn 
 /** With `href` the button is a link (next/link) and takes the anchor's attributes; without it, the button's. */
 export type ButtonProps = ButtonOwn & (({ href?: undefined } & NativeButton) | ({ href: string } & NativeLink));
 
-const swallow = (e: MouseEvent) => e.preventDefault();
+// what a press does on a button that is busy or a link that is off: nothing (no form submit, no navigation, and no click for a clickable row around it)
+const swallow = (e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+};
 
 function Content({ loading, leftIcon, rightIcon, children }: { loading: boolean; leftIcon?: ReactNode; rightIcon?: ReactNode; children?: ReactNode }) {
   // With no left icon the spinner goes over the middle and the content turns transparent (not hidden: the name must stay in the accessibility tree),
@@ -63,7 +67,7 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
     const { href, onClick, ...anchor } = rest;
     if (disabled || loading) {
       return (
-        <a {...anchor} ref={ref as Ref<HTMLAnchorElement>} role="link" aria-disabled="true" aria-busy={busy} tabIndex={-1} className={classes}>{content}</a>
+        <a {...anchor} ref={ref as Ref<HTMLAnchorElement>} role="link" aria-disabled="true" aria-busy={busy} tabIndex={-1} onClick={swallow} className={classes}>{content}</a>
       );
     }
     return <Link {...anchor} ref={ref as Ref<HTMLAnchorElement>} href={href} onClick={onClick} className={classes}>{content}</Link>;

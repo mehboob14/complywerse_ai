@@ -111,6 +111,7 @@ test('Button loading: aria-busy, presses are swallowed, and the button stays foc
   const s = src('Button.tsx');
   assert.ok(s.includes('aria-busy={busy}') && s.includes('aria-disabled={busy}'));
   assert.ok(s.includes('onClick={loading ? swallow : onClick}'));
+  assert.ok(/const swallow = [^;]*?preventDefault\(\);\s*e\.stopPropagation\(\);/s.test(s), 'no submit, and no click for a clickable row around the button');
   assert.ok(/disabled=\{disabled\}/.test(s) && !/disabled=\{disabled \|\| loading\}/.test(s), 'loading must not set the disabled attribute: focus would be lost');
   assert.ok(s.includes('Loader2') && s.includes('animate-spin'));
   assert.ok(s.includes('opacity-0') && !/\binvisible\b/.test(s), 'the label of a loading button stays in the accessibility tree');
@@ -122,7 +123,7 @@ test('Button href: a next/link with the same classes; a disabled or loading link
   const inert = /<a \{\.\.\.anchor\}[\s\S]*?>\{content\}<\/a>/.exec(s)?.[0] ?? '';
   assert.ok(inert, 'the disabled branch renders a plain <a>');
   assert.ok(!/href=/.test(inert), 'no href: it cannot be followed by click, middle click or "open in a new tab"');
-  for (const part of ['role="link"', 'aria-disabled="true"', 'tabIndex={-1}']) assert.ok(inert.includes(part), part);
+  for (const part of ['role="link"', 'aria-disabled="true"', 'tabIndex={-1}', 'onClick={swallow}']) assert.ok(inert.includes(part), part);
   assert.ok(s.includes('if (disabled || loading)'));
 });
 
