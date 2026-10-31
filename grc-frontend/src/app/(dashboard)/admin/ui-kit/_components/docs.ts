@@ -895,7 +895,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   AnimatedModal: {
     name: 'AnimatedModal',
     importFrom: UI,
-    use: 'a centred dialog is needed. Focus moves in when it opens, Tab wraps inside, Escape closes, and focus goes back to what opened it.',
+    use: 'a centred dialog is needed. Focus moves in when it opens, Tab wraps inside, Escape closes, and focus goes back to what opened it. Stacked overlays (a preview over a drawer) close one layer per Escape: the top one, the one that holds focus; a list or a menu that is open takes the press first.',
     dont: 'Do not forget `dirty` when the dialog holds typed input: without it Escape and the X throw the input away. (Legacy look; the kit\'s ConfirmDialog is built on it.)',
     parts: [
       {
@@ -924,7 +924,7 @@ export const DOCS: Record<string, ComponentDoc> = {
   RightSlidePanel: {
     name: 'RightSlidePanel',
     importFrom: UI,
-    use: 'a record\'s detail or a long form should sit in a drawer on the right and keep the list in view. Same focus rules as the dialog.',
+    use: 'a record\'s detail or a long form should sit in a drawer on the right and keep the list in view. Same focus rules as the dialog, and the same Escape: a dialog opened from the drawer closes first, the drawer on the next press.',
     dont: 'Do not forget `dirty` when the panel holds typed input; a full-width drawer on a phone has no backdrop to press.',
     parts: [
       {

@@ -13,7 +13,7 @@
 import { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { focusIsElsewhere } from './dialogFocus';
+import { focusIsElsewhere, overlayTakesEscape } from './dialogFocus';
 import { useDialogFocus } from './useDialogFocus';
 import { lockBodyScroll } from './scrollLock';
 import { DiscardBar, useDiscardGuard } from './ds/DiscardBar';
@@ -96,8 +96,10 @@ export function AnimatedModal({
   useEffect(() => {
     if (!render) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;                                          // a list inside handled it
-      if (dirty && dialogRef.current && focusIsElsewhere(dialogRef.current, document.activeElement, document.body)) return;   // a menu or a dialog over this one is open: Escape is its
+      // a list inside handled it (defaultPrevented), or a menu, a preview or a drawer drawn over this one holds focus: Escape is that layer's, one layer per press
+      const elsewhere = dialogRef.current ? focusIsElsewhere(dialogRef.current, document.activeElement, document.body) : false;
+      if (!overlayTakesEscape({ key: e.key, defaultPrevented: e.defaultPrevented, focusElsewhere: elsewhere })) return;
+      e.preventDefault();  // taken: an overlay under this one, whose listener may run after this one, must not take it too
       requestClose('escape');
     };
     document.addEventListener('keydown', onKey);

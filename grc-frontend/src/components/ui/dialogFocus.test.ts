@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { AUTOFOCUS, FIELD, TABBABLE, closeAction, focusIsElsewhere, initialFocusTarget, nextFocusIndex, visibleOnly } from './dialogFocus.ts';
+import { AUTOFOCUS, FIELD, TABBABLE, closeAction, focusIsElsewhere, initialFocusTarget, nextFocusIndex, overlayTakesEscape, visibleOnly } from './dialogFocus.ts';
 
 test('Tab wraps from the last item to the first and Shift+Tab from the first to the last; in between the browser moves focus', () => {
   assert.equal(nextFocusIndex(4, 3, false), 0);
@@ -38,6 +38,44 @@ test('focus is elsewhere only when it is on something outside the dialog that is
   assert.equal(focusIsElsewhere(dialog, outside, body), true);        // a menu or a dialog drawn over this one
   assert.equal(focusIsElsewhere(dialog, body, body), false);
   assert.equal(focusIsElsewhere(dialog, null, body), false);
+});
+
+// One Escape closes one layer. Two overlays stacked (a preview over a drawer, a drawer over a dialog) both listen on the document, so the lower one must
+// leave a press alone while focus is in the layer drawn over it; before this, only an overlay holding typed input (`dirty`) did, and one press closed both.
+test('an overlay takes an Escape that nobody handled while focus is in it or nowhere', () => {
+  assert.equal(overlayTakesEscape({ key: 'Escape', defaultPrevented: false, focusElsewhere: false }), true);
+});
+
+test('an overlay with a layer drawn over it (focus in a menu, a preview, another drawer) leaves the Escape to that layer, typed input or not', () => {
+  assert.equal(overlayTakesEscape({ key: 'Escape', defaultPrevented: false, focusElsewhere: true }), false);
+});
+
+test('an Escape that a list or the top overlay already handled (defaultPrevented) is nobody else\'s, whichever order the listeners run in', () => {
+  assert.equal(overlayTakesEscape({ key: 'Escape', defaultPrevented: true, focusElsewhere: false }), false);
+  assert.equal(overlayTakesEscape({ key: 'Escape', defaultPrevented: true, focusElsewhere: true }), false);
+});
+
+test('only Escape is Escape', () => {
+  for (const key of ['Enter', 'Tab', ' ', 'Esc', 'escape', 'ArrowDown', '']) assert.equal(overlayTakesEscape({ key, defaultPrevented: false, focusElsewhere: false }), false, JSON.stringify(key));
+});
+
+test('a stack of two: the press goes to the top layer only, in either order of the two listeners', () => {
+  // the top layer (preview) holds focus; the lower (drawer) sees focus elsewhere. Whichever listener runs first, exactly one takes it.
+  const listeners = {
+    preview: (e: { defaultPrevented: boolean }) => overlayTakesEscape({ key: 'Escape', defaultPrevented: e.defaultPrevented, focusElsewhere: false }),
+    drawer: (e: { defaultPrevented: boolean }) => overlayTakesEscape({ key: 'Escape', defaultPrevented: e.defaultPrevented, focusElsewhere: true }),
+  };
+  for (const order of [['preview', 'drawer'], ['drawer', 'preview']] as const) {
+    const event = { defaultPrevented: false };
+    const taken: string[] = [];
+    for (const name of order) if (listeners[name](event)) { taken.push(name); event.defaultPrevented = true; }              // the one that takes it marks it handled
+    assert.deepEqual(taken, ['preview'], order.join(' then '));
+  }
+  // and when focus has already moved back into the drawer before its listener runs (the preview closed first), the mark is what keeps the drawer shut
+  const event = { defaultPrevented: false };
+  assert.equal(listeners.preview(event), true);
+  event.defaultPrevented = true;
+  assert.equal(overlayTakesEscape({ key: 'Escape', defaultPrevented: event.defaultPrevented, focusElsewhere: false }), false);
 });
 
 test('the first focus: a marked element, else a field, else a button, else the dialog', () => {
@@ -103,4 +141,17 @@ test('both overlays use the shared focus hook and the discard guard and name the
   const vendor = readFileSync('src/app/(dashboard)/vendor-risk/_ui/Dialog.tsx', 'utf8');
   assert.match(vendor, /labelledBy=/, 'the vendor Dialog names itself through AnimatedModal');
   assert.doesNotMatch(vendor, /addEventListener|TABBABLE|querySelector/, 'no trap or focus code of its own');
+});
+
+// Source-text pin: the Escape handler of BOTH overlays is the same decision, with no `dirty &&` in front of the focus guard (that was the gap), and it marks the
+// press handled when it takes it, so an overlay under it that listens later in the same keydown leaves it alone.
+test('both overlays apply the focus guard to every Escape, dirty or not, and mark the press taken', () => {
+  for (const name of ['AnimatedModal', 'RightSlidePanel']) {
+    const src = readFileSync(`src/components/ui/${name}.tsx`, 'utf8').replace(/\r\n/g, '\n');
+    assert.match(src, /import \{ focusIsElsewhere, overlayTakesEscape \} from '\.\/dialogFocus';/, `${name} imports the decision`);
+    assert.match(src, /overlayTakesEscape\(\{ key: e\.key, defaultPrevented: e\.defaultPrevented, focusElsewhere: elsewhere \}\)/, `${name} asks it`);
+    assert.match(src, /focusIsElsewhere\((?:dialogRef|panelRef)\.current, document\.activeElement, document\.body\)/, `${name} measures where focus is`);
+    assert.doesNotMatch(src, /dirty && (?:dialogRef|panelRef)\.current && focusIsElsewhere/, `${name}: the guard is no longer only for a dirty overlay`);
+    assert.match(src, /if \(!overlayTakesEscape\([^\n]*\)\) return;\n\s*e\.preventDefault\(\);[^\n]*\n\s*requestClose\('escape'\);/, `${name} marks the press taken before it closes`);
+  }
 });

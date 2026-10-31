@@ -30,6 +30,14 @@ export function focusIsElsewhere(dialog: { contains(node: unknown): boolean }, a
   return active != null && active !== body && !dialog.contains(active);
 }
 
+/** Whether an overlay (a dialog or a drawer) takes this Escape press. It must be Escape; nothing may have handled it already (a list, a menu or a
+ *  stacked overlay that took it first: `defaultPrevented`); and focus must not be in a layer drawn over this overlay (`focusElsewhere`: a menu, a
+ *  preview or a drawer opened from it). That layer is the top one and the press is its: one Escape closes one layer, whether the overlay holds
+ *  typed input or not. */
+export function overlayTakesEscape({ key, defaultPrevented, focusElsewhere }: { key: string; defaultPrevented: boolean; focusElsewhere: boolean }): boolean {
+  return key === 'Escape' && !defaultPrevented && !focusElsewhere;
+}
+
 /** What takes focus when a dialog opens: the element a caller marked, else the first field, else the first button, else the dialog.
  *  On a touch screen (`touch`) only a marked element or the dialog itself: focusing a text field there raises the on-screen keyboard over the
  *  dialog the moment it opens, which these dialogs never did before they took focus. */

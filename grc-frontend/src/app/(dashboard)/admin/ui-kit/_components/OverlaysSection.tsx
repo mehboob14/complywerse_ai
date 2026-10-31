@@ -81,6 +81,26 @@ function DrawerDemo() {
   );
 }
 
+/** A drawer that opens a preview dialog over itself. The dialog is written BEFORE the drawer on purpose: the order the two Escape listeners are added in is
+ *  the order of the tree, so this is the one where the drawer hears a press after the dialog has already taken it. One Escape must close one layer. */
+function StackedDemo() {
+  const [drawer, setDrawer] = useState(false);
+  const [preview, setPreview] = useState(false);
+  const [log, setLog] = useState('nothing yet');
+  return (
+    <div className="space-y-[8px]">
+      <Row><Button data-guide-stacked onClick={() => setDrawer(true)}>Open a drawer with a preview</Button></Row>
+      <p className="text-ds-label text-ds-fg-muted" aria-live="polite">Last closed: {log}. Open the drawer, then the preview, and press Escape once: only the preview closes; the second Escape closes the drawer.</p>
+      <AnimatedModal isOpen={preview} onClose={() => { setPreview(false); setLog('the preview'); }} title="Preview" subtitle="Drawn over the drawer" size="md">
+        <div className="p-[16px]"><p className="text-ds-body text-ds-fg-body">Escape closes this dialog and nothing under it.</p></div>
+      </AnimatedModal>
+      <RightSlidePanel isOpen={drawer} onClose={() => { setDrawer(false); setLog('the drawer'); }} title="Document details" subtitle="A drawer that opens a preview" footer={<Footer onClose={() => { setDrawer(false); setLog('the drawer'); }} label="Done" />}>
+        <Button data-guide-stacked-preview onClick={() => setPreview(true)}>Preview the document</Button>
+      </RightSlidePanel>
+    </div>
+  );
+}
+
 function DiscardBarDemo() {
   const [shown, setShown] = useState(false);
   return (
@@ -172,7 +192,10 @@ export function OverlaysSection() {
   return (
     <GuideSection id="overlays" title="Overlays and feedback" lead="How the platform asks (dialogs, drawers, the confirm question), tells (toasts) and reports (a mutation that confirms only after the server does). Focus moves in, Tab wraps, Escape closes and focus goes back; typed input is never thrown away without asking.">
       <Spec name="AnimatedModal"><Specimen label="A plain dialog, one that holds typing (dirty), and the width choices"><ModalDemo /></Specimen></Spec>
-      <Spec name="RightSlidePanel"><Specimen label="A plain drawer, one that holds typing (dirty), and one whose backdrop does nothing; on a phone it fills the screen"><DrawerDemo /></Specimen></Spec>
+      <Spec name="RightSlidePanel">
+        <Specimen label="A plain drawer, one that holds typing (dirty), and one whose backdrop does nothing; on a phone it fills the screen"><DrawerDemo /></Specimen>
+        <Specimen label="Stacked: a drawer that opens a dialog. One Escape closes one layer (the top one), typed input or not"><StackedDemo /></Specimen>
+      </Spec>
       <Spec name="DiscardBar"><Specimen label="The bar both overlays show when dirty"><DiscardBarDemo /></Specimen></Spec>
       <Spec name="ConfirmDialog"><Specimen label="useConfirm: a default and a danger question"><ConfirmDemo /></Specimen></Spec>
       <Spec name="useNotify"><Specimen label="Every kind of toast. A success goes by itself after 3 seconds; the others wait, and all of them wait while you read them (pointer over, or focus inside)"><NotifyDemo /></Specimen></Spec>
