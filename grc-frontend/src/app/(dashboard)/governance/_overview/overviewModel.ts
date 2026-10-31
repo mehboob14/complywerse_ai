@@ -51,10 +51,9 @@ const LIBRARY = '/governance/documents';
 /** The counters in the order the page has always listed them. */
 export const ATTENTION: readonly Attention[] = [
   { key: 'documents_awaiting_approval', label: 'Documents awaiting approval', href: `${LIBRARY}?status=pending_review,pending_approval`, tone: 'pending', fallback: 'pending', exact: true },
-  {
-    key: 'overdue_reviews', label: 'Overdue reviews', href: '/governance/reviews', tone: 'danger', fallback: 'overdue', exact: false,
-    gap: 'The Reviews page opens on its Overdue tab but counts every document that is not archived or expired; the scorecard counts only approved and in-force ones (the library with ?review=overdue matches it exactly).',
-  },
+  // the library's review lens uses the scorecard's own definition (approved and in-force documents past their review date); the Reviews tab
+  // of the Documents bar lists every document that is not archived or expired, so its count differs
+  { key: 'overdue_reviews', label: 'Overdue reviews', href: `${LIBRARY}?review=overdue`, tone: 'danger', fallback: 'overdue', exact: true },
   {
     key: 'expiring_documents_30d', label: 'Documents expiring in 30 days', href: `${LIBRARY}?status=approved,published`, tone: 'warning', fallback: 'expiring', exact: false,
     gap: 'No page filters documents by expiry date; the library is opened on approved and published documents, the ones the count draws from.',
