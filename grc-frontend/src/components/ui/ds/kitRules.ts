@@ -30,7 +30,7 @@ export const KIT_RULES: KitRule[] = [
 /** text-[Npx] under 12px, and a bare `outline-none` (no focus-visible replacement on the same line): rules that need a little logic. */
 function logicViolations(line: string): string[] {
   const out: string[] = [];
-  for (const m of line.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)) if (parseFloat(m[1]) < 12) out.push('small-text');
+  for (const m of Array.from(line.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g))) if (parseFloat(m[1]) < 12) out.push('small-text');
   if (/outline-none/.test(line) && !/focus-visible:/.test(line)) out.push('bare-outline-none');
   return out;
 }

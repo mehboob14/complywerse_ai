@@ -9,7 +9,7 @@ import { contrast } from './contrast.ts';
 
 const css = readFileSync('styles/tokens.css', 'utf8');
 const tokens = new Map<string, string>();
-for (const m of css.matchAll(/--(ds-[a-z0-9-]+)\s*:\s*([^;]+);/g)) tokens.set(m[1], m[2].trim());
+for (const m of Array.from(css.matchAll(/--(ds-[a-z0-9-]+)\s*:\s*([^;]+);/g))) tokens.set(m[1], m[2].trim());
 const hex = (name: string): string => {
   const v = tokens.get(name);
   assert.ok(v && /^#[0-9a-f]{3,6}$/i.test(v), `--${name} is not a hex colour (${v})`);
@@ -64,10 +64,10 @@ test('type tokens keep the 12px floor and the agreed scale', () => {
 
 test('every token the Tailwind theme reads is defined, and every colour token is reachable', () => {
   const config = readFileSync('tailwind.config.ts', 'utf8');
-  const used = new Set([...config.matchAll(/var\(--(ds-[a-z0-9-]+)\)/g)].map((m) => m[1]));
-  const missing = [...used].filter((n) => !tokens.has(n));
+  const used = new Set(Array.from(config.matchAll(/var\(--(ds-[a-z0-9-]+)\)/g), (m) => m[1]));
+  const missing = Array.from(used).filter((n) => !tokens.has(n));
   assert.deepEqual(missing, []);
-  const inCss = new Set([...css.matchAll(/var\(--(ds-[a-z0-9-]+)\)/g)].map((m) => m[1]));    // a token another token is built from (the ring uses the focus colour)
-  const unused = [...tokens.keys()].filter((n) => !used.has(n) && !inCss.has(n));
+  const inCss = new Set(Array.from(css.matchAll(/var\(--(ds-[a-z0-9-]+)\)/g), (m) => m[1]));    // a token another token is built from (the ring uses the focus colour)
+  const unused = Array.from(tokens.keys()).filter((n) => !used.has(n) && !inCss.has(n));
   assert.deepEqual(unused, [], 'a token nobody can reach through the theme');
 });
