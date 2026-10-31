@@ -1,13 +1,30 @@
 'use client';
 
-// The numbers a page opens with: StatTile (a figure, with every state it can be in) and ProgressBar (a share, drawn and read out). Everything here is
-// static or simulated: no request leaves the page.
+// The numbers a page opens with: StatTile (a figure, with every state it can be in), ProgressBar (a share, drawn and read out) and ChartFrame (a chart
+// with a title and its numbers in words). Everything here is static or simulated: no request leaves the page.
 import { useEffect, useRef, useState } from 'react';
-import { Button, ProgressBar, StatTile, StatusPill } from '@/components/ui';
+import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Button, ChartFrame, ProgressBar, StatTile, StatusPill } from '@/components/ui';
 import { formatCount } from '@/lib/format';
 import { Grid, GuideSection, Row, Spec, Specimen } from './Guide';
 
 const TILES = 'grid grid-cols-1 gap-[16px] sm:grid-cols-2 xl:grid-cols-3';
+const FRAME = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
+
+// An SVG attribute cannot read a class, so a chart spells the hex of the token it means.
+const GRID = '#e1e6eb';        // --ds-border
+const INK = '#586472';         // --ds-fg-muted
+const BRAND = '#0f766e';       // --ds-primary
+const TIP = { fontSize: 12, border: '1px solid #e1e6eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)', color: '#1f2933' };
+
+const MONTHS = [
+  { month: 'May', created: 4, published: 2 }, { month: 'Jun', created: 6, published: 3 }, { month: 'Jul', created: 3, published: 4 },
+  { month: 'Aug', created: 8, published: 5 }, { month: 'Sep', created: 5, published: 6 }, { month: 'Oct', created: 7, published: 4 },
+];
+const STATUSES = [
+  { label: 'Draft', value: 50, fill: '#586472' }, { label: 'Pending approval', value: 44, fill: '#6d28d9' }, { label: 'Approved', value: 40, fill: '#08794f' },
+  { label: 'Rejected', value: 22, fill: '#b42318' }, { label: 'Revoked', value: 18, fill: '#9a5007' },
+];
 
 function FailedTile() {
   const [phase, setPhase] = useState<'failed' | 'loading' | 'ok'>('failed');
@@ -98,11 +115,63 @@ function BarDemo() {
   );
 }
 
+function ChartDemo() {
+  return (
+    <Grid cols={2}>
+      <Specimen label="An area chart in a frame: the title, the chart (a picture, hidden from assistive technology) and its numbers as a table that only a screen reader sees. Tab goes past it: it takes no focus">
+        <div className={FRAME}>
+          <ChartFrame
+            title="Documents created and published each month"
+            note="The last six months"
+            height={240}
+            data={{ columns: ['Month', 'Created', 'Published'], rows: MONTHS.map((m) => [m.month, m.created, m.published]) }}
+          >
+            {(focusOff) => (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={MONTHS} margin={{ top: 8, right: 12, left: -14, bottom: 0 }} {...focusOff}>
+                  <CartesianGrid strokeDasharray="2 2" stroke={GRID} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: INK }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: INK }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TIP} />
+                  <Area type="monotone" dataKey="created" name="Created" stroke={INK} fill={INK} fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
+                  <Area type="monotone" dataKey="published" name="Published" stroke={BRAND} fill={BRAND} fillOpacity={0.14} strokeWidth={2} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </ChartFrame>
+        </div>
+      </Specimen>
+      <Specimen label="A donut: the Pie takes the same props (rootTabIndex), or its group is a tab stop of its own">
+        <div className={FRAME}>
+          <ChartFrame
+            title="Exceptions by status"
+            note="174 exceptions"
+            height={240}
+            data={{ columns: ['Status', 'Exceptions'], rows: STATUSES.map((st) => [st.label, st.value]) }}
+          >
+            {(focusOff) => (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart {...focusOff}>
+                  <Pie data={STATUSES} dataKey="value" nameKey="label" innerRadius={52} outerRadius={84} paddingAngle={2} isAnimationActive={false} {...focusOff}>
+                    {STATUSES.map((st) => <Cell key={st.label} fill={st.fill} />)}
+                  </Pie>
+                  <Tooltip contentStyle={TIP} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartFrame>
+        </div>
+      </Specimen>
+    </Grid>
+  );
+}
+
 export function FiguresSection() {
   return (
-    <GuideSection id="figures" title="Figures" lead="The numbers a page opens with and the shares it draws. A figure is never a 0 that stands for a failure, a wait or nothing recorded: each of those has its own state.">
+    <GuideSection id="figures" title="Figures and charts" lead="The numbers a page opens with, the shares it draws and the charts that picture them. A figure is never a 0 that stands for a failure, a wait or nothing recorded: each of those has its own state. A chart always has its numbers in words.">
       <Spec name="StatTile"><TileDemo /></Spec>
       <Spec name="ProgressBar"><BarDemo /></Spec>
+      <Spec name="ChartFrame"><ChartDemo /></Spec>
     </GuideSection>
   );
 }

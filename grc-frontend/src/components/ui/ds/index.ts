@@ -33,6 +33,8 @@ export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } fr
 export { ReadOnlyNote, type ReadOnlyNoteProps } from './ReadOnlyNote';
 export { StatTile, type StatTileProps, type StatTone } from './StatTile';
 export { ProgressBar, type ProgressBarProps, type ProgressTone } from './ProgressBar';
+export { ChartFrame, type ChartFrameProps, type ChartData } from './ChartFrame';
+export { chartFocusOff } from './chartText';
 export { ConfirmDialog, type ConfirmDialogProps, type ConfirmRequest } from './ConfirmDialog';
 export { useConfirm, type ConfirmOptions } from './useConfirm';
 export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './useNotify';

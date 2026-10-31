@@ -35,7 +35,7 @@ const SECTIONS = [
   { id: 'structure', label: 'Structure' },
   { id: 'settings', label: 'Settings pages' },
   { id: 'tables', label: 'Tables' },
-  { id: 'figures', label: 'Figures' },
+  { id: 'figures', label: 'Figures and charts' },
   { id: 'overlays', label: 'Overlays and feedback' },
   { id: 'formatting', label: 'Formatting' },
   { id: 'matrix', label: 'States matrix' },

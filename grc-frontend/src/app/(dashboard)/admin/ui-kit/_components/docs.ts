@@ -739,6 +739,37 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  ChartFrame: {
+    name: 'ChartFrame',
+    importFrom: UI,
+    imports: ['ChartFrame', 'chartFocusOff'],
+    use: 'a recharts chart is drawn: a visible title, the chart in a box of a set height, and its numbers as a table that only a screen reader sees. recharts 3 makes every chart a tab stop announced as an unnamed "application"; the frame hands the chart the props that turn that off, so it is neither a keyboard trap nor a picture without words.',
+    dont: 'Do not draw a chart without its numbers: `data` is required, and the table is what a screen reader reads in place of the picture. Do not forget `{...focusOff}` on the chart (and on a Pie) or the chart is a tab stop again, and do not hide a failed or empty request in a chart: say it with ErrorState or EmptyState before you draw a frame.',
+    parts: [
+      {
+        name: 'ChartFrame', source: `${DS}/ChartFrame.tsx`, own: 'ChartFrameProps',
+        props: [
+          prop('title', 'string', 'What the chart shows, drawn above it ("Documents created and published each month"). It also names the figure and the table of numbers.'),
+          prop('note', 'string', 'A line under the title, drawn: the unit, or what to read from the chart.'),
+          prop('data', 'ChartData', 'The numbers the chart draws, as a table: the chart\'s text alternative. Read out, never drawn.'),
+          prop('height', 'number', 'How tall the chart is, in px. It fills the box: <ResponsiveContainer width="100%" height="100%">.', '240'),
+          prop('children', 'ReactNode | (focusOff) => ReactNode', 'The chart. A function receives the props that turn off recharts\' keyboard layer: spread them on the chart, and on a Pie.'),
+          CLASS_NAME,
+        ],
+      },
+      {
+        name: 'ChartData', source: `${DS}/chartText.ts`, own: 'ChartData',
+        props: [
+          prop('columns', 'readonly string[]', 'The column names: the first names what each row is (the month, the status), the rest are the numbers drawn ("Created", "Published").'),
+          prop('rows', 'ReadonlyArray<readonly (string | number | null | undefined)[]>', 'One row per category, a cell per column. A number is read with its separators and up to two decimals; nothing is "No data", never 0. More than 60 rows are cut and the table says how many were left out.'),
+        ],
+      },
+      {
+        name: 'chartFocusOff', fn: true,
+        props: [prop('chartFocusOff()', '{ accessibilityLayer: false; rootTabIndex: -1 }', 'The props that turn off recharts 3\'s keyboard layer: accessibilityLayer on the chart (no tab stop, no "application" role) and rootTabIndex on a Pie (its group is a tab stop of its own). A fresh object each call.')],
+      },
+    ],
+  },
   InfoTip: {
     name: 'InfoTip',
     importFrom: UI,
