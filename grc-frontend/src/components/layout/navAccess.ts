@@ -70,7 +70,8 @@ export const navigation: NavEntry[] = [
     icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
     items: [
-      { name: 'Overview', href: '/erm', exact: true, icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
+      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/appetite', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/mitigation-actions', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
       {
         name: 'Operational Risk',
         icon: Layers,
@@ -98,7 +99,7 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
-      { name: 'Overview', href: '/compliance', exact: true, icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
@@ -108,7 +109,7 @@ export const navigation: NavEntry[] = [
         name: 'Assessments',
         icon: ClipboardCheck,
         items: [
-          { name: 'Overview', href: '/assessments', exact: true, icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
           // Cyber Security features now live on a dedicated hub page
           // (/cyber-security) instead of a nested 7-item dropdown.
           { name: 'Cyber Security', href: '/cyber-security', activeMatch: '/cyber-security', icon: ShieldAlert, requiredPermissions: ['compliance:assessments:*'] },

@@ -1,6 +1,7 @@
 // node --test src/components/layout/navActive.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 
 import { activeNavHref, cleanPath, groupHasActive, underPath } from './navActive.ts';
 import { flattenLeaves, isGroup, navigation, type NavEntry, type NavGroup } from './navAccess.ts';
@@ -82,10 +83,49 @@ test('every entry lights on its own page, and on the pages under it unless it is
   }
 });
 
-test('every Overview (and the dashboard) lights on its own page only', () => {
+test('every Overview (and the dashboard) lights on its own page only, but Assessments: /assessments/<framework> is its own family', () => {
   const overviews = leaves.filter((l) => l.name === 'Overview' || l.name === 'Performance Overview');
   assert.ok(overviews.length >= 7, 'the Overview entries are there');
-  for (const l of overviews) assert.equal(l.exact, true, `${l.name} (${l.href}) is exact`);
+  for (const l of overviews) assert.equal(!!l.exact, l.href !== '/assessments', `${l.name} (${l.href})`);
+});
+
+// The pages of an area that have no entry of their own lit its Overview before the Overview became exact (Phase 1 changes nothing outside
+// Governance), so each is mapped to it by the narrowest prefix: path (dynamic ids as 1) -> the entry that lights
+const OVERVIEW_PAGES: Array<[string, string]> = [
+  ['/erm/ai-risk-assessment', '/erm'],
+  ['/erm/appetite', '/erm'],
+  ['/erm/dependencies', '/erm'],
+  ['/erm/framework-controls/1', '/erm'],
+  ['/erm/internal-controls', '/erm'],
+  ['/erm/internal-controls/1', '/erm'],
+  ['/erm/mitigation-actions', '/erm'],
+  ['/erm/reports', '/erm'],
+  ['/erm/reviews', '/erm'],
+  ['/compliance/assessments', '/compliance'],
+  ['/compliance/assessments/1', '/compliance'],
+  ['/compliance/assessments/approvals', '/compliance'],
+  ['/compliance/statements', '/compliance'],
+  ['/assessments/1', '/assessments'],
+];
+
+test('the 14 pages with no entry of their own still light their area\'s Overview', () => {
+  assert.equal(OVERVIEW_PAGES.length, 14);
+  for (const [path, want] of OVERVIEW_PAGES) assert.equal(activeNavHref(path, navigation), want, path);
+});
+
+test('the mapping is the narrow one: a page that is not listed lights nothing, and an entry of its own still wins', () => {
+  assert.equal(activeNavHref('/erm/not-a-page', navigation), undefined);
+  assert.equal(activeNavHref('/compliance/not-a-page', navigation), undefined);
+  assert.equal(activeNavHref('/erm/risks/12', navigation), '/erm/risks');
+  assert.equal(activeNavHref('/erm/incidents', navigation), '/erm/incidents');
+  assert.equal(activeNavHref('/compliance/access-reviews/4', navigation), '/compliance/access-reviews');
+  assert.equal(activeNavHref('/assessments/dpia', navigation), '/assessments/dpia');
+});
+
+test('every activeMatch prefix is a folder of the app: a typo would leave its pages unlit', () => {
+  for (const l of leaves) {
+    for (const prefix of ([] as string[]).concat(l.activeMatch ?? [])) assert.ok(existsSync(`src/app/(dashboard)${prefix}`), `${l.name}: ${prefix}`);
+  }
 });
 
 // The Governance routes of G1_url_contracts.md (the page a link opens -> the one entry that lights)
