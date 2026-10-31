@@ -52,7 +52,7 @@ function PartRow({ part }: { part: Part }) {
         <span className="shrink-0 tabular-nums text-[#586472]">{part.words > 0 ? `${part.words.toLocaleString()} words` : part.phase ? `${part.phase}…` : ''}</span>
         <span className="sr-only">{part.state}</span>
       </div>
-      {part.note && <p className={`ml-[22px] text-[11px] ${part.state === 'rewriting' || part.state === 'failed' ? 'text-[#8a6100]' : 'text-[#586472]'}`}>{part.note}</p>}
+      {part.note && <p className={`ml-[22px] text-[12px] ${part.state === 'rewriting' || part.state === 'failed' ? 'text-[#8a6100]' : 'text-[#586472]'}`}>{part.note}</p>}
     </li>
   );
 }
@@ -127,9 +127,9 @@ export default function LiveTurn({ message }: { message: Message }) {
 
         {live?.tail && (
           <div className="mt-2 border-t border-[#e1e6eb] pt-2">
-            {live.tail_label && <p className="mb-1 text-[11px] text-[#586472]">{live.tail_label}</p>}
+            {live.tail_label && <p className="mb-1 text-[12px] text-[#586472]">{live.tail_label}</p>}
             <div className="relative h-20 overflow-hidden rounded-md bg-[#f1f5f6] ring-1 ring-[#dde3e7]" aria-hidden>
-              <div className="absolute inset-x-0 bottom-0 whitespace-pre-wrap break-words px-2 pb-1.5 font-mono text-[11.5px] leading-snug text-[#3f4b58]">{live.tail}<Caret /></div>
+              <div className="absolute inset-x-0 bottom-0 whitespace-pre-wrap break-words px-2 pb-1.5 font-mono text-[12px] leading-snug text-[#3f4b58]">{live.tail}<Caret /></div>
               <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-[#f1f5f6] to-transparent" />
             </div>
           </div>

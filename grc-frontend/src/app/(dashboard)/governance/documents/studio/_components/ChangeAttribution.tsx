@@ -42,9 +42,9 @@ export function OriginBadge({ origin, by, coverage = 1, at, version }: { origin:
   const look = originLook(origin);
   const Icon = look.icon;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-[#586472]">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-[#586472]">
       <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ring-1 ring-inset ${look.pill}`}><Icon className="h-3 w-3" strokeWidth={2} aria-hidden /> {byLine(origin, by, coverage)}</span>
-      {version && <span className="rounded-md bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#334155]">v{version}</span>}
+      {version && <span className="rounded-md bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[12px] font-semibold text-[#334155]">v{version}</span>}
       {at && <span>{ago(at)}</span>}
     </span>
   );
@@ -64,7 +64,7 @@ export function SourceChips({ sources, onShow }: { sources: ChainSource[]; onSho
             {s.basis === 'reference' && s.verified === false && <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" aria-label="The quoted words were not found in the source" />}
           </>
         );
-        const cls = 'inline-flex max-w-full items-center gap-1 truncate rounded-md border border-[#e2e8f0] bg-[#ffffff] px-1.5 py-0.5 text-[11px] text-[#334155]';
+        const cls = 'inline-flex max-w-full items-center gap-1 truncate rounded-md border border-[#e2e8f0] bg-[#ffffff] px-1.5 py-0.5 text-[12px] text-[#334155]';
         return (
           <li key={i} className="min-w-0">
             {onShow && s.ref ? <button type="button" title={title} onClick={() => onShow(s.ref)} className={`${cls} hover:border-primary-600`}>{body}</button> : <span title={title} className={cls}>{body}</span>}

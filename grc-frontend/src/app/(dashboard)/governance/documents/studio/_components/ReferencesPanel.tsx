@@ -4,14 +4,16 @@
  * What the AI may lean on: the parent document, a general reference document from the library, a framework from the platform
  * (all of it, some domains, named controls, or a topic), a file you upload, or a template. Each is attached to this session
  * only, shown here, and the AI cites it by its number (R1, R2 …) so its quotes can be checked.
+ *
+ * On the design-system kit: the buttons, fields and choices are the kit's; the kind of reference is a named choice (not a tab strip with
+ * no panels); a list that is loading, empty or could not be read says which.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { BookMarked, Eye, EyeOff, FileText, Layers, Loader2, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
-import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
+import { BookMarked, Eye, EyeOff, FileText, Layers, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { DOC_TYPE_LABEL, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { useToast } from '@/components/ui/ToastProvider';
-import { ErrorState, SkeletonRows, TextInput } from '@/components/ui/ds';
+import { Button, Checkbox, ErrorState, IconButton, SegmentedControl, SkeletonLines, SkeletonRows, Textarea, TextInput, useNotify } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { matches, plural } from '@/lib/studio/text';
 import { SIGNOFF_STATUS } from '../../_SignoffControl';
@@ -62,6 +64,8 @@ const Waiting = ({ label = 'Loading' }: { label?: string }) => <li><SkeletonRows
 
 /** A row a person picks (a document, a framework, a template). */
 export const PICK_ROW = 'flex min-h-ds-control w-full items-center gap-[8px] rounded-ds-control border border-ds-border bg-ds-surface px-[10px] py-[6px] text-left hover:border-ds-primary hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring disabled:cursor-not-allowed disabled:opacity-50';
+/** A list with nothing to show: said in a dashed box. */
+const NOTHING = 'rounded-ds-card border border-dashed border-ds-border-strong p-[12px] text-center text-ds-label text-ds-fg-muted';
 
 /** The platform's frameworks with a search over name, version and publisher. Shared by the references panel and the start screen. A list that
  *  could not be read says so (with Retry when repeating can help): it is not "No frameworks". */
@@ -79,7 +83,7 @@ export function FrameworkList({ frameworks, loading, error, onRetry, exclude = [
       <ul className={`mt-[6px] space-y-[4px] overflow-y-auto ${maxHeight}`}>
         {loading && <Waiting label="Loading the frameworks" />}
         {failed && !loading && <li><ErrorState compact title="Couldn't load the frameworks" message={errorMessage(error)} onRetry={onRetry && canRetry(error) ? onRetry : undefined} /></li>}
-        {!loading && !failed && shown.length === 0 && <li className="rounded-ds-card border border-dashed border-ds-border-strong p-[12px] text-center text-ds-label text-ds-fg-muted">{q.trim() ? 'No match' : 'No frameworks'}</li>}
+        {!loading && !failed && shown.length === 0 && <li className={NOTHING}>{q.trim() ? 'No match' : 'No frameworks'}</li>}
         {shown.map((f) => (
           <li key={f.id}>
             <button type="button" onClick={() => onPick(f)} className={PICK_ROW}>
@@ -98,43 +102,53 @@ export function FrameworkList({ frameworks, loading, error, onRetry, exclude = [
 }
 
 function Attached({ session, reference, onChanged, open, onToggleOpen }: { session: Session; reference: Reference; onChanged: () => void; open: boolean; onToggleOpen: () => void }) {
-  const { toast } = useToast();
+  const notify = useNotify();
   const Icon = KIND_ICON[reference.kind];
-  const toggle = useMutation({ mutationFn: () => studioApi.toggleReference(session.id, reference.id, !reference.include), onSuccess: onChanged, onError: (e) => toast({ title: 'Could not change the reference', message: problemOf(e), type: 'error' }) });
-  const remove = useMutation({ mutationFn: () => studioApi.removeReference(session.id, reference.id), onSuccess: onChanged, onError: (e) => toast({ title: 'Could not remove the reference', message: problemOf(e), type: 'error' }) });
+  const toggle = useMutation({
+    mutationFn: () => studioApi.toggleReference(session.id, reference.id, !reference.include),
+    onSuccess: onChanged,
+    onError: (e) => notify.error(e, { title: 'Could not change the reference', retry: canRetry(e) ? () => toggle.mutate() : undefined }),
+  });
+  const remove = useMutation({
+    mutationFn: () => studioApi.removeReference(session.id, reference.id),
+    onSuccess: onChanged,
+    onError: (e) => notify.error(e, { title: 'Could not remove the reference', retry: canRetry(e) ? () => remove.mutate() : undefined }),
+  });
   const text = useQuery({ queryKey: ['studio', 'reference-text', session.id, reference.id], queryFn: () => studioApi.readReference(session.id, reference.id), enabled: open, staleTime: 60_000 });
   return (
-    <li id={`ref-${reference.key}`} className={`rounded-lg border bg-[#fff] p-2.5 ${reference.include ? 'border-[#d5dbe1]' : 'border-[#e1e6eb] opacity-60'}`}>
+    <li id={`ref-${reference.key}`} className={`rounded-ds-card border bg-ds-surface p-[10px] ${reference.include ? 'border-ds-border' : 'border-ds-border opacity-60'}`}>
       <div className="flex items-start gap-2">
-        <span className="mt-0.5 rounded bg-[#e6f4f1] px-1.5 py-0.5 text-xs font-bold text-[#0f766e]">{reference.key}</span>
+        <span className="mt-0.5 rounded bg-ds-primary-soft px-1.5 py-0.5 text-ds-label font-[700] text-ds-primary-text">{reference.key}</span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-medium text-[#1f2933]" title={reference.title}>{reference.title}</p>
-          <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-[#586472]">
-            <Icon className="h-3 w-3" /> {KIND_LABEL[reference.kind]}
+          <p className="truncate text-ds-body font-medium text-ds-fg" title={reference.title}>{reference.title}</p>
+          <p className="flex flex-wrap items-center gap-x-1.5 text-ds-label text-ds-fg-muted">
+            <Icon aria-hidden className="h-3 w-3" /> {KIND_LABEL[reference.kind]}
             {reference.label ? <span>· {reference.label}</span> : null}
             <span>· {size(reference.chars)}</span>
             {reference.scope?.mode && reference.scope.mode !== 'all' ? <span>· {reference.scope.mode === 'domains' ? plural(reference.scope.domains?.length ?? 0, 'domain')
               : reference.scope.mode === 'query' ? (reference.scope.query ? `about “${reference.scope.query}”` : 'about a topic') : reference.scope.mode}</span> : null}
           </p>
           {reference.truncated && (
-            <p className="mt-0.5 text-xs text-[#8a6100]">
+            <p className="mt-0.5 text-ds-label text-ds-warning">
               Too long: only the start is used
               <InfoTip className="ml-1" label="About the length" text="Only the start was given to Comply Agent. Narrow it to the parts that matter." />
             </p>
           )}
-          {reference.notes.map((n, i) => <p key={i} className="mt-0.5 text-xs text-[#8a6100]">{n}</p>)}
+          {reference.notes.map((n, i) => <p key={i} className="mt-0.5 text-ds-label text-ds-warning">{n}</p>)}
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" onClick={onToggleOpen} title="Read the text Comply Agent is given" className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]" aria-label={`Read ${reference.key}`} aria-expanded={open}><Eye className="h-4 w-4" /></button>
-          <button type="button" onClick={() => toggle.mutate()} disabled={toggle.isPending} title={reference.include ? 'Do not use for now' : 'Use again'} className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]" aria-label={reference.include ? `Pause ${reference.key}` : `Use ${reference.key}`}>
-            {reference.include ? <EyeOff className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          </button>
-          <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending} title="Remove" className="rounded p-1.5 text-[#9b1c1c] hover:bg-[#fdf3f3]" aria-label={`Remove ${reference.key}`}><Trash2 className="h-4 w-4" /></button>
+        <div className="flex shrink-0 items-center">
+          <IconButton label={`Read ${reference.key}`} title="Read the text Comply Agent is given" aria-expanded={open} onClick={onToggleOpen}><Eye aria-hidden /></IconButton>
+          <IconButton label={reference.include ? `Pause ${reference.key}` : `Use ${reference.key}`} title={reference.include ? 'Do not use for now' : 'Use again'} disabled={toggle.isPending} onClick={() => toggle.mutate()}>
+            {reference.include ? <EyeOff aria-hidden /> : <Plus aria-hidden />}
+          </IconButton>
+          <IconButton label={`Remove ${reference.key}`} title="Remove" disabled={remove.isPending} onClick={() => remove.mutate()} className="!text-ds-danger"><Trash2 aria-hidden /></IconButton>
         </div>
       </div>
       {open && (
-        <div className="mt-2 max-h-64 overflow-y-auto rounded border border-[#e1e6eb] bg-[#f8fafb] p-2">
-          {text.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" role="status" aria-label="Loading" /> : <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-[#26323d]">{text.data?.text ?? 'Could not load the text'}</pre>}
+        <div className="mt-2 max-h-64 overflow-y-auto rounded-ds-control border border-ds-border bg-ds-surface-subtle p-2">
+          {text.isLoading ? <SkeletonLines lines={3} label="Loading the text" />
+            : text.isError ? <ErrorState compact title="Couldn't load the text" message={errorMessage(text.error)} onRetry={canRetry(text.error) ? () => { void text.refetch(); } : undefined} />
+            : <pre className="whitespace-pre-wrap font-sans text-ds-label leading-relaxed text-ds-fg-body">{text.data?.text ?? ''}</pre>}
         </div>
       )}
     </li>
@@ -149,17 +163,18 @@ function DocumentPicker({ onPick, busy, empty, exclude }: { onPick: (doc: Librar
     <div>
       <SearchBox value={q} onChange={setQ} placeholder="Search documents" label="Search the library" />
       <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
-        {docs.isLoading && <Waiting />}
-        {docs.data?.items.length === 0 && <li className="p-2 text-xs text-[#586472]">{empty}</li>}
+        {docs.isLoading && <Waiting label="Loading the library" />}
+        {docs.isError && !docs.data && <li><ErrorState compact title="Couldn't load the library" message={errorMessage(docs.error)} onRetry={canRetry(docs.error) ? () => { void docs.refetch(); } : undefined} /></li>}
+        {docs.data?.items.length === 0 && <li className="p-2 text-ds-label text-ds-fg-muted">{empty}</li>}
         {docs.data?.items.map((d) => (
           <li key={d.id}>
-            <button type="button" disabled={busy || (!d.has_text && !d.has_file)} onClick={() => onPick(d)} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e6eb] bg-[#fff] px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9] disabled:opacity-50">
-              <FileText className="h-4 w-4 shrink-0 text-[#586472]" />
+            <button type="button" disabled={busy || (!d.has_text && !d.has_file)} onClick={() => onPick(d)} className={PICK_ROW}>
+              <FileText aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" strokeWidth={1.75} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-[#1f2933]">{d.title}</span>
-                <span className="block text-xs text-[#586472]">{docLine(d, DOC_TYPE_LABEL, SIGNOFF_STATUS)}{!d.has_text && !d.has_file ? ' · no text' : ''}</span>
+                <span className="block truncate text-ds-body text-ds-fg" title={d.title}>{d.title}</span>
+                <span className="block text-ds-label text-ds-fg-muted">{docLine(d, DOC_TYPE_LABEL, SIGNOFF_STATUS)}{!d.has_text && !d.has_file ? ' · no text' : ''}</span>
               </span>
-              <Plus className="h-4 w-4 text-[#0f766e]" />
+              <Plus aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" strokeWidth={1.75} />
             </button>
           </li>
         ))}
@@ -167,6 +182,8 @@ function DocumentPicker({ onPick, busy, empty, exclude }: { onPick: (doc: Librar
     </div>
   );
 }
+
+const SCOPES = [['all', 'controls'], ['domains', 'Some domains'], ['controls', 'Named controls'], ['query', 'Controls about a topic']] as const;
 
 function FrameworkPicker({ onPick, busy }: { onPick: (fw: FrameworkItem, scope: ReferenceScope) => void; busy: boolean }) {
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
@@ -177,49 +194,41 @@ function FrameworkPicker({ onPick, busy }: { onPick: (fw: FrameworkItem, scope: 
   const [query, setQuery] = useState('');
   const [domainQ, setDomainQ] = useState('');
   if (!selected) {
-    return <FrameworkList frameworks={fws.data?.items} loading={fws.isLoading} onPick={(f) => { setSelected(f); setMode('all'); setDomains([]); setDomainQ(''); }} />;
+    return <FrameworkList frameworks={fws.data?.items} loading={fws.isLoading} error={fws.isError ? fws.error : null} onRetry={() => { void fws.refetch(); }}
+      onPick={(f) => { setSelected(f); setMode('all'); setDomains([]); setDomainQ(''); }} />;
   }
   const shownDomains = selected.domains.filter((d) => matches(domainQ, d));
   const scope: ReferenceScope = mode === 'domains' ? { mode, domains } : mode === 'controls' ? { mode, control_refs: controls.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean) } : mode === 'query' ? { mode, query } : { mode: 'all' };
   const ready = mode === 'all' || (mode === 'domains' && domains.length > 0) || (mode === 'controls' && (scope.control_refs?.length ?? 0) > 0) || (mode === 'query' && query.trim().length > 3);
   return (
-    <div className="space-y-2.5 rounded-lg border border-[#d5dbe1] bg-[#fff] p-3">
+    <div className="space-y-2.5 rounded-ds-card border border-ds-border bg-ds-surface p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-[#1f2933]">{selected.name}{selected.version ? ` ${selected.version}` : ''}</p>
-        <button type="button" onClick={() => setSelected(null)} className="text-xs font-medium text-[#0f766e] hover:underline">Choose another</button>
+        <p className="min-w-0 break-words text-ds-body font-[600] text-ds-fg">{selected.name}{selected.version ? ` ${selected.version}` : ''}</p>
+        <Button variant="link" size="sm" onClick={() => setSelected(null)}>Choose another</Button>
       </div>
       <fieldset>
-        <legend className="mb-1 text-xs font-semibold text-[#3f4b58]" title="Which part should Comply Agent use?">Part to use</legend>
-        {([
-          ['all', `All ${selected.controls} controls`],
-          ['domains', 'Some domains'],
-          ['controls', 'Named controls'],
-          ['query', 'Controls about a topic'],
-        ] as const).map(([value, label]) => (
-          <label key={value} className="flex items-center gap-2 py-0.5 text-sm text-[#26323d]">
-            <input type="radio" name="fw-scope" checked={mode === value} onChange={() => setMode(value)} className="accent-[#0f766e]" /> {label}
+        <legend className="mb-1 text-ds-label text-ds-fg" title="Which part should Comply Agent use?">Part to use</legend>
+        {SCOPES.map(([value, label]) => (
+          <label key={value} className="flex min-h-[var(--ds-control-h-sm)] cursor-pointer items-center gap-2 text-ds-body text-ds-fg-body">
+            <input type="radio" name="fw-scope" checked={mode === value} onChange={() => setMode(value)} className="h-[16px] w-[16px] shrink-0 accent-ds-primary focus-visible:outline-none focus-visible:shadow-ds-ring" /> {value === 'all' ? `All ${selected.controls} controls` : label}
           </label>
         ))}
       </fieldset>
       {mode === 'domains' && (
         <div className="space-y-1.5">
           {selected.domains.length > 6 && <SearchBox value={domainQ} onChange={setDomainQ} placeholder="Search the domains" label="Search the domains of this framework" />}
-          <div className="max-h-48 space-y-0.5 overflow-y-auto rounded border border-[#e1e6eb] p-2">
-            {shownDomains.length === 0 && <p className="text-xs text-[#586472]">No match</p>}
+          <div className="max-h-48 overflow-y-auto rounded-ds-control border border-ds-border px-2">
+            {shownDomains.length === 0 && <p className="py-2 text-ds-label text-ds-fg-muted">No match</p>}
             {shownDomains.map((d) => (
-              <label key={d} className="flex items-start gap-2 text-sm text-[#26323d]">
-                <input type="checkbox" checked={domains.includes(d)} onChange={(e) => setDomains(e.target.checked ? [...domains, d] : domains.filter((x) => x !== d))} className="mt-1 accent-[#0f766e]" /> {d}
-              </label>
+              <Checkbox key={d} label={d} checked={domains.includes(d)} onChange={(e) => setDomains(e.target.checked ? [...domains, d] : domains.filter((x) => x !== d))} />
             ))}
           </div>
-          {domains.length > 0 && <p className="text-xs text-[#586472]">{domains.length} chosen</p>}
+          {domains.length > 0 && <p className="text-ds-label text-ds-fg-muted">{domains.length} chosen</p>}
         </div>
       )}
-      {mode === 'controls' && <textarea value={controls} onChange={(e) => setControls(e.target.value)} rows={3} placeholder="Control numbers: A.5.1, A.8.2" title="Separate them with commas or lines" aria-label="Control numbers" className="w-full rounded border border-[#b8c4c8] p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />}
-      {mode === 'query' && <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Topic, e.g. access control" aria-label="Topic" className="w-full rounded border border-[#b8c4c8] p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />}
-      <button type="button" disabled={!ready || busy} onClick={() => onPick(selected, scope)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-[#fff] hover:bg-[#115e59] disabled:opacity-50">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Use framework
-      </button>
+      {mode === 'controls' && <Textarea value={controls} onChange={(e) => setControls(e.target.value)} rows={3} placeholder="Control numbers: A.5.1, A.8.2" title="Separate them with commas or lines" aria-label="Control numbers" />}
+      {mode === 'query' && <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Topic, e.g. access control" aria-label="Topic" />}
+      <Button variant="primary" leftIcon={<Plus aria-hidden />} loading={busy} disabled={!ready} onClick={() => onPick(selected, scope)}>Use framework</Button>
     </div>
   );
 }
@@ -230,8 +239,16 @@ export interface ReferencesPanelProps {
   focusKey?: string | null;
 }
 
+const KINDS: { value: AddTab; label: string }[] = [
+  { value: 'parent', label: 'Parent' },
+  { value: 'document', label: 'Document' },
+  { value: 'framework', label: 'Framework' },
+  { value: 'upload', label: 'Upload' },
+  { value: 'template', label: 'Template' },
+];
+
 export default function ReferencesPanel({ session, onChanged, focusKey }: ReferencesPanelProps) {
-  const { toast } = useToast();
+  const notify = useNotify();
   const [tab, setTab] = useState<AddTab>('document');
   const [opened, setOpened] = useState<string | null>(null);
   const [templateQ, setTemplateQ] = useState('');
@@ -246,35 +263,29 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
 
   const add = useMutation({
     mutationFn: (body: Parameters<typeof studioApi.addReference>[1]) => studioApi.addReference(session.id, body),
-    onSuccess: (r) => { onChanged(); toast({ title: `${r.key} added`, message: r.title, type: 'success' }); },
-    onError: (e) => toast({ title: 'Could not add the reference', message: problemOf(e), type: 'error' }),
+    onSuccess: (r) => { onChanged(); notify.success(r.title, { title: `${r.key} added` }); },
+    onError: (e) => notify.error(e, { title: 'Could not add the reference' }),
   });
   const upload = useMutation({
     mutationFn: (f: File) => studioApi.uploadReference(session.id, f),
-    onSuccess: (r) => { onChanged(); toast({ title: `${r.key} added`, message: r.title, type: 'success' }); },
-    onError: (e) => toast({ title: 'Could not add the file', message: problemOf(e), type: 'error' }),
+    onSuccess: (r) => { onChanged(); notify.success(r.title, { title: `${r.key} added` }); },
+    onError: (e) => notify.error(e, { title: 'Could not add the file' }),
   });
   const total = useMemo(() => session.references.filter((r) => r.include).reduce((n, r) => n + r.chars, 0), [session.references]);
+  const templateRows = (templates.data?.items ?? []).filter((t) => t.id !== 'builtin:blank' && matches(templateQ, t.name, t.doc_type));
 
-  const tabs: { key: AddTab; label: string }[] = [
-    { key: 'parent', label: 'Parent' },
-    { key: 'document', label: 'Document' },
-    { key: 'framework', label: 'Framework' },
-    { key: 'upload', label: 'Upload' },
-    { key: 'template', label: 'Template' },
-  ];
   return (
     <div className="h-full overflow-y-auto p-3">
       <div className="flex items-center gap-1">
         <h3 className="text-[15px] font-semibold text-[#1f2933]">References</h3>
         <InfoTip label="About the references" text="Comply Agent uses these, cites them by number, and its quotes are checked against them." />
-        {total > 0 && <span className="ml-auto text-xs text-[#586472]" title="The text Comply Agent is given from these">{size(total)} in use</span>}
+        {total > 0 && <span className="ml-auto text-ds-label text-ds-fg-muted" title="The text Comply Agent is given from these">{size(total)} in use</span>}
       </div>
 
       <ul className="mt-3 space-y-2" aria-label="Attached references">
         {session.references.length === 0 && (
-          <li className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-[#c5ccd3] px-3 py-6 text-center">
-            <BookMarked className="h-8 w-8 text-[#9aa5b1]" strokeWidth={1.5} aria-hidden />
+          <li className="flex flex-col items-center gap-2 rounded-ds-card border border-dashed border-ds-border-strong px-3 py-6 text-center">
+            <BookMarked className="h-8 w-8 text-ds-fg-muted" strokeWidth={1.5} aria-hidden />
             <p className="text-[15px] font-semibold text-[#1f2933]">
               No references
               <InfoTip className="ml-1" label="About writing without references" text="Comply Agent will write from general knowledge and your instructions." />
@@ -284,21 +295,17 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
         {session.references.map((r) => <Attached key={r.id} session={session} reference={r} onChanged={onChanged} open={opened === r.key} onToggleOpen={() => setOpened(opened === r.key ? null : r.key)} />)}
       </ul>
 
-      <div className="mt-4 rounded-xl border border-[#d5dbe1] bg-[#fff] p-2.5">
+      <div className="mt-4 rounded-ds-card border border-ds-border bg-ds-surface p-2.5">
         <div className="mb-2 flex items-center gap-1">
-          <p className="text-[13px] font-semibold text-[#26323d]">Add reference</p>
+          <p className="text-ds-body font-[600] text-ds-fg">Add reference</p>
           {tab !== 'template' && <InfoTip label="About this kind of reference" text={HELP[tab]} />}
         </div>
-        <div className="mb-2.5 flex flex-wrap gap-1" role="tablist" aria-label="Kind of reference">
-          {tabs.map((t) => (
-            <button key={t.key} role="tab" aria-selected={tab === t.key} type="button" onClick={() => setTab(t.key)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === t.key ? 'bg-[#0f766e] text-[#fff]' : 'bg-[#fff] text-[#3f4b58] ring-1 ring-[#c5ccd3] hover:bg-[#eef1f4]'}`}>{t.label}</button>
-          ))}
-        </div>
+        {/* a choice of one kind, each opening its own form below: named radio buttons (the arrow keys move between them), not tabs without panels */}
+        <SegmentedControl<AddTab> label="Kind of reference" name="add-reference-kind" options={KINDS} value={tab} onChange={setTab} className="mb-2.5" />
         {tab === 'parent' && (
           <div className="space-y-2">
             {session.document_id && (
-              <button type="button" disabled={add.isPending} onClick={() => add.mutate({ kind: 'parent_document' })} title="Use this document’s parent" className="rounded-lg border border-[#0f766e] bg-[#fff] px-3 py-1.5 text-xs font-semibold text-[#0f766e] hover:bg-[#f0fdfa] disabled:opacity-50">Use its parent</button>
+              <Button loading={add.isPending} onClick={() => add.mutate({ kind: 'parent_document' })} title="Use this document’s parent">Use its parent</Button>
             )}
             <DocumentPicker busy={add.isPending} empty="No documents" exclude={session.document_id} onPick={(d) => add.mutate({ kind: 'parent_document', source_id: d.id })} />
           </div>
@@ -315,30 +322,27 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
         )}
         {tab === 'upload' && (
           <div className="space-y-2">
-            <input ref={file} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
-            <button type="button" disabled={upload.isPending} onClick={() => file.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#7b8794] bg-[#fff] px-3 py-3 text-sm font-medium text-[#26323d] hover:border-[#0f766e] hover:bg-[#f3fbf9] disabled:opacity-50">
-              {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Choose file
-            </button>
+            <input ref={file} type="file" hidden aria-label="Choose a file" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
+            <Button leftIcon={<Upload aria-hidden />} loading={upload.isPending} onClick={() => file.current?.click()}>Choose file</Button>
           </div>
         )}
         {tab === 'template' && (
           <div className="space-y-2">
-          <SearchBox value={templateQ} onChange={setTemplateQ} placeholder="Search templates" label="Search the templates" />
-          <ul className="max-h-56 space-y-1 overflow-y-auto">
-            {templates.isLoading && <Waiting />}
-            {templates.data && templateQ.trim() && !templates.data.items.some((t) => t.id !== 'builtin:blank' && matches(templateQ, t.name, t.doc_type)) && (
-              <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">No match</li>
-            )}
-            {templates.data?.items.filter((t) => t.id !== 'builtin:blank' && matches(templateQ, t.name, t.doc_type)).map((t) => (
-              <li key={t.id}>
-                <button type="button" disabled={add.isPending} onClick={() => add.mutate({ kind: 'template', template_id: t.id })} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e6eb] bg-[#fff] px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
-                  <FileText className="h-4 w-4 shrink-0 text-[#586472]" />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{t.name}</span><span className="block text-xs text-[#586472]">{t.builtin ? 'Standard structure' : 'Your template'}{t.is_default && !t.builtin ? ' · default' : ''}</span></span>
-                  <Plus className="h-4 w-4 text-[#0f766e]" />
-                </button>
-              </li>
-            ))}
-          </ul>
+            <SearchBox value={templateQ} onChange={setTemplateQ} placeholder="Search templates" label="Search the templates" />
+            <ul className="max-h-56 space-y-1 overflow-y-auto">
+              {templates.isLoading && <Waiting label="Loading the templates" />}
+              {templates.isError && !templates.data && <li><ErrorState compact title="Couldn't load the templates" message={errorMessage(templates.error)} onRetry={canRetry(templates.error) ? () => { void templates.refetch(); } : undefined} /></li>}
+              {templates.data && templateRows.length === 0 && <li className={NOTHING}>{templateQ.trim() ? 'No match' : 'No templates'}</li>}
+              {templateRows.map((t) => (
+                <li key={t.id}>
+                  <button type="button" disabled={add.isPending} onClick={() => add.mutate({ kind: 'template', template_id: t.id })} className={PICK_ROW}>
+                    <FileText aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" strokeWidth={1.75} />
+                    <span className="min-w-0 flex-1"><span className="block truncate text-ds-body text-ds-fg" title={t.name}>{t.name}</span><span className="block text-ds-label text-ds-fg-muted">{t.builtin ? 'Standard structure' : 'Your template'}{t.is_default && !t.builtin ? ' · default' : ''}</span></span>
+                    <Plus aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" strokeWidth={1.75} />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
