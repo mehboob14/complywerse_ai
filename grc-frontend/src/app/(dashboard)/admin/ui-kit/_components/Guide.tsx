@@ -6,7 +6,7 @@
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { RowHeaderCell, Table, TBody, Td, Th, THead, Tr } from '@/components/ui';
-import { DOCS, type PartDoc } from './docs';
+import { DOCS, type ComponentDoc, type PartDoc } from './docs';
 
 /** Monospace at the label size, for names, types and code. */
 export const MONO = 'font-mono text-ds-label';
@@ -98,6 +98,34 @@ export function PropsTable({ part, titled }: { part: PartDoc; titled: boolean })
   );
 }
 
+/** A group of one-line functions (the formatters, the table logic) as ONE table: a call, what it returns, what it does. */
+function CallsTable({ doc }: { doc: ComponentDoc }) {
+  return (
+    <div className="max-w-full overflow-x-auto rounded-ds-card border border-ds-border">
+      <Table caption={`Calls of ${doc.name}`} className="min-w-[760px] [table-layout:fixed]">
+        <colgroup>
+          <col className="w-[330px]" />
+          <col className="w-[190px]" />
+          <col />
+        </colgroup>
+        <THead><Tr><Th>Call</Th><Th>Returns</Th><Th>What it does</Th></Tr></THead>
+        <TBody>
+          {doc.parts.map((part) => {
+            const p = part.props[0];
+            return (
+              <Tr key={part.name}>
+                <RowHeaderCell className="align-top"><code className={clsx(MONO, 'text-ds-fg')}>{p.name.startsWith('(') ? `${part.name}${p.name}` : `${part.name} = ${p.name}`}</code></RowHeaderCell>
+                <Td className="align-top"><code className={clsx(MONO, 'text-ds-fg-body')}>{p.type}</code></Td>
+                <Td className="align-top"><Prose text={p.note} /></Td>
+              </Tr>
+            );
+          })}
+        </TBody>
+      </Table>
+    </div>
+  );
+}
+
 /** The card of one component: where to import it, when to use it, what not to do, its live specimens, and its props. */
 export function Spec({ name, children }: { name: string; children?: ReactNode }) {
   const doc = DOCS[name];
@@ -114,7 +142,9 @@ export function Spec({ name, children }: { name: string; children?: ReactNode })
       {doc.dont && <p className="border-l-2 border-ds-danger-border pl-[12px] text-ds-body text-ds-fg-body"><Prose text={doc.dont} /></p>}
       {children && <div className="min-w-0 space-y-[16px] rounded-ds-card bg-ds-bg p-[16px]">{children}</div>}
       <div className="min-w-0 space-y-[12px]">
-        {doc.parts.map((part) => <PropsTable key={part.name} part={part} titled={doc.parts.length > 1 || part.name !== name} />)}
+        {doc.parts.length > 1 && doc.parts.every((part) => part.fn && part.props.length === 1)
+          ? <CallsTable doc={doc} />
+          : doc.parts.map((part) => <PropsTable key={part.name} part={part} titled={doc.parts.length > 1 || part.name !== name} />)}
       </div>
     </article>
   );
