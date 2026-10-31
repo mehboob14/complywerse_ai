@@ -695,6 +695,50 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  StatTile: {
+    name: 'StatTile',
+    importFrom: UI,
+    use: 'a page opens with the numbers that matter: one tile each, with a 24px figure, what it counts, a line of facts, an (i) for what it rests on and, when the figure opens the records behind it, a link. Four states that never read alike: the figure, "Not recorded", loading and failed.',
+    dont: 'Do not pass 0 for a figure that failed to load or that nothing recorded (pass `error`, `loading` or `value={null}`: a 0 is a number the person will believe), do not make the whole tile a button (its (i) and its link are controls of their own), and do not write a sentence in `note`: facts.',
+    parts: [
+      {
+        name: 'StatTile', source: `${DS}/StatTile.tsx`, own: 'StatTileProps',
+        props: [
+          prop('label', 'string', 'What the figure is ("Open reviews"): 12px, above it.'),
+          prop('value', 'string | null', 'The figure as text (formatCount(n)). null means nothing is recorded: the tile says "Not recorded", never 0.'),
+          prop('unit', 'string', 'What the figure counts, after it: "documents".'),
+          prop('note', 'ReactNode', 'A line of facts under the figure: "3 archived", "32 of 41 documents mapped". It may hold a link.'),
+          prop('info', 'string', 'What the figure rests on, from an (i) beside the label. With no figure (value null) it says why there is none, beside "Not recorded".'),
+          prop('link', '{ href; label }', 'The figure opens the records behind it. The label is what a screen reader says for the link ("41 documents. Open the library"): it is required with the link.'),
+          prop('tone', "'default' | 'success' | 'warning' | 'danger'", 'The colour of the figure: danger for something wrong, success for something done.', "'default'"),
+          prop('progress', 'number | null', 'A bar under the figure, 0 to 100, for a figure that is a share. It is a ProgressBar named by the label; null draws none.'),
+          prop('loading', 'boolean', 'The request has not answered: a skeleton in place of the figure, announced as "Loading <label>".', 'false'),
+          prop('error', '{ title; message?; onRetry? } | null', 'The request failed: what, in the server\'s words, and Retry when trying again can help. Shown in place of the figure; it wins over `loading`.', 'null'),
+          prop('children', 'ReactNode', 'More under the figure: pills, links.'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  ProgressBar: {
+    name: 'ProgressBar',
+    importFrom: UI,
+    use: 'a share is drawn as a bar: project completion, coverage. A real progressbar (a name, aria-valuenow and the words as aria-valuetext) with the number beside it. It fills the width it is given: set the width with `className`.',
+    dont: 'Do not pass 0 for a value that is not recorded (pass null: the bar says so and draws nothing), and do not rely on colour alone: the number is beside the bar. A stored value outside 0-100 fills the track and no more, and the words still say the stored figure.',
+    parts: [
+      {
+        name: 'ProgressBar', source: `${DS}/ProgressBar.tsx`, own: 'ProgressBarProps',
+        props: [
+          prop('value', 'number | null | undefined', 'A percent: 72 is 72%. null or undefined is not recorded: no bar, a dash, and "<label>: not recorded" for a screen reader.'),
+          prop('label', 'string', 'What the bar measures ("Delivery progress"). Read out with the value; never drawn.'),
+          prop('valueText', 'string', 'The words beside the bar, instead of the percent ("3 of 5 steps"). The bar is still drawn from `value`.'),
+          prop('showValue', 'boolean', 'false draws the bar alone: a tile that already shows the figure.', 'true'),
+          prop('tone', "'primary' | 'success' | 'warning' | 'danger'", 'The colour of the fill; each keeps 3:1 against the track.', "'primary'"),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
   InfoTip: {
     name: 'InfoTip',
     importFrom: UI,

@@ -18,6 +18,7 @@ import { StatesMatrix } from './_components/StatesMatrix';
 import { StructureSection } from './_components/StructureSection';
 import { SettingsSection } from './_components/SettingsSection';
 import { TablesSection } from './_components/TablesSection';
+import { FiguresSection } from './_components/FiguresSection';
 import { OverlaysSection } from './_components/OverlaysSection';
 import { FormatSection } from './_components/FormatSection';
 import { MONO } from './_components/Guide';
@@ -34,6 +35,7 @@ const SECTIONS = [
   { id: 'structure', label: 'Structure' },
   { id: 'settings', label: 'Settings pages' },
   { id: 'tables', label: 'Tables' },
+  { id: 'figures', label: 'Figures' },
   { id: 'overlays', label: 'Overlays and feedback' },
   { id: 'formatting', label: 'Formatting' },
   { id: 'matrix', label: 'States matrix' },
@@ -67,6 +69,7 @@ function Guide() {
       <StructureSection />
       <SettingsSection />
       <TablesSection />
+      <FiguresSection />
       <OverlaysSection />
       <FormatSection />
       <StatesMatrix />
