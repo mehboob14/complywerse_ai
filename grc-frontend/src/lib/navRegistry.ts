@@ -162,7 +162,7 @@ const pages: RouteEntry[] = [
   gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 6, permission: 'governance:settings:*' } }),
   gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 4 }, keywords: ['Reviews', 'Review Calendar'] }),
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),
-  gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab' }),
+  gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab', ownHeading: true }),
   gov('/governance/workflows', 'Approval Workflows', { parent: DOCS, hidden: 'opens only from a document\'s menu ("Older approval requests") where the document lifecycle is off' }),
   gov(`${COMMITTEES}/:id`, 'Committee', { parent: COMMITTEES, hidden: 'opens from the Committees list', ownHeading: true }),
   gov(`${COMMITTEES}/meetings/:id`, 'Meeting', { parent: COMMITTEES, hidden: 'opens from a committee', ownHeading: true }),

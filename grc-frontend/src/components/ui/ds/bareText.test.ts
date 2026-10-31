@@ -24,6 +24,7 @@ const FOLDERS = [
   `${ROOT}/governance/_metrics`,                  // G4-F1 KPI Report (kpi-report/page.tsx is listed below)
   `${ROOT}/governance/committees`,                // G4-E Committees (the list, a committee, a meeting, Oversight Actions)
   `${ROOT}/is-projects`,                          // G4-F2 Projects
+  `${ROOT}/governance/mappings`,                  // G4-G Policy-Control Mappings (standalone and the document's Mappings view)
   `${ROOT}/admin/ui-kit`,                         // the style guide, which documents this rule
 ];
 /** Single files of a migrated group whose folder holds other things. */
