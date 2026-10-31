@@ -51,3 +51,9 @@ test('the page is on the design-system kit: no legacy head, button strings, hex 
   assert.match(page, /<PageHeader\s+variant="page"/);
   assert.match(section, /<RegisterTable<Row>/);
 });
+
+test('a number of days is the kit\'s TextInput with its unit inside the box, not a box with a word of its own beside it', () => {
+  assert.match(page, /<TextInput type="number"[^>]*\bunit=\{unit\}/);
+  assert.doesNotMatch(page, /\{unit\}<\/span>/);
+  assert.equal((page.match(/<DaysField /g) ?? []).length, 7);                              // the seven numbers of days on the page
+});

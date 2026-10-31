@@ -57,11 +57,8 @@ function DaysField({ id, label, hint, unit = 'days', value, onChange, error, min
 }) {
   return (
     <FormField id={id} label={label} info={hint} error={error}>
-      <div className="flex items-center gap-[8px]">
-        <TextInput type="number" inputMode="numeric" min={min} max={max} step={1} readOnly={readOnly} className="w-[88px] shrink-0"
-          value={Number.isFinite(value) ? value : ''} onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))} />
-        <span className="min-w-0 text-ds-body text-ds-fg-muted">{unit}</span>
-      </div>
+      <TextInput type="number" inputMode="numeric" min={min} max={max} step={1} readOnly={readOnly} unit={unit} className="w-[168px]"
+        value={Number.isFinite(value) ? value : ''} onChange={(e) => onChange(e.target.value === '' ? Number.NaN : Number(e.target.value))} />
     </FormField>
   );
 }
