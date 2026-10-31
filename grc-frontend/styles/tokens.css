@@ -47,6 +47,22 @@
 	--space-6: 24px;
 }
 
+/* Variables the platform CSS (globals.css) and some pages read with no fallback and that nothing defined (DESIGN-SYSTEM.md 1.7, known debt since
+   2026-07-04): the hover rules that repaint hover:bg-gray/white, the muted words of the header and the guide, the shadow-sm..xl repaint, the
+   .bg-gradient-to-r repaint, one grid gap. Until now each read computed to its initial value (no hover fill, no shadow, no gradient, no gap,
+   inherited text colour). src/lib/cssVars.test.ts keeps this list at zero. */
+:root {
+	--color-hover: #f3f6f8;
+	--color-text-muted: #586472;
+	--color-text-secondary: #586472;
+	--color-surface-muted: #f1f3f5;
+	--color-primary: #0f766e;
+	--color-base-hover: #17b898;
+	--space-3: 12px;
+	--shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
+	--shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+
 /* Design-system tokens (UX revamp, Phase 1). New --ds-* names, so nothing that exists changes; the kit in components/ui/ds reads them
    through the Tailwind theme (colors.ds.*, fontSize.ds-*, borderRadius.ds-*, height.ds-control). Every text/control pair below is
    asserted in src/lib/dsTokens.test.ts (4.5:1 for words, 3:1 for control outlines and the focus ring). */
