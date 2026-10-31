@@ -13,6 +13,7 @@
 // text in `title`. A single line with "…" (`truncate`) only truncates where the cell has a cap, e.g. `block max-w-[320px] truncate`.
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
+import { Button } from './Button';
 import { RowHeaderCell, Table, TableFrame, TBody, Td, Th, THead, Tr, rowHandlers, type CellAlign } from './Table';
 import type { ColumnPriority, SortDir, SortState } from './tableModel';
 
@@ -82,14 +83,11 @@ function Bar({ width }: { width: string }) {
   return <span className="block h-[12px] animate-pulse rounded-ds-control bg-ds-border motion-reduce:animate-none" style={{ width }} />;
 }
 
-// The Retry button is plain until the kit has its Button; `!text-[13px]` because the governance pages' CSS sets 12px on every button.
-const RETRY = 'inline-flex h-ds-control shrink-0 items-center justify-center rounded-ds-control border border-ds-border-strong bg-ds-surface px-[12px] !text-[13px] font-medium text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
-
 function Failure({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div role="alert" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
       <span className="min-w-0 text-ds-body text-ds-danger [overflow-wrap:anywhere]">{message}</span>
-      {onRetry && <button type="button" onClick={onRetry} className={RETRY}>Retry</button>}
+      {onRetry && <Button onClick={onRetry}>Retry</Button>}
     </div>
   );
 }
