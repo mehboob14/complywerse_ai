@@ -20,3 +20,11 @@ export { default as PermissionGuard, IfPermission } from './PermissionGuard';
 export { PageLoader, default as PageLoaderDefault, type PageLoaderProps, type PageLoaderSize } from './PageLoader';
 export { ComboBoxInput, type ComboBoxInputProps, type ComboBoxOption } from './ComboBoxInput';
 export { InfoTip } from './InfoTip';
+export {
+  TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
+  type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,
+} from './ds/Table';
+export {
+  nextSort, ariaSort, sortRows, priorityClass, rowCountText,
+  type SortState, type SortDir, type SortCycle, type SortValue, type ColumnPriority,
+} from './ds/tableModel';
