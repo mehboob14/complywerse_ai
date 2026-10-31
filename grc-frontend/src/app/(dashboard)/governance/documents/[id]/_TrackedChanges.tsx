@@ -6,16 +6,16 @@
 // Backend: governance/change_chain.py. Shown in the Document Viewer when the organisation has the document life cycle.
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GitCompare, Loader2, Undo2 } from 'lucide-react';
+import { GitCompare, Undo2 } from 'lucide-react';
 import { documentChainApi, type ChainHunk } from '@/lib/documentChain';
-import { problemOf } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
+import { Button, ErrorState, Select, SkeletonLines } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import RedlineView from '../studio/_components/RedlineView';
 import { originLook } from '../studio/_components/ChangeAttribution';
-import { dateTime, day } from '@/lib/documentLifecycle';
+import { dateTime, day } from '../_view/docDates';
 import { InitialsAvatar } from '../_workspace/lib';
 import { approvedVersionId, compareLine, defaultBaseline, versionOrigin, versionPill, versionsBetween } from '../_view/trackedChanges';
 import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
@@ -87,11 +87,14 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
         message: `Saved as version ${r.version}.${r.status === 'pending_review' ? ' The document goes back to review.' : ''}${r.notes?.length ? ` ${r.notes.join(' ')}` : ''}` });
     },
     // the refusal is said inside the prompt (it stays open to Cancel); the comparison is read again in case the document moved on
+    // (the success toast stays here, not in useReportedMutation: it is a warning when the server has notes, a success otherwise)
     onError: () => { qc.invalidateQueries({ queryKey: ['document-chain-redline', documentId] }); },
   });
   const ask = (h: ChainHunk | null) => { takeBack.reset(); setAsking(h); setReason(''); };
 
-  if (chain.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
+  if (chain.isLoading) return <SkeletonLines lines={6} label="Loading the changes" />;
+  // a failed read of the versions is not "the first version": it says so and offers Retry
+  if (chain.isError && !chain.data) return <ErrorState title="Couldn't load the changes" message={errorMessage(chain.error)} onRetry={() => { void chain.refetch(); }} />;
   const data = redline.data;
   if (versions.length === 0) return <FirstVersion number={chain.data?.document?.version || '1.0'} />;
   // one version: nothing to compare with, unless the document changed since without a version (then those changes show)
@@ -118,14 +121,13 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
           <label className="flex min-w-0 items-center gap-2 text-sm">
             <GitCompare className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
             <span className="shrink-0 font-semibold text-slate-900">Compared with</span>
-            <select value={baseline ?? ''} onChange={(e) => { setFrom(Number(e.target.value)); setTo(null); }} aria-label="Version to compare with"
-              className="min-w-0 max-w-[24rem] rounded-lg border border-[#cbd5e1] bg-white px-2.5 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-primary-500/30">
+            <Select value={baseline ?? ''} onChange={(e) => { setFrom(Number(e.target.value)); setTo(null); }} aria-label="Version to compare with" className="min-w-0 max-w-[24rem]">
               {newestFirst.map((v, i) => (
                 <option key={v.id} value={v.id} disabled={i === 0 && to == null}>
                   v{v.number} · {versionOrigin(v)}{v.origin === 'initial' ? '' : ` · ${plural(v.changes, 'change')}`} · {dateTime(v.at)}{i === 0 ? ' (current)' : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {versions.length > 2 && baseline !== versions[0].id && (
             <button type="button" onClick={() => { setFrom(versions[0].id); setTo(null); }} className="text-xs font-semibold text-[#0b6b58] hover:underline">Compare with the original</button>
@@ -136,7 +138,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
               <button type="button" onClick={() => setTo(null)} className="font-semibold underline">Show everything since v{data.from.number}</button>
             </span>
           )}
-          <span className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="ml-auto flex flex-wrap items-center gap-1.5 text-xs">
             {stats && (stats.inserted + stats.deleted + stats.modified > 0) ? (
               <>
                 {stats.inserted > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">{plural(stats.inserted, 'block')} added</span>}
@@ -147,7 +149,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
             ) : stats ? <span className={MUTED}>No changes</span> : null}
           </span>
         </div>
-        <p className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${MUTED}`}>
+        <p className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED}`}>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" aria-hidden /> added</span>
           <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200" aria-hidden /> removed</span>
           <InfoTip label="About the changes" text="Each change says who made it, on whose request and from which sources." />
@@ -155,13 +157,13 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
         </p>
         {range.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[#d5dbe1] pt-2" aria-label="Versions in this comparison">
-            <span className="text-[11px] text-[#586472]">Since v{baseNumber}:</span>
+            <span className="text-xs text-[#586472]">Since v{baseNumber}:</span>
             {range.map((v) => {
               const look = originLook(v.origin);
               const Icon = look.icon;
               return (
                 <span key={v.id} title={`${v.by} · ${dateTime(v.at)}${v.summary ? ` · ${v.summary}` : ''}`}
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${look.pill}`}>
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${look.pill}`}>
                   <Icon className="h-3 w-3" aria-hidden /> v{v.number} · {versionPill(v)}
                 </span>
               );
@@ -189,13 +191,12 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
                     className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
                 </label>
               )}
-              {takeBack.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs text-rose-800" role="alert">Not taken back: {problemOf(takeBack.error)}</p>}
+              {takeBack.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs text-rose-800" role="alert">Not taken back: {errorMessage(takeBack.error)}</p>}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" disabled={takeBack.isPending || (proposes && !reason.trim())} onClick={() => takeBack.mutate()}
-                  className={`${BTN_PRIMARY} !bg-amber-700 hover:!bg-amber-800`}>
-                  {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} {proposes ? sendLabel(decider) : 'Take it back'}
-                </button>
-                <button type="button" onClick={() => ask(null)} className={BTN}>Cancel</button>
+                <Button variant="danger" leftIcon={<Undo2 aria-hidden />} loading={takeBack.isPending} disabled={proposes && !reason.trim()} onClick={() => takeBack.mutate()}>
+                  {proposes ? sendLabel(decider) : 'Take it back'}
+                </Button>
+                <Button onClick={() => ask(null)}>Cancel</Button>
               </div>
             </div>
           </div>
@@ -203,8 +204,8 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
       )}
 
       <div className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 shadow-card sm:p-4">
-        {redline.isLoading && <div className="flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
-        {redline.isError && <p className="text-sm text-rose-700" role="alert">{problemOf(redline.error, 'These versions could not be compared.')}</p>}
+        {redline.isLoading && <SkeletonLines lines={4} label="Comparing" />}
+        {redline.isError && <ErrorState compact title="These versions could not be compared" message={errorMessage(redline.error)} onRetry={() => { void redline.refetch(); }} />}
         {onlyStamp && <p className="mb-2 text-xs font-semibold text-[#26323d]">Only the sign-off record changed.</p>}
         {data && (
           <RedlineView rows={data.rows} empty={range.length ? `The text is the same as in v${data.from.number}.` : 'Nothing changed since that version.'}
@@ -240,9 +241,7 @@ export function SinceApproved({ documentId, onShow }: { documentId: number; onSh
         {plural(info.changes, 'change')} · {plural(info.versions, 'version')}{info.ai ? ` · ${info.ai} by Comply Agent` : ''}
         <span className="ml-2 inline-flex translate-y-0.5 items-center align-middle">{info.people.slice(0, 4).map((p, i) => <span key={p} className={i ? '-ml-1.5' : ''}><InitialsAvatar name={p} size="sm" /></span>)}</span>
       </span>
-      <button type="button" onClick={() => onShow(info.base.id)} title="See them marked in the document" className={BTN}>
-        Show changes
-      </button>
+      <Button title="See them marked in the document" onClick={() => onShow(info.base.id)}>Show changes</Button>
     </div>
   );
 }

@@ -3,14 +3,14 @@
 // Statements <-> the original document file (organisations with document sync only; the API says {enabled:false} otherwise).
 // Backend: grc/modules/governance/doc_sync.py.
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileCheck2, Loader2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FileCheck2 } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_PRIMARY } from '@/components/governance/docUi';
-import { sendLabel } from '@/lib/proposals';
-import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
+import { Button, ErrorState, TextInput, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { proposedOf, sendLabel } from '@/lib/proposals';
+import { ProposeNote, proposedWords, useProposalRole, useRefreshAfterProposal } from './_ProposalsView';
 
 interface Pending { id: number; code: string | null; was: string; now: string }
 interface SyncState {
@@ -28,12 +28,11 @@ interface SyncState {
 
 export default function DocumentSyncPanel({ documentId }: { documentId: string | number }) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const base = `/governance/documents/${documentId}/document-sync`;
 
-  const { data } = useQuery<SyncState>({
+  const { data, isError, error, refetch } = useQuery<SyncState>({
     queryKey: ['document-sync', String(documentId)],
     queryFn: async () => (await apiClient.get(base)).data,
   });
@@ -47,28 +46,35 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
     for (const key of ['document-chain', 'document-chain-redline']) queryClient.invalidateQueries({ queryKey: [key] });   // the Change log
   };
 
-  const check = useMutation({
+  const check = useReportedMutation({
     mutationFn: async () => (await apiClient.post(`${base}/check`, null, { params: { again: true } })).data,
-    onSuccess: () => { refresh(); toast({ type: 'success', title: 'Checked', message: 'Statements were compared with the document.' }); },
-    onError: (e: any) => toast({ type: 'error', title: 'Check failed', message: e?.response?.data?.detail || 'Could not read the document.' }),
+    success: { title: 'Checked', message: 'Statements were compared with the document.' },
+    failure: 'Check failed',
+    fallback: 'Could not read the document.',
+    onSuccess: () => { refresh(); },
   });
 
   // not the owner or author: writing the statements in goes to the owner to accept, with a message they read
   const { proposes, decider } = useProposalRole(Number(documentId));
-  const handledAsProposal = useProposedAnswer();
-  const apply = useMutation({
+  const refreshAfterProposal = useRefreshAfterProposal();
+  const apply = useReportedMutation({
     mutationFn: async () => (await apiClient.post(`${base}/apply`, { change_reason: reason.trim() || null, message: reason.trim() || undefined })).data,
+    success: (r: any) => proposedWords(r, decider)
+      ?? { title: `Document updated to version ${r.version}`, message: `${r.updated} statement${r.updated === 1 ? '' : 's'} written into the document${r.sent_to_review ? '; it is back in review' : ''}.` },
+    failure: 'Document not updated',
+    fallback: 'Could not write the document.',
+    retryable: false,                                                    // a second try could write a second version
     onSuccess: (r: any) => {
       setConfirming(false);
       setReason('');
-      if (handledAsProposal(r, decider)) return;                         // the document is as it was until the owner accepts
+      if (proposedOf(r)) { refreshAfterProposal(); return; }            // the document is as it was until the owner accepts
       refresh();
-      toast({ type: 'success', title: `Document updated to version ${r.version}`,
-              message: `${r.updated} statement${r.updated === 1 ? '' : 's'} written into the document${r.sent_to_review ? '; it is back in review' : ''}.` });
     },
-    onError: (e: any) => toast({ type: 'error', title: 'Document not updated', message: e?.response?.data?.detail || 'Could not write the document.' }),
   });
 
+  if (isError && !data) {
+    return <div className="mb-4"><ErrorState compact title="Couldn't read the document sync" message={errorMessage(error)} onRetry={() => { void refetch(); }} /></div>;
+  }
   if (!data?.enabled) return null;
   const pending = data.pending || [];
   const missing = data.not_found || [];
@@ -85,9 +91,7 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
             {c.checked}/{c.statements} checked · {c.exact} as written · {c.corrected} corrected · {c.not_found} not found
           </span>
         )}
-        <button type="button" onClick={() => check.mutate()} disabled={check.isPending} title="Compare the statements with the document" className={`${BTN} ml-auto`}>
-          {check.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />} Check
-        </button>
+        <Button size="sm" className="ml-auto" loading={check.isPending} title="Compare the statements with the document" onClick={() => check.mutate()}>Check</Button>
       </div>
 
       {missing.length > 0 && (
@@ -104,7 +108,7 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
           </p>
           {data.reason && <p className="mt-1 text-xs text-amber-900">{data.reason}</p>}
           {!confirming && data.can_apply && (
-            <button type="button" onClick={() => setConfirming(true)} className={`${BTN_PRIMARY} mt-2`}>Update document</button>
+            <Button variant="primary" className="mt-2" onClick={() => setConfirming(true)}>Update document</Button>
           )}
           {confirming && (
             <div className="mt-2 space-y-2">
@@ -116,14 +120,13 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
               {proposes ? (
                 <ProposeNote id={`sync-why-${documentId}`} decider={decider} value={reason} onChange={setReason} placeholder="e.g. The statements on passwords follow the new standard" />
               ) : (
-                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" aria-label="Reason"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none" />
+                <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" aria-label="Reason" />
               )}
               <div className="flex gap-2">
-                <button type="button" onClick={() => apply.mutate()} disabled={apply.isPending || (proposes && !reason.trim())} className={BTN_PRIMARY}>
-                  {apply.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />} {proposes ? sendLabel(decider) : 'Write to document'}
-                </button>
-                <button type="button" onClick={() => setConfirming(false)} className={BTN}>Cancel</button>
+                <Button variant="primary" loading={apply.isPending} disabled={proposes && !reason.trim()} onClick={() => apply.mutate()}>
+                  {proposes ? sendLabel(decider) : 'Write to document'}
+                </Button>
+                <Button onClick={() => setConfirming(false)}>Cancel</Button>
               </div>
             </div>
           )}
