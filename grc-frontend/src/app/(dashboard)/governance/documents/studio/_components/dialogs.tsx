@@ -215,6 +215,7 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
           note={`What you changed here becomes the next version after ${original}.`} />}
         <DocumentDetailsFields d={tracked} />
         <ReviewerApproverFields value={signoff} onChange={setSignoff} />
+        {fws.isLoading && <SkeletonLines lines={2} label="Loading the frameworks" />}
         {fws.isError && !fws.data && <ErrorState compact title="Couldn't load the frameworks" message={errorMessage(fws.error)} onRetry={canRetry(fws.error) ? () => { void fws.refetch(); } : undefined} />}
         {fws.data && fws.data.items.length > 0 && (
           <fieldset>
