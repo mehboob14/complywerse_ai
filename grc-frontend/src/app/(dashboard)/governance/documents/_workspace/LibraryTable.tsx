@@ -260,6 +260,9 @@ export function LibraryTable({
   };
   const headId = (n: FolderNode<GovDoc>) => `${uid}-folder-${n.key}`;
   const docsId = (n: FolderNode<GovDoc>) => `${uid}-docs-${n.key}`;
+  // the phone's cards are in the page as well (the window's width hides one of the two), and an id may not appear twice in a page
+  const cardHeadId = (n: FolderNode<GovDoc>) => `${uid}-cfolder-${n.key}`;
+  const cardDocsId = (n: FolderNode<GovDoc>) => `${uid}-cdocs-${n.key}`;
 
   // the rows get tick boxes only when the bulk bar has something for this person to do; no Approve: a document is approved by its
   // approvers signing it in its review (the server refuses a bulk approval), and Publish publishes only approved documents
@@ -605,14 +608,14 @@ export function LibraryTable({
                         node={node}
                         open={item.open}
                         tick={tickFolder(node)}
-                        headId={headId(node)}
-                        controls={[...node.folders.map(headId), ...(node.top.length > 0 ? [docsId(node)] : [])]}
+                        headId={cardHeadId(node)}
+                        controls={[...node.folders.map(cardHeadId), ...(node.top.length > 0 ? [cardDocsId(node)] : [])]}
                         onToggle={() => applyFold(flipFolder(foldView, node.key))}
                       />
                     );
                   }
                   return (
-                    <li key={`docs-${node.key}`} id={docsId(node)}>
+                    <li key={`docs-${node.key}`} id={cardDocsId(node)}>
                       <ul role="list" aria-label={`Documents in ${node.name}`} className="flex flex-col gap-2">
                         {item.rows.map((r) => renderCard(r, node.depth + 1))}
                         {node.top.length > FIRST_SHOWN && (

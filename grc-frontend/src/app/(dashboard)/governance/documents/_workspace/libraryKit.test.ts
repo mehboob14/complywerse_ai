@@ -93,6 +93,14 @@ test('the register is on the kit table: sortable headers with aria-sort, rows th
   assert.ok(drawer.includes('useDialogFocus(sheet, panelRef)') && drawer.includes('lockBodyScroll()') && drawer.includes("aria-modal={sheet ? true : undefined}"));
 });
 
+test('the table and the phone cards are both in the page (the width hides one), so their folder ids differ: an id may appear once, and aria-controls must name the right one', () => {
+  const table = read('LibraryTable.tsx');
+  assert.ok(table.includes('const headId =') && table.includes('const docsId =') && table.includes('const cardHeadId =') && table.includes('const cardDocsId ='));
+  const cards = table.slice(table.indexOf('<ul role="list"'));
+  assert.ok(!/\b(headId|docsId)\(|map\(headId\)/.test(cards), 'the cards use their own ids');
+  assert.ok(cards.includes('headId={cardHeadId(node)}') && cards.includes('id={cardDocsId(node)}') && cards.includes('node.folders.map(cardHeadId)'));
+});
+
 test('the files that were rewritten on the kit hold its token rules: no named text size, palette colour, hex, named shadow or radius, no text under 12px', () => {
   const rewritten = [
     'atoms.tsx', 'cells.tsx', 'DocumentDrawer.tsx', 'DocumentsWorkspace.tsx', 'FolderRows.tsx', 'FrameworkList.tsx', 'FrameworksCell.tsx', 'LibraryFilters.tsx', 'LibraryKpis.tsx',
