@@ -46,3 +46,69 @@
 	--space-5: 20px;
 	--space-6: 24px;
 }
+
+/* Design-system tokens (UX revamp, Phase 1). New --ds-* names, so nothing that exists changes; the kit in components/ui/ds reads them
+   through the Tailwind theme (colors.ds.*, fontSize.ds-*, borderRadius.ds-*, height.ds-control). Every text/control pair below is
+   asserted in src/lib/dsTokens.test.ts (4.5:1 for words, 3:1 for control outlines and the focus ring). */
+:root {
+	/* brand: deep teal, white words on a filled control */
+	--ds-primary: #0f766e;
+	--ds-primary-hover: #115e59;
+	--ds-primary-active: #134e4a;
+	--ds-on-primary: #ffffff;
+	--ds-primary-soft: #e6f6f3;
+	--ds-primary-text: #0f766e;
+	--ds-focus: #0f766e;
+
+	/* neutrals */
+	--ds-bg: #f1f3f5;
+	--ds-surface: #ffffff;
+	--ds-surface-subtle: #f6f8fa;
+	--ds-surface-hover: #f3f6f8;
+	--ds-fg: #1f2933;
+	--ds-fg-body: #26323d;
+	--ds-fg-muted: #586472;
+	--ds-border: #e1e6eb;
+	--ds-border-strong: #c3ccd5;
+	--ds-border-control: #7c8896;
+
+	/* meaning (words on the soft tint; the vendor kit's tones are the same family) */
+	--ds-danger: #b42318;
+	--ds-danger-hover: #912018;
+	--ds-danger-soft: #fef3f2;
+	--ds-danger-border: #e4a8a1;
+	--ds-on-danger: #ffffff;
+	--ds-warning: #9a5007;
+	--ds-warning-soft: #fbf1e4;
+	--ds-success: #08794f;
+	--ds-success-soft: #e7f5ef;
+	--ds-info: #0369a1;
+	--ds-info-soft: #eaf4fb;
+	--ds-scrim: rgba(15, 23, 42, 0.45);
+
+	/* type: 12px is the floor for anything to be read; 13px body and cells */
+	--ds-text-title: 20px;
+	--ds-text-section: 15px;
+	--ds-text-body: 13px;
+	--ds-text-label: 12px;
+	--ds-leading-title: 28px;
+	--ds-leading-section: 22px;
+	--ds-leading-body: 20px;
+	--ds-leading-label: 16px;
+
+	/* shape and size on a 4px grid */
+	--ds-radius-control: 6px;
+	--ds-radius-card: 8px;
+	--ds-control-h: 32px;
+	--ds-control-h-sm: 28px;
+	--ds-shadow-pop: 0 8px 24px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08);
+	--ds-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--ds-focus);
+}
+
+/* touch targets are 44px on a phone-width window or a coarse pointer */
+@media (max-width: 767px), (pointer: coarse) {
+	:root {
+		--ds-control-h: 44px;
+		--ds-control-h-sm: 44px;
+	}
+}
