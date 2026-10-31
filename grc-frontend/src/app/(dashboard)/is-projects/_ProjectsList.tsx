@@ -132,7 +132,7 @@ export function ProjectsList({ canCreate, onCreate }: { canCreate: boolean; onCr
           empty={empty}
           cardTitle={(p) => <ProjectName p={p} />}
           footer={total > 0 ? (
-            <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={setPageSize} pageSizes={PAGE_SIZES} noun="projects" />
+            <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={setPageSize} pageSizes={PAGE_SIZES} noun={total === 1 ? 'project' : 'projects'} />
           ) : undefined}
         />
       </div>

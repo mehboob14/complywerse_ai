@@ -21,7 +21,8 @@ export function ProjectName({ p }: { p: ISProject }) {
       <Link href={`/is-projects/${p.id}`} title={projectTitle(p)} className="line-clamp-2 break-words rounded-ds-control py-[2px] font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">
         {projectTitle(p)}
       </Link>
-      {where && <span className="block truncate text-ds-label text-ds-fg-muted" title={where}>{where}</span>}
+      {where && <span className="line-clamp-2 break-words text-ds-label text-ds-fg-muted" title={where}>{where}</span>}
+      {p.open_risks_count > 0 && <span className="block text-ds-label font-[600] text-ds-warning">{formatCount(p.open_risks_count)} open {p.open_risks_count === 1 ? 'risk' : 'risks'}</span>}
     </span>
   );
 }
@@ -30,20 +31,16 @@ export function ProjectName({ p }: { p: ISProject }) {
 export function projectColumns({ owner = true }: { owner?: boolean } = {}): Array<RegisterColumn<ISProject>> {
   const cols: Array<RegisterColumn<ISProject>> = [
     { key: 'name', header: 'Project', isRowHeader: true, cell: (p) => <ProjectName p={p} /> },
-    { key: 'status', header: 'Status', width: 'w-[120px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(projectStatus, p.status)} /> },
-    { key: 'health', header: 'Health', priority: 2, width: 'w-[112px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(projectHealth, p.health)} /> },
-    { key: 'priority', header: 'Priority', priority: 3, width: 'w-[96px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(priorityStatus, p.priority)} /> },
+    { key: 'status', header: 'Status', width: 'w-[112px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(projectStatus, p.status)} /> },
+    { key: 'health', header: 'Health', priority: 2, width: 'w-[104px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(projectHealth, p.health)} /> },
+    { key: 'priority', header: 'Priority', priority: 3, width: 'w-[88px]', card: 'meta', cell: (p) => <StatusPill size="sm" {...statusPill(priorityStatus, p.priority)} /> },
   ];
-  if (owner) cols.push({ key: 'owner', header: 'Owner', priority: 3, width: 'w-[152px]', card: 'meta', cell: (p) => <PersonChip name={p.project_owner_name} /> });
+  if (owner) cols.push({ key: 'owner', header: 'Owner', priority: 3, width: 'w-[144px]', card: 'meta', cell: (p) => <PersonChip name={p.project_owner_name} /> });
   cols.push(
-    { key: 'progress', header: 'Progress', width: 'w-[136px]', card: 'meta', cell: (p) => <ProgressBar value={p.completion_percentage} label={`${projectTitle(p)} progress`} /> },
+    { key: 'progress', header: 'Progress', width: 'w-[120px]', card: 'meta', cell: (p) => <ProgressBar value={p.completion_percentage} label={`${projectTitle(p)} progress`} width="w-[48px]" /> },
     {
-      key: 'target', header: 'Target date', priority: 2, width: 'w-[112px]', card: 'meta',
+      key: 'target', header: 'Target date', priority: 2, width: 'w-[108px]', card: 'meta',
       cell: (p) => <span className={`whitespace-nowrap tabular-nums ${p.target_end_date ? '' : 'text-ds-fg-muted'}`}>{formatDate(p.target_end_date, { calendar: true, empty: NOT_SET })}</span>,
-    },
-    {
-      key: 'risks', header: 'Open risks', priority: 3, align: 'right', width: 'w-[88px]', card: 'meta',
-      cell: (p) => <span className={`tabular-nums ${p.open_risks_count > 0 ? 'font-[600] text-ds-warning' : 'text-ds-fg-muted'}`}>{formatCount(p.open_risks_count)}</span>,
     },
   );
   return cols;

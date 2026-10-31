@@ -35,7 +35,7 @@ export function ProgressBar({ value, label, width = 'w-[72px]' }: { value: numbe
       <span role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v)} className={`block h-[6px] shrink-0 overflow-hidden rounded-full bg-ds-border ${width}`}>
         <span className="block h-full rounded-full bg-ds-primary" style={{ width: `${v}%` }} />
       </span>
-      <span className="tabular-nums text-ds-label text-ds-fg-body">{formatPercent(value ?? 0)}</span>
+      <span className="whitespace-nowrap tabular-nums text-ds-label text-ds-fg-body">{formatPercent(value ?? 0)}</span>
     </span>
   );
 }

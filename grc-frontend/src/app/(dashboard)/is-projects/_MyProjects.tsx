@@ -32,7 +32,7 @@ function Section({ id, title, rows, owner }: { id: string; title: string; rows: 
         getRowId={(p) => p.id}
         onRowActivate={(p) => router.push(`/is-projects/${p.id}`)}
         cardTitle={(p) => <ProjectName p={p} />}
-        footer={<Pager page={at} pageSize={size} total={rows.length} onPage={setPage} onPageSize={(n) => { setSize(n); setPage(1); }} pageSizes={SIZES} noun="projects" />}
+        footer={<Pager page={at} pageSize={size} total={rows.length} onPage={setPage} onPageSize={(n) => { setSize(n); setPage(1); }} pageSizes={SIZES} noun={rows.length === 1 ? 'project' : 'projects'} />}
       />
     </SectionCard>
   );
