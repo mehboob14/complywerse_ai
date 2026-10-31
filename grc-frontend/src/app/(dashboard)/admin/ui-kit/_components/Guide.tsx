@@ -13,6 +13,11 @@ export const MONO = 'font-mono text-ds-label';
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
+/** Text with `code` spans: what sits between backticks is drawn in the monospace face. */
+function Prose({ text }: { text: string }) {
+  return <>{text.split('`').map((part, i) => (i % 2 === 1 ? <code key={i} className={clsx(MONO, 'text-ds-fg')}>{part}</code> : part))}</>;
+}
+
 export function GuideSection({ id, title, lead, children }: { id: string; title: string; lead?: string; children: ReactNode }) {
   return (
     <section id={id} data-guide-section={id} aria-labelledby={`${id}-title`} className="scroll-mt-[8px] space-y-[16px] border-t border-ds-border pt-[24px]">
@@ -38,10 +43,10 @@ export function Row({ children, gap = 8, align = 'center', className }: { childr
   return <div className={clsx('flex flex-wrap', GAPS[gap], ALIGNS[align], className)}>{children}</div>;
 }
 
-/** One live example, with its caption. `of` names the component for the accessibility probe when it is not the card's own. */
-export function Specimen({ label, of, children, className }: { label: string; of?: string; children: ReactNode; className?: string }) {
+/** One live example, with its caption. */
+export function Specimen({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div data-guide-component={of} className={clsx('min-w-0 space-y-[6px]', className)}>
+    <div className={clsx('min-w-0 space-y-[6px]', className)}>
       <p className="text-ds-label text-ds-fg-muted">{label}</p>
       <div className="min-w-0">{children}</div>
     </div>
@@ -83,7 +88,7 @@ export function PropsTable({ part, titled }: { part: PartDoc; titled: boolean })
                 <RowHeaderCell className="align-top"><code className={clsx(MONO, 'text-ds-fg')}>{p.name}</code></RowHeaderCell>
                 <Td className="align-top"><code className={clsx(MONO, 'text-ds-fg-body')}>{p.type}</code></Td>
                 {!fn && <Td className="align-top"><code className={clsx(MONO, 'text-ds-fg-muted')}>{p.default ?? '—'}</code></Td>}
-                <Td className="align-top">{p.note}</Td>
+                <Td className="align-top"><Prose text={p.note} /></Td>
               </Tr>
             ))}
           </TBody>
@@ -105,8 +110,8 @@ export function Spec({ name, children }: { name: string; children?: ReactNode })
         <h3 id={`${id}-name`} className="!text-ds-section !text-ds-fg">{name}</h3>
         <code className={clsx(MONO, 'min-w-0 break-all text-ds-fg-muted')}>{`import { ${imports.join(', ')} } from '${doc.importFrom}'`}</code>
       </div>
-      <p className="text-ds-body text-ds-fg-body"><span className="font-medium text-ds-fg">Use when </span>{doc.use}</p>
-      {doc.dont && <p className="border-l-2 border-ds-danger-border pl-[12px] text-ds-body text-ds-fg-body">{doc.dont}</p>}
+      <p className="text-ds-body text-ds-fg-body"><span className="font-medium text-ds-fg">Use when </span><Prose text={doc.use} /></p>
+      {doc.dont && <p className="border-l-2 border-ds-danger-border pl-[12px] text-ds-body text-ds-fg-body"><Prose text={doc.dont} /></p>}
       {children && <div className="min-w-0 space-y-[16px] rounded-ds-card bg-ds-bg p-[16px]">{children}</div>}
       <div className="min-w-0 space-y-[12px]">
         {doc.parts.map((part) => <PropsTable key={part.name} part={part} titled={doc.parts.length > 1 || part.name !== name} />)}
