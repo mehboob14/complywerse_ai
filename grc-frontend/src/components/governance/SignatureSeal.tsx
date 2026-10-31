@@ -28,7 +28,11 @@ type Verified = {
 };
 
 /** What a signed record shows: the drawing, its fingerprint, and a Verify that checks the seal again. `codeTitle`: what the code is, when it is not the image's fingerprint. */
-export default function SignatureSeal({ id, fingerprint, thumb = true, codeTitle = 'SHA-256 fingerprint of the drawn signature' }: { id: number; fingerprint: string; thumb?: boolean; codeTitle?: string }) {
+export default function SignatureSeal({ id, fingerprint, thumb = true, codeTitle = 'SHA-256 fingerprint of the drawn signature', ds = false }: {
+  id: number; fingerprint: string; thumb?: boolean; codeTitle?: string;
+  /** Draws it in the design-system tokens (12px words, a 24px Verify target, the kit's focus ring and tones) for a page that is on the kit. Off: exactly as it always was. */
+  ds?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<Verified | null | false>(null);
 
@@ -36,6 +40,36 @@ export default function SignatureSeal({ id, fingerprint, thumb = true, codeTitle
     setBusy(true);
     try { setSeen((await esignApi.get(id)).data as Verified); } catch { setSeen(false); } finally { setBusy(false); }
   };
+
+  if (ds) {
+    return (
+      <div className="mt-[6px] flex items-start gap-3">
+        {thumb && <SignatureImage id={id} />}
+        <div className="min-w-0 text-ds-label text-ds-fg-muted">
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span title={codeTitle}>E-signed · <span className="font-mono">{fingerprint.slice(0, 12)}</span></span>
+            <button type="button" onClick={verify} disabled={busy}
+              className="inline-flex min-h-[24px] items-center rounded-ds-control px-[6px] text-ds-label text-ds-primary-text hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring disabled:opacity-50">
+              {busy ? <Loader2 aria-hidden className="h-[12px] w-[12px] animate-spin" /> : 'Verify'}
+              {busy && <span className="sr-only">Verifying</span>}
+            </button>
+          </div>
+          {seen === false && <p role="alert" className="mt-[2px] text-ds-label text-ds-danger">Could not check this signature.</p>}
+          {seen && (
+            <p role="status" className={`mt-[2px] flex items-start gap-1 text-ds-label ${seen.valid ? 'text-ds-success' : 'text-ds-danger'}`}>
+              {seen.valid ? <CheckCircle2 aria-hidden className="mt-[2px] h-[12px] w-[12px] shrink-0" /> : <ShieldAlert aria-hidden className="mt-[2px] h-[12px] w-[12px] shrink-0" />}
+              <span>
+                {seen.valid ? 'Verified: the signature and its record are unchanged.' : 'Does not verify: the signature or its record was changed.'}{' '}
+                {seen.signer_name}{seen.signer_title ? `, ${seen.signer_title}` : ''}, {new Date(`${seen.signed_at}Z`).toLocaleString()}
+                {seen.ip_address ? ` · ${seen.ip_address}` : ''}{seen.document_version ? ` · version ${seen.document_version}` : ''}.
+                {seen.document_changed_since ? ' The document has been edited since.' : ''}
+              </span>
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-1.5 flex items-start gap-3">
