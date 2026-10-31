@@ -18,6 +18,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
@@ -72,7 +73,9 @@ export default function ActionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [committeeFilter, setCommitteeFilter] = useState<string>('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const searchParams = useSearchParams();
+  // a link from the Governance overview opens the list already on what is overdue (?overdue=1); the checkbox below still turns it off
+  const [overdueOnly, setOverdueOnly] = useState(searchParams?.get('overdue') === '1');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     committee_id: '',
