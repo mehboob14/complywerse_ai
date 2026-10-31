@@ -2,89 +2,52 @@
 
 // The document's Details popup: title, type, classification, owner, department, review cycle and dates, frameworks, parent,
 // tags, description, and who reviews and approves it. Read-only for people who cannot edit; otherwise Save sends only what changed
-// (PUT /governance/documents/{id}; the reviewers and approvers to …/signoff/participants, while it is a draft or on its way).
-// The code (document_code) is neither shown nor sent: a document keeps the one it has.
+// (PUT /governance/documents/{id}; the reviewers and approvers to …/signoff/participants, while it is a draft or on its way): the
+// rules for what is sent are _view/detailsForm.ts, tested. The code (document_code) is neither shown nor sent: a document keeps the one it has.
+// The fields are the kit's (FormField with TextInput, Select, Textarea); the four pickers that search (owner, department, parent, frameworks) are still
+// MultiSelectDropdown, which the kit has no replacement for yet, under a label of their own. The popup asks "Discard changes?" before Escape or the X
+// throws typed input away. A save is reported after the server answered (the server's words when it refused, Retry when repeating can help).
 // The lists share their React Query keys (and shapes) with the document pages, so they come from one cache.
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
-import { useToast } from '@/components/ui/ToastProvider';
-import { BTN as SECONDARY, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { Button, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
-import { addMonths } from '../_detailsRead';
 import { MAX_TAGS, addTags, leftOut, splitTags, tagSuggestions } from '../_tags';
 import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoice } from '../_SignoffControl';
+import type { FrameworkInfo } from '../_workspace/libraryModel';
+import { calendarDay } from '../_view/docDates';
+import { changes, fromDoc, suggestNext, type DetailsForm as Form } from '../_view/detailsForm';
+import { FrameworksValue } from './_FrameworksValue';
 
-const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const TRIGGER = 'w-full !h-[34px] !border-[#b8c4c8] !text-sm';
-// (the buttons are the Documents area's shared ones, components/governance/docUi: SECONDARY = BTN, PRIMARY = BTN_PRIMARY)
 
-type Form = {
-  title: string; doc_type: string; classification: string;
-  owner_id: number | null; department_id: number | null; review_cycle_months: number | null;
-  effective_date: string; next_review_date: string; applicable_framework_ids: number[];
-  parent_document_id: number | null; tags: string[]; description: string;
-};
-
-const fromDoc = (doc: any): Form => ({
-  title: doc?.title || '',
-  doc_type: doc?.doc_type || '',
-  classification: String(doc?.classification || '').toLowerCase(),
-  owner_id: doc?.owner_id ?? null,
-  department_id: doc?.department_id ?? null,
-  review_cycle_months: doc?.review_cycle_months ?? null,
-  effective_date: String(doc?.effective_date || '').slice(0, 10),   // a date, stored as naive-UTC midnight
-  next_review_date: String(doc?.next_review_date || '').slice(0, 10),
-  applicable_framework_ids: [...(doc?.applicable_framework_ids || [])],
-  parent_document_id: doc?.parent_document_id ?? null,
-  tags: [...(doc?.tags || [])],
-  description: doc?.description || '',
-});
-
-const NULL_WHEN_EMPTY = new Set<string>(['description', 'effective_date', 'next_review_date']);
-
-/** Only the fields that differ from `base`; text trimmed, an emptied optional text or date sent as null. */
-function changes(base: Form, form: Form): Record<string, unknown> {
-  const patch: Record<string, unknown> = {};
-  for (const k of Object.keys(form) as (keyof Form)[]) {
-    let a: unknown = base[k];
-    let b: unknown = form[k];
-    if (typeof b === 'string') { b = b.trim(); a = String(a ?? '').trim(); }
-    const same = Array.isArray(b)
-      ? JSON.stringify([...b].sort()) === JSON.stringify([...(a as unknown[])].sort())
-      : a === b;
-    if (!same) patch[k] = b === '' && NULL_WHEN_EMPTY.has(k) ? null : b;
-  }
-  return patch;
-}
-
-const suggestNext = (f: Form) => (f.effective_date && f.review_cycle_months ? addMonths(f.effective_date, f.review_cycle_months) : '');
-
-const day = (ymd: string) =>
-  ymd ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
 const labelOf = <T,>(opts: [T, string][], value: T) => opts.find(([v]) => v === value)?.[1] || '';
 
-function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
+/** A label for a picker that is not a kit control: it names its group, with the (i) beside it when it has one. */
+function PickerField({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
+  const id = useId();
   return (
-    <label className={`block min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
-      <span className="mb-1 block text-xs font-semibold text-[#26323d]">{label}</span>
+    <div role="group" aria-labelledby={id} className={`flex min-w-0 flex-col gap-[4px] ${wide ? 'sm:col-span-2' : ''}`}>
+      <span id={id} className="text-ds-label text-ds-fg">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 
-function Value({ label, wide, mono, children }: { label: string; wide?: boolean; mono?: boolean; children: React.ReactNode }) {
+function Value({ label, wide, mono, children }: { label: string; wide?: boolean; mono?: boolean; children: ReactNode }) {
   const empty = children === '' || children === null || children === undefined || (Array.isArray(children) && children.length === 0);
   return (
     <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
-      <dt className="text-xs font-semibold text-[#26323d]">{label}</dt>
-      <dd className={`mt-0.5 whitespace-pre-wrap break-words text-sm text-[#1f2933] ${mono ? 'font-mono' : ''}`}>
-        {empty ? <span className="text-sm text-[#586472]">—</span> : children}
+      <dt className="text-ds-label text-ds-fg">{label}</dt>
+      <dd className={`mt-[2px] whitespace-pre-wrap break-words text-ds-body text-ds-fg-body ${mono ? 'font-mono' : ''}`}>
+        {empty ? <span className="text-ds-fg-muted">—</span> : children}
       </dd>
     </div>
   );
@@ -123,45 +86,45 @@ function TagField({ value, onChange, text, onText, used, labelledBy }: {
       onChange(value.slice(0, -1));
     }
   };
+  const CHIP_BUTTON = 'inline-flex min-h-[24px] max-w-full items-center truncate rounded-full px-[8px] text-ds-label focus-visible:outline-none focus-visible:shadow-ds-ring';
   return (
     // a press anywhere in the field keeps the typing in the box (a button's click still runs); leaving the field keeps the text in the box
     <div onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}>
-      <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-[#1ed4b0]">
+      <div className="flex min-h-ds-control flex-wrap items-center gap-[6px] rounded-ds-control border border-ds-border-control bg-ds-surface px-[8px] py-[3px] focus-within:shadow-ds-ring">
         {value.map((t, i) => (
-          <span key={t} className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] py-0.5 pl-2 pr-1 text-xs text-[#26323d]">
+          <span key={t} className="inline-flex max-w-full items-center gap-[2px] rounded-full border border-ds-border bg-ds-surface-subtle pl-[8px] text-ds-label text-ds-fg-body">
             <span className="min-w-0 truncate">{t}</span>
             <button ref={i === value.length - 1 ? lastRemove : undefined} type="button" onClick={() => remove(t)} aria-label={`Remove tag ${t}`}
-              className="rounded-full p-0.5 text-[#586472] hover:bg-[#e3e8ec] hover:text-[#1f2933] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
-              <X className="h-3 w-3" aria-hidden />
+              className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring">
+              <X className="h-[12px] w-[12px]" aria-hidden />
             </button>
           </span>
         ))}
         {!full && (
           <input ref={box} type="text" value={text} onChange={(e) => onText(e.target.value)} onKeyDown={onKeyDown}
             aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Add a tag, press Enter'} title="Press Enter or a comma to add"
-            className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-0" />
+            className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-ds-body text-ds-fg placeholder:text-ds-fg-muted focus:outline-none focus:ring-0" />
         )}
       </div>
       {/* always there, so a screen reader hears the limit when the focus has moved to a remove button */}
-      <div role="status" className="text-xs text-[#586472]">
+      <div role="status" className="text-ds-label font-normal text-ds-fg-muted">
         {full && (
-          <span className="mt-1.5 block break-words">
+          <span className="mt-[6px] block break-words">
             {left.length ? `Not added (up to ${MAX_TAGS} tags): ${left.join(', ')}. ` : `Up to ${MAX_TAGS} tags. `}Remove one to add more.
           </span>
         )}
       </div>
       {((isNew && !full) || hints.length > 0) && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="mt-[6px] flex flex-wrap items-center gap-[6px]">
           {isNew && !full && (
-            <button type="button" onClick={() => add(parts)}
-              className="max-w-full truncate rounded-full border border-[#0f766e] bg-[#ecf8f5] px-2 py-0.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#d7f0ea] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
+            <button type="button" onClick={() => add(parts)} className={`${CHIP_BUTTON} border border-ds-primary bg-ds-primary-soft font-semibold text-ds-primary-text hover:bg-ds-surface-hover`}>
               + Add “{parts.join(', ')}”
             </button>
           )}
-          {hints.length > 0 && <span className="text-xs text-[#586472]">{text.trim() ? 'Matching:' : 'Used elsewhere:'}</span>}
+          {hints.length > 0 && <span className="text-ds-label font-normal text-ds-fg-muted">{text.trim() ? 'Matching:' : 'Used elsewhere:'}</span>}
           {hints.map((h) => (
             <button key={h} type="button" onClick={() => add([h])} aria-label={`Add tag ${h}`}
-              className="max-w-full truncate rounded-full border border-dashed border-[#9fb3b8] bg-white px-2 py-0.5 text-xs text-[#26323d] hover:border-[#0f766e] hover:bg-[#ecf8f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
+              className={`${CHIP_BUTTON} border border-dashed border-ds-border-strong bg-ds-surface font-normal text-ds-fg-body hover:border-ds-primary hover:bg-ds-primary-soft`}>
               + {h}
             </button>
           ))}
@@ -177,7 +140,6 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
   onSaved?: (patch: Record<string, unknown>) => void;
 }) {
   const qc = useQueryClient();
-  const { toast } = useToast();
   const [base, setBase] = useState<Form>(() => fromDoc(doc));
   const [form, setForm] = useState<Form>(() => fromDoc(doc));
   // who reviews and approves it: changed here while it is a draft or on its way (the server refuses it once approved)
@@ -252,6 +214,16 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     }
     return out;
   }, [frameworks, form.applicable_framework_ids]);
+  // the read-only value's chips: the short code beside the full name, as the library's chips carry them (the list this popup already reads, no extra request)
+  const fwInfo = useMemo(() => {
+    const out: Record<string, FrameworkInfo> = {};
+    for (const f of frameworks) {
+      const short = String(f.short_code || '').trim();
+      const name = String(f.name || '').trim();
+      out[String(f.id)] = { short: short || name || `#${f.id}`, name: name || short || `#${f.id}` };
+    }
+    return out;
+  }, [frameworks]);
 
   const others = docsQ.data || [];
   // the document and everything under it, at any depth: the server refuses any of them as the parent (a cycle)
@@ -275,7 +247,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     && (keyOf(people.reviewers) !== keyOf(serverPeople.reviewers) || keyOf(people.approvers) !== keyOf(serverPeople.approvers));
   const dirty = Object.keys(patch).length > 0 || peopleChanged;
 
-  const save = useMutation({
+  const save = useReportedMutation({
     mutationFn: async () => {
       if (Object.keys(patch).length) await governanceApi.updateDocument(doc.id, patch as any);
       if (peopleChanged && people) {
@@ -285,6 +257,12 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
                                                              reviewers: ids(people.reviewers), approvers: ids(people.approvers) });
       }
     },
+    success: () => {
+      const notAdded = leftOut(saveTags, typed);                              // typed past the limit
+      return notAdded.length ? { title: 'Details saved', message: `Not added (up to ${MAX_TAGS} tags): ${notAdded.join(', ')}.` } : 'Details saved';
+    },
+    failure: 'Not saved',
+    fallback: 'Could not save the details.',
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['governance-document', doc.id] });
       qc.invalidateQueries({ queryKey: ['document-access', doc.id] });
@@ -292,15 +270,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
       qc.invalidateQueries({ queryKey: ['doc-signoff', doc.id] });
       qc.invalidateQueries({ queryKey: ['document-lifecycle'] });
       onSaved?.(patch);
-      const notAdded = leftOut(saveTags, typed);                              // typed past the limit
-      toast({ type: 'success', title: 'Details saved',
-              message: notAdded.length ? `Not added (up to ${MAX_TAGS} tags): ${notAdded.join(', ')}.` : undefined });
       onClose();
-    },
-    onError: (e: any) => {
-      const d = e?.response?.data?.detail;
-      const message = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x: any) => x?.msg).filter(Boolean).join('; ') : '';
-      toast({ type: 'error', title: 'Not saved', message: message || 'Could not save the details.' });
     },
   });
 
@@ -319,68 +289,78 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
   const one = (v: number | null) => (v == null ? [] : [String(v)]);
   const toId = (vals: string[]) => (vals[0] ? Number(vals[0]) : null);
 
-  const row = (label: string, shown: React.ReactNode, editor: React.ReactNode, opts: { wide?: boolean; mono?: boolean } = {}) =>
-    canEdit
-      ? <Field key={label} label={label} wide={opts.wide}>{editor}</Field>
-      : <Value key={label} label={label} wide={opts.wide} mono={opts.mono}>{shown}</Value>;
+  const wide = (on?: boolean) => (on ? 'sm:col-span-2' : undefined);
+  /** The popup's row: its label and value when it is read-only, its label and kit field when it can be changed (`picker`: a control the kit has no field for). */
+  const row = (label: string, shown: ReactNode, editor: ReactNode, opts: { wide?: boolean; mono?: boolean; picker?: boolean } = {}) => {
+    if (!canEdit) return <Value key={label} label={label} wide={opts.wide} mono={opts.mono}>{shown}</Value>;
+    return opts.picker
+      ? <PickerField key={label} label={label} wide={opts.wide}>{editor}</PickerField>
+      : <FormField key={label} label={label} className={wide(opts.wide)}>{editor}</FormField>;
+  };
 
   const fields = [
-    row('Title', form.title,
-      <input type="text" value={form.title} onChange={(e) => set({ title: e.target.value })} required aria-invalid={!form.title.trim()} className={INPUT} />,
-      { wide: true }),
+    canEdit ? (
+      <FormField key="Title" label="Title" required error={form.title.trim() ? undefined : 'Enter a title'} className="sm:col-span-2">
+        <TextInput type="text" value={form.title} onChange={(e) => set({ title: e.target.value })} />
+      </FormField>
+    ) : <Value key="Title" label="Title" wide>{form.title}</Value>,
     row('Type', labelOf(types, form.doc_type),
-      <select value={form.doc_type} onChange={(e) => set({ doc_type: e.target.value })} className={INPUT}>
+      <Select value={form.doc_type} onChange={(e) => set({ doc_type: e.target.value })}>
         {!form.doc_type && <option value="">Choose…</option>}
         {types.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>),
+      </Select>),
     row('Classification', labelOf(classes, form.classification),
-      <select value={form.classification} onChange={(e) => set({ classification: e.target.value })} className={INPUT}>
+      <Select value={form.classification} onChange={(e) => set({ classification: e.target.value })}>
         {!form.classification && <option value="">Choose…</option>}
         {classes.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>),
+      </Select>),
     row('Owner', doc?.owner_name || '',
       <MultiSelectDropdown title="Owner" items={ownerItems} selectedValues={one(form.owner_id)} onApply={(v) => set({ owner_id: toId(v) })}
-        multiSelect={false} triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />),
+        multiSelect={false} triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />, { picker: true }),
     row('Department', departments.find((d) => d.id === form.department_id)?.name || '',
       <MultiSelectDropdown title="Department" items={deptItems} selectedValues={one(form.department_id)} onApply={(v) => set({ department_id: toId(v) })}
         multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false}
-        placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />),
+        placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />, { picker: true }),
     row('Review cycle', form.review_cycle_months == null ? '' : labelOf(cycles, form.review_cycle_months),
-      <select value={form.review_cycle_months ?? ''} onChange={(e) => setSchedule({ review_cycle_months: e.target.value ? Number(e.target.value) : null })} className={INPUT}>
+      <Select value={form.review_cycle_months ?? ''} onChange={(e) => setSchedule({ review_cycle_months: e.target.value ? Number(e.target.value) : null })}>
         {form.review_cycle_months == null && <option value="">Not set</option>}
         {cycles.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>),
-    row('Effective date', day(form.effective_date),
-      <input type="date" value={form.effective_date} onChange={(e) => setSchedule({ effective_date: e.target.value })} className={INPUT} />),
-    row('Next review', day(form.next_review_date),
-      <input type="date" value={form.next_review_date} onChange={(e) => set({ next_review_date: e.target.value })} className={INPUT} />),
+      </Select>),
+    // the effective date and the review date are DAYS (stored as a DateTime at midnight): read as written, in every time zone
+    row('Effective date', form.effective_date ? calendarDay(form.effective_date) : '',
+      <TextInput type="date" value={form.effective_date} onChange={(e) => setSchedule({ effective_date: e.target.value })} />),
+    row('Next review', form.next_review_date ? calendarDay(form.next_review_date) : '',
+      <TextInput type="date" value={form.next_review_date} onChange={(e) => set({ next_review_date: e.target.value })} />),
     // next to Next review, so the half-width fields pair up in two columns
     row('Parent document', doc?.parent_document?.title || '',
       <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} exclude={notParents} enabled={open}
-        title={doc?.parent_document?.id === form.parent_document_id ? doc?.parent_document?.title : undefined} />),
-    row('Frameworks', form.applicable_framework_ids.map((id) => fwItems.find((i) => i.value === String(id))?.label || `Framework ${id}`).join(', '),
+        title={doc?.parent_document?.id === form.parent_document_id ? doc?.parent_document?.title : undefined} />, { picker: true }),
+    // read-only: the first two as chips and "+N" for the rest (the full list one press away), as the library cuts them
+    row('Frameworks', form.applicable_framework_ids.length ? <FrameworksValue ids={form.applicable_framework_ids} info={fwInfo} /> : '',
       <MultiSelectDropdown title="Frameworks" items={fwItems} selectedValues={form.applicable_framework_ids.map(String)}
         onApply={(v) => set({ applicable_framework_ids: v.map(Number).filter((n) => !Number.isNaN(n)) })}
         multiSelect triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Choose frameworks" triggerClassName={TRIGGER} />,
-      { wide: true }),
+      { wide: true, picker: true }),
     // not a <label>: one around the chips' remove buttons would press the first of them when "Tags" is clicked
     canEdit ? (
       <div key="Tags" className="min-w-0 sm:col-span-2">
-        <span id={tagsLabel} className="mb-1 block text-xs font-semibold text-[#26323d]">Tags</span>
+        <span id={tagsLabel} className="mb-[4px] block text-ds-label text-ds-fg">Tags</span>
         <TagField value={form.tags} onChange={(tags) => set({ tags })} text={tagText} onText={setTagText} used={usedTags} labelledBy={tagsLabel} />
       </div>
     ) : (
       <Value key="Tags" label="Tags" wide>
         {form.tags.length ? (
-          <span className="flex flex-wrap gap-1">
-            {form.tags.map((t) => <span key={t} className="rounded-full border border-[#d5dbe1] px-2 py-0.5 text-[11px] text-[#26323d]">{t}</span>)}
+          <span className="flex flex-wrap gap-[6px]">
+            {form.tags.map((t) => <span key={t} className="inline-flex h-[24px] items-center rounded-full border border-ds-border px-[8px] text-ds-label text-ds-fg-body">{t}</span>)}
           </span>
         ) : ''}
       </Value>
     ),
-    row('Description', form.description,
-      <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={3} className={INPUT} />,
-      { wide: true }),
+    canEdit ? (
+      <FormField key="Description" label="Description" className="sm:col-span-2">
+        <Textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={3} />
+      </FormField>
+    ) : <Value key="Description" label="Description" wide>{form.description}</Value>,
     peopleEditable ? (
       <div key="people" className="sm:col-span-2">
         <ReviewerApproverFields value={people ?? serverPeople} onChange={setPeople} tenantId={tenantId}
@@ -400,26 +380,24 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
 
   const footer = canEdit ? (
     <div className="flex justify-end gap-2">
-      <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
-      <button type="button" onClick={() => save.mutate()} disabled={!dirty || save.isPending || !form.title.trim()} className={PRIMARY}>
-        {save.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Save
-      </button>
+      <Button onClick={onClose}>Cancel</Button>
+      <Button variant="primary" loading={save.isPending} disabled={!dirty || !form.title.trim()} onClick={() => save.mutate()}>Save</Button>
     </div>
   ) : (
     <div className="flex justify-end">
-      <button type="button" onClick={onClose} className={SECONDARY}>Close</button>
+      <Button onClick={onClose}>Close</Button>
     </div>
   );
 
   return (
-    <AnimatedModal isOpen={open} onClose={onClose} title="Details" subtitle={doc?.title} size="lg" footer={footer}
+    <AnimatedModal isOpen={open} onClose={onClose} title="Details" subtitle={doc?.title} size="lg" footer={footer} dirty={canEdit && dirty}
       className="max-sm:max-h-[100dvh] max-sm:h-[100dvh] max-sm:rounded-none">
       {canEdit ? (
-        <form className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5" onSubmit={(e) => { e.preventDefault(); if (dirty && form.title.trim() && !save.isPending) save.mutate(); }}>
+        <form className="grid grid-cols-1 gap-[12px] px-4 py-4 sm:grid-cols-2 sm:px-5" onSubmit={(e) => { e.preventDefault(); if (dirty && form.title.trim() && !save.isPending) save.mutate(); }}>
           {fields}
         </form>
       ) : (
-        <dl className="grid grid-cols-1 gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5">{fields}</dl>
+        <dl className="grid grid-cols-1 gap-[12px] px-4 py-4 sm:grid-cols-2 sm:px-5">{fields}</dl>
       )}
     </AnimatedModal>
   );
