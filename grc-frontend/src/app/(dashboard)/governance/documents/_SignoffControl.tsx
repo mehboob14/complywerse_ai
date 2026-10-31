@@ -330,7 +330,7 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
   const notify = useNotify();
   const refresh = useRefreshAll(documentId);
   const options = useAssigneeOptions(doc?.tenant_id);
-  const { data } = useSignoff(documentId);
+  const { data, isError, error, refetch } = useSignoff(documentId);
   const [prepared, setPrepared] = useState<Participant[]>([]);
   const [reviewers, setReviewers] = useState<Participant[]>([]);
   const [approvers, setApprovers] = useState<Participant[]>([]);
@@ -358,7 +358,8 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
     onError: (e: any) => { notify.error(e, { title: 'Not sent', fallback: 'Add a reviewer or an approver first.' }); },
   });
 
-  if (!data) return null;
+  // a failed read is not "nobody": it says so (nothing shows while it is still loading, as before)
+  if (!data) return isError ? <ErrorState compact title="Couldn't load who reviews and approves" message={errorMessage(error)} onRetry={() => { void refetch(); }} /> : null;
   const status = data.status || doc?.status;
   if (data.route?.custom) return <RouteSummaryCard data={data} />;
   const editable = !readOnly && ['draft', 'pending_review', 'pending_approval'].includes(status);

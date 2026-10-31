@@ -417,22 +417,25 @@ export default function DocumentStudio() {
               <span className="hidden lg:inline">Documents</span>
             </Button>
           )}
-          <div className="flex min-w-[14rem] flex-1 items-center gap-2">
+          {/* the title and its pills wrap as two blocks: the pills stay beside a short title and drop under a long one, instead of squeezing it to a few letters */}
+          <div className="flex min-w-[14rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             {/* two lines at most, the whole title in the tooltip and in Details (a 500-character title no longer pushes the bar out of shape) */}
-            <h1 className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
-            {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
-            <LifecycleHover doc={doc} focusable><StatusPill {...docStatusPill(shownStatus)} className="min-h-[24px]" /></LifecycleHover>
-            <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
-            {doc.newer_version && !archived ? (
-              <StatusPill tone="warning" label={newerWords} className="shrink-0" />
-            ) : inForceNote && (
-              <StatusPill tone="success" label={`v${doc.version_in_force} in force`} className="shrink-0" />
-            )}
-            <StatusPill tone="neutral" label={TYPE_LABEL[doc.doc_type] ?? doc.doc_type} className="hidden shrink-0 sm:inline-flex" />
-            <IconButton label="Details" onClick={() => setPopup('details')}><Info aria-hidden /></IconButton>
+            <h1 className="line-clamp-2 min-w-0 max-w-full break-words text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
+            <div className="flex shrink-0 items-center gap-2">
+              {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
+              <LifecycleHover doc={doc} focusable><StatusPill {...docStatusPill(shownStatus)} className="min-h-[24px]" /></LifecycleHover>
+              <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
+              {doc.newer_version && !archived ? (
+                <StatusPill tone="warning" label={newerWords} className="shrink-0" />
+              ) : inForceNote && (
+                <StatusPill tone="success" label={`v${doc.version_in_force} in force`} className="shrink-0" />
+              )}
+              <StatusPill tone="neutral" label={TYPE_LABEL[doc.doc_type] ?? doc.doc_type} className="hidden shrink-0 sm:inline-flex" />
+              <IconButton label="Details" onClick={() => setPopup('details')}><Info aria-hidden /></IconButton>
+            </div>
           </div>
 
-          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
             {canEdit && (
               <>
                 <Button leftIcon={<Sparkles aria-hidden />} loading={edit.isPending} disabled={editing.disabled} onClick={() => edit.mutate(false)} aria-label={editing.label} title={editing.title}>
@@ -443,7 +446,8 @@ export default function DocumentStudio() {
               </>
             )}
             {primary && (
-              <Button variant="primary" leftIcon={primary.kind === 'submit' ? <Send aria-hidden /> : <PenLine aria-hidden />} onClick={act}>{primary.label}</Button>
+              // (no icon on a phone: Edit, the action, Download and More then fit one row at 390 wide)
+              <Button variant="primary" leftIcon={primary.kind === 'submit' ? <Send aria-hidden className="hidden sm:block" /> : <PenLine aria-hidden className="hidden sm:block" />} onClick={act}>{primary.label}</Button>
             )}
             <Menu label="Download" items={downloadItems} />
             {downloading && <span role="status" className="inline-flex items-center"><Loader2 className="h-[16px] w-[16px] animate-spin text-ds-fg-muted" aria-hidden /><span className="sr-only">Downloading</span></span>}
@@ -458,6 +462,10 @@ export default function DocumentStudio() {
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
           {accessQ.isError && (
             <ErrorState compact title="Couldn't read what you may do with this document" message={errorMessage(accessQ.error)} onRetry={() => { void accessQ.refetch(); }} />
+          )}
+          {/* a failed read of the proposed changes is not "none waiting": the banner and the tab would be missing without a word (a refusal or a server without them is the answer, not a failure) */}
+          {proposalsQ.isError && loadFailure(proposalsQ.error) === 'failed' && (
+            <ErrorState compact title="Couldn't check for proposed changes" message={errorMessage(proposalsQ.error)} onRetry={() => { void proposalsQ.refetch(); }} />
           )}
           {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
           {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
@@ -509,7 +517,7 @@ export default function DocumentStudio() {
             <TabPanel key={t.key} tabKey={t.key}>
               {t.key === 'document' && view === 'document' && (
                 <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} htmlFailed={htmlQ.isError ? errorMessage(htmlQ.error) : null}
-                  onRetryHtml={() => { void htmlQ.refetch(); }} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
+                  onRetryHtml={loadFailure(htmlQ.error) === 'failed' ? () => { void htmlQ.refetch(); } : undefined} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
                   chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={mayChange} reading={reading} onStopReading={() => setReading(null)}
                   onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
                   ackedVersion={ackedVersion}
