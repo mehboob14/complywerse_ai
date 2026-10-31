@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, Menu, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
@@ -12,6 +12,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
+import { MAIN_MENU_ID, useShellMenu } from './ShellMenu';
+import { readCollapsed, writeCollapsed } from './shellMode';
 
 const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise',
   decide: 'A proposed change to decide on', revise: 'Your change was not accepted' };
@@ -85,6 +87,9 @@ export default function Header() {
   const queryClient = useQueryClient();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userButtonRef = useRef<HTMLButtonElement>(null);
+  const { open: menuOpen, setOpen: setMenuOpen } = useShellMenu();
+  const dropdownIds = { approvals: useId(), notifications: useId(), user: useId() };
 
   const { data: me } = useQuery({
     queryKey: ['current-user'],
@@ -104,9 +109,11 @@ export default function Header() {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const notifButtonRef = useRef<HTMLButtonElement>(null);
 
   const [approvalsOpen, setApprovalsOpen] = useState(false);
   const approvalsRef = useRef<HTMLDivElement>(null);
+  const approvalsButtonRef = useRef<HTMLButtonElement>(null);
   const [chatQ, setChatQ] = useState('');
 
   const submitChat = (e?: React.FormEvent) => {
@@ -208,13 +215,36 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Escape closes an open dropdown, and gives focus back to its button when focus was inside it
+  useEffect(() => {
+    if (!approvalsOpen && !notifOpen && !isUserMenuOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const dropdowns = [
+        { open: approvalsOpen, close: () => setApprovalsOpen(false), wrap: approvalsRef, button: approvalsButtonRef },
+        { open: notifOpen, close: () => setNotifOpen(false), wrap: notifRef, button: notifButtonRef },
+        { open: isUserMenuOpen, close: () => setIsUserMenuOpen(false), wrap: userMenuRef, button: userButtonRef },
+      ];
+      dropdowns.forEach(({ open, close, wrap, button }) => {
+        if (!open) return;
+        close();
+        if (wrap.current?.contains(document.activeElement)) button.current?.focus();
+      });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [approvalsOpen, notifOpen, isUserMenuOpen]);
+
   const handleLogout = async () => {
     try {
       await apiClient.post('/auth/logout');
     } catch (error) {
       console.error('Logout failed:', error);
     }
+    // the collapsed sidebar is a preference of this browser, not of the session: it survives signing out
+    const collapsedSidebar = readCollapsed();
     localStorage.clear();
+    writeCollapsed(collapsedSidebar);
     sessionStorage.clear(); // Clear permission cache so next user gets fresh permissions
     queryClient.clear();
     setIsUserMenuOpen(false);
@@ -224,6 +254,18 @@ export default function Header() {
 
   return (
     <header className="top-nav flex h-12 items-center justify-between px-4 lg:px-5">
+      {/* Below lg the menu is the off-canvas drawer (Sidebar.tsx); from lg there is the sidebar, or on a middle-width window the rail's own button. */}
+      <button
+        type="button"
+        onClick={(e) => { e.currentTarget.focus({ preventScroll: true }); setMenuOpen(true); }}
+        aria-label="Open menu"
+        aria-haspopup="dialog"
+        aria-expanded={menuOpen}
+        aria-controls={MAIN_MENU_ID}
+        className="-ml-1 mr-1 inline-flex min-h-ds-control min-w-[var(--ds-control-h)] flex-shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] lg:hidden"
+      >
+        <Menu size={20} strokeWidth={1.75} />
+      </button>
       <div className="flex flex-1 min-w-0 self-stretch items-center px-1">
         {(() => {
           // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
@@ -265,7 +307,7 @@ export default function Header() {
         })()}
       </div>
 
-      <div className="ml-3 flex items-center gap-2.5">
+      <div className="ml-2 flex items-center gap-1.5 sm:ml-3 sm:gap-2.5">
         {/* ComplyChat — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
         {canAskComplyChat && (
@@ -283,10 +325,11 @@ export default function Header() {
             </button>
           </form>
         )}
-        {/* on a narrower screen the Documents tabs need that room: ComplyChat is an icon there */}
-        {canAskComplyChat && inDocumentsArea(pathname) && (
+        {/* where the input is not shown (below md; in the Documents area, which needs the room for its tabs, below lg) ComplyChat is an icon.
+            It opens what the input opens when it is submitted empty: the chat. */}
+        {canAskComplyChat && (
           <Link href="/complychat" aria-label="Ask ComplyChat" title="Ask ComplyChat"
-            className="hidden rounded-md p-1.5 text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 md:inline-flex lg:hidden">
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${inDocumentsArea(pathname) ? 'lg:hidden' : 'md:hidden'}`}>
             <Sparkles size={18} strokeWidth={1.75} />
           </Link>
         )}
@@ -299,6 +342,7 @@ export default function Header() {
         {/* Pending compliance approvals — opens a dropdown (not a page). */}
         <div className="relative" ref={approvalsRef}>
           <button
+            ref={approvalsButtonRef}
             type="button"
             onClick={() => {
               // opened: the list as it is now (an item done a moment ago is gone)
@@ -307,8 +351,10 @@ export default function Header() {
             }}
             title="Pending approvals"
             aria-label="Pending approvals"
+            aria-haspopup="dialog"
             aria-expanded={approvalsOpen}
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+            aria-controls={approvalsOpen ? dropdownIds.approvals : undefined}
+            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
           >
             <ClipboardCheck size={18} strokeWidth={1.75} />
             {pendingApprovalCount > 0 && (
@@ -318,7 +364,7 @@ export default function Header() {
             )}
           </button>
           {approvalsOpen && (
-            <div className={`${DROPDOWN} sm:w-96`}>
+            <div id={dropdownIds.approvals} role="dialog" aria-label="Pending approvals" className={`${DROPDOWN} sm:w-96`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Pending Approvals</span>
                 {pendingApprovalCount > 0 && (
@@ -394,14 +440,17 @@ export default function Header() {
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
           <button
+            ref={notifButtonRef}
             type="button"
             onClick={() => {
               if (!notifOpen) refetchNotifs();
               setNotifOpen(!notifOpen);
             }}
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
             aria-label="Notifications"
+            aria-haspopup="dialog"
             aria-expanded={notifOpen}
+            aria-controls={notifOpen ? dropdownIds.notifications : undefined}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -413,7 +462,7 @@ export default function Header() {
             )}
           </button>
           {notifOpen && (
-            <div className={`${DROPDOWN} sm:w-80`}>
+            <div id={dropdownIds.notifications} role="dialog" aria-label="Notifications" className={`${DROPDOWN} sm:w-80`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Notifications</span>
                 <div className="flex items-center gap-2">
@@ -477,23 +526,26 @@ export default function Header() {
         {/* User avatar + menu */}
         <div className="relative" ref={userMenuRef}>
           <button
+            ref={userButtonRef}
             type="button"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
-            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
             aria-label="User menu"
+            aria-haspopup="dialog"
             aria-expanded={isUserMenuOpen}
+            aria-controls={isUserMenuOpen ? dropdownIds.user : undefined}
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">
               {initials}
             </span>
             <ChevronDown
               size={14}
-              className={`text-[var(--color-text-muted)] transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`}
+              className={`hidden text-[var(--color-text-muted)] transition-transform sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`}
             />
           </button>
 
           {isUserMenuOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+            <div id={dropdownIds.user} role="dialog" aria-label="Account" className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
               <div className="border-b border-[var(--color-border)] px-3 py-2.5">
                 <p className="text-sm font-semibold text-[var(--color-text)]">{displayName}</p>
                 {userEmail && (
