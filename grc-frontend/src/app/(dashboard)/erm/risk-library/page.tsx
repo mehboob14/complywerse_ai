@@ -7,7 +7,7 @@ import { Fragment, Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookMarked, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PageLoader } from '@/components/ui';
@@ -17,7 +17,7 @@ import { PAGE_SIZE, addressOf, apiParams, filtersFrom, rangeText, type Filters, 
 
 const SELECT = 'mt-1 h-9 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-2.5 text-[13px] text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
 const LABEL = 'block text-[12px] font-medium text-[#586472]';
-const VIEWS: { value: View; label: string }[] = [{ value: 'all', label: 'All' }, { value: 'open', label: 'Not in register' }, { value: 'added', label: 'In register' }];
+const VIEWS: { value: View; label: string }[] = [{ value: 'all', label: 'All' }, { value: 'open', label: 'Not added' }, { value: 'added', label: 'In register' }];
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
@@ -77,16 +77,8 @@ function Library() {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#e6f6f3] text-[#0f766e]">
-            <BookMarked aria-hidden className="h-6 w-6" strokeWidth={1.75} />
-          </span>
-          <div>
-            <h1 className="!text-[22px] font-semibold leading-7 text-[#1f2933]">Risk Library</h1>
-            <p className="text-[13px] leading-5 text-[#586472]">Risks a standard lists, ready to move into your register.</p>
-          </div>
-        </div>
+      <header className="flex items-center justify-end">
+        <h1 className="sr-only">Risk Library</h1>
         <Link href="/erm/risks" className="inline-flex h-9 items-center rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-4 text-[14px] font-medium text-[#26323d] hover:bg-[#f4f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
           Risk register
         </Link>
@@ -103,7 +95,7 @@ function Library() {
             <Stat label="In your register" value={data.in_register_total} />
           </section>
 
-          <section aria-label="Filters" className="grid gap-3 rounded-xl border border-[#d8dee4] bg-[#ffffff] p-3 sm:grid-cols-2 lg:grid-cols-5">
+          <section aria-label="Filters" className="grid gap-3 rounded-xl border border-[#d8dee4] bg-[#ffffff] p-3 sm:grid-cols-2 xl:grid-cols-3">
             <div>
               <label htmlFor="rl-framework" className={LABEL}>Framework</label>
               <select id="rl-framework" className={SELECT} value={framework.key} onChange={(e) => change({ framework: e.target.value, family: '', objective: '' })}>
@@ -133,7 +125,7 @@ function Library() {
               <div role="group" aria-labelledby="rl-view" className="mt-1 flex h-9 overflow-hidden rounded-lg border border-[#c9d1d9]">
                 {VIEWS.map((v) => (
                   <button key={v.value} type="button" aria-pressed={filters.view === v.value} onClick={() => change({ view: v.value })}
-                    className={`flex-1 px-2 text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e] ${filters.view === v.value ? 'bg-[#0f766e] text-[#ffffff]' : 'bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]'}`}>
+                    className={`flex-1 whitespace-nowrap px-2 text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e] ${filters.view === v.value ? 'bg-[#0f766e] text-[#ffffff]' : 'bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]'}`}>
                     {v.label}
                   </button>
                 ))}
@@ -176,20 +168,20 @@ function Library() {
                               <p className="text-[12px] leading-4 text-[#586472]">{r.family_id} {r.family_name}</p>
                             </td>
                             <td className="px-3 py-3">
-                              <span title={r.controls.map((c) => c.control_id).join(', ')} className="inline-flex h-6 items-center rounded-full bg-[#eef1f4] px-2.5 text-[12px] font-medium text-[#26323d]">
+                              <span title={r.controls.map((c) => c.control_id).join(', ')} className="inline-flex h-6 items-center whitespace-nowrap rounded-full bg-[#eef1f4] px-2.5 text-[12px] font-medium text-[#26323d]">
                                 {r.controls.length} {r.controls.length === 1 ? 'control' : 'controls'}
                               </span>
                             </td>
                             <td className="px-3 py-3 text-right">
                               <div className="flex flex-wrap items-center justify-end gap-2">
                                 {r.in_register && (
-                                  <Link href={`/erm/risks/${r.in_register.risk_id}`} className="inline-flex h-7 items-center gap-1 rounded-full bg-[#dcfce7] px-2.5 text-[12px] font-medium text-[#166534] hover:bg-[#bbf7d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                                  <Link href={`/erm/risks/${r.in_register.risk_id}`} className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full bg-[#dcfce7] px-2.5 text-[12px] font-medium text-[#166534] hover:bg-[#bbf7d0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
                                     <Check aria-hidden className="h-3.5 w-3.5" /> In register
                                   </Link>
                                 )}
                                 {mayAdd && (
                                   <button type="button" onClick={() => setAdding(r)}
-                                    className={`inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${r.in_register ? 'border border-[#c9d1d9] bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]' : 'bg-[#0f766e] text-[#ffffff] hover:bg-[#115e59]'}`}>
+                                    className={`inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${r.in_register ? 'border border-[#c9d1d9] bg-[#ffffff] text-[#26323d] hover:bg-[#f4f6f8]' : 'bg-[#0f766e] text-[#ffffff] hover:bg-[#115e59]'}`}>
                                     <Plus aria-hidden className="h-3.5 w-3.5" /> {r.in_register ? 'Add again' : 'Add to register'}
                                   </button>
                                 )}
