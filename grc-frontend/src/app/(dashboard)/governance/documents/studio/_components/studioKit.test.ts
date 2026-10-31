@@ -49,6 +49,10 @@ test('no text under 12px, and no mint focus ring of its own', () => {
   }
   assert.deepEqual(small, []);
   assert.deepEqual(mint, []);
+  // the platform's multi-select draws a round 11px count beside "3 selected"; `compact` leaves it out (the button says it already)
+  const setup = read('_components/SetupFields.tsx');
+  const from = setup.indexOf('<MultiSelectDropdown');
+  assert.ok(from >= 0 && /\bcompact\b/.test(setup.slice(from, setup.indexOf('/>', from))), 'the setup\'s multi-select is compact: no 11px count badge');
 });
 
 test('every message is the kit\'s (useNotify / useReportedMutation), none the old toast with the server\'s uncleaned text', () => {

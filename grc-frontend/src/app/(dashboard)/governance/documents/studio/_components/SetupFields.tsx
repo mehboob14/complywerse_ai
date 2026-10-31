@@ -111,7 +111,8 @@ function Many({ label, items, value, onChange, create = true, disabled }: {
   const chosen = all.filter((i) => value.includes(i.value)).map((i) => i.label);
   return (
     <Field label={label}>
-      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={take} triggerVariant="input" size="sm" showAvatars={false}
+      {/* compact: the button already says "3 selected"; the round 11px count beside it said it twice, under the platform's 12px floor */}
+      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={take} triggerVariant="input" size="sm" showAvatars={false} compact
         forceSearch placeholder="Choose…" searchPlaceholder={create ? 'Search or type your own' : 'Search'} className="w-full" triggerClassName="w-full"
         onCreate={create ? (t) => onChange([...value, t]) : undefined} disabled={disabled} />
       {/* one choice is named on the button; several are counted there and named here */}
