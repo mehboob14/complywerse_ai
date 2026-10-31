@@ -52,7 +52,7 @@ test('the drawer is a modal dialog that takes focus, keeps it, closes on Escape 
 test('the layout switches on the same widths as the mode: no sidebar in the page below lg, a 64px rail to xl, the full 240px from xl', () => {
   assert.match(sidebar, /'hidden lg:flex flex-col/);
   assert.match(sidebar, /'w-\[64px\] xl:w-60'/);
-  assert.match(sidebar, /aria-controls=\{MAIN_MENU_ID\}/, 'the rail button names the drawer it opens');
+  assert.match(sidebar, /aria-controls=\{menuOpen \? MAIN_MENU_ID : undefined\}/, 'the rail button names the drawer it opens while it is open (the drawer is not in the page when closed)');
 });
 
 test('the keyboard focus ring reads (3:1) on the white menu and on the mint row that is lit', () => {

@@ -10,7 +10,7 @@ const header = readFileSync('src/components/layout/Header.tsx', 'utf8');
 test('below lg the top bar has the button that opens the menu drawer, and from lg it is gone', () => {
   assert.match(header, /lg:hidden"\s*\n?\s*>\s*\n?\s*<Menu/, 'the menu button shows below lg only');
   assert.match(header, /aria-label="Open menu"/);
-  assert.match(header, /aria-controls=\{MAIN_MENU_ID\}/);
+  assert.match(header, /aria-controls=\{menuOpen \? MAIN_MENU_ID : undefined\}/, 'names the drawer while it is open: the drawer is not in the page when closed');
   assert.match(header, /aria-expanded=\{menuOpen\}/);
 });
 

@@ -253,7 +253,7 @@ export default function Header() {
         aria-label="Open menu"
         aria-haspopup="dialog"
         aria-expanded={menuOpen}
-        aria-controls={MAIN_MENU_ID}
+        aria-controls={menuOpen ? MAIN_MENU_ID : undefined}
         className="-ml-1 mr-1 inline-flex min-h-ds-control min-w-[var(--ds-control-h)] flex-shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] lg:hidden"
       >
         <Menu size={20} strokeWidth={1.75} />

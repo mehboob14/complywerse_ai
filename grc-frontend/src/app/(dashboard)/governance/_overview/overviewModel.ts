@@ -54,10 +54,9 @@ export const ATTENTION: readonly Attention[] = [
   // the library's review lens uses the scorecard's own definition (approved and in-force documents past their review date); the Reviews tab
   // of the Documents bar lists every document that is not archived or expired, so its count differs
   { key: 'overdue_reviews', label: 'Overdue reviews', href: `${LIBRARY}?review=overdue`, tone: 'danger', fallback: 'overdue', exact: true },
-  {
-    key: 'expiring_documents_30d', label: 'Documents expiring in 30 days', href: `${LIBRARY}?status=approved,published`, tone: 'warning', fallback: 'expiring', exact: false,
-    gap: 'No page filters documents by expiry date; the library is opened on approved and published documents, the ones the count draws from.',
-  },
+  // the library's expiry filter is the server rule restated for the browser (approved or in force, expiry from now to now + 30 days; proven on 810 combinations in
+  // libraryModel's tests): exact while the library is not cut (it filters the documents it has loaded, and says so when it is cut)
+  { key: 'expiring_documents_30d', label: 'Documents expiring in 30 days', href: `${LIBRARY}?expiry=30d`, tone: 'warning', fallback: 'expiring', exact: true },
   {
     key: 'exceptions_attention', label: 'Exceptions pending or expiring', href: '/governance/exceptions', tone: 'warning', fallback: 'exceptions', exact: false,
     gap: 'The Exceptions page keeps its status filter in the page, not in the address, so it opens unfiltered.',

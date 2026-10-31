@@ -194,7 +194,7 @@ export default function Sidebar() {
                 aria-label="Open menu"
                 aria-haspopup="dialog"
                 aria-expanded={menuOpen}
-                aria-controls={MAIN_MENU_ID}
+                aria-controls={menuOpen ? MAIN_MENU_ID : undefined}
               >
                 <Menu size={17} strokeWidth={1.75} />
               </button>
