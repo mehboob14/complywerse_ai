@@ -15,3 +15,14 @@ export function useMinWidth(px: number, server = true): boolean {
     () => server,
   );
 }
+
+function subscribeToResize(notify: () => void): () => void {
+  window.addEventListener('resize', notify);
+  return () => window.removeEventListener('resize', notify);
+}
+
+/** Something worked out from the window's width (`select`), kept up to date as it is resized. The component re-renders only when the answer changes (a number or a
+ *  string compares by value), not at every pixel of the resize. `server` is the answer for the first render, before the real width is known. */
+export function useViewport<T extends string | number | boolean>(select: (width: number) => T, server: T): T {
+  return useSyncExternalStore(subscribeToResize, () => select(window.innerWidth), () => server);
+}

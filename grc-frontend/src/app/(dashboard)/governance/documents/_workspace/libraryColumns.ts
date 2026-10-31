@@ -77,10 +77,20 @@ export const GUTTER = 63;
 /** The width of the register's frame at a window width. */
 export const frameWidth = (viewport: number): number => viewport - sidebarAt(viewport) - GUTTER;
 
+/** Of these columns, the ones drawn at a window width (the same rule the classes say: `placeClass`). */
+export function drawn(columns: readonly Column[], viewport: number, peeking = false): Column[] {
+  return columns.filter((c) => COLUMN_FROM[c.id] <= viewport && (!peeking || (PEEK_FROM[c.id] ?? Infinity) <= viewport));
+}
+
 /** The columns drawn at a window width, in order, for the person's choice (`hidden`: the optional columns they switched off). */
 export function shownAt(viewport: number, hidden: readonly string[], peeking = false): Column[] {
-  return visibleColumns(hidden).filter((c) => COLUMN_FROM[c.id] <= viewport && (!peeking || (PEEK_FROM[c.id] ?? Infinity) <= viewport));
+  return drawn(visibleColumns(hidden), viewport, peeking);
 }
+
+/** How many cells a row that spans the whole table must span at a window width: the drawn columns, and the tick box column. A span of more than the table has adds a column
+ *  of its own to a fixed layout and takes its share of the width, so this is the count of what is DRAWN, not of what is chosen. */
+export const spanAt = (columns: readonly Column[], viewport: number, peeking: boolean, selectable: boolean): number =>
+  drawn(columns, viewport, peeking).length + (selectable ? 1 : 0);
 
 /** The width the drawn columns ask for: the Document column at its least, the tick box column when there is one. */
 export const needAt = (viewport: number, hidden: readonly string[], peeking = false, selectable = true): number =>

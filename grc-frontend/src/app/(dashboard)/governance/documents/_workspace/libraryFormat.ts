@@ -1,8 +1,7 @@
 // Small words for the library's cells and drawer: how long ago, what kind of file, how big, how often a review comes round.
 // Pure, so `node --test` runs libraryFormat.test.ts against it.
+import { formatDate } from '../../../../../lib/format.ts';
 import { parseUtc } from '../../../../../lib/serverTime.ts';
-
-const dateFmt = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago", then the date ("12 Oct 2026"). A time in the future (a clock a little ahead) is "just now". */
 export function relativeTime(value: string | null | undefined, now: Date = new Date()): string {
@@ -14,7 +13,7 @@ export function relativeTime(value: string | null | undefined, now: Date = new D
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
   const days = Math.floor(hours / 24);
-  return days < 7 ? `${days} d ago` : dateFmt.format(at);
+  return days < 7 ? `${days} d ago` : formatDate(at, { calendar: true });      // "5 Nov 2026": the platform's date, the UTC day as before
 }
 
 export type FileKind = 'pdf' | 'word' | 'excel' | 'powerpoint' | 'text' | 'other';

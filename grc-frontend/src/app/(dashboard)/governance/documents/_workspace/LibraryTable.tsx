@@ -41,10 +41,11 @@ import {
   type FoldChange, type FoldView, type FolderNode, type MoveTarget,
 } from './libraryFolders';
 import { clampPage } from './libraryFormat';
-import { WIDTH_CLASS, cardFields, placeClass } from './libraryColumns';
+import { WIDTH_CLASS, cardFields, placeClass, spanAt } from './libraryColumns';
 import { compareDocs, nextSort, type Lookups, type Sort } from './libraryModel';
 import { isCut, pagerNoun } from './libraryNumbers';
 import { PAGE_SIZES, type Density } from './libraryPrefs';
+import { useViewport } from './useMinWidth';
 import {
   actionableIds, bulkActionsFor, drawnRows, pageOf, rowRights, selectedLabel, tickState, toggleAll, toggleOne, visibleColumns,
   type BulkId, type Column, type DrawnRow, type Open, type TickState,
@@ -133,12 +134,12 @@ const PIN_TITLE_AFTER_TICK = 'sticky left-[44px] z-[1]';
 const EDGE_SHADOW = 'shadow-[1px_0_0_0_var(--ds-border-strong),6px_0_8px_-6px_rgba(31,41,51,0.25)]';
 const TICK_COLUMN = 'w-[44px] [&&]:!pr-0';
 
-/** A tick box with a target of its own (the label around it is as big as a control), which is not a click on the row. */
+/** A tick box with a target of its own (the label around it is as big as a control, and a press anywhere on it ticks), which is not a click on the row. */
 function Tick({ label, checked, state, onChange }: { label: string; checked?: boolean; state?: TickState; onChange: () => void }) {
   return (
-    <span data-no-peek className="-m-[8px] grid h-[var(--ds-control-h)] w-[var(--ds-control-h)] shrink-0 place-items-center p-[8px] [&_label]:p-0">
+    <label data-no-peek className="-m-[8px] grid h-[var(--ds-control-h)] w-[var(--ds-control-h)] shrink-0 cursor-pointer place-items-center">
       <Checkbox aria-label={label} checked={checked ?? state === 'all'} indeterminate={state === 'some'} onChange={onChange} />
-    </span>
+    </label>
   );
 }
 
@@ -264,6 +265,8 @@ export function LibraryTable({
   // approvers signing it in its review (the server refuses a bulk approval), and Publish publishes only approved documents
   const bulkActions = bulkActionsFor(canEdit, showingArchived, !!onBulkRestore);
   const selectable = bulkActions.length > 0;
+  // the cells a full-width row (a folder, the versions, "Show more") spans: what the window draws, never more (libraryColumns.spanAt)
+  const span = useViewport((w) => spanAt(columns, w, peeking, selectable), columns.length + (selectable ? 1 : 0));
   const ticked = actionableIds(selected, entries);
   const runBulk = (id: BulkId, ids: number[]) => {
     switch (id) {
@@ -384,7 +387,7 @@ export function LibraryTable({
         </Tr>
         {r.open === 'all' && (
           <Tr>
-            <Td colSpan={columns.length + (selectable ? 1 : 0)} className="bg-ds-surface-subtle [&&]:!py-[4px]">
+            <Td colSpan={span} className="bg-ds-surface-subtle [&&]:!py-[4px]">
               {/* pinned to the left edge, so the versions stay in view when the table has scrolled sideways */}
               <div className="sticky left-[12px] w-full max-w-[min(44rem,calc(100vw-4rem))] py-[4px]" style={{ paddingLeft: selectable ? 24 : 0 }}>
                 <Versions doc={doc} depth={r.depth + offset} />
@@ -528,7 +531,7 @@ export function LibraryTable({
                           <FolderHeadRow
                             node={node}
                             open={item.open}
-                            colSpan={columns.length + (selectable ? 1 : 0)}
+                            colSpan={span}
                             tick={tickFolder(node)}
                             headId={headId(node)}
                             controls={[...node.folders.map(headId), ...(node.top.length > 0 ? [docsId(node)] : [])]}
@@ -542,7 +545,7 @@ export function LibraryTable({
                         {item.rows.map((r) => renderRow(r, node.depth + 1))}
                         {node.top.length > FIRST_SHOWN && (
                           <ShowMoreRow
-                            colSpan={columns.length + (selectable ? 1 : 0)}
+                            colSpan={span}
                             indent={(selectable ? 24 : 0) + (node.depth + 1) * STEP}
                             hidden={item.remaining}
                             step={showMoreStep(item.remaining)}

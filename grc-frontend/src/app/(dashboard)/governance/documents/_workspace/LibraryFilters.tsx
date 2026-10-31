@@ -39,6 +39,8 @@ export interface LibraryFiltersProps {
   total: number;
   /** how many documents the page loaded and how many exist: the words say "loaded" when they differ (libraryNumbers.ts) */
   listSize: { loaded: number; total: number | null | undefined };
+  /** the list has not answered yet: no count is announced (it would say "0 documents") */
+  loading?: boolean;
   /** built-in first, then the person's own (SavedView.builtIn) */
   views: SavedView[];
   activeViewId: string | null;
@@ -186,7 +188,7 @@ function PopoverMenu({ title, label, width, align = 'left', buttonClass, button,
           tabIndex={-1}
           onKeyDown={onPanelKeyDown}
           style={{ left: at.left, top: at.top, bottom: at.bottom, width: at.width, maxHeight: at.maxHeight }}
-          className="fixed z-[70] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface text-ds-body text-ds-fg-body shadow-ds-pop focus:outline-none"
+          className="fixed z-[70] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface text-ds-body text-ds-fg-body shadow-ds-pop focus-visible:outline-none"
         >
           {children({ close, refocus })}
         </div>,
@@ -385,7 +387,7 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
 // ─── The bar ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function LibraryFilters({
-  filters, onChange, options, canFilterMine, shown, total, listSize, views, activeViewId, onApplyView, onSaveView, onDeleteView,
+  filters, onChange, options, canFilterMine, shown, total, listSize, loading = false, views, activeViewId, onApplyView, onSaveView, onDeleteView,
   columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport, view, onView,
 }: LibraryFiltersProps) {
   const searchRef = useRef<HTMLInputElement>(null);
@@ -413,7 +415,7 @@ export function LibraryFilters({
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-2">
       {/* The count, for a screen reader (the header says it in words, the chips below when filtering) */}
-      <span role="status" aria-live="polite" className="sr-only">{resultLine({ shown, scope: total, filtering, loaded: listSize.loaded, total: listSize.total })}</span>
+      <span role="status" aria-live="polite" className="sr-only">{loading ? 'Loading the documents' : resultLine({ shown, scope: total, filtering, loaded: listSize.loaded, total: listSize.total })}</span>
 
       {/* One group: the search, the pills, then (right) layout, views, columns, export. It wraps on narrow screens. */}
       <div className="flex flex-wrap items-center gap-2">
@@ -444,6 +446,8 @@ export function LibraryFilters({
           ) : undefined}
         />
 
+        {/* on a phone the pills are one line that scrolls along (four lines of pills would push the documents off the first screen); from 640px they join the bar */}
+        <div className="-mx-[2px] flex min-w-0 max-w-full items-center gap-2 overflow-x-auto px-[2px] py-[2px] max-sm:w-full sm:contents">
         <FilterPill title="Type" items={options.types} selected={filters.types} onApply={(next) => set({ types: next })} />
         <FilterPill title="Status" items={options.statuses} selected={filters.statuses} onApply={(next) => set({ statuses: nextStatuses(filters.statuses, next) })} />
         <FilterPill title="Owner" items={options.owners} selected={filters.owners} onApply={(next) => set({ owners: next })} forceSearch />
@@ -506,6 +510,7 @@ export function LibraryFilters({
             Mine
           </button>
         )}
+        </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* the layout: the register table, or a folder for each department (the same documents, the same filters) */}

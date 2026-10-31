@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  COLUMN_FROM, COLUMN_WIDTH, GUTTER, PEEK_FROM, PEEK_PANEL, TICK_WIDTH, TITLE_MIN, WIDTH_CLASS, cardFields, columnClass, fitsAt, frameWidth, needAt, peekClass, placeClass,
-  roomAt, shownAt, sidebarAt,
+  COLUMN_FROM, COLUMN_WIDTH, GUTTER, PEEK_FROM, PEEK_PANEL, TICK_WIDTH, TITLE_MIN, WIDTH_CLASS, cardFields, columnClass, drawn, fitsAt, frameWidth, needAt, peekClass,
+  placeClass, roomAt, shownAt, sidebarAt, spanAt,
 } from './libraryColumns.ts';
 import { COLUMNS, visibleColumns } from './libraryTableLogic.ts';
 import { DEFAULT_PREFS, OPTIONAL_COLUMNS } from './libraryPrefs.ts';
@@ -119,4 +119,15 @@ test('a phone card says the status always, and the owner and the next review unl
   assert.deepEqual(cardFields(['review']), ['lifecycle', 'owner']);
   assert.deepEqual(cardFields(['lifecycle']), ['lifecycle', 'owner', 'review']);                      // the status is not optional on a card: a document with no status said is a document unsaid
   assert.deepEqual(cardFields(['owner', 'review', 'lifecycle']), ['lifecycle']);
+});
+
+test('a row that spans the whole table spans what is drawn, never more: the count the browser measured in the header (a longer span adds a column of its own to a fixed layout)', () => {
+  const chosen = visibleColumns(DEFAULT_PREFS.hidden);
+  // measured header cells (the tick box column included): 1440 -> 8, 1280 -> 7, 1024 -> 6, 768 -> 5
+  assert.deepEqual([1440, 1280, 1024, 768].map((w) => spanAt(chosen, w, false, true)), [8, 7, 6, 5]);
+  assert.equal(spanAt(chosen, 1500, false, true), 9);                                  // the Type column appears from 1470
+  assert.equal(spanAt(chosen, 1280, false, false), 6);                                 // a person with no bulk action has no tick column
+  assert.equal(spanAt(chosen, 1280, true, true), 4);                                   // the details panel beside it: the tick box, the Document, the status, the menu
+  assert.deepEqual(drawn(chosen.filter((c) => c.id !== 'department'), 1920, false).map((c) => c.id), shownAt(1920, DEFAULT_PREFS.hidden).map((c) => c.id));   // the Folders view leaves Department out
+  for (const w of WIDTHS) assert.equal(spanAt(visibleColumns(EVERYTHING), w, false, true), shownAt(w, EVERYTHING).length + 1);
 });

@@ -94,7 +94,8 @@ export function TitleBlock({ doc, match, childCount, open, parentTitle, compact,
   onOpenDoc: (id: number) => void;
 }) {
   const archived = doc.status === 'archived';
-  // the clamp is on the wrapper and the link stays inline, so only the words are the link: a click beside a short title opens the details panel
+  // the clamp is on the wrapper and the link stays inline, so only the words are the link: a click beside a short title opens the details panel (3px of padding
+  // give the words a 24px target without moving a line)
   const title = (
     <div dir="auto" className={`relative min-w-0 text-ds-body [overflow-wrap:anywhere] ${compact ? 'truncate' : 'line-clamp-2'}`}>
       <Link
@@ -105,7 +106,7 @@ export function TitleBlock({ doc, match, childCount, open, parentTitle, compact,
           e.stopPropagation();                                 // the row behind it opens the details panel
           if (plainClick(e)) { e.preventDefault(); onOpenDoc(doc.id); }
         }}
-        className={`rounded-ds-control hover:text-ds-primary-text hover:underline focus-visible:bg-ds-primary-soft focus-visible:text-ds-primary-text focus-visible:underline focus-visible:outline-none ${match ? 'font-[600] text-ds-fg' : 'text-ds-fg-muted'}`}
+        className={`rounded-ds-control py-[3px] hover:text-ds-primary-text hover:underline focus-visible:bg-ds-primary-soft focus-visible:text-ds-primary-text focus-visible:underline focus-visible:outline-none ${match ? 'font-[600] text-ds-fg' : 'text-ds-fg-muted'}`}
       >
         {doc.title}
         {parentTitle && <span className="sr-only">, under {parentTitle}</span>}
@@ -178,7 +179,7 @@ export function TypeCell({ doc }: { doc: GovDoc }) {
 export function LifecycleCell({ doc }: { doc: GovDoc }) {
   return (
     <LifecycleHover doc={doc} focusable>
-      <StatusPill size="sm" {...statusPill(documentStatus, doc.status)} />
+      <span className="inline-flex py-[2px]"><StatusPill size="sm" {...statusPill(documentStatus, doc.status)} /></span>
     </LifecycleHover>
   );
 }

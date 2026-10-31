@@ -138,7 +138,7 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
             onClick={(e) => e.stopPropagation()}
             onKeyDown={onPopKey}
             style={{ left: place.left, top: place.top, bottom: place.bottom, maxHeight: place.maxHeight, width: WIDTH }}
-            className="fixed z-[70] max-w-[calc(100vw-16px)] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface p-[12px] text-left shadow-ds-pop focus:outline-none"
+            className="fixed z-[70] max-w-[calc(100vw-16px)] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface p-[12px] text-left shadow-ds-pop focus-visible:outline-none"
           >
             <p className="mb-2 text-ds-body font-[600] text-ds-fg">Frameworks · {total}</p>
             <FrameworkList

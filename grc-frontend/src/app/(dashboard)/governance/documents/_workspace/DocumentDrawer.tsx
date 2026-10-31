@@ -153,7 +153,7 @@ function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; cou
         </dl>
       </Section>
       <Section title="Attestation">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-[12px]">
           {att.requested && <AttestationRing pct={att.pct} done={att.done ?? undefined} total={att.total ?? undefined} size={44} />}
           <div className="min-w-0">
             <p className="text-ds-body font-[600] text-ds-fg">{att.headline}</p>
@@ -216,7 +216,7 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
             {waiting.length === 0 ? <p className={MUTED}>Nobody waiting</p> : (
               <ul className="divide-y divide-ds-border">
                 {waiting.slice(0, WAITING_SHOWN).map((r) => (
-                  <li key={r.id} className="flex items-baseline justify-between gap-3 py-1.5">
+                  <li key={r.id} className="flex items-baseline justify-between gap-[12px] py-1.5">
                     <span className="min-w-0 truncate text-ds-body font-[600] text-ds-fg">{r.user || 'Unknown person'}</span>
                     <span className={`shrink-0 text-right text-ds-label ${r.overdue ? 'font-[600] text-ds-danger' : 'text-ds-fg-muted'}`}>
                       {LIFECYCLE_KIND_LABEL[r.kind]} · {dueWords(r)}
@@ -244,7 +244,7 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
             {recent.length === 0 ? <p className={MUTED}>No activity yet</p> : (
               <ol className="space-y-2">
                 {recent.map((e, i) => (
-                  <li key={i} className="flex gap-3">
+                  <li key={i} className="flex gap-[12px]">
                     <span className="w-[8.5rem] shrink-0 whitespace-nowrap text-ds-label text-ds-fg-muted">{formatDateTime(e.at)}</span>
                     <span className="min-w-0 text-ds-body text-ds-fg">
                       <span className="font-[600]">{eventLabel(e.kind)}</span>
@@ -270,7 +270,7 @@ function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lo
   const ids = mappedFrameworkIds(doc);
   if (ids.length === 0) {
     return (
-      <div className="rounded-ds-card border border-dashed border-ds-border-strong px-4 py-8 text-center">
+      <div className="rounded-ds-card border border-dashed border-ds-border-strong px-[16px] py-[32px] text-center">
         <p className="text-ds-body font-[600] text-ds-fg">No frameworks</p>
         <p className={`mt-1 ${MUTED}`}>Map them from Edit.</p>
       </div>
@@ -366,7 +366,7 @@ function DrawerPanel({
         : 'sticky top-[64px] flex max-h-[calc(100vh-80px)] w-[400px] shrink-0 flex-col self-start overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface shadow-ds-pop'}
     >
       <div className="shrink-0 border-b border-ds-border px-[16px] pb-[12px] pt-[12px]">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-[12px]">
           <div className="min-w-0 flex-1">
             <h2 id={titleId} dir="auto" title={doc.title} className="line-clamp-3 break-words !text-ds-section !text-ds-fg">{doc.title}</h2>
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-ds-label text-ds-fg-muted">
@@ -383,6 +383,7 @@ function DrawerPanel({
                 <IconButton label="Next document" aria-disabled={hasNext === false || undefined} onClick={() => { if (hasNext !== false) onStep(1); }}><ChevronDown aria-hidden /></IconButton>
               </>
             )}
+            <Menu label="More actions" iconOnly items={menu} />
             <IconButton label="Close details" ref={closeRef} data-autofocus="" onClick={onClose}><X aria-hidden /></IconButton>
           </div>
         </div>
@@ -396,7 +397,6 @@ function DrawerPanel({
           <Button variant="primary" onClick={() => onOpenDoc(doc.id)} rightIcon={<ArrowUpRight aria-hidden />}>Open document</Button>
           <Button onClick={() => onDownload(doc)} leftIcon={<Download aria-hidden />}>Download</Button>
           {canEdit && <Button onClick={() => onEdit(doc)} title="Edit the document's details" leftIcon={<Pencil aria-hidden />}>Edit</Button>}
-          <Menu label="More actions" iconOnly items={menu} />
         </div>
       </div>
 

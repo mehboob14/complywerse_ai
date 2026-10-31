@@ -454,8 +454,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             )}
             {create === 'buttons' && (
               <>
-                <Button onClick={onTemplates} title="Templates" leftIcon={<LayoutTemplate aria-hidden />}>Templates</Button>
-                <Button onClick={onAIDraft} title="AI Draft" leftIcon={<Sparkles aria-hidden />}>AI Draft</Button>
+                {/* icon only on a phone, so the three buttons share a line (the words stay for a screen reader) */}
+                <Button onClick={onTemplates} title="Templates" leftIcon={<LayoutTemplate aria-hidden />}><span className="max-sm:sr-only">Templates</span></Button>
+                <Button onClick={onAIDraft} title="AI Draft" leftIcon={<Sparkles aria-hidden />}><span className="max-sm:sr-only">AI Draft</span></Button>
                 <Button variant="primary" onClick={onNewDocument} title="New document" leftIcon={<Plus aria-hidden />}>New document</Button>
               </>
             )}
@@ -501,6 +502,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             shown={filteredDocs.length}
             total={archivedList ? totals.archived : totals.all}
             listSize={{ loaded: allDocs.length, total: serverTotal }}
+            loading={docsLoading}
             views={views}
             activeViewId={activeViewId}
             onApplyView={(v) => setState(v.state)}

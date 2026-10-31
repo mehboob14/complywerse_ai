@@ -207,7 +207,7 @@ export function FoldersToolbar({ allOpen, canFold, onToggleAll, folders, documen
   total?: number | null;
 }) {
   return (
-    <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="mb-2 flex items-center justify-between gap-[12px]">
       {canFold ? (
         <Button size="sm" variant="ghost" onClick={onToggleAll} leftIcon={allOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
           {allOpen ? 'Collapse all' : 'Expand all'}

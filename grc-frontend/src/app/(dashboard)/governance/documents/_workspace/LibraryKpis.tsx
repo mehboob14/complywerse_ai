@@ -42,9 +42,9 @@ const CARDS: { key: CardKey; label: string; tip: string }[] = [
 /** What a bucket's chip says: a word or two (the full wording is its tooltip and the filter list's). */
 const CHIP_WORD: Record<ReviewBucket, string> = { ok: 'current', due_soon: 'due', overdue: 'overdue', unscheduled: 'no date' };
 
-// six tiles: 2 across on a phone (4 rows), 3 across from tablets (3 rows: the health tile spans the last one, "Published" widens to
-// fill the one above), one row on a laptop with the health tile widest (never narrower than the ring and its four counts need)
-const GRID = 'grid grid-cols-2 gap-[12px] md:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(320px,2.2fr)]';
+// six tiles: 3 across on a phone and a tablet (2 rows of tiles: "Published" widens to fill the second, the health tile spans a third), one row on a laptop
+// with the health tile widest (never narrower than the ring and its four counts need)
+const GRID = 'grid grid-cols-3 gap-[12px] xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(320px,2.2fr)]';
 // a minimum, not a fixed height: if the counts of the health tile ever have to wrap, the whole row grows instead of clipping them
 const TILE_BASE = 'flex min-h-[72px] min-w-0 rounded-ds-card border bg-ds-surface px-[12px] py-[10px]';
 const TILE = `${TILE_BASE} flex-col justify-between`;
@@ -104,7 +104,7 @@ function HealthTile({ health, review, noun, onReview }: { health: Kpis['health']
     <div
       role="group"
       aria-label="Review health"
-      className={`${TILE_BASE} col-span-2 flex-row items-center gap-[14px] overflow-hidden border-ds-border py-[6px] md:col-span-3 xl:col-span-1`}
+      className={`${TILE_BASE} col-span-3 flex-row items-center gap-[14px] overflow-hidden border-ds-border py-[6px] xl:col-span-1`}
     >
       <div className="relative h-[56px] w-[56px] shrink-0" title={reviewable > 0 ? `${percent(health.upToDate, reviewable)}% of the ${documents(reviewable, noun)} in force are up to date` : undefined}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90" aria-hidden>
@@ -185,7 +185,7 @@ export function LibraryKpis({ kpis, statuses, review, onStatuses, onReview, load
       <div className={GRID} role="status" aria-busy="true">
         <span className="sr-only">Loading the summary…</span>
         {[...CARDS, null].map((card, i) => (
-          <Skeleton key={card?.key ?? 'health'} className={`min-h-[72px] rounded-ds-card ${i === CARDS.length ? 'col-span-2 md:col-span-3 xl:col-span-1' : ''}`} />
+          <Skeleton key={card?.key ?? 'health'} className={`min-h-[72px] rounded-ds-card ${i === CARDS.length ? 'col-span-3 xl:col-span-1' : ''}`} />
         ))}
       </div>
     );
