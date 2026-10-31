@@ -12,6 +12,7 @@
 // The field owns the control's id (the label points at it); pass `id` to FormField, not to the control, when the page needs a fixed one.
 import { createContext, useContext, useId, type ReactNode } from 'react';
 import { clsx } from 'clsx';
+import { InfoTip } from '../InfoTip';
 import { controlA11y, describedBy, fieldIds, type ControlA11y, type ControlOwn, type FieldState } from './fieldA11y';
 
 const FieldContext = createContext<FieldState | null>(null);
@@ -27,6 +28,8 @@ export interface FormFieldProps {
   required?: boolean;
   /** adds "(optional)" after the label; ignored when `required` */
   optional?: boolean;
+  /** an explanation that helps the person who wonders, as the (i) beside the label (InfoTip); text that prevents a mistake is a `hint` */
+  info?: string;
   hint?: ReactNode;
   /** shown in red under the control; the control is then marked invalid */
   error?: ReactNode;
@@ -37,27 +40,32 @@ export interface FormFieldProps {
   children: ReactNode;
 }
 
-export function FormField({ label, required = false, optional = false, hint, error, id: chosenId, className, children }: FormFieldProps) {
+export function FormField({ label, required = false, optional = false, info, hint, error, id: chosenId, className, children }: FormFieldProps) {
   const generated = useId();
   const { id, hintId, errorId } = fieldIds(chosenId ?? generated);
   const hasHint = Boolean(hint);
   const hasError = Boolean(error);
   const state: FieldState = { id, describedBy: describedBy(hasHint && hintId, hasError && errorId), invalid: hasError, required };
 
+  const labelEl = (
+    <label htmlFor={id} className="relative break-words text-ds-label text-ds-fg">
+      {label}
+      {required ? (
+        <>
+          <span aria-hidden="true" className="ml-[2px] text-ds-danger">*</span>
+          <span className="sr-only"> (required)</span>
+        </>
+      ) : optional ? (
+        <span className="ml-[4px] font-normal text-ds-fg-muted">(optional)</span>
+      ) : null}
+    </label>
+  );
+
   return (
     <FieldContext.Provider value={state}>
       <div className={clsx('flex min-w-0 flex-col gap-[4px]', className)}>
-        <label htmlFor={id} className="relative break-words text-ds-label text-ds-fg">
-          {label}
-          {required ? (
-            <>
-              <span aria-hidden="true" className="ml-[2px] text-ds-danger">*</span>
-              <span className="sr-only"> (required)</span>
-            </>
-          ) : optional ? (
-            <span className="ml-[4px] font-normal text-ds-fg-muted">(optional)</span>
-          ) : null}
-        </label>
+        {/* the (i) sits beside the label, not inside it: a press on it must not move focus into the control */}
+        {info ? <div className="flex min-w-0 items-center gap-[4px]">{labelEl}<InfoTip text={info} /></div> : labelEl}
         {children}
         {hasHint && <p id={hintId} className="break-words text-ds-label font-normal text-ds-fg-muted">{hint}</p>}
         {hasError && <p id={errorId} role="alert" className="break-words text-ds-label font-normal text-ds-danger">{error}</p>}
