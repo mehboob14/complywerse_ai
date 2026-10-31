@@ -4,14 +4,18 @@
  * AnimatedModal — a centered, scrim-backed modal with a smooth enter/exit
  * (scrim fades, panel fades + scales). The app has no framer-motion, so this is
  * pure CSS transitions driven by a mount/show state machine (so the exit animation
- * actually plays before unmount). Escape-to-close + backdrop click + body-scroll lock.
+ * actually plays before unmount). Escape-to-close + body-scroll lock. Keyboard focus moves in when it opens,
+ * wraps inside it, and goes back to what opened it (useDialogFocus); `dirty` asks before Escape or X throws typed input away.
  *
  * Charter: white surface, rounded-xl, single-teal accents, hairline borders,
  * shadow from the modal set — no gradients.
  */
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useId, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { focusIsElsewhere } from './dialogFocus';
+import { useDialogFocus } from './useDialogFocus';
+import { DiscardBar, useDiscardGuard } from './ds/DiscardBar';
 
 const MAX_W: Record<string, string> = {
   md: 'max-w-md',
@@ -33,6 +37,18 @@ export interface AnimatedModalProps {
   /** Hide the default header (caller renders its own). */
   bareHeader?: boolean;
   className?: string;
+  /** With `bareHeader`: the id of the element in `children` that names the dialog (the default header's title names it otherwise). */
+  labelledBy?: string;
+  /** With `bareHeader`: the id of the element that describes the dialog (the default header's subtitle otherwise). */
+  describedBy?: string;
+  /** False: a press on the dim area does nothing, not even ask. True (the default) leaves it as it was: a press there closed nothing
+   *  (the dim layer covers the container the old check looked for); with `dirty` it asks. */
+  closeOnBackdrop?: boolean;
+  /** The caller holds typed input. Escape, the X button and a press on the dim area then show "Discard changes?" instead of closing;
+   *  Keep editing goes back, Discard calls `onClose`. */
+  dirty?: boolean;
+  discardLabel?: string;
+  keepLabel?: string;
 }
 
 export function AnimatedModal({
@@ -46,10 +62,22 @@ export function AnimatedModal({
   children,
   bareHeader = false,
   className = '',
+  labelledBy,
+  describedBy,
+  closeOnBackdrop = true,
+  dirty = false,
+  discardLabel = 'Discard',
+  keepLabel = 'Keep editing',
 }: AnimatedModalProps) {
   const [render, setRender] = useState(isOpen);
   const [show, setShow] = useState(false);
   const rafRef = useRef<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const subtitleId = useId();
+  useDialogFocus(isOpen, dialogRef, render);
+  const { asking, requestClose, keep, discard } = useDiscardGuard({ open: isOpen, dirty, closeOnBackdrop, onClose, dialogRef });
 
   useEffect(() => {
     if (isOpen) {
@@ -63,18 +91,25 @@ export function AnimatedModal({
     return () => clearTimeout(t);
   }, [isOpen]);
 
-  // Escape to close + lock body scroll while open
+  // Escape to close
   useEffect(() => {
     if (!render) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };     // a list inside handled it
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;                                          // a list inside handled it
+      if (dirty && dialogRef.current && focusIsElsewhere(dialogRef.current, document.activeElement, document.body)) return;   // a menu or a dialog over this one is open: Escape is its
+      requestClose('escape');
+    };
     document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [render, dirty, requestClose]);
+
+  // lock body scroll while open (its own effect: it must not be undone and redone each time the listener above is re-attached)
+  useEffect(() => {
+    if (!render) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [render, onClose]);
+    return () => { document.body.style.overflow = prev; };
+  }, [render]);
 
   // Rendered inline in the tree, this fixed-position overlay is at the mercy of
   // any ancestor that establishes a containing block (transform/filter/sticky
@@ -85,9 +120,11 @@ export function AnimatedModal({
   return createPortal(
     <div
       className={`fixed inset-0 z-[60] flex items-center justify-center p-4 transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      // only a press on this container itself ever counted, and the scrim covers it, so a press on the dim area closed nothing; `dirty` makes it ask
+      onMouseDown={(e) => { if (e.target === e.currentTarget || (dirty && e.target === scrimRef.current)) requestClose('backdrop'); }}
     >
       <div
+        ref={scrimRef}
         className="absolute inset-0"
         style={{
           backgroundColor: 'rgba(15, 23, 42, 0.45)',
@@ -97,20 +134,24 @@ export function AnimatedModal({
         aria-hidden
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        className={`relative flex max-h-[90vh] w-full ${MAX_W[size]} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 ${show ? 'scale-100 opacity-100' : 'scale-95 opacity-0'} ${className}`}
+        aria-labelledby={labelledBy ?? (!bareHeader && title ? titleId : undefined)}
+        aria-describedby={describedBy ?? (!bareHeader && subtitle ? subtitleId : undefined)}
+        tabIndex={-1}
+        className={`relative flex max-h-[90vh] w-full ${MAX_W[size]} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 focus:outline-none ${show ? 'scale-100 opacity-100' : 'scale-95 opacity-0'} ${className}`}
       >
         {!bareHeader && (
           <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
             <div className="min-w-0">
-              {title && <div className="truncate text-base font-semibold text-slate-900">{title}</div>}
-              {subtitle && <div className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</div>}
+              {title && <div id={titleId} className="truncate text-base font-semibold text-slate-900">{title}</div>}
+              {subtitle && <div id={subtitleId} className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</div>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {headerAccessory}
               <button
-                onClick={onClose}
+                onClick={() => requestClose('close-button')}
                 className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close"
               >
@@ -119,6 +160,7 @@ export function AnimatedModal({
             </div>
           </div>
         )}
+        {asking && <DiscardBar keepLabel={keepLabel} discardLabel={discardLabel} onKeep={keep} onDiscard={discard} />}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">{children}</div>
         {footer && <div className="border-t border-slate-100 bg-slate-50 px-5 py-3">{footer}</div>}
       </div>

@@ -1,9 +1,9 @@
 'use client';
 
-// The Vendors pages' centred dialog: the platform's own portal modal (AnimatedModal: scrim, Escape, backdrop click, scroll lock)
-// with a title row and a pinned footer. AnimatedModal draws the box but names nothing and keeps focus nowhere, so this also names it
-// for screen readers, puts focus inside, keeps Tab inside, and hands focus back to what opened it.
-import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
+// The Vendors pages' centred dialog: the platform's own portal modal (AnimatedModal: scrim, Escape, scroll lock, and since the shared
+// focus work: names itself, takes focus, keeps Tab inside, hands focus back to what opened it) with a title row and a pinned footer.
+// This adds the title row that names it, the sizes and the footer; `data-autofocus` on an element of `children` is where focus starts.
+import { useId, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { X } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
@@ -15,9 +15,6 @@ const WIDTH = {
   720: { size: 'lg', cls: '!max-w-[720px]' },
   1080: { size: '2xl', cls: '!max-w-[1080px]' },
 } as const;
-
-const FIELD = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-const TABBABLE = 'a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Dialog({ open, onClose, title, description, size = 480, footer, children, flush = false }: {
   open: boolean;
@@ -34,54 +31,19 @@ export function Dialog({ open, onClose, title, description, size = 480, footer, 
 }) {
   const titleId = useId();
   const descId = useId();
-  const mark = useRef<HTMLElement | null>(null);
-
-  // runs when the content mounts (AnimatedModal mounts it a frame after `open`): name the dialog, then focus the element marked
-  // data-autofocus, else the first field, if focus is not already inside; a dialog with no field gets focus on its close button
-  const mount = useCallback((el: HTMLDivElement | null) => {
-    mark.current = el;
-    const dialog = el?.closest<HTMLElement>('[role="dialog"]');
-    if (!el || !dialog) return;
-    dialog.setAttribute('aria-labelledby', titleId);
-    if (description) dialog.setAttribute('aria-describedby', descId);
-    if (!dialog.contains(document.activeElement)) {
-      (el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>(FIELD) ?? el.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true });
-    }
-  }, [titleId, descId, description]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const before = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const dialog = mark.current?.closest<HTMLElement>('[role="dialog"]');
-      if (!dialog) return;
-      const active = document.activeElement;
-      const inside = active !== null && dialog.contains(active);
-      if (!inside && active !== null && active !== document.body) return;        // focus is in a menu drawn over the dialog: that menu handles Tab
-      const items = Array.from(dialog.querySelectorAll<HTMLElement>(TABBABLE)).filter((el) => el.getClientRects().length > 0);
-      if (items.length === 0) { e.preventDefault(); return; }
-      const [first, last] = [items[0], items[items.length - 1]];
-      if (e.shiftKey && (!inside || active === first)) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && (!inside || active === last)) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      before?.focus?.();
-    };
-  }, [open]);
 
   return (
     <AnimatedModal
       isOpen={open}
       onClose={onClose}
       bareHeader
+      labelledBy={titleId}
+      describedBy={description ? descId : undefined}
       size={WIDTH[size].size}
       className={WIDTH[size].cls}
       footer={footer ? <div className="flex flex-wrap items-center justify-end gap-2">{footer}</div> : undefined}
     >
-      <div ref={mount}>
+      <div>
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#e1e6eb] bg-[#fff] px-5 py-3.5">
           <div className="min-w-0">
             <h2 id={titleId} className="text-[16px] font-semibold leading-6 text-[#1f2933]">{title}</h2>
