@@ -3,7 +3,9 @@
 // The register: rows of one kind of record, with sortable columns, a row that opens, and a state for every moment the list can be in.
 // At 768px and wider it is the table (Table.tsx) with its less important columns dropped as the window narrows; below that the same rows
 // are a list of cards. Both are drawn and CSS shows one (`hidden md:block` / `md:hidden`), so there is no flash of the wrong layout
-// and the hidden one is not read out. Which also means a column's `cell` is rendered twice per row: no ids in it.
+// and the hidden one is not read out. Which also means a column's `cell` is rendered twice per row: no ids in it. A cell that must exist once (an
+// input with an id, a control a label points at) gets a `cardCell`, the card's own version of it, or is left off the card (`card: 'hide'`). The
+// card has a row-actions slot of its own (`cardActions`: a Menu at the top right), because the table's actions column is not on a card.
 //
 // It does not sort, filter or page. The page owns the order (`sort` + `onSortChange`, rows already in that order: tableModel.sortRows for a
 // list held on the client), the filters and the pager (`footer`), and says what the list is (`empty`, `error`, `loading`).
@@ -39,6 +41,9 @@ export interface RegisterColumn<T> {
   card?: 'meta' | 'hide';
   /** the label of the card line, when the header is not the right word there */
   cardLabel?: string;
+  /** what the card's line holds instead of `cell`, when the cell is an inline control (an input, a select) that must not be drawn twice: show its
+   *  value, as words. Only for a column that is on the card (`card: 'meta'`); without it the card draws `cell`. */
+  cardCell?: (row: T) => ReactNode;
 }
 
 export interface RegisterTableProps<T> {
@@ -65,6 +70,10 @@ export interface RegisterTableProps<T> {
   footer?: ReactNode;
   /** the first thing on a card */
   cardTitle: (row: T) => ReactNode;
+  /** the row's actions on a card, at the top right beside the title: a Menu ("⋯"). A press anywhere in it is not a press on the card, and its 44px
+   *  touch target bleeds into the card's padding so the card does not grow. The table has no such slot: its actions are a column. Left out, the
+   *  card is as it always was. */
+  cardActions?: (row: T) => ReactNode;
   /** the header stays in view while the rows scroll in the frame */
   stickyHead?: boolean;
   /** the header row is not drawn but is still read out (`sr-only` on the <thead>, never display:none): for a table whose columns the caption and the
@@ -97,7 +106,7 @@ function Failure({ message, onRetry }: { message: string; onRetry?: () => void }
 
 export function RegisterTable<T>({
   caption, columns, rows, getRowId, sort = null, onSortChange, onRowActivate, selectedId = null, loading = false, loadingRows = 6,
-  error = null, empty, footer, cardTitle, stickyHead = false, hideHeader = false, maxHeight,
+  error = null, empty, footer, cardTitle, cardActions, stickyHead = false, hideHeader = false, maxHeight,
 }: RegisterTableProps<T>) {
   const failed = !loading && error != null;
   const isEmpty = !loading && !failed && rows.length === 0;
@@ -179,6 +188,7 @@ export function RegisterTable<T>({
                 const id = getRowId(row);
                 const selected = isSelected(id);
                 const open = onRowActivate && (() => onRowActivate(row));
+                const title = <div className="min-w-0 text-ds-body font-medium text-ds-fg [overflow-wrap:anywhere]">{cardTitle(row)}</div>;
                 return (
                   <li
                     key={id}
@@ -187,13 +197,18 @@ export function RegisterTable<T>({
                     {...rowHandlers<HTMLLIElement>(open)}
                     className={clsx(CARD, selected ? CARD_SELECTED : CARD_PLAIN, open && CARD_PRESSABLE)}
                   >
-                    <div className="min-w-0 text-ds-body font-medium text-ds-fg [overflow-wrap:anywhere]">{cardTitle(row)}</div>
+                    {cardActions ? (
+                      <div className="flex items-start justify-between gap-2">
+                        {title}
+                        <div data-row-ignore className="-my-[12px] shrink-0">{cardActions(row)}</div>
+                      </div>
+                    ) : title}
                     {meta.length > 0 && (
                       <dl className="mt-2 flex flex-col gap-1">
                         {meta.map((c) => (
                           <div key={c.key} className="grid grid-cols-[minmax(0,40%)_minmax(0,1fr)] gap-x-2">
                             <dt className="text-ds-label text-ds-fg-muted">{c.cardLabel ?? c.header}</dt>
-                            <dd className="min-w-0 text-ds-body text-ds-fg-body [overflow-wrap:anywhere]">{c.cell(row)}</dd>
+                            <dd className="min-w-0 text-ds-body text-ds-fg-body [overflow-wrap:anywhere]">{(c.cardCell ?? c.cell)(row)}</dd>
                           </div>
                         ))}
                       </dl>

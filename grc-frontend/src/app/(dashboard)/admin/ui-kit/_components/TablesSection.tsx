@@ -3,11 +3,12 @@
 // The table primitives and RegisterTable: rows, sortable columns, row activation, priority columns, loading, failed and empty; and the logic
 // behind them with its answers computed live. At 768 px and wider a register is a table; below that the same rows are cards.
 import { useEffect, useRef, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
-  Button, EmptyState, PersonChip, RegisterTable, RowHeaderCell, StatusPill, Table, TableFrame, TBody, Td, Th, THead, Tr,
+  Button, EmptyState, Menu, PersonChip, RegisterTable, RowHeaderCell, Select, StatusPill, Table, TableFrame, TBody, Td, Th, THead, Tr,
   ariaSort, nextSort, priorityClass, rowCountText, sortRows, type RegisterColumn, type SortState, type SortValue,
 } from '@/components/ui';
-import { formatCount, formatDate, formatDateTime } from '@/lib/format';
+import { formatCount, formatDate, formatDateTime, statusLabel } from '@/lib/format';
 import { parseUtc } from '@/lib/serverTime';
 import { documentStatus, priority as priorityStatus, statusPill } from '@/lib/status';
 import { GuideSection, MONO, Spec, Specimen } from './Guide';
@@ -99,6 +100,55 @@ function RegisterDemo() {
   );
 }
 
+const PRIORITIES = ['critical', 'high', 'medium', 'low'];
+
+/** An inline control and a row menu: the table has a Select and an Actions column, the card has the value as a pill (`cardCell`) and the menu at its top right (`cardActions`). */
+function InlineDemo() {
+  const rows = DOCUMENTS.slice(0, 4);
+  const [priorities, setPriorities] = useState<Record<number, string>>(() => Object.fromEntries(rows.map((d) => [d.id, d.priority])));
+  const [last, setLast] = useState('nothing yet');
+  const menu = (d: Doc) => (
+    <Menu
+      iconOnly
+      label={`Actions for ${d.title}`}
+      items={[
+        { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => setLast(`Edit “${d.title}”`) },
+        { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => setLast(`Delete “${d.title}”`) },
+      ]}
+    />
+  );
+  const columns: RegisterColumn<Doc>[] = [
+    { key: 'title', header: 'Document', isRowHeader: true, cell: (d) => <span className="line-clamp-2 font-medium text-ds-fg" title={d.title}>{d.title}</span> },
+    {
+      key: 'priority',
+      header: 'Priority',
+      card: 'meta',
+      cell: (d) => (
+        <Select aria-label={`Priority of ${d.title}`} value={priorities[d.id]} onChange={(e) => setPriorities({ ...priorities, [d.id]: e.target.value })} className="w-[130px]">
+          {PRIORITIES.map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
+        </Select>
+      ),
+      cardCell: (d) => <StatusPill size="sm" {...statusPill(priorityStatus, priorities[d.id])} />,
+    },
+    { key: 'owner', header: 'Owner', priority: 2, card: 'meta', cell: (d) => <PersonChip name={d.owner} size={20} /> },
+    { key: 'actions', header: 'Actions', align: 'right', card: 'hide', cell: menu },
+  ];
+  return (
+    <div className="space-y-[8px]">
+      <RegisterTable
+        caption="Documents with an inline priority and row actions"
+        columns={columns}
+        rows={rows}
+        getRowId={(d) => d.id}
+        cardTitle={(d) => d.title}
+        cardActions={menu}
+        onRowActivate={(d) => setLast(`Opened “${d.title}”`)}
+      />
+      <p className="text-ds-label text-ds-fg-muted" aria-live="polite" data-guide-last="inline">Last: {last}. Below 768 px the Select is a pill (it exists once) and the menu is at the top right of the card; a press on the menu or the Select does not open the row.</p>
+    </div>
+  );
+}
+
 function FailedDemo() {
   const [phase, setPhase] = useState<'failed' | 'loading' | 'ok'>('failed');
   const tries = useRef(0);
@@ -183,6 +233,9 @@ export function TablesSection() {
         <Specimen label="Empty, nothing matches: say so and clear the filters"><RegisterTable caption="Documents (no matches demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} empty={<EmptyState bare kind="noMatches" title="No documents match" description="Try another search." onClearFilters={() => undefined} />} /></Specimen>
         <Specimen label="hideHeader: the header row is read out and not drawn (the caption and the cells make the columns plain); the width moves to the cells">
           <RegisterTable caption="Documents, header read out and not drawn" hideHeader columns={QUIET_COLUMNS} rows={DOCUMENTS.slice(0, 3)} getRowId={(d) => d.id} cardTitle={(d) => d.title} />
+        </Specimen>
+        <Specimen label="cardCell and cardActions: an inline Select in the table is a pill on the card (not drawn twice), and the row's menu sits at the top right of each card">
+          <InlineDemo />
         </Specimen>
         <Specimen label="No empty state given: the register's own plain line"><RegisterTable caption="Documents (plain empty demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} /></Specimen>
       </Spec>

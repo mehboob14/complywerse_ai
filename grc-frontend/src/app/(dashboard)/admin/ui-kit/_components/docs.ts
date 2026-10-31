@@ -524,7 +524,7 @@ export const DOCS: Record<string, ComponentDoc> = {
     name: 'RegisterTable',
     importFrom: UI,
     use: 'a list of one kind of record needs sortable columns, a row that opens, and a state for every moment (loading, failed, empty). A table from 768 px, cards below.',
-    dont: 'Do not put ids in a column `cell` (it is drawn twice, in the table and on the card), and never pass [] for a request that has not answered or has failed: use `loading` and `error`.',
+    dont: 'Do not put ids in a column `cell`, and do not put an input there that must exist once: a cell is drawn twice, in the table and on the card (a `cardCell` gives the card its own version). Never pass [] for a request that has not answered or has failed: use `loading` and `error`.',
     parts: [
       {
         name: 'RegisterTable', source: `${DS}/RegisterTable.tsx`, own: 'RegisterTableProps',
@@ -543,6 +543,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('empty', 'ReactNode', 'The page\'s own empty state, drawn in place of the table.'),
           prop('footer', 'ReactNode', 'Under the frame in every state but loading: the pager and count.'),
           prop('cardTitle', '(row) => ReactNode', 'The first thing on a card.'),
+          prop('cardActions', '(row) => ReactNode', 'The row\'s actions on a card, at the top right beside the title: a Menu ("⋯"). A press anywhere in the slot is not a press on the card. The table has no such slot (its actions are a column), so the card gets its own and the column gets card: \'hide\'.'),
           prop('stickyHead', 'boolean', 'The header stays in view while the rows scroll in the frame.', 'false'),
           prop('hideHeader', 'boolean', 'The header row is not drawn but is still read out (sr-only, never display:none): for a table whose columns the caption and the cells already make plain. A column `width` then applies to the cells; cards are unaffected.', 'false'),
           prop('maxHeight', 'string', 'A max-h-[70vh] class written out in full.'),
@@ -553,7 +554,7 @@ export const DOCS: Record<string, ComponentDoc> = {
         props: [
           prop('key', 'string', 'What `sort` holds.'),
           prop('header', 'string', 'The header text, and the label of the card line.'),
-          prop('cell', '(row) => ReactNode', 'Drawn in the table and on the card: no ids in it.'),
+          prop('cell', '(row) => ReactNode', 'Drawn in the table AND on the card (both are in the page, CSS shows one): no ids in it, and no control that must exist once. For an inline control give the column a `cardCell`.'),
           prop('priority', '1 | 2 | 3', '1 always; 2 from 768 px; 3 from 1024 px. Cards ignore it.', '1'),
           prop('align', "'left' | 'right' | 'center'", 'Text alignment.'),
           prop('sortable', 'boolean', 'A click on the header sorts (needs onSortChange).'),
@@ -562,6 +563,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('isRowHeader', 'boolean', 'The cell names its row (<th scope="row">).'),
           prop('card', "'meta' | 'hide'", 'meta makes it a "label: value" line under the card title; otherwise it is not on the card.'),
           prop('cardLabel', 'string', 'The card line\'s label when the header is not the right word.'),
+          prop('cardCell', '(row) => ReactNode', 'What the card\'s line holds instead of `cell`, when the cell is an inline control (an input, a select) that must not be drawn twice: show its value as words. Only for a column with card: \'meta\'.'),
         ],
       },
     ],
