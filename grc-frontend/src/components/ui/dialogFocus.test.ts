@@ -1,6 +1,7 @@
 // node --test src/components/ui/dialogFocus.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { AUTOFOCUS, FIELD, TABBABLE, closeAction, focusIsElsewhere, initialFocusTarget, nextFocusIndex, visibleOnly } from './dialogFocus.ts';
 
@@ -80,4 +81,17 @@ test('closeOnBackdrop false makes the backdrop inert, with or without typed inpu
   assert.equal(closeAction(inert, 'escape'), 'close');
   assert.equal(closeAction(inert, 'close-button'), 'close');
   assert.equal(closeAction({ ...inert, dirty: true }, 'escape'), 'ask');
+});
+
+// Source-text guard (like kitGuard.test.ts): the focus work lives in the two shared overlays, once, and the vendor Dialog stays slim.
+test('both overlays use the shared focus hook and the discard guard and name themselves; the vendor Dialog keeps no trap of its own', () => {
+  for (const name of ['AnimatedModal', 'RightSlidePanel']) {
+    const src = readFileSync(`src/components/ui/${name}.tsx`, 'utf8');
+    assert.match(src, /useDialogFocus\(/, `${name} uses useDialogFocus`);
+    assert.match(src, /useDiscardGuard\(/, `${name} uses useDiscardGuard`);
+    assert.match(src, /aria-labelledby=/, `${name} names itself`);
+  }
+  const vendor = readFileSync('src/app/(dashboard)/vendor-risk/_ui/Dialog.tsx', 'utf8');
+  assert.match(vendor, /labelledBy=/, 'the vendor Dialog names itself through AnimatedModal');
+  assert.doesNotMatch(vendor, /addEventListener|TABBABLE|querySelector/, 'no trap or focus code of its own');
 });
