@@ -103,11 +103,11 @@ export default function GovernanceSettingsPage() {
     return () => window.clearTimeout(t);
   }, [savedAt]);
 
-  // The confirmation is said only after the server has answered; a refusal stays on screen (with Retry when trying again can help) and is also
-  // the line of the save bar. (The one toast line carries what the toast used to say in two.)
+  // The confirmation is said only after the server has answered, as a headline and a line under it; a refusal stays on screen (with Retry when
+  // trying again can help) and is also the line of the save bar.
   const save = useReportedMutation({
     mutationFn: async () => (await apiClient.put(SETTINGS_URL, patch)).data as SettingsAnswer,
-    success: 'Settings saved. New requests, reminders and escalations use them from now on.',
+    success: { title: 'Settings saved', message: 'New requests, reminders and escalations use them from now on.' },
     failure: 'Not saved',
     onSuccess: (answer) => {
       queryClient.setQueryData(SETTINGS_KEY, answer);

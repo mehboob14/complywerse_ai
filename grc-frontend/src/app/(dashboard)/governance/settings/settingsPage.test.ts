@@ -37,6 +37,7 @@ test('every card keeps its anchor, and the days in the task table still link to 
 test('leaving with unsaved changes asks, and the confirmation is the kit\'s: said after the server answered, never for a refusal', () => {
   assert.match(page, /addEventListener\('beforeunload'/);
   assert.match(page, /useReportedMutation\(/);
+  assert.match(page, /success: \{ title: 'Settings saved', message: 'New requests, reminders and escalations use them from now on\.' \}/);   // a headline and a line, as it always read
   assert.doesNotMatch(page, /useMutation\(/);
   assert.doesNotMatch(page, /\btoast\(/);                                                  // no hand-made toast: useReportedMutation and useNotify say it
   assert.match(page, /onError: \(e\) => setServerError\(errorMessage\(e, /);                // the bar carries the refusal, cleaned
