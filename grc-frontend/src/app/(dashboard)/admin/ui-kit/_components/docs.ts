@@ -335,6 +335,26 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  Notice: {
+    name: 'Notice',
+    importFrom: UI,
+    use: 'a page has something to say about the list or the card under it: the list is cut ("Showing 100 of 174"), a source is missing, a setting is off. The tone is also an icon, so it never rests on colour alone.',
+    dont: 'Do not use it for a failed request (ErrorState has Retry and says what failed), for the confirmation of something the person just did (a toast) or for what blocks the page (NoAccessState), and do not stack two: say the one that matters.',
+    parts: [
+      {
+        name: 'Notice', source: `${DS}/Notice.tsx`, own: 'NoticeProps',
+        props: [
+          prop('tone', "'info' | 'warning' | 'danger'", 'What kind of notice it is: its icon, its tint and its role.', "'info'"),
+          prop('title', 'string', 'The bold first line: what is the case ("Showing 100 of 174 exceptions").'),
+          prop('children', 'ReactNode', 'The line under the title, or the only line when there is no title. It may hold a link.'),
+          prop('action', 'ReactNode', 'What the person can do about it: a Button or a link, after the words. It drops under them on a narrow screen.'),
+          prop('icon', 'LucideIcon', 'Replaces the tone\'s icon (an info circle, a warning triangle, a danger circle).'),
+          prop('role', "'status' | 'alert'", 'status is polite, alert is assertive. The default follows the tone: an info notice is a status, a warning or a danger is an alert. Pass status for a notice that is on the page from the moment it loads.', 'by tone'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
   PageHeader: {
     name: 'PageHeader',
     importFrom: UI,

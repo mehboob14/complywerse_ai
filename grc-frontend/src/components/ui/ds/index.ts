@@ -12,6 +12,7 @@ export { PersonStack, type PersonStackProps } from './PersonStack';
 export { EmptyState, type EmptyStateProps, type EmptyStateKind } from './EmptyState';
 export { ErrorState, type ErrorStateProps } from './ErrorState';
 export { NoAccessState, type NoAccessStateProps } from './NoAccessState';
+export { Notice, type NoticeProps, type NoticeTone } from './Notice';
 export { Skeleton, SkeletonLines, SkeletonRows, type SkeletonProps, type SkeletonLinesProps, type SkeletonRowsProps } from './Skeleton';
 export { Menu, type MenuItem, type MenuProps } from './Menu';
 export { Pager, type PagerProps } from './Pager';
