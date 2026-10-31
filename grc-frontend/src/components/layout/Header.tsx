@@ -9,7 +9,7 @@ import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 import { usePermissions } from '@/hooks/usePermissions';
-import { routeFor, subtitleFor, titleFor } from '@/lib/navRegistry';
+import { ownHeadingSection, routeFor, subtitleFor, titleFor } from '@/lib/navRegistry';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
@@ -72,9 +72,6 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/reports/dashboards': { title: 'Dashboards', subtitle: 'Saved reports, side by side' },
   '/admin': { title: 'Administration' },
 };
-
-// A Governance page that draws its own heading in the body (PageHeader variant="page") shows only its section up here (the `section` branch below), so its name is not on screen twice.
-const OWN_HEADING: Record<string, string> = { '/governance': 'Governance' };
 
 export default function Header() {
   const router = useRouter();
@@ -268,7 +265,7 @@ export default function Header() {
           if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : null;
           // a Governance page is named by the registry, whatever page it is; every other page still reads PAGE_TITLES
           const named = routeFor(pathname)?.area === 'governance' ? titleFor(pathname) : undefined;
-          const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: OWN_HEADING[pathname ?? ''] } : PAGE_TITLES[pathname ?? ''];
+          const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: ownHeadingSection(pathname) } : PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
           if (!info && /^\/assets\/[^/]+$/.test(pathname ?? '')) {

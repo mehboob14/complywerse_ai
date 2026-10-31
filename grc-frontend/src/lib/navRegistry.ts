@@ -97,6 +97,9 @@ export interface RouteEntry {
   /** what the page needs today, as navAccess says (any one of them); null: no right, any signed-in user */
   permissions: string[] | null;
   keywords?: string[];
+  /** the page draws its own heading in its body (PageHeader variant="page"): the top bar then names only its section, so the page's name is not on
+   *  screen twice. Set it on a page when it moves to the kit's page head. */
+  ownHeading?: boolean;
 }
 
 /** An entry that is a tab of a strip. */
@@ -115,7 +118,7 @@ function walk(entries: NavEntry[], groups: Crumb[]): void {
 }
 walk(navigation, []);
 
-type Extra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords'>>;
+type Extra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading'>>;
 
 const DOCS = '/governance/documents';
 const ATTEST = `${DOCS}/attestation`;
@@ -125,7 +128,8 @@ const PROJECTS = '/is-projects';
 
 // what the sidebar's own leaves add (by href)
 const OF_LEAF: Record<string, Extra> = {
-  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture' },
+  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true },
+  '/governance/kpi-report': { ownHeading: true },
   [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1 }, keywords: ['Document library'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'] },
@@ -212,6 +216,16 @@ export function titleFor(pathname: string | null | undefined): string | undefine
 export function subtitleFor(pathname: string | null | undefined): string | undefined {
   const hit = routeFor(pathname);
   return hit ? hit.subtitle ?? canonical(hit).subtitle : undefined;
+}
+
+/** The area names the top bar shows for a page that draws its own heading (only Governance is registry-owned so far). */
+const SECTION: Record<string, string> = { governance: 'Governance' };
+
+/** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name; undefined when the
+ *  page has no own heading (the top bar then shows its title) or is no route. */
+export function ownHeadingSection(pathname: string | null | undefined): string | undefined {
+  const hit = routeFor(pathname);
+  return hit && canonical(hit).ownHeading ? SECTION[hit.area] : undefined;
 }
 
 /** The trail to a page: its sidebar groups, then the pages it hangs under, then the page itself (the last one is current). [] for a path that is no route. */

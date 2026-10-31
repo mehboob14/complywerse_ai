@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { activeTab, breadcrumbFor, isInArea, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
+import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry } from '../components/layout/navAccess.ts';
 import { activeNavHref } from '../components/layout/navActive.ts';
 
@@ -357,4 +357,13 @@ test('the Header names Governance pages from the registry and keeps no Governanc
   const keys = Array.from(table.matchAll(/^\s*'(\/[^']*)':/gm)).map((m) => m[1]);
   assert.ok(keys.length > 20, 'the title map of the other modules is still there');
   assert.deepEqual(keys.filter((k) => routeFor(k)?.area === 'governance' || k.startsWith('/governance') || k.startsWith('/is-projects')), [], 'a Governance title kept in the Header');
+});
+
+test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
+  assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), ['/governance', '/governance/kpi-report']);
+  assert.equal(ownHeadingSection('/governance'), 'Governance');
+  assert.equal(ownHeadingSection('/governance/kpi-report'), 'Governance');
+  assert.equal(ownHeadingSection('/governance/committees'), undefined, 'a page without the flag shows its own title in the top bar');
+  assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
+  assert.equal(ownHeadingSection(null), undefined);
 });
