@@ -171,6 +171,11 @@ test('every URL of the contract resolves to an entry, with its query or hash ign
   assert.equal(routeFor('/attest/some-token')?.path, '/attest/:token');
 });
 
+test('the forward is real: the legacy attestations page replaces itself with the entry the registry names as its target', () => {
+  const source = readFileSync(`${APP}(dashboard)/governance/attestations/page.tsx`, 'utf8');
+  for (const a of routes.filter((e) => e.aliasOf)) assert.ok(source.includes(`router.replace('${a.aliasOf}')`), `${a.path} does not forward to ${a.aliasOf}`);
+});
+
 test('a static page beats a :param page of the same shape, a :param matches one segment only, and a path that is no route is no entry', () => {
   assert.equal(routeFor('/governance/documents/studio')?.path, '/governance/documents/studio');
   assert.equal(routeFor('/governance/documents/12')?.path, '/governance/documents/:id');
