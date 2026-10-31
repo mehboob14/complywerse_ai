@@ -17,6 +17,7 @@ import { documentChainApi } from '@/lib/documentChain';
 import { controlledCopy, controlledFileKey, recordStamp } from '@/lib/controlPages';
 import { useToast } from '@/components/ui/ToastProvider';
 import { RightSlidePanel } from '@/components/ui';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { ErrorState, SkeletonLines } from '@/components/ui/ds';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
@@ -29,7 +30,7 @@ import { versionGroups } from '../_workspace/library';
 import WordView from '@/components/governance/WordView';
 import { useRouter } from 'next/navigation';
 import {
-  FileText, Loader2, Download, GitCompare, RotateCcw, User, Clock, CheckCircle, X, Info, History, Pencil, Maximize2, Save,
+  FileText, Loader2, Download, GitCompare, RotateCcw, User, Clock, CheckCircle, Info, History, Pencil, Maximize2, Save,
 } from 'lucide-react';
 
 export const formatDate = (dateStr: string | null | undefined) => {
@@ -814,26 +815,20 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
 
   return (
     <div className="space-y-6">
-      {/* Full-document popup — scrollable read/edit surface */}
-      {showFullViewer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-300 bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-5 py-3">
-              <h3 className="min-w-0 truncate font-semibold text-slate-900">{doc?.title || 'Document'}</h3>
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Info className="h-3.5 w-3.5" /> Details</button>
-                <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><History className="h-3.5 w-3.5" /> History</button>
-                {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><CheckCircle className="h-3.5 w-3.5" /> Sign-off</button>}
-                {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
-                <button onClick={closeFullViewer} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              {editing ? editorBody : renderReadBody(true)}
-            </div>
+      {/* Full-document popup — scrollable read/edit surface (a kit dialog: focus in, Tab wraps, Escape, focus back; an edited text asks before it is thrown away) */}
+      <AnimatedModal isOpen={showFullViewer} onClose={closeFullViewer} size="3xl" title={doc?.title || 'Document'} dirty={editing && editContent !== rawContent}
+        headerAccessory={(
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Info className="h-3.5 w-3.5" aria-hidden /> Details</button>
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><History className="h-3.5 w-3.5" aria-hidden /> History</button>
+            {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><CheckCircle className="h-3.5 w-3.5" aria-hidden /> Sign-off</button>}
+            {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5" aria-hidden /> Edit</button>}
           </div>
+        )}>
+        <div className="px-6 py-5">
+          {editing ? editorBody : renderReadBody(true)}
         </div>
-      )}
+      </AnimatedModal>
       {doc?.id && (
         <DocumentVersionHistoryPanel
           documentId={doc.id}

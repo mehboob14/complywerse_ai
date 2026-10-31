@@ -17,7 +17,9 @@ import apiClient, { governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
 import { parseUtc } from '@/lib/serverTime';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
+import { Button } from '@/components/ui/ds';
 import { useToast } from '@/components/ui/ToastProvider';
 import { BTN, BTN_ICON, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
@@ -584,202 +586,183 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
         )}
       </section>
 
-      {/* address a gap: review or edit Comply Agent's clause, then apply it to the document */}
-      {addressGapFinding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Address the gap"
-          onKeyDown={(e) => { if (e.key === 'Escape') closeAddressGap(); }}>
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl border border-[#d5dbe1] bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-[#e3e8ec] px-5 py-4">
-              <div className="min-w-0">
-                <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-[#1f2933]">
-                  <Sparkles className="h-4 w-4 text-[#0f766e]" aria-hidden /> Address the gap
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${addressGapMode === 'replace' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
-                    {addressGapMode === 'replace' ? 'Replaces a clause' : 'Adds a clause'}
-                  </span>
-                  <InfoTip label="About this fix"
-                    text={addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.'
-                      : 'A new clause, added at the end of the document under its own heading.'} />
-                </h3>
-                <p className="mt-0.5 truncate text-xs text-[#586472]">
-                  {addressGapFinding.framework_name && <span className="font-medium">{addressGapFinding.framework_name} · </span>}
-                  <span className="font-mono text-[#26323d]">{addressGapFinding.clause_reference || '—'}</span>
-                  {addressGapFinding.clause_title && <> · {addressGapFinding.clause_title}</>}
-                </p>
-              </div>
-              <button type="button" autoFocus onClick={closeAddressGap} className="shrink-0 rounded-lg p-2 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" aria-label="Close"><X className="h-5 w-5" /></button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-              {addressGapFinding.gap_description && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <span className="mb-1 block text-xs font-semibold text-amber-900">Gap</span>
-                  <p className="text-sm text-amber-950">{addressGapFinding.gap_description}</p>
-                </div>
-              )}
-              {addressGapFinding.remediation_recommendation && (
-                <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
-                  <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">Recommendation</span>
-                  <p className="text-sm text-[#1f2933]">{addressGapFinding.remediation_recommendation}</p>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <button type="button" onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)} disabled={generateGapFixMutation.isPending} className={BTN}>
-                  {generateGapFixMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#0f766e]" />}
-                  {generateGapFixMutation.isPending ? 'Drafting…' : addressGapDraft ? 'Draft again' : 'Draft with Comply Agent'}
-                </button>
-              </div>
-
-              {addressGapMode === 'replace' ? (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">In the document now</span>
-                    <textarea value={addressGapOriginal} readOnly rows={14} className={`${FIELD} resize-y bg-[#f7f9fa] font-mono`} />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New wording</span>
-                    <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={14} className={`${FIELD} resize-y`}
-                      placeholder="Draft it with Comply Agent, or write it yourself." />
-                  </label>
-                </div>
-              ) : (
-                <>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New clause</span>
-                    <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={12} className={`${FIELD} resize-y`}
-                      placeholder="Draft it with Comply Agent, or write a clause that closes this gap yourself." />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Heading <span className="text-xs font-normal text-[#586472]">(optional)</span></span>
-                    <input type="text" value={addressGapHeading} onChange={(e) => setAddressGapHeading(e.target.value)} className={FIELD} />
-                  </label>
-                </>
-              )}
-
-              {proposes ? (
-                <ProposeNote id={`gap-why-${addressGapFinding.id}`} decider={decider} value={addressGapReason} onChange={setAddressGapReason}
-                  placeholder="e.g. Closing the gap before the audit" />
-              ) : (
-                <>
-                  <div>
-                    {/* the (i) is a button: outside the <label>, which would otherwise label it instead of the field */}
-                    <div className="mb-1.5 flex items-center gap-1">
-                      <label htmlFor={`gap-fix-why-${addressGapFinding.id}`} className="text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional)</span></label>
-                      <InfoTip label="About the reason" text="Kept in the version history." />
-                    </div>
-                    <input id={`gap-fix-why-${addressGapFinding.id}`} type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
-                  </div>
-                  <p className="text-xs text-[#586472]">
-                    Saved as the document&apos;s next version; earlier versions are kept.
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-[#e3e8ec] px-5 py-3">
-              <button type="button" onClick={closeAddressGap} className={BTN}>Cancel</button>
-              <button type="button"
-                onClick={() => applyGapFixMutation.mutate({
-                  findingId: addressGapFinding.id,
-                  data: {
-                    mode: addressGapMode,
-                    proposed_text: addressGapDraft,
-                    current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
-                    section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
-                    change_reason: addressGapReason || undefined,
-                    message: addressGapReason.trim() || undefined,
-                  },
-                })}
-                disabled={!addressGapDraft.trim() || applyGapFixMutation.isPending || (addressGapMode === 'replace' && !addressGapOriginal.trim()) || (proposes && !addressGapReason.trim())}
-                className={PRIMARY}>
-                {applyGapFixMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> {proposes ? 'Sending…' : 'Applying…'}</>
-                  : <><Check className="h-4 w-4" /> {proposes ? sendLabel(decider) : addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}</>}
-              </button>
-            </div>
+      {/* address a gap: review or edit Comply Agent's clause, then apply it to the document (a kit dialog: focus in, Tab wraps, Escape, focus back; a clause edited or a reason typed asks before it is thrown away) */}
+      <AnimatedModal isOpen={!!addressGapFinding} onClose={closeAddressGap} size="3xl" title="Address the gap"
+        dirty={!!addressGapFinding && (addressGapDraft !== (addressGapFinding.suggested_clause_text || '') || addressGapReason.trim() !== '')}
+        subtitle={addressGapFinding ? [addressGapFinding.framework_name, addressGapFinding.clause_reference || '—', addressGapFinding.clause_title].filter(Boolean).join(' · ') : undefined}
+        headerAccessory={(
+          <span className="flex items-center gap-1">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${addressGapMode === 'replace' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+              {addressGapMode === 'replace' ? 'Replaces a clause' : 'Adds a clause'}
+            </span>
+            <InfoTip label="About this fix"
+              text={addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.'
+                : 'A new clause, added at the end of the document under its own heading.'} />
+          </span>
+        )}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button onClick={closeAddressGap}>Cancel</Button>
+            <Button variant="primary" loading={applyGapFixMutation.isPending}
+              leftIcon={applyGapFixMutation.isPending ? undefined : <Check aria-hidden />}
+              onClick={() => applyGapFixMutation.mutate({
+                findingId: addressGapFinding.id,
+                data: {
+                  mode: addressGapMode,
+                  proposed_text: addressGapDraft,
+                  current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
+                  section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
+                  change_reason: addressGapReason || undefined,
+                  message: addressGapReason.trim() || undefined,
+                },
+              })}
+              disabled={!addressGapDraft.trim() || (addressGapMode === 'replace' && !addressGapOriginal.trim()) || (proposes && !addressGapReason.trim())}>
+              {applyGapFixMutation.isPending ? (proposes ? 'Sending…' : 'Applying…') : proposes ? sendLabel(decider) : addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}
+            </Button>
           </div>
-        </div>
-      )}
-
-      {/* the frameworks to run against */}
-      {showGapModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Run gap analysis"
-          onKeyDown={(e) => { if (e.key === 'Escape') closeGapModal(); }}>
-          <div className="w-full max-w-lg rounded-xl border border-[#d5dbe1] bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-1">
-                <h3 className="text-base font-semibold text-[#1f2933]">Run gap analysis</h3>
-                <InfoTip label="About running the analysis" text="Choose the frameworks to check; with none chosen, all of them run." />
-              </div>
-              <button type="button" autoFocus onClick={closeGapModal} className="rounded-lg p-2 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" aria-label="Close"><X className="h-5 w-5" /></button>
-            </div>
-            {uploadedFrameworks && uploadedFrameworks.length > 0 && (
-              <div className="relative mb-3">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8794]" aria-hidden />
-                <input type="text" value={gapFrameworkSearch} onChange={(e) => setGapFrameworkSearch(e.target.value)} aria-label="Search frameworks"
-                  placeholder="Search by name, code or regulator…" className={`${FIELD} pl-9 pr-9`} />
-                {gapFrameworkSearch && (
-                  <button type="button" onClick={() => setGapFrameworkSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[#7b8794] hover:text-[#26323d]" aria-label="Clear the search">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
+        )}>
+        {addressGapFinding && (
+          <div className="space-y-4 px-5 py-4">
+            {addressGapFinding.gap_description && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <span className="mb-1 block text-xs font-semibold text-amber-900">Gap</span>
+                <p className="text-sm text-amber-950">{addressGapFinding.gap_description}</p>
               </div>
             )}
-            <div className="mb-5 max-h-64 space-y-2 overflow-y-auto">
-              {!uploadedFrameworks ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>
-              ) : uploadedFrameworks.length === 0 ? (
-                <p className="py-4 text-center text-sm text-[#586472]">No frameworks in the library yet.</p>
-              ) : (() => {
-                const term = gapFrameworkSearch.trim().toLowerCase();
-                const visible = term
-                  ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, frameworkTypeLabel(fw.framework_type), fw.regulator, fw.source_organization, fw.version]
-                    .filter(Boolean).join(' ').toLowerCase().includes(term))
-                  : (uploadedFrameworks as any[]);
-                if (visible.length === 0) return <p className="py-4 text-center text-sm text-[#586472]">No framework matches &ldquo;{gapFrameworkSearch}&rdquo;.</p>;
-                const visibleIds = visible.map((fw: any) => fw.id);
-                const allVisibleSelected = visibleIds.every((vid: number) => selectedFrameworkIds.includes(vid));
-                const toggleVisible = () => setSelectedFrameworkIds((prev) => (allVisibleSelected
-                  ? prev.filter((pid) => !visibleIds.includes(pid))                  // the ones outside the search stay chosen
-                  : Array.from(new Set([...prev, ...visibleIds]))));
-                return (
-                  <>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d5dbe1] bg-white p-3 hover:bg-[#f7f9fa]">
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
-                      <span className="text-sm font-medium text-[#1f2933]">{term ? `All that match (${visible.length})` : `All (${uploadedFrameworks.length})`}</span>
-                    </label>
-                    {visible.map((fw: any) => (
-                      <label key={fw.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e3e8ec] bg-white p-3 hover:bg-[#f7f9fa]">
-                        <input type="checkbox" checked={selectedFrameworkIds.includes(fw.id)} onChange={() => toggleFramework(fw.id)} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-[#1f2933]">{fw.name || `Framework ${fw.id}`}</span>
-                            {(fw.short_code || fw.framework_type) && (
-                              <span className={`rounded bg-[#eef1f4] px-1.5 py-0.5 text-xs text-[#3f4b58] ${fw.short_code ? 'font-mono' : ''}`}>{fw.short_code || frameworkTypeLabel(fw.framework_type)}</span>
-                            )}
-                          </span>
-                          <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
-                            {fw.version && <span>{versionLabel(fw.version)}</span>}
-                            {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
-                            {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </>
-                );
-              })()}
-            </div>
-            {runError && <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">{runError}</p>}
-            <div className="flex justify-end gap-2 border-t border-[#e3e8ec] pt-4">
-              <button type="button" onClick={closeGapModal} className={BTN}>Cancel</button>
-              <button type="button" onClick={handleRunAnalysis} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>
-                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {selectedFrameworkIds.length === 0 ? 'Run all' : `Run (${selectedFrameworkIds.length})`}
+            {addressGapFinding.remediation_recommendation && (
+              <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
+                <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">Recommendation</span>
+                <p className="text-sm text-[#1f2933]">{addressGapFinding.remediation_recommendation}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button type="button" onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)} disabled={generateGapFixMutation.isPending} className={BTN}>
+                {generateGapFixMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#0f766e]" />}
+                {generateGapFixMutation.isPending ? 'Drafting…' : addressGapDraft ? 'Draft again' : 'Draft with Comply Agent'}
               </button>
             </div>
+
+            {addressGapMode === 'replace' ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#26323d]">In the document now</span>
+                  <textarea value={addressGapOriginal} readOnly rows={14} className={`${FIELD} resize-y bg-[#f7f9fa] font-mono`} />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New wording</span>
+                  <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={14} className={`${FIELD} resize-y`}
+                    placeholder="Draft it with Comply Agent, or write it yourself." />
+                </label>
+              </div>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New clause</span>
+                  <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={12} className={`${FIELD} resize-y`}
+                    placeholder="Draft it with Comply Agent, or write a clause that closes this gap yourself." />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Heading <span className="text-xs font-normal text-[#586472]">(optional)</span></span>
+                  <input type="text" value={addressGapHeading} onChange={(e) => setAddressGapHeading(e.target.value)} className={FIELD} />
+                </label>
+              </>
+            )}
+
+            {proposes ? (
+              <ProposeNote id={`gap-why-${addressGapFinding.id}`} decider={decider} value={addressGapReason} onChange={setAddressGapReason}
+                placeholder="e.g. Closing the gap before the audit" />
+            ) : (
+              <>
+                <div>
+                  {/* the (i) is a button: outside the <label>, which would otherwise label it instead of the field */}
+                  <div className="mb-1.5 flex items-center gap-1">
+                    <label htmlFor={`gap-fix-why-${addressGapFinding.id}`} className="text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional)</span></label>
+                    <InfoTip label="About the reason" text="Kept in the version history." />
+                  </div>
+                  <input id={`gap-fix-why-${addressGapFinding.id}`} type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
+                </div>
+                <p className="text-xs text-[#586472]">
+                  Saved as the document&apos;s next version; earlier versions are kept.
+                </p>
+              </>
+            )}
           </div>
+        )}
+      </AnimatedModal>
+
+      {/* the frameworks to run against (a kit dialog: focus in, Tab wraps, Escape, focus back) */}
+      <AnimatedModal isOpen={showGapModal} onClose={closeGapModal} size="md" title="Run gap analysis"
+        headerAccessory={<InfoTip label="About running the analysis" text="Choose the frameworks to check; with none chosen, all of them run." />}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button onClick={closeGapModal}>Cancel</Button>
+            <Button variant="primary" loading={runGapAnalysisMutation.isPending} leftIcon={<Play aria-hidden />} onClick={handleRunAnalysis}>
+              {selectedFrameworkIds.length === 0 ? 'Run all' : `Run (${selectedFrameworkIds.length})`}
+            </Button>
+          </div>
+        )}>
+        <div className="space-y-3 px-5 py-4">
+          {uploadedFrameworks && uploadedFrameworks.length > 0 && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8794]" aria-hidden />
+              <input type="text" value={gapFrameworkSearch} onChange={(e) => setGapFrameworkSearch(e.target.value)} aria-label="Search frameworks"
+                placeholder="Search by name, code or regulator…" className={`${FIELD} pl-9 pr-9`} />
+              {gapFrameworkSearch && (
+                <button type="button" onClick={() => setGapFrameworkSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[#7b8794] hover:text-[#26323d]" aria-label="Clear the search">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {!uploadedFrameworks ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>
+            ) : uploadedFrameworks.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[#586472]">No frameworks in the library yet.</p>
+            ) : (() => {
+              const term = gapFrameworkSearch.trim().toLowerCase();
+              const visible = term
+                ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, frameworkTypeLabel(fw.framework_type), fw.regulator, fw.source_organization, fw.version]
+                  .filter(Boolean).join(' ').toLowerCase().includes(term))
+                : (uploadedFrameworks as any[]);
+              if (visible.length === 0) return <p className="py-4 text-center text-sm text-[#586472]">No framework matches &ldquo;{gapFrameworkSearch}&rdquo;.</p>;
+              const visibleIds = visible.map((fw: any) => fw.id);
+              const allVisibleSelected = visibleIds.every((vid: number) => selectedFrameworkIds.includes(vid));
+              const toggleVisible = () => setSelectedFrameworkIds((prev) => (allVisibleSelected
+                ? prev.filter((pid) => !visibleIds.includes(pid))                  // the ones outside the search stay chosen
+                : Array.from(new Set([...prev, ...visibleIds]))));
+              return (
+                <>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d5dbe1] bg-white p-3 hover:bg-[#f7f9fa]">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
+                    <span className="text-sm font-medium text-[#1f2933]">{term ? `All that match (${visible.length})` : `All (${uploadedFrameworks.length})`}</span>
+                  </label>
+                  {visible.map((fw: any) => (
+                    <label key={fw.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e3e8ec] bg-white p-3 hover:bg-[#f7f9fa]">
+                      <input type="checkbox" checked={selectedFrameworkIds.includes(fw.id)} onChange={() => toggleFramework(fw.id)} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-[#1f2933]">{fw.name || `Framework ${fw.id}`}</span>
+                          {(fw.short_code || fw.framework_type) && (
+                            <span className={`rounded bg-[#eef1f4] px-1.5 py-0.5 text-xs text-[#3f4b58] ${fw.short_code ? 'font-mono' : ''}`}>{fw.short_code || frameworkTypeLabel(fw.framework_type)}</span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
+                          {fw.version && <span>{versionLabel(fw.version)}</span>}
+                          {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
+                          {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+          {runError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">{runError}</p>}
         </div>
-      )}
+      </AnimatedModal>
 
       <NcaCompareModal isOpen={showNcaCompareModal} onClose={() => setShowNcaCompareModal(false)}
         documents={allDocumentsForCompare.map((d) => ({ id: d.id, title: d.title, doc_type: d.doc_type }))} initialDocumentId={id} />

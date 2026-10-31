@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { BTN, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
 import CreateControlDialog from '@/components/soc2/CreateControlDialog';
@@ -360,8 +361,11 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     onError: (error: any) => toast({ type: 'error', title: 'Not deleted', message: error?.response?.data?.detail || 'The statement could not be deleted.' }),
   });
 
+  // the dialog fades out for 200 ms after it is closed: its versions stay (the key keeps the statement it showed, the read is off) instead of flashing "No earlier versions"
+  const lastHistoryStmt = useRef<number | null>(null);
+  if (versionHistoryStmtId) lastHistoryStmt.current = versionHistoryStmtId;
   const { data: versionData, isLoading: versionsLoading } = useQuery({
-    queryKey: ['statement-versions', documentId, versionHistoryStmtId],
+    queryKey: ['statement-versions', documentId, versionHistoryStmtId ?? lastHistoryStmt.current],
     queryFn: async () => (await governanceApi.getStatementVersions(documentId, versionHistoryStmtId!)).data as any,
     enabled: !!versionHistoryStmtId,
   });
@@ -726,109 +730,99 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
         );
       })}
 
-      {versionHistoryStmtId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Statement history"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setVersionHistoryStmtId(null); setCompareVersions(null); } }}>
-          <div className="max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-[#d5dbe1] bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#d5dbe1] bg-white px-5 py-3">
-              <div className="flex items-center gap-3">
-                <History className="h-5 w-5 text-[#0f766e]" aria-hidden />
-                <h3 className="text-base font-semibold text-[#1f2933]">Statement history</h3>
-                {versionData?.total_versions != null && (
-                  <span className="rounded-full bg-[#effaf8] px-2.5 py-0.5 text-xs font-medium text-[#0b4f46]">{versionData.total_versions} version{versionData.total_versions !== 1 ? 's' : ''}</span>
-                )}
-              </div>
-              <button type="button" autoFocus onClick={() => { setVersionHistoryStmtId(null); setCompareVersions(null); }} className={ICON} aria-label="Close"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="space-y-4 p-5">
-              {versionsLoading ? (
-                <div className="flex h-32 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#0f766e]" /></div>
-              ) : versionData?.versions?.length > 0 ? (
-                <>
-                  <div className="space-y-3">
-                    {versionData.versions.map((v: any, idx: number) => {
-                      const isLatest = idx === 0;
-                      return (
-                        <div key={v.id} className={`rounded-xl border p-4 ${isLatest ? 'border-[#99d5cc] bg-[#effaf8]' : 'border-[#d5dbe1] bg-white'}`}>
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded bg-[#eef1f4] px-2 py-0.5 font-mono text-xs text-[#26323d]">v{v.version_number}</span>
-                              <span className="rounded bg-[#eef1f4] px-2 py-0.5 text-xs font-medium capitalize text-[#3f4b58]">{v.change_type?.replace(/_/g, ' ')}</span>
-                              {isLatest && <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">Current</span>}
-                            </div>
-                            {!isLatest && (
-                              <div className="flex items-center gap-2">
-                                <button type="button" onClick={() => setCompareVersions({ a: v.id, b: versionData.versions[0].id })} className={BTN}><GitCompare className="h-3.5 w-3.5" /> Compare</button>
-                                {canEdit && (
-                                  <button type="button" disabled={rollbackMutation.isPending} className={BTN} title="Roll back to this version"
-                                    onClick={() => (proposeTo ? setRollingBack({ versionId: v.id, why: '' }) : rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id }))}>
-                                    <RotateCcw className="h-3.5 w-3.5" /> {rollbackMutation.isPending ? 'Rolling back…' : 'Roll back'}
-                                  </button>
-                                )}
-                              </div>
+      {/* the statement's versions, compared and rolled back (a kit dialog: it takes focus, wraps Tab, closes on Escape, gives focus back; typing a roll back's reason asks before it is thrown away) */}
+      <AnimatedModal isOpen={!!versionHistoryStmtId} onClose={() => { setVersionHistoryStmtId(null); setCompareVersions(null); setRollingBack(null); }} size="xl" title="Statement history"
+        dirty={!!rollingBack?.why.trim()}
+        headerAccessory={versionData?.total_versions != null ? (
+          <span className="rounded-full bg-[#effaf8] px-2.5 py-0.5 text-xs font-medium text-[#0b4f46]">{versionData.total_versions} version{versionData.total_versions !== 1 ? 's' : ''}</span>
+        ) : undefined}>
+        <div className="space-y-4 p-5">
+          {versionsLoading ? (
+            <div className="flex h-32 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#0f766e]" /></div>
+          ) : versionData?.versions?.length > 0 ? (
+            <>
+              <div className="space-y-3">
+                {versionData.versions.map((v: any, idx: number) => {
+                  const isLatest = idx === 0;
+                  return (
+                    <div key={v.id} className={`rounded-xl border p-4 ${isLatest ? 'border-[#99d5cc] bg-[#effaf8]' : 'border-[#d5dbe1] bg-white'}`}>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-[#eef1f4] px-2 py-0.5 font-mono text-xs text-[#26323d]">v{v.version_number}</span>
+                          <span className="rounded bg-[#eef1f4] px-2 py-0.5 text-xs font-medium capitalize text-[#3f4b58]">{v.change_type?.replace(/_/g, ' ')}</span>
+                          {isLatest && <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">Current</span>}
+                        </div>
+                        {!isLatest && (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setCompareVersions({ a: v.id, b: versionData.versions[0].id })} className={BTN}><GitCompare className="h-3.5 w-3.5" /> Compare</button>
+                            {canEdit && (
+                              <button type="button" disabled={rollbackMutation.isPending} className={BTN} title="Roll back to this version"
+                                onClick={() => (proposeTo ? setRollingBack({ versionId: v.id, why: '' }) : rollbackMutation.mutate({ stmtId: versionHistoryStmtId!, versionId: v.id }))}>
+                                <RotateCcw className="h-3.5 w-3.5" /> {rollbackMutation.isPending ? 'Rolling back…' : 'Roll back'}
+                              </button>
                             )}
                           </div>
-                          <p className="whitespace-pre-wrap break-words text-sm text-[#26323d]">{v.statement_text}</p>
-                          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
-                            {v.changed_by_name && <span className="flex items-center gap-1"><User className="h-3 w-3" aria-hidden /> {v.changed_by_name}</span>}
-                            {v.changed_at && <span className="flex items-center gap-1"><Clock className="h-3 w-3" aria-hidden /> {new Date(v.changed_at).toLocaleString()}</span>}
-                            {v.change_reason && <span className="italic">&quot;{v.change_reason}&quot;</span>}
+                        )}
+                      </div>
+                      <p className="whitespace-pre-wrap break-words text-sm text-[#26323d]">{v.statement_text}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
+                        {v.changed_by_name && <span className="flex items-center gap-1"><User className="h-3 w-3" aria-hidden /> {v.changed_by_name}</span>}
+                        {v.changed_at && <span className="flex items-center gap-1"><Clock className="h-3 w-3" aria-hidden /> {new Date(v.changed_at).toLocaleString()}</span>}
+                        {v.change_reason && <span className="italic">&quot;{v.change_reason}&quot;</span>}
+                      </div>
+                      {proposeTo && rollingBack && rollingBack.versionId === v.id && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-[#99d5cc] bg-[#f3fbf9] p-3">
+                          <label htmlFor={`statement-rollback-why-${v.id}`} className="block text-xs font-semibold text-[#26323d]">
+                            Justification for this change <span className="font-normal text-[#586472]">(required: {proposeTo} reads it)</span>
+                          </label>
+                          <textarea id={`statement-rollback-why-${v.id}`} value={rollingBack.why} rows={2} maxLength={2000} required aria-required="true" autoFocus className={FIELD}
+                            onChange={(e) => setRollingBack({ versionId: v.id, why: e.target.value })} />
+                          <p className="text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <button type="button" onClick={() => setRollingBack(null)} className={BTN}>Cancel</button>
+                            <button type="button" disabled={rollbackMutation.isPending || !rollingBack.why.trim()} className={PRIMARY}
+                              onClick={() => rollbackMutation.mutate({ stmtId: versionHistoryStmtId!, versionId: v.id, why: rollingBack.why })}>
+                              {rollbackMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sendLabel(proposeTo)}
+                            </button>
                           </div>
-                          {proposeTo && rollingBack && rollingBack.versionId === v.id && (
-                            <div className="mt-3 space-y-2 rounded-lg border border-[#99d5cc] bg-[#f3fbf9] p-3">
-                              <label htmlFor={`statement-rollback-why-${v.id}`} className="block text-xs font-semibold text-[#26323d]">
-                                Justification for this change <span className="font-normal text-[#586472]">(required: {proposeTo} reads it)</span>
-                              </label>
-                              <textarea id={`statement-rollback-why-${v.id}`} value={rollingBack.why} rows={2} maxLength={2000} required aria-required="true" autoFocus className={FIELD}
-                                onChange={(e) => setRollingBack({ versionId: v.id, why: e.target.value })} />
-                              <p className="text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>
-                              <div className="flex flex-wrap justify-end gap-2">
-                                <button type="button" onClick={() => setRollingBack(null)} className={BTN}>Cancel</button>
-                                <button type="button" disabled={rollbackMutation.isPending || !rollingBack.why.trim()} className={PRIMARY}
-                                  onClick={() => rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id, why: rollingBack.why })}>
-                                  {rollbackMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sendLabel(proposeTo)}
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                  {compareVersions && diffData && (
-                    <div className="mt-4 rounded-xl border border-[#99d5cc] bg-white p-4">
-                      <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0b4f46]"><GitCompare className="h-4 w-4" aria-hidden /> What changed</h4>
-                      {diffData.field_changes?.length > 0 ? (
-                        <div className="space-y-2">
-                          {diffData.field_changes.map((change: any, i: number) => (
-                            <div key={i} className="rounded-lg border border-[#d5dbe1] bg-white p-3">
-                              <span className="text-xs font-semibold uppercase text-[#586472]">{change.field.replace(/_/g, ' ')}</span>
-                              <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div className="rounded border border-rose-200 bg-rose-50 p-2">
-                                  <span className="text-xs text-[#7a1616]">v{diffData.version_a.version_number}</span>
-                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#26323d]">{change.version_a_value || '(empty)'}</p>
-                                </div>
-                                <div className="rounded border border-emerald-200 bg-emerald-50 p-2">
-                                  <span className="text-xs text-emerald-800">v{diffData.version_b.version_number}</span>
-                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#26323d]">{change.version_b_value || '(empty)'}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-[#586472]">No difference</p>
                       )}
                     </div>
+                  );
+                })}
+              </div>
+              {compareVersions && diffData && (
+                <div className="mt-4 rounded-xl border border-[#99d5cc] bg-white p-4">
+                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0b4f46]"><GitCompare className="h-4 w-4" aria-hidden /> What changed</h4>
+                  {diffData.field_changes?.length > 0 ? (
+                    <div className="space-y-2">
+                      {diffData.field_changes.map((change: any, i: number) => (
+                        <div key={i} className="rounded-lg border border-[#d5dbe1] bg-white p-3">
+                          <span className="text-xs font-semibold uppercase text-[#586472]">{change.field.replace(/_/g, ' ')}</span>
+                          <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded border border-rose-200 bg-rose-50 p-2">
+                              <span className="text-xs text-[#7a1616]">v{diffData.version_a.version_number}</span>
+                              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#26323d]">{change.version_a_value || '(empty)'}</p>
+                            </div>
+                            <div className="rounded border border-emerald-200 bg-emerald-50 p-2">
+                              <span className="text-xs text-emerald-800">v{diffData.version_b.version_number}</span>
+                              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#26323d]">{change.version_b_value || '(empty)'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[#586472]">No difference</p>
                   )}
-                </>
-              ) : (
-                <p className="py-8 text-center text-sm text-[#586472]">No earlier versions</p>
+                </div>
               )}
-            </div>
-          </div>
+            </>
+          ) : (
+            <p className="py-8 text-center text-sm text-[#586472]">No earlier versions</p>
+          )}
         </div>
-      )}
+      </AnimatedModal>
     </div>
   );
 }
