@@ -22,9 +22,11 @@ from .kris_workflow import router as kris_workflow_router
 from .quantification import router as quantification_router
 from .ctem_scopes import router as ctem_scopes_router
 from .risk_library import router as risk_library_router
+from .risk_framework_requirements import router as risk_framework_requirements_router
 
 __all__ = [
     "risk_library_router",
+    "risk_framework_requirements_router",
     "quantification_router",
     "ctem_scopes_router",
     "sections_dashboard_router",

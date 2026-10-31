@@ -15,9 +15,13 @@ export interface LibraryList {
   limit: number;
   in_register_total: number;
   facets: Facets;
+  /** The organisation's own copy of the framework the library comes from; null when it has not installed it (nothing can be linked). */
+  installed_framework: { id: number; name: string } | null;
 }
 export interface AddedRisk {
   risk: { id: number; title: string; category: string; status: string; inherent_score: number | null; priority: string | null };
+  linked_controls: string[];
+  controls_not_installed: string[];
   library_risk: LibraryRisk;
 }
 

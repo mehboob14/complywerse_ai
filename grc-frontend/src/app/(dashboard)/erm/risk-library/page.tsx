@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { PageLoader } from '@/components/ui';
 import AddToRegisterDialog from './_components/AddToRegisterDialog';
 import { riskLibraryApi, type AddedRisk } from './_lib/api';
-import { PAGE_SIZE, addressOf, apiParams, filtersFrom, rangeText, type Filters, type LibraryRisk, type View } from './_lib/model';
+import { PAGE_SIZE, addedText, addressOf, apiParams, filtersFrom, rangeText, type Filters, type LibraryRisk, type View } from './_lib/model';
 
 const SELECT = 'mt-1 h-9 w-full rounded-lg border border-[#c9d1d9] bg-[#ffffff] px-2.5 text-[13px] text-[#1f2933] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/30';
 const LABEL = 'block text-[12px] font-medium text-[#586472]';
@@ -67,7 +67,7 @@ function Library() {
   const added = (a: AddedRisk) => {
     setAdding(null);
     queryClient.invalidateQueries({ queryKey: ['risk-library'] });
-    toast({ type: 'success', title: 'Added to the risk register', message: `Risk #${a.risk.id}: ${a.risk.title}` });
+    toast({ type: 'success', title: 'Added to the risk register', message: addedText(a) });
   };
 
   if (library.isLoading) return <PageLoader />;
@@ -224,7 +224,7 @@ function Library() {
         </>
       )}
 
-      <AddToRegisterDialog risk={adding} onClose={() => setAdding(null)} onAdded={added} />
+      <AddToRegisterDialog risk={adding} framework={data.installed_framework} onClose={() => setAdding(null)} onAdded={added} />
     </div>
   );
 }

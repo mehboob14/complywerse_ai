@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  CATEGORIES, addressOf, apiParams, bandOf, filtersFrom, inherentScore, problem, rangeText, requestBody, startForm,
-  type AddForm, type LibraryRisk,
+  CATEGORIES, addedText, addressOf, apiParams, bandOf, filtersFrom, inherentScore, linkable, problem, rangeText, requestBody, startForm,
+  toggleControl, type AddForm, type LibraryRisk,
 } from './model.ts';
 
 const RISK: LibraryRisk = {
@@ -44,9 +44,33 @@ test('the request leaves empty optional answers out and numbers the rest', () =>
   assert.deepEqual(body, {
     title: 'Too high residual risks', description: 'A relevant threat...', category: 'operational', owner_id: 9, business_owner_id: undefined,
     team_id: undefined, inherent_likelihood: 4, inherent_impact: 3, residual_likelihood: undefined, residual_impact: undefined,
-    treatment_plan: 'Reduce it', review_date: '2027-01-15T00:00:00', allow_duplicate: undefined,
+    treatment_plan: 'Reduce it', review_date: '2027-01-15T00:00:00', status: 'open', custom_values: undefined, control_codes: ['M2.3.1'],
+    allow_duplicate: undefined,
   });
   assert.equal(requestBody(filled(), true).allow_duplicate, true);
+});
+
+test('the organisation own field values and the ticked controls go with the request', () => {
+  const body = requestBody(filled({ status: 'in_treatment', controls: [] }), false, { business_line: 'Treasury' });
+  assert.deepEqual([body.status, body.custom_values, body.control_codes], ['in_treatment', { business_line: 'Treasury' }, []]);
+});
+
+test('every control the organisation holds is ticked at first, and the ones it lacks cannot be', () => {
+  const risk: LibraryRisk = { ...RISK, controls: [
+    { control_id: 'M2.3.1', title: 'A', installed: true }, { control_id: 'M2.3.2', title: 'B', installed: false }, { control_id: 'M2.3.3', title: 'C' }] };
+  assert.deepEqual(linkable(risk), ['M2.3.1', 'M2.3.3']);
+  assert.deepEqual(startForm(risk).controls, ['M2.3.1', 'M2.3.3']);
+  assert.equal(startForm(risk).status, 'open');
+  const all = risk.controls.map((c) => c.control_id);
+  assert.deepEqual(toggleControl(all, ['M2.3.1', 'M2.3.3'], 'M2.3.1'), ['M2.3.3']);
+  assert.deepEqual(toggleControl(all, ['M2.3.3'], 'M2.3.1'), ['M2.3.1', 'M2.3.3']);   // ticked again: back in the objective's order
+});
+
+test('the toast says how many controls were linked', () => {
+  const risk = { id: 7, title: 'Too high residual risks' };
+  assert.equal(addedText({ risk, linked_controls: [] }), 'Risk #7: Too high residual risks');
+  assert.equal(addedText({ risk, linked_controls: ['M2.3.1'] }), 'Risk #7: Too high residual risks · 1 control linked');
+  assert.equal(addedText({ risk, linked_controls: ['M2.3.1', 'M2.3.2'] }), 'Risk #7: Too high residual risks · 2 controls linked');
 });
 
 test('the filters live in the address and come back from it', () => {

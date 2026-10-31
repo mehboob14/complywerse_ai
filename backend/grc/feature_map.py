@@ -63,6 +63,7 @@ BY_PREFIX: Dict[str, Place] = {
     "/advanced-erm": ("Risk Management", "Overview"),
     "/erm/risks": ("Risk Management", "Risk Register"),
     "/erm/risk-library": ("Risk Management", "Risk Library"),
+    "/erm/framework-requirements": ("Risk Management", "Risk Register"),
     "/risks": ("Risk Management", "Risk Register"),
     "/erm/risk-assessments": ("Risk Management", "Risk Assessments"),
     "/erm/framework-risk-assessments": ("Risk Management", "Risk Assessments"),

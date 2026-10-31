@@ -1,7 +1,8 @@
 // Pure rules of the Risk Library page and its "Add to register" pop-up (no React): what the pop-up starts with, when it may be sent,
 // the score band a likelihood and an impact give, and the address the page keeps its filters in.
 
-export interface LibraryControl { control_id: string; title: string; priority?: string | null; applicability?: string | null }
+/** `installed`: this organisation's framework library holds the control, so it can be linked (absent until the server says). */
+export interface LibraryControl { control_id: string; title: string; priority?: string | null; applicability?: string | null; installed?: boolean }
 
 export interface LibraryRisk {
   id: string;
@@ -56,15 +57,26 @@ export interface AddForm {
   residual_impact: string;
   treatment_plan: string;
   review_date: string;
+  status: string;
+  /** The ids of the objective's controls to link to the new risk (only ones the organisation's framework library holds). */
+  controls: string[];
 }
 
-/** What the pop-up opens with: the library's words and the family's suggested category; the person fills in the rest. */
+/** The controls of a library risk that can be linked here: the ones this organisation's framework library holds. */
+export const linkable = (risk: LibraryRisk): string[] => risk.controls.filter((c) => c.installed !== false).map((c) => c.control_id);
+
+/** What the pop-up opens with: the library's words, the family's suggested category and every linkable control; the person fills in the rest. */
 export function startForm(risk: LibraryRisk): AddForm {
   return {
     title: risk.title, description: risk.description, category: risk.suggested_category,
     owner_id: '', business_owner_id: '', team_id: '', inherent_likelihood: '', inherent_impact: '',
-    residual_likelihood: '', residual_impact: '', treatment_plan: '', review_date: '',
+    residual_likelihood: '', residual_impact: '', treatment_plan: '', review_date: '', status: 'open', controls: linkable(risk),
   };
+}
+
+/** Tick or untick one control (the order stays the objective's). */
+export function toggleControl(all: string[], chosen: string[], id: string): string[] {
+  return all.filter((c) => (c === id ? !chosen.includes(c) : chosen.includes(c)));
 }
 
 export function inherentScore(f: Pick<AddForm, 'inherent_likelihood' | 'inherent_impact'>): number | null {
@@ -82,18 +94,25 @@ export function problem(f: AddForm): string | null {
   return null;
 }
 
-/** The body for POST /erm/risk-library/{id}/add-to-register. Empty optional answers are left out. */
-export function requestBody(f: AddForm, again: boolean): Record<string, unknown> {
+/** The body for POST /erm/risk-library/{id}/add-to-register. Empty optional answers are left out; `custom` is the tenant's own
+ *  field values from the Custom fields tab (undefined = none to send), `controls` always goes (an empty list links none). */
+export function requestBody(f: AddForm, again: boolean, custom?: Record<string, unknown>): Record<string, unknown> {
   const num = (v: string) => (v ? Number(v) : undefined);
   const text = (v: string) => (v.trim() ? v.trim() : undefined);
   return {
-    title: f.title.trim(), description: f.description.trim(), category: f.category,
+    title: f.title.trim(), description: f.description.trim(), category: f.category, status: f.status || undefined,
     owner_id: Number(f.owner_id), business_owner_id: num(f.business_owner_id), team_id: num(f.team_id),
     inherent_likelihood: Number(f.inherent_likelihood), inherent_impact: Number(f.inherent_impact),
     residual_likelihood: num(f.residual_likelihood), residual_impact: num(f.residual_impact),
     treatment_plan: text(f.treatment_plan), review_date: f.review_date ? `${f.review_date}T00:00:00` : undefined,
-    allow_duplicate: again || undefined,
+    custom_values: custom, control_codes: f.controls, allow_duplicate: again || undefined,
   };
+}
+
+/** What the toast says after an add: the new risk and how many controls it was linked to. */
+export function addedText(added: { risk: { id: number; title: string }; linked_controls: string[] }): string {
+  const n = added.linked_controls.length;
+  return `Risk #${added.risk.id}: ${added.risk.title}${n ? ` · ${n} ${n === 1 ? 'control' : 'controls'} linked` : ''}`;
 }
 
 // ── the page's filters, kept in the address ─────────────────────────────────
