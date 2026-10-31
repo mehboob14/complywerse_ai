@@ -74,7 +74,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
 };
 
 // A Governance page that draws its own heading in the body (PageHeader variant="page") shows only its section up here (the `section` branch below), so its name is not on screen twice.
-const OWN_HEADING: Record<string, string> = { '/governance': 'Governance' };
+const OWN_HEADING: Record<string, string> = { '/governance': 'Governance', '/governance/kpi-report': 'Governance' };
 
 export default function Header() {
   const router = useRouter();

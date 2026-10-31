@@ -33,7 +33,7 @@ test('signing out keeps the one thing the shell remembers about this browser', (
 });
 
 test('a Governance page that draws its own heading shows only its section in the top bar, so its name is not on screen twice', () => {
-  assert.match(header, /const OWN_HEADING: Record<string, string> = \{ '\/governance': 'Governance' \};/);
+  assert.match(header, /const OWN_HEADING: Record<string, string> = \{ '\/governance': 'Governance', '\/governance\/kpi-report': 'Governance' \};/);
   assert.match(header, /section: OWN_HEADING\[pathname \?\? ''\]/);
   assert.match(header, /if \(info\.section\) \{/, 'the branch that prints the section and not the title');
 });
