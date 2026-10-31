@@ -63,6 +63,13 @@ test('the keyboard focus ring reads (3:1) on the white menu and on the mint row 
   assert.ok(contrast(ring, mint) >= 3, `ring ${ring} on ${mint}: ${contrast(ring, mint).toFixed(2)}`);
 });
 
+test('new text in the menu stays at or above the 12px floor: only the Administration heading, which was there before, is smaller', () => {
+  const small = (tree.match(/text-\[\d+(?:\.\d+)?px\]/g) ?? []).filter((c) => parseFloat(c.slice(6)) < 12);
+  assert.deepEqual(small, ['text-[10px]'], 'the Administration flyout heading');
+  assert.match(tree, /aria-hidden className="px-2\.5 pb-0\.5 pt-2 text-\[12px\]/, 'a sub-group heading in a rail flyout');
+  assert.match(tree, /aria-hidden className="px-2\.5 py-1\.5 text-\[12px\]/, 'the group heading of a rail flyout');
+});
+
 test('the page has a skip link as its first stop, aimed at the main area', () => {
   assert.match(layout, /<a\s+href="#main-content"/);
   assert.match(layout, /<main id="main-content" tabIndex=\{-1\}/);

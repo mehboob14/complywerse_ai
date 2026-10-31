@@ -332,7 +332,7 @@ function RailFlyoutItems({ entries, activeHref, onPick }: { entries: NavEntry[];
           // a sub-group keeps its name, or three entries called Overview would be indistinguishable
           return (
             <div key={entry.name} role="group" aria-label={entry.name}>
-              <div aria-hidden className="px-2.5 pb-0.5 pt-2 text-[11px] font-semibold text-[var(--sidebar-text-section)]">{entry.name}</div>
+              <div aria-hidden className="px-2.5 pb-0.5 pt-2 text-[12px] font-semibold text-[var(--sidebar-text-section)]">{entry.name}</div>
               <RailFlyoutItems entries={entry.items} activeHref={activeHref} onPick={onPick} />
             </div>
           );
@@ -384,7 +384,7 @@ function RailGroup({ group, activeHref }: { group: NavGroup; activeHref: string 
       >
         {GroupIcon
           ? <GroupIcon {...navIconProps} />
-          : <span className="text-[11px] font-semibold">{group.name.charAt(0)}</span>}
+          : <span className="text-[12px] font-semibold">{group.name.charAt(0)}</span>}
       </button>
       {fly.open && (
         <div
@@ -397,7 +397,7 @@ function RailGroup({ group, activeHref }: { group: NavGroup; activeHref: string 
           style={fly.style}
           className="fixed z-50 max-h-[calc(100vh-16px)] min-w-[210px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-elevated focus:outline-none"
         >
-          <div aria-hidden className="px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-text)]">{group.name}</div>
+          <div aria-hidden className="px-2.5 py-1.5 text-[12px] font-semibold text-[var(--color-text)]">{group.name}</div>
           <RailFlyoutItems entries={group.items} activeHref={activeHref} onPick={fly.close} />
         </div>
       )}
