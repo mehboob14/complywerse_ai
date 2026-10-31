@@ -67,6 +67,9 @@ export interface RegisterTableProps<T> {
   cardTitle: (row: T) => ReactNode;
   /** the header stays in view while the rows scroll in the frame */
   stickyHead?: boolean;
+  /** the header row is not drawn but is still read out (`sr-only` on the <thead>, never display:none): for a table whose columns the caption and the
+   *  cells already make plain. A column's `width` still applies (it moves to the cells). The cards are unaffected: they have no header row. */
+  hideHeader?: boolean;
   /** a Tailwind max-height class with an arbitrary value, written out in full: 'max-h-[70vh]'. With `stickyHead` and none given the frame is
    *  as tall as the window leaves under the page's own header and cards (the library's measure). */
   maxHeight?: string;
@@ -94,13 +97,15 @@ function Failure({ message, onRetry }: { message: string; onRetry?: () => void }
 
 export function RegisterTable<T>({
   caption, columns, rows, getRowId, sort = null, onSortChange, onRowActivate, selectedId = null, loading = false, loadingRows = 6,
-  error = null, empty, footer, cardTitle, stickyHead = false, maxHeight,
+  error = null, empty, footer, cardTitle, stickyHead = false, hideHeader = false, maxHeight,
 }: RegisterTableProps<T>) {
   const failed = !loading && error != null;
   const isEmpty = !loading && !failed && rows.length === 0;
   const meta = columns.filter((c) => c.card === 'meta');
   const placeholders = Array.from({ length: Math.max(1, loadingRows) }, (_, i) => i);
   const isSelected = (id: string | number) => selectedId != null && String(id) === String(selectedId);
+  // with the header out of the layout (an absolutely positioned <thead> takes no part in column sizing) the columns are sized by their cells
+  const cellWidth = (c: RegisterColumn<T>) => (hideHeader ? c.width : undefined);
 
   return (
     <div className="min-w-0 max-w-full">
@@ -113,7 +118,7 @@ export function RegisterTable<T>({
           <div className="hidden md:block">
             <TableFrame aria-label={caption} maxHeight={maxHeight ?? (stickyHead ? STICKY_FRAME : undefined)}>
               <Table caption={caption} aria-busy={loading || undefined}>
-                <THead>
+                <THead className={hideHeader ? 'sr-only' : undefined}>
                   <Tr>
                     {columns.map((c) => (
                       <Th
@@ -136,7 +141,7 @@ export function RegisterTable<T>({
                   {loading ? (
                     placeholders.map((i) => (
                       <Tr key={i} aria-hidden>
-                        {columns.map((c) => <Td key={c.key} priority={c.priority}><Bar width={c.isRowHeader ? '65%' : '70%'} /></Td>)}
+                        {columns.map((c) => <Td key={c.key} priority={c.priority} className={cellWidth(c)}><Bar width={c.isRowHeader ? '65%' : '70%'} /></Td>)}
                       </Tr>
                     ))
                   ) : failed ? (
@@ -148,7 +153,7 @@ export function RegisterTable<T>({
                         <Tr key={id} selected={isSelected(id)} onActivate={onRowActivate && (() => onRowActivate(row))}>
                           {columns.map((c) => {
                             const Cell = c.isRowHeader ? RowHeaderCell : Td;
-                            return <Cell key={c.key} align={c.align} priority={c.priority}>{c.cell(row)}</Cell>;
+                            return <Cell key={c.key} align={c.align} priority={c.priority} className={cellWidth(c)}>{c.cell(row)}</Cell>;
                           })}
                         </Tr>
                       );

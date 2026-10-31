@@ -95,3 +95,26 @@ test('the classes that outrank the dashboard CSS on bare table elements are stil
     assert.ok(table.includes(cls), cls);
   }
 });
+
+test('hideHeader hides the header row from the eye only: sr-only on the thead, never display:none, so it is still read out', () => {
+  assert.match(register, /\bhideHeader\?: boolean;/);
+  assert.match(register, /stickyHead = false, hideHeader = false,/);                      // off by default: every existing register is as it was
+  const head = openingTags(register, 'THead');
+  assert.equal(head.length, 1);
+  assert.match(head[0], /className=\{hideHeader \? 'sr-only' : undefined\}/);
+  assert.doesNotMatch(head[0], /hidden|invisible|display|none|aria-hidden/);
+  assert.match(table, /function THead\(\{ className, \.\.\.rest \}: HTMLAttributes<HTMLTableSectionElement>\) \{\s*return <thead \{\.\.\.rest\} className=\{className\} \/>;/);
+  assert.match(table, /<table \{\.\.\.rest\} className=\{clsx\('relative w-full/);            // the table is positioned: an sr-only thead stays inside it, not at the page's far corner
+});
+
+test('with the header out of the layout the column widths move to the cells, in the rows and in the loading rows', () => {
+  assert.match(register, /const cellWidth = \(c: RegisterColumn<T>\) => \(hideHeader \? c\.width : undefined\);/);
+  assert.equal((register.match(/className=\{cellWidth\(c\)\}/g) ?? []).length, 2);
+  assert.match(register, /className=\{c\.width\}/);                                         // the header cell keeps its own width, drawn or not
+});
+
+test('the cards have no header row to hide: hideHeader never reaches them', () => {
+  const cards = register.slice(register.indexOf('<ul role="list"'));
+  assert.ok(cards.length > 100);
+  assert.doesNotMatch(cards, /hideHeader|sr-only|cellWidth/);
+});

@@ -2,6 +2,8 @@
 
 // Textarea: a multi-line field, same wiring and look as TextInput (see there). With `maxLength` it shows how much of it is used ("123 / 500"),
 // controlled or not; the counter is a polite live region. The browser enforces the limit. `className` goes on the wrapper, for layout only.
+// The wrapper is positioned (as TextInput's and Select's are): the (i) of a FormField label has a larger press area on a touch screen, and a positioned
+// control is drawn over it, so the first pixels of the field are the field's (infoTip.test.ts).
 import { forwardRef, useState, type ChangeEvent, type TextareaHTMLAttributes } from 'react';
 import { clsx } from 'clsx';
 import { useFieldControl } from './FormField';
@@ -28,7 +30,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     onChange?.(e);
   };
   return (
-    <div className={className}>
+    <div className={clsx('relative', className)}>
       <textarea
         {...rest}
         ref={ref}

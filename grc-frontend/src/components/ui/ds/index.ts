@@ -28,3 +28,4 @@ export {
 export { SectionCard, type SectionCardProps } from './SectionCard';
 export { SaveBar, type SaveBarProps } from './SaveBar';
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';
+export { ReadOnlyNote, type ReadOnlyNoteProps } from './ReadOnlyNote';

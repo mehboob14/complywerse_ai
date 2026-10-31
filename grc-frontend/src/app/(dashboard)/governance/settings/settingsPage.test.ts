@@ -37,6 +37,7 @@ test('every card keeps its anchor, and the days in the task table still link to 
 test('leaving with unsaved changes asks, and the confirmation is the kit\'s: said after the server answered, never for a refusal', () => {
   assert.match(page, /addEventListener\('beforeunload'/);
   assert.match(page, /useReportedMutation\(/);
+  assert.match(page, /success: \{ title: 'Settings saved', message: 'New requests, reminders and escalations use them from now on\.' \}/);   // a headline and a line, as it always read
   assert.doesNotMatch(page, /useMutation\(/);
   assert.doesNotMatch(page, /\btoast\(/);                                                  // no hand-made toast: useReportedMutation and useNotify say it
   assert.match(page, /onError: \(e\) => setServerError\(errorMessage\(e, /);                // the bar carries the refusal, cleaned
@@ -50,4 +51,10 @@ test('the page is on the design-system kit: no legacy head, button strings, hex 
   }
   assert.match(page, /<PageHeader\s+variant="page"/);
   assert.match(section, /<RegisterTable<Row>/);
+});
+
+test('a number of days is the kit\'s TextInput with its unit inside the box, not a box with a word of its own beside it', () => {
+  assert.match(page, /<TextInput type="number"[^>]*\bunit=\{unit\}/);
+  assert.doesNotMatch(page, /\{unit\}<\/span>/);
+  assert.equal((page.match(/<DaysField /g) ?? []).length, 7);                              // the seven numbers of days on the page
 });

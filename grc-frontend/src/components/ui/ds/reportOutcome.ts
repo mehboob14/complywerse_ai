@@ -91,17 +91,37 @@ export function errorToast(errorOrMessage: unknown, options: NotifyErrorOptions 
 
 export type Outcome<D, V> = { ok: true; data: D; variables: V } | { ok: false; error: unknown; variables: V };
 
+/** A confirmation: one line, or a headline with a second line under it. */
+export type SuccessWords = string | { title: string; message?: string };
+
 export interface ReportConfig<D, V> {
-  /** "Document archived", or a function of what the server returned (a throw in it is ignored: the record is saved) */
-  success: string | ((data: D, variables: V) => string);
+  /** "Document archived"; `{ title: 'Settings saved', message: 'New requests use them from now on.' }` (a headline and a second line); or a function
+   *  of what the server returned that gives either (a throw in it is ignored: the record is saved) */
+  success: SuccessWords | ((data: D, variables: V) => SuccessWords);
   /** the headline of the failure: "Couldn't archive the document" */
   failure: string;
+  /** said when the server gave no usable words, instead of the plain "Please try again." (what the server says always wins; same rule as errorMessage) */
+  fallback?: string;
   /** false: never offer Retry (a create that is not safe to repeat). Otherwise Retry is offered when canRetry(error) */
   retryable?: boolean;
 }
 
-export interface SuccessReport { kind: 'success'; message: string }
+/** `title` is there only when the confirmation has a second line: `message` is then that line (the way confirmationToast reads a title). */
+export interface SuccessReport { kind: 'success'; message: string; title?: string }
 export interface ErrorReport { kind: 'error'; title: string; message: string; retry?: () => void }
+
+/**
+ * The words of a confirmation, whatever the caller gave: a string is one line; an object is a headline and, when it has one, a second line. A part
+ * that is blank or not text is dropped (a second line without a headline becomes the headline), and nothing usable at all says "Done".
+ */
+export function successWords(words: unknown): { message: string; title?: string } {
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  if (words !== null && typeof words === 'object') {
+    const { title, message } = words as { title?: unknown; message?: unknown };
+    return text(title) && text(message) ? { title: text(title), message: text(message) } : { message: text(title) || text(message) || DONE };
+  }
+  return { message: text(words) || DONE };
+}
 
 /**
  * What to say about a finished mutation. A success outcome gives a success report and a failure outcome gives an error report, whatever the
@@ -111,12 +131,12 @@ export function reportOutcome<D, V>(outcome: { ok: true; data: D; variables: V }
 export function reportOutcome<D, V>(outcome: { ok: false; error: unknown; variables: V }, config: ReportConfig<D, V>, rerun?: (variables: V) => void): ErrorReport;
 export function reportOutcome<D, V>(outcome: Outcome<D, V>, config: ReportConfig<D, V>, rerun?: (variables: V) => void): SuccessReport | ErrorReport {
   if (outcome.ok) {
-    let text: unknown = '';
-    try { text = typeof config.success === 'function' ? config.success(outcome.data, outcome.variables) : config.success; } catch { text = ''; }
-    return { kind: 'success', message: (typeof text === 'string' && text.trim()) || DONE };
+    let words: unknown = '';
+    try { words = typeof config.success === 'function' ? config.success(outcome.data, outcome.variables) : config.success; } catch { words = ''; }
+    return { kind: 'success', ...successWords(words) };
   }
   const retry = rerun && config.retryable !== false && canRetry(outcome.error) ? () => rerun(outcome.variables) : undefined;
-  return { kind: 'error', title: (config.failure || '').trim() || ERROR_TITLE, message: errorMessage(outcome.error), retry };
+  return { kind: 'error', title: (config.failure || '').trim() || ERROR_TITLE, message: errorMessage(outcome.error, config.fallback), retry };
 }
 
 export interface ReportedMutationConfig<D, V> extends ReportConfig<D, V> {
@@ -131,7 +151,8 @@ export interface ReportedMutationConfig<D, V> extends ReportConfig<D, V> {
 
 /** What carrying out a report touches; useReportedMutation supplies the real ones, the tests fakes. */
 export interface ReportSinks<V> {
-  notifySuccess: (message: string) => void;
+  /** called with one argument for a one-line confirmation; with `{ title }` when there is a second line (`message` is then that line) */
+  notifySuccess: (message: string, options?: { title: string }) => void;
   notifyError: (message: string, options: { title: string; retry?: () => void }) => void;
   invalidate: (queryKey: readonly unknown[]) => void;
   /** start the same mutation again */
@@ -147,7 +168,9 @@ export function reportedMutationOptions<D, V>(config: ReportedMutationConfig<D, 
   return {
     mutationFn: config.mutationFn,
     onSuccess: async (data: D, variables: V): Promise<void> => {
-      sinks.notifySuccess(reportOutcome({ ok: true, data, variables }, config).message);
+      const report = reportOutcome({ ok: true, data, variables }, config);
+      if (report.title) sinks.notifySuccess(report.message, { title: report.title });
+      else sinks.notifySuccess(report.message);
       config.invalidate?.forEach((queryKey) => sinks.invalidate(queryKey));
       try { await config.onSuccess?.(data, variables); } catch (error) { console.error(error); }
     },

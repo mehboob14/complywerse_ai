@@ -49,3 +49,4 @@ export {
 export { SectionCard, type SectionCardProps } from './ds/SectionCard';
 export { SaveBar, type SaveBarProps } from './ds/SaveBar';
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './ds/SegmentedControl';
+export { ReadOnlyNote, type ReadOnlyNoteProps } from './ds/ReadOnlyNote';
