@@ -44,7 +44,11 @@ test('the library addresses use the filters the library reads, and mean what the
   const statuses = (href: string) => fromParams(new URLSearchParams(href.split('?')[1])).filters.statuses;
   assert.deepEqual(statuses(def('documents_awaiting_approval').href), ['pending_review', 'pending_approval']);
   assert.ok(sameSet(statuses(def('documents_awaiting_approval').href), KPI_STATUSES.inReview), 'the library\'s own "In review" card');
-  assert.deepEqual(statuses(def('expiring_documents_30d').href), ['approved', 'published']);
+  // the expiry counter opens the library's own expiry filter (the server's rule restated in libraryModel), with no status narrowing
+  const expiring = fromParams(new URLSearchParams(def('expiring_documents_30d').href.split('?')[1]));
+  assert.equal(expiring.filters.expiring, true);
+  assert.deepEqual(expiring.filters.statuses, []);
+  assert.equal(def('expiring_documents_30d').exact, true);
   assert.deepEqual(statuses(documentsHref.published), KPI_STATUSES.published);
   assert.deepEqual(statuses(documentsHref.archived), KPI_STATUSES.archived);
   assert.ok(sameSet(statuses(documentsHref.inReview), KPI_STATUSES.inReview));
