@@ -43,15 +43,14 @@
 //   /governance/committees/actions           -                  (none)                                   Oversight Actions             back "Committees"                        Oversight Actions
 //   /governance/kpi-report                   KPI Report         (none)                                   KPI Report                    -                                        KPI Report
 //   /erm/kris                                KRIs               (none)                                   Key Risk Indicators           -                                        KRIs
-//   /is-projects                             Projects           "IS Projects" + subtitle                 Overview (the first tab)      -                                        Projects (bar: was "IS Projects")
-//   /is-projects/dashboard, /my-projects, /:id  -               (none)                                   Overview, My Projects, name   -                                        Overview, My Projects, Project
+//   /is-projects                             Projects           "IS Projects" + subtitle                 Projects (the page head)      -                                        Projects (bar: was "IS Projects"; now its section only)
+//   /is-projects/dashboard, /my-projects, /:id  -               (none)                                   Projects Overview, My Projects, name  -                                Overview, My Projects, Project (bar: its section only)
 //   /governance/regulatory-changes           Regulatory Changes (none)                                   Regulatory changes            -                                        Regulatory Changes
 //   /governance/regulatory-changes/:id       -                  (none)                                   the change's title            back "regulatory changes"                Regulatory change
 //   /governance/regulatory-feeds             Regulatory Feeds   (none)                                   Regulatory Feeds              -                                        Regulatory Feeds
 //   /attest/:token                           -                  (none: outside the shell)                the campaign's name           -                                        Acknowledge
 // Page headings that still say another name (page files, left alone here; each page group aligns its heading to routeFor(pathname).label when it moves to the kit):
-// Document library (Documents), Key Risk Indicators (KRIs), Regulatory changes (case), Overview (Projects, its first
-// tab), Pending Approvals (two sections of Document Reviews), and the back links "Reviews", "Campaigns", "Attestations", "Studio".
+// Document library (Documents), Key Risk Indicators (KRIs), Regulatory changes (case), Pending Approvals (two sections of Document Reviews), and the back links "Reviews", "Campaigns", "Attestations", "Studio".
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry, type NavItem } from '../components/layout/navAccess.ts';
 import { cleanPath, underPath } from '../components/layout/navActive.ts';
 
@@ -134,7 +133,7 @@ const OF_LEAF: Record<string, Extra> = {
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'], ownHeading: true },
   '/erm/kris': { keywords: ['Key Risk Indicators'] },
-  [PROJECTS]: { subtitle: 'Track and manage information security projects across the organization', keywords: ['IS Projects'] },
+  [PROJECTS]: { subtitle: 'Track and manage information security projects across the organization', keywords: ['IS Projects'], ownHeading: true },
 };
 
 const leaves: RouteEntry[] = sidebar.map(({ item, groups }) => ({
@@ -169,9 +168,9 @@ const pages: RouteEntry[] = [
   gov(`${COMMITTEES}/meetings/:id`, 'Meeting', { parent: COMMITTEES, hidden: 'opens from a committee', ownHeading: true }),
   gov(`${COMMITTEES}/actions`, 'Oversight Actions', { parent: COMMITTEES, hidden: 'opens from the Committees page and the Overview\'s overdue-actions counter', ownHeading: true }),
   gov(`${REGULATORY}/:id`, 'Regulatory change', { parent: REGULATORY, hidden: 'opens from the Regulatory Changes list' }),
-  gov(`${PROJECTS}/dashboard`, 'Overview', { title: 'Projects Overview', parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its Overview tab' }),
-  gov(`${PROJECTS}/my-projects`, 'My Projects', { parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its My Projects tab' }),
-  gov(`${PROJECTS}/:id`, 'Project', { parent: PROJECTS, hidden: 'opens from the Projects list' }),
+  gov(`${PROJECTS}/dashboard`, 'Overview', { title: 'Projects Overview', parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its Overview tab', ownHeading: true }),
+  gov(`${PROJECTS}/my-projects`, 'My Projects', { parent: PROJECTS, hidden: 'no link opens it; the Projects page shows the same view as its My Projects tab', ownHeading: true }),
+  gov(`${PROJECTS}/:id`, 'Project', { parent: PROJECTS, hidden: 'opens from the Projects list', ownHeading: true }),
   gov('/attest/:token', 'Acknowledge', { hidden: 'public page for people outside the organisation (an e-mailed link): no menu, no top bar' }),
 ];
 
