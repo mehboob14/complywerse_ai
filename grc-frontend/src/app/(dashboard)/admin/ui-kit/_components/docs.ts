@@ -45,6 +45,33 @@ const UI = '@/components/ui';
 const DS = 'src/components/ui/ds';
 const UIDIR = 'src/components/ui';
 
+const SELECT_BASE: PartDoc = {
+  name: 'SelectBaseProps', source: `${DS}/SelectPopover.tsx`, own: 'SelectBaseProps',
+  props: [
+    prop('label', 'string', 'The control\'s name ("Status"): it names the button ("Status: Draft, Approved") and the list for a screen reader, and is drawn before the choice with `showLabel`.'),
+    prop('options', 'readonly ListOption[]', 'What can be chosen.'),
+    prop('placeholder', 'string', 'What the button says while nothing is chosen ("All statuses").', "'Select…'"),
+    prop('searchable', 'boolean', 'A search box above the options (every word must be in the label or the description, any case, no accents: the library\'s fold). The default is yes from 9 options.', 'options > 8'),
+    prop('searchPlaceholder', 'string', 'What the empty search box says.', "'Search'"),
+    prop('emptyText', 'string', 'What the list says when a search leaves no option.', "'No matches'"),
+    prop('showLabel', 'boolean', 'Draws the name before the choice ("Status: Draft"): for a filter bar that has no FormField label.', 'false'),
+    prop('disabled', 'boolean', 'Shown, cannot be opened.', 'false'),
+    prop('invalid', 'boolean', 'A red outline (a FormField with an error does this by itself).', 'false'),
+    prop('id', 'string', 'The button\'s id, when the page needs a fixed one; a FormField gives it one and points its label at it.'),
+    CLASS_NAME,
+  ],
+};
+
+const LIST_OPTION: PartDoc = {
+  name: 'ListOption', source: `${DS}/listboxModel.ts`, own: 'ListOption',
+  props: [
+    prop('value', 'string', 'What the page stores (an id, a code).'),
+    prop('label', 'string', 'What the person reads; search and type-ahead look at it.'),
+    prop('description', 'string', 'A second line under the label (an email under a name); searched too.'),
+    prop('disabled', 'boolean', 'Shown, cannot be chosen; the arrow keys skip it.'),
+  ],
+};
+
 export const DOCS: Record<string, ComponentDoc> = {
   Button: {
     name: 'Button',
@@ -161,6 +188,45 @@ export const DOCS: Record<string, ComponentDoc> = {
           CLASS_NAME,
         ],
       },
+    ],
+  },
+  MultiSelect: {
+    name: 'MultiSelect',
+    importFrom: UI,
+    imports: ['MultiSelect'],
+    use: 'the person chooses several values from a list: statuses, owners, frameworks. A button that says what is chosen ("3 selected", or the first two as chips and "+N") opens a popover of options with checkboxes, a search box when the list is long, and Select all / Clear. The popover is drawn on the window, so a table, a card or a dialog cannot clip it. Keys: ArrowDown, ArrowUp, Home, End, a letter (type-ahead), Space or Enter to choose, Ctrl+A to choose all shown, Escape to close.',
+    dont: 'Do not use it for one value (Combobox) or for a few fixed choices (checkboxes in the form), and do not leave `label` out: it names the button and the list for a screen reader. A chosen value whose option has not loaded yet is shown as it is, never as "nothing chosen": do not hide a filter that is in force.',
+    parts: [
+      {
+        name: 'MultiSelect', source: `${DS}/MultiSelect.tsx`, own: 'MultiSelectProps',
+        props: [
+          prop('value', 'readonly string[]', 'The values chosen, in the order they were chosen.'),
+          prop('onChange', '(value: string[]) => void', 'The whole choice after a change: a new array.'),
+          prop('display', "'count' | 'chips'", 'How the button shows several: "3 selected" (one is its label), or the first two as chips and "+N".', "'count'"),
+          inherited(prop('...SelectBaseProps', '', 'label, options, placeholder, searchable, searchPlaceholder, emptyText, showLabel, disabled, invalid, id, className: see below.')),
+        ],
+      },
+      SELECT_BASE,
+      LIST_OPTION,
+    ],
+  },
+  Combobox: {
+    name: 'Combobox',
+    importFrom: UI,
+    use: 'the person chooses ONE value from a list that may be long (an owner, a department, a framework): the browser\'s own select cannot search. The same button, popover and keys as MultiSelect; choosing an option closes the list and gives focus back to the button, so the next Tab goes on.',
+    dont: 'Do not use it for a handful of options (Select: the browser\'s own list works on a phone and with a screen reader), and do not leave `label` out. It is the kit\'s: the older ComboBoxInput and MultiSelectDropdown keep their own looks until their pages move.',
+    parts: [
+      {
+        name: 'Combobox', source: `${DS}/Combobox.tsx`, own: 'ComboboxProps',
+        props: [
+          prop('value', 'string | null', 'The value chosen, or null for none.'),
+          prop('onChange', '(value: string | null) => void', 'The value chosen, or null when it was cleared.'),
+          prop('clearable', 'boolean', 'Choosing the chosen option again clears it: for a field that may stay empty.', 'false'),
+          inherited(prop('...SelectBaseProps', '', 'label, options, placeholder, searchable, searchPlaceholder, emptyText, showLabel, disabled, invalid, id, className: see below.')),
+        ],
+      },
+      SELECT_BASE,
+      LIST_OPTION,
     ],
   },
   Checkbox: {

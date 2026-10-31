@@ -25,6 +25,9 @@ export { FormField, useFieldControl, type FormFieldProps } from './ds/FormField'
 export { TextInput, type TextInputProps } from './ds/TextInput';
 export { Textarea, type TextareaProps } from './ds/Textarea';
 export { Select, type SelectProps } from './ds/Select';
+export { MultiSelect, type MultiSelectProps } from './ds/MultiSelect';
+export { Combobox, type ComboboxProps } from './ds/Combobox';
+export type { ListOption, SelectDisplay } from './ds/listboxModel';
 export { Checkbox, type CheckboxProps } from './ds/Checkbox';
 export { StatusPill, type StatusPillProps } from './ds/StatusPill';
 export { Avatar, type AvatarProps, type AvatarSize } from './ds/Avatar';
