@@ -10,7 +10,7 @@
 // (cards below 768px), Menu for the row's actions, StatusPill, useConfirm for the "deactivate?" question, useReportedMutation for what it does.
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, Building2, CornerDownRight, Lock, Pencil, Plus, Power } from 'lucide-react';
+import { ArrowUpRight, Building2, CornerDownRight, Pencil, Plus, Power } from 'lucide-react';
 import { clsx } from 'clsx';
 import { departmentsApi, type Department } from '@/lib/api';
 import { EMPTY } from '@/lib/format';
@@ -20,7 +20,7 @@ import {
 import { departmentStatus, statusPill } from '@/lib/status';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, EmptyState, Menu, RegisterTable, SectionCard, StatusPill, type MenuItem, type RegisterColumn } from '@/components/ui/ds';
+import { Button, EmptyState, Menu, ReadOnlyNote, RegisterTable, SectionCard, StatusPill, type MenuItem, type RegisterColumn } from '@/components/ui/ds';
 import { useConfirm } from '@/components/ui/ds/useConfirm';
 import { useNotify } from '@/components/ui/ds/useNotify';
 import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
@@ -135,10 +135,10 @@ export function DepartmentsSection() {
             {!empty && !failed && add}
           </>
         ) : permsLoading ? undefined : (
-          <span className="inline-flex items-center gap-[6px] text-ds-body text-ds-fg-muted">
-            <Lock size={14} aria-hidden /> View only
+          <ReadOnlyNote>
+            View only
             <InfoTip text="Only an administrator, or someone whose role lets them edit the organisation, can add or change departments." label="Why departments are view only" />
-          </span>
+          </ReadOnlyNote>
         )}
       >
         {empty ? (

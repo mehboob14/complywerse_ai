@@ -17,7 +17,7 @@ import { priority as priorityStatus, statusPill } from '@/lib/status';
 import { PageHeader } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import {
-  Button, Checkbox, EmptyState, ErrorState, FormField, RowHeaderCell, SaveBar, SectionCard, SegmentedControl, Select, SkeletonLines, StatusPill,
+  Button, Checkbox, EmptyState, ErrorState, FormField, ReadOnlyNote, RowHeaderCell, SaveBar, SectionCard, SegmentedControl, Select, SkeletonLines, StatusPill,
   Table, TableFrame, TBody, Td, Textarea, TextInput, Th, THead, Tr,
 } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -176,10 +176,10 @@ export default function GovernanceSettingsPage() {
         title="Governance settings"
         info="How long people have to review, approve and acknowledge documents, who is reminded and told when it is late, and the task each person gets. They apply to the whole organisation."
         meta={ro ? (
-          <span className="inline-flex items-center gap-[6px]">
-            <Lock size={14} aria-hidden /> View only
+          <ReadOnlyNote>
+            View only
             <InfoTip text="Only an administrator, or someone given the Governance Settings right, can change them." label="Why these settings are view only" />
-          </span>
+          </ReadOnlyNote>
         ) : undefined}
         actions={canEdit ? (
           <Button leftIcon={<RotateCcw aria-hidden />} onClick={() => data.defaults && set(data.defaults)} disabled={atDefaults}
