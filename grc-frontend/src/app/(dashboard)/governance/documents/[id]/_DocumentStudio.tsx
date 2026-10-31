@@ -3,34 +3,35 @@
 /**
  * A library document in the AI Studio. Everyone reads it here and does their own step (acknowledge, review and sign, approve and
  * sign, publish, submit for review); the people who may change it open their one draft of it with Edit. One top bar: the status
- * (its life cycle on hover), the version, the views (Document · Approvals · Statements · Mappings · Gap analysis · Versions), the one main action for
- * this person, Edit, Download and ⋯; the rest opens in popups. Opening the document only reads: no studio session is made
- * until Edit (POST /governance/studio/documents/{id}/draft), and who may do what comes from GET .../access.
+ * (its life cycle on hover), the version, the one main action for this person, Edit, Download and ⋯, and under it the views (Document ·
+ * Approvals · Statements · Mappings · Gap analysis · Versions) as the kit's Tabs; the rest opens in popups. Opening the document only
+ * reads: no studio session is made until Edit (POST /governance/studio/documents/{id}/draft), and who may do what comes from GET .../access.
+ * The open view is kept as it always was: `view` state, `?tab=` written by setView, read again when the address changes (_view/docRoute.ts).
  */
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ChevronDown, Download, FileCheck2, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
-} from 'lucide-react';
+import { useQuery, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
+import { AlertCircle, Archive, ArchiveRestore, ArrowLeft, FileCheck2, FileText, Info, Link2, Loader2, PenLine, Send, Sparkles, XCircle } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { documentApi, type DraftOpened } from '@/lib/studio/documentApi';
-import { problemOf, problemOfBlob, saveBlob } from '@/lib/studio/api';
+import { problemOfBlob, saveBlob } from '@/lib/studio/api';
 import { ago } from '@/lib/studio/text';
 import { documentChainApi, type ExportFormat } from '@/lib/documentChain';
 import { approvalRecordExport, exportReply, recordFileName } from '@/lib/approvalRecord';
-import { day, type LifecycleReply } from '@/lib/documentLifecycle';
+import type { LifecycleReply } from '@/lib/documentLifecycle';
 import { actOf, actOutcome } from '@/lib/documentTasks';
 import { usePermissions } from '@/hooks/usePermissions';
-import { PageLoader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_ICON, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
+import {
+  Button, ErrorState, FormField, IconButton, Menu, Skeleton, SkeletonLines, StatusPill, TabPanel, Tabs, TextInput, useNotify, useReportedMutation,
+  type MenuItem,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import GovernanceMappingsPage from '../../mappings/page';
-import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, StatusChip, useSignoff } from '../_SignoffControl';
+import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, useSignoff } from '../_SignoffControl';
 import { LifecycleHover } from '../_workspace/LifecycleHover';
 import { bulkArchive, restoreDocument } from '../_workspace/api';
 import { ARCHIVE_LINE } from '../_workspace/archive';
@@ -45,52 +46,23 @@ import ReviewHistory from './_ReviewHistory';
 import { ClassicDocumentPage } from './_LegacyDocumentPage';
 import StatementsView from './_StatementsView';
 import GapAnalysisView from './_GapAnalysisView';
-import ProposalsView, { ProposalsBanner, ProposeNote, useProposals, useProposedAnswer } from './_ProposalsView';
-import { deciderName, sendLabel, signRoleOf, type Proposal } from '@/lib/proposals';
-import { LIBRARY_VIEWS, VIEWS, retryUnlessRefused, viewOf, type DocView } from '../_view/docRoute';
+import ProposalsView, { ProposalsBanner, ProposeNote, proposedWords, useProposals, useRefreshAfterProposal } from './_ProposalsView';
+import { deciderName, proposedOf, sendLabel, signRoleOf, type Proposal } from '@/lib/proposals';
+import { LIBRARY_VIEWS, retryUnlessRefused, viewOf, type DocView } from '../_view/docRoute';
 import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf, stepLine } from '../_view/docActions';
+import { docStatusPill } from '../_view/docStatus';
+import { docTabs } from '../_view/docTabs';
+import { editState } from '../_view/docEdit';
+import { loadFailure } from '../_view/docLoad';
+import { day } from '../_view/docDates';
 
 const TYPE_LABEL: Record<string, string> = {
   policy: 'Policy', standard: 'Standard', procedure: 'Procedure', guideline: 'Guideline', charter: 'Charter', framework: 'Framework',
 };
 type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'archive' | 'resubmit';
 const FULL_ON_PHONE = 'max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none';
-// (the buttons are the Documents area's shared ones, components/governance/docUi: BTN, PRIMARY = BTN_PRIMARY, BTN_ICON)
-const ITEM = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-const ITEM_DANGER = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#9b1c1c] hover:bg-[#fdf2f2] disabled:opacity-50';
-
-/** A small menu: a button, a list under it; closes on a choice, a click outside or Escape. */
-function Menu({ label, icon, children, align = 'right', title, width = 'w-64' }: { label?: string; icon: React.ReactNode; children: (close: () => void) => React.ReactNode; align?: 'left' | 'right'; title: string; width?: string }) {
-  const [open, setOpenState] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  // closing by a choice or Escape gives the keyboard focus back to the button, not to the page
-  const setOpen = (v: boolean | ((cur: boolean) => boolean)) => setOpenState((cur) => {
-    const next = typeof v === 'function' ? v(cur) : v;
-    if (cur && !next) setTimeout(() => trigger.current?.focus(), 0);
-    return next;
-  });
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpenState(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-  }, [open]);
-  return (
-    <div ref={box} className="relative">
-      <button ref={trigger} type="button" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} title={title} aria-label={label ? undefined : title} className={label ? BTN : BTN_ICON}>
-        {icon}{label && <span className="hidden lg:inline">{label}</span>}{label && <ChevronDown className="hidden h-3.5 w-3.5 lg:block" aria-hidden />}
-      </button>
-      {open && (
-        <div role="menu" className={`absolute top-full z-50 mt-1 ${width} max-w-[calc(100vw-1.5rem)] rounded-xl border border-[#d5dbe1] bg-white p-1 shadow-xl ${align === 'right' ? 'right-0' : 'left-0'}`}>
-          {children(() => setOpen(false))}
-        </div>
-      )}
-    </div>
-  );
-}
+// the strip of views is the kit's tab list, drawn as the second row of the bar: white, with the bar's side padding
+const STRIP = '[&>[role=tablist]]:shrink-0 [&>[role=tablist]]:bg-ds-surface [&>[role=tablist]]:px-[12px] sm:[&>[role=tablist]]:px-[16px]';
 
 export default function DocumentStudio() {
   const params = useParams();
@@ -99,7 +71,7 @@ export default function DocumentStudio() {
   const router = useRouter();
   const search = useSearchParams();
   const qc = useQueryClient();
-  const { toast } = useToast();
+  const notify = useNotify();
   // the view's scroll box: the link to the Change log under the document starts that view at its top, not where the link was
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -111,6 +83,9 @@ export default function DocumentStudio() {
   // an earlier version read in the Document view (Read on its card in Versions), until "Back to the current version"
   const [reading, setReading] = useState<{ id: number; number: string } | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  // typed in the sign / acknowledge popups (a drawn signature, a comment): Escape and the X ask before they throw it away
+  const [signDirty, setSignDirty] = useState(false);
+  const [ackDirty, setAckDirty] = useState(false);
   // ?version=<id> (a version in the library tree): the Versions view opens on it
   const focusVersion = Number(search?.get('version')) || undefined;
   // ?proposal=<id> (a task, a notification, My Approvals): Proposed changes opens on it
@@ -159,34 +134,38 @@ export default function DocumentStudio() {
   const proposalCount = proposalsQ.data?.items.length ?? 0;
   const proposalsWaiting = proposalsQ.data?.pending ?? 0;
   useEffect(() => { if (view === 'proposals' && proposalsQ.isError) setViewState('document'); }, [view, proposalsQ.isError]);
-  const handledAsProposal = useProposedAnswer();
+  const refreshAfterProposal = useRefreshAfterProposal();
 
   const refreshAll = () => {
     for (const key of ['governance-document', 'document-access', 'doc-signoff', 'document-lifecycle', 'document-chain', 'document-chain-redline',
       'document-versions', 'document-view-html', 'governance-documents']) qc.invalidateQueries({ queryKey: [key] });
   };
-  const edit = useMutation({
+  // opening the draft is not a write that is reported (the person goes to the Studio): a failure says so, with what the server said and a Retry
+  const edit: UseMutationResult<DraftOpened, Error, boolean> = useMutation<DraftOpened, Error, boolean>({
     mutationFn: (fresh: boolean) => documentApi.draft(id, fresh),
     onSuccess: (d) => {
       if (d.stale) { setStale(d); setPopup('stale'); return; }
       router.push(`/governance/documents/studio/${d.session_id}`);
     },
-    onError: (e) => toast({ type: 'error', title: 'The draft could not be opened', message: problemOf(e) }),
+    onError: (e, fresh) => { notify.error(e, { title: 'The draft could not be opened', retry: () => edit.mutate(fresh) }); },
   });
-  const publish = useMutation({
+  const publish = useReportedMutation({
     mutationFn: () => governanceApi.publishDocument(id),
-    onSuccess: () => { setPopup(null); refreshAll(); toast({ type: 'success', title: 'Published', message: 'It is the version everyone reads now.' }); },
-    onError: (e) => toast({ type: 'error', title: 'Not published', message: problemOf(e) }),
+    success: { title: 'Published', message: 'It is the version everyone reads now.' },
+    failure: 'Not published',
+    onSuccess: () => { setPopup(null); refreshAll(); },
   });
-  const restore = useMutation({
+  const restore = useReportedMutation({
     mutationFn: (v: { id: number; why?: string }) => governanceApi.rollbackDocumentVersion(id, v.id, v.why),
+    // a restore by someone who is not the owner or author becomes a proposal: the server's sentence says so, and the document is as it was
+    success: (res) => proposedWords(res?.data, deciderName(docQ.data))
+      ?? { title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' },
+    failure: 'Not restored',
     onSuccess: (res) => {
       setRestoring(null);
-      if (handledAsProposal(res?.data, deciderName(docQ.data))) return;           // sent to the owner: the document is as it was
+      if (proposedOf(res?.data)) { refreshAfterProposal(); return; }
       refreshAll();
-      toast({ type: 'success', title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' });
     },
-    onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
   const { hasPermission, isLoading: permsLoading } = usePermissions();
   // the library (its lists, the Statements, Mappings and Gap analysis views, the way back to the documents): any governance:policies
@@ -200,22 +179,18 @@ export default function DocumentStudio() {
     refreshAll();
   };
   // documents are archived, never deleted (the user, 2026-10-17): every version, signature and the history are kept
-  const archive = useMutation({
+  const archive = useReportedMutation({
     mutationFn: () => bulkArchive([id]),
-    onSuccess: () => {
-      setPopup(null);
-      refreshLibrary();
-      toast({ type: 'success', title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' });
-    },
+    success: { title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' },
+    failure: 'Not archived',
+    onSuccess: () => { setPopup(null); refreshLibrary(); },
   });
   // back as a draft: it is reviewed, approved and published again before it is in force; no version is made by restoring
-  const unarchive = useMutation({
+  const unarchive = useReportedMutation({
     mutationFn: () => restoreDocument(id),
-    onSuccess: () => {
-      refreshLibrary();
-      toast({ type: 'success', title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.' });
-    },
-    onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
+    success: { title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.' },
+    failure: 'Not restored',
+    onSuccess: () => { refreshLibrary(); },
   });
 
   // a version asked for by the URL where the life cycle is off: its Versions view is only a button, so the version history opens
@@ -247,7 +222,7 @@ export default function DocumentStudio() {
       myRole: signRoleOf(signoff.data), doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)),
       canResubmit: !!signoff.data?.can_resubmit });
     if ('popup' in out) setPopup(out.popup);
-    else toast({ type: 'info', title: out.title, message: out.message });
+    else notify.info(out.message, { title: out.title });
     const q = new URLSearchParams(search?.toString() ?? '');
     q.delete('act');
     router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
@@ -266,7 +241,7 @@ export default function DocumentStudio() {
       setTrackedRange(null);
       setReading(v.status === 'current' ? null : { id: v.id, number: v.version_number });
     } else {
-      toast({ type: 'error', title: 'That version could not be opened', message: readQ.error ? problemOf(readQ.error) : 'It is not a version of this document.' });
+      notify.error(readQ.error ?? 'It is not a version of this document.', { title: 'That version could not be opened', fallback: 'It is not a version of this document.' });
     }
     const q = new URLSearchParams(search?.toString() ?? '');
     q.delete('read');
@@ -290,10 +265,15 @@ export default function DocumentStudio() {
   if (!valid) return <NotFound library={library} />;
   // a backend from before the AI Studio's document view (not restarted, or not deployed yet): the classic page
   if ((accessQ.error as any)?.response?.status === 404) return <ClassicDocumentPage />;
-  if (docQ.isLoading || accessQ.isLoading) return <PageLoader className="h-64" />;
+  if (docQ.isLoading || accessQ.isLoading) return <PageSkeleton />;
   const doc = docQ.data;
-  const refused = (docQ.error as any)?.response?.status === 403 ? String((docQ.error as any).response.data?.detail || REFUSED) : null;
-  if (docQ.error || !doc) return <NotFound library={library} refused={refused} />;
+  // a refusal (403) says the server's sentence, a missing document (404) says so, and a failed read (a 500, no connection) says that and offers Retry: it is not "not found"
+  const why = loadFailure(docQ.error);
+  const refused = why === 'refused' ? String((docQ.error as any).response?.data?.detail || REFUSED) : null;
+  if (docQ.error || !doc) {
+    return <NotFound library={library} refused={refused}
+      failure={why === 'failed' ? { message: errorMessage(docQ.error), onRetry: () => { void docQ.refetch(); } } : null} />;
+  }
 
   const access = accessQ.data;
   const canEdit = !!access?.can_edit;
@@ -356,7 +336,7 @@ export default function DocumentStudio() {
       const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
       saveBlob(res.data as Blob, named ? decodeURIComponent(named) : doc.file_name || `${doc.title} v${version}.pdf`);
     } catch (e) {
-      toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
+      notify.error(await problemOfBlob(e), { title: 'Not downloaded', retry: () => { void downloadThis(); } });
     } finally { setDownloading(null); }
   };
   // the document with its control pages in it (a platform document: a PDF with them where its own sections are; Word, PDF: after the
@@ -371,13 +351,13 @@ export default function DocumentStudio() {
         try {
           const record = await approvalRecordExport(id, { fallbackName: recordFileName(doc.title, version) });
           saveBlob(record.blob, record.filename);
-          toast({ type: 'info', title: 'Two files downloaded', message: 'This kind of file cannot carry the document control pages inside it, so they came as a PDF of their own.' });
+          notify.info('This kind of file cannot carry the document control pages inside it, so they came as a PDF of their own.', { title: 'Two files downloaded' });
         } catch (e) {
-          toast({ type: 'error', title: 'The document control pages were not downloaded', message: `${await problemOfBlob(e)} The document itself was.` });
+          notify.error(`${await problemOfBlob(e)} The document itself was.`, { title: 'The document control pages were not downloaded' });
         }
       }
     } catch (e) {
-      toast({ type: 'error', title: 'Not downloaded', message: await problemOfBlob(e) });
+      notify.error(await problemOfBlob(e), { title: 'Not downloaded', retry: () => { void downloadWithRecord(); } });
     } finally { setDownloading(null); }
   };
   const downloadLog = async (format: ExportFormat) => {
@@ -386,235 +366,230 @@ export default function DocumentStudio() {
       const { blob, filename } = await documentChainApi.exportFile(id, format);
       saveBlob(blob, filename);
     } catch (e) {
-      toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
+      notify.error(e, { title: 'Not downloaded', retry: () => { void downloadLog(format); } });
     } finally { setDownloading(null); }
   };
-  const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit';
-  // the typed-name sign-off writes into the document's own text: only a text document (an uploaded file keeps its own table)
+  const copyLink = () => {
+    const link = `${window.location.origin}/governance/documents/${id}`;
+    const notCopied = () => notify.error(`Copy it from here: ${link}`, { title: 'Not copied' });
+    if (!navigator.clipboard) notCopied();
+    else void navigator.clipboard.writeText(link).then(
+      () => notify.success('Anyone who may see the document can open it with this link.', { title: 'Link copied' }), notCopied);
+  };
+  const editing = editState({ mayChange, openable: access?.openable, reason: access?.reason, archived, draft, ago });
+  // typed-name sign-off writes into the document's own text: only a text document (an uploaded file keeps its own table)
   const canTyped = mayChange && !doc.has_file && /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(doc.content || '');
+
+  // the same items, in the same order and under the same conditions as the hand-rolled menus had (the Change log's formats are named in full:
+  // a menu item is read on its own, so "Excel" alone would not say of what)
+  const downloadItems: MenuItem[] = [
+    { key: 'record', label: 'With document control pages', icon: FileCheck2, onSelect: () => { void downloadWithRecord(); } },
+    { key: 'original', label: 'Original file', icon: FileText, onSelect: () => { void downloadThis(); } },
+    { key: 'earlier', label: 'An earlier version…', onSelect: () => setView('versions') },
+    ...(lifecycleOn
+      ? (['xlsx', 'pdf', 'csv'] as ExportFormat[]).map((f): MenuItem => ({ key: `log-${f}`, label: `Change log as ${f === 'xlsx' ? 'Excel' : f.toUpperCase()}`, onSelect: () => { void downloadLog(f); } }))
+      : []),
+  ];
+  const moreItems: MenuItem[] = [
+    { key: 'details', label: 'Details…', icon: Info, onSelect: () => setPopup('details') },
+    { key: 'copy', label: 'Copy link', icon: Link2, onSelect: copyLink },
+    { key: 'history', label: 'Version history…', hidden: lifecycleOn, onSelect: () => setPopup('history') },
+    { key: 'control', label: 'Document control…', hidden: !canTyped, onSelect: () => setPopup('control') },
+    { key: 'settings', label: 'Due dates and escalation…', hidden: !(lifecycleOn && !archived), onSelect: () => setPopup('settings') },
+    { key: 'workflows', label: 'Older approval requests', hidden: lifecycleOn, onSelect: () => router.push('/governance/workflows') },
+    { key: 'archive', label: 'Archive document…', icon: Archive, danger: true, hidden: !canArchive, onSelect: () => { archive.reset(); setPopup('archive'); } },
+    { key: 'restore', label: 'Restore from the archive', icon: ArchiveRestore, hidden: !(archived && canEdit), disabled: unarchive.isPending, onSelect: () => unarchive.mutate() },
+  ];
+  const tabs = docTabs({ library, open: view, proposals: proposalCount, proposalsWaiting, openRemarks, pendingApprovals, yourStep: !!(personal && primary?.kind !== 'acknowledge') });
+  // the version read is the published one for someone the server sent `newer_version`; the version on its way is a pill
+  const shownStatus = doc.newer_version && !archived ? 'published' : doc.status;
+  const newerWords = doc.newer_version ? `v${doc.newer_version.number} ${SIGNOFF_STATUS[doc.newer_version.status]?.label.toLowerCase() ?? 'on its way'}` : '';
 
   return (
     // fills the page under the app's top bar (cancels main's compact padding exactly, as the AI Studio's workspace does); the bar
     // stays, the view scrolls under it
     <div className="-m-[14px] flex h-[calc(100vh-3rem)] flex-col bg-[#f4f6f8] lg:-m-4">
       {/* ── the one bar ─────────────────────────────────────────────── */}
-      <header className="z-30 shrink-0 border-b border-[#d5dbe1] bg-white px-3 py-2 sm:px-4">
+      <header className="z-30 shrink-0 bg-white px-3 pb-1 pt-2 sm:px-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {library && (
-            <Link href="/governance/documents" className="inline-flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-sm text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" title="Back to the documents">
-              <ArrowLeft className="h-4 w-4" aria-hidden /><span className="hidden lg:inline">Documents</span>
-            </Link>
+            <Button href="/governance/documents" variant="ghost" size="sm" leftIcon={<ArrowLeft aria-hidden />} aria-label="Back to the documents" title="Back to the documents">
+              <span className="hidden lg:inline">Documents</span>
+            </Button>
           )}
-          <div className="flex min-w-[14rem] flex-1 items-center gap-2">
-            <h1 className="min-w-0 truncate text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
-            {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
-            {/* the version read is the published one for someone the server sent `newer_version`; the version on its way is a pill */}
-            <LifecycleHover doc={doc} focusable><StatusChip status={doc.newer_version && !archived ? 'published' : doc.status} /></LifecycleHover>
-            <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
-            {doc.newer_version && !archived ? (
-              <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">v{doc.newer_version.number} {SIGNOFF_STATUS[doc.newer_version.status]?.label.toLowerCase() ?? 'on its way'}</span>
-            ) : inForceNote && (
-              <span className="shrink-0 rounded-full border border-[#99d5cc] bg-[#effaf8] px-2 py-0.5 text-[11px] font-medium text-[#0b4f46]">v{doc.version_in_force} in force</span>
-            )}
-            <span className="hidden shrink-0 rounded-full bg-[#eef1f4] px-2 py-0.5 text-[11px] font-medium text-[#3f4b58] sm:inline">{TYPE_LABEL[doc.doc_type] ?? doc.doc_type}</span>
-            <button type="button" onClick={() => setPopup('details')} title="Details" aria-label="Details" className="shrink-0 rounded-md p-1 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]"><Info className="h-4 w-4" /></button>
+          {/* the title and its pills wrap as two blocks: the pills stay beside a short title and drop under a long one, instead of squeezing it to a few letters */}
+          <div className="flex min-w-[14rem] flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            {/* two lines at most, the whole title in the tooltip and in Details (a 500-character title no longer pushes the bar out of shape) */}
+            <h1 className="line-clamp-2 min-w-0 max-w-full break-words text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
+            <div className="flex shrink-0 items-center gap-2">
+              {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
+              <LifecycleHover doc={doc} focusable><StatusPill {...docStatusPill(shownStatus)} className="min-h-[24px]" /></LifecycleHover>
+              <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
+              {doc.newer_version && !archived ? (
+                <StatusPill tone="warning" label={newerWords} className="shrink-0" />
+              ) : inForceNote && (
+                <StatusPill tone="success" label={`v${doc.version_in_force} in force`} className="shrink-0" />
+              )}
+              <StatusPill tone="neutral" label={TYPE_LABEL[doc.doc_type] ?? doc.doc_type} className="hidden shrink-0 sm:inline-flex" />
+              <IconButton label="Details" onClick={() => setPopup('details')}><Info aria-hidden /></IconButton>
+            </div>
           </div>
 
-          <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
+          <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
             {canEdit && (
-              <button type="button" onClick={() => edit.mutate(false)} disabled={!mayChange || !access?.openable || edit.isPending} className={BTN} aria-label={editLabel}
-                title={!mayChange || !access?.openable ? access?.reason ?? 'This document is archived. Restore it to change it.' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Edit in Comply AI Studio'}>
-                {edit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                <span className="hidden lg:inline">{editLabel}</span>
-              </button>
+              <>
+                <Button leftIcon={<Sparkles aria-hidden />} loading={edit.isPending} disabled={editing.disabled} onClick={() => edit.mutate(false)} aria-label={editing.label} title={editing.title}>
+                  <span className="hidden lg:inline">{editing.label}</span>
+                </Button>
+                {/* a disabled button says nothing: the reason is the (i) beside it, reachable by keyboard */}
+                {editing.why && <InfoTip align="end" label="Why it cannot be edited" text={editing.why} />}
+              </>
             )}
             {primary && (
-              <button type="button" onClick={act} className={PRIMARY}>
-                {primary.kind === 'submit' ? <Send className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}{primary.label}
-              </button>
+              // (no icon on a phone: Edit, the action, Download and More then fit one row at 390 wide)
+              <Button variant="primary" leftIcon={primary.kind === 'submit' ? <Send aria-hidden className="hidden sm:block" /> : <PenLine aria-hidden className="hidden sm:block" />} onClick={act}>{primary.label}</Button>
             )}
-            <Menu title="Download" label="Download" width="w-80" icon={downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}>
-              {(close) => (
-                <>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadWithRecord(); }}><FileCheck2 className="h-4 w-4" /> With document control pages</button>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadThis(); }}><FileText className="h-4 w-4" /> Original file</button>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setView('versions'); }}>An earlier version…</button>
-                  {lifecycleOn && (
-                    <>
-                      <div role="presentation" className="px-2.5 pb-0.5 pt-2 text-xs font-semibold text-[#586472]">Change log</div>
-                      {(['xlsx', 'pdf', 'csv'] as ExportFormat[]).map((f) => (
-                        <button key={f} type="button" role="menuitem" className={ITEM} onClick={() => { close(); void downloadLog(f); }}>{f === 'xlsx' ? 'Excel' : f.toUpperCase()}</button>
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-            </Menu>
-            <Menu title="More" icon={<MoreHorizontal className="h-4 w-4" />}>
-              {(close) => (
-                <>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('details'); }}><Info className="h-4 w-4" /> Details…</button>
-                  <button type="button" role="menuitem" className={ITEM} onClick={() => {
-                    close();
-                    const link = `${window.location.origin}/governance/documents/${id}`;
-                    const notCopied = () => toast({ type: 'error', title: 'Not copied', message: `Copy it from here: ${link}` });
-                    if (!navigator.clipboard) notCopied();
-                    else void navigator.clipboard.writeText(link).then(
-                      () => toast({ type: 'success', title: 'Link copied', message: 'Anyone who may see the document can open it with this link.' }), notCopied);
-                  }}><Link2 className="h-4 w-4" /> Copy link</button>
-                  {!lifecycleOn && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('history'); }}>Version history…</button>}
-                  {canTyped && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('control'); }}>Document control…</button>}
-                  {lifecycleOn && !archived && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('settings'); }}>Due dates and escalation…</button>}
-                  {!lifecycleOn && <Link role="menuitem" href="/governance/workflows" className={ITEM} onClick={close}>Older approval requests</Link>}
-                  {canArchive && <button type="button" role="menuitem" className={ITEM_DANGER} onClick={() => { close(); archive.reset(); setPopup('archive'); }}><Archive className="h-4 w-4" /> Archive document…</button>}
-                  {archived && canEdit && <button type="button" role="menuitem" className={ITEM} disabled={unarchive.isPending} onClick={() => { close(); unarchive.mutate(); }}><ArchiveRestore className="h-4 w-4" /> Restore from the archive</button>}
-                </>
-              )}
-            </Menu>
+            <Menu label="Download" items={downloadItems} />
+            {downloading && <span role="status" className="inline-flex items-center"><Loader2 className="h-[16px] w-[16px] animate-spin text-ds-fg-muted" aria-hidden /><span className="sr-only">Downloading</span></span>}
+            <Menu label="More" iconOnly items={moreItems} />
           </div>
-
-          {/* the views: in the bar on very wide screens, on their own row below it otherwise */}
-          <nav aria-label="Views" className="order-last -mx-1 flex w-full overflow-x-auto px-1 [scrollbar-width:none] 2xl:order-none 2xl:mx-0 2xl:w-auto 2xl:px-0 [&::-webkit-scrollbar]:hidden">
-            <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="tablist">
-              {VIEWS.filter((v) => (library || !LIBRARY_VIEWS.has(v.key)) && (v.key !== 'proposals' || proposalCount > 0 || view === 'proposals')).map((v) => {
-                const on = view === v.key;
-                const badge = v.key === 'approvals' ? (personal && primary?.kind !== 'acknowledge' ? 'Your step' : pendingApprovals ? String(pendingApprovals) : '')
-                  : v.key === 'discussion' && openRemarks ? String(openRemarks)
-                  : v.key === 'proposals' && proposalsWaiting ? String(proposalsWaiting) : '';
-                return (
-                  <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)}
-                    className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ${on ? 'bg-white text-[#0b4f46] shadow-sm' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
-                    {v.label}
-                    {badge && <span className={`rounded-full px-1.5 text-[10px] font-semibold ${badge === 'Your step' ? 'bg-amber-100 text-amber-900' : 'bg-white text-[#3f4b58]'}`}>{badge}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
         </div>
       </header>
 
-      {/* ── the view ────────────────────────────────────────────────── */}
+      {/* ── the views and the view ───────────────────────────────────── */}
       {/* (Proposed changes is wider: two documents side by side) */}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
-        {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
-        {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
-        {archived && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2" role="status">
-            <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
-            <span className="min-w-0 flex-1 text-[13px] text-[#26323d]">
-              <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}</span> · not in force
-              {canEdit && <InfoTip className="ml-1" label="About restoring" text="Restore it to work on it again as a draft; it is in force again once approved and published." />}
-            </span>
-            {canEdit && (
-              <button type="button" onClick={() => unarchive.mutate()} disabled={unarchive.isPending} className={BTN}>
-                {unarchive.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />} Restore
-              </button>
-            )}
-          </div>
-        )}
-        {personal && view === 'document' && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
-            <span className="min-w-0 flex-1 text-[13px] font-medium text-amber-950">
-              {stepLine({ kind: personal.kind, due })}
-              {personal.kind === 'acknowledge' && ackVersion !== version ? ` · v${ackVersion} in force` : ''}
-              <InfoTip className="ml-1" label="What to do first" text={`Read the document first, then ${personal.kind === 'acknowledge' ? 'acknowledge it' : 'sign it'}.`} />
-            </span>
-            <button type="button" onClick={act} className={PRIMARY}><PenLine className="h-4 w-4" /> {personal.label}</button>
-          </div>
-        )}
-        {inForceNote && view === 'document' && !reading && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] px-4 py-2" role="status">
-            <span className="min-w-0 flex-1 text-[13px] text-[#0b3f38]">
-              {inForceNote}
-              <InfoTip className="ml-1" label="About the published version" text="The published version stays in force until the new one is approved and published." />
-            </span>
-            {!doc.newer_version && doc.in_force_version_id && (
-              <button type="button" onClick={() => setReading({ id: doc.in_force_version_id, number: doc.version_in_force })} className={BTN}>Read v{doc.version_in_force}</button>
-            )}
-          </div>
-        )}
-        {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} onProposeAgain={proposeAgain} />}
-        {rejected && view === 'document' && (
-          <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2" role="status">
-            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9b1c1c]" aria-hidden />
-            <span className="min-w-0 flex-1 text-[13px] text-[#7a1616]">
-              <span className="font-semibold">Rejected by {rejected.user || 'a reviewer'}{rejected.done_at ? ` on ${day(rejected.done_at)}` : ''}</span>
-              {rejected.comment ? `: ${rejected.comment}` : '.'}
-            </span>
-          </div>
-        )}
-        {view === 'document' && (
-          <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
-            chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={mayChange} reading={reading} onStopReading={() => setReading(null)}
-            onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
-            ackedVersion={ackedVersion}
-            onOpenChangeLog={() => { scroller.current?.scrollTo({ top: 0 }); setView('versions'); }} />
-        )}
-        {view === 'approvals' && (
-          lifecycleOn ? (
-            <>
-              {/* the person's own step is asked in the bar's popups, with the version shown */}
-              <LifecycleTab documentId={id} doc={doc} canEdit={canEdit} canAnnotate={canAnnotate} settings={false} ownSteps={false} discussion={false} />
-              <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
-            </>
-          ) : (
-            <>
-              <SignOffControlTab documentId={id} doc={doc} canEdit={canEdit} version={version} />
-              <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
-            </>
-          )
-        )}
-        {view === 'proposals' && (
-          <ProposalsView documentId={id} doc={doc} asked={proposalAsked} onPick={openProposal} onProposeAgain={proposeAgain} />
-        )}
-        {/* the Discussion: everyone who can open the document comments (its author, reviewers, approvers, the people asked to acknowledge it) */}
-        {view === 'discussion' && (
-          <section className="relative">
-            <DocumentAnnotationPanel documentId={id} variant="page" />
-            {/* the panel's own header has room on its right: the paragraph that stood above it is this (i) */}
-            <span className="absolute right-3 top-2.5">
-              <InfoTip align="end" label="About the discussion" text="Questions and comments on this document from everyone working on it: its author, reviewers and approvers, and the people asked to acknowledge it." />
-            </span>
-          </section>
-        )}
-        {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
-        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} again={again} onAgainOpened={() => setAgain(null)} />}
-        {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} canEdit={mayChange} />}
-        {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={mayChange} />}
-        {view === 'versions' && (
-          lifecycleOn ? (
-            <ChainTab documentId={id} currentVersion={version} onRestore={mayChange ? setRestoring : undefined} focusVersionId={focusVersion}
-              onShowInDocument={(range) => { setReading(null); setTrackedRange(range); setView('document'); }}
-              onRead={(v) => { setTrackedRange(null); setReading(v); setView('document'); }} />
-          ) : (
-            <section className="flex items-center gap-1.5 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
-              <button type="button" onClick={() => setPopup('history')} className={BTN}>Open versions</button>
-              <InfoTip label="About the versions" text={`Every version of this document, with its file and what changed${mayChange ? ', and Restore' : ''}.`} />
-            </section>
-          )
-        )}
-      </div></div>
+      <Tabs tabs={tabs} value={view} onChange={(k) => setView(k as DocView)} ariaLabel="Views" className={`flex min-h-0 flex-1 flex-col ${STRIP}`}>
+        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+          {accessQ.isError && (
+            <ErrorState compact title="Couldn't read what you may do with this document" message={errorMessage(accessQ.error)} onRetry={() => { void accessQ.refetch(); }} />
+          )}
+          {/* a failed read of the proposed changes is not "none waiting": the banner and the tab would be missing without a word (a refusal or a server without them is the answer, not a failure) */}
+          {proposalsQ.isError && loadFailure(proposalsQ.error) === 'failed' && (
+            <ErrorState compact title="Couldn't check for proposed changes" message={errorMessage(proposalsQ.error)} onRetry={() => { void proposalsQ.refetch(); }} />
+          )}
+          {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
+          {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
+          {archived && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2" role="status">
+              <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
+              <span className="min-w-0 flex-1 text-[13px] text-[#26323d]">
+                <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}</span> · not in force
+                {canEdit && <InfoTip className="ml-1" label="About restoring" text="Restore it to work on it again as a draft; it is in force again once approved and published." />}
+              </span>
+              {canEdit && (
+                <Button leftIcon={<ArchiveRestore aria-hidden />} loading={unarchive.isPending} onClick={() => unarchive.mutate()}>Restore</Button>
+              )}
+            </div>
+          )}
+          {personal && view === 'document' && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
+              <span className="min-w-0 flex-1 text-[13px] font-medium text-amber-950">
+                {stepLine({ kind: personal.kind, due })}
+                {personal.kind === 'acknowledge' && ackVersion !== version ? ` · v${ackVersion} in force` : ''}
+                <InfoTip className="ml-1" label="What to do first" text={`Read the document first, then ${personal.kind === 'acknowledge' ? 'acknowledge it' : 'sign it'}.`} />
+              </span>
+              <Button variant="primary" leftIcon={<PenLine aria-hidden />} onClick={act}>{personal.label}</Button>
+            </div>
+          )}
+          {inForceNote && view === 'document' && !reading && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#99d5cc] bg-[#effaf8] px-4 py-2" role="status">
+              <span className="min-w-0 flex-1 text-[13px] text-[#0b3f38]">
+                {inForceNote}
+                <InfoTip className="ml-1" label="About the published version" text="The published version stays in force until the new one is approved and published." />
+              </span>
+              {!doc.newer_version && doc.in_force_version_id && (
+                <Button onClick={() => setReading({ id: doc.in_force_version_id, number: doc.version_in_force })}>Read v{doc.version_in_force}</Button>
+              )}
+            </div>
+          )}
+          {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} onProposeAgain={proposeAgain} />}
+          {rejected && view === 'document' && (
+            <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2" role="status">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9b1c1c]" aria-hidden />
+              <span className="min-w-0 flex-1 text-[13px] text-[#7a1616]">
+                <span className="font-semibold">Rejected by {rejected.user || 'a reviewer'}{rejected.done_at ? ` on ${day(rejected.done_at)}` : ''}</span>
+                {rejected.comment ? `: ${rejected.comment}` : '.'}
+              </span>
+            </div>
+          )}
+          {/* each view's content is drawn only while it is the open one (as before): the panels give the strip its tabpanel and aria-controls */}
+          {tabs.map((t) => (
+            <TabPanel key={t.key} tabKey={t.key}>
+              {t.key === 'document' && view === 'document' && (
+                <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} htmlFailed={htmlQ.isError ? errorMessage(htmlQ.error) : null}
+                  onRetryHtml={loadFailure(htmlQ.error) === 'failed' ? () => { void htmlQ.refetch(); } : undefined} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
+                  chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={mayChange} reading={reading} onStopReading={() => setReading(null)}
+                  onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
+                  ackedVersion={ackedVersion}
+                  onOpenChangeLog={() => { scroller.current?.scrollTo({ top: 0 }); setView('versions'); }} />
+              )}
+              {t.key === 'approvals' && view === 'approvals' && (
+                lifecycleOn ? (
+                  <>
+                    {/* the person's own step is asked in the bar's popups, with the version shown */}
+                    <LifecycleTab documentId={id} doc={doc} canEdit={canEdit} canAnnotate={canAnnotate} settings={false} ownSteps={false} discussion={false} />
+                    <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
+                  </>
+                ) : (
+                  <>
+                    <SignOffControlTab documentId={id} doc={doc} canEdit={canEdit} version={version} />
+                    <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
+                  </>
+                )
+              )}
+              {t.key === 'proposals' && view === 'proposals' && (
+                <ProposalsView documentId={id} doc={doc} asked={proposalAsked} onPick={openProposal} onProposeAgain={proposeAgain} />
+              )}
+              {/* the Discussion: everyone who can open the document comments (its author, reviewers, approvers, the people asked to acknowledge it) */}
+              {t.key === 'discussion' && view === 'discussion' && (
+                <section className="relative">
+                  <DocumentAnnotationPanel documentId={id} variant="page" />
+                  {/* the panel's own header has room on its right: the paragraph that stood above it is this (i) */}
+                  <span className="absolute right-3 top-2.5">
+                    <InfoTip align="end" label="About the discussion" text="Questions and comments on this document from everyone working on it: its author, reviewers and approvers, and the people asked to acknowledge it." />
+                  </span>
+                </section>
+              )}
+              {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
+              {t.key === 'statements' && view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} again={again} onAgainOpened={() => setAgain(null)} />}
+              {t.key === 'mappings' && view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} canEdit={mayChange} />}
+              {t.key === 'gaps' && view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={mayChange} />}
+              {t.key === 'versions' && view === 'versions' && (
+                lifecycleOn ? (
+                  <ChainTab documentId={id} currentVersion={version} onRestore={mayChange ? setRestoring : undefined} focusVersionId={focusVersion}
+                    onShowInDocument={(range) => { setReading(null); setTrackedRange(range); setView('document'); }}
+                    onRead={(v) => { setTrackedRange(null); setReading(v); setView('document'); }} />
+                ) : (
+                  <section className="flex items-center gap-1.5 rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
+                    <Button onClick={() => setPopup('history')}>Open versions</Button>
+                    <InfoTip label="About the versions" text={`Every version of this document, with its file and what changed${mayChange ? ', and Restore' : ''}.`} />
+                  </section>
+                )
+              )}
+            </TabPanel>
+          ))}
+        </div></div>
+      </Tabs>
 
       {/* ── popups ──────────────────────────────────────────────────── */}
       <DetailsDialog doc={doc} open={popup === 'details'} onClose={() => setPopup(null)} canEdit={mayChange} />
       <SubmitDialog documentId={id} doc={doc} open={popup === 'submit'} onClose={() => setPopup(null)} />
       <ResubmitDialog documentId={id} open={popup === 'resubmit'} onClose={() => setPopup(null)} />
-      <AnimatedModal isOpen={popup === 'sign'} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE}
+      <AnimatedModal isOpen={popup === 'sign'} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} dirty={signDirty}
         title={asIs ? 'Sign it as it is' : myStep ? STEP_LABEL[myStep.kind] : primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
-        <div className="p-4"><SignoffAction documentId={id} due={mySign?.due_date} version={version} /></div>
+        <div className="p-4"><SignoffAction documentId={id} due={mySign?.due_date} version={version} onDirty={setSignDirty} /></div>
       </AnimatedModal>
-      <AnimatedModal isOpen={popup === 'ack' && !!myAck} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} title="Acknowledge"
+      <AnimatedModal isOpen={popup === 'ack' && !!myAck} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} title="Acknowledge" dirty={ackDirty}
         subtitle={`${doc.title} · version ${ackVersion}${ackVersion !== version ? ', the one in force' : ''}`}>
         <div className="p-4">
-          {myAck && <AckAction base={`/governance/documents/${id}/lifecycle`} row={myAck} open version={ackVersion} onCancel={() => setPopup(null)} onDone={() => { setPopup(null); refreshAll(); }} />}
+          {myAck && <AckAction base={`/governance/documents/${id}/lifecycle`} row={myAck} open version={ackVersion} onCancel={() => setPopup(null)} onDone={() => { setPopup(null); refreshAll(); }} onDirty={setAckDirty} />}
         </div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'publish'} onClose={() => setPopup(null)} size="md" title={`Publish version ${version}?`}
         footer={(
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setPopup(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => publish.mutate()} disabled={publish.isPending} className={PRIMARY}>{publish.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Publish</button>
+            <Button onClick={() => setPopup(null)}>Cancel</Button>
+            <Button variant="primary" loading={publish.isPending} onClick={() => publish.mutate()}>Publish</Button>
           </div>
         )}>
         <p className="px-5 py-4 text-sm text-[#26323d]">{publishLine(version, lifecycleOn)}</p>
@@ -622,23 +597,19 @@ export default function DocumentStudio() {
       <AnimatedModal isOpen={popup === 'archive'} onClose={() => setPopup(null)} size="md" title={`Archive “${doc.title}”?`}
         footer={(
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setPopup(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => archive.mutate()} disabled={archive.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
-              {archive.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />} Archive
-            </button>
+            <Button onClick={() => setPopup(null)}>Cancel</Button>
+            <Button variant="danger" leftIcon={<Archive aria-hidden />} loading={archive.isPending} onClick={() => archive.mutate()}>Archive</Button>
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
           <p className="text-sm text-[#26323d]">{ARCHIVE_LINE}</p>
-          {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'stale' && !!stale} onClose={() => setPopup(null)} size="md" title="Your draft is out of date"
         footer={(
           <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => stale && router.push(`/governance/documents/studio/${stale.session_id}`)} className={BTN}>Continue my draft</button>
-            <button type="button" onClick={() => edit.mutate(true)} disabled={edit.isPending} className={PRIMARY}>{edit.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Start again from v{stale?.library_version}</button>
+            <Button onClick={() => stale && router.push(`/governance/documents/studio/${stale.session_id}`)}>Continue my draft</Button>
+            <Button variant="primary" loading={edit.isPending} onClick={() => edit.mutate(true)}>Start again from v{stale?.library_version}</Button>
           </div>
         )}>
         <p className="px-5 py-4 text-sm text-[#26323d]">
@@ -649,13 +620,14 @@ export default function DocumentStudio() {
       <AnimatedModal isOpen={popup === 'settings'} onClose={() => setPopup(null)} size="lg" title="Due dates and escalation">
         <div className="p-4"><SettingsCard inPopup /></div>
       </AnimatedModal>
-      <AnimatedModal isOpen={!!restoring} onClose={() => setRestoring(null)} size="md" title={`Restore version ${restoring?.number}?`}
+      <AnimatedModal isOpen={!!restoring} onClose={() => setRestoring(null)} size="md" title={`Restore version ${restoring?.number}?`} dirty={!!restoring?.why?.trim()}
         footer={(
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setRestoring(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => restoring && restore.mutate(restoring)} disabled={restore.isPending || (proposes && !restoring?.why?.trim())} className={PRIMARY}>
-              {restore.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : proposes ? <Send className="h-4 w-4" aria-hidden /> : null} {proposes ? sendLabel(decider) : 'Restore'}
-            </button>
+            <Button onClick={() => setRestoring(null)}>Cancel</Button>
+            <Button variant="primary" loading={restore.isPending} leftIcon={proposes ? <Send aria-hidden /> : undefined} disabled={proposes && !restoring?.why?.trim()}
+              onClick={() => restoring && restore.mutate(restoring)}>
+              {proposes ? sendLabel(decider) : 'Restore'}
+            </Button>
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
@@ -668,12 +640,10 @@ export default function DocumentStudio() {
             <ProposeNote id="restore-why" decider={decider} value={restoring?.why ?? ''} placeholder="e.g. The last edit was made in error"
               onChange={(v) => setRestoring((r) => (r ? { ...r, why: v } : r))} />
           ) : (
-            <label className="block">
-              <span className="text-xs font-semibold text-[#26323d]">Why <span className="font-normal text-[#586472]">(optional)</span></span>
-              <input type="text" value={restoring?.why ?? ''} maxLength={500} placeholder="e.g. The last edit was made in error"
-                onChange={(e) => setRestoring((r) => (r ? { ...r, why: e.target.value } : r))}
-                className="mt-1 w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#586472] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]" />
-            </label>
+            <FormField label="Why" optional>
+              <TextInput value={restoring?.why ?? ''} maxLength={500} placeholder="e.g. The last edit was made in error"
+                onChange={(e) => setRestoring((r) => (r ? { ...r, why: e.target.value } : r))} />
+            </FormField>
           )}
         </div>
       </AnimatedModal>
@@ -686,8 +656,27 @@ export default function DocumentStudio() {
 
 const REFUSED = 'You may not open this document. It opens for people allowed to read the document library and for anyone asked to review, approve or acknowledge it.';
 
-/** Not found, or (`refused`: the server's sentence) not this person's to read; the way back only for who reads the library. */
-function NotFound({ library = true, refused = null }: { library?: boolean; refused?: string | null }) {
+/** What the page shows while the document and what the person may do with it are read: grey blocks, never an empty page. */
+function PageSkeleton() {
+  return (
+    <div className="space-y-4 p-4">
+      <Skeleton className="h-[24px] w-[260px]" />
+      <SkeletonLines lines={8} label="Loading the document" />
+    </div>
+  );
+}
+
+/** Not found, or (`refused`: the server's sentence) not this person's to read, or (`failure`) not read at all: that is not "not found", and it offers Retry.
+ *  The way back only for who reads the library. */
+function NotFound({ library = true, refused = null, failure = null }: { library?: boolean; refused?: string | null; failure?: { message: string; onRetry: () => void } | null }) {
+  if (failure) {
+    return (
+      <div className="mx-auto flex max-w-xl flex-col items-center gap-3 px-4 py-10 text-center">
+        <ErrorState title="Couldn't load this document" message={failure.message} onRetry={failure.onRetry} />
+        {library && <Link href="/governance/documents" className="text-sm font-semibold text-[#0b6b58] underline">Back to Documents</Link>}
+      </div>
+    );
+  }
   return (
     <div className="flex h-64 flex-col items-center justify-center gap-3 px-4 text-center">
       <AlertCircle className="h-10 w-10 text-[#9b1c1c]" aria-hidden />

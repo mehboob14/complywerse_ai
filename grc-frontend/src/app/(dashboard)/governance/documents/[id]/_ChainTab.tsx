@@ -30,13 +30,14 @@ import {
 } from '@/lib/changeLog';
 import { problemOf, saveBlob, type Segment } from '@/lib/studio/api';
 import { ago, plural, wordDiff } from '@/lib/studio/text';
-import { dateTime } from '@/lib/documentLifecycle';
-import { parseUtc } from '@/lib/serverTime';
-import { useToast } from '@/components/ui/ToastProvider';
+import { formatCount } from '@/lib/format';
+import { clock, dateTime } from '../_view/docDates';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import { BTN, BTN_TEXT } from '@/components/governance/docUi';
-import { InitialsAvatar } from '../_workspace/lib';
+import {
+  Button, EmptyState, ErrorState, Menu, PersonChip, PersonStack, SkeletonLines, Table, TableFrame, TBody, Td, THead, Th, Tr, useNotify, type MenuItem,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { OriginBadge, SourceChips, originLook } from '../studio/_components/ChangeAttribution';
 
 const MUTED = 'text-[#586472]';
@@ -121,7 +122,6 @@ type DiffMode = 'redline' | 'sides';
 const eventMeta = (kind: string) => EVENT[kind] ?? { label: kind.replace(/_/g, ' '), icon: FileText, tone: SLATE };
 const eventLabel = (kind: string) => eventMeta(kind).label;
 const LABELS = { kind: (s: string) => (KIND[s] ?? KIND.modified).label, event: eventLabel, source: (k: string) => ORIGIN_LABEL[k] ?? 'Changed' };
-const clock = (at: string | null) => parseUtc(at)?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) ?? '';
 
 /** sources with nothing to name them by (a change made on the person's request) are labelled by what they rest on, not "Source" */
 const named = (sources: ChainSource[]) => (sources ?? []).map((s) => (s.ref || s.title || s.locator ? s : { ...s, title: sourceLabel(s) }));
@@ -133,9 +133,9 @@ const originLabel = (v: ChainVersion, isFirst: boolean) => (isFirst && v.origin 
 
 function Words({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" title={`${added} words added, ${removed} removed`}>
-      <span className="font-mono font-semibold text-emerald-700">+{added}</span>
-      <span className="font-mono font-semibold text-rose-700">−{removed}</span>
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" title={`${formatCount(added)} words added, ${formatCount(removed)} removed`}>
+      <span className="font-mono font-semibold text-emerald-700">+{formatCount(added)}</span>
+      <span className="font-mono font-semibold text-rose-700">−{formatCount(removed)}</span>
       <span className={MUTED}>words</span>
     </span>
   );
@@ -207,9 +207,9 @@ function ItemCard({ item, version, mode }: { item: ChainItem; version: string; m
   return (
     <li className="rounded-xl border border-[#d5dbe1] bg-[#fff]">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#e1e6eb] px-3 py-2">
-        <span className="rounded-md bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[11px] font-semibold text-[#26323d]" title="Reference in the export">{version}.{item.n}</span>
+        <span className="rounded-md bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-xs font-semibold text-[#26323d]" title="Reference in the export">{version}.{item.n}</span>
         <SectionPath section={item.section} />
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}{tag ? ` · ${tag}` : ''}</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}{tag ? ` · ${tag}` : ''}</span>
         {!shape && <span className="ml-auto"><Words added={item.words_added} removed={item.words_removed} /></span>}
       </div>
       <div className="px-3 py-2.5">
@@ -282,13 +282,13 @@ function VersionDetail({ entry, current, mode, onMode, onShow, onDownload, downl
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${look.node}`} aria-hidden><Icon className="h-3.5 w-3.5" /></span>
             <span className="text-[15px] font-semibold text-[#1f2933]">v{v.number}</span>
-            {current && <span className="rounded-full bg-[#f0fdfa] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e] ring-1 ring-inset ring-primary-100">Current</span>}
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${look.pill}`}>{originLabel(v, isFirst)}</span>
-            {size && !isFirst && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${size.tone}`} title="How big the change was: a major change raises the first number of the version">{size.label}</span>}
-            {!v.comparable && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Text not readable</span>}
+            {current && <span className="rounded-full bg-[#f0fdfa] px-2 py-0.5 text-xs font-semibold text-[#0f766e] ring-1 ring-inset ring-primary-100">Current</span>}
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${look.pill}`}>{originLabel(v, isFirst)}</span>
+            {size && !isFirst && <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${size.tone}`} title="How big the change was: a major change raises the first number of the version">{size.label}</span>}
+            {!v.comparable && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Text not readable</span>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <span className="inline-flex items-center gap-1.5 text-[#26323d]"><InitialsAvatar name={v.by} size="sm" /> {v.by}</span>
+            <PersonChip name={v.by} size={20} />
             <span className={MUTED} title={ago(v.at)}>{dateTime(v.at)}</span>
             <Stage stage={v.stage} label={v.stage_label} />
             {v.has_file && v.file_name && <span className={`inline-flex min-w-0 items-center gap-1 break-all ${MUTED}`}><FileText className="h-3.5 w-3.5 shrink-0" aria-hidden /> {v.file_name}</span>}
@@ -297,22 +297,14 @@ function VersionDetail({ entry, current, mode, onMode, onShow, onDownload, downl
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           {v.has_file && (
-            <button type="button" onClick={onDownload} disabled={downloading} title={`Download the file of version ${v.number}`} className={BTN}>
-              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />} File
-            </button>
+            <Button leftIcon={<FileDown aria-hidden />} loading={downloading} title={`Download the file of version ${v.number}`} onClick={onDownload}>File</Button>
           )}
           {onRead && !current && (
-            <button type="button" onClick={onRead} title={`Read version ${v.number} as it was`} className={BTN}>
-              <BookOpen className="h-4 w-4" /> Read
-            </button>
+            <Button leftIcon={<BookOpen aria-hidden />} title={`Read version ${v.number} as it was`} onClick={onRead}>Read</Button>
           )}
-          <button type="button" onClick={onShow} disabled={!canShow} title={canShow ? "See this version's changes marked in the document" : 'The original has nothing before it to compare with'} className={BTN}>
-            <GitCompare className="h-4 w-4" /> Show in document
-          </button>
+          <Button leftIcon={<GitCompare aria-hidden />} disabled={!canShow} title={canShow ? "See this version's changes marked in the document" : 'The original has nothing before it to compare with'} onClick={onShow}>Show in document</Button>
           {onRestore && !current && (
-            <button type="button" onClick={onRestore} title={`Make version ${v.number} the document again, as a new version`} className={BTN}>
-              <RotateCcw className="h-4 w-4" /> Restore
-            </button>
+            <Button leftIcon={<RotateCcw aria-hidden />} title={`Make version ${v.number} the document again, as a new version`} onClick={onRestore}>Restore</Button>
           )}
         </div>
       </div>
@@ -340,9 +332,9 @@ function VersionDetail({ entry, current, mode, onMode, onShow, onDownload, downl
           ? <p className={`text-xs ${MUTED}`}>{v.items.length ? 'None match the filters' : nothing}</p>
           : <ul className="space-y-2.5">{items.map((it) => <ItemCard key={`${v.id}-${it.n}`} item={it} version={v.number} mode={mode} />)}</ul>}
         {entry.hidden > 0 && (
-          <button type="button" onClick={() => setAll(!all)} className={`mt-2 ${BTN_TEXT}`}>
+          <Button variant="link" className="mt-2" aria-expanded={all} onClick={() => setAll(!all)}>
             {all ? 'Show matching only' : `Show ${plural(entry.hidden, 'other change')}`}
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -363,7 +355,7 @@ function EventDetail({ entry, versionThen, mode, onMode }: { entry: EventEntry; 
       </div>
       <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
         <dt className={MUTED}>Who</dt>
-        <dd className="text-[#26323d]">{e.actor ? <span className="inline-flex items-center gap-1.5"><InitialsAvatar name={e.actor} size="sm" /> {e.actor}</span> : 'Not recorded'}</dd>
+        <dd className="text-[#26323d]">{e.actor ? <PersonChip name={e.actor} size={20} /> : 'Not recorded'}</dd>
         <dt className={MUTED}>When</dt>
         <dd className="text-[#26323d]">{e.at ? `${dateTime(e.at)} (${ago(e.at)})` : 'Not recorded'}</dd>
         {e.to && (
@@ -439,9 +431,9 @@ function EntryRow({ entry, current, selected, open, wide, onPick }: { entry: Log
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="text-[13px] font-semibold text-[#1f2933]">v{v.number}</span>
-          <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${look.pill}`}>{originLabel(v, entry.first)}</span>
-          {size && !entry.first && <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${size.tone}`}>{size.label}</span>}
-          {current && <span className="rounded-full bg-[#f0fdfa] px-1.5 py-0.5 text-[11px] font-semibold text-[#0f766e] ring-1 ring-inset ring-primary-100">Current</span>}
+          <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${look.pill}`}>{originLabel(v, entry.first)}</span>
+          {size && !entry.first && <span className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${size.tone}`}>{size.label}</span>}
+          {current && <span className="rounded-full bg-[#f0fdfa] px-1.5 py-0.5 text-xs font-semibold text-[#0f766e] ring-1 ring-inset ring-primary-100">Current</span>}
         </span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[#26323d]">
           <span>{v.by}</span>
@@ -482,14 +474,14 @@ function Journey({ versions, onPick }: { versions: ChainVersion[]; onPick: (id: 
                 <button key={v.id} type="button" onClick={() => onPick(v.id)}
                   title={`v${v.number} · ${originLabel(v, i === 0)} · ${v.by} · ${dateTime(v.at)}${v.changes ? ` · ${plural(v.changes, 'change')}` : ''}`}
                   className={`relative z-[1] inline-flex shrink-0 items-center justify-center rounded-full ring-inset transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 ${look.node}
-                    ${dense ? 'h-5 w-5 ring-1' : 'h-8 w-8 ring-1'} ${now ? 'ring-2 ring-primary-600' : ''}`}>
+                    ${dense ? 'h-6 w-6 ring-1' : 'h-8 w-8 ring-1'} ${now ? 'ring-2 ring-primary-600' : ''}`}>
                   {!dense && <Icon className="h-3.5 w-3.5" aria-hidden />}
                   <span className="sr-only">Version {v.number}</span>
                 </button>
               );
             })}
           </div>
-          {!dense && <div className="mt-1 flex justify-between gap-1 font-mono text-[11px] text-[#7b8794]">{versions.map((v) => <span key={v.id} className="w-8 shrink-0 text-center">v{v.number}</span>)}</div>}
+          {!dense && <div className="mt-1 flex justify-between gap-1 font-mono text-xs text-[#7b8794]">{versions.map((v) => <span key={v.id} className="w-8 shrink-0 text-center">v{v.number}</span>)}</div>}
         </div>
       </div>
     </div>
@@ -510,12 +502,7 @@ function Stat({ icon: Icon, label, value, sub, title }: { icon: LucideIcon; labe
 }
 
 function People({ names }: { names: string[] }) {
-  return (
-    <span className="flex items-center">
-      {names.slice(0, 4).map((n, i) => <span key={n} className={i ? '-ml-1.5' : ''}><InitialsAvatar name={n} size="sm" /></span>)}
-      {names.length > 4 && <span className="ml-1">+{names.length - 4}</span>}
-    </span>
-  );
+  return <PersonStack people={names} max={4} size={20} label="People who changed this document" />;
 }
 
 const COLUMNS: Array<{ label: string; sort?: SortKey }> = [
@@ -523,170 +510,127 @@ const COLUMNS: Array<{ label: string; sort?: SortKey }> = [
   { label: 'Version', sort: 'version' }, { label: 'Stage' }, { label: 'Section or details' }, { label: 'From' }, { label: 'To' }, { label: 'Words' },
   { label: 'Request and reason' }, { label: 'Sources' },
 ];
-const TD = 'px-2.5 py-2 align-top text-xs';
+// the kit's cells say their own size and colour (13px, important): the change log's tints and top alignment are written important too
+const TOP = '!align-top whitespace-normal';
 
 function Who({ name }: { name: string | null | undefined }) {
-  return name ? <span className="inline-flex items-center gap-1.5 text-[#26323d]"><InitialsAvatar name={name} size="sm" /> {name}</span> : <span className={MUTED}>—</span>;
+  return name ? <PersonChip name={name} size={20} /> : <span className={MUTED}>—</span>;
 }
 
 function Pill({ tone, icon: Icon, children }: { tone: string; icon?: LucideIcon; children: React.ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${tone}`}>{Icon && <Icon className="h-3 w-3" aria-hidden />}{children}</span>;
+  return <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${tone}`}>{Icon && <Icon className="h-3 w-3" aria-hidden />}{children}</span>;
 }
 
 function Texts({ before, after }: { before: string | null | undefined; after: string | null | undefined }) {
   return (
     <>
-      <td className={`${TD} max-w-[16rem] bg-rose-50/40 text-rose-900`}><span className="line-clamp-4 whitespace-pre-wrap break-words" title={before ?? ''}>{before || '—'}</span></td>
-      <td className={`${TD} max-w-[16rem] bg-emerald-50/40 text-emerald-950`}><span className="line-clamp-4 whitespace-pre-wrap break-words" title={after ?? ''}>{after || '—'}</span></td>
+      <Td className={`${TOP} max-w-[16rem] bg-rose-50/40 !text-rose-900`}><span className="line-clamp-4 whitespace-pre-wrap break-words" title={before ?? ''}>{before || '—'}</span></Td>
+      <Td className={`${TOP} max-w-[16rem] bg-emerald-50/40 !text-emerald-950`}><span className="line-clamp-4 whitespace-pre-wrap break-words" title={after ?? ''}>{after || '—'}</span></Td>
     </>
   );
 }
 
 function Line({ row }: { row: TableRow }) {
   const { entry, item: it } = row;
-  const tr = 'border-t border-[#e1e6eb] hover:bg-[#f7f9fa]';
   const none = <span className={MUTED}>—</span>;
   if (entry.type === 'event') {
     const e = entry.event;
     const meta = eventMeta(e.kind);
     const statement = e.before || e.after;
     return (
-      <tr className={tr}>
-        <td className={TD}>{none}</td>
-        <td className={`${TD} whitespace-nowrap text-[#26323d]`}>{dateTime(e.at)}</td>
-        <td className={TD}><Who name={e.actor} /></td>
-        <td className={TD}><Pill tone={meta.tone} icon={meta.icon}>{meta.label}</Pill></td>
-        <td className={TD}>{none}</td>
-        <td className={`${TD} whitespace-nowrap font-mono text-[#26323d]`}>{row.version ? `v${row.version}` : '—'}</td>
-        <td className={`${TD} whitespace-nowrap`}><Stage stage={e.stage} label={STAGE_NAME[e.stage] ?? e.stage} /></td>
-        <td className={`${TD} max-w-[16rem] text-[#26323d]`}>{e.detail || '—'}</td>
+      <Tr>
+        <Td className={TOP}>{none}</Td>
+        <Td className={`${TOP} whitespace-nowrap`}>{dateTime(e.at)}</Td>
+        <Td className={TOP}><Who name={e.actor} /></Td>
+        <Td className={TOP}><Pill tone={meta.tone} icon={meta.icon}>{meta.label}</Pill></Td>
+        <Td className={TOP}>{none}</Td>
+        <Td className={`${TOP} whitespace-nowrap font-mono`}>{row.version ? `v${row.version}` : '—'}</Td>
+        <Td className={`${TOP} whitespace-nowrap`}><Stage stage={e.stage} label={STAGE_NAME[e.stage] ?? e.stage} /></Td>
+        <Td className={`${TOP} max-w-[16rem]`}>{e.detail || '—'}</Td>
         {statement ? <Texts before={e.before} after={e.after} />
           : <Texts before={e.from ? STAGE_NAME[e.from] ?? e.from : null} after={e.to ? STAGE_NAME[e.to] ?? e.to : null} />}
-        <td className={TD}>{none}</td>
-        <td className={TD}>{none}</td>
-        <td className={TD}>{none}</td>
-      </tr>
+        <Td className={TOP}>{none}</Td>
+        <Td className={TOP}>{none}</Td>
+        <Td className={TOP}>{none}</Td>
+      </Tr>
     );
   }
   const v = entry.version;
   if (!it) {                                                      // a version shown by itself (the original, one with no change listed)
     const look = originLook(entry.first && v.origin === 'initial' ? 'initial' : v.origin);
     return (
-      <tr className={tr}>
-        <td className={`${TD} whitespace-nowrap font-mono text-[#26323d]`}>v{v.number}</td>
-        <td className={`${TD} whitespace-nowrap text-[#26323d]`}>{dateTime(v.at)}</td>
-        <td className={TD}><Who name={v.by} /></td>
-        <td className={TD}><Pill tone={SLATE}>Version</Pill></td>
-        <td className={TD}><Pill tone={look.pill} icon={look.icon}>{originLabel(v, entry.first)}</Pill></td>
-        <td className={`${TD} whitespace-nowrap font-mono text-[#26323d]`}>v{v.number}</td>
-        <td className={`${TD} whitespace-nowrap`}><Stage stage={v.stage} label={v.stage_label} /></td>
-        <td className={`${TD} max-w-[16rem] text-[#26323d]`}>{v.summary || '—'}</td>
+      <Tr>
+        <Td className={`${TOP} whitespace-nowrap font-mono`}>v{v.number}</Td>
+        <Td className={`${TOP} whitespace-nowrap`}>{dateTime(v.at)}</Td>
+        <Td className={TOP}><Who name={v.by} /></Td>
+        <Td className={TOP}><Pill tone={SLATE}>Version</Pill></Td>
+        <Td className={TOP}><Pill tone={look.pill} icon={look.icon}>{originLabel(v, entry.first)}</Pill></Td>
+        <Td className={`${TOP} whitespace-nowrap font-mono`}>v{v.number}</Td>
+        <Td className={`${TOP} whitespace-nowrap`}><Stage stage={v.stage} label={v.stage_label} /></Td>
+        <Td className={`${TOP} max-w-[16rem]`}>{v.summary || '—'}</Td>
         <Texts before={null} after={null} />
-        <td className={TD}>{none}</td>
-        <td className={`${TD} max-w-[14rem] text-[#26323d]`}>{v.reason || '—'}</td>
-        <td className={TD}>{none}</td>
-      </tr>
+        <Td className={TOP}>{none}</Td>
+        <Td className={`${TOP} max-w-[14rem]`}>{v.reason || '—'}</Td>
+        <Td className={TOP}>{none}</Td>
+      </Tr>
     );
   }
   const kind = KIND[it.status] ?? KIND.modified;
   const look = originLook(it.origin);
   const tag = tagOf(it);
   return (
-    <tr className={tr}>
-      <td className={`${TD} whitespace-nowrap font-mono text-[#26323d]`}>{v.number}.{it.n}</td>
-      <td className={`${TD} whitespace-nowrap text-[#26323d]`}>{dateTime(it.at || v.at)}</td>
-      <td className={TD}><Who name={it.by || v.by} /></td>
-      <td className={TD}>
+    <Tr>
+      <Td className={`${TOP} whitespace-nowrap font-mono`}>{v.number}.{it.n}</Td>
+      <Td className={`${TOP} whitespace-nowrap`}>{dateTime(it.at || v.at)}</Td>
+      <Td className={TOP}><Who name={it.by || v.by} /></Td>
+      <Td className={TOP}>
         <Pill tone={kind.tone}>{kind.label}</Pill>
         {tag && <span className="mt-1 block whitespace-nowrap text-xs font-medium text-[#8a6100]">{tag}</span>}
-      </td>
-      <td className={TD}><Pill tone={look.pill} icon={look.icon}>{ORIGIN_LABEL[it.origin] ?? 'Changed'}</Pill></td>
-      <td className={`${TD} whitespace-nowrap font-mono text-[#26323d]`}>v{v.number}</td>
-      <td className={`${TD} whitespace-nowrap`}><Stage stage={v.stage} label={v.stage_label} /></td>
-      <td className={`${TD} max-w-[16rem] text-[#26323d]`}>{it.section || '—'}</td>
+      </Td>
+      <Td className={TOP}><Pill tone={look.pill} icon={look.icon}>{ORIGIN_LABEL[it.origin] ?? 'Changed'}</Pill></Td>
+      <Td className={`${TOP} whitespace-nowrap font-mono`}>v{v.number}</Td>
+      <Td className={`${TOP} whitespace-nowrap`}><Stage stage={v.stage} label={v.stage_label} /></Td>
+      <Td className={`${TOP} max-w-[16rem]`}>{it.section || '—'}</Td>
       <Texts before={it.before_text} after={it.after_text} />
-      <td className={`${TD} whitespace-nowrap`}>{shapeOf(it) ? <span className={`text-xs ${MUTED}`} title="No word changed">—</span> : <Words added={it.words_added} removed={it.words_removed} />}</td>
-      <td className={`${TD} max-w-[14rem] text-[#26323d]`}>{[it.request && `“${it.request}”`, it.reason].filter(Boolean).join(' — ') || '—'}</td>
-      <td className={`${TD} max-w-[16rem]`}><SourceChips sources={named(it.sources)} /></td>
-    </tr>
+      <Td className={`${TOP} whitespace-nowrap`}>{shapeOf(it) ? <span className={`text-xs ${MUTED}`} title="No word changed">—</span> : <Words added={it.words_added} removed={it.words_removed} />}</Td>
+      <Td className={`${TOP} max-w-[14rem]`}>{[it.request && `“${it.request}”`, it.reason].filter(Boolean).join(' — ') || '—'}</Td>
+      <Td className={`${TOP} max-w-[16rem]`}><SourceChips sources={named(it.sources)} /></Td>
+    </Tr>
   );
 }
 
-/** The log as a table: a row per change and per step, with the same filters; When, Who, What, Source and Version sort. */
+/** The log as a table: a row per change and per step, with the same filters; When, Who, What, Source and Version sort. It scrolls inside its own frame (a tab stop,
+ *  named), its header stays in view while the rows scroll, and no column is dropped on a narrower window: the whole width is one scroll away. */
 function LogTable({ rows, sort, onSort }: { rows: TableRow[]; sort: { by: SortKey; dir: 'asc' | 'desc' }; onSort: (by: SortKey) => void }) {
-  // the head's look is set on the <th> and a <span> in it: the platform's `thead th` rule would beat classes on the <thead>
-  const HEAD = 'text-[11px] font-semibold uppercase tracking-wide';
+  const state = { key: sort.by, dir: sort.dir };
   return (
-    <div className="relative overflow-x-auto rounded-xl border border-[#d5dbe1] bg-[#fff]">
-      <table className="w-full min-w-[1180px] border-collapse text-left text-xs">
-        <caption className="sr-only">The change log as a table. The When, Who, What, Source and Version columns can be sorted.</caption>
-        <thead>
+    <TableFrame aria-label="The change log as a table" maxHeight="max-h-[70vh]">
+      <Table caption="The change log, one row per change or step. The When, Who, What, Source and Version columns can be sorted." className="min-w-[1180px]">
+        <THead>
           <tr>
-            {COLUMNS.map((c) => {
-              const on = !!c.sort && sort.by === c.sort;
-              const Arrow = !on ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
-              return (
-                <th key={c.label} scope="col" className="whitespace-nowrap border-b border-[#d5dbe1] px-2.5 py-2.5 text-left !bg-[#f3f6f8]"
-                  aria-sort={c.sort ? (on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none') : undefined}>
-                  {c.sort ? (
-                    <button type="button" onClick={() => onSort(c.sort as SortKey)} className={`inline-flex items-center gap-1 rounded hover:text-[#1f2933] ${on ? 'text-[#1f2933]' : 'text-[#586472]'} ${FOCUS}`}>
-                      <span className={HEAD}>{c.label}</span><Arrow className={`h-3 w-3 ${on ? 'text-[#0f766e]' : 'text-[#7b8794]'}`} aria-hidden />
-                    </button>
-                  ) : <span className={`${HEAD} text-[#586472]`}>{c.label}</span>}
-                </th>
-              );
-            })}
+            {COLUMNS.map((c) => (
+              <Th key={c.label} sticky sortKey={c.sort} sort={state} sortCycle="asc-desc" firstDir={c.sort === 'when' || c.sort === 'version' ? 'desc' : 'asc'}
+                onSortChange={c.sort ? () => onSort(c.sort as SortKey) : undefined}>{c.label}</Th>
+            ))}
           </tr>
-        </thead>
-        <tbody>{rows.map((r) => <Line key={r.key} row={r} />)}</tbody>
-      </table>
-    </div>
+        </THead>
+        <TBody>{rows.map((r) => <Line key={r.key} row={r} />)}</TBody>
+      </Table>
+    </TableFrame>
   );
 }
 
-const MENU_ITEM = 'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
-
-/** One Export button: the whole log as Excel, PDF or CSV and, while the log is narrowed, what is shown (`shown`: how much that is). */
+/** One Export button: the whole log as Excel, PDF or CSV and, while the log is narrowed, what is shown (`shown`: how much that is). The kit's menu: arrow keys, focus in and back. */
 function ExportMenu({ busy, shown, onPick }: { busy: { format: ExportFormat; filtered: boolean } | null; shown: string | null; onPick: (f: ExportFormat, filtered: boolean) => void }) {
-  const [open, setOpenState] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  // closing by a choice or Escape gives the keyboard focus back to the button
-  const setOpen = (v: boolean) => {
-    setOpenState((cur) => {
-      if (cur && !v) setTimeout(() => trigger.current?.focus(), 0);
-      return v;
-    });
-  };
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpenState(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-  }, [open]);
-  const groups: Array<{ title: string | null; filtered: boolean }> = shown ? [{ title: 'All', filtered: false }, { title: `Shown: ${shown}`, filtered: true }] : [{ title: null, filtered: false }];
+  const items: MenuItem[] = (shown ? [{ title: 'All entries', filtered: false }, { title: `Shown entries (${shown})`, filtered: true }] : [{ title: '', filtered: false }])
+    .flatMap((g) => FORMATS.map(([fmt, name, Icon]): MenuItem => ({
+      key: `${g.filtered ? 'shown' : 'all'}-${fmt}`, label: g.title ? `${g.title}: ${name}` : name, icon: Icon, onSelect: () => onPick(fmt, g.filtered),
+    })));
   return (
-    <div ref={box} className="relative">
-      <button ref={trigger} type="button" onClick={() => setOpen(!open)} disabled={busy !== null} aria-haspopup="menu" aria-expanded={open} title="Export the change log" className={BTN}>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Export <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-      </button>
-      {open && (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-56 max-w-[calc(100vw-1.5rem)] rounded-xl border border-[#d5dbe1] bg-[#fff] p-1 shadow-xl">
-          {groups.map((g) => (
-            <div key={String(g.filtered)} role="group" aria-label={g.title ?? 'Export'}>
-              {g.title && <div role="presentation" className={`px-2.5 pb-0.5 pt-2 text-xs font-semibold ${MUTED}`}>{g.title}</div>}
-              {FORMATS.map(([fmt, name, Icon]) => (
-                <button key={fmt} type="button" role="menuitem" className={MENU_ITEM} onClick={() => { setOpen(false); onPick(fmt, g.filtered); }}>
-                  <Icon className="h-4 w-4 text-[#586472]" aria-hidden /> {name}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <span className="inline-flex items-center gap-2">
+      {busy && <span role="status" className="inline-flex items-center"><Loader2 className="h-[16px] w-[16px] animate-spin text-ds-fg-muted" aria-hidden /><span className="sr-only">Exporting</span></span>}
+      <Menu label="Export" items={items} disabled={busy !== null} />
+    </span>
   );
 }
 
@@ -777,7 +721,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
   /** open the Document Viewer with the changes of one version marked (from the version before it, to it) */
   onShowInDocument: (range: { from: number; to: number }) => void;
 }) {
-  const { toast } = useToast();
+  const notify = useNotify();
   const search = useSearchParams();
   // the filters, split and layout come from the URL and go back into it, so a link keeps them and they survive switching views
   const [f, setF] = useState<LogFilters>(() => (search ? readQuery(search) : NO_FILTERS));
@@ -845,7 +789,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
       const { blob, filename } = await documentChainApi.exportFile(documentId, format, filtered ? exportParams(f, new Date()) : undefined);
       saveBlob(blob, filename);
     } catch (e) {
-      toast({ type: 'error', title: 'Could not export the change log', message: problemOf(e) });
+      notify.error(e, { title: 'Could not export the change log', retry: () => { void download(format, filtered); } });
     } finally {
       setExporting(null);
     }
@@ -856,14 +800,15 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
       const { blob, filename } = await documentChainApi.versionFile(documentId, v.id, v.file_name || data?.document?.title || 'document', v.number);
       saveBlob(blob, filename);
     } catch (e) {
-      toast({ type: 'error', title: `Could not download the file of version ${v.number}`, message: problemOf(e) });
+      notify.error(e, { title: `Could not download the file of version ${v.number}`, retry: () => { void downloadVersion(v); } });
     } finally {
       setFetching(null);
     }
   };
 
-  if (q.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" aria-label="Loading" role="status" /></div>;
-  if (q.isError || !data) return <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{problemOf(q.error, 'Could not load the change log.')}</p>;
+  if (q.isLoading) return <SkeletonLines lines={8} label="Loading the change log" />;
+  // a failed read is not an empty log: it says so, with the server's words, and offers Retry
+  if (q.isError || !data) return <ErrorState title="Couldn't load the change log" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} />;
   if (!data.enabled) return <p className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4 text-[13px] text-[#26323d]">Not enabled for your organisation.</p>;
   const s = data.summary;
   const latest = currentVersion ?? data.document?.version;
@@ -914,14 +859,14 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
         <Journey versions={oldestFirst} onPick={jumpTo} />
 
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#e1e6eb] pt-3 md:grid-cols-3 xl:grid-cols-5">
-          <Stat icon={History} label="Versions" value={s.versions} sub={oldestFirst[0]?.at ? `since ${dateTime(oldestFirst[0].at)}` : undefined} />
-          <Stat icon={GitCompare} label="Changes" value={s.changes} sub={<Words added={s.words_added} removed={s.words_removed} />} />
-          <Stat icon={Sparkles} label="Comply Agent" value={s.ai_assisted} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}%` : undefined}
+          <Stat icon={History} label="Versions" value={formatCount(s.versions)} sub={oldestFirst[0]?.at ? `since ${dateTime(oldestFirst[0].at)}` : undefined} />
+          <Stat icon={GitCompare} label="Changes" value={formatCount(s.changes)} sub={<Words added={s.words_added} removed={s.words_removed} />} />
+          <Stat icon={Sparkles} label="Comply Agent" value={formatCount(s.ai_assisted)} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}%` : undefined}
             title={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}% of the changes were made with Comply Agent` : undefined} />
-          <Stat icon={Users} label="People" value={s.people}
+          <Stat icon={Users} label="People" value={formatCount(s.people)}
             sub={<People names={Array.from(new Set([...oldestFirst.map((v) => v.by), ...chain.events.map((x) => x.actor ?? '')].filter(Boolean))).sort()} />} />
-          <Stat icon={BookOpenCheck} label="Sources" value={s.sources} sub={s.sources ? `${found}/${s.sources} verified` : undefined}
-            title={s.sources ? `${found} of ${s.sources} quoted passages were found in their source` : undefined} />
+          <Stat icon={BookOpenCheck} label="Sources" value={formatCount(s.sources)} sub={s.sources ? `${formatCount(found)}/${formatCount(s.sources)} verified` : undefined}
+            title={s.sources ? `${formatCount(found)} of ${formatCount(s.sources)} quoted passages were found in their source` : undefined} />
         </div>
       </section>
 
@@ -933,8 +878,8 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
             {/* on a wide screen this group sits at the end of the row, on a phone it stays beside the Show switch */}
             <div className="ml-auto flex items-center gap-2 sm:order-last">
               {!wide && f.layout === 'timeline' && log.entries.length > 0 && (
-                <button type="button" className={BTN_TEXT}
-                  onClick={() => setOpened(open.size ? new Set() : new Set(log.entries.map((x) => x.key)))}>{open.size ? 'Collapse all' : 'Expand all'}</button>
+                <Button variant="link" size="sm"
+                  onClick={() => setOpened(open.size ? new Set() : new Set(log.entries.map((x) => x.key)))}>{open.size ? 'Collapse all' : 'Expand all'}</Button>
               )}
               <p role="status" className={`text-xs ${MUTED}`}>{status}</p>
               <Segmented label="Show as" value={f.layout} onChange={(layout) => set({ layout })}
@@ -968,27 +913,19 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
           {chips.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               {chips.map((c) => <Chip key={c.key} label={c.label} onRemove={c.clear} />)}
-              <button type="button" onClick={clearAll} className={BTN_TEXT}>Clear all</button>
+              <Button variant="link" size="sm" onClick={clearAll}>Clear all</Button>
             </div>
           )}
         </div>
       </div>
 
       {log.entries.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-[#c3ccd5] bg-[#fff] px-4 py-8 text-center">
-          <History className="h-8 w-8 text-[#7b8794]" strokeWidth={1.5} aria-hidden />
-          {log.total === 0 ? (
-            <>
-              <p className="text-[13px] font-medium text-[#1f2933]">{f.split === 'activity' ? 'No activity yet' : 'Nothing recorded yet'}</p>
-              {f.split !== 'all' && <button type="button" onClick={() => set({ split: 'all' })} className={BTN}>Show all</button>}
-            </>
-          ) : (
-            <>
-              <p className="text-[13px] font-medium text-[#1f2933]">No matches</p>
-              <button type="button" onClick={clearAll} className={BTN}><X className="h-4 w-4" aria-hidden /> Clear filters</button>
-            </>
-          )}
-        </div>
+        log.total === 0 ? (
+          <EmptyState kind="firstUse" icon={History} title={f.split === 'activity' ? 'No activity yet' : 'Nothing recorded yet'}
+            action={f.split !== 'all' ? <Button onClick={() => set({ split: 'all' })}>Show all</Button> : undefined} />
+        ) : (
+          <EmptyState kind="noMatches" icon={History} title="No matches" onClearFilters={clearAll} />
+        )
       ) : f.layout === 'table' ? (
         <LogTable rows={rows} sort={sort}
           onSort={(by) => setSort((p) => ({ by, dir: p.by === by ? (p.dir === 'desc' ? 'asc' : 'desc') : by === 'when' || by === 'version' ? 'desc' : 'asc' }))} />
@@ -998,7 +935,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
             {groups.map((g) => (
               <section key={g.key} aria-label={`${g.label}: ${plural(g.entries.length, 'entry', 'entries')}`}>
                 <h4 className="sticky z-10 -mx-1 bg-[#f4f6f8] px-1 py-1 text-xs font-semibold text-[#26323d]" style={{ top: sticky.bar }}>
-                  {g.label} <span className="font-normal text-[#586472]">· {g.entries.length}</span>
+                  {g.label} <span className="font-normal text-[#586472]">· {formatCount(g.entries.length)}</span>
                 </h4>
                 <ul className="divide-y divide-[#e1e6eb] overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
                   {g.entries.map((en) => (
