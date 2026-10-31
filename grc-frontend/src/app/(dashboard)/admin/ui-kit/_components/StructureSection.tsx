@@ -107,6 +107,15 @@ function PagerDemo() {
       <Specimen label="Nothing: 0, never a made-up number">
         <div className={FRAME}><Pager page={1} pageSize={25} total={0} noun="documents" onPage={() => undefined} /></div>
       </Specimen>
+      <Specimen label="noun={{ one, other }}: exactly one reads &quot;1–1 of 1 committee&quot;">
+        <div className={FRAME}><Pager page={1} pageSize={25} total={1} noun={{ one: 'committee', other: 'committees' }} onPage={() => undefined} /></div>
+      </Specimen>
+      <Specimen label="The same noun with 2, and with nothing (&quot;0 committees&quot;)">
+        <div className="space-y-[8px]">
+          <div className={FRAME}><Pager page={1} pageSize={25} total={2} noun={{ one: 'committee', other: 'committees' }} onPage={() => undefined} /></div>
+          <div className={FRAME}><Pager page={1} pageSize={25} total={0} noun={{ one: 'committee', other: 'committees' }} onPage={() => undefined} /></div>
+        </div>
+      </Specimen>
     </Grid>
   );
 }

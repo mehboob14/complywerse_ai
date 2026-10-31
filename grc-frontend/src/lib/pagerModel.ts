@@ -32,10 +32,21 @@ export function pageRange(page: number, pageSize: number, total: number): PageRa
   };
 }
 
-/** "1–25 of 1,243 documents" (an en dash, so a screen reader says "to"); "0 documents" when there are none. `noun` is the plural. */
-export function rangeText(range: PageRange, total: number, noun: string): string {
-  if (range.to === 0) return `0 ${noun}`;
-  return `${formatCount(range.from)}–${formatCount(range.to)} of ${formatCount(Math.floor(total))} ${noun}`;
+/** What is counted. A string is the plural ("documents"), as it has always been; `{ one, other }` has a word for exactly one and a word for every
+ *  other count, so a list of one reads "1–1 of 1 committee" and not "1–1 of 1 committees". */
+export type PagerNoun = string | { one: string; other: string };
+
+/** The word for `count` things: a string noun is the plural whatever the count; `{ one, other }` uses `one` for exactly 1 (a fraction is rounded down,
+ *  like the count itself) and `other` for 0, 2 and more, and for a count that is not a number. */
+export function nounFor(noun: PagerNoun, count: number): string {
+  if (typeof noun === 'string') return noun;
+  return Number.isFinite(count) && Math.floor(count) === 1 ? noun.one : noun.other;
+}
+
+/** "1–25 of 1,243 documents" (an en dash, so a screen reader says "to"); "0 documents" when there are none. `noun` is the plural, or `{ one, other }`. */
+export function rangeText(range: PageRange, total: number, noun: PagerNoun): string {
+  if (range.to === 0) return `0 ${nounFor(noun, 0)}`;
+  return `${formatCount(range.from)}–${formatCount(range.to)} of ${formatCount(Math.floor(total))} ${nounFor(noun, total)}`;
 }
 
 export const DEFAULT_PAGE_SIZES: readonly number[] = [10, 25, 50, 100];

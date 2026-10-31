@@ -440,7 +440,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('onPage', '(page) => void', 'Previous or Next was pressed.'),
           prop('onPageSize', '(size) => void', 'Gives a "Rows per page" choice; the caller decides what else changes (usually back to page 1).'),
           prop('pageSizes', 'readonly number[]', 'The choices; the size in use is always among them.', '[10, 25, 50, 100]'),
-          prop('noun', 'string', 'What is counted, plural.', "'items'"),
+          prop('noun', 'string | { one; other }', 'What is counted: the plural ("documents"), or { one: "committee", other: "committees" } so a list of exactly one reads "1–1 of 1 committee". "0 committees" and every other count use `other`.', "'items'"),
           CLASS_NAME,
         ],
       },

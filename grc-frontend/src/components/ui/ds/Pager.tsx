@@ -6,7 +6,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatCount } from '@/lib/format';
-import { pageRange, pageSizeOptions, rangeText } from '@/lib/pagerModel';
+import { pageRange, pageSizeOptions, rangeText, type PagerNoun } from '@/lib/pagerModel';
 
 export interface PagerProps {
   /** 1-based; a page outside the range is clamped into it */
@@ -20,8 +20,8 @@ export interface PagerProps {
   onPageSize?: (pageSize: number) => void;
   /** the choices; default 10, 25, 50, 100 (the size in use is always among them) */
   pageSizes?: readonly number[];
-  /** what is counted, in the plural: "documents" */
-  noun?: string;
+  /** what is counted: the plural ("documents"), or `{ one: 'committee', other: 'committees' }` so a list of one reads "1–1 of 1 committee" */
+  noun?: PagerNoun;
   /** layout only (margin, width) */
   className?: string;
 }
