@@ -9,6 +9,7 @@ import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 import { usePermissions } from '@/hooks/usePermissions';
+import { routeFor, subtitleFor, titleFor } from '@/lib/navRegistry';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
@@ -27,6 +28,7 @@ const navIconProps = {
   strokeWidth: 1.5,
 };
 
+// The top-bar title of every page that is not a Governance page (those are named by the navigation registry, lib/navRegistry.ts)
 const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: string }> = {
   '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization', section: 'Cybersecurity Assurance' },
   '/vulnerabilities/dashboard': { title: 'Vulnerability Dashboard', subtitle: 'Real-time security posture' },
@@ -37,15 +39,6 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/dashboard': { title: 'Performance Overview' },
   '/cyber-security': { title: 'Cyber Security', subtitle: 'Application security and security-operations maturity assessments' },
   '/nca': { title: 'NCA', subtitle: 'National Cybersecurity Authority — DCC, registers and audit plan' },
-  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture' },
-  '/governance/documents': { title: 'Documents', subtitle: 'Policy and document lifecycle management' },
-  '/governance/documents/attestation': { title: 'Attestation', subtitle: 'Document acknowledgment campaigns' },
-  '/governance/attestations': { title: 'Attestation', subtitle: 'Document acknowledgment campaigns' },
-  '/governance/mappings': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/approvals': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/exceptions': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/reviews': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/workflows': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/evidence': { title: 'Evidence Management' },
   '/frameworks': { title: 'Frameworks' },
   '/controls': { title: 'Control Catalog' },
@@ -78,7 +71,6 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/reports/trends': { title: 'Trends', subtitle: 'KPI history across every module' },
   '/reports/dashboards': { title: 'Dashboards', subtitle: 'Saved reports, side by side' },
   '/admin': { title: 'Administration' },
-  '/is-projects': { title: 'IS Projects', subtitle: 'Track and manage information security projects across the organization' },
 };
 
 export default function Header() {
@@ -271,7 +263,9 @@ export default function Header() {
           // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
           // they are the library's, so someone only asked about a document (no library right) gets none
           if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : null;
-          const info = PAGE_TITLES[pathname ?? ''];
+          // a Governance page is named by the registry, whatever page it is; every other page still reads PAGE_TITLES
+          const named = routeFor(pathname)?.area === 'governance' ? titleFor(pathname) : undefined;
+          const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname) } : PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
           if (!info && /^\/assets\/[^/]+$/.test(pathname ?? '')) {
