@@ -360,9 +360,10 @@ test('the Header names Governance pages from the registry and keeps no Governanc
 });
 
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
-  assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), ['/governance', '/governance/kpi-report']);
+  assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), ['/governance', '/governance/kpi-report', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects']);
   assert.equal(ownHeadingSection('/governance'), 'Governance');
   assert.equal(ownHeadingSection('/governance/kpi-report'), 'Governance');
+  for (const path of ['/is-projects', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/150']) assert.equal(ownHeadingSection(path), 'Governance', `${path}: the Projects pages draw their own heading`);
   assert.equal(ownHeadingSection('/governance/committees'), undefined, 'a page without the flag shows its own title in the top bar');
   assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
   assert.equal(ownHeadingSection(null), undefined);
