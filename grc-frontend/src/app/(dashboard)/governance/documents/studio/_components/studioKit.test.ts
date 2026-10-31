@@ -97,6 +97,7 @@ test('the editor says what could not load instead of looking empty: the conversa
   assert.ok(read('_components/SetupFields.tsx').includes("Couldn't load the choices"));
   const dialogs = read('_components/dialogs.tsx');                                                // the frameworks of "Move to library": a line while they load, a message if they do not
   assert.ok(dialogs.includes('Loading the frameworks') && dialogs.includes("Couldn't load the frameworks"));
+  assert.ok(/could not be saved\.\$\{saveWhy/.test(read('[sessionId]/page.tsx')), 'a failed autosave says why, in the server\'s (cleaned) words');
 });
 
 test('the chat is a named log, its questions are real radio buttons and checkboxes, and a request that was not sent gives the text back', () => {

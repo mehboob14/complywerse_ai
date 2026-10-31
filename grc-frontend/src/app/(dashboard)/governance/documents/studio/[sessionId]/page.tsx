@@ -78,6 +78,7 @@ export default function StudioWorkspacePage() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflight = useRef<Promise<void> | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [saveWhy, setSaveWhy] = useState('');                         // what the server said when the last save failed (cleaned), shown in the banner
   const [text, setText] = useState('');                               // for the counts in the bar
   const [pushed, setPushed] = useState({ value: '', version: 0 });    // what the editor is told to show
   const loadedFor = useRef<number | null>(null);
@@ -118,6 +119,7 @@ export default function StudioWorkspacePage() {
         patchSessionCache({ revision: r.revision, words: r.words, unsaved_in_library: true });
         setSaveState(latest.current.trim() === content.trim() ? 'saved' : 'dirty');
       } catch (e) {
+        setSaveWhy(isConflict(e) ? '' : errorMessage(e));
         setSaveState(isConflict(e) ? 'conflict' : 'error');
         throw e;
       }
@@ -589,7 +591,7 @@ export default function StudioWorkspacePage() {
               {saveState === 'error' && <Button size="sm" variant="danger" onClick={() => flush()}>Try again</Button>}
             </>
           )}>
-          {saveState === 'conflict' ? 'This document changed elsewhere. Your latest typing is not saved.' : 'Your latest typing could not be saved.'}
+          {saveState === 'conflict' ? 'This document changed elsewhere. Your latest typing is not saved.' : `Your latest typing could not be saved.${saveWhy ? ` ${saveWhy}` : ''}`}
           {saveState === 'conflict' && <InfoTip className="ml-[4px]" label="What happened" text="It was changed in another window, or a Comply Agent change was accepted there." />}
         </StudioBar>
       )}
