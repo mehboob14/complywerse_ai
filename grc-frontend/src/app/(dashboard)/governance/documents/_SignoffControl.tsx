@@ -14,6 +14,7 @@ import { MultiSelectDropdown } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
 import { BTN, BTN_PRIMARY, BTN_TEXT } from '@/components/governance/docUi';
+import { StatusPill } from '@/components/ui/ds';
 import { parseUtc } from '@/lib/serverTime';
 import { day } from '@/lib/documentLifecycle';
 import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
@@ -22,6 +23,7 @@ import { signRoleOf } from '@/lib/proposals';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
+import { DOC_STATUS_WORDS, docStatusPill } from './_view/docStatus';
 import {
   Loader2, Send, CheckCircle, XCircle, Clock, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
 } from 'lucide-react';
@@ -53,20 +55,12 @@ export type Signoff = {
   can_withdraw?: boolean;
 };
 
-/** The document's status as people say it, and its colour. */
-export const SIGNOFF_STATUS: Record<string, { label: string; tone: string }> = {
-  draft: { label: 'Draft', tone: 'border-gray-300 bg-white text-gray-700' },
-  pending_review: { label: 'In review', tone: 'border-amber-300 bg-amber-50 text-amber-800' },
-  pending_approval: { label: 'Awaiting approval', tone: 'border-amber-300 bg-amber-50 text-amber-800' },
-  approved: { label: 'Approved', tone: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
-  published: { label: 'Published', tone: 'border-primary-300 bg-primary-50 text-primary-800' },
-  expired: { label: 'Expired', tone: 'border-rose-300 bg-rose-50 text-rose-800' },
-  archived: { label: 'Archived', tone: 'border-gray-300 bg-white text-gray-600' },
-};
+/** The document's status as people say it (the words are _view/docStatus.ts's, with the library's tones in the pill). */
+export const SIGNOFF_STATUS: Record<string, { label: string }> = Object.fromEntries(Object.entries(DOC_STATUS_WORDS).map(([key, label]) => [key, { label }]));
 
+/** The status as a pill: the registry's tone, the page's word (the Approvals "Progress" card, the Sign-off tab and the document's top bar). */
 export function StatusChip({ status }: { status: string }) {
-  const s = SIGNOFF_STATUS[status] || { label: status.replace(/_/g, ' '), tone: 'border-gray-300 bg-white text-gray-700' };
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${s.tone}`}>{s.label}</span>;
+  return <StatusPill {...docStatusPill(status)} />;
 }
 
 export function useSignoff(documentId: number) {
@@ -163,10 +157,12 @@ const ROLES = [
  * The signer's own step: shown only to someone who can sign now. Draw the signature, sign; or reject with a reason, which sends
  * the document back to draft. `due` is when the request is due (from the life cycle, when the organisation has it).
  */
-export function SignoffAction({ documentId, due, version: shown }: {
+export function SignoffAction({ documentId, due, version: shown, onDirty }: {
   documentId: number; due?: string | null;
   /** the version the person is reading: sent with the decision, refused by the server if the document moved on */
   version?: string;
+  /** told whether something was typed or drawn (a signature, a comment, a reason): a popup around this asks before it throws that away */
+  onDirty?: (dirty: boolean) => void;
 }) {
   const { toast } = useToast();
   const refresh = useRefreshAll(documentId);
@@ -177,6 +173,9 @@ export function SignoffAction({ documentId, due, version: shown }: {
   const [reason, setReason] = useState('');
   const [delegateTo, setDelegateTo] = useState<string>('');
   const options = useAssigneeOptions();
+  const dirty = !!signature || comment.trim() !== '' || reason.trim() !== '' || delegateTo !== '';
+  useEffect(() => { onDirty?.(dirty); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps -- told when it changes
+  useEffect(() => () => onDirty?.(false), []);     // eslint-disable-line react-hooks/exhaustive-deps -- and that it is gone
   // a person, not one already asked at this stage (the person themselves among them): the server refuses those
   const onStage = new Set((data?.route?.stages.find((s) => s.position === data?.my_step?.stage_position)?.people ?? [])
     .filter((p) => p.target_type === 'user').map((p) => `user:${p.target_id}`));

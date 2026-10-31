@@ -16,7 +16,8 @@ import { problemOf as studioProblem, saveBlob } from '@/lib/studio/api';
 import { documentChainApi } from '@/lib/documentChain';
 import { controlledCopy, controlledFileKey, recordStamp } from '@/lib/controlPages';
 import { useToast } from '@/components/ui/ToastProvider';
-import { PageLoader, RightSlidePanel } from '@/components/ui';
+import { RightSlidePanel } from '@/components/ui';
+import { ErrorState, SkeletonLines } from '@/components/ui/ds';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
@@ -460,7 +461,8 @@ export function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
   );
 }
 
-export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion, onOpenChangeLog }: any) {
+export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htmlFailed, onRetryHtml, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion, onOpenChangeLog }: any) {
+  // htmlFailed: the server's words when the cleaned text could not be read (and nothing else shows the document), onRetryHtml reads it again
   // variant 'studio': the AI Studio's document view draws the document at full height; its actions are in the view's top bar
   const studio = variant === 'studio';
   // reading ({id, number}): an earlier version shown as it was, its file as Word or the PDF draws it, else its text
@@ -653,7 +655,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   // both as the collapsed inline preview and inside the full-view popup.
   const renderReadBody = (full = false) => (
     reading && versionQ.isLoading ? (
-      <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+      <SkeletonLines lines={8} label="Loading the version" />
     ) : reading && !shown ? (
       <p className="py-10 text-center text-sm text-rose-700" role="alert">Version {reading.number} could not be read. {studioProblem(versionQ.error)}</p>
     ) : tracking && chainOn ? (
@@ -673,12 +675,15 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           className={`w-full rounded-lg border border-slate-200 bg-white ${full || studio ? 'h-[calc(100vh-9rem)] min-h-[420px]' : 'h-[340px]'}`}
         />
       ) : (
-        <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+        <SkeletonLines lines={8} label="Loading the file" />
       )
     ) : isWordFile && !wordError ? (
       <WordView file={shownFile} height={full || studio ? undefined : 340} label={shown?.file_name || doc?.title || 'Document'} />
     ) : htmlLoading && !reading ? (
-      <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+      <SkeletonLines lines={8} label="Loading the document" />
+    ) : htmlFailed && !reading && !isMarkdown ? (
+      // the cleaned text could not be read: that is not "no viewable content"
+      <ErrorState title="Couldn't read the document" message={htmlFailed} onRetry={onRetryHtml} />
     ) : isMarkdown ? (
       // the document with its control pages where its own sections are; the document as it is until they are here (an earlier version: its own pages)
       <ControlledMarkdown

@@ -86,6 +86,19 @@ export function useProposedAnswer() {
   };
 }
 
+/** The same two halves, apart, for a writer that reports through useReportedMutation (its `success` says the words, its `onSuccess` reads the lists):
+ *  the words of a {proposed: true} answer ("Change proposed" and the server's sentence), or null when it is the writer's usual answer. */
+export function proposedWords(data: unknown, decider?: string): { title: string; message: string } | null {
+  const answer = proposedOf(data);
+  return answer ? proposedToast(answer, decider) : null;
+}
+
+/** What is read again after a change became a proposal: the document is as it was, the list, the hold, the requests and the Change log are not. */
+export function useRefreshAfterProposal(): () => void {
+  const qc = useQueryClient();
+  return () => { for (const key of AFTER_PROPOSING) qc.invalidateQueries({ queryKey: [key] }); };
+}
+
 // ── the proposer's note in a writer's dialog ─────────────────────────────────
 /** "Goes to <owner> to accept or reject" and the required message the owner reads. */
 export function ProposeNote({ id, decider, value, onChange, placeholder, autoFocus }: {

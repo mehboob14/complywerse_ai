@@ -5,7 +5,7 @@
 // where they are, who reviews and approves (and sending it), who has acknowledged which version (with their drawn signature), the life cycle, the due-date settings and
 // the discussion. Backend: governance/doc_lifecycle.py (requests, acknowledgements, timeline) and routers/document_signoff.py
 // (participants and signatures).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, ChevronRight, Clock, FileCheck2, Loader2, Search } from 'lucide-react';
@@ -111,16 +111,21 @@ function Stages({ status, signoff, acks }: { status: string; signoff?: Signoff; 
 }
 
 // ── the person's own acknowledgement ─────────────────────────────────────────
-export function AckAction({ base, row, onDone, open: startOpen = false, version, onCancel }: {
+export function AckAction({ base, row, onDone, open: startOpen = false, version, onCancel, onDirty }: {
   base: string; row: Row; onDone: () => void; open?: boolean; version?: string;
   /** a popup that opened it closes on Cancel */
   onCancel?: () => void;
+  /** told whether something was typed or drawn (a signature, a comment): a popup around this asks before it throws that away */
+  onDirty?: (dirty: boolean) => void;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(startOpen);
   const [comment, setComment] = useState('');
   const [signature, setSignature] = useState<string | null>(null);
+  const dirty = !!signature || comment.trim() !== '';
+  useEffect(() => { onDirty?.(dirty); }, [dirty]); // eslint-disable-line react-hooks/exhaustive-deps -- told when it changes
+  useEffect(() => () => onDirty?.(false), []);     // eslint-disable-line react-hooks/exhaustive-deps -- and that it is gone
   const acknowledge = useMutation({
     mutationFn: async () => (await apiClient.post(`${base}/acknowledge`, { comment: comment.trim() || null, signature_image: signature, version })).data,
     // the toast first: onDone closes the popup this form is in
