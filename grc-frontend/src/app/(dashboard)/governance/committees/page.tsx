@@ -539,7 +539,7 @@ function ContextPanel({ selected, meetings, allMeetings, actions, canDelete, del
                 ))}
               </ul>
               {shownMeetings.length > MEETINGS_SHOWN && selected && (
-                <p className="mt-[8px]">
+                <p className="mt-[8px] text-ds-body">
                   <Button href={`/governance/committees/${selected.id}?tab=meetings`} variant="link" size="sm">+{formatCount(shownMeetings.length - MEETINGS_SHOWN)} more meetings</Button>
                 </p>
               )}
