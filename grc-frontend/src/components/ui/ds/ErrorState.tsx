@@ -22,12 +22,16 @@ export interface ErrorStateProps {
 export function ErrorState({ title = "Couldn't load this", message, onRetry, compact = false, className }: ErrorStateProps) {
   const retry = onRetry && <Button leftIcon={<RotateCw aria-hidden />} onClick={onRetry}>Retry</Button>;
   if (compact) {
+    // the icon and the words are one item that asks for 12rem and takes the rest, so in a narrow card Retry drops below them instead of
+    // squeezing the words into a column of a letter or a word per line
     return (
       <div role="alert" className={clsx('flex flex-wrap items-start gap-[12px] p-3', className)}>
-        <AlertTriangle aria-hidden className="mt-[2px] h-[16px] w-[16px] shrink-0 text-ds-danger" strokeWidth={1.75} />
-        <div className="min-w-0 flex-1">
-          <p className="text-ds-body font-medium text-ds-fg">{title}</p>
-          {message && <p className="mt-1 break-words text-ds-body text-ds-fg-muted">{message}</p>}
+        <div className="flex min-w-0 flex-1 basis-[12rem] items-start gap-[12px]">
+          <AlertTriangle aria-hidden className="mt-[2px] h-[16px] w-[16px] shrink-0 text-ds-danger" strokeWidth={1.75} />
+          <div className="min-w-0 flex-1">
+            <p className="text-ds-body font-medium text-ds-fg">{title}</p>
+            {message && <p className="mt-1 break-words text-ds-body text-ds-fg-muted">{message}</p>}
+          </div>
         </div>
         {retry}
       </div>
