@@ -38,13 +38,13 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   return (
     <label
       className={clsx(
-        'inline-flex items-start gap-[8px] py-[calc((var(--ds-control-h)_-_var(--ds-leading-body))/2)] text-ds-body text-ds-fg-body',
+        'inline-flex max-w-full items-start gap-[8px] py-[calc((var(--ds-control-h)_-_var(--ds-leading-body))/2)] text-ds-body text-ds-fg-body',
         rest.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
       )}
     >
       <input {...rest} ref={inner} {...a11y} type="checkbox" className={clsx(BOX, 'mt-[2px]')} />
-      <span className="min-w-0">{label}</span>
+      <span className="min-w-0 break-words">{label}</span>
     </label>
   );
 });

@@ -47,7 +47,7 @@ export function FormField({ label, required = false, optional = false, hint, err
   return (
     <FieldContext.Provider value={state}>
       <div className={clsx('flex min-w-0 flex-col gap-[4px]', className)}>
-        <label htmlFor={id} className="relative text-ds-label text-ds-fg">
+        <label htmlFor={id} className="relative break-words text-ds-label text-ds-fg">
           {label}
           {required ? (
             <>
@@ -59,8 +59,8 @@ export function FormField({ label, required = false, optional = false, hint, err
           ) : null}
         </label>
         {children}
-        {hasHint && <p id={hintId} className="text-ds-label font-normal text-ds-fg-muted">{hint}</p>}
-        {hasError && <p id={errorId} role="alert" className="text-ds-label font-normal text-ds-danger">{error}</p>}
+        {hasHint && <p id={hintId} className="break-words text-ds-label font-normal text-ds-fg-muted">{hint}</p>}
+        {hasError && <p id={errorId} role="alert" className="break-words text-ds-label font-normal text-ds-danger">{error}</p>}
       </div>
     </FieldContext.Provider>
   );

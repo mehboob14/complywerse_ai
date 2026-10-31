@@ -138,6 +138,8 @@ test('FormField: generated ids, a label that points at the control, the required
   assert.ok(/value=\{state\}/.test(s) && /describedBy: describedBy\(hasHint && hintId, hasError && errorId\), invalid: hasError, required/.test(s));
   assert.ok(/export function useFieldControl/.test(s));
   assert.ok(!/\bh-\[|min-h-/.test(s), 'no heights in the field wrapper');
+  assert.equal((s.match(/break-words/g) ?? []).length, 3, 'label, hint and error wrap a long unbroken word instead of widening the page');
+  assert.ok(/min-w-0 break-words/.test(src('Checkbox.tsx')) && /inline-flex max-w-full/.test(src('Checkbox.tsx')), 'the checkbox row is capped at its container and its words break');
 });
 
 test('TextInput, Textarea, Select and Checkbox take their wiring from the field and forward their ref', () => {
