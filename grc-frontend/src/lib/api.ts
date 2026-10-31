@@ -4151,7 +4151,7 @@ export const committeeApi = {
   },
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
   createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
-  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean; skip?: number; limit?: number }) => apiClient.get('/governance/committees/actions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
   aiRewordActionText: (formData: FormData) =>
     apiClient.post('/governance/committees/actions/ai/reword', formData, {
