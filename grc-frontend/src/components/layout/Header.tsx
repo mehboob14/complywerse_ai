@@ -352,7 +352,7 @@ export default function Header() {
           >
             <ClipboardCheck size={18} strokeWidth={1.75} />
             {pendingApprovalCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white leading-none">
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#b45309] px-[4px] text-[12px] font-bold text-white leading-none">
                 {pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}
               </span>
             )}
@@ -450,8 +450,8 @@ export default function Header() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
-                {unreadCount}
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#b42318] px-[4px] text-[12px] font-bold text-white leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
