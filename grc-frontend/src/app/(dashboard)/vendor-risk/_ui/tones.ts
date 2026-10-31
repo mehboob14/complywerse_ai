@@ -1,32 +1,12 @@
 // Status words -> tone, and the colours of each tone. Pure, so `node --test` runs tones.test.ts against it.
-// The six families are Verity's shipped ones (tprm-verity-ux-reference, "Colours actually shipped"), spelled as hex because the
-// platform CSS repaints slate/green/blue utilities inside the shell (PITFALLS 100). Words are the ones Verity uses plus the ones
-// Compliverse's own rows carry (a vendor is "suspended", a request "in_review"); anything else reads as neutral, never as a guess.
+// The tone model (Tone, TONE and the word lookup) lives in src/lib/status.ts, the platform's status registry, and is re-exported here, so
+// every import of this kit and tones.test.ts stay as they were. What stays here are the vendor kit's own word maps: the words Verity uses
+// plus the ones Compliverse's own rows carry (a vendor is "suspended", a request "in_review"); anything else reads as neutral, never as a guess.
+import { toneOf, type Tone } from '../../../../lib/status.ts';
 
-export type Tone = 'success' | 'danger' | 'warning' | 'progress' | 'pending' | 'neutral';
+export { TONE, type Tone, type ToneColors } from '../../../../lib/status.ts';
 
-export interface ToneColors {
-  /** the dot, a bar, a chart slice */
-  dot: string;
-  /** words on the tint (4.5:1 or better, checked in tones.test.ts) */
-  text: string;
-  /** the soft fill behind a pill */
-  tint: string;
-  /** the dot at 30% over white: a pill's outline, so a column of pale pills still reads */
-  border: string;
-}
-
-export const TONE: Record<Tone, ToneColors> = {
-  success: { dot: '#059669', text: '#08794F', tint: '#E7F5EF', border: '#B4E0D2' },
-  danger: { dot: '#E11D48', text: '#C01741', tint: '#FDEEF1', border: '#F6BBC8' },
-  warning: { dot: '#D97706', text: '#9A5007', tint: '#FBF1E4', border: '#F0D2A9' },
-  progress: { dot: '#0284C7', text: '#0369A1', tint: '#EAF4FB', border: '#B3D9EE' },
-  pending: { dot: '#7C5CD6', text: '#6947C7', tint: '#F3EFFC', border: '#D7CCF1' },
-  neutral: { dot: '#64748B', text: '#566072', tint: '#F0F2F5', border: '#D1D7DF' },
-};
-
-const norm = (s?: string | null): string => String(s ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-const word = (map: Record<string, Tone>) => (s?: string | null): Tone => map[norm(s)] ?? 'neutral';
+const word = (map: Record<string, Tone>) => (s?: string | null): Tone => toneOf(map, s);
 
 const STAGE: Record<string, Tone> = {
   not_started: 'pending', in_progress: 'progress', complete: 'success', completed: 'success', skipped: 'neutral', blocked: 'warning',
