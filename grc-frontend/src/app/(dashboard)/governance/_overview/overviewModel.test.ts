@@ -11,6 +11,7 @@ import {
   type Attention, type AttentionSources, type Load, type Scorecard,
 } from './overviewModel.ts';
 import { KPI_STATUSES, fromParams, sameSet } from '../documents/_workspace/libraryModel.ts';
+import { overdueFromSearch } from '../../../../lib/committees.ts';
 
 const read = (rel: string): string | null => {
   const url = new URL(rel, import.meta.url);
@@ -54,7 +55,9 @@ test('the committee actions page opens its Overdue filter from the address, as t
   assert.ok(page, 'the actions page exists');
   assert.match(def('overdue_actions').href, /\?overdue=1$/);
   assert.match(page!, /useSearchParams\(\)/);
-  assert.match(page!, /useState\([^)]*\.get\('overdue'\) === '1'\)/);
+  // the page reads the address once, for its first render, through the committees model's parser (lib/committees.test.ts pins the parser itself)
+  assert.match(page!, /useState\(\(\) => overdueFromSearch\(/);
+  assert.equal(overdueFromSearch(def('overdue_actions').href.split('?')[1]), true, 'the counter\'s address switches the filter on');
 });
 
 // ── what a counter shows ─────────────────────────────────────────────────────
