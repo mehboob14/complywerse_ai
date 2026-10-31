@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
+import { ownHeadingSection } from '../../../../lib/navRegistry.ts';
 
 const DIR = 'src/app/(dashboard)/governance/committees';
 const read = (rel: string) => readFileSync(`${DIR}/${rel}`, 'utf8');
@@ -109,6 +110,13 @@ test('the pages say "Not recorded" where nothing can record the number (the over
   for (const reading of ['performanceReading(', 'actionsDoneReading(', 'overdueReading(', 'attendanceReading(', 'meetingsHeldReading(']) assert.ok(src.includes(reading), `overview lost ${reading}`);
   assert.doesNotMatch(code(src), /Math\.round\(k!?\.avg_attendance_pct/, 'the attendance tile used to round a number that may not exist');
   assert.doesNotMatch(code(src), /'no meeting data yet'/);
+});
+
+test('the pages draw their own heading with the kit and the registry says so, so the top bar names only the section', () => {
+  for (const [name, src] of Object.entries(SOURCES)) assert.match(src, /<PageHeader\s+variant="page"/, `${name} draws no page head`);
+  for (const url of ['/governance/committees', '/governance/committees/3', '/governance/committees/meetings/9', '/governance/committees/actions']) {
+    assert.equal(ownHeadingSection(url), 'Governance', `${url} is not flagged ownHeading in lib/navRegistry.ts`);
+  }
 });
 
 test('the pages take their headings from the registry (Committees, Oversight Actions)', () => {
