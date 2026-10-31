@@ -5,12 +5,13 @@
  * use by their full name ("Operations › Security"), "No department" last. It is portaled to <body> and fixed to the button it came from
  * (never clipped by the table's scroll), opens below that button or above it when there is more room there, takes focus when it opens
  * and gives it back when it closes. ArrowUp / ArrowDown and Enter choose, Escape or a click outside closes it. What it offers and how
- * the search narrows are rules in libraryFolders.ts; the moving itself (and what is said afterwards) is the page's. Every size and
- * colour is explicit: the platform CSS repaints white and slate and gives every button 12px text.
+ * the search narrows are rules in libraryFolders.ts; the moving itself (and what is said afterwards) is the page's. Written on the
+ * design-system tokens (the portal is outside the platform's page styles, and so are these classes).
  */
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, Search } from 'lucide-react';
+import { TextInput } from '@/components/ui/ds';
 import { filterTargets, type MoveTarget } from './libraryFolders';
 
 const WIDTH = 288;
@@ -31,8 +32,6 @@ function placeBeside(r: DOMRect | null): Spot {
     ? { left, width, top: r.bottom + GAP, maxHeight: Math.min(MAX_HEIGHT, below) }
     : { left, width, bottom: window.innerHeight - r.top + GAP, maxHeight: Math.min(MAX_HEIGHT, above) };
 }
-
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 
 export function MovePopover({ anchor, targets, current, count, busy = false, onPick, onClose }: {
   /** the button it came from (its box when it was clicked) */
@@ -111,18 +110,17 @@ export function MovePopover({ anchor, targets, current, count, busy = false, onP
       onClick={(e) => e.stopPropagation()}
       onKeyDown={onKeyDown}
       style={{ left: spot.left, top: spot.top, bottom: spot.bottom, width: spot.width, maxHeight: spot.maxHeight }}
-      className="fixed z-[70] flex flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff] text-[13px] text-[#26323d] shadow-elevated"
+      className="fixed z-[70] flex flex-col overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface text-ds-body text-ds-fg-body shadow-ds-pop"
     >
-      <div className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2.5">
-        <p className="text-[13px] font-semibold text-[#1f2933]">Move to</p>
-        <p className="flex items-center gap-1.5 text-[12px] text-[#586472]" role="status">
-          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />}
+      <div className="flex items-center justify-between gap-2 px-[12px] pb-1.5 pt-2.5">
+        <p className="text-ds-body font-[600] text-ds-fg">Move to</p>
+        <p className="flex items-center gap-1.5 text-ds-label text-ds-fg-muted" role="status">
+          {busy && <Loader2 className="h-[16px] w-[16px] animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />}
           {busy ? 'Moving…' : count === 1 ? '1 document' : `${count} documents`}
         </p>
       </div>
-      <div className="relative px-2 pb-2">
-        <Search aria-hidden strokeWidth={1.75} className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-[60%] text-[#586472]" />
-        <input
+      <div className="px-2 pb-2">
+        <TextInput
           ref={inputRef}
           type="text"
           role="combobox"
@@ -136,11 +134,11 @@ export function MovePopover({ anchor, targets, current, count, busy = false, onP
           value={query}
           onChange={(e) => { setQuery(e.target.value); setAt(0); }}
           placeholder="Search departments"
-          className={`h-8 w-full rounded-lg border border-[#c3ccd5] bg-[#fff] pl-8 pr-2 text-xs text-[#1f2933] placeholder:text-[#586472] ${FOCUS}`}
+          leftAdornment={<Search aria-hidden />}
         />
       </div>
-      <ul id={`${uid}-list`} role="listbox" aria-label="Departments" className="min-h-0 flex-1 overflow-y-auto border-t border-[#e1e6eb] p-1 scrollbar-thin">
-        {list.length === 0 && <li role="presentation" className="px-2 py-3 text-center text-[12px] text-[#586472]">No match</li>}
+      <ul id={`${uid}-list`} role="listbox" aria-label="Departments" className="min-h-0 flex-1 overflow-y-auto border-t border-ds-border p-1 scrollbar-thin">
+        {list.length === 0 && <li role="presentation" className="px-2 py-3 text-center text-ds-label text-ds-fg-muted">No match</li>}
         {list.map((t, i) => {
           const on = i === active;
           const here = isCurrent(t);
@@ -154,11 +152,11 @@ export function MovePopover({ anchor, targets, current, count, busy = false, onP
               title={here ? 'Already here' : t.label}
               onMouseEnter={() => setAt(i)}
               onClick={() => choose(t)}
-              className={`flex min-h-[32px] items-center gap-2 rounded-md px-2 py-1.5 ${t.id === null && i > 0 ? 'mt-1 border-t border-[#e1e6eb] pt-2' : ''} ${
-                here || busy ? 'cursor-default' : 'cursor-pointer'} ${on && !here && !busy ? 'bg-[#f0fdfa]' : ''} ${here ? 'text-[#586472]' : 'text-[#26323d]'}`}
+              className={`flex min-h-ds-control items-center gap-2 rounded-ds-control px-2 py-1.5 ${t.id === null && i > 0 ? 'mt-1 border-t border-ds-border pt-2' : ''} ${
+                here || busy ? 'cursor-default' : 'cursor-pointer'} ${on && !here && !busy ? 'bg-ds-primary-soft' : ''} ${here ? 'text-ds-fg-muted' : 'text-ds-fg-body'}`}
             >
-              <span className={`min-w-0 flex-1 truncate ${t.id === null ? 'text-[#586472]' : ''}`}>{t.label}</span>
-              {here && <Check aria-hidden strokeWidth={2} className="h-4 w-4 shrink-0 text-[#0f766e]" />}
+              <span className={`min-w-0 flex-1 truncate ${t.id === null ? 'text-ds-fg-muted' : ''}`}>{t.label}</span>
+              {here && <Check aria-hidden strokeWidth={2} className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" />}
             </li>
           );
         })}

@@ -16,10 +16,13 @@ export interface FilterOptions {
   classifications: Option[];
 }
 
+/** The words of the optional expiry filter, on its chip and in the filter list. */
+export const EXPIRING_LABEL = 'Expiring in 30 days';
+
 export interface FilterChip {
   /** unique among the chips shown */
   key: string;
-  facet: FacetKey | 'search' | 'mine';
+  facet: FacetKey | 'search' | 'mine' | 'expiring';
   /** the one value this chip stands for (the search text for the search chip) */
   value: string;
   /** "Type: Policy", "Search: “data”", "My documents" */
@@ -48,6 +51,7 @@ export function filterChips(filters: Filters, options: FilterOptions): FilterChi
       chips.push({ key: `${facet}:${value}`, facet, value, label: `${noun}: ${words.get(value) ?? value}` });
     }
   }
+  if (filters.expiring) chips.push({ key: 'expiring', facet: 'expiring', value: 'expiring', label: EXPIRING_LABEL });
   const query = filters.search.trim();
   if (query) chips.push({ key: 'search', facet: 'search', value: filters.search, label: `Search: “${query}”` });
   if (filters.mine) chips.push({ key: 'mine', facet: 'mine', value: 'mine', label: 'My documents' });
@@ -58,6 +62,7 @@ export function filterChips(filters: Filters, options: FilterOptions): FilterChi
 export function removeChip(filters: Filters, chip: FilterChip): Filters {
   if (chip.facet === 'search') return { ...filters, search: '' };
   if (chip.facet === 'mine') return { ...filters, mine: false };
+  if (chip.facet === 'expiring') return { ...filters, expiring: false };
   const left = (filters[chip.facet] as string[]).filter((v) => v !== chip.value);
   if (chip.facet === 'statuses') return { ...filters, statuses: nextStatuses(filters.statuses, left) };
   return { ...filters, [chip.facet]: left } as Filters;

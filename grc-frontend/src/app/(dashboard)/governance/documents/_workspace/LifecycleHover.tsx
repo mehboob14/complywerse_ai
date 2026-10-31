@@ -1,20 +1,21 @@
 'use client';
 
 /**
- * LifecycleHover — wraps a document's stage indicator in the library (Table "Lifecycle" column, Tree status) and, on hover or
- * keyboard focus, shows its life cycle: where it stands, who it is waiting for, how many have acknowledged, what happened last
- * and the key dates. The card is portaled and fixed-positioned (never clipped by the table's scroll), opens after a short pause
- * so moving down a list does not flicker, and closes on leave, Escape, scroll or click. The people and the activity come from
- * the life cycle endpoint when the organisation has it (same cache entry as the document's Approvals & Acknowledgements tab);
- * the dates are the ones the document already carries, so every organisation gets a useful card.
+ * LifecycleHover — wraps a document's stage indicator in the library (the Lifecycle column's status pill, a card's status line) and, on hover or keyboard focus, shows its
+ * life cycle: where it stands, who it is waiting for, how many have acknowledged, what happened last and the key dates. The card is portaled and fixed-positioned (never
+ * clipped by the table's scroll), opens after a short pause so moving down a list does not flicker, and closes on leave, Escape, scroll or click. The people and the activity
+ * come from the life cycle endpoint when the organisation has it (same cache entry as the document's Approvals & Acknowledgements tab); the dates are the ones the document
+ * already carries, so every organisation gets a useful card. Written on the design-system tokens, 12px at the least, dates through lib/format.ts.
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { dateTime, day, eventLabel, LIFECYCLE_KIND_LABEL, type LifecycleReply } from '@/lib/documentLifecycle';
-import { type GovDoc, LifecycleDots, ReviewStatus, verLabel } from './lib';
+import { LIFECYCLE_KIND_LABEL, eventLabel, type LifecycleReply } from '@/lib/documentLifecycle';
+import { formatDate, formatDateTime } from '@/lib/format';
+import { type GovDoc, LifecycleDots, verLabel } from './lib';
+import { reviewState } from './libraryModel';
 
 const OPEN_DELAY = 250;     // ms the pointer rests before the card opens
 const CLOSE_DELAY = 150;    // ms of grace to move from the indicator onto the card
@@ -41,11 +42,13 @@ function placeBeside(r: DOMRect): Placement {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="mb-1 text-ds-label font-[600] uppercase tracking-wide text-ds-fg-muted">{title}</p>
       {children}
     </div>
   );
 }
+
+const REVIEW_TEXT = { overdue: 'text-ds-danger', due_soon: 'text-ds-warning', ok: 'text-ds-success', unscheduled: 'text-ds-fg-muted' } as const;
 
 function LifecycleCard({ doc }: { doc: GovDoc }) {
   const { data, isLoading, isError } = useQuery<LifecycleReply>({
@@ -59,53 +62,54 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
   const acks = full?.acknowledgements;
   const recent = full ? full.timeline.slice(0, ACTIVITY_SHOWN) : [];
   const dates: [string, string][] = [
-    ['Created', day(doc.created_at)],
-    ...(doc.approved_at ? [['Approved', day(doc.approved_at)] as [string, string]] : []),
-    ...(doc.published_at ? [['Published', day(doc.published_at)] as [string, string]] : []),
-    ...(doc.effective_date ? [['Effective', day(doc.effective_date)] as [string, string]] : []),
+    ['Created', formatDate(doc.created_at)],
+    ...(doc.approved_at ? [['Approved', formatDate(doc.approved_at)] as [string, string]] : []),
+    ...(doc.published_at ? [['Published', formatDate(doc.published_at)] as [string, string]] : []),
+    ...(doc.effective_date ? [['Effective', formatDate(doc.effective_date, { calendar: true })] as [string, string]] : []),
   ];
+  const review = reviewState(doc);
 
   return (
-    <div className="space-y-3 text-xs text-slate-700">
+    <div className="space-y-[12px] text-ds-label text-ds-fg-body">
       <div>
         <div className="flex items-start justify-between gap-2">
-          <p className="line-clamp-2 text-sm font-semibold text-slate-900">{doc.title}</p>
-          <span className="shrink-0 text-[11px] text-slate-500">{verLabel(doc.current_version)}</span>
+          <p dir="auto" className="line-clamp-2 text-ds-body font-[600] text-ds-fg">{doc.title}</p>
+          <span className="shrink-0 text-ds-label text-ds-fg-muted">{verLabel(doc.current_version)}</span>
         </div>
         <div className="mt-1.5"><LifecycleDots status={doc.status} /></div>
-        <p className="mt-1 text-slate-500">
+        <p className="mt-1 text-ds-fg-muted">
           Owner {doc.owner_name || 'not assigned'}{doc.author_name && doc.author_name !== doc.owner_name ? ` · prepared by ${doc.author_name}` : ''}
         </p>
       </div>
 
       {isLoading && (
-        <p className="flex items-center gap-2 text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</p>
+        <p className="flex items-center gap-2 text-ds-fg-muted"><Loader2 className="h-[16px] w-[16px] animate-spin motion-reduce:animate-none" aria-hidden /> Loading…</p>
       )}
 
       {waiting.length > 0 && (
         <Section title="Waiting for">
           <ul className="space-y-1">
             {waiting.slice(0, WAITING_SHOWN).map((r) => (
-              <li key={r.id} className="flex items-baseline justify-between gap-3">
-                <span className="truncate font-medium text-slate-900">{r.user}</span>
-                <span className={`shrink-0 ${r.overdue ? 'text-rose-600' : 'text-slate-500'}`}>
-                  {LIFECYCLE_KIND_LABEL[r.kind]} · {r.overdue ? `overdue since ${day(r.due_date)}` : `due ${day(r.due_date)}`}
+              <li key={r.id} className="flex items-baseline justify-between gap-[12px]">
+                <span className="truncate font-[600] text-ds-fg">{r.user}</span>
+                <span className={`shrink-0 ${r.overdue ? 'text-ds-danger' : 'text-ds-fg-muted'}`}>
+                  {LIFECYCLE_KIND_LABEL[r.kind]} · {r.overdue ? `overdue since ${formatDate(r.due_date)}` : `due ${formatDate(r.due_date)}`}
                 </span>
               </li>
             ))}
-            {waiting.length > WAITING_SHOWN && <li className="text-slate-500">and {waiting.length - WAITING_SHOWN} more</li>}
+            {waiting.length > WAITING_SHOWN && <li className="text-ds-fg-muted">and {waiting.length - WAITING_SHOWN} more</li>}
           </ul>
         </Section>
       )}
 
       {acks && acks.total > 0 && (
         <Section title="Acknowledgements">
-          <div className="h-1.5 w-full overflow-hidden rounded bg-slate-200">
-            <div className="h-1.5 bg-emerald-500" style={{ width: `${acks.percent}%` }} />
+          <div className="h-[6px] w-full overflow-hidden rounded-full bg-ds-border">
+            <div className="h-[6px] bg-ds-success" style={{ width: `${acks.percent}%` }} />
           </div>
           <p className="mt-1">
             {acks.done} of {acks.total} users ({acks.percent}%)
-            {acks.overdue > 0 && <span className="text-rose-600"> · {acks.overdue} overdue</span>}
+            {acks.overdue > 0 && <span className="text-ds-danger"> · {acks.overdue} overdue</span>}
           </p>
         </Section>
       )}
@@ -113,15 +117,15 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
       {full && (
         <Section title="Recent activity">
           {recent.length === 0 ? (
-            <p className="text-slate-500">No activity yet</p>
+            <p className="text-ds-fg-muted">No activity yet</p>
           ) : (
             <ol className="space-y-1">
               {recent.map((e, i) => (
                 <li key={i} className="flex gap-2">
-                  <span className="w-[76px] shrink-0 text-slate-500">{dateTime(e.at)}</span>
+                  <span className="w-[8rem] shrink-0 text-ds-fg-muted">{formatDateTime(e.at)}</span>
                   <span className="min-w-0">
-                    <span className="font-medium text-slate-800">{eventLabel(e.kind)}</span>
-                    {e.actor && <span className="text-slate-500"> · {e.actor}</span>}
+                    <span className="font-[600] text-ds-fg">{eventLabel(e.kind)}</span>
+                    {e.actor && <span className="text-ds-fg-muted"> · {e.actor}</span>}
                   </span>
                 </li>
               ))}
@@ -133,18 +137,23 @@ function LifecycleCard({ doc }: { doc: GovDoc }) {
       <Section title="Key dates">
         <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5">
           {dates.map(([label, value]) => (
-            <div key={label} className="flex gap-1.5"><dt className="text-slate-500">{label}</dt><dd>{value}</dd></div>
+            <div key={label} className="flex gap-1.5"><dt className="text-ds-fg-muted">{label}</dt><dd>{value}</dd></div>
           ))}
           <div className="col-span-2 flex items-center gap-1.5">
-            <dt className="text-slate-500">Next review</dt>
+            <dt className="text-ds-fg-muted">Next review</dt>
             <dd className="flex items-center gap-2">
-              {doc.next_review_date ? <>{day(doc.next_review_date)}<ReviewStatus date={doc.next_review_date} className="!text-xs" /></> : 'Not set'}
+              {doc.next_review_date ? (
+                <>
+                  {formatDate(doc.next_review_date, { calendar: true })}
+                  {review.label && <span className={`font-[600] ${REVIEW_TEXT[review.bucket ?? 'unscheduled']}`}>{review.label}</span>}
+                </>
+              ) : 'Not set'}
             </dd>
           </div>
         </dl>
       </Section>
 
-      {isError && !data && <p className="text-slate-500">Could not load the people and activity.</p>}
+      {isError && !data && <p className="text-ds-fg-muted">Could not load the people and activity.</p>}
     </div>
   );
 }
@@ -183,7 +192,7 @@ export function LifecycleHover({ doc, children, focusable = false }: { doc: GovD
     <>
       <span
         ref={wrapRef}
-        className="inline-flex"
+        className="inline-flex max-w-full rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring"
         tabIndex={focusable ? 0 : undefined}
         aria-describedby={placement ? cardId : undefined}
         onMouseEnter={openSoon}
@@ -203,7 +212,7 @@ export function LifecycleHover({ doc, children, focusable = false }: { doc: GovD
             onMouseEnter={hold}
             onMouseLeave={closeSoon}
             style={{ left: placement.left, top: placement.top, bottom: placement.bottom, maxHeight: placement.maxHeight }}
-            className="fixed z-[60] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 text-left shadow-elevated"
+            className="fixed z-[60] w-[340px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface p-3 text-left shadow-ds-pop"
           >
             <LifecycleCard doc={doc} />
           </div>,

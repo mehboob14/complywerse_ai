@@ -1,24 +1,27 @@
 'use client';
 
 /**
- * The filter bar of the documents library, controlled by its props: ONE row (search, the filter pills, and on the right the Views,
- * Columns, density and Export controls as icons), and, only while filtering, a line with how many match and what is filtered on as
- * chips that come off one by one. What each filter means lives in libraryModel.ts and the chips' and names' rules in libraryFiltersLogic.ts;
- * this file only draws and keeps what is not state of the page (which popover is open, the name being typed for a new view).
- * Colours are explicit hex classes on purpose: the platform's CSS repaints slate/white inside the dashboard and gives a bare <p>
- * its own size and colour (PITFALLS: grc-frontend UI). The popovers are portaled and fixed-positioned so no table or scroll
- * container clips them, and close on Escape, an outside click, a scroll elsewhere or a change of width.
+ * The filter bar of the documents library, controlled by its props: ONE group of controls (search, the filter pills, and on the right the layout switch and the Views,
+ * Columns and Export tools), and, only while filtering, a line with how many match and what is filtered on as chips that come off one by one. What each filter means lives in
+ * libraryModel.ts, the chips' and names' rules in libraryFiltersLogic.ts and every number the bar states in libraryNumbers.ts (cut, it says "in the 1,000 loaded"); this file
+ * only draws and keeps what is not state of the page (which popover is open, the name being typed for a new view).
+ * On the design-system kit: the search is a TextInput, the tools are kit buttons, the layout switch a SegmentedControl, the lists are native checkboxes. The multi-select
+ * PILLS have no kit equivalent yet: FilterPill is the library's own (a popover with checkbox rows and a search box, immediate like the shared dropdown it replaces here,
+ * keyboard-correct: Escape and Tab close it and focus goes back to its button). The popovers are portaled and fixed-positioned so no table or scroll container clips them,
+ * and close on Escape, an outside click, a scroll elsewhere or a change of width.
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Bookmark, Check, ChevronDown, Columns3, Download, Folder, Plus, Rows3, Rows4, Search, SlidersHorizontal, Table2, UserRound, X } from 'lucide-react';
-import { MultiSelectDropdown } from '@/components/ui';
+import { Bookmark, Check, ChevronDown, Columns3, Download, Plus, Search, SlidersHorizontal, UserRound, X } from 'lucide-react';
+import { Button, Checkbox, SegmentedControl, TextInput } from '@/components/ui/ds';
+import { buttonClasses, iconButtonClasses } from '@/components/ui/ds/buttonStyles';
 import {
   ATTESTATION_BUCKETS, ATTESTATION_LABEL, NO_FILTERS, REVIEW_BUCKETS, REVIEW_BUCKET_LABEL, filterCount, nextStatuses,
-  type AttestationBucket, type Filters, type LibraryViewId, type ReviewBucket, type SavedView,
+  type AttestationBucket, type Filters, type LibraryViewId, type Option, type ReviewBucket, type SavedView,
 } from './libraryModel';
 import type { Density } from './libraryPrefs';
-import { exportTitle, filterChips, removeChip, resultText, validViewName, type FilterOptions } from './libraryFiltersLogic';
+import { EXPIRING_LABEL, filterChips, removeChip, validViewName, type FilterOptions } from './libraryFiltersLogic';
+import { exportWords, resultLine, shownOf } from './libraryNumbers';
 
 export type { FilterOptions } from './libraryFiltersLogic';
 
@@ -34,13 +37,18 @@ export interface LibraryFiltersProps {
   shown: number;
   /** documents in scope (without the filters) */
   total: number;
+  /** how many documents the page loaded and how many exist: the words say "loaded" when they differ (libraryNumbers.ts) */
+  listSize: { loaded: number; total: number | null | undefined };
+  /** the list has not answered yet: no count is announced (it would say "0 documents") */
+  loading?: boolean;
   /** built-in first, then the person's own (SavedView.builtIn) */
   views: SavedView[];
   activeViewId: string | null;
   onApplyView: (view: SavedView) => void;
   /** saves the CURRENT filters + sort under that name */
   onSaveView: (name: string) => void;
-  onDeleteView: (id: string) => void;
+  /** the page asks before it deletes a view */
+  onDeleteView: (view: SavedView) => void;
   /** the optional columns (the title and the actions are always on) */
   columns: ColumnChoice[];
   onToggleColumn: (id: string) => void;
@@ -55,24 +63,18 @@ export interface LibraryFiltersProps {
   onView: (view: LibraryViewId) => void;
 }
 
-const REVIEW_ITEMS = REVIEW_BUCKETS.map((b) => ({ value: b as string, label: REVIEW_BUCKET_LABEL[b] }));
+const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
+/** The filter pills: a slim round button, 32px (44px on touch). */
+const PILL = `inline-flex h-ds-control shrink-0 items-center gap-[6px] whitespace-nowrap rounded-full border px-[12px] text-ds-label transition-colors ${FOCUS}`;
+const PILL_IDLE = 'border-ds-border-strong bg-ds-surface text-ds-fg-body hover:bg-ds-surface-hover';
+const PILL_APPLIED = 'border-ds-primary bg-ds-surface text-ds-fg hover:bg-ds-surface-hover';
+const PILL_ON = 'border-ds-primary bg-ds-primary-soft text-ds-primary-text';
+const SECTION = 'px-[8px] pb-1 pt-2 text-ds-label font-[600] text-ds-fg-muted';
+const QUIET = 'px-[8px] py-1.5 text-ds-label text-ds-fg-muted';
+const LINK_ROW = `flex min-h-ds-control w-full items-center gap-2 rounded-ds-control px-[8px] text-left text-ds-body font-[600] text-ds-primary-text hover:bg-ds-primary-soft ${FOCUS}`;
 
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
-// Two traps of the platform's CSS (globals.css), for everything drawn inline (the popovers are portaled to <body>, outside both):
-//  - `.bg-white` is forced with !important, which would beat any hover/on tint on the same element: an element whose background
-//    changes never carries `bg-white` (a plain white one is spelled bg-[#fff]).
-//  - `.governance-light button { font-size: .75rem }` beats an arbitrary size such as text-[13px] on a <button> or <input>; the
-//    named sizes (text-sm = 13px, text-xs = 12px) are forced by `.compact-density` and win. So the text of a button is text-sm /
-//    text-xs, like the shared dropdown's pills; text inside a <span> may use any size.
-/** The buttons that sit among the shared dropdown's pills look like them. */
-const PILL = `inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs transition-colors ${FOCUS}`;
-const PILL_IDLE = 'border-[#d5dbe1] bg-white text-[#1f2933] hover:border-[#9aa5b1]';
-const PILL_APPLIED = 'border-[#0f766e] bg-white text-[#1f2933]';
-const PILL_ON = 'border-[#0f766e] bg-[#f0fdfa] font-medium text-[#115e59]';
-/** The small buttons of row 2. */
-const TOOL = `inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d5dbe1] bg-[#fff] px-2.5 text-sm font-medium text-[#26323d] transition-colors enabled:hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
-const SECTION = 'px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[#586472]';
-const QUIET = 'px-2 py-1.5 text-[12px] leading-4 text-[#586472]';
+const LAYOUT = [{ value: 'table', label: 'Table' }, { value: 'folders', label: 'Folders' }] as const;
+const DENSITY = [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }] as const;
 
 const toggle = <T extends string>(list: readonly T[], value: T): T[] => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
@@ -186,7 +188,7 @@ function PopoverMenu({ title, label, width, align = 'left', buttonClass, button,
           tabIndex={-1}
           onKeyDown={onPanelKeyDown}
           style={{ left: at.left, top: at.top, bottom: at.bottom, width: at.width, maxHeight: at.maxHeight }}
-          className="fixed z-[70] overflow-y-auto rounded-xl border border-[#d5dbe1] bg-white text-[13px] text-[#26323d] shadow-elevated focus:outline-none"
+          className="fixed z-[70] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface text-ds-body text-ds-fg-body shadow-ds-pop focus-visible:outline-none"
         >
           {children({ close, refocus })}
         </div>,
@@ -196,12 +198,86 @@ function PopoverMenu({ title, label, width, align = 'left', buttonClass, button,
   );
 }
 
-function CheckRow({ checked, label, onChange }: { checked: boolean; label: string; onChange: () => void }) {
+// ─── A multi-select pill ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A few words for the pill: "Type" while nothing is chosen, "Type · Policy" for one, "Type · 2" for more. */
+function pillWords(title: string, items: readonly Option[], selected: readonly string[]): { text: string; label: string } {
+  const names = items.filter((o) => selected.includes(o.value)).map((o) => o.label);
+  if (selected.length === 0) return { text: title, label: `${title}, no filter` };
+  const text = `${title} · ${names.length === 1 ? names[0] : selected.length}`;
+  return { text, label: `${title}: ${names.length > 0 ? names.join(', ') : `${selected.length} chosen`}` };
+}
+
+/** The list inside a pill: a search box (always for people, departments and frameworks, which are long; else only past ten), a checkbox for each choice, Clear. */
+function PillList({ title, items, selected, onApply, forceSearch, api }: {
+  title: string; items: Option[]; selected: string[]; onApply: (next: string[]) => void; forceSearch: boolean; api: PanelApi;
+}) {
+  const [query, setQuery] = useState('');
+  const searchable = forceSearch || items.length > 10;
+  const q = query.trim().toLowerCase();
+  const shown = q ? items.filter((o) => o.label.toLowerCase().includes(q) || (o.subLabel ?? '').toLowerCase().includes(q)) : items;
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] text-[#26323d] hover:bg-[#f3f6f8]">
-      <input type="checkbox" checked={checked} onChange={onChange} className={`h-4 w-4 shrink-0 rounded border-[#9aa5b1] accent-[#0f766e] ${FOCUS}`} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </label>
+    <div role="group" aria-label={title} className="p-[8px]">
+      {searchable && (
+        <div className="pb-[8px]">
+          <TextInput
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape' && query) { e.preventDefault(); e.stopPropagation(); setQuery(''); } }}
+            aria-label={`Search ${title.toLowerCase()}`}
+            placeholder="Search"
+            autoComplete="off"
+            leftAdornment={<Search aria-hidden />}
+          />
+        </div>
+      )}
+      <div className="max-h-[256px] overflow-y-auto">
+        {shown.length === 0 && <p className={QUIET}>No items found</p>}
+        {shown.map((o) => (
+          <Checkbox
+            key={o.value}
+            className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover"
+            checked={selected.includes(o.value)}
+            onChange={() => onApply(toggle(selected, o.value))}
+            label={(
+              <span className="block min-w-0">
+                <span className="block truncate">{o.label}</span>
+                {o.subLabel && <span className="block truncate text-ds-label text-ds-fg-muted">{o.subLabel}</span>}
+              </span>
+            )}
+          />
+        ))}
+      </div>
+      {selected.length > 0 && (
+        <div className="mt-[4px] border-t border-ds-border pt-[4px]">
+          <button type="button" onClick={() => { onApply([]); api.refocus(); }} className={LINK_ROW}>Clear {title.toLowerCase()}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterPill({ title, items, selected, onApply, forceSearch = false }: {
+  title: string; items: Option[]; selected: string[]; onApply: (next: string[]) => void; forceSearch?: boolean;
+}) {
+  const words = pillWords(title, items, selected);
+  return (
+    <PopoverMenu
+      title={title}
+      label={words.label}
+      width={288}
+      align="left"
+      buttonClass={`${PILL} ${selected.length > 0 ? PILL_APPLIED : PILL_IDLE} max-w-[14rem]`}
+      button={(
+        <>
+          <span className="min-w-0 truncate">{words.text}</span>
+          <ChevronDown aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />
+        </>
+      )}
+    >
+      {(api) => <PillList title={title} items={items} selected={selected} onApply={onApply} forceSearch={forceSearch} api={api} />}
+    </PopoverMenu>
   );
 }
 
@@ -213,7 +289,7 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   canSave: boolean;
   onApply: (view: SavedView) => void;
   onSave: (name: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (view: SavedView) => void;
   api: PanelApi;
 }) {
   const [naming, setNaming] = useState(false);
@@ -221,7 +297,6 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   const [tried, setTried] = useState(false);               // an empty name is only complained about once Save was pressed
   const inputRef = useRef<HTMLInputElement>(null);
   const uid = useId();
-  const inputId = `${uid}-name`;
   const errorId = `${uid}-error`;
   const builtIn = views.filter((v) => v.builtIn);
   const own = views.filter((v) => !v.builtIn);
@@ -240,14 +315,14 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   const row = (v: SavedView) => {
     const on = v.id === activeViewId;
     return (
-      <li key={v.id} className="flex items-center rounded-md hover:bg-[#f3f6f8]">
+      <li key={v.id} className="flex items-center rounded-ds-control hover:bg-ds-surface-hover">
         <button
           type="button"
           aria-current={on ? 'true' : undefined}
           onClick={() => { onApply(v); api.close(); }}
-          className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] ${on ? 'font-medium text-[#115e59]' : 'text-[#26323d]'} ${FOCUS}`}
+          className={`flex min-h-ds-control min-w-0 flex-1 items-center gap-2 rounded-ds-control px-[8px] text-left text-ds-body ${on ? 'font-[600] text-ds-primary-text' : 'text-ds-fg-body'} ${FOCUS}`}
         >
-          <Check aria-hidden strokeWidth={2} className={`h-4 w-4 shrink-0 ${on ? 'text-[#0f766e]' : 'invisible'}`} />
+          <Check aria-hidden strokeWidth={2} className={`h-[16px] w-[16px] shrink-0 ${on ? 'text-ds-primary-text' : 'invisible'}`} />
           <span className="min-w-0 flex-1 truncate">{v.name}</span>
         </button>
         {!v.builtIn && (
@@ -255,10 +330,10 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
             type="button"
             aria-label={`Delete view “${v.name}”`}
             title="Delete view"
-            onClick={() => { onDelete(v.id); api.refocus(); }}
-            className={`mr-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-[#586472] hover:bg-[#fee4e2] hover:text-[#b42318] ${FOCUS}`}
+            onClick={() => { api.close(); onDelete(v); }}
+            className={`mr-1 grid h-ds-control w-[var(--ds-control-h)] shrink-0 place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-danger-soft hover:text-ds-danger ${FOCUS}`}
           >
-            <X aria-hidden strokeWidth={1.75} className="h-4 w-4" />
+            <X aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px]" />
           </button>
         )}
       </li>
@@ -266,45 +341,40 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   };
 
   return (
-    <div className="p-2">
+    <div className="p-[8px]">
       <p className={SECTION}>Views</p>
       <ul>{builtIn.map(row)}</ul>
       <p className={SECTION}>My views</p>
       {own.length > 0 ? <ul>{own.map(row)}</ul> : <p className={QUIET}>None yet. Filter the library, then save the view here.</p>}
       {canSave && (
-        <div className="mt-1.5 border-t border-[#e1e6eb] pt-1.5">
+        <div className="mt-1.5 border-t border-ds-border pt-1.5">
           {naming ? (
-            <div className="space-y-1.5 px-2 pb-1">
-              <label htmlFor={inputId} className="block text-[12px] font-medium text-[#26323d]">Name this view</label>
-              <input
-                id={inputId}
+            <div className="space-y-1.5 px-[8px] pb-1">
+              <label htmlFor={`${uid}-name`} className="block text-ds-label font-[600] text-ds-fg-body">Name this view</label>
+              <TextInput
+                id={`${uid}-name`}
                 ref={inputRef}
                 type="text"
                 value={name}
                 autoComplete="off"
                 placeholder="For example, Overdue policies"
-                aria-invalid={showError}
+                invalid={showError}
                 aria-describedby={showError ? errorId : undefined}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); save(); }
                   else if (e.key === 'Escape') { e.preventDefault(); cancel(); }       // cancels the name; the panel's own Escape then leaves it alone
                 }}
-                className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] text-[#1f2933] placeholder:text-[#586472] ${showError ? 'border-[#b42318]' : 'border-[#c3ccd5]'} ${FOCUS}`}
               />
-              {showError && <p id={errorId} role="alert" className="text-[12px] leading-4 text-[#b42318]">{error}</p>}
+              {showError && <p id={errorId} role="alert" className="text-ds-label text-ds-danger">{error}</p>}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={cancel} className={`h-8 rounded-lg px-3 text-[13px] font-medium text-[#26323d] hover:bg-[#f3f6f8] ${FOCUS}`}>Cancel</button>
-                <button type="button" onClick={save} className={`h-8 rounded-lg bg-[#0f766e] px-3 text-[13px] font-medium text-[#fff] hover:bg-[#115e59] ${FOCUS}`}>Save</button>
+                <Button size="sm" variant="ghost" onClick={cancel}>Cancel</Button>
+                <Button size="sm" variant="primary" onClick={save}>Save</Button>
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setNaming(true)}
-              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-[#0f766e] hover:bg-[#f0fdfa] ${FOCUS}`}
-            >
-              <Plus aria-hidden strokeWidth={2} className="h-4 w-4 shrink-0" />
+            <button type="button" onClick={() => setNaming(true)} className={LINK_ROW}>
+              <Plus aria-hidden strokeWidth={2} className="h-[16px] w-[16px] shrink-0" />
               Save current view…
             </button>
           )}
@@ -314,22 +384,20 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
   );
 }
 
-// ─── The bar ─────────────────────────────────────────────────────────────────────────
-
-/** An icon-only tool button: a square, named by aria-label and title. */
-const ICON_TOOL = `${TOOL} w-8 justify-center px-0`;
+// ─── The bar ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function LibraryFilters({
-  filters, onChange, options, canFilterMine, shown, total, views, activeViewId, onApplyView, onSaveView, onDeleteView,
+  filters, onChange, options, canFilterMine, shown, total, listSize, loading = false, views, activeViewId, onApplyView, onSaveView, onDeleteView,
   columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport, view, onView,
 }: LibraryFiltersProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const filtering = filterCount(filters) > 0;
   const chips = filterChips(filters, options);
-  const moreCount = filters.review.length + filters.attestation.length + filters.classifications.length;
+  const moreCount = filters.review.length + filters.attestation.length + filters.classifications.length + (filters.expiring ? 1 : 0);
   const activeView = views.find((v) => v.id === activeViewId) ?? null;
   const namedView = activeView && activeView.id !== 'all' ? activeView : null;      // "All documents" is the plain state: no name on the button
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
+  const words = exportWords({ shown, loaded: listSize.loaded, total: listSize.total, canExport });
 
   // "/" jumps to the search, unless the person is typing somewhere or a dialog is open
   useEffect(() => {
@@ -344,152 +412,121 @@ export function LibraryFilters({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const pill = (title: string, items: FilterOptions['types'], selected: string[], onApply: (next: string[]) => void, extra: { forceSearch?: boolean; showAvatars?: boolean } = {}) => (
-    <MultiSelectDropdown
-      title={title}
-      items={items}
-      selectedValues={selected}
-      onApply={onApply}
-      multiSelect
-      autoApply
-      compact
-      size="sm"
-      showAvatars={extra.showAvatars ?? false}
-      forceSearch={extra.forceSearch}
-      className="shrink-0"
-      triggerClassName="max-w-[14rem]"
-    />
-  );
-
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-2 text-[13px] text-[#26323d]">
+    <div className="flex min-w-0 max-w-full flex-col gap-2">
       {/* The count, for a screen reader (the header says it in words, the chips below when filtering) */}
-      <span role="status" aria-live="polite" className="sr-only">{resultText(shown, total, filtering)}</span>
+      <span role="status" aria-live="polite" className="sr-only">{loading ? 'Loading the documents' : resultLine({ shown, scope: total, filtering, loaded: listSize.loaded, total: listSize.total })}</span>
 
-      {/* One row: the search, the pills, then (right) views, columns, density, export. It wraps on narrow screens; on a phone the pills scroll along one line. */}
+      {/* One group: the search, the pills, then (right) layout, views, columns, export. It wraps on narrow screens. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px] sm:flex-1">
-          <Search aria-hidden strokeWidth={1.75} className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#586472]" />
-          <input
-            ref={searchRef}
-            type="text"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            spellCheck={false}
-            aria-label="Search documents"
-            aria-keyshortcuts="/"
-            title="Searches title, code, owner, department, frameworks, tags and file name. Press / to jump here."
-            value={filters.search}
-            onChange={(e) => set({ search: e.target.value })}
-            placeholder="Search documents"
-            className={`h-8 w-full rounded-lg border border-[#c3ccd5] bg-white pl-9 pr-8 text-xs text-[#1f2933] text-ellipsis placeholder:text-[#586472] focus-visible:!border-[#0f766e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]`}
-          />
-          {filters.search && (
+        <TextInput
+          ref={searchRef}
+          className="w-full sm:min-w-[200px] sm:max-w-[300px] sm:flex-1"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          spellCheck={false}
+          aria-label="Search documents"
+          aria-keyshortcuts="/"
+          title="Searches title, code, owner, department, frameworks, tags and file name. Press / to jump here."
+          value={filters.search}
+          onChange={(e) => set({ search: e.target.value })}
+          placeholder="Search documents"
+          leftAdornment={<Search aria-hidden />}
+          rightAdornment={filters.search ? (
             <button
               type="button"
               aria-label="Clear search"
+              title="Clear search"
               onClick={() => { set({ search: '' }); searchRef.current?.focus(); }}
-              className={`absolute right-1.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933] ${FOCUS}`}
+              className={`grid h-[24px] w-[24px] place-items-center rounded-full text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg ${FOCUS}`}
             >
-              <X aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5" />
+              <X aria-hidden strokeWidth={1.75} className="h-[14px] w-[14px]" />
             </button>
+          ) : undefined}
+        />
+
+        {/* on a phone the pills are one line that scrolls along (four lines of pills would push the documents off the first screen); from 640px they join the bar */}
+        <div className="-mx-[2px] flex min-w-0 max-w-full items-center gap-2 overflow-x-auto px-[2px] py-[2px] max-sm:w-full sm:contents">
+        <FilterPill title="Type" items={options.types} selected={filters.types} onApply={(next) => set({ types: next })} />
+        <FilterPill title="Status" items={options.statuses} selected={filters.statuses} onApply={(next) => set({ statuses: nextStatuses(filters.statuses, next) })} />
+        <FilterPill title="Owner" items={options.owners} selected={filters.owners} onApply={(next) => set({ owners: next })} forceSearch />
+        <FilterPill title="Department" items={options.departments} selected={filters.departments} onApply={(next) => set({ departments: next })} forceSearch />
+        <FilterPill title="Framework" items={options.frameworks} selected={filters.frameworks} onApply={(next) => set({ frameworks: next })} forceSearch />
+
+        <PopoverMenu
+          title="Filters"
+          label={moreCount > 0 ? `More filters, ${moreCount} applied` : 'More filters'}
+          width={288}
+          align="left"
+          buttonClass={`${PILL} ${moreCount > 0 ? PILL_APPLIED : PILL_IDLE}`}
+          button={(
+            <>
+              <SlidersHorizontal aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />
+              <span>Filters</span>
+              {moreCount > 0 && (
+                <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-ds-primary-soft px-[6px] text-ds-label text-ds-primary-text">{moreCount}</span>
+              )}
+            </>
           )}
-        </div>
+        >
+          {() => (
+            <div className="space-y-2 p-[8px]">
+              <fieldset className="min-w-0">
+                <legend className={SECTION}>Review</legend>
+                {REVIEW_BUCKETS.map((b: ReviewBucket) => (
+                  <Checkbox key={b} className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover" checked={filters.review.includes(b)} label={REVIEW_BUCKET_LABEL[b]} onChange={() => set({ review: toggle(filters.review, b) })} />
+                ))}
+              </fieldset>
+              <fieldset className="min-w-0">
+                <legend className={SECTION}>Expiry</legend>
+                <Checkbox className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover" checked={filters.expiring} label={EXPIRING_LABEL} onChange={() => set({ expiring: !filters.expiring })} />
+              </fieldset>
+              <fieldset className="min-w-0">
+                <legend className={SECTION}>Attestation</legend>
+                {ATTESTATION_BUCKETS.map((b: AttestationBucket) => (
+                  <Checkbox key={b} className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover" checked={filters.attestation.includes(b)} label={ATTESTATION_LABEL[b]} onChange={() => set({ attestation: toggle(filters.attestation, b) })} />
+                ))}
+              </fieldset>
+              <fieldset className="min-w-0">
+                <legend className={SECTION}>Classification</legend>
+                {options.classifications.length > 0 ? options.classifications.map((o) => (
+                  <Checkbox key={o.value} className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover" checked={filters.classifications.includes(o.value)} label={o.label} onChange={() => set({ classifications: toggle(filters.classifications, o.value) })} />
+                )) : <p className={QUIET}>None set</p>}
+              </fieldset>
+            </div>
+          )}
+        </PopoverMenu>
 
-        <div className="-m-0.5 flex items-center gap-2 overflow-x-auto p-0.5 scrollbar-thin sm:contents">
-          {pill('Type', options.types, filters.types, (next) => set({ types: next }))}
-          {pill('Status', options.statuses, filters.statuses, (next) => set({ statuses: nextStatuses(filters.statuses, next) }))}
-          {pill('Owner', options.owners, filters.owners, (next) => set({ owners: next }), { forceSearch: true, showAvatars: true })}
-          {pill('Department', options.departments, filters.departments, (next) => set({ departments: next }), { forceSearch: true })}
-          {pill('Framework', options.frameworks, filters.frameworks, (next) => set({ frameworks: next }), { forceSearch: true })}
-
-          <PopoverMenu
-            title="Filters"
-            label={moreCount > 0 ? `More filters, ${moreCount} applied` : 'More filters'}
-            width={288}
-            align="left"
-            buttonClass={`${PILL} ${moreCount > 0 ? PILL_APPLIED : PILL_IDLE}`}
-            button={(
-              <>
-                <SlidersHorizontal aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-[#586472]" />
-                <span>Filters</span>
-                {moreCount > 0 && (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#ccfbf1] px-1.5 text-[11px] font-medium text-[#115e59]">{moreCount}</span>
-                )}
-              </>
-            )}
+        {canFilterMine && (
+          <button
+            type="button"
+            aria-pressed={filters.mine}
+            title="Only the documents you own or wrote"
+            onClick={() => set({ mine: !filters.mine })}
+            className={`${PILL} ${filters.mine ? PILL_ON : PILL_IDLE}`}
           >
-            {() => (
-              <div className="space-y-2 p-2">
-                <fieldset className="min-w-0">
-                  <legend className={SECTION}>Review</legend>
-                  {REVIEW_BUCKETS.map((b: ReviewBucket) => (
-                    <CheckRow key={b} checked={filters.review.includes(b)} label={REVIEW_BUCKET_LABEL[b]} onChange={() => set({ review: toggle(filters.review, b) })} />
-                  ))}
-                </fieldset>
-                <fieldset className="min-w-0">
-                  <legend className={SECTION}>Attestation</legend>
-                  {ATTESTATION_BUCKETS.map((b: AttestationBucket) => (
-                    <CheckRow key={b} checked={filters.attestation.includes(b)} label={ATTESTATION_LABEL[b]} onChange={() => set({ attestation: toggle(filters.attestation, b) })} />
-                  ))}
-                </fieldset>
-                <fieldset className="min-w-0">
-                  <legend className={SECTION}>Classification</legend>
-                  {options.classifications.length > 0 ? options.classifications.map((o) => (
-                    <CheckRow key={o.value} checked={filters.classifications.includes(o.value)} label={o.label} onChange={() => set({ classifications: toggle(filters.classifications, o.value) })} />
-                  )) : <p className={QUIET}>None set</p>}
-                </fieldset>
-              </div>
-            )}
-          </PopoverMenu>
-
-          {canFilterMine && (
-            <button
-              type="button"
-              aria-pressed={filters.mine}
-              title="Only the documents you own or wrote"
-              onClick={() => set({ mine: !filters.mine })}
-              className={`${PILL} ${filters.mine ? PILL_ON : PILL_IDLE}`}
-            >
-              {filters.mine ? <Check aria-hidden strokeWidth={2} className="h-3.5 w-3.5 shrink-0 text-[#0f766e]" /> : <UserRound aria-hidden strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 text-[#586472]" />}
-              Mine
-            </button>
-          )}
+            {filters.mine ? <Check aria-hidden strokeWidth={2} className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" /> : <UserRound aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />}
+            Mine
+          </button>
+        )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* the layout: the register table, or a folder for each department (the same documents, the same filters) */}
-          <div role="group" aria-label="Library layout" className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-[#c3ccd5] bg-[#fff] p-0.5">
-            {([['table', Table2, 'Table'], ['folders', Folder, 'Folders']] as const).map(([value, Icon, name]) => {
-              const on = view === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={on}
-                  title={value === 'table' ? 'One list of documents' : 'Documents in a folder for each department'}
-                  onClick={() => { if (!on) onView(value); }}
-                  className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs ${FOCUS} ${on ? 'bg-[#f0fdfa] font-medium text-[#115e59] ring-1 ring-inset ring-[#99d5cf]' : 'text-[#586472] hover:bg-[#f3f6f8]'}`}
-                >
-                  <Icon aria-hidden strokeWidth={1.75} className="h-4 w-4" />
-                  {name}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl label="Library layout" name="library-layout" options={LAYOUT} value={view} onChange={onView} />
 
           <PopoverMenu
             title="Views"
             label={activeView ? `Views, current view ${activeView.name}` : 'Views'}
             width={300}
             align="right"
-            buttonClass={namedView ? TOOL : ICON_TOOL}
+            buttonClass={namedView ? buttonClasses({ variant: 'secondary' }) : iconButtonClasses('secondary')}
             button={(
               <>
-                <Bookmark aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />
+                <Bookmark aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0" />
                 {namedView && <span className="max-w-[9rem] truncate">{namedView.name}</span>}
-                {namedView && <ChevronDown aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />}
+                {namedView && <ChevronDown aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0" />}
               </>
             )}
           >
@@ -510,74 +547,48 @@ export function LibraryFilters({
             title="Columns and rows"
             width={248}
             align="right"
-            buttonClass={ICON_TOOL}
-            button={<Columns3 aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0 text-[#586472]" />}
+            buttonClass={iconButtonClasses('secondary')}
+            button={<Columns3 aria-hidden strokeWidth={1.75} className="h-[16px] w-[16px] shrink-0" />}
           >
             {() => (
-              <div className="p-2">
+              <div className="p-[8px]">
                 <p className={SECTION}>Columns</p>
-                {columns.map((c) => <CheckRow key={c.id} checked={c.visible} label={c.label} onChange={() => onToggleColumn(c.id)} />)}
+                {columns.map((c) => <Checkbox key={c.id} className="w-full rounded-ds-control px-[8px] hover:bg-ds-surface-hover" checked={c.visible} label={c.label} onChange={() => onToggleColumn(c.id)} />)}
                 <p className={SECTION}>Rows</p>
-                <div role="group" aria-label="Row density" className="mx-2 mb-1 inline-flex h-8 items-center gap-0.5 rounded-lg border border-[#c3ccd5] bg-white p-0.5">
-                  {([['comfortable', Rows3, 'Comfortable'], ['compact', Rows4, 'Compact']] as const).map(([value, Icon, name]) => {
-                    const on = density === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-pressed={on}
-                        aria-label={`${name} rows`}
-                        title={name}
-                        onClick={() => onDensity(value)}
-                        className={`inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs ${FOCUS} ${on ? 'bg-[#f0fdfa] font-medium text-[#115e59] ring-1 ring-inset ring-[#99d5cf]' : 'text-[#586472] hover:bg-[#f3f6f8]'}`}
-                      >
-                        <Icon aria-hidden strokeWidth={1.75} className="h-4 w-4" />
-                        {name}
-                      </button>
-                    );
-                  })}
+                <div className="px-[8px] pb-1">
+                  <SegmentedControl label="Row density" name="library-density" options={DENSITY} value={density} onChange={onDensity} />
                 </div>
-                <div className="mt-1 border-t border-[#e1e6eb] pt-1.5">
-                  <button type="button" onClick={onResetColumns} className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-[#0f766e] hover:bg-[#f0fdfa] ${FOCUS}`}>
-                    Reset
-                  </button>
+                <div className="mt-1 border-t border-ds-border pt-1.5">
+                  <button type="button" onClick={onResetColumns} className={LINK_ROW}>Reset</button>
                 </div>
               </div>
             )}
           </PopoverMenu>
 
-          <button type="button" onClick={onExport} disabled={!canExport} title={exportTitle(shown, canExport)} aria-label="Export CSV" className={ICON_TOOL}>
-            <Download aria-hidden strokeWidth={1.75} className="h-4 w-4 shrink-0" />
-          </button>
+          <Button onClick={onExport} disabled={!canExport} title={words.title} leftIcon={<Download aria-hidden />}>{words.label}</Button>
         </div>
       </div>
 
       {/* Only while filtering: how many match, what is filtered on (each comes off by itself), and a way to drop them all */}
       {chips.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="text-[13px] font-medium tabular-nums text-[#1f2933]">{shown} of {total}</span>
+          <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{shownOf({ shown, scope: total, loaded: listSize.loaded, total: listSize.total })}</span>
           <ul aria-label="Active filters" className="flex min-w-0 flex-wrap items-center gap-2">
             {chips.map((chip) => (
-              <li key={chip.key} className="inline-flex h-7 max-w-full items-center rounded-full border border-[#99d5cf] bg-[#f0fdfa] pl-2.5 pr-0.5 text-[12.5px] text-[#115e59]">
+              <li key={chip.key} className="inline-flex min-h-[28px] max-w-full items-center rounded-full border border-ds-primary bg-ds-primary-soft pl-[10px] pr-[2px] text-ds-label text-ds-primary-text">
                 <span className="min-w-0 truncate">{chip.label}</span>
                 <button
                   type="button"
                   aria-label={`Remove filter ${chip.label}`}
                   onClick={() => onChange(removeChip(filters, chip))}
-                  className={`ml-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[#115e59] hover:bg-[#ccfbf1] ${FOCUS}`}
+                  className={`ml-[2px] grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full text-ds-primary-text hover:bg-ds-surface ${FOCUS}`}
                 >
-                  <X aria-hidden strokeWidth={2} className="h-3.5 w-3.5" />
+                  <X aria-hidden strokeWidth={2} className="h-[14px] w-[14px]" />
                 </button>
               </li>
             ))}
             <li>
-              <button
-                type="button"
-                onClick={() => { onChange(NO_FILTERS); searchRef.current?.focus(); }}
-                className={`h-7 rounded-md px-2 text-sm font-medium text-[#0f766e] hover:bg-[#f0fdfa] hover:text-[#115e59] ${FOCUS}`}
-              >
-                Clear
-              </button>
+              <Button size="sm" variant="link" onClick={() => { onChange(NO_FILTERS); searchRef.current?.focus(); }}>Clear</Button>
             </li>
           </ul>
         </div>

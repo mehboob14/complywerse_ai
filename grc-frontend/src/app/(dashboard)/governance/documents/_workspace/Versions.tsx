@@ -1,16 +1,17 @@
 'use client';
 
 /**
- * A document's versions as the library shows them: under its row in the table and in the detail drawer. Read as the document page
+ * A document's versions as the library shows them: under its row in the table and in the details panel. Read as the document page
  * reads them (its Change log: the change chain; where the chain is off, the version history), as a hierarchy: each major version
  * with its minor versions under it, newest major first (library.versionGroups); each opens the document on that version.
+ * Written on the design-system tokens, 12px at the least; the date is "12 Nov 2026".
  */
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { documentChainApi } from '@/lib/documentChain';
-import { day } from '@/lib/documentLifecycle';
+import { formatDate } from '@/lib/format';
 import { problemOf } from '@/lib/studio/api';
 import { type GovDoc, statusLabel, verLabel } from './lib';
 import { versionGroups, versionStates, type VersionState } from './library';
@@ -31,18 +32,17 @@ function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { stat
   const earlier = v.state === 'superseded';
   const word = v.state === 'in-force' ? 'In force' : earlier ? null : statusLabel(doc.status);
   const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
-  // text-[#fff], not text-white: the library's governance-light repaints text-white grey
-  const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : 'border-[#9aa5b1] text-[#1f2933]';
+  const look = inForce ? 'border-ds-primary bg-ds-primary text-ds-on-primary' : 'border-ds-border-control text-ds-fg';
   return (
     <Link
       href={`/governance/documents/${doc.id}?read=${v.id}`}
-      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+      className="flex min-h-ds-control flex-wrap items-center gap-x-2 gap-y-[2px] rounded-ds-control px-[6px] py-[2px] text-ds-label text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
     >
-      <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
-      {word ? <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
+      <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{verLabel(v.number)}</span>
+      {word ? <span className={`rounded-ds-control border px-[6px] text-ds-label ${look}`}>{word}</span>
         : <span className="sr-only">earlier version</span>}
       {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
-      <span className="text-[11px] text-[#586472] max-sm:basis-full">{[original ? 'The original' : SIZE[v.kind ?? ''], day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
+      <span className="text-ds-label text-ds-fg-muted max-sm:basis-full">{[original ? 'The original' : SIZE[v.kind ?? ''], formatDate(v.at, { empty: '' }), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
     </Link>
   );
 }
@@ -69,18 +69,18 @@ export function Versions({ doc, depth = 0 }: { doc: GovDoc; depth?: number }) {
   const note = { paddingLeft: depth * STEP + STEP + GAP };
 
   if (chain.isPending || (off && history.isPending)) {
-    return <p style={note} className="inline-flex items-center gap-1.5 text-[12px] text-[#586472]"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Reading the versions…</p>;
+    return <p style={note} role="status" className="inline-flex items-center gap-1.5 text-ds-label text-ds-fg-muted"><Loader2 className="h-[16px] w-[16px] animate-spin motion-reduce:animate-none" aria-hidden /> Reading the versions…</p>;
   }
-  if (failed) return <p style={note} role="alert" className="text-[12px] text-[#9b1c1c]">{problemOf(failed, 'The versions could not be read.')}</p>;
-  if (lines.length === 0) return <p style={note} className="text-[12px] text-[#586472]">No versions recorded yet.</p>;
+  if (failed) return <p style={note} role="alert" className="text-ds-label text-ds-danger">{problemOf(failed, 'The versions could not be read.')}</p>;
+  if (lines.length === 0) return <p style={note} className="text-ds-label text-ds-fg-muted">No versions recorded yet.</p>;
   const original = lines[lines.length - 1].id;
   return (
-    <ul aria-label={`Versions of ${doc.title}, newest major version first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-[#d5dbe1] pl-2">
+    <ul aria-label={`Versions of ${doc.title}, newest major version first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-ds-border-strong pl-2">
       {versionGroups(lines).map((g) => (
         <li key={g.head.id}>
           <VersionLink doc={doc} v={g.head} original={g.head.id === original} />
           {g.minors.length > 0 && (
-            <ul aria-label={`Minor versions after ${verLabel(g.head.number)}, newest first`} className="ml-3 border-l border-[#e1e6eb] pl-2">
+            <ul aria-label={`Minor versions after ${verLabel(g.head.number)}, newest first`} className="ml-3 border-l border-ds-border pl-2">
               {g.minors.map((v) => <li key={v.id}><VersionLink doc={doc} v={v} original={v.id === original} /></li>)}
             </ul>
           )}
