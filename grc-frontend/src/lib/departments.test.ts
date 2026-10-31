@@ -6,8 +6,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 import { apiErrorText } from './apiError.ts';
 import {
-  DEACTIVATE_NOTE, DEPARTMENT_QUERY_KEYS, activatedText, deactivatedText, departmentCreateBody, departmentPatch, departmentPlaceholder, departmentRows,
-  departmentsSummary, documentsLabel, howChips, memberSummary, parentChoices, refreshDepartments, removeBlock,
+  DEACTIVATE_NOTE, DEPARTMENT_QUERY_KEYS, activatedText, deactivatedText, departmentCreateBody, departmentFormDirty, departmentPatch, departmentPlaceholder,
+  departmentRows, departmentsSummary, documentsLabel, howChips, memberSummary, parentChoices, refreshDepartments, removeBlock,
   roleChips, roleItems, roleLabel, userItems, type DepartmentForm,
 } from './departments.ts';
 
@@ -115,6 +115,21 @@ test('a new department sends its name and only what was filled in, never a code 
   });
 });
 
+test('the form is dirty when closing it would lose something: typing in a new department, any change in an edit', () => {
+  const empty = form({ name: '', description: '', parentId: null, leadId: null, roleIds: [] });
+  assert.equal(departmentFormDirty('create', undefined, empty), false);                                         // opened and left alone
+  assert.equal(departmentFormDirty('create', undefined, { ...empty, name: '   ' }), false);                     // spaces are no name
+  for (const typed of [{ name: 'IT' }, { description: 'x' }, { parentId: 4 }, { leadId: 7 }, { roleIds: [3] }]) {
+    assert.equal(departmentFormDirty('create', undefined, { ...empty, ...typed }), true, JSON.stringify(typed));
+  }
+  assert.equal(departmentFormDirty('edit', dept, form()), false);                                               // as it was (roles in another order are the same)
+  assert.equal(departmentFormDirty('edit', dept, form({ name: ' Compliance ' })), false);                       // the save would trim it to the same name: nothing to lose
+  for (const changed of [{ name: 'Risk' }, { description: '' }, { parentId: null }, { leadId: null }, { roleIds: [8] }, { active: false }]) {
+    assert.equal(departmentFormDirty('edit', dept, form(changed)), true, JSON.stringify(changed));
+  }
+  assert.equal(departmentFormDirty('edit', undefined, empty), false);                                           // an edit with no department behaves as a new one
+});
+
 test('the Department field of a document says why it has nothing to offer', () => {
   assert.equal(departmentPlaceholder({ failed: true, count: 0 }), "Couldn't load departments");
   assert.equal(departmentPlaceholder({ loading: true, count: 0 }), 'Loading departments…');
@@ -193,17 +208,24 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const ADMIN_PAGE = '../app/(dashboard)/admin/departments/page.tsx';
 const SETTINGS_SECTION = '../app/(dashboard)/governance/settings/_DepartmentsSection.tsx';
 
-test('the department form and the deactivate question exist once: Administration and Settings open the same components', () => {
+test('the department form exists once and the deactivate question says the same words: Administration and Settings open the same form and ask with DEACTIVATE_NOTE', () => {
   const shared = source('../components/admin/DepartmentForm.tsx');
   assert.match(shared, /export function DepartmentFormModal/);
   assert.match(shared, /export function DeactivateModal/);
   for (const path of [ADMIN_PAGE, SETTINGS_SECTION]) {
     const page = source(path);
-    for (const name of ['DepartmentFormModal', 'DeactivateModal']) {
-      assert.match(page, new RegExp(`import \\{[^}]*\\b${name}\\b[^}]*\\} from '@/components/admin/DepartmentForm'`), `${path} does not use the shared ${name}`);
-      assert.doesNotMatch(page, new RegExp(`function ${name}\\b`), `${path} has its own ${name}`);
-    }
+    assert.match(page, /import \{[^}]*\bDepartmentFormModal\b[^}]*\} from '@\/components\/admin\/DepartmentForm'/, `${path} does not use the shared DepartmentFormModal`);
+    assert.doesNotMatch(page, /function DepartmentFormModal\b/, `${path} has its own DepartmentFormModal`);
   }
+  // Administration asks in the shared dialog; Settings asks through the kit's useConfirm (a dialog every page shares) with the very same note and the same call
+  assert.match(source(ADMIN_PAGE), /import \{[^}]*\bDeactivateModal\b[^}]*\} from '@\/components\/admin\/DepartmentForm'/);
+  const section = source(SETTINGS_SECTION);
+  assert.doesNotMatch(section, /function DeactivateModal\b/);
+  assert.match(section, /useConfirm\(\)/);
+  assert.match(section, /message: DEACTIVATE_NOTE/);
+  assert.match(section, /departmentsApi\.deactivate\(/);
+  assert.match(section, /drawer mode="create"/);                                                 // and the form is the drawer that asks before it discards typing
+  assert.match(section, /drawer mode="edit"/);
 });
 
 test('Settings changes departments only for those the server lets, and links to the tab where members and roles are managed', () => {
@@ -221,6 +243,6 @@ test('Settings changes departments only for those the server lets, and links to 
 
 test('the Departments card comes first on Governance → Settings, and is there even when the approval settings are not', () => {
   const page = source('../app/(dashboard)/governance/settings/page.tsx');
-  assert.match(page, /<DepartmentsSection \/>\s*<Section id="due"/);                              // before the first lifecycle card
+  assert.match(page, /<DepartmentsSection \/>\s*<SectionCard id="due"/);                          // before the first lifecycle card
   assert.equal(page.match(/<WithDepartments>/g)?.length, 2);                                      // the load error and "not switched on"
 });

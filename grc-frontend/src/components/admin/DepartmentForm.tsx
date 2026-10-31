@@ -11,8 +11,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, X } from 'lucide-react';
 import { assetsApi, departmentsApi, type Department } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
-import { DEACTIVATE_NOTE, departmentCreateBody, departmentPatch, parentChoices, roleItems, userItems, type DepartmentForm } from '@/lib/departments';
+import { DEACTIVATE_NOTE, departmentCreateBody, departmentFormDirty, departmentPatch, parentChoices, roleItems, userItems, type DepartmentForm } from '@/lib/departments';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { Button } from '@/components/ui/ds/Button';
 
 export type TenantUser = { id: number; display_name: string; email: string };
 
@@ -99,13 +101,16 @@ function Field({ label, htmlFor, hint, wide, children }: { label: string; htmlFo
 // ── create / edit ────────────────────────────────────────────────────────────
 
 /** `departments`: every department (the parent choices come from it). `onSaved(message)`: it was saved - the caller closes the
- *  dialog, refreshes the lists (refreshDepartments) and says `message`. */
-export function DepartmentFormModal({ mode, department, departments, onClose, onSaved }: {
+ *  dialog, refreshes the lists (refreshDepartments) and says `message`. `drawer`: draw it as the design-system drawer (RightSlidePanel) that asks
+ *  "Discard changes?" before Escape, the X or a click outside throws typed input away, with the kit's buttons; without it the dialog is the one
+ *  Administration → Departments has always opened (same fields, same save, same words). */
+export function DepartmentFormModal({ mode, department, departments, onClose, onSaved, drawer = false }: {
   mode: 'create' | 'edit';
   department?: Department;
   departments: Department[];
   onClose: () => void;
   onSaved: (message: string) => void;
+  drawer?: boolean;
 }) {
   const id = useId();
   const [form, setForm] = useState<DepartmentForm>(() => ({
@@ -169,20 +174,8 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
   };
 
   const formId = `${id}-form`;
-  return (
-    <Modal
-      title={mode === 'create' ? 'New department' : `Edit department — ${department?.name}`}
-      onClose={onClose}
-      footer={(
-        <>
-          <button type="button" onClick={onClose} className={PLAIN}>Cancel</button>
-          <button type="submit" form={formId} disabled={saving} className={PRIMARY}>
-            {saving && <Loader2 size={13} className="animate-spin" aria-hidden />}
-            {mode === 'create' ? 'Create' : 'Save'}
-          </button>
-        </>
-      )}
-    >
+  const title = mode === 'create' ? 'New department' : `Edit department — ${department?.name}`;
+  const fields = (
       <form id={formId} onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Name *" htmlFor={`${id}-name`} wide>
           <input id={`${id}-name`} value={form.name} onChange={(e) => set({ name: e.target.value })} required autoFocus className={INPUT}
@@ -219,6 +212,41 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
           <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-[#7a1616] sm:col-span-2">{problem}</p>
         )}
       </form>
+  );
+
+  if (drawer) {
+    return (
+      <RightSlidePanel
+        isOpen
+        onClose={onClose}
+        title={title}
+        dirty={departmentFormDirty(mode, department, form)}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button type="submit" form={formId} variant="primary" loading={saving}>{mode === 'create' ? 'Create' : 'Save'}</Button>
+          </div>
+        )}
+      >
+        {fields}
+      </RightSlidePanel>
+    );
+  }
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className={PLAIN}>Cancel</button>
+          <button type="submit" form={formId} disabled={saving} className={PRIMARY}>
+            {saving && <Loader2 size={13} className="animate-spin" aria-hidden />}
+            {mode === 'create' ? 'Create' : 'Save'}
+          </button>
+        </>
+      )}
+    >
+      {fields}
     </Modal>
   );
 }
