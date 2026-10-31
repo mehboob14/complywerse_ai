@@ -18,6 +18,7 @@ export { Menu, type MenuItem, type MenuProps } from './Menu';
 export { Pager, type PagerProps } from './Pager';
 export { Tabs, TabPanel, type TabItem, type TabPanelProps, type TabsProps } from './Tabs';
 export { useTabParam } from './useTabParam';
+export { useAddressState, type AddressStateOptions } from './useAddressState';
 export {
   TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
   type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,

@@ -1,11 +1,13 @@
 'use client';
 
-// PageHeader (classic and variant="page"), Tabs with the ?tab= behaviour, Pager (many pages, one page, a capped list, nothing) and Menu.
+// PageHeader (classic and variant="page"), Tabs with the ?tab= behaviour, useAddressState (several params in the address) with the rules behind it,
+// Pager (many pages, one page, a capped list, nothing) and Menu.
 import { useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Copy, Download, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button, Menu, PageHeader, Pager, StatusPill, TabPanel, Tabs, useTabParam, type MenuItem } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
+import { AddressParamsTable, AddressStateDemo } from './AddressDemo';
 import { Grid, GuideSection, MONO, Row, Spec, Specimen } from './Guide';
 
 const FRAME = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
@@ -62,7 +64,7 @@ function TabsDemo() {
           <Tabs
             ariaLabel="Example record sections"
             value={tab}
-            onChange={(key) => setTab(key as (typeof TAB_KEYS)[number])}
+            onChange={setTab}
             tabs={[
               { key: 'overview', label: 'Overview' },
               { key: 'findings', label: 'Findings', count: 12 },
@@ -148,6 +150,8 @@ export function StructureSection() {
     <GuideSection id="structure" title="Structure" lead="How a page is headed, divided, paged and given a row of actions.">
       <Spec name="PageHeader"><HeaderDemo /></Spec>
       <Spec name="Tabs"><TabsDemo /></Spec>
+      <Spec name="useAddressState"><AddressStateDemo /></Spec>
+      <Spec name="Address params"><AddressParamsTable /></Spec>
       <Spec name="Pager"><PagerDemo /></Spec>
       <Spec name="Menu"><MenuDemo /></Spec>
     </GuideSection>

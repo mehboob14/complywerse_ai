@@ -39,6 +39,7 @@ export { Menu, type MenuItem, type MenuProps } from './ds/Menu';
 export { Pager, type PagerProps } from './ds/Pager';
 export { Tabs, TabPanel, type TabItem, type TabPanelProps, type TabsProps } from './ds/Tabs';
 export { useTabParam } from './ds/useTabParam';
+export { useAddressState, type AddressStateOptions } from './ds/useAddressState';
 export {
   TableFrame, Table, THead, TBody, Tr, Th, Td, RowHeaderCell,
   type TableFrameProps, type TableProps, type TrProps, type ThProps, type TdProps, type RowHeaderCellProps, type CellAlign,

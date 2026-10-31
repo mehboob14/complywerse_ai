@@ -393,8 +393,8 @@ export const DOCS: Record<string, ComponentDoc> = {
         name: 'Tabs', source: `${DS}/Tabs.tsx`, own: 'TabsProps',
         props: [
           prop('tabs', 'TabItem[]', 'The strip.'),
-          prop('value', 'string', 'The key of the open tab.'),
-          prop('onChange', '(key) => void', 'Called when another tab is picked (click, arrow keys, Home, End).'),
+          prop('value', 'K extends string', 'The key of the open tab. Its type is the type of `onChange`\'s key: the union of the keys useTabParam was given, or plain string.', 'string'),
+          prop('onChange', '(key: K) => void', 'Called with the key of the tab that was picked (click, arrow keys, Home, End). Typed by `value`: a useTabParam setter is passed as it is, with no cast.'),
           prop('ariaLabel', 'string', 'Names the tab list for a screen reader.'),
           prop('children', 'ReactNode', 'The TabPanels.'),
           CLASS_NAME,
@@ -423,6 +423,43 @@ export const DOCS: Record<string, ComponentDoc> = {
         name: 'useTabParam', source: `${DS}/useTabParam.ts`, fn: true,
         props: [prop('useTabParam(paramName, keys, { fallback, aliases? })', '[tab, setTab]', 'The open tab, kept in the address. The default tab has the plain address; picking a tab replaces the address (Back is not filled with tab clicks) and never scrolls; an alias keeps an old ?tab= name from an email or a bookmark working. Pass only the keys on offer today.')],
       },
+    ],
+  },
+  useAddressState: {
+    name: 'useAddressState',
+    importFrom: UI,
+    use: 'a page keeps several things in its address (the search, the filters, the sort, the page) so a link, a reload and Back land where the person was. You give it a schema (a name, what its values mean and its default); it gives you the state and a setter that shows a change at once and rewrites the address: it replaces, it does not push, unless asked.',
+    dont: 'Do not define the schema inside the component (it would read the address again on every render), do not keep the same state in React state as well, and do not put anything private in an address: it is stored in history, shared by link and sent in emails. For the open tab alone use useTabParam.',
+    parts: [
+      {
+        name: 'useAddressState', fn: true,
+        props: [
+          prop('useAddressState(schema)', '[state, set]', 'The state the address stands for (every name, its default where the address has nothing usable) and a setter. A name the schema does not list is left alone, and so is the hash. When the address changes (a link, Back) it is the truth again, unless it already says what the page holds ("policy " in a search box and the trimmed "policy" the address keeps are one state).'),
+          prop('set(patch, options?)', 'void', 'Merges `patch` into the state, shows it at once and rewrites the address with history.replaceState (no navigation, no history entry, no scroll). Two changes in one event compose.'),
+        ],
+      },
+      {
+        name: 'AddressStateOptions', source: `${DS}/useAddressState.ts`, own: 'AddressStateOptions',
+        props: [prop('push', 'boolean', 'Add a history entry (pushState) instead of replacing the current one: for a step Back should undo, such as opening a record.', 'false')],
+      },
+    ],
+  },
+  'Address params': {
+    name: 'Address params',
+    importFrom: '@/lib/addressState',
+    imports: ['oneOf', 'text', 'listOf', 'flag', 'integer', 'sortOf', 'readAddress', 'writeAddress', 'sameAddressState'],
+    use: 'you write the schema for useAddressState, or you need the rules apart from React (tested): what an address means, what a state writes back. A value that is not usable is the default, so an address can never put a page in a state it cannot be in. A ParamSpec of your own is just a default, a read and a write.',
+    dont: 'Do not trust an address: every kind reads junk as the default. Do not put a comma in a list value (a list is written comma-separated), and do not keep two names for one thing: other params of the address are left alone, so a name the schema lists is the page\'s.',
+    parts: [
+      { name: 'oneOf', fn: true, props: [prop('oneOf(options, fallback)', 'ParamSpec<T>', 'One of the options, any case, spaces ignored. The first occurrence of a repeated name decides. Written as the option, and nothing when it is the fallback.')] },
+      { name: 'text', fn: true, props: [prop('text()', 'ParamSpec<string>', 'Free text (a search box): read as it is, written trimmed, nothing when blank. The default is the empty string.')] },
+      { name: 'listOf', fn: true, props: [prop('listOf(options?)', 'ParamSpec<string[]>', 'Every occurrence of the name and every comma-separated piece, trimmed, without blanks or repeats, in the order first seen. With `options` anything else is dropped. Written as one comma-separated value.')] },
+      { name: 'flag', fn: true, props: [prop('flag()', 'ParamSpec<boolean>', '`1` or `true` is on; anything else is off. Written as `1`, nothing when off.')] },
+      { name: 'integer', fn: true, props: [prop('integer(fallback, { min?, max? })', 'ParamSpec<number>', 'A whole number (a page): digits only, within min and max, else the fallback. Written when it is not the fallback.')] },
+      { name: 'sortOf', fn: true, props: [prop('sortOf(keys, fallback)', 'ParamSpec<SortState>', '`key:dir` with a key from `keys` and asc or desc. `none` is "no sort" (how a page that sorts by default says it was cleared). Written when it is not the fallback. Has the shape of the table kit\'s SortState.')] },
+      { name: 'readAddress', fn: true, props: [prop('readAddress(schema, search)', 'AddressState', 'The state an address stands for. Names the schema does not list are ignored; `search` may start with "?".')] },
+      { name: 'writeAddress', fn: true, props: [prop('writeAddress(schema, search, state)', 'string', 'The query string (no "?") for a state: the defaults are left out, every other param of `search` is kept in its place, the schema\'s own come after in the schema\'s order, so one state is one address.')] },
+      { name: 'sameAddressState', fn: true, props: [prop('sameAddressState(schema, a, b)', 'boolean', 'Whether two states write the same address.')] },
     ],
   },
   Pager: {

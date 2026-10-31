@@ -19,11 +19,14 @@ export interface TabItem extends TabLike {
   count?: number;
 }
 
-export interface TabsProps {
+// `K` is the type of the tab keys the page works with ('overview' | 'findings' | 'history', what useTabParam gives): `onChange` receives one, so a
+// useTabParam setter is passed as it is, with no cast. Without a typed value K is plain string, as it always was.
+export interface TabsProps<K extends string = string> {
   tabs: TabItem[];
   /** the key of the open tab: one of the tabs that are shown (a `value` that matches none leaves every tab unselected) */
-  value: string;
-  onChange: (key: string) => void;
+  value: K;
+  /** a tab was picked (click, arrow keys, Home, End): its key, which is one of the `tabs` keys, so it is a `K` when the keys are */
+  onChange: (key: K) => void;
   /** names the tab list for a screen reader: "Vendor record sections" */
   ariaLabel: string;
   /** the TabPanels */
@@ -42,7 +45,7 @@ const TAB_OPEN = 'border-ds-primary text-ds-primary-text';
 const TAB_SHUT = 'border-transparent text-ds-fg-muted enabled:hover:border-ds-border-strong enabled:hover:text-ds-fg';
 const BADGE = 'inline-flex min-w-[20px] items-center justify-center rounded-full px-[6px] text-ds-label tabular-nums';
 
-export function Tabs({ tabs, value, onChange, ariaLabel, children, className }: TabsProps) {
+export function Tabs<K extends string = string>({ tabs, value, onChange, ariaLabel, children, className }: TabsProps<K>) {
   const base = useId();
   const strip = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -68,7 +71,7 @@ export function Tabs({ tabs, value, onChange, ariaLabel, children, className }: 
     if (to === null) return;
     e.preventDefault();
     buttons.current.get(to)?.focus();
-    if (to !== value) onChange(to);
+    if (to !== value) onChange(to as K);
   };
 
   return (
@@ -89,7 +92,7 @@ export function Tabs({ tabs, value, onChange, ariaLabel, children, className }: 
                 aria-controls={panelId(base, t.key)}
                 tabIndex={t.key === stop ? 0 : -1}
                 disabled={t.disabled}
-                onClick={() => { if (!open) onChange(t.key); }}
+                onClick={() => { if (!open) onChange(t.key as K); }}
                 onKeyDown={(e) => onKeyDown(e, t.key)}
                 className={clsx(TAB, open ? TAB_OPEN : TAB_SHUT)}
               >
