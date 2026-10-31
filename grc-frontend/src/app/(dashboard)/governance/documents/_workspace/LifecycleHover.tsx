@@ -192,7 +192,7 @@ export function LifecycleHover({ doc, children, focusable = false }: { doc: GovD
     <>
       <span
         ref={wrapRef}
-        className="inline-flex rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring"
+        className="inline-flex max-w-full rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring"
         tabIndex={focusable ? 0 : undefined}
         aria-describedby={placement ? cardId : undefined}
         onMouseEnter={openSoon}

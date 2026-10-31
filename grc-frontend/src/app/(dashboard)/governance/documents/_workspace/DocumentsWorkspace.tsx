@@ -173,6 +173,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const { data: listData, isLoading: docsLoading, isError: listFailed, error: listError, refetch } = useQuery({
     queryKey: ['gov-docs-workspace'],
     queryFn: () => fetchDocuments({ limit: 1000, sort_by: 'updated_at', sort_order: 'desc' }),
+    retry: (failures, e) => failures < 3 && canRetry(e),                  // a refusal (403) is said at once; a network or server failure is tried a few times, as it always was
   });
   const { data: coverage } = useQuery({ queryKey: ['gov-docs-coverage'], queryFn: fetchCoverage });
   const { data: users = [] } = useQuery({
@@ -582,7 +583,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       <RightSlidePanel
         isOpen={assignOwnerFor != null}
         onClose={() => setAssignOwnerFor(null)}
-        title={`Assign owner · ${assignOwnerFor?.length ?? 0} documents`}
+        title={`Assign owner · ${assignOwnerFor?.length ?? 0} ${assignOwnerFor?.length === 1 ? 'document' : 'documents'}`}
         dirty={assignOwnerId !== ''}
         footer={(
           <div className="flex justify-end gap-2">
@@ -602,7 +603,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       <RightSlidePanel
         isOpen={reviewDateFor != null}
         onClose={() => setReviewDateFor(null)}
-        title={`Set review date · ${reviewDateFor?.length ?? 0} documents`}
+        title={`Set review date · ${reviewDateFor?.length ?? 0} ${reviewDateFor?.length === 1 ? 'document' : 'documents'}`}
         dirty={reviewDate !== ''}
         footer={(
           <div className="flex justify-end gap-2">

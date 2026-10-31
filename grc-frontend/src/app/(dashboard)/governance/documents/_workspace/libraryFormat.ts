@@ -13,7 +13,7 @@ export function relativeTime(value: string | null | undefined, now: Date = new D
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} h ago`;
   const days = Math.floor(hours / 24);
-  return days < 7 ? `${days} d ago` : formatDate(at, { calendar: true });      // "5 Nov 2026": the platform's date, the UTC day as before
+  return days < 7 ? `${days} d ago` : formatDate(at);      // "5 Nov 2026": the platform's date. A timestamp is shown on the viewer's own day (lib/format.ts), not the UTC one
 }
 
 export type FileKind = 'pdf' | 'word' | 'excel' | 'powerpoint' | 'text' | 'other';

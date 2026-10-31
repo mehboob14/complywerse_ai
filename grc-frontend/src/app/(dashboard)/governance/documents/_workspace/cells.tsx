@@ -179,7 +179,7 @@ export function TypeCell({ doc }: { doc: GovDoc }) {
 export function LifecycleCell({ doc }: { doc: GovDoc }) {
   return (
     <LifecycleHover doc={doc} focusable>
-      <span className="inline-flex py-[2px]"><StatusPill size="sm" {...statusPill(documentStatus, doc.status)} /></span>
+      <span className="inline-flex max-w-full py-[2px]"><StatusPill size="sm" {...statusPill(documentStatus, doc.status)} /></span>
     </LifecycleHover>
   );
 }
