@@ -12,19 +12,21 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
-import { problemOf as studioProblem, saveBlob } from '@/lib/studio/api';
+import { saveBlob } from '@/lib/studio/api';
 import { documentChainApi } from '@/lib/documentChain';
 import { controlledCopy, controlledFileKey, recordStamp } from '@/lib/controlPages';
 import { useToast } from '@/components/ui/ToastProvider';
 import { RightSlidePanel } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
-import { ErrorState, SkeletonLines } from '@/components/ui/ds';
+import { Button, Checkbox, ErrorState, FormField, Select, SkeletonLines, TextInput, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { calendarDay, dateTime } from '../_view/docDates';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
 import { ControlActions, ControlledMarkdown } from './ControlPages';
-import { ProposeNote, useProposedAnswer } from './_ProposalsView';
-import { sendLabel } from '@/lib/proposals';
+import { ProposeNote, proposedWords, useProposedAnswer, useRefreshAfterProposal } from './_ProposalsView';
+import { proposedOf, sendLabel } from '@/lib/proposals';
 import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
 import { versionGroups } from '../_workspace/library';
 import WordView from '@/components/governance/WordView';
@@ -33,10 +35,8 @@ import {
   FileText, Loader2, Download, GitCompare, RotateCcw, User, Clock, CheckCircle, Info, History, Pencil, Maximize2, Save,
 } from 'lucide-react';
 
-export const formatDate = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString();
-};
+/** A DAY stored as a DateTime (the classic page's effective date and next review): "12 Nov 2026", the same in every time zone; "—" when there is none. */
+export const formatDate = (dateStr: string | null | undefined) => calendarDay(dateStr);
 
 const sanitizeDocumentHtml = (html: string | null | undefined) => {
   if (!html) return '';
@@ -163,8 +163,8 @@ export function DocumentVersionHistoryPanel({
   /** the person is not its owner or author: a restore goes to this person (the owner) to accept, with a message they read */
   proposeTo?: string | null;
 }) {
-  const { toast } = useToast();
-  const handledAsProposal = useProposedAnswer();
+  const notify = useNotify();
+  const refreshAfterProposal = useRefreshAfterProposal();
   const [fetching, setFetching] = useState<number | null>(null);
   const downloadFile = async (v: any) => {
     setFetching(v.id);
@@ -172,13 +172,13 @@ export function DocumentVersionHistoryPanel({
       const { blob, filename } = await documentChainApi.versionFile(documentId, v.id, v.file_name || 'document', v.version_number);
       saveBlob(blob, filename);
     } catch (e) {
-      toast({ type: 'error', title: `Could not download the file of version ${v.version_number}`, message: studioProblem(e) });
+      notify.error(e, { title: `Could not download the file of version ${v.version_number}`, retry: () => { void downloadFile(v); } });
     } finally {
       setFetching(null);
     }
   };
   const [compareId, setCompareId] = useState<number | null>(null);
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['document-versions', documentId],
     enabled: isOpen,
     queryFn: async () => {
@@ -198,10 +198,15 @@ export function DocumentVersionHistoryPanel({
 
   // Restore asks first: why (kept with the new version), and that an approved document goes back to review
   const [restoring, setRestoring] = useState<{ id: number; why: string } | null>(null);
-  const rollbackMutation = useMutation({
+  // restoring makes a new version each time: reported after the server answered, no Retry; for a person who is not the owner or author it becomes a proposal
+  // (the server's sentence says so and the document is as it was)
+  const rollbackMutation = useReportedMutation({
     mutationFn: async (r: { id: number; why: string }) => governanceApi.rollbackDocumentVersion(documentId, r.id, r.why),
-    onSuccess: (res) => { setRestoring(null); if (handledAsProposal(res?.data, proposeTo ?? undefined)) return; refetch(); onRestored(); },
-    onError: (e) => toast({ type: 'error', title: 'Not restored', message: studioProblem(e) }),
+    success: (res) => proposedWords(res?.data, proposeTo ?? undefined)
+      ?? { title: 'Restored', message: 'The selected version is the document again, as a new version; the versions after it are kept.' },
+    failure: 'Not restored',
+    retryable: false,
+    onSuccess: (res) => { setRestoring(null); if (proposedOf(res?.data)) { refreshAfterProposal(); return; } refetch(); onRestored(); },
   });
 
   const changeColors: Record<string, string> = {
@@ -213,9 +218,12 @@ export function DocumentVersionHistoryPanel({
   };
 
   return (
-    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Version History" widthClassName="w-[560px]">
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Version History" widthClassName="w-[560px]" dirty={!!restoring?.why.trim()}>
       {isLoading ? (
-        <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>
+        <SkeletonLines lines={6} label="Loading the versions" />
+      ) : isError && !data ? (
+        // a failed read is not "no version history yet"
+        <ErrorState title="Couldn't load the version history" message={errorMessage(error)} onRetry={() => { void refetch(); }} />
       ) : versions.length === 0 ? (
         <p className="text-sm text-slate-500 py-6 text-center">No version history yet. Edits to the document content will appear here.</p>
       ) : (
@@ -228,37 +236,29 @@ export function DocumentVersionHistoryPanel({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-900">v{v.version_number}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${changeColors[v.change_type] || 'bg-slate-100 text-slate-600'}`}>{v.change_type}</span>
-                    {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-medium text-primary-700">current</span>}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${changeColors[v.change_type] || 'bg-slate-100 text-slate-600'}`}>{v.change_type}</span>
+                    {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">current</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
                     {v.has_file && (
-                      <button onClick={() => downloadFile(v)} disabled={fetching === v.id} title={`Download ${v.file_name || 'the file'} of this version`} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-60">
-                        {fetching === v.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} File
-                      </button>
+                      <Button size="sm" leftIcon={<Download aria-hidden />} loading={fetching === v.id} title={`Download ${v.file_name || 'the file'} of this version`} onClick={() => downloadFile(v)}>File</Button>
                     )}
                     {!isCurrent && currentRow && onCompare && (
-                      <button onClick={() => onCompare(v.id)} title="See the document as it is now, with what changed since this version marked" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50">
-                        <GitCompare className="h-3 w-3" /> Compare
-                      </button>
+                      <Button size="sm" leftIcon={<GitCompare aria-hidden />} title="See the document as it is now, with what changed since this version marked" onClick={() => onCompare(v.id)}>Compare</Button>
                     )}
                     {!isCurrent && currentRow && !onCompare && (
-                      <button onClick={() => setCompareId(compareId === v.id ? null : v.id)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50">
-                        <GitCompare className="h-3 w-3" /> {compareId === v.id ? 'Hide diff' : 'Diff'}
-                      </button>
+                      <Button size="sm" leftIcon={<GitCompare aria-hidden />} aria-expanded={compareId === v.id} onClick={() => setCompareId(compareId === v.id ? null : v.id)}>{compareId === v.id ? 'Hide diff' : 'Diff'}</Button>
                     )}
                     {!isCurrent && canRestore && (
-                      <button onClick={() => setRestoring({ id: v.id, why: '' })} disabled={rollbackMutation.isPending || restoring?.id === v.id} className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50 disabled:opacity-50">
-                        <RotateCcw className="h-3 w-3" /> Restore
-                      </button>
+                      <Button size="sm" leftIcon={<RotateCcw aria-hidden />} disabled={rollbackMutation.isPending || restoring?.id === v.id} onClick={() => setRestoring({ id: v.id, why: '' })}>Restore</Button>
                     )}
                   </div>
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
                   <User className="h-3 w-3" />{v.creator_name || 'Unknown'}
-                  <Clock className="h-3 w-3 ml-1" />{v.created_at ? new Date(v.created_at).toLocaleString() : ''}
+                  <Clock className="h-3 w-3 ml-1" aria-hidden />{v.created_at ? dateTime(v.created_at) : ''}
                 </div>
-                {v.has_file && v.file_name && <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-500"><FileText className="h-3 w-3" /> {v.file_name}</p>}
+                {v.has_file && v.file_name && <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><FileText className="h-3 w-3" /> {v.file_name}</p>}
                 {v.change_summary && v.change_summary !== v.change_reason && <p className="mt-1 text-xs text-slate-600">{v.change_summary}</p>}
                 {v.change_reason && <p className="mt-1 text-xs text-slate-600 italic">“{v.change_reason}”</p>}
                 {restoring && restoring.id === v.id && (
@@ -273,32 +273,30 @@ export function DocumentVersionHistoryPanel({
                           onChange={(why) => setRestoring({ id: v.id, why })} />
                       </div>
                     ) : (
-                      <label className="mt-2 block">
-                        <span className="text-[11px] font-semibold text-amber-950">Why <span className="font-normal">(optional)</span></span>
-                        <input type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
-                          onChange={(e) => setRestoring({ id: v.id, why: e.target.value })}
-                          className="mt-1 w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
-                      </label>
+                      <FormField label="Why" optional className="mt-2">
+                        <TextInput type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
+                          onChange={(e) => setRestoring({ id: v.id, why: e.target.value })} />
+                      </FormField>
                     )}
                     <div className="mt-2 flex justify-end gap-2">
-                      <button type="button" onClick={() => setRestoring(null)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Cancel</button>
-                      <button type="button" onClick={() => rollbackMutation.mutate(restoring)} disabled={rollbackMutation.isPending || (!!proposeTo && !restoring.why.trim())}
-                        className="inline-flex items-center gap-1 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
-                        {rollbackMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} {proposeTo ? sendLabel(proposeTo) : 'Restore'}
-                      </button>
+                      <Button size="sm" onClick={() => setRestoring(null)}>Cancel</Button>
+                      <Button size="sm" variant="primary" leftIcon={<RotateCcw aria-hidden />} loading={rollbackMutation.isPending} disabled={!!proposeTo && !restoring.why.trim()}
+                        onClick={() => rollbackMutation.mutate(restoring)}>
+                        {proposeTo ? sendLabel(proposeTo) : 'Restore'}
+                      </Button>
                     </div>
                   </div>
                 )}
                 {compareId === v.id && (
                   <div className="mt-2 rounded-md bg-slate-50 border border-slate-200 p-2">
                     {diffQuery.isLoading ? (
-                      <p className="text-[11px] text-slate-400">Computing diff…</p>
+                      <p className="text-xs text-slate-400">Computing diff…</p>
                     ) : diffQuery.data ? (
-                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] font-mono text-slate-700">
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs font-mono text-slate-700">
                         {(diffQuery.data.diff || diffQuery.data.text_diff || `+${diffQuery.data.additions ?? 0} additions · -${diffQuery.data.deletions ?? 0} deletions`)}
                       </pre>
                     ) : (
-                      <p className="text-[11px] text-slate-400">No differences.</p>
+                      <p className="text-xs text-slate-400">No differences.</p>
                     )}
                   </div>
                 )}
@@ -317,7 +315,6 @@ export function DocumentVersionHistoryPanel({
 export function DocumentSignoffPanel({
   documentId, isOpen, onClose, onDone,
 }: { documentId: number; isOpen: boolean; onClose: () => void; onDone: () => void }) {
-  const { toast } = useToast();
   const [rows, setRows] = useState<Array<{ role: string; name: string; designation: string; date: string }>>([
     { role: 'Prepared by', name: '', designation: '', date: '' },
     { role: 'Reviewed by', name: '', designation: '', date: '' },
@@ -331,7 +328,8 @@ export function DocumentSignoffPanel({
   const setRow = (i: number, patch: Partial<{ role: string; name: string; designation: string; date: string }>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
-  const mutation = useMutation({
+  // the details become a new version of the document (audited): reported after the server answered, with its words when it refuses; no Retry
+  const mutation = useReportedMutation({
     mutationFn: async () => governanceApi.signoffDocument(documentId, {
       signoffs: rows.filter((r) => r.role.trim() && (r.name.trim() || r.date.trim() || r.designation.trim())),
       effective_date: effectiveDate || undefined,
@@ -339,16 +337,16 @@ export function DocumentSignoffPanel({
       next_review_date: nextReview || undefined,
       mark_approved: markApproved,
     }),
-    onSuccess: () => {
-      toast({ type: 'success', title: 'Signed off', message: 'Approval details applied to the document (versioned + audited).' });
-      onDone();
-      onClose();
-    },
-    onError: () => toast({ type: 'error', title: 'Sign-off failed', message: 'Could not apply the sign-off.' }),
+    success: { title: 'Signed off', message: 'Approval details applied to the document (versioned + audited).' },
+    failure: 'Sign-off failed',
+    fallback: 'Could not apply the sign-off.',
+    retryable: false,
+    onSuccess: () => { onDone(); onClose(); },
   });
+  const typed = rows.some((r) => r.name.trim() || r.designation.trim() || r.date.trim()) || !!effectiveDate || !!version.trim() || !!nextReview || markApproved;
 
   return (
-    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Sign-off & Document Control" widthClassName="w-[560px]">
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Sign-off & Document Control" widthClassName="w-[560px]" dirty={typed}>
       <div className="space-y-5">
         <p className="text-xs text-slate-500">
           Fill in approver details and document-control fields. These replace the placeholders in the
@@ -360,60 +358,33 @@ export function DocumentSignoffPanel({
           <div className="space-y-3">
             {rows.map((r, i) => (
               <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
-                <input
-                  value={r.role}
-                  onChange={(e) => setRow(i, { role: e.target.value })}
-                  placeholder="Role (e.g. Approved by)" aria-label="Role"
-                  className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-medium"
-                />
+                <TextInput value={r.role} onChange={(e) => setRow(i, { role: e.target.value })} placeholder="Role (e.g. Approved by)" aria-label="Role" />
                 <div className="grid grid-cols-2 gap-2">
-                  <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" aria-label={`${r.role || 'Signer'}: name`} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
-                  <input value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" aria-label={`${r.role || 'Signer'}: designation`} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
+                  <TextInput value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" aria-label={`${r.role || 'Signer'}: name`} />
+                  <TextInput value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" aria-label={`${r.role || 'Signer'}: designation`} />
                 </div>
-                <input type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} aria-label={`${r.role || 'Signer'}: date`} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
+                <TextInput type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} aria-label={`${r.role || 'Signer'}: date`} />
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() => setRows((prev) => [...prev, { role: '', name: '', designation: '', date: '' }])}
-              className="text-xs font-medium text-primary-600 hover:text-primary-700"
-            >
-              + Add approver row
-            </button>
+            <Button variant="link" size="sm" onClick={() => setRows((prev) => [...prev, { role: '', name: '', designation: '', date: '' }])}>+ Add approver row</Button>
           </div>
         </div>
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Document Control</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div>
-              <label htmlFor="dc-effective" className="block text-[11px] text-slate-500 mb-0.5">Effective date</label>
-              <input id="dc-effective" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label htmlFor="dc-version" className="block text-[11px] text-slate-500 mb-0.5">Version</label>
-              <input id="dc-version" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label htmlFor="dc-next" className="block text-[11px] text-slate-500 mb-0.5">Next review</label>
-              <input id="dc-next" type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm" />
-            </div>
+            <FormField label="Effective date"><TextInput type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} /></FormField>
+            <FormField label="Version"><TextInput value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" /></FormField>
+            <FormField label="Next review"><TextInput type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} /></FormField>
           </div>
-          <label className="mt-3 flex items-center gap-2 text-xs text-slate-700">
-            <input type="checkbox" checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} className="rounded border-slate-300" />
-            Also mark the document as approved (records approver + timestamp)
-          </label>
+          <div className="mt-3">
+            <Checkbox checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} label="Also mark the document as approved (records approver + timestamp)" />
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Apply Sign-off
-          </button>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" leftIcon={<CheckCircle aria-hidden />} loading={mutation.isPending} onClick={() => mutation.mutate()}>Apply Sign-off</Button>
         </div>
       </div>
     </RightSlidePanel>
@@ -658,7 +629,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
     reading && versionQ.isLoading ? (
       <SkeletonLines lines={8} label="Loading the version" />
     ) : reading && !shown ? (
-      <p className="py-10 text-center text-sm text-rose-700" role="alert">Version {reading.number} could not be read. {studioProblem(versionQ.error)}</p>
+      <p className="py-10 text-center text-sm text-rose-700" role="alert">Version {reading.number} could not be read. {errorMessage(versionQ.error)}</p>
     ) : tracking && chainOn ? (
       <TrackedChanges documentId={doc.id} status={doc.status} initial={sinceRange ?? trackedRange ?? (firstOpening.current != null ? { from: firstOpening.current, to: null } : null)} canTakeBack={canTakeBack}
         onChanged={() => { for (const key of ['governance-document', 'document-access']) queryClient.invalidateQueries({ queryKey: [key] }); }} />
@@ -768,10 +739,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
                 ? <><span className="font-semibold">Reading v{reading.number}</span>, the published version in force. The current version is v{doc?.current_version || '1.0'}{SIGNOFF_STATUS[doc?.status] ? `, ${SIGNOFF_STATUS[doc.status].label.toLowerCase()}` : ''}.</>
                 : <><span className="font-semibold">Reading v{reading.number}</span> - not the current version (v{doc?.current_version || '1.0'}).</>}
             </span>
-            <button type="button" onClick={onStopReading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100">
-              Back to the current version
-            </button>
+            <Button onClick={onStopReading}>Back to the current version</Button>
           </div>
         )}
         {chainOn && !reading && !tracking && !deciding && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
@@ -780,14 +748,14 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
             {(chainQ.data?.versions?.length ?? 0) > 1 && (
               <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
                 Version
-                <select value={reading?.id ? String(reading.id) : 'current'} aria-label="Read a version of the document"
+                <Select value={reading?.id ? String(reading.id) : 'current'} aria-label="Read a version of the document" className="w-[14rem]"
                   onChange={(e) => {
                     const pick = e.target.value;
                     if (pick === 'current') { onStopReading?.(); return; }
                     const v = chainQ.data?.versions.find((x: any) => String(x.id) === pick);
                     if (v) { setPicked(false); onRead?.({ id: v.id, number: v.number }); }
                   }}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800">
+                  >
                   <option value="current">v{doc?.current_version || '1.0'} (current)</option>
                   {/* every earlier version, each major with its minor versions, newest first (the newest row is the current one) */}
                   {versionGroups([...(chainQ.data?.versions ?? [])].slice(0, -1).reverse()).map((g) => (
@@ -797,13 +765,11 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
                       ))}
                     </optgroup>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
-            {!reading && <button onClick={() => { setPicked(!tracking); setSinceRange(null); }} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
-              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
-              <GitCompare className="h-3.5 w-3.5" /> {tracking ? 'Hide changes' : 'Show changes'}
-            </button>}
+            {!reading && <Button leftIcon={<GitCompare aria-hidden />} variant={tracking ? 'primary' : 'secondary'} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
+              onClick={() => { setPicked(!tracking); setSinceRange(null); }}>{tracking ? 'Hide changes' : 'Show changes'}</Button>}
           </div>
         )}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-8">{renderReadBody(true)}</div>
@@ -836,7 +802,6 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htm
           onClose={() => setShowHistory(false)}
           onRestored={() => {
             for (const key of ['governance-document', 'document-chain', 'document-chain-redline', 'document-lifecycle']) queryClient.invalidateQueries({ queryKey: [key] });
-            toast({ type: 'success', title: 'Restored', message: 'The selected version is the document again, as a new version; the versions after it are kept.' });
           }}
           onCompare={chainOn ? (versionId) => { setShowHistory(false); setSinceRange({ from: versionId, to: null }); setPicked(true); } : undefined}
           canRestore={canTakeBack}

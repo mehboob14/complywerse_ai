@@ -27,7 +27,7 @@ test('a plain date is that day in every language: day month-name year, no leadin
 const ZONES: Array<[string, string]> = [['Asia/Karachi', 'UTC+5'], ['America/Los_Angeles', 'UTC-8'], ['Pacific/Auckland', 'UTC+13']];
 
 function inZone(tz: string, expression: string): string {
-  const code = `import('./docDates.ts').then((d) => { const { day, dateTime, calendarDay, clock } = d; console.log(JSON.stringify(${expression})); })`;
+  const code = `import('./docDates.ts').then((d) => { const { day, dateTime, calendarDay, clock } = d; process.stdout.write(JSON.stringify(${expression})); })`;
   const run = spawnSync(process.execPath, ['--input-type=module', '-e', code], { cwd: new URL('.', import.meta.url), env: { ...process.env, TZ: tz }, encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
   return run.stdout.trim().split('\n').pop() as string;

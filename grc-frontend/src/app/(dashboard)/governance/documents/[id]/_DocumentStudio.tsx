@@ -421,7 +421,7 @@ export default function DocumentStudio() {
             {/* two lines at most, the whole title in the tooltip and in Details (a 500-character title no longer pushes the bar out of shape) */}
             <h1 className="line-clamp-2 min-w-0 break-words text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
             {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
-            <LifecycleHover doc={doc} focusable><StatusPill {...docStatusPill(shownStatus)} /></LifecycleHover>
+            <LifecycleHover doc={doc} focusable><StatusPill {...docStatusPill(shownStatus)} className="min-h-[24px]" /></LifecycleHover>
             <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
             {doc.newer_version && !archived ? (
               <StatusPill tone="warning" label={newerWords} className="shrink-0" />
