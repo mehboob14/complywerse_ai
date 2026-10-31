@@ -20,3 +20,7 @@ export { default as PermissionGuard, IfPermission } from './PermissionGuard';
 export { PageLoader, default as PageLoaderDefault, type PageLoaderProps, type PageLoaderSize } from './PageLoader';
 export { ComboBoxInput, type ComboBoxInputProps, type ComboBoxOption } from './ComboBoxInput';
 export { InfoTip } from './InfoTip';
+export { Menu, type MenuItem, type MenuProps } from './ds/Menu';
+export { Pager, type PagerProps } from './ds/Pager';
+export { Tabs, TabPanel, type TabItem, type TabPanelProps, type TabsProps } from './ds/Tabs';
+export { useTabParam } from './ds/useTabParam';
