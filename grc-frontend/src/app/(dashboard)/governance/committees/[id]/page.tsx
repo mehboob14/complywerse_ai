@@ -20,6 +20,7 @@ import {
 import { committeeApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PageHeader } from '@/components/ui';
+import { ListNotice } from '@/components/governance/ListNotice';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
@@ -1277,10 +1278,10 @@ export default function CommitteeDetailPage() {
               {canCreate && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateActionModalOpen(true)}>Add action item</Button>}
             </div>
             {actions && actionsTotal > actions.length && (
-              <p className="rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[12px] py-[8px] text-ds-body text-ds-fg-body">
-                {cutNotice({ shown: actions.length, total: actionsTotal, noun: 'actions' })} Earliest due first.{' '}
+              <ListNotice title={cutNotice({ shown: actions.length, total: actionsTotal, noun: 'actions' })}>
+                Earliest due first.{' '}
                 <Link href="/governance/committees/actions" className="text-ds-primary-text underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">Open all actions to filter and page through them</Link>
-              </p>
+              </ListNotice>
             )}
             <RegisterTable<Action>
               caption="Committee actions"
