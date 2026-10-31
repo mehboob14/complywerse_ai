@@ -51,6 +51,8 @@ export interface LibDoc {
   applicable_framework_ids?: number[] | null;
   tags?: string[] | null;
   next_review_date: string | null;
+  /** when the document lapses (naive UTC); read only by the optional "Expiring in 30 days" filter */
+  expiry_date?: string | null;
   version_in_force?: string | null;
   current_version?: string | null;
   created_at: string;
@@ -140,6 +142,25 @@ export function reviewState(d: Pick<LibDoc, 'status' | 'version_in_force' | 'nex
     };
   }
   return { bucket: 'ok', due, days, label: `in ${shortSpan(days)}`, long: `In ${span(days)}` };
+}
+
+// ─── Expiry ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const EXPIRY_DAYS = 30;
+/** The address value of the Expiring filter (`?expiry=30d`): the only one there is. */
+export const EXPIRY_PARAM = '30d';
+
+/**
+ * Whether a document counts as "expiring in 30 days" exactly as the Governance overview counts it (GET /governance/dashboard/scorecard,
+ * `expiring_30d`): an approved document or one with a version in force (`version_in_force` is the server's own `in_force_number`) whose expiry
+ * date lies from this moment to 30 days ahead. Instants, not whole days, as the server compares them (naive UTC against `utcnow()`): a
+ * document that lapsed earlier today is not expiring, it has expired. A draft, a withdrawn or an archived document with a date is not counted.
+ */
+export function expiringSoon(d: Pick<LibDoc, 'status' | 'version_in_force' | 'expiry_date'>, now: Date = new Date()): boolean {
+  if (!(d.status === 'approved' || d.version_in_force)) return false;
+  const at = parseUtc(d.expiry_date);
+  if (!at) return false;
+  return now.getTime() <= at.getTime() && at.getTime() <= now.getTime() + EXPIRY_DAYS * DAY;
 }
 
 export interface Health { reviewable: number; upToDate: number; dueSoon: number; overdue: number; unscheduled: number }
@@ -281,17 +302,20 @@ export interface Filters {
   classifications: string[];
   /** owned or written by the signed-in person */
   mine: boolean;
+  /** expiring in the next 30 days (the overview's counter; off unless the address or the filter list asks, `?expiry=30d`) */
+  expiring: boolean;
 }
 
 export const NO_FILTERS: Filters = {
   search: '', types: [], statuses: [], owners: [], departments: [], frameworks: [], review: [], attestation: [], classifications: [], mine: false,
+  expiring: false,
 };
 
-export type FacetKey = Exclude<keyof Filters, 'search' | 'mine'>;
+export type FacetKey = Exclude<keyof Filters, 'search' | 'mine' | 'expiring'>;
 
 /** How many things are being filtered on (the search counts one). */
 export function filterCount(f: Filters): number {
-  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0)
+  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0) + (f.expiring ? 1 : 0)
     + (['types', 'statuses', 'owners', 'departments', 'frameworks', 'review', 'attestation', 'classifications'] as FacetKey[])
       .reduce((n, k) => n + (f[k].length ? 1 : 0), 0);
 }
@@ -346,6 +370,7 @@ export function matchesFilters(d: LibDoc, f: Filters, ctx: MatchContext): boolea
     if (!b || !f.review.includes(b)) return false;
   }
   if (f.attestation.length && !f.attestation.includes(attestationBucket(ctx.coverage[d.id]))) return false;
+  if (f.expiring && !expiringSoon(d, ctx.now)) return false;
   if (f.mine && !(ctx.me != null && (d.owner_id === ctx.me || d.author_id === ctx.me))) return false;
   const terms = searchTerms(f.search);
   if (terms.length) {
@@ -456,6 +481,7 @@ export function toParams(state: LibraryState): URLSearchParams {
   if (f.search.trim()) p.set('q', f.search.trim());
   for (const [key, name] of LISTS) if (f[key].length) p.set(name, f[key].join(','));
   if (f.mine) p.set('mine', '1');
+  if (f.expiring) p.set('expiry', EXPIRY_PARAM);
   if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) p.set('sort', `${sort.key}:${sort.dir}`);
   return p;
 }
@@ -471,6 +497,7 @@ export function fromParams(p: URLSearchParams): LibraryState {
   f.attestation = f.attestation.filter((v): v is AttestationBucket => (ATTESTATION_BUCKETS as string[]).includes(v));
   f.statuses = nextStatuses([], f.statuses);
   f.mine = p.get('mine') === '1';
+  f.expiring = p.get('expiry') === EXPIRY_PARAM;
   const [key, dir] = (p.get('sort') ?? '').split(':');
   const sort: Sort = (SORT_KEYS as string[]).includes(key) && (dir === 'asc' || dir === 'desc') ? { key: key as SortKey, dir } : DEFAULT_SORT;
   return { filters: f, sort };
@@ -488,7 +515,7 @@ export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
 
 /** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
  *  `open` is the document peeked at in the drawer; `view` the layout. */
-export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'sort', 'open', 'id', 'view'];
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'sort', 'open', 'id', 'view'];
 
 /** The address with the library's keys replaced by this state (and the open document, and the layout when the person has chosen
  *  one); every other key is kept as it was. */
