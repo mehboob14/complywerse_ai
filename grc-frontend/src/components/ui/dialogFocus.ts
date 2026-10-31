@@ -30,8 +30,11 @@ export function focusIsElsewhere(dialog: { contains(node: unknown): boolean }, a
   return active != null && active !== body && !dialog.contains(active);
 }
 
-/** What takes focus when a dialog opens: the element a caller marked, else the first field, else the first button, else the dialog. */
-export function initialFocusTarget<T>(found: { autofocus: readonly T[]; fields: readonly T[]; buttons: readonly T[] }, dialog: T): T {
+/** What takes focus when a dialog opens: the element a caller marked, else the first field, else the first button, else the dialog.
+ *  On a touch screen (`touch`) only a marked element or the dialog itself: focusing a text field there raises the on-screen keyboard over the
+ *  dialog the moment it opens, which these dialogs never did before they took focus. */
+export function initialFocusTarget<T>(found: { autofocus: readonly T[]; fields: readonly T[]; buttons: readonly T[] }, dialog: T, touch = false): T {
+  if (touch) return found.autofocus[0] ?? dialog;
   return found.autofocus[0] ?? found.fields[0] ?? found.buttons[0] ?? dialog;
 }
 

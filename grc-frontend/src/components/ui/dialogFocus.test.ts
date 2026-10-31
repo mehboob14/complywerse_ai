@@ -48,6 +48,13 @@ test('the first focus: a marked element, else a field, else a button, else the d
   assert.equal(initialFocusTarget({ autofocus: [], fields: [], buttons: [] }, dialog), 'dialog');
 });
 
+test('on a touch screen no field or button takes focus (the keyboard would cover the dialog): a marked element, else the dialog', () => {
+  const dialog = 'dialog';
+  assert.equal(initialFocusTarget({ autofocus: ['mark'], fields: ['f1'], buttons: ['b1'] }, dialog, true), 'mark');
+  assert.equal(initialFocusTarget({ autofocus: [], fields: ['f1'], buttons: ['b1'] }, dialog, true), 'dialog');
+  assert.equal(initialFocusTarget({ autofocus: [], fields: ['f1'], buttons: ['b1'] }, dialog, false), 'f1');
+});
+
 test('the selectors name what they should', () => {
   for (const part of ['a[href]', 'button:not(:disabled)', 'textarea:not(:disabled)', '[tabindex]:not([tabindex="-1"])', '[contenteditable="true"]']) {
     assert.ok(TABBABLE.includes(part), `TABBABLE has ${part}`);
@@ -90,6 +97,8 @@ test('both overlays use the shared focus hook and the discard guard and name the
     assert.match(src, /useDialogFocus\(/, `${name} uses useDialogFocus`);
     assert.match(src, /useDiscardGuard\(/, `${name} uses useDiscardGuard`);
     assert.match(src, /aria-labelledby=/, `${name} names itself`);
+    assert.match(src, /lockBodyScroll\(\)/, `${name} locks the page scroll through the shared lock`);
+    assert.doesNotMatch(src, /body\.style\.overflow/, `${name} keeps no scroll lock of its own`);
   }
   const vendor = readFileSync('src/app/(dashboard)/vendor-risk/_ui/Dialog.tsx', 'utf8');
   assert.match(vendor, /labelledBy=/, 'the vendor Dialog names itself through AnimatedModal');

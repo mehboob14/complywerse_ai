@@ -10,11 +10,14 @@ import { AUTOFOCUS, FIELD, TABBABLE, focusIsElsewhere, initialFocusTarget, nextF
 
 const visible = (root: HTMLElement, selector: string) => visibleOnly(root.querySelectorAll<HTMLElement>(selector));
 
-/** Focus the element a dialog starts on: what a caller marked data-autofocus, else the first field, else the first button, else the dialog itself. */
+/** Focus the element a dialog starts on: what a caller marked data-autofocus, else the first field, else the first button, else the dialog itself
+ *  (on a touch screen, a marked element or the dialog itself: no on-screen keyboard just because a dialog opened). */
 export function focusInto(dialog: HTMLElement): void {
+  const touch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   initialFocusTarget<HTMLElement>(
     { autofocus: visible(dialog, AUTOFOCUS), fields: visible(dialog, FIELD), buttons: visible(dialog, 'button:not(:disabled)') },
     dialog,
+    touch,
   ).focus({ preventScroll: true });
 }
 

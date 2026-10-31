@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { focusIsElsewhere } from './dialogFocus';
 import { useDialogFocus } from './useDialogFocus';
+import { lockBodyScroll } from './scrollLock';
 import { DiscardBar, useDiscardGuard } from './ds/DiscardBar';
 
 const MAX_W: Record<string, string> = {
@@ -104,12 +105,7 @@ export function AnimatedModal({
   }, [render, dirty, requestClose]);
 
   // lock body scroll while open (its own effect: it must not be undone and redone each time the listener above is re-attached)
-  useEffect(() => {
-    if (!render) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [render]);
+  useEffect(() => (render ? lockBodyScroll() : undefined), [render]);
 
   // Rendered inline in the tree, this fixed-position overlay is at the mercy of
   // any ancestor that establishes a containing block (transform/filter/sticky

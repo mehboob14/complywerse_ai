@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { focusIsElsewhere } from './dialogFocus';
 import { useDialogFocus } from './useDialogFocus';
+import { lockBodyScroll } from './scrollLock';
 import { DiscardBar, useDiscardGuard } from './ds/DiscardBar';
 
 export interface RightSlidePanelProps {
@@ -62,12 +63,7 @@ export function RightSlidePanel({
   }, [isOpen, onClose, dirty, requestClose]);
 
   // Prevent body scroll while open
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [isOpen]);
+  useEffect(() => (isOpen ? lockBodyScroll() : undefined), [isOpen]);
 
   // Portal to <body> so ancestor styles (e.g. .governance-light .fixed.inset-0
   // width/padding/centering rules) and containing blocks cannot distort the
