@@ -190,3 +190,13 @@ export const priority = defineStatuses('priority', {
   low: 'neutral',
   info: 'neutral',
 });
+
+// A KPI / KRI's red-amber-green rating (RiskKRI.current_status: erm/routers/kris.py calculate_kri_status gives green, amber, red, or "unknown" when a
+// threshold is missing; the report also reads "no status" as unknown). The words are the report's own, said as what they mean: green = on track,
+// amber = watch, red = off target. "unknown" says "Not rated" and not "No data": the same rating is given to a metric that has a value but no thresholds.
+export const rag = defineStatuses('metric', {
+  green: { tone: 'success', label: 'On track' },
+  amber: { tone: 'warning', label: 'Watch' },
+  red: { tone: 'danger', label: 'Off target' },
+  unknown: { tone: 'neutral', label: 'Not rated' },
+});

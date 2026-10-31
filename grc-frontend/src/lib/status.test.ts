@@ -9,7 +9,7 @@ import { contrast } from './contrast.ts';
 import { EMPTY } from './format.ts';
 import {
   TONE, actionStatus, attestationStatus, committeeStatus, defineStatuses, departmentStatus, documentStatus, exceptionStatus, meetingStatus, norm, priority,
-  reviewStatus, statusPill, toneOf, type Statuses, type Tone,
+  rag, reviewStatus, statusPill, toneOf, type Statuses, type Tone,
 } from './status.ts';
 import { TONE as VENDOR_TONE, tones } from '../app/(dashboard)/vendor-risk/_ui/tones.ts';
 import { STATUS_LABEL } from '../app/(dashboard)/governance/documents/_workspace/libraryModel.ts';
@@ -142,6 +142,11 @@ test('the Governance priority scale: critical danger, high warning, medium progr
   ]);
 });
 
+test('KPI / KRI rating: green on track, amber watch, red off target, and "not rated" where there is no rating (never "No data": a value can have no thresholds)', () => {
+  exhaustive(rag, [['green', 'success', 'On track'], ['amber', 'warning', 'Watch'], ['red', 'danger', 'Off target'], ['unknown', 'neutral', 'Not rated']]);
+  assert.deepEqual(statusPill(rag, undefined), { tone: 'neutral', label: EMPTY }, 'no word at all is the dash, as for every record');
+});
+
 // ── the backend's own lists ───────────────────────────────────────────────────
 // A word the server starts writing fails here until someone decides its tone; the files are read when the backend is beside the frontend.
 const BACKEND = new URL('../../../backend/grc/', import.meta.url);
@@ -195,4 +200,10 @@ test('committees, reviews, attestations and priorities: the words in the models\
   const attestations = source('models/_27_attestation_certification_management_models.py')!;
   covers(attestationStatus, commented(attestations, 'status', 'draft'), 'models/_27 AttestationCampaign.status');
   covers(attestationStatus, commented(attestations, 'status', 'pending'), 'models/_27 AttestationRequest.status');
+});
+
+test('KPI / KRI rating: every rating the server can give is registered', { skip: !present('modules/erm/routers/kris.py') }, () => {
+  const router = source('modules/erm/routers/kris.py')!;
+  const rating = /def calculate_kri_status[\s\S]*?\r?\n\r?\n\r?\ndef /.exec(router)?.[0] ?? '';
+  covers(rag, Array.from(rating.matchAll(/return "([a-z]+)"/g), (m) => m[1]), 'modules/erm/routers/kris.py calculate_kri_status');
 });
