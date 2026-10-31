@@ -59,6 +59,21 @@ test('a day the month does not have is no date (V8 would roll it into the next m
   assert.equal(formatDate('2026-12-31'), '31 Dec 2026');
 });
 
+test('calendar: whatever is not a date, or not written as one, is still the empty text', () => {
+  const none = [
+    null, undefined, '', '   ', 'not a date', '2026-13-45', '2026-00-10', '2026-11-00', '2026-02-30T00:00:00', '2027-02-29T10:00:00Z', '2100-02-29T00:00:00',
+    'T00:00:00', '12 Nov 2026', '20261112', '2026-11-12Tjunk', Number.NaN, new Date(Number.NaN),
+  ];
+  for (const value of none) {
+    assert.equal(formatDate(value, { calendar: true }), EMPTY, String(value));
+    assert.equal(formatDateTime(value, { calendar: true }), EMPTY, String(value));
+    assert.equal(formatDate(value, { calendar: true, empty: NOT_SET }), 'Not set', String(value));
+    assert.equal(formatDateTime(value, { calendar: true, empty: 'No date' }), 'No date', String(value));
+    assert.equal(formatRelative(value, new Date(2026, 10, 12, 15, 0), { calendar: true }), '', String(value));
+  }
+  assert.equal(formatDate('2000-02-29T00:00:00', { calendar: true }), '29 Feb 2000');       // a real leap day is a date
+});
+
 // ── numbers ──────────────────────────────────────────────────────────────────
 test('formatCount: thousands separators, whole numbers, "—" for nothing', () => {
   assert.deepEqual([0, 7, 999, 1000, 12345, 1234567, -1234].map((n) => formatCount(n)), ['0', '7', '999', '1,000', '12,345', '1,234,567', '-1,234']);
@@ -182,13 +197,16 @@ const CODES = Object.keys(ZONES) as Code[];
 const OFFSETS: Record<Code, [number, number]> = { HNL: [600, 600], LAX: [480, 420], UTC: [0, 0], MSK: [-180, -180], KHI: [-300, -300], AKL: [-780, -720] };
 
 type Call = [fn: string, ...args: unknown[]];
-const at = (iso: string) => ({ $date: iso });                      // a Date, which JSON cannot carry
+// A Date, which JSON cannot carry: an instant, or a moment on the viewer's own clock (local(2026, 10, 12, 15) is 15:00 on 12 Nov in any zone).
+const at = (iso: string) => ({ $date: iso });
+const local = (...fields: number[]) => ({ $local: fields });
 
 // Runs the calls in a fresh node process whose clock is in `zone`: they go in on stdin as JSON, the answers come out the same way.
 const CHILD = [
   'const m = await import(process.argv[1]);',
   "let text = ''; for await (const chunk of process.stdin) text += chunk;",
-  "const calls = JSON.parse(text, (key, v) => (v && typeof v === 'object' && '$date' in v ? new Date(v.$date) : v));",
+  "const revive = (key, v) => { if (v && typeof v === 'object') { if ('$date' in v) return new Date(v.$date); if ('$local' in v) return new Date(...v.$local); } return v; };",
+  'const calls = JSON.parse(text, revive);',
   'process.stdout.write(JSON.stringify({ offsets: [new Date(2026, 0, 15).getTimezoneOffset(), new Date(2026, 6, 15).getTimezoneOffset()],',
   'results: calls.map(([fn, ...args]) => m[fn](...args)) }));',
 ].join(' ');
@@ -204,6 +222,7 @@ function inZone(zone: string, calls: Call[]): { offsets: [number, number]; resul
 type Want = string | Partial<Record<Code, string>>;               // one text for every zone, or a text per zone (a zone left out is not checked)
 
 const NOW = at('2026-11-12T22:30:00Z');                           // 12:30 on 12 Nov in Honolulu, 03:30 on 13 Nov in Karachi
+const TODAY = local(2026, 10, 12, 15, 0);                         // 15:00 on 12 Nov, on the viewer's own clock in every zone
 const AT_2230 = { HNL: '12 Nov 2026, 12:30', LAX: '12 Nov 2026, 14:30', UTC: '12 Nov 2026, 22:30', MSK: '13 Nov 2026, 01:30', KHI: '13 Nov 2026, 03:30', AKL: '13 Nov 2026, 11:30' };
 const SAME_DAY = { HNL: '12 Nov 2026', LAX: '12 Nov 2026', UTC: '12 Nov 2026', MSK: '13 Nov 2026', KHI: '13 Nov 2026', AKL: '13 Nov 2026' };
 
@@ -272,9 +291,55 @@ const TABLE: Array<[Call, Want]> = [
   [['formatRelative', '2026-03-09', at('2026-03-07T20:00:00Z')], { LAX: 'in 2 days' }],      // across the spring change: still 2 calendar days
   [['formatRelative', '2026-11-02', at('2026-10-31T19:00:00Z')], { LAX: 'in 2 days' }],      // and across the autumn one
   [['formatRelative', '2026-03-08', at('2026-03-08T08:30:00Z')], { LAX: 'today' }],
+
+  // `calendar`: a field that means a DAY but arrives as a DateTime ("...T00:00:00") is the day as written, in every zone, with no clock
+  [['formatDate', '2026-11-12T00:00:00', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12T23:59:59', { calendar: true }], '12 Nov 2026'],
+  [['formatDateTime', '2026-11-12T00:00:00', { calendar: true }], '12 Nov 2026'],
+  [['formatDateTime', '2026-11-12T23:59:59', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12T00:00:00Z', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12 00:00:00', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12T00:00:00.000000', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12T23:59:59+05:00', { calendar: true }], '12 Nov 2026'],         // a zone after the time does not move it either ...
+  [['formatDate', '2026-11-12T00:00:00+05:00', { calendar: true }], '12 Nov 2026'],         // ... this is 19:00 UTC on the 11th, and still the 12th as written
+  [['formatDate', '2026-11-12T00:00:00-08:00', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', ' 2026-11-12T00:00:00 ', { calendar: true }], '12 Nov 2026'],
+  [['formatDate', '2026-11-12', { calendar: true }], '12 Nov 2026'],                         // a date with no time is the same either way
+  [['formatDate', '2026-12-31T23:59:59', { calendar: true }], '31 Dec 2026'],               // year boundary: never 1 Jan 2027 ...
+  [['formatDate', '2027-01-01T00:00:00', { calendar: true }], '1 Jan 2027'],                // ... and never 31 Dec 2026
+  [['formatDate', '2028-02-29T00:00:00', { calendar: true }], '29 Feb 2028'],               // leap day
+  [['formatDate', at('2026-11-12T00:00:00Z'), { calendar: true }], '12 Nov 2026'],          // a Date has no written date: its UTC fields are the day ...
+  [['formatDate', at('2026-11-12T23:59:59Z'), { calendar: true }], '12 Nov 2026'],
+  [['formatDate', Date.UTC(2026, 10, 12, 23, 59), { calendar: true }], '12 Nov 2026'],      // ... and so are an epoch's
+  // the same strings without the flag are moments, as before: midnight UTC is still the day before west of Greenwich
+  [['formatDate', '2026-11-12T00:00:00'], { HNL: '11 Nov 2026', LAX: '11 Nov 2026', UTC: '12 Nov 2026', MSK: '12 Nov 2026', KHI: '12 Nov 2026', AKL: '12 Nov 2026' }],
+  [['formatDate', '2026-11-12T00:00:00', { calendar: false }], { HNL: '11 Nov 2026', LAX: '11 Nov 2026', UTC: '12 Nov 2026', MSK: '12 Nov 2026', KHI: '12 Nov 2026', AKL: '12 Nov 2026' }],
+  [['formatDate', '2026-11-12T23:59:59'], { HNL: '12 Nov 2026', LAX: '12 Nov 2026', UTC: '12 Nov 2026', MSK: '13 Nov 2026', KHI: '13 Nov 2026', AKL: '13 Nov 2026' }],
+  [['formatDateTime', '2026-11-12T00:00:00'], {
+    HNL: '11 Nov 2026, 14:00', LAX: '11 Nov 2026, 16:00', UTC: '12 Nov 2026, 00:00', MSK: '12 Nov 2026, 03:00', KHI: '12 Nov 2026, 05:00', AKL: '12 Nov 2026, 13:00',
+  }],
+  [['formatDateTime', '2026-11-12T23:59:59'], {
+    HNL: '12 Nov 2026, 13:59', LAX: '12 Nov 2026, 15:59', UTC: '12 Nov 2026, 23:59', MSK: '13 Nov 2026, 02:59', KHI: '13 Nov 2026, 04:59', AKL: '13 Nov 2026, 12:59',
+  }],
+  // with `calendar` the days are counted the same in every zone when "today" is the same day on the viewer's clock
+  [['formatRelative', '2026-11-12T00:00:00', TODAY, { calendar: true }], 'today'],
+  [['formatRelative', '2026-11-12T23:59:59', TODAY, { calendar: true }], 'today'],
+  [['formatRelative', '2026-11-13T00:00:00', TODAY, { calendar: true }], 'in 1 day'],
+  [['formatRelative', '2026-11-21T00:00:00', TODAY, { calendar: true }], 'in 9 days'],
+  [['formatRelative', '2026-11-21T23:59:59', TODAY, { calendar: true }], 'in 9 days'],
+  [['formatRelative', '2026-11-21T00:00:00-08:00', TODAY, { calendar: true }], 'in 9 days'],
+  [['formatRelative', '2026-11-21', TODAY, { calendar: true }], 'in 9 days'],
+  [['formatRelative', '2026-11-03T23:59:59', TODAY, { calendar: true }], '9 days ago'],
+  [['formatRelative', at('2026-11-21T00:00:00Z'), TODAY, { calendar: true }], 'in 9 days'],
+  [['formatRelative', '2026-03-09T00:00:00', local(2026, 2, 7, 12, 0), { calendar: true }], 'in 2 days'],     // across the US spring change
+  // without it the same strings are moments: midnight UTC on the 12th is still the 11th in Honolulu and Los Angeles
+  [['formatRelative', '2026-11-12T00:00:00', TODAY], { HNL: '1 day ago', LAX: '1 day ago', UTC: 'today', MSK: 'today', KHI: 'today', AKL: 'today' }],
+  [['formatRelative', '2026-11-21T00:00:00', TODAY], { HNL: 'in 8 days', LAX: 'in 8 days', UTC: 'in 9 days', MSK: 'in 9 days', KHI: 'in 9 days', AKL: 'in 9 days' }],
+  // `today` stays the viewer's own: 22:30 UTC on the 12th is already the 13th in Moscow, Karachi and Auckland
+  [['formatRelative', '2026-11-12T00:00:00', NOW, { calendar: true }], { HNL: 'today', LAX: 'today', UTC: 'today', MSK: '1 day ago', KHI: '1 day ago', AKL: '1 day ago' }],
 ];
 
-test('what a date says in six time zones: a date with no time never moves, a moment is the viewer\'s own day and clock', () => {
+test('what a date says in six time zones: a date with no time never moves, a moment is the viewer\'s own day and clock, a calendar day is the one written', () => {
   const wrong: string[] = [];
   for (const code of CODES) {
     const { offsets, results } = inZone(ZONES[code], TABLE.map(([call]) => call));

@@ -25,36 +25,46 @@ export type DateInput = string | number | Date | null | undefined;
 interface Day { year: number; month: number; date: number; time: string | null }
 
 /** A date with no time ("2026-03-25") is that day as written, in every zone. A moment ("2026-03-25T22:30:00", naive = UTC) is the viewer's
- *  own day and clock. null when the value is not a date; V8 reads "2027-02-29" as 1 Mar 2027, so a day the month does not have is none. */
-function readDate(value: DateInput): Day | null {
+ *  own day and clock. `calendar` is for a field whose meaning is a DAY although it arrives as a DateTime ("2026-03-25T00:00:00", or with any
+ *  time or zone after it): the day is the date as written (so the string must begin YYYY-MM-DD), whatever the viewer's zone; a Date or an
+ *  epoch has no written date, so its UTC fields are the day. null when the value is not a date; V8 reads "2027-02-29" as 1 Mar 2027, so a
+ *  day the month does not have is none. */
+function readDate(value: DateInput, calendar: boolean): Day | null {
   const text = typeof value === 'string' ? value.trim() : value;
   const at = parseUtc(text);
   if (!at || Number.isNaN(at.getTime())) return null;
   if (typeof text === 'string') {
     const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
     if (ymd && Number(ymd[3]) > new Date(Date.UTC(Number(ymd[1]), Number(ymd[2]), 0)).getUTCDate()) return null;
-    if (DATE_ONLY.test(text)) return { year: at.getUTCFullYear(), month: at.getUTCMonth(), date: at.getUTCDate(), time: null };
+    if (ymd && (calendar || DATE_ONLY.test(text))) return { year: Number(ymd[1]), month: Number(ymd[2]) - 1, date: Number(ymd[3]), time: null };
+    if (calendar) return null;                                                  // a calendar day is written YYYY-MM-DD
+  } else if (calendar) {
+    return { year: at.getUTCFullYear(), month: at.getUTCMonth(), date: at.getUTCDate(), time: null };
   }
   return { year: at.getFullYear(), month: at.getMonth(), date: at.getDate(), time: `${pad(at.getHours())}:${pad(at.getMinutes())}` };
 }
 
 const dayWords = (d: Day): string => `${d.date} ${MONTHS[d.month]} ${d.year}`;
 
-/** "12 Nov 2026"; `empty` (default "—") when there is no date. A date with no time never moves; a moment shows the viewer's own day. */
-export function formatDate(value: DateInput, { empty = EMPTY }: { empty?: string } = {}): string {
-  const day = readDate(value);
+interface DateOptions { empty?: string; calendar?: boolean }
+
+/** "12 Nov 2026"; `empty` (default "—") when there is no date. A date with no time never moves; a moment shows the viewer's own day.
+ *  `calendar: true` is for a field that means a day (effective, next review, expiry, due) but arrives as a DateTime: the day as written. */
+export function formatDate(value: DateInput, { empty = EMPTY, calendar = false }: DateOptions = {}): string {
+  const day = readDate(value, calendar);
   return day ? dayWords(day) : empty;
 }
 
-/** "12 Nov 2026, 14:05": 24-hour clock in the viewer's zone. A date with no time shows just the date. */
-export function formatDateTime(value: DateInput, { empty = EMPTY }: { empty?: string } = {}): string {
-  const day = readDate(value);
+/** "12 Nov 2026, 14:05": 24-hour clock in the viewer's zone. A date with no time shows just the date, and so does `calendar: true`. */
+export function formatDateTime(value: DateInput, { empty = EMPTY, calendar = false }: DateOptions = {}): string {
+  const day = readDate(value, calendar);
   return day ? `${dayWords(day)}${day.time ? `, ${day.time}` : ''}` : empty;
 }
 
-/** "today", "in 9 days", "3 days ago", counted in calendar days against `today` (the viewer's calendar); '' when there is no date. */
-export function formatRelative(value: DateInput, today: Date = new Date()): string {
-  const day = readDate(value);
+/** "today", "in 9 days", "3 days ago", counted in calendar days against `today` (the viewer's calendar); '' when there is no date.
+ *  `calendar: true` reads `value` as a day, as formatDate does; `today` stays the viewer's own. */
+export function formatRelative(value: DateInput, today: Date = new Date(), { calendar = false }: { calendar?: boolean } = {}): string {
+  const day = readDate(value, calendar);
   if (!day) return '';
   const diff = (Date.UTC(day.year, day.month, day.date) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000;
   if (diff === 0) return 'today';
