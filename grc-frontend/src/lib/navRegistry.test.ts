@@ -1,0 +1,321 @@
+// node --test "src/lib/navRegistry.test.ts"
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { activeTab, breadcrumbFor, isInArea, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
+import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry } from '../components/layout/navAccess.ts';
+import { activeNavHref } from '../components/layout/navActive.ts';
+
+const APP = fileURLToPath(new URL('../app/', import.meta.url));
+const SRC = fileURLToPath(new URL('../', import.meta.url));
+const entry = (path: string): RouteEntry => {
+  const found = routes.find((e) => e.path === path);
+  assert.ok(found, `no entry for ${path}`);
+  return found;
+};
+const example = (path: string) => path.replace(/:[A-Za-z]+/g, '7');                  // a pattern as a real URL
+const isStatic = (path: string) => !path.includes(':');
+
+// ---- the registry and the app's folders ----
+
+/** `governance/documents/[id]/page.tsx` -> `/governance/documents/:id` for every page of a folder of the app. */
+function pagesOf(folder: string, base: string): string[] {
+  return (readdirSync(`${APP}${folder}`, { recursive: true }) as string[])
+    .map((file) => file.replace(/\\/g, '/'))
+    .filter((file) => file === 'page.tsx' || file.endsWith('/page.tsx'))
+    .map((file) => `${base}${file.slice(0, -'page.tsx'.length).replace(/\/$/, '').replace(/^(?=.)/, '/')}`.replace(/\[([A-Za-z]+)\]/g, ':$1'));
+}
+
+const subfolders = (at: string) => readdirSync(at, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+/** Whether Next would find a page for these URL segments under a folder: a folder by name, else a [param] folder; a (route group) folder is transparent. */
+function hasPage(at: string, segments: string[]): boolean {
+  if (segments.length === 0 && existsSync(`${at}/page.tsx`)) return true;
+  return subfolders(at).some((name) => (/^\(.+\)$/.test(name) ? hasPage(`${at}/${name}`, segments)
+    : segments.length > 0 && (name === segments[0] || /^\[[^\]]+\]$/.test(name)) && hasPage(`${at}/${name}`, segments.slice(1))));
+}
+
+test('every page of the Governance folder is exactly one entry, and every Governance URL of the registry is a page', () => {
+  const pages = pagesOf('(dashboard)/governance', '/governance');
+  assert.equal(pages.length, 26, 'the folder holds the 26 pages of the URL contract');
+  for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
+  for (const e of routes.filter((r) => r.path.startsWith('/governance'))) assert.ok(pages.includes(e.path), `${e.path} has no page.tsx`);
+});
+
+test('every entry of the registry is a page of the app: no sidebar link and no Governance entry points nowhere', () => {
+  for (const e of routes) assert.ok(hasPage(APP, e.path.split('/').filter(Boolean)), `${e.path} has no page in src/app`);
+  assert.ok(!hasPage(APP, ['governance', 'nowhere']), 'the check can say no');
+});
+
+test('the other pages of the Governance sidebar group and their sub-pages are entries too', () => {
+  for (const base of ['erm/kris', 'is-projects']) {
+    for (const page of pagesOf(`(dashboard)/${base}`, `/${base}`)) assert.ok(routes.some((e) => e.path === page), page);
+  }
+});
+
+// ---- one entry per sidebar leaf, named as the sidebar names it, needing what the sidebar says ----
+
+test('every sidebar leaf has an entry: its name is the label, its rights are the sidebar\'s, its groups are the menu groups', () => {
+  const trail = (entries: NavEntry[], path: string[] = []): Array<[string, string[]]> => entries.flatMap((e) => (isGroup(e) ? trail(e.items, [...path, e.name]) : [[e.href, path] as [string, string[]]]));
+  const groupsOf = Object.fromEntries(trail(navigation));
+  for (const leaf of flattenLeaves(navigation)) {
+    const e = entry(leaf.href);
+    assert.equal(e.label, leaf.name, leaf.href);
+    assert.deepEqual(e.permissions, navPermissions(leaf.href), `${leaf.name}: rights`);
+    assert.deepEqual(e.groups.map((g) => g.label), groupsOf[leaf.href], `${leaf.name}: groups`);
+    assert.equal(e.hidden, undefined, `${leaf.name} is in the menu`);
+  }
+});
+
+test('the rights of a page without a menu entry are none: the registry adds no guard, and says where it has none', () => {
+  const leafPaths = flattenLeaves(navigation).map((l) => l.href);
+  for (const e of routes.filter((r) => !leafPaths.includes(r.path))) assert.equal(e.permissions, null, e.path);
+  // the Governance pages that guard nothing today (any signed-in user opens them by URL); G3_permission_matrix lists which of their APIs are open too
+  const unguarded = routes.filter((e) => e.area === 'governance' && e.permissions === null).map((e) => e.path);
+  assert.deepEqual(unguarded, [
+    '/governance/documents/:id', '/governance/documents/studio', '/governance/documents/studio/:sessionId', '/governance/documents/attestation',
+    '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
+    '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
+    '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
+    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token',
+  ]);
+});
+
+// ---- identity, trail, forwards ----
+
+test('paths are unique, and so are the tabs of a strip (by id and by place)', () => {
+  const paths = routes.map((e) => e.path);
+  assert.deepEqual(paths.filter((p, i) => paths.indexOf(p) !== i), []);
+  const tabs = routes.flatMap((e) => (e.tab ? [e.tab] : []));
+  for (const area of Array.from(new Set(tabs.map((t) => t.area)))) {
+    const own = tabs.filter((t) => t.area === area);
+    assert.equal(new Set(own.map((t) => t.id)).size, own.length, `${area}: tab ids`);
+    assert.equal(new Set(own.map((t) => t.order)).size, own.length, `${area}: tab places`);
+  }
+});
+
+test('the trail of every entry reaches a root without a cycle, through static pages that are entries', () => {
+  for (const e of routes) {
+    const seen: string[] = [];
+    for (let at: RouteEntry | undefined = e.aliasOf ? entry(e.aliasOf) : e; at; at = at.parent ? routes.find((r) => r.path === at!.parent) : undefined) {
+      assert.ok(!seen.includes(at.path), `${e.path}: cycle at ${at.path}`);
+      seen.push(at.path);
+      if (at.parent) {
+        assert.ok(isStatic(at.parent), `${at.path}: its parent ${at.parent} has a :param, which a URL cannot fill in`);
+        assert.ok(routes.some((r) => r.path === at!.parent), `${at.path}: no entry for its parent ${at.parent}`);
+      }
+    }
+    const root = routes.find((r) => r.path === seen[seen.length - 1]) as RouteEntry;
+    assert.ok(root.groups.length > 0 || flattenLeaves(navigation).some((l) => l.href === root.path) || root.path === '/attest/:token', `${e.path}: root ${root.path} is not a menu entry`);
+  }
+});
+
+test('a forward is another URL of an entry that is a page of its own, under the same name', () => {
+  const aliases = routes.filter((e) => e.aliasOf);
+  assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [['/governance/attestations', '/governance/documents/attestation']]);
+  for (const a of aliases) {
+    const target = entry(a.aliasOf as string);
+    assert.equal(target.aliasOf, undefined);
+    assert.equal(a.label, target.label);
+    assert.equal(titleFor(example(a.path)), titleFor(example(target.path)));
+    assert.equal(a.tab, undefined);
+  }
+});
+
+test('every page is reached through a menu entry, a tab, a forward, or the page it hangs under (and says from where)', () => {
+  const inMenu = flattenLeaves(navigation).map((l) => l.href);
+  for (const e of routes) {
+    const reached = inMenu.includes(e.path) || !!e.tab || !!e.aliasOf;
+    if (reached) continue;
+    assert.ok(e.hidden && e.hidden.length > 10, `${e.path}: not in the menu, no tab, no forward: it needs a reason`);
+    assert.ok(e.parent || e.path === '/attest/:token', `${e.path}: reached from nowhere`);
+  }
+  assert.ok(routes.every((e) => !e.hidden || !(e.tab || e.aliasOf || inMenu.includes(e.path))), 'a page in a menu or a tab bar is not hidden');
+});
+
+test('a short label is a tab\'s display variant and differs from the label; names are unique among the pages that hang under the same page', () => {
+  for (const e of routes.filter((r) => r.shortLabel)) {
+    assert.ok(e.tab, `${e.path}: a shortLabel belongs to a tab`);
+    assert.notEqual(e.shortLabel, e.label);
+  }
+  const siblings = routes.filter((e) => !e.aliasOf);
+  for (const e of siblings) {
+    const same = siblings.filter((o) => o.parent === e.parent && o.groups.map((g) => g.label).join('/') === e.groups.map((g) => g.label).join('/') && o.label === e.label);
+    assert.equal(same.length, 1, `${e.path} shares its name "${e.label}" with ${same.map((s) => s.path).join(', ')}`);
+  }
+});
+
+// ---- the URL contract (G1): every URL keeps resolving ----
+
+const CONTRACT = [
+  '/governance', '/governance/documents', '/governance/documents/44', '/governance/documents/studio', '/governance/documents/studio/12',
+  '/governance/documents/attestation', '/governance/approvals', '/governance/exceptions', '/governance/reviews', '/governance/reviews/calendar',
+  '/governance/mappings', '/governance/workflows', '/governance/committees', '/governance/committees/actions', '/governance/committees/3',
+  '/governance/committees/meetings/9', '/governance/kpi-report', '/governance/settings', '/governance/regulatory-changes', '/governance/regulatory-changes/5',
+  '/governance/regulatory-feeds', '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/4',
+  '/governance/attestations/complete/4', '/governance/attestations/my', '/erm/kris', '/is-projects', '/is-projects/dashboard', '/is-projects/my-projects',
+  '/is-projects/7', '/dashboard', '/attest/abc123',
+];
+
+test('every URL of the contract resolves to an entry, with its query or hash ignored; the one forward is explicit', () => {
+  assert.equal(CONTRACT.length, 33, 'G1_url_contracts.md lists 33 routes');
+  for (const url of CONTRACT) {
+    assert.ok(routeFor(url), url);
+    assert.ok(routeFor(`${url}/`), `${url}/`);
+    assert.ok(routeFor(`${url}?tab=approvals&act=ack#top`), `${url}?query`);
+    assert.ok(titleFor(url), `${url} has a title`);
+    assert.ok(breadcrumbFor(url).length > 0, `${url} has a trail`);
+  }
+  assert.equal(routeFor('/governance/attestations')?.aliasOf, '/governance/documents/attestation');
+  assert.equal(routeFor('/attest/some-token')?.path, '/attest/:token');
+});
+
+test('a static page beats a :param page of the same shape, a :param matches one segment only, and a path that is no route is no entry', () => {
+  assert.equal(routeFor('/governance/documents/studio')?.path, '/governance/documents/studio');
+  assert.equal(routeFor('/governance/documents/12')?.path, '/governance/documents/:id');
+  assert.equal(routeFor('/governance/documents/attestation')?.path, '/governance/documents/attestation');
+  assert.equal(routeFor('/governance/committees/meetings/9')?.path, '/governance/committees/meetings/:id');
+  assert.equal(routeFor('/governance/committees/actions')?.path, '/governance/committees/actions');
+  assert.equal(routeFor('/governance/documents/12/extra'), undefined);
+  assert.equal(routeFor('/governance/documentsX'), undefined);
+  assert.equal(routeFor('/governance/nowhere'), undefined);
+  assert.equal(routeFor('/'), undefined);
+});
+
+test('the active menu entry agrees with the trail: a page lights the menu entry it hangs under', () => {
+  for (const e of routes.filter((r) => !r.aliasOf)) {
+    const url = example(e.path);
+    let root: RouteEntry = e;
+    while (root.parent) root = entry(root.parent);
+    const inMenu = flattenLeaves(navigation).some((l) => l.href === root.path);
+    assert.equal(activeNavHref(url, navigation), inMenu ? root.path : undefined, `${url} (hangs under ${root.path})`);
+  }
+});
+
+// ---- names ----
+
+test('titleFor: the destination\'s title, its label by default; a forward has its target\'s', () => {
+  assert.equal(titleFor('/governance'), 'Governance Overview');
+  assert.equal(subtitleFor('/governance'), 'Real-time policy, framework, and review posture');
+  assert.equal(titleFor('/governance/documents'), 'Documents');
+  assert.equal(titleFor('/governance/documents/12'), 'Document');
+  assert.equal(titleFor('/governance/committees/3'), 'Committee');
+  assert.equal(titleFor('/governance/attestations/campaigns/7'), 'Attestation Campaign');
+  assert.equal(titleFor('/governance/attestations'), 'Attestation');
+  assert.equal(subtitleFor('/governance/attestations'), 'Document acknowledgment campaigns');
+  assert.equal(titleFor('/is-projects'), 'Projects');
+  assert.equal(titleFor('/erm/kris'), 'KRIs');
+  assert.equal(titleFor('/dashboard'), 'Performance Overview');
+  assert.equal(titleFor('/governance/exceptions'), 'Policy exceptions');
+  assert.equal(entry('/governance/exceptions').shortLabel, 'Exceptions');
+});
+
+test('the five pages that said only "Governance" in the top bar have their own name now', () => {
+  assert.deepEqual(
+    ['/governance/approvals', '/governance/mappings', '/governance/reviews', '/governance/workflows', '/governance/exceptions'].map((p) => titleFor(p)),
+    ['My Approvals', 'Policy-Control Mappings', 'Document Reviews', 'Approval Workflows', 'Policy exceptions'],
+  );
+  for (const e of routes.filter((r) => r.area === 'governance')) {
+    assert.notEqual(titleFor(example(e.path)), 'Governance', e.path);
+    assert.notEqual(subtitleFor(example(e.path)), 'Policy and document lifecycle management', e.path);
+  }
+});
+
+test('the old names stay findable (keywords), and no entry has two names for the same page', () => {
+  assert.deepEqual(entry('/governance/committees').keywords, ['Board & Committee Management']);
+  assert.deepEqual(entry('/is-projects').keywords, ['IS Projects']);
+  assert.deepEqual(entry('/erm/kris').keywords, ['Key Risk Indicators']);
+  assert.deepEqual(entry('/governance/documents').keywords, ['Document library']);
+  assert.deepEqual(entry('/governance/approvals').keywords, ['Pending Approvals']);
+  assert.deepEqual(entry('/governance/reviews').keywords, ['Reviews']);
+  assert.equal(titleFor('/is-projects/dashboard'), 'Projects Overview');
+  for (const e of routes) for (const k of e.keywords ?? []) assert.notEqual(k, e.label, `${e.path}: a keyword repeats the label`);
+});
+
+test('breadcrumbFor: the menu groups, the pages it hangs under, then the page (the last is current, with the real URL)', () => {
+  assert.deepEqual(breadcrumbFor('/governance/documents/12'), [
+    { label: 'Governance', href: '/governance' }, { label: 'Documents', href: '/governance/documents' }, { label: 'Document', href: '/governance/documents/12' },
+  ]);
+  assert.deepEqual(breadcrumbFor('/governance/committees/3'), [
+    { label: 'Governance', href: '/governance' }, { label: 'Committees', href: '/governance/committees' }, { label: 'Committee', href: '/governance/committees/3' },
+  ]);
+  assert.deepEqual(breadcrumbFor('/governance/attestations/campaigns/7'), [
+    { label: 'Governance', href: '/governance' }, { label: 'Documents', href: '/governance/documents' }, { label: 'Attestation', href: '/governance/documents/attestation' },
+    { label: 'Attestation Campaigns', href: '/governance/attestations/campaigns' }, { label: 'Attestation Campaign', href: '/governance/attestations/campaigns/7' },
+  ]);
+  assert.deepEqual(breadcrumbFor('/governance/attestations'), [
+    { label: 'Governance', href: '/governance' }, { label: 'Documents', href: '/governance/documents' }, { label: 'Attestation', href: '/governance/documents/attestation' },
+  ]);
+  assert.deepEqual(breadcrumbFor('/governance/regulatory-changes/5'), [
+    { label: 'Compliance Management', href: '/compliance' }, { label: 'Regulatory Changes', href: '/governance/regulatory-changes' }, { label: 'Regulatory change', href: '/governance/regulatory-changes/5' },
+  ]);
+  assert.deepEqual(breadcrumbFor('/governance'), [{ label: 'Governance', href: '/governance' }, { label: 'Overview', href: '/governance' }]);
+  assert.deepEqual(breadcrumbFor('/attest/abc'), [{ label: 'Acknowledge', href: '/attest/abc' }]);
+  assert.deepEqual(breadcrumbFor('/tasks'), [{ label: 'Task Management', href: '/tasks' }]);
+  assert.deepEqual(breadcrumbFor('/erm/analytics/scenario').map((c) => c.label), ['Risk Management', 'Operational Risk', 'Scenario Analysis']);
+});
+
+test('an unknown or odd path falls back (undefined, an empty trail) and never throws', () => {
+  for (const odd of ['', '/', '//', '/nowhere', '/governance/%E0%A4%A', `/${'a/'.repeat(300)}`, '?x=1', '#h', '/governance/documents/12/13/14']) {
+    assert.equal(titleFor(odd), undefined, odd);
+    assert.deepEqual(breadcrumbFor(odd), [], odd);
+    assert.equal(routeFor(odd), undefined, odd);
+  }
+  for (const nothing of [null, undefined]) {
+    assert.equal(titleFor(nothing), undefined);
+    assert.equal(subtitleFor(nothing), undefined);
+    assert.deepEqual(breadcrumbFor(nothing), []);
+    assert.equal(isInArea('documents', nothing), false);
+    assert.equal(activeTab('documents', nothing), undefined);
+  }
+});
+
+// ---- tabs (the full pin of the Documents tab bar is documentsTabs.test.ts) ----
+
+test('the Documents strip: five tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
+  assert.deepEqual(tabsFor('documents').map((t) => t.path), [
+    '/governance/documents', '/governance/documents/studio', '/governance/documents/attestation', '/governance/exceptions', '/governance/settings',
+  ]);
+  const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
+  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Policy exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Policy exceptions']);
+  assert.deepEqual(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 5);
+  assert.deepEqual(tabsFor('nowhere'), []);
+});
+
+test('a short label is only what the tab shows; the tooltip and the accessible name are the label', () => {
+  const settings = tabsFor('documents').find((t) => t.tab.id === 'settings') as RouteEntry;
+  assert.equal(settings.label, 'Governance settings');
+  assert.equal(settings.shortLabel, 'Settings');
+  assert.equal(titleFor('/governance/settings'), 'Governance settings');
+});
+
+// ---- the consumers read the registry and keep no names of their own ----
+
+const read = (path: string) => readFileSync(`${SRC}${path}`, 'utf8').replace(/\r\n/g, '\n');
+const withoutComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
+const stringLiterals = (source: string) => withoutComments(source).match(/(['"`])(?:\\.|(?!\1).)*\1/g) ?? [];
+
+test('DocumentsTabs has no route of its own: its tabs, its area rule and its lit tab come from the registry; the label is the tooltip and the accessible name', () => {
+  const source = read('components/governance/DocumentsTabs.tsx');
+  assert.ok(source.includes("from '@/lib/navRegistry'"));
+  assert.deepEqual(stringLiterals(source).filter((s) => /\/governance|\/erm|\/is-projects/.test(s)), [], 'a route literal in DocumentsTabs.tsx');
+  for (const call of ['tabsFor(', 'activeTab(', 'isInArea(']) assert.ok(source.includes(call), call);
+  assert.ok(source.includes('title={t.label}') && source.includes('aria-label={t.label}'), 'the full label is the tooltip and the accessible name');
+  assert.ok(source.includes('t.shortLabel ?? t.label'), 'the short label is what the tab shows');
+  // an icon for every tab of the strip (it keeps the presentation; the registry keeps the names)
+  for (const { tab } of tabsFor('documents')) assert.ok(new RegExp(`\\b${tab.id}:\\s*\\{\\s*icon:\\s*[A-Z]`).test(source), `no icon for the ${tab.id} tab`);
+});
+
+test('the Header names Governance pages from the registry and keeps no Governance title of its own', () => {
+  const source = read('components/layout/Header.tsx');
+  assert.ok(source.includes("from '@/lib/navRegistry'"));
+  assert.ok(source.includes('titleFor(pathname)') && source.includes('subtitleFor(pathname)'));
+  const table = source.slice(source.indexOf('const PAGE_TITLES'), source.indexOf('export default function Header'));
+  const keys = Array.from(table.matchAll(/^\s*'(\/[^']*)':/gm)).map((m) => m[1]);
+  assert.ok(keys.length > 20, 'the title map of the other modules is still there');
+  assert.deepEqual(keys.filter((k) => routeFor(k)?.area === 'governance' || k.startsWith('/governance') || k.startsWith('/is-projects')), [], 'a Governance title kept in the Header');
+});

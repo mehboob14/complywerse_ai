@@ -4,9 +4,11 @@
 // DocumentsTabs.tsx and is now read from the navigation registry (lib/navRegistry.ts); this test is the pin of the behaviour it had BEFORE:
 // ORACLE is the old logic transcribed, TABLE is the same behaviour as a hand-written table, and the registry must give both.
 // The only deliberate difference: the Settings tab's tooltip and accessible name is the destination's full name, "Governance settings" (it was "Settings").
+// A path that is no route is not part of the contract (the old rules matched on characters, the registry on whole path segments).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+
+import { activeTab, isInArea, tabsFor } from '../../lib/navRegistry.ts';
 
 type Tab = { name: string; label: string; href: string; iconOnly?: boolean };
 type Ctx = { studio: boolean; settings: boolean };
@@ -94,25 +96,39 @@ test('the tabs, in order, by who sees them: the Studio where it is on, Settings 
   ]);
 });
 
-// ---- the source the oracle was transcribed from: while DocumentsTabs.tsx still holds the rules inline, they must be these ----
-const source = readFileSync('src/components/governance/DocumentsTabs.tsx', 'utf8').replace(/\r\n/g, '\n');
-const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+// ---- the registry gives the tab bar what the old rules gave it ----
 
-test('DocumentsTabs.tsx still holds the rules this test pins (replaced by the registry guards of navRegistry.test.ts once it reads them from there)', () => {
-  if (source.includes("from '@/lib/navRegistry'")) return;       // moved to the registry: its own test guards the component now
-  const text = flat(source);
-  for (const line of [
-    "const DOCUMENTS = { name: 'Documents', label: 'Documents', href: '/governance/documents', icon: FileText };",
-    "const ATTESTATION = { name: 'Attestation', label: 'Attestation', href: '/governance/documents/attestation', icon: ClipboardCheck };",
-    "const EXCEPTIONS = { name: 'Policy exceptions', label: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle };",
-    "const STUDIO = { name: 'Comply AI Studio', label: 'Comply AI Studio', href: '/governance/documents/studio', icon: Sparkles };",
-    "const SETTINGS = { name: 'Settings', label: 'Settings', href: '/governance/settings', icon: Settings, iconOnly: true };",
-    "!!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions') || pathname.startsWith(SETTINGS.href));",
-    "const tabs = studio.data?.enabled ? [DOCUMENTS, STUDIO, ATTESTATION, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, EXCEPTIONS];",
-    "if (usePermissions().hasPermission('governance:settings:*')) tabs.push(SETTINGS);",
-    "const docInStudio = !!studio.data?.enabled && /^\\/governance\\/documents\\/\\d+$/.test(pathname);",
-    "? pathname === t.href || (!docInStudio && pathname.startsWith(`${t.href}/`) && !pathname.startsWith(ATTESTATION.href) && !pathname.startsWith(STUDIO.href))",
-    ": t === STUDIO ? docInStudio || pathname.startsWith(t.href) : pathname.startsWith(t.href);",
-    "title={t.name} aria-label={t.name}",
-  ]) assert.ok(text.includes(flat(line)), line);
+const OLD_NAME = (label: string) => (label === 'Governance settings' ? 'Settings' : label);       // the one deliberate change
+
+test('the registry lists the same tabs in the same order, each showing the same text and leading to the same page', () => {
+  for (const ctx of ALL) {
+    const tabs = tabsFor('documents', { studio: ctx.studio, can: () => ctx.settings });
+    const old = oracleTabs(ctx);
+    assert.deepEqual(tabs.map((t) => t.path), old.map((t) => t.href), JSON.stringify(ctx));
+    assert.deepEqual(tabs.map((t) => t.shortLabel ?? t.label), old.map((t) => t.label), `${JSON.stringify(ctx)}: what each tab shows`);
+    assert.deepEqual(tabs.map((t) => OLD_NAME(t.label)), old.map((t) => t.name), `${JSON.stringify(ctx)}: tooltip and accessible name`);
+  }
+  assert.equal(tabsFor('documents').find((t) => t.tab.id === 'settings')?.label, 'Governance settings');
+});
+
+test('the registry puts the same pages in the area and lights the same tab on each', () => {
+  for (const [path, inArea] of TABLE) assert.equal(isInArea('documents', path), inArea, path);
+  assert.equal(isInArea('documents', null), false);
+  assert.equal(isInArea('documents', ''), false);
+  for (const ctx of ALL) {
+    const tabs = tabsFor('documents', { studio: ctx.studio, can: () => ctx.settings });
+    for (const [path] of TABLE) {
+      const lit = activeTab('documents', path, { studio: ctx.studio });
+      const shown = lit && tabs.some((t) => t.path === lit.path) ? OLD_NAME(lit.label) : null;           // a tab the bar does not list is not lit
+      assert.equal(shown, oracleLit(path, ctx), `${path} ${JSON.stringify(ctx)}`);
+    }
+  }
+});
+
+test('the table is the registry answer too, in both Studio states', () => {
+  const lit = (path: string, studio: boolean) => { const tab = activeTab('documents', path, { studio }); return tab ? OLD_NAME(tab.label) : null; };
+  for (const [path, , studioOn, studioOff] of TABLE) {
+    assert.equal(lit(path, true), studioOn, `${path} (Studio on)`);
+    assert.equal(lit(path, false), studioOff, `${path} (Studio off)`);
+  }
 });
