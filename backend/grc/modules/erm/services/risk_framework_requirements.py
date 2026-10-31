@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from ....models import ParsedFrameworkControl, Risk, RiskFrameworkRequirementLink, UploadedFramework
@@ -17,7 +17,9 @@ EFFECTIVENESS = ("full", "partial", "minimal", "none")
 
 
 def _shared_or_own(tenant_ids: Sequence[int]):
-    return or_(UploadedFramework.tenant_id.is_(None), UploadedFramework.tenant_id.in_(list(tenant_ids) or [-1]))
+    """The frameworks this tenant can use: its own and the shared ones, not the deactivated (as the control library does)."""
+    return and_(or_(UploadedFramework.tenant_id.is_(None), UploadedFramework.tenant_id.in_(list(tenant_ids) or [-1])),
+                or_(UploadedFramework.is_active.is_(True), UploadedFramework.is_active.is_(None)))
 
 
 def installed(db: Session, tenant_ids: Sequence[int]) -> List[dict]:

@@ -263,6 +263,17 @@ def test_the_installed_copy_with_the_most_controls_is_the_one_linked(db):
     assert made["linked_controls"] == M23
 
 
+def test_a_deactivated_framework_is_not_offered_or_linked(db):
+    fw = install_uae_ia(db)
+    fw.is_active = False
+    db.commit()
+    http = client(db)
+    assert http.get("/framework-requirements/frameworks").json()["items"] == []
+    assert http.get("/risk-library").json()["installed_framework"] is None
+    made = http.post("/risk-library/uae_ia:M2.3:03/add-to-register", json=ADD).json()
+    assert made["linked_controls"] == [] and made["controls_not_installed"] == M23
+
+
 RESTRICTED = [{"key": "business_line", "label": "Business line", "type": "select", "options": ["Retail", "Treasury"], "required": True},
               {"key": "note", "label": "Note", "type": "text"}]
 
