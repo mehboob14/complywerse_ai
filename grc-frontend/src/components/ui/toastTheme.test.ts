@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { TOAST_TEXT, TOAST_TONES } from './toastTheme.ts';
+import { TOAST_ACTION, TOAST_TEXT, TOAST_TONES, toastRole } from './toastTheme.ts';
 
 // WCAG 2.x contrast ratio of two #rrggbb colours.
 function contrast(a: string, b: string): number {
@@ -55,4 +55,27 @@ test('the toast uses no colour class the platform CSS repaints', () => {
 test('the cyber-assurance re-export is not a client boundary (Next refuses `export *` in one)', () => {
   const src = readFileSync(new URL('../../cyber-assurance/components/ui/Toast.tsx', import.meta.url), 'utf8');
   if (/export \*/.test(src)) assert.doesNotMatch(src, /^\s*['"]use client['"]/m);
+});
+
+test('the action button ("Retry") meets WCAG AA on every card, and white on its hover fill', () => {
+  const [word, fill] = [hexes(TOAST_ACTION.match(/(?:^|\s)text-\[#[0-9a-f]{6}\]/i)?.[0] ?? '')[0], hexes(TOAST_ACTION.match(/hover:bg-\[#[0-9a-f]{6}\]/i)?.[0] ?? '')[0]];
+  assert.ok(word && fill, 'the action needs a word colour and a hover fill');
+  for (const [type, tone] of Object.entries(TOAST_TONES)) {
+    const [bg] = hexes(tone.bg);
+    assert.ok(contrast(word, bg) >= 4.5, `${type}: action ${word} on ${bg} is ${contrast(word, bg).toFixed(2)}:1`);
+  }
+  assert.ok(contrast('#ffffff', fill) >= 4.5, `white on the hover fill ${fill}`);
+  assert.doesNotMatch(TOAST_ACTION, /(?:^|[\s'"])(?:hover:)?(?:text-white|bg-white|text-(?:slate|gray)-\d|bg-(?:slate|gray)-\d)/);
+});
+
+test('an error interrupts a screen reader, everything else waits its turn', () => {
+  assert.equal(toastRole('error'), 'alert');
+  for (const type of ['success', 'warning', 'info'] as const) assert.equal(toastRole(type), 'status');
+});
+
+test('every toast reads its role from toastRole and offers its action through the themed button', () => {
+  const src = readFileSync(new URL('./Toast.tsx', import.meta.url), 'utf8');
+  assert.match(src, /role=\{toastRole\(type\)\}/);
+  assert.match(src, /TOAST_ACTION/);
+  assert.doesNotMatch(src, /role="alert"/);                       // the old fixed role: an alert for every toast
 });
