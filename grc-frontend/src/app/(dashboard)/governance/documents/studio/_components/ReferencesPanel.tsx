@@ -11,6 +11,8 @@ import { BookMarked, Eye, EyeOff, FileText, Layers, Loader2, Paperclip, Plus, Se
 import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
+import { ErrorState, SkeletonRows, TextInput } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { matches, plural } from '@/lib/studio/text';
 import { SIGNOFF_STATUS } from '../../_SignoffControl';
 import { docLine } from './homeLists';
@@ -52,42 +54,41 @@ function useDebounced<T>(value: T, ms = 300): T {
 export { matches };
 
 export function SearchBox({ value, onChange, placeholder, label }: { value: string; onChange: (v: string) => void; placeholder: string; label: string }) {
-  return (
-    <label className="relative block">
-      <span className="sr-only">{label}</span>
-      <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" aria-hidden />
-      <input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-lg border border-[#b8c4c8] bg-[#fff] py-2 pl-8 pr-3 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />
-    </label>
-  );
+  return <TextInput type="search" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} leftAdornment={<Search aria-hidden />} />;
 }
 
-/** The wait for a list: a spinner, no words (a screen reader is told). */
-const Waiting = () => <li role="status" className="relative p-2 text-[#586472]"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /><span className="sr-only">Loading</span></li>;
+/** The wait for a list: grey bars, "Loading" said once. */
+const Waiting = ({ label = 'Loading' }: { label?: string }) => <li><SkeletonRows rows={3} columns={1} label={label} /></li>;
 
-/** The platform's frameworks with a search over name, version and publisher. Shared by the references panel and the start screen. */
-export function FrameworkList({ frameworks, loading, exclude = [], onPick, maxHeight = 'max-h-64' }: {
-  frameworks?: FrameworkItem[]; loading: boolean; exclude?: number[]; onPick: (fw: FrameworkItem) => void; maxHeight?: string;
+/** A row a person picks (a document, a framework, a template). */
+export const PICK_ROW = 'flex min-h-ds-control w-full items-center gap-[8px] rounded-ds-control border border-ds-border bg-ds-surface px-[10px] py-[6px] text-left hover:border-ds-primary hover:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring disabled:cursor-not-allowed disabled:opacity-50';
+
+/** The platform's frameworks with a search over name, version and publisher. Shared by the references panel and the start screen. A list that
+ *  could not be read says so (with Retry when repeating can help): it is not "No frameworks". */
+export function FrameworkList({ frameworks, loading, error, onRetry, exclude = [], onPick, maxHeight = 'max-h-64' }: {
+  frameworks?: FrameworkItem[]; loading: boolean; error?: unknown; onRetry?: () => void; exclude?: number[]; onPick: (fw: FrameworkItem) => void; maxHeight?: string;
 }) {
   const [q, setQ] = useState('');
   const all = (frameworks ?? []).filter((f) => !exclude.includes(f.id));
   const shown = all.filter((f) => matches(q, f.name, f.version, f.organisation));
+  const failed = error != null && !frameworks;
   return (
     <div>
       <SearchBox value={q} onChange={setQ} placeholder="Search frameworks" label="Search the frameworks" />
-      {!loading && all.length > 0 && <p className="mt-1 text-xs text-[#586472]" role="status">{q.trim() ? `${shown.length} of ${plural(all.length, 'framework')}` : plural(all.length, 'framework')}</p>}
-      <ul className={`mt-1.5 space-y-1 overflow-y-auto ${maxHeight}`}>
-        {loading && <Waiting />}
-        {!loading && shown.length === 0 && <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">{q.trim() ? 'No match' : 'No frameworks'}</li>}
+      {!loading && all.length > 0 && <p className="mt-[4px] text-ds-label text-ds-fg-muted" role="status">{q.trim() ? `${shown.length} of ${plural(all.length, 'framework')}` : plural(all.length, 'framework')}</p>}
+      <ul className={`mt-[6px] space-y-[4px] overflow-y-auto ${maxHeight}`}>
+        {loading && <Waiting label="Loading the frameworks" />}
+        {failed && !loading && <li><ErrorState compact title="Couldn't load the frameworks" message={errorMessage(error)} onRetry={onRetry && canRetry(error) ? onRetry : undefined} /></li>}
+        {!loading && !failed && shown.length === 0 && <li className="rounded-ds-card border border-dashed border-ds-border-strong p-[12px] text-center text-ds-label text-ds-fg-muted">{q.trim() ? 'No match' : 'No frameworks'}</li>}
         {shown.map((f) => (
           <li key={f.id}>
-            <button type="button" onClick={() => onPick(f)} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e6eb] bg-[#fff] px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
-              <BookMarked className="h-4 w-4 shrink-0 text-[#586472]" />
+            <button type="button" onClick={() => onPick(f)} className={PICK_ROW}>
+              <BookMarked aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" strokeWidth={1.75} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-[#1f2933]">{f.name}{f.version ? ` ${f.version}` : ''}</span>
-                <span className="block text-xs text-[#586472]">{[f.organisation, `${f.controls} controls`].filter(Boolean).join(' · ')}</span>
+                <span className="block truncate text-ds-body text-ds-fg" title={`${f.name}${f.version ? ` ${f.version}` : ''}`}>{f.name}{f.version ? ` ${f.version}` : ''}</span>
+                <span className="block text-ds-label text-ds-fg-muted">{[f.organisation, `${f.controls} controls`].filter(Boolean).join(' · ')}</span>
               </span>
-              <Plus className="h-4 w-4 shrink-0 text-[#0f766e]" aria-hidden />
+              <Plus aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" strokeWidth={1.75} />
             </button>
           </li>
         ))}
