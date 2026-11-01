@@ -7,6 +7,8 @@
  * This refuses to run Next when any config Next loads looks tampered with.
  *   node scripts/guard-postcss.js            check the real files
  *   node scripts/guard-postcss.js <file...>  check other files (used by the self-test)
+ *   node scripts/guard-postcss.js --staged   every staged *.config.{js,mjs,cjs,ts} (.githooks/pre-commit)
+ * One detection source: the pre-commit hook calls this script too.
  */
 const fs = require('fs');
 const path = require('path');
@@ -41,9 +43,23 @@ function problem(src, strictPostcss) {
   return null;
 }
 
+const CONFIG_RE = /\.config\.(js|mjs|cjs|ts)$/;
+const asTarget = (f) => ({ file: path.resolve(f), strict: path.basename(f).startsWith('postcss.config') });
+
+/** Every staged config file in the repo (the .githooks/pre-commit gate). */
+function stagedConfigs() {
+  const { execSync } = require('child_process');
+  const root = execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
+  return execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8', cwd: root })
+    .split('\n').map((s) => s.trim()).filter((f) => CONFIG_RE.test(f))
+    .map((f) => asTarget(path.join(root, f)));
+}
+
 const args = process.argv.slice(2);
-const targets = args.length
-  ? args.map((f) => ({ file: path.resolve(f), strict: path.basename(f).startsWith('postcss.config') }))
+const targets = args.includes('--staged')
+  ? stagedConfigs()
+  : args.length
+  ? args.map(asTarget)
   : [
       { file: path.join(FRONTEND, 'postcss.config.js'), strict: true },
       { file: path.join(FRONTEND, 'next.config.js'), strict: false },
