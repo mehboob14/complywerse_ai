@@ -663,7 +663,7 @@ func deepCollect(apiToken string) string {
 	if runtime.GOOS == "windows" {
 		ext = ".ps1"
 	}
-	f, err := os.CreateTemp("", "ava-deep-*"+ext)
+	f, err := os.CreateTemp("", "complyverse-deep-*"+ext)
 	if err != nil {
 		return ""
 	}
