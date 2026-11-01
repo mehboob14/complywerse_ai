@@ -6,12 +6,13 @@
 // useReportedMutation for every write and useConfirm for the delete. Every number says what it rests on: a tile whose source cannot be set today (attendance,
 // quorum, minutes, meetings held: no screen marks a meeting completed or enters attendance) says "Not recorded" and, from an (i), what is missing, instead of 0%
 // (lib/committees.ts holds the rules and their tests). The score and its formulas are the server's (committees.py, GET /overview); this page only says how far
-// the data behind them goes. Deleting a committee is still the server's hard delete, now asked in a dialog that names what goes with it:
-// G4_committee_deactivation_plan.md is the plan for replacing it with Deactivate.
+// the data behind them goes. A committee is DEACTIVATED, never deleted, from here (G4_committee_deactivation_plan.md): the question says what stays, nothing
+// it holds is removed, Reactivate undoes it. The table opens on the Active committees (the status filter lives in the address: ?status=inactive|all), the
+// tiles above keep counting every committee, and a New meeting is offered the active ones only.
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
-import { Calendar, CalendarPlus, CheckSquare, ClipboardList, Plus, Search, Trash2, TrendingUp, Trophy, UserCheck, Users, X, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { Calendar, CalendarPlus, CheckSquare, ClipboardList, Plus, Power, PowerOff, Search, Trash2, TrendingUp, Trophy, UserCheck, Users, X, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { assetsApi, committeeApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -22,23 +23,25 @@ import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { ScoreRing, scoreBand } from '@/components/dashboard/score-kit';
 import {
-  Button, EmptyState, ErrorState, FormField, IconButton, Pager, PersonChip, RegisterTable, SectionCard, Select, Skeleton, SkeletonLines, StatusPill, Textarea, TextInput,
-  sortRows, type RegisterColumn, type SortState,
+  Button, EmptyState, ErrorState, FormField, IconButton, Pager, PersonChip, RegisterTable, SectionCard, SegmentedControl, Select, Skeleton, SkeletonLines, StatusPill,
+  Textarea, TextInput, sortRows, useAddressState, type RegisterColumn, type SortState,
 } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { useConfirm } from '@/components/ui/ds/useConfirm';
 import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import { oneOf } from '@/lib/addressState';
 import { formatCount, formatPercent, truncate } from '@/lib/format';
 import { parseUtc } from '@/lib/serverTime';
 import { pageRange } from '@/lib/pagerModel';
 import { routeFor } from '@/lib/navRegistry';
 import { TONE } from '@/lib/status';
 import {
-  NOT_RECORDED, actionsDoneReading, attendanceReading, committeeTypeLabel, deleteCommitteePlan, dueDay, dueRelative, formChanged, gradeTone, isOverdueAction, listOf,
-  matchesCommittee, measureHasData, measureReason, meetingDay, meetingRelative, meetingsHeldReading, overdueReading, performanceReading, upcomingMeetings,
-  type Overview, type OverviewCommittee, type OverviewMeeting, type OverviewMetric, type OverviewMonth,
+  COMMITTEE_STATUS_VALUES, DEFAULT_COMMITTEE_STATUS, NOT_RECORDED, actionsDoneReading, activeCommittees, attendanceReading, committeeTypeLabel, dueDay, dueRelative,
+  emptyListReading, formChanged, gradeTone, isActiveCommittee, isOverdueAction, listOf, matchesCommittee, matchesStatus, measureHasData, measureReason, meetingDay,
+  meetingRelative, meetingsHeldReading, overdueReading, performanceReading, statusCounts, statusOptions, upcomingMeetings,
+  type CommitteeStatusFilter, type Overview, type OverviewCommittee, type OverviewMeeting, type OverviewMetric, type OverviewMonth,
 } from '@/lib/committees';
-import { ActionStatusPills, CommitteeActivity, DrawerFooter, FormProblem, NotRecorded, PickerField, StatTile } from './_ui';
+import { ActionStatusPills, CommitteeActivity, DrawerFooter, FormProblem, NotRecorded, PickerField, StatTile, useCommitteeActivation } from './_ui';
 
 interface ActionRow {
   id: number;
@@ -75,11 +78,14 @@ const monthLabel = (key: string): string => MONTH_ABBR[(parseInt(key.split('-')[
 const short = (name: string): string => truncate(name, 60).text;
 const SUB_HEAD = 'text-ds-label text-ds-fg-muted';
 const PAGE_SIZES = [10, 25, 50];
+/** The status filter lives in the address (?status=inactive); a value nobody listed opens on Active. */
+const ADDRESS = { status: oneOf<CommitteeStatusFilter>(COMMITTEE_STATUS_VALUES, DEFAULT_COMMITTEE_STATUS) };
 
 export default function CommitteesDashboardPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
-  const canDelete = hasPermission('governance:committees:delete');
+  // Deactivate / Reactivate need the delete right (the server asks for it too: governance:committees:delete)
+  const canDeactivate = hasPermission('governance:committees:delete');
   const queryClient = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
   const [perfOpen, setPerfOpen] = useState(false);
@@ -90,6 +96,8 @@ export default function CommitteesDashboardPage() {
   const [sort, setSort] = useState<SortState>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
+  const [address, setAddress] = useAddressState(ADDRESS);
+  const status = address.status;
 
   // ── data (the same keys and requests as ever) ──
   const overviewQ = useQuery({
@@ -97,12 +105,16 @@ export default function CommitteesDashboardPage() {
     queryFn: async () => (await committeeApi.getOverview()).data as Overview,
   });
   const overview = overviewQ.data;
+  const committees = useMemo(() => overview?.committees ?? [], [overview]);
+  // the selected committee, for as long as the status filter still shows it: one the filter hides is not "selected", the panel is back to all committees
+  const selected = useMemo(() => committees.find((c) => c.id === selectedId && matchesStatus(c, status)) ?? null, [committees, selectedId, status]);
+  const selectionId = selected?.id ?? null;
 
   // the right-hand list: the selected committee's actions, else the overdue ones; `total` is the API's, the list is what it sent (capped at 100)
   const panelActionsQ = useQuery({
-    queryKey: ['committee-panel-actions', selectedId],
+    queryKey: ['committee-panel-actions', selectionId],
     queryFn: async () => {
-      const res = await committeeApi.getActions(selectedId ? { committee_id: selectedId } : { overdue_only: true });
+      const res = await committeeApi.getActions(selectionId ? { committee_id: selectionId } : { overdue_only: true });
       const { items, total } = listOf<Record<string, any>>(res.data);
       return {
         total,
@@ -117,12 +129,12 @@ export default function CommitteesDashboardPage() {
 
   // the selected committee's own upcoming meetings, fetched per committee rather than cut from the overview's top six
   const panelMeetingsQ = useQuery({
-    queryKey: ['committee-panel-meetings', selectedId],
-    enabled: !!selectedId,
+    queryKey: ['committee-panel-meetings', selectionId],
+    enabled: !!selectionId,
     queryFn: async () => {
-      const { items } = listOf<Record<string, any>>((await committeeApi.getMeetings(selectedId as number)).data);
+      const { items } = listOf<Record<string, any>>((await committeeApi.getMeetings(selectionId as number)).data);
       return upcomingMeetings(items.map((m) => ({
-        id: m.id, title: m.title, committee_id: selectedId as number, committee_name: null, scheduled_date: m.scheduled_date, status: m.status,
+        id: m.id, title: m.title, committee_id: selectionId as number, committee_name: null, scheduled_date: m.scheduled_date, status: m.status,
       })) as OverviewMeeting[]);
     },
   });
@@ -132,39 +144,33 @@ export default function CommitteesDashboardPage() {
     queryFn: async () => ((await assetsApi.getTenantUsers()).data || []) as TenantUserOption[],
   });
 
-  const committees = useMemo(() => overview?.committees ?? [], [overview]);
-  const selected = useMemo(() => committees.find((c) => c.id === selectedId) ?? null, [committees, selectedId]);
   const userItems = useMemo(
     () => tenantUsers.map((u) => ({ value: String(u.id), label: u.display_name || u.email || `User ${u.id}`, subLabel: u.email })),
     [tenantUsers],
   );
-  const committeeItems = useMemo(() => committees.map((c) => ({ value: String(c.id), label: c.name })), [committees]);
+  // a new meeting goes to an active committee: the server refuses a deactivated one (400), so the picker does not offer it
+  const committeeItems = useMemo(() => activeCommittees(committees).map((c) => ({ value: String(c.id), label: c.name })), [committees]);
 
-  // a selected committee that is gone after a refetch (deleted elsewhere) clears the selection, so the panel cannot show a stale one
+  // a selected committee that is gone after a refetch (deleted through the API) clears the selection, so the panel cannot show a stale one
   useEffect(() => {
     if (selectedId != null && committees.length && !committees.some((c) => c.id === selectedId)) setSelectedId(null);
   }, [committees, selectedId]);
 
-  // ── the table: search, sort, page (all of the committees are already here: the overview sends every one) ──
+  // ── the table: status, search, sort, page (all of the committees are already here: the overview sends every one, inactive ones included) ──
+  const counts = useMemo(() => statusCounts(committees), [committees]);
   const rows = useMemo(() => {
-    const found = committees.filter((c) => matchesCommittee(c, search));
+    const found = committees.filter((c) => matchesStatus(c, status) && matchesCommittee(c, search));
     return sortRows(found, sort, (c, key) => (key === 'next' ? parseUtc(c.next_meeting_date) : c.name));
-  }, [committees, search, sort]);
+  }, [committees, status, search, sort]);
   const range = pageRange(page, pageSize, rows.length);
   const pageRows = rows.slice(range.from === 0 ? 0 : range.from - 1, range.to);
 
-  // ── the delete: the server's hard delete, asked in a dialog that says what goes with it ──
-  const del = useReportedMutation({
-    mutationFn: (c: OverviewCommittee) => committeeApi.deleteCommittee(c.id),
-    success: (_r, c) => `Deleted ${short(c.name)}`,
-    failure: "Couldn't delete the committee",
+  // ── Deactivate / Reactivate: a question with what stays, then the server's call; nothing the committee holds is removed ──
+  const activation = useCommitteeActivation({
+    confirm,
     invalidate: [['committee-overview']],
-    onSuccess: () => setSelectedId(null),
+    deactivatedNote: status === 'active' ? 'Find it under Inactive.' : undefined,       // on Active the row leaves the table; on All it stays, marked
   });
-  const askDelete = async (c: OverviewCommittee) => {
-    const plan = deleteCommitteePlan(short(c.name));
-    if (await confirm({ title: plan.title, message: plan.message, confirmLabel: plan.confirmLabel, tone: 'danger' })) del.mutate(c);
-  };
 
   if (overviewQ.isLoading) {
     return (
@@ -197,7 +203,9 @@ export default function CommitteesDashboardPage() {
   const actionsDone = actionsDoneReading(k);
   const overdue = overdueReading(k);
   const attendance = attendanceReading(k);
-  const inactive = committees.filter((c) => !c.is_active).length;
+  const inactive = counts.inactive;
+  const nothingToSchedule = committeeItems.length === 0;       // every committee is inactive: a meeting has nowhere to go
+  const emptyReading = emptyListReading(status, counts, search);
 
   // Four columns, so the table fits the two-thirds it has beside the panel at 1280px: the type and the member count sit under the name (and are lines of the
   // card below 768px).
@@ -229,7 +237,7 @@ export default function CommitteesDashboardPage() {
           </span>
         )),
     },
-    { key: 'status', header: 'Status', width: 'w-[96px]', card: 'meta', cell: (c) => <CommitteeActivity size="sm" active={c.is_active} /> },
+    { key: 'status', header: 'Status', width: 'w-[96px]', card: 'meta', cell: (c) => <CommitteeActivity size="sm" active={isActiveCommittee(c)} /> },
   ];
 
   return (
@@ -244,7 +252,14 @@ export default function CommitteesDashboardPage() {
             <Button href="/governance/committees/actions" leftIcon={<ClipboardList aria-hidden />}>All actions</Button>
             {canCreate && (
               <>
-                <Button leftIcon={<CalendarPlus aria-hidden />} onClick={() => setMeetingModalOpen(true)} disabled={isEmpty}>New meeting</Button>
+                <Button
+                  leftIcon={<CalendarPlus aria-hidden />}
+                  onClick={() => setMeetingModalOpen(true)}
+                  disabled={isEmpty || nothingToSchedule}
+                  title={!isEmpty && nothingToSchedule ? 'Every committee is inactive: reactivate one to schedule a meeting.' : undefined}
+                >
+                  New meeting
+                </Button>
                 <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setCommitteeModalOpen(true)}>New committee</Button>
               </>
             )}
@@ -328,15 +343,24 @@ export default function CommitteesDashboardPage() {
                 info="Select a committee to see its upcoming meetings and its actions beside the list. Its name opens it."
                 meta={inactive > 0 ? `${formatCount(committees.length)} · ${formatCount(inactive)} inactive` : formatCount(committees.length)}
                 actions={(
-                  <TextInput
-                    type="search"
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    placeholder="Search committees"
-                    aria-label="Search committees"
-                    leftAdornment={<Search aria-hidden />}
-                    className="w-[220px] max-w-full"
-                  />
+                  <>
+                    <SegmentedControl
+                      label="Show committees"
+                      name="committee-status"
+                      options={statusOptions(counts)}
+                      value={status}
+                      onChange={(next) => { setAddress({ status: next }); setPage(1); }}
+                    />
+                    <TextInput
+                      type="search"
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                      placeholder="Search committees"
+                      aria-label="Search committees"
+                      leftAdornment={<Search aria-hidden />}
+                      className="w-[220px] max-w-full"
+                    />
+                  </>
                 )}
               >
                 <RegisterTable<OverviewCommittee>
@@ -346,15 +370,27 @@ export default function CommitteesDashboardPage() {
                   getRowId={(c) => c.id}
                   sort={sort}
                   onSortChange={(next) => { setSort(next); setPage(1); }}
-                  selectedId={selectedId}
-                  onRowActivate={(c) => setSelectedId(c.id === selectedId ? null : c.id)}
+                  selectedId={selectionId}
+                  onRowActivate={(c) => setSelectedId(c.id === selectionId ? null : c.id)}
                   cardTitle={(c) => (
                     <>
                       <Link href={`/governance/committees/${c.id}`} title={c.name} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{c.name}</Link>
                       <span className="block text-ds-label font-normal text-ds-fg-muted">{committeeTypeLabel(c.committee_type)} · {formatCount(c.members_count)} {c.members_count === 1 ? 'member' : 'members'}</span>
                     </>
                   )}
-                  empty={(
+                  empty={emptyReading ? (
+                    <EmptyState
+                      kind="noMatches"
+                      bare
+                      title={emptyReading.title}
+                      description={emptyReading.description}
+                      action={emptyReading.switchTo ? (
+                        <Button onClick={() => { setAddress({ status: emptyReading.switchTo as CommitteeStatusFilter }); setPage(1); }}>
+                          {emptyReading.switchTo === 'inactive' ? 'Show inactive committees' : 'Show active committees'}
+                        </Button>
+                      ) : undefined}
+                    />
+                  ) : (
                     <EmptyState
                       kind="noMatches"
                       bare
@@ -385,9 +421,10 @@ export default function CommitteesDashboardPage() {
                   meetings={selected ? panelMeetingsQ : null}
                   allMeetings={overview.upcoming_meetings}
                   actions={panelActionsQ}
-                  canDelete={canDelete}
-                  deleting={del.isPending}
-                  onDelete={askDelete}
+                  canDeactivate={canDeactivate}
+                  busy={activation.busy}
+                  onDeactivate={(c) => { void activation.askDeactivate(c); }}
+                  onReactivate={activation.reactivate}
                   onClear={() => setSelectedId(null)}
                 />
               </div>
@@ -422,7 +459,7 @@ export default function CommitteesDashboardPage() {
         open={meetingModalOpen}
         onClose={() => setMeetingModalOpen(false)}
         committeeItems={committeeItems}
-        defaultCommitteeId={selectedId}
+        defaultCommitteeId={selected && isActiveCommittee(selected) ? selected.id : null}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['committee-overview'] })}
       />
       {confirmDialog}
@@ -486,14 +523,16 @@ function PerformanceDetail({ kpis }: { kpis: Overview['kpis'] }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Context panel: the selected committee's upcoming meetings and actions (else: what is coming and what is late)
 // ─────────────────────────────────────────────────────────────────────────────
-function ContextPanel({ selected, meetings, allMeetings, actions, canDelete, deleting, onDelete, onClear }: {
+function ContextPanel({ selected, meetings, allMeetings, actions, canDeactivate, busy, onDeactivate, onReactivate, onClear }: {
   selected: OverviewCommittee | null;
   meetings: { data?: OverviewMeeting[]; isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown } | null;
   allMeetings: OverviewMeeting[];
   actions: { data?: { items: ActionRow[]; total: number }; isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown };
-  canDelete?: boolean;
-  deleting?: boolean;
-  onDelete: (c: OverviewCommittee) => void;
+  canDeactivate?: boolean;
+  /** a question is being prepared or a call is on its way */
+  busy?: boolean;
+  onDeactivate: (c: OverviewCommittee) => void;
+  onReactivate: (c: OverviewCommittee) => void;
   onClear: () => void;
 }) {
   const shownMeetings = selected ? (meetings?.data ?? []) : allMeetings;
@@ -501,15 +540,19 @@ function ContextPanel({ selected, meetings, allMeetings, actions, canDelete, del
   const ACTIONS_SHOWN = 8;
   const actionItems = actions.data?.items ?? [];
   const actionTotal = actions.data?.total ?? 0;
+  const off = selected ? !isActiveCommittee(selected) : false;
   return (
     <SectionCard
       id="committee-context"
       title={selected ? short(selected.name) : 'All committees'}
       info={selected ? 'The selected committee: its next meetings and its actions.' : 'The next meetings and the overdue actions of every committee. Select a committee to narrow it down.'}
+      meta={off ? <CommitteeActivity size="sm" active={false} /> : undefined}
       actions={selected ? (
         <>
           <Button href={`/governance/committees/${selected.id}`} variant="link" size="sm" rightIcon={<ArrowUpRight aria-hidden />}>Open committee</Button>
-          {canDelete && <IconButton label={`Delete ${short(selected.name)}`} disabled={deleting} onClick={() => onDelete(selected)}><Trash2 aria-hidden /></IconButton>}
+          {canDeactivate && (off
+            ? <Button size="sm" leftIcon={<Power aria-hidden />} loading={busy} onClick={() => onReactivate(selected)}>Reactivate</Button>
+            : <Button size="sm" leftIcon={<PowerOff aria-hidden />} loading={busy} onClick={() => onDeactivate(selected)}>Deactivate</Button>)}
           <IconButton label="Clear selection" onClick={onClear}><X aria-hidden /></IconButton>
         </>
       ) : undefined}

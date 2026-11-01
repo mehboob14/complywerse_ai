@@ -7,9 +7,10 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import {
-  ACTION_TYPES, COMMITTEE_TABS, DEFAULT_COMMITTEE_TAB, NOT_RECORDED, actionListParams, actionTypeLabel, actionsDoneReading, attendanceReading, attendanceWhy,
-  committeeTypeLabel, cutNotice, deleteCommitteePlan, formChanged, gradeTone, isOverdueAction, listOf, matchesCommittee, measureHasData, measureReason, meetingsHeldReading,
-  overdueFromSearch, overdueReading, performanceReading, removeMemberPlan, slaPill, upcomingMeetings,
+  ACTION_TYPES, COMMITTEE_STATUS_VALUES, COMMITTEE_TABS, DEFAULT_COMMITTEE_STATUS, DEFAULT_COMMITTEE_TAB, INACTIVE_NOTE, NOT_RECORDED, actionListParams, actionTypeLabel,
+  actionsDoneReading, activeCommittees, attendanceReading, attendanceWhy, committeeChoiceLabel, committeeTypeLabel, cutNotice, deactivateCommitteePlan, deactivatedLine,
+  emptyListReading, formChanged, gradeTone, isActiveCommittee, isOverdueAction, listOf, matchesCommittee, matchesStatus, measureHasData, measureReason, meetingsHeldReading,
+  overdueFromSearch, overdueReading, performanceReading, reactivatedLine, removeMemberPlan, slaPill, statusCounts, statusOptions, upcomingMeetings, whatStays,
   type OverviewKpis, type OverviewMetric, type SlaLike,
 } from './committees.ts';
 import { resolveTab } from './tabsModel.ts';
@@ -288,13 +289,101 @@ test('removing an ordinary member, or a chair the committee no longer points at,
   assert.equal(removeMemberPlan({ user_id: 3, user_name: '', role: 'member' }, committee).title, 'Remove User 3 from Audit Committee?');
 });
 
-test('the delete question names what the server removes, and its confirm button says what it does', () => {
-  const plan = deleteCommitteePlan('Audit Committee');
-  assert.equal(plan.title, 'Delete Audit Committee?');
-  assert.equal(plan.confirmLabel, 'Delete committee');
-  for (const word of ['members', 'charters', 'meetings', 'agendas', 'minutes', 'attached documents', 'actions', 'Task Management', 'cannot be undone', 'a vote was cast on any agenda item']) {
-    assert.ok(plan.message.includes(word), word);
+// ── deactivating a committee ────────────────────────────────────────────────
+test('the deactivate question says what stays, with the counts, and that it can be undone: nothing is removed', () => {
+  const plan = deactivateCommitteePlan('Audit Committee', { openActions: 3, scheduledMeetings: 2 });
+  assert.equal(plan.title, 'Deactivate Audit Committee?');
+  assert.equal(plan.confirmLabel, 'Deactivate');
+  for (const words of ['stops appearing in committee pickers', 'takes no new meetings, actions or members',
+    'members, charters, meetings, agendas, minutes and actions stay and can still be read',
+    '3 open actions and 2 scheduled meetings stay as they are', 'You can reactivate it at any time']) {
+    assert.ok(plan.message.includes(words), words);
   }
+  assert.doesNotMatch(plan.message, /delete|permanent|cannot be undone/i, 'deactivating is not deleting');
+});
+
+test('the counts read as a person would say them: one is singular, none is said once, an unknown number is not invented', () => {
+  const say = (openActions: number | null, scheduledMeetings: number | null) => deactivateCommitteePlan('X', { openActions, scheduledMeetings }).message;
+  assert.match(say(1, 1), /1 open action and 1 scheduled meeting stay as they are\./);
+  assert.match(say(0, 4), /0 open actions and 4 scheduled meetings stay as they are\./);
+  assert.match(say(1200, 0), /1,200 open actions and 0 scheduled meetings stay as they are\./);
+  assert.match(say(0, 0), /; it has no open actions and no scheduled meetings\. You can reactivate/);
+  // a count that could not be read is not shown as 0: the sentence says the same thing without a number
+  for (const text of [say(null, 2), say(2, null), say(null, null)]) {
+    assert.match(text, /; its open actions and scheduled meetings stay as they are\./);
+    assert.doesNotMatch(text, /\d open action|\d scheduled/);
+  }
+});
+
+test('what stays is read from the server\'s own counts: the committee\'s pending actions and the meeting list\'s total, never the length of a page', () => {
+  assert.deepEqual(whatStays({ pending_actions_count: 7 }, { items: [{ id: 1 }], total: 12, skip: 0, limit: 1 }), { openActions: 7, scheduledMeetings: 12 });
+  assert.deepEqual(whatStays({ pending_actions_count: 0 }, { items: [], total: 0 }), { openActions: 0, scheduledMeetings: 0 });
+  assert.deepEqual(whatStays({ pending_actions_count: 3 }, [{ id: 1 }, { id: 2 }]), { openActions: 3, scheduledMeetings: 2 });      // a bare array is its length
+  // a reply that failed (null) or did not carry the number is unknown, not zero
+  assert.deepEqual(whatStays(null, null), { openActions: null, scheduledMeetings: null });
+  assert.deepEqual(whatStays({ name: 'x' }, undefined), { openActions: null, scheduledMeetings: null });
+  assert.deepEqual(whatStays({ pending_actions_count: 'many' }, { items: [], total: 5 }), { openActions: null, scheduledMeetings: 5 });
+});
+
+test('the toasts say what happened, in the plan\'s words', () => {
+  assert.equal(deactivatedLine('Audit Committee'), 'Audit Committee is deactivated.');
+  assert.equal(reactivatedLine('Audit Committee'), 'Audit Committee is active again.');
+});
+
+test('a committee is active unless it was switched off: a missing or null flag reads as active, as the server reads it', () => {
+  assert.equal(isActiveCommittee({ is_active: true }), true);
+  assert.equal(isActiveCommittee({ is_active: false }), false);
+  assert.equal(isActiveCommittee({ is_active: null }), true);
+  assert.equal(isActiveCommittee({}), true);
+});
+
+const LIST = [{ id: 1, name: 'Audit', is_active: true }, { id: 2, name: 'Risk', is_active: false }, { id: 3, name: 'Board' }, { id: 4, name: 'Old IT', is_active: false }];
+
+test('the status filter keeps the active ones by default, the inactive ones on request, and all of them under All', () => {
+  assert.equal(DEFAULT_COMMITTEE_STATUS, 'active');
+  assert.deepEqual([...COMMITTEE_STATUS_VALUES], ['active', 'inactive', 'all']);
+  const ids = (filter: 'active' | 'inactive' | 'all') => LIST.filter((c) => matchesStatus(c, filter)).map((c) => c.id);
+  assert.deepEqual(ids('active'), [1, 3]);
+  assert.deepEqual(ids('inactive'), [2, 4]);
+  assert.deepEqual(ids('all'), [1, 2, 3, 4]);
+});
+
+test('the filter\'s choices carry their true counts, and the three add up', () => {
+  const counts = statusCounts(LIST);
+  assert.deepEqual(counts, { active: 2, inactive: 2, all: 4 });
+  assert.deepEqual(statusOptions(counts), [
+    { value: 'active', label: 'Active (2)' }, { value: 'inactive', label: 'Inactive (2)' }, { value: 'all', label: 'All (4)' },
+  ]);
+  assert.deepEqual(statusCounts([]), { active: 0, inactive: 0, all: 0 });
+  assert.equal(statusOptions(statusCounts(Array.from({ length: 1200 }, (_, i) => ({ id: i, is_active: true }))))[0].label, 'Active (1,200)');
+});
+
+test('an empty table says why: no active committees, no inactive ones, and nothing when the search itself found nothing', () => {
+  const none = (active: number, inactive: number) => ({ active, inactive, all: active + inactive });
+  const allOff = emptyListReading('active', none(0, 2), '');
+  assert.equal(allOff?.title, 'No active committees');
+  assert.match(allOff?.description ?? '', /2 committees are inactive/);
+  assert.equal(allOff?.switchTo, 'inactive');
+  assert.match(emptyListReading('active', none(0, 1), '')?.description ?? '', /1 committee is inactive/);
+  assert.equal(emptyListReading('inactive', none(3, 0), '')?.title, 'No inactive committees');
+  assert.equal(emptyListReading('inactive', none(3, 0), '')?.switchTo, 'active');
+  assert.equal(emptyListReading('active', none(3, 1), ''), null, 'the list has rows: nothing to explain');
+  assert.equal(emptyListReading('all', none(0, 0), ''), null);
+  assert.equal(emptyListReading('active', none(0, 2), 'audit'), null, 'a search that finds nothing has its own words');
+});
+
+test('a new meeting or action is offered the active committees only; a filter that must still find an inactive one marks it', () => {
+  assert.deepEqual(activeCommittees(LIST).map((c) => c.id), [1, 3]);
+  assert.deepEqual(activeCommittees([]), []);
+  assert.equal(committeeChoiceLabel({ name: 'Audit', is_active: true }), 'Audit');
+  assert.equal(committeeChoiceLabel({ name: 'Board' }), 'Board');
+  assert.equal(committeeChoiceLabel({ name: 'Risk', is_active: false }), 'Risk (inactive)');
+});
+
+test('the inactive committee\'s note is one line that says what it takes and how to get it back', () => {
+  assert.match(INACTIVE_NOTE, /^Inactive: kept for the record, no new meetings, actions or members\./);
+  assert.match(INACTIVE_NOTE, /Reactivate it/);
+  assert.ok(!INACTIVE_NOTE.includes('\n'));
 });
 
 test('a form is changed when its typed input differs from what it opened with', () => {

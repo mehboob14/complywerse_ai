@@ -4064,10 +4064,15 @@ export const attestationApi = {
 };
 
 export const committeeApi = {
-  getCommittees: () => apiClient.get('/governance/committees'),
+  // With no argument: the active committees, as ever. `is_active: 'all'` also lists the deactivated ones (the Oversight Actions filter).
+  getCommittees: (params?: { is_active?: 'true' | 'false' | 'all' }) => apiClient.get('/governance/committees', { params }),
   getCommittee: (id: number) => apiClient.get(`/governance/committees/${id}`),
   createCommittee: (data: any) => apiClient.post('/governance/committees', data),
   updateCommittee: (id: number, data: any) => apiClient.put(`/governance/committees/${id}`, data),
+  // Deactivate / reactivate: the way the screens retire a committee (nothing it holds is removed). Both need governance:committees:delete, on the server too.
+  deactivateCommittee: (id: number) => apiClient.post(`/governance/committees/${id}/deactivate`),
+  reactivateCommittee: (id: number) => apiClient.post(`/governance/committees/${id}/reactivate`),
+  // An administrator's HARD delete, for scripts: no page calls it (it answers 409 when a vote or an audit-register request points at the committee).
   deleteCommittee: (id: number) => apiClient.delete(`/governance/committees/${id}`),
   getMembers: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/members`),
   addMember: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/members`, data),
@@ -4098,7 +4103,8 @@ export const committeeApi = {
   aiGenerateCharter: (committeeId: number, frameworkIds?: number[]) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`, { framework_ids: frameworkIds || [] }),
   aiCompareCharter: (committeeId: number, data: { charter_id?: number; charter_text?: string }) =>
     apiClient.post(`/governance/committees/${committeeId}/ai-compare-charter`, data),
-  getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/meetings`),
+  getMeetings: (committeeId: number, params?: { status?: string; from_date?: string; limit?: number }) =>
+    apiClient.get(`/governance/committees/${committeeId}/meetings`, { params }),
   createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
   getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
   updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
