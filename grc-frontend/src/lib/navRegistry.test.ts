@@ -17,6 +17,8 @@ const entry = (path: string): RouteEntry => {
 };
 const example = (path: string) => path.replace(/:[A-Za-z]+/g, '7');                  // a pattern as a real URL
 const isStatic = (path: string) => !path.includes(':');
+/** The destinations that end a trail without being a leaf of the sidebar: the Administration menu is pinned at the foot of the sidebar (not an entry of `navigation`), User Management and ComplyChat are links of the top bar, and the public acknowledgement page has no shell. */
+const ROOTS_OUTSIDE_THE_MENU = ['/admin', '/users', '/complychat', '/attest/:token'];
 
 // ---- the registry and the app's folders ----
 
@@ -68,17 +70,21 @@ test('every sidebar leaf has an entry: its name is the label, its rights are the
   }
 });
 
-test('the rights of a page without a menu entry are none: the registry adds no guard, and says where it has none', () => {
+test("the rights of a page without a menu entry are those of the page it hangs under: the registry adds no guard, and navAccess still says where there is none", () => {
   const leafPaths = flattenLeaves(navigation).map((l) => l.href);
-  for (const e of routes.filter((r) => !leafPaths.includes(r.path))) assert.equal(e.permissions, null, e.path);
-  // the Governance pages that guard nothing today (any signed-in user opens them by URL); G3_permission_matrix lists which of their APIs are open too
-  const unguarded = routes.filter((e) => e.area === 'governance' && e.permissions === null).map((e) => e.path);
+  const rightsOf = (e: RouteEntry): RouteEntry => { let at = e; while (at.aliasOf || at.parent) at = entry((at.aliasOf ?? at.parent) as string); return at; };
+  for (const e of routes.filter((r) => !leafPaths.includes(r.path) && navPermissions(r.path).length === 0)) {
+    // a Governance page: no page of it gates itself, so it is offered to whoever is offered the page it hangs under (a root with no rights: everyone)
+    if (e.area === 'governance') assert.deepEqual(e.permissions, rightsOf(e).permissions, e.path);
+  }
+  // the Governance pages that guard nothing today (any signed-in user opens them by URL; navAccess lists no right for them); G3_permission_matrix lists which of their APIs are open too
+  const unguarded = routes.filter((e) => e.area === 'governance' && !leafPaths.includes(e.path) && navPermissions(e.path).length === 0).map((e) => e.path);
   assert.deepEqual(unguarded, [
     '/governance/documents/:id', '/governance/documents/studio', '/governance/documents/studio/:sessionId', '/governance/documents/attestation',
     '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
     '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
     '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
-    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token',
+    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token', '/documents',
   ]);
 });
 
@@ -107,7 +113,7 @@ test('the trail of every entry reaches a root without a cycle, through static pa
       }
     }
     const root = routes.find((r) => r.path === seen[seen.length - 1]) as RouteEntry;
-    assert.ok(root.groups.length > 0 || flattenLeaves(navigation).some((l) => l.href === root.path) || root.path === '/attest/:token', `${e.path}: root ${root.path} is not a menu entry`);
+    assert.ok(root.groups.length > 0 || flattenLeaves(navigation).some((l) => l.href === root.path) || ROOTS_OUTSIDE_THE_MENU.includes(root.path), `${e.path}: root ${root.path} is not a menu entry`);
   }
 });
 
@@ -116,6 +122,22 @@ test('a forward is another URL of an entry that is a page of its own, under the 
   assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
     ['/governance/attestations', '/governance/documents/attestation'],
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
+    // the rest of the app (R-REG): forwards and second addresses of the same page; navPages/coverage.test.ts reads every page file and holds each one to its target
+    ['/erm/internal-controls', '/controls'],
+    ['/erm/internal-controls/:id', '/controls'],
+    ['/erm/ai-risk-assessment', '/erm/risk-assessments/ai-risk-assessment'],
+    ['/erm/risks/dashboard', '/erm/risks'],                                  // not a forward: /erm/risks renders this page
+    ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
+    ['/vendor-risk/procurement', '/vendor-risk'],
+    ['/vendor-risk/shadow-saas', '/vendor-risk'],
+    ['/vendor-risk/settings/alert-rules', '/vendor-risk/policy'],
+    ['/automation/scope', '/automation/soc2-controls'],
+    ['/admin/access-reviews', '/compliance/access-reviews'],
+    ['/admin/access-reviews/connect', '/compliance/access-reviews/connect'],
+    ['/admin/access-reviews/rules', '/compliance/access-reviews/rules'],
+    ['/admin/access-reviews/:id', '/compliance/access-reviews/:id'],
+    ['/admin/teams', '/admin'],
+    ['/cyber-assurance/admin/teams', '/cyber-assurance/admin'],
   ]);
   for (const a of aliases) {
     const target = entry(a.aliasOf as string);
@@ -132,7 +154,7 @@ test('every page is reached through a menu entry, a tab, a forward, or the page 
     const reached = inMenu.includes(e.path) || !!e.tab || !!e.aliasOf;
     if (reached) continue;
     assert.ok(e.hidden && e.hidden.length > 10, `${e.path}: not in the menu, no tab, no forward: it needs a reason`);
-    assert.ok(e.parent || e.path === '/attest/:token', `${e.path}: reached from nowhere`);
+    assert.ok(e.parent || ROOTS_OUTSIDE_THE_MENU.includes(e.path), `${e.path}: reached from nowhere`);
   }
   assert.ok(routes.every((e) => !e.hidden || !(e.tab || e.aliasOf || inMenu.includes(e.path))), 'a page in a menu or a tab bar is not hidden');
 });
@@ -310,7 +332,7 @@ test('Reviews is a door of its own: a tab of the Documents strip for everyone wh
   assert.deepEqual([reviews.tab?.area, reviews.tab?.id, reviews.tab?.permission, reviews.tab?.studio], ['documents', 'reviews', undefined, undefined]);
   assert.equal(reviews.label, 'Document Reviews');
   assert.equal(reviews.shortLabel, 'Reviews');
-  assert.equal(reviews.permissions, null, 'the registry adds no right and no guard');
+  assert.deepEqual(reviews.permissions, entry('/governance/documents').permissions, 'no right of its own: it is offered to whoever is offered the strip (the Documents entry)');
   for (const ctx of [{ studio: true, can: () => false }, { studio: false, can: () => false }, { studio: false, can: () => true }]) {
     assert.ok(tabsFor('documents', ctx).some((t) => t.path === '/governance/reviews'), JSON.stringify(ctx.studio));
   }

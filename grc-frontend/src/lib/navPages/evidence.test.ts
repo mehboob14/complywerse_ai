@@ -35,12 +35,15 @@ const pageFile = (path: string) => readFileSync(`${DASHBOARD}${path.slice(1)}/pa
 const entry = (path: string) => routes.filter((e) => e.path === path);
 const REQUIREMENTS = '/evidence-requirements';
 
-test('the two folders hold the two pages; /evidence is a sidebar leaf; the other Evidence builders\' pages are not declared here', () => {
+test('the two folders hold the two pages; /evidence is a sidebar leaf; the three Evidence-details pages are declared (by R-REG) without ownHeading until their builder moves them to the kit', () => {
   assert.deepEqual(ownPages().sort(), ['/evidence', REQUIREMENTS]);
   assert.equal(entry('/evidence').length, 1, 'the sidebar leaf is the entry');
   assert.ok(entry(REQUIREMENTS).length <= 1, 'declared at most once');
-  assert.deepEqual(PAGES.map((p) => p.path).filter((p) => p !== REQUIREMENTS), [], 'only this group\'s own page is declared in PAGES; the others stay commented out for their builders');
-  for (const skeleton of ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage']) assert.equal(entry(skeleton).length, 0, `${skeleton} is the next builder's`);
+  assert.deepEqual(PAGES.map((p) => p.path).filter((p) => p !== REQUIREMENTS), ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage'], 'the details pages are declared in PAGES, in the order of the folder');
+  for (const details of ['/evidence/:id', '/evidence/audit-packages', '/evidence/coverage']) {
+    assert.equal(entry(details).length, 1, `${details} has its entry`);
+    assert.equal(entry(details)[0].ownHeading, undefined, `${details}: its page does not draw the kit head yet, so the top bar keeps naming it`);
+  }
 });
 
 test('the requirements catalogue entry, once enabled, is what the code says: no link opens it, it hangs under Evidence Management, it draws its own heading', () => {

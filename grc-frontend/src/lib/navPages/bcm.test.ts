@@ -66,10 +66,10 @@ test('the labels are the sidebar\'s names; the detail pages hang under their lis
   assert.deepEqual(breadcrumbFor('/bcm/drills/12').map((c) => c.label), ['Compliance Management', 'Business Continuity', 'Drills & Invocations', 'Drill']);
 });
 
-test('the rights of the three leaves are the sidebar\'s and the detail pages ask for nothing the registry could enforce', () => {
+test('the rights of the three leaves are the sidebar\'s and a detail page is offered to whoever is offered its list (the registry enforces nothing)', () => {
   assert.deepEqual(routeFor('/bcm')?.permissions, ['bcm:dashboard:*']);
   assert.deepEqual(routeFor('/bcm/plans')?.permissions, ['bcm:plans:*']);
   assert.deepEqual(routeFor('/bcm/drills')?.permissions, ['bcm:drills:*']);
-  assert.equal(routeFor('/bcm/plans/12')?.permissions, null);
-  assert.equal(routeFor('/bcm/drills/12')?.permissions, null);
+  assert.deepEqual(routeFor('/bcm/plans/12')?.permissions, ['bcm:plans:*']);
+  assert.deepEqual(routeFor('/bcm/drills/12')?.permissions, ['bcm:drills:*']);
 });
