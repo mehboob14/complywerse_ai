@@ -45,7 +45,8 @@ export function Owners({ task, size = 20 }: { task: Pick<TaskRow, 'assignees' | 
   );
 }
 
-const VIA = 'inline-flex items-center gap-[2px] text-ds-label font-medium text-ds-primary-text underline-offset-[2px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring rounded-ds-control';
+// the padding and the matching negative margin make the link 24px high (44px on a phone) without moving anything: a line of 12px text is 16px
+const VIA = 'inline-flex items-center gap-[2px] rounded-ds-control py-[4px] -my-[4px] max-md:py-[14px] max-md:-my-[14px] text-ds-label font-medium text-ds-primary-text underline-offset-[2px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 /** Where a task came from, as a short line under its title: a regulatory change links to it, a document request offers the person's own step, another module is named. */
 export function SourceNote({ task, meId }: { task: Pick<TaskRow, 'linked_regulatory_change_id' | 'document_request' | 'source_module' | 'source_entity_type'>; meId: number | null }): ReactNode {

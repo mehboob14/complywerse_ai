@@ -47,7 +47,7 @@ export function Board({ canCreate, onNew }: { canCreate: boolean; onNew: () => v
   const total = data?.total ?? 0;
   const onlyMine = data?.scope === 'mine';
   const loading = q.isPending;
-  const failure = q.isError ? { message: errorMessage(q.error, "Couldn't load the tasks."), onRetry: canRetry(q.error) ? () => { void q.refetch(); } : undefined } : null;
+  const failure = q.isError ? { message: `Couldn't load the tasks. ${errorMessage(q.error)}`, onRetry: canRetry(q.error) ? () => { void q.refetch(); } : undefined } : null;
   const filters = filterCount(s);
 
   // a page that no longer exists (a stale address, or a filter that left fewer pages) is the last one
