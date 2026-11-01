@@ -89,7 +89,7 @@ test('what each row says: title in full, context, who asked, when, and the asked
   const [e] = build(input('assessment.evidence', { pending_approvals: [evidenceRow(5, { current_tier: 2 })] })).items;
   assert.deepEqual([e.title, e.context, e.detail, e.requester, e.dueAt, e.createdAt], ['scan-5.pdf', 'SWIFT CSP · item 2.3 · tier 2', 'Privileged accounts are reviewed', 'Khalid Approver', null, day(-4)]);
   const [s] = build(input('doc.signoff', { items: [signoffRow(8)] })).items;
-  assert.deepEqual([s.context, s.createdAt, s.requester, s.dueAt], ['Standard · Reviewer', day(-3), null, null]);
+  assert.deepEqual([s.context, s.createdAt, s.requester, s.dueAt], ['Standard · Review', day(-3), null, null]);
 });
 
 // ── 2. the count rule ────────────────────────────────────────────────────────

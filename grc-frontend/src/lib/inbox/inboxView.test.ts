@@ -121,8 +121,10 @@ test('the facts under a row: what is asked and of what and who asked; for a sent
   assert.deepEqual(factsOf(a), ['To approve', 'Standard · v2.1', 'asked by Bina Branch']);
   const [again] = build(input('doc.lifecycle', { items: [lifeRow(2, 'review', { again: { kind: 'signed', changed: true } })] })).items;
   assert.equal(factsOf(again)[0], 'To review again');
-  const [plain] = build(input('doc.lifecycle', { items: [lifeRow(3, 'acknowledgement', { doc_type: null })] })).items;
-  assert.deepEqual(factsOf(plain), ['To acknowledge'], 'nothing is invented for what the source does not say');
+  const [ack] = build(input('doc.lifecycle', { items: [lifeRow(4, 'acknowledgement', { doc_type: 'policy', version: '3.0' })] })).items;
+  assert.deepEqual(factsOf(ack), ['Policy · v3.0'], 'an acknowledgement is in the To acknowledge section: its kind is not repeated on every row');
+  const [plain] = build(input('doc.lifecycle', { items: [lifeRow(3, 'acknowledgement', { doc_type: null, version: null })] })).items;
+  assert.deepEqual(factsOf(plain), ['To acknowledge'], 'nothing is invented for what the source does not say; a row is never blank');
   const [sent] = build(input('doc.sent', { items: [{ document_id: 9, kind: 'review', title: 'S', doc_type: 'policy', pending: 4, waiting: ['Rana Reviewer', 'Rafay Reviewer'], waiting_more: 2 }] })).items;
   assert.deepEqual(factsOf(sent), ['Review requested', 'Policy', 'waiting for Rana Reviewer, Rafay Reviewer +2', '4 pending']);
 });

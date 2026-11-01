@@ -33,9 +33,11 @@ export interface DecisionDialogProps {
   onClose: () => void;
   /** a decision went through: refresh the lists and close */
   onDecided: (item: InboxItem) => Promise<void> | void;
+  /** the server says the item is no longer the person's, or the document changed: ask the lists again, so the row is right behind the dialog */
+  onStale: (item: InboxItem) => void;
 }
 
-export function DecisionDialog({ item, stillWaiting, onClose, onDecided }: DecisionDialogProps) {
+export function DecisionDialog({ item, stillWaiting, onClose, onDecided, onStale }: DecisionDialogProps) {
   const [dirty, setDirty] = useState(false);
   const evidence = item.kind === 'evidence';
   return (
@@ -43,8 +45,8 @@ export function DecisionDialog({ item, stillWaiting, onClose, onDecided }: Decis
       <div className="flex flex-col gap-[12px] p-[16px]">
         <Subject item={item} />
         {!stillWaiting ? <Gone onClose={onClose} />
-          : evidence ? <EvidenceForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} />
-          : <DocumentForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} />}
+          : evidence ? <EvidenceForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />
+          : <DocumentForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />}
       </div>
     </AnimatedModal>
   );
@@ -95,7 +97,7 @@ function commentLabel(choice: ChoiceSpec): string {
 
 // ── documents: sign, ask for changes, reject ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided'> & { onDirty: (d: boolean) => void }) {
+function DocumentForm({ item, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
   const documentId = item.documentId as number;
   const signoff = useSignoff(documentId);
   const data = signoff.data;
@@ -110,6 +112,8 @@ function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
   const [missing, setMissing] = useState('');
   // the server took the decision: the form stays shut while the lists refresh and the dialog closes, so it cannot be sent twice
   const [finished, setFinished] = useState(false);
+  // a new key empties the drawing box (the pad keeps its own canvas)
+  const [padKey, setPadKey] = useState(0);
 
   const typed = !!signature || comment.trim() !== '';
   useEffect(() => { onDirty(typed); }, [typed]);        // eslint-disable-line react-hooks/exhaustive-deps -- told when it changes
@@ -125,7 +129,7 @@ function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
     failure: 'Your decision could not be sent',
     toast: 'success',                                  // a failure is said here, in the dialog, with the form kept
     onSuccess: async () => { setFinished(true); await onDecided(item); },
-    onError: (error) => { setFailure(failureOf(error)); },
+    onError: (error) => { const f = failureOf(error); setFailure(f); if (f.kind === 'stale' || f.kind === 'changed') onStale(item); },
   });
 
   const submit = () => {
@@ -136,7 +140,7 @@ function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
     send.mutate(choice);
   };
   // a changed document: read it again, then draw again — a signature on a page that changed is exactly what the server refuses
-  const reload = () => { setFailure(null); setSignature(null); setMissing(''); void signoff.refetch(); };
+  const reload = () => { setFailure(null); setSignature(null); setPadKey((k) => k + 1); setMissing(''); void signoff.refetch(); };
 
   if (signoff.isLoading) return <SkeletonLines lines={4} label="Loading your step" />;
   if (signoff.isError && !data) return <ErrorState compact title="Couldn't load your step" message={failureOf(signoff.error).message} onRetry={() => { void signoff.refetch(); }} />;
@@ -158,8 +162,8 @@ function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
       </div>
       <Choices choices={choices} value={choice.id} onChange={(c) => { setChoiceId(c); setMissing(''); setFailure(null); }} disabled={send.isPending || finished} />
       {choice.signature && (
-        <FormField label="Your signature" required error={missing === 'Draw your signature to sign.' ? missing : undefined} hint="Draw it in the box. It is kept with your name, the time and a fingerprint of the document.">
-          <SignaturePad onChange={setSignature} height={140} />
+        <FormField label="Your signature" required error={missing === 'Draw your signature to sign.' ? missing : undefined}>
+          <SignaturePad key={padKey} onChange={setSignature} height={140} />
         </FormField>
       )}
       {choice.reason !== 'none' && (
@@ -178,7 +182,7 @@ function DocumentForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
 
 // ── evidence: approve, return, reject ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function EvidenceForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided'> & { onDirty: (d: boolean) => void }) {
+function EvidenceForm({ item, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
   const choices = evidenceChoices();
   const [choiceId, setChoiceId] = useState<Choice>('approve');
   const choice = choices.find((c) => c.id === choiceId) ?? choices[0];
@@ -196,7 +200,7 @@ function EvidenceForm({ item, onDirty, onClose, onDecided }: Pick<DecisionDialog
     failure: 'Your decision could not be sent',
     toast: 'success',
     onSuccess: async () => { setFinished(true); await onDecided(item); },
-    onError: (error) => { setFailure(failureOf(error)); },
+    onError: (error) => { const f = failureOf(error); setFailure(f); if (f.kind === 'stale' || f.kind === 'changed') onStale(item); },
   });
   const submit = () => { setFailure(null); send.mutate(choice); };
 

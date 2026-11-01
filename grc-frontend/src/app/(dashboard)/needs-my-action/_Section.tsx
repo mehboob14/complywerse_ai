@@ -22,9 +22,11 @@ export interface SectionProps {
   now: Date;
   onOpenItem: (item: InboxItem) => void;
   onRetry: (source: InboxItem['source']) => void;
+  /** the sources being asked right now (a Retry shows it) */
+  fetching: Partial<Record<InboxItem['source'], boolean>>;
 }
 
-export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, onOpenItem, onRetry }: SectionProps) {
+export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, onOpenItem, onRetry, fetching }: SectionProps) {
   const items = inbox.bySection[spec.section];
   const status = sectionStatus(inbox, spec.section);
   const decisions = spec.key === 'decide';
@@ -59,11 +61,11 @@ export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, 
           {status.notices.map((n) => (
             <div key={n.source} className="p-[12px]">
               {n.state === 'unavailable' ? (
-                <Notice tone="warning" title={`${n.label} could not be loaded`} action={<Button leftIcon={<RotateCw aria-hidden />} onClick={() => onRetry(n.source)}>Retry</Button>}>
+                <Notice tone="warning" title={`${n.label} could not be loaded`} action={<Button leftIcon={<RotateCw aria-hidden />} loading={!!fetching[n.source]} onClick={() => onRetry(n.source)}>Retry</Button>}>
                   {n.message} What it holds is not in these numbers.
                 </Notice>
               ) : (
-                <Notice tone="info" title={`${n.label} could not be refreshed`} action={<Button leftIcon={<RotateCw aria-hidden />} onClick={() => onRetry(n.source)}>Retry</Button>}>
+                <Notice tone="info" title={`${n.label} could not be refreshed`} action={<Button leftIcon={<RotateCw aria-hidden />} loading={!!fetching[n.source]} onClick={() => onRetry(n.source)}>Retry</Button>}>
                   Showing what it said at {clockOf(n.at)}.
                 </Notice>
               )}

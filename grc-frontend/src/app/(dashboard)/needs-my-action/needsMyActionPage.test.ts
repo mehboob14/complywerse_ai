@@ -99,7 +99,7 @@ test('the dialog writes ONLY to the endpoints the document page and the assessme
 test('a failed decision is said inside the dialog (the toast is for the success), in the server\'s words, with Try again; the form is kept and cannot be sent twice', () => {
   const dialog = read(`${PAGE}/_DecisionDialog.tsx`);
   assert.equal((dialog.match(/toast: 'success'/g) ?? []).length, 2);
-  assert.match(dialog, /onError: \(error\) => \{ setFailure\(failureOf\(error\)\); \}/);
+  assert.equal((dialog.match(/onError: \(error\) => \{ const f = failureOf\(error\); setFailure\(f\); if \(f\.kind === 'stale' \|\| f\.kind === 'changed'\) onStale\(item\); \},/g) ?? []).length, 2, 'both forms say the failure in the dialog and ask the lists again when the item is no longer theirs');
   assert.match(dialog, /Try again/);
   assert.match(dialog, /setFinished\(true\)/);
   assert.match(dialog, /This is no longer waiting for you/);

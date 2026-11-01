@@ -168,7 +168,7 @@ function signoffItems(raw: unknown): { items: InboxItem[]; skipped: number } {
   for (const r of rowsOf(raw, ['items'])) {
     const documentId = isRow(r) ? whole(r.document_id) : null;
     if (!isRow(r) || documentId === null) { skipped++; continue; }
-    const stage = text(r.stage_label) ?? text(r.stage_name);
+    const stage = text(r.stage_name) ?? text(r.stage_label);          // the stage's own name (Review, Concurrence...), not the sign-off table's "Reviewed by"
     items.push({
       key: `doc.signoff:signoff:${documentId}`, source: 'doc.signoff', recordType: 'GovernanceDocument', recordId: documentId, kind: 'signoff', section: 'decision',
       title: text(r.title) ?? `Document #${documentId}`, context: [documentContext(r.doc_type), stage].filter(Boolean).join(' · ') || null, detail: null,

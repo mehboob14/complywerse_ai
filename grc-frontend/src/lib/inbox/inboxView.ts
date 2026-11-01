@@ -83,7 +83,11 @@ export function factsOf(item: InboxItem): string[] {
     const waiting = names ? `waiting for ${names}${item.group.more ? ` +${formatCount(item.group.more)}` : ''}` : null;
     return keep([SENT_LABEL[item.kind] ?? 'Requested', item.context, waiting, `${formatCount(item.group.pending)} pending`]);
   }
-  return keep([`${KIND_META[item.kind].label}${item.again ? ' again' : ''}`, item.context, item.requester ? `asked by ${item.requester}` : null]);
+  // an acknowledgement sits in the "To acknowledge" section: its kind is said there, so the row says what it is about (the section's name is not repeated 150 times)
+  const parts = item.kind === 'acknowledgement'
+    ? keep([item.context, item.requester ? `asked by ${item.requester}` : null])
+    : keep([`${KIND_META[item.kind].label}${item.again ? ' again' : ''}`, item.context, item.requester ? `asked by ${item.requester}` : null]);
+  return parts.length ? parts : [KIND_META[item.kind].label];
 }
 
 /** The facts line under the page title: "3 to decide · 1 overdue · 150 to acknowledge"; '' while nothing has been counted. */

@@ -29,7 +29,7 @@ export default function NeedsMyActionPage() {
 }
 
 function Queue() {
-  const { inbox, refetch, fetching } = useInbox({ includeSent: true });
+  const { inbox, refetch, fetching, fetchingSource } = useInbox({ includeSent: true });
   const search = useSearchParams();
   const asked = sectionParam(search?.get('section'));
   const queryClient = useQueryClient();
@@ -119,10 +119,19 @@ function Queue() {
           now={now}
           onOpenItem={(item) => { setDone(null); setDeciding(item); }}
           onRetry={(source) => refetch(source)}
+          fetching={fetchingSource}
         />
       ))}
 
-      {deciding && <DecisionDialog item={deciding} stillWaiting={stillWaiting} onClose={() => setDeciding(null)} onDecided={decided} />}
+      {deciding && (
+        <DecisionDialog
+          item={deciding}
+          stillWaiting={stillWaiting}
+          onClose={() => setDeciding(null)}
+          onDecided={decided}
+          onStale={(item) => { keysAfterDecision(item.documentId).forEach((queryKey) => { void queryClient.invalidateQueries({ queryKey }); }); }}
+        />
+      )}
     </div>
   );
 }
