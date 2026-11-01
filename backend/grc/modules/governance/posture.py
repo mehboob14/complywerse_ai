@@ -89,9 +89,11 @@ def build(db: Session, user: GRCUser, scoped: List[int], by: str, limit: int, of
         return out
 
     G = GovernanceDocument
+    columns = [G.id, G.status, G.department_id, G.next_review_date, G.expiry_date, G.current_version, G.published_version]
+    if by == "framework":                                            # the department view never reads the two JSON columns
+        columns += [G.framework_ids, G.applicable_framework_ids]
     # ponytail: every readable document is read once and grouped here; at ~100k documents the department view could be a SQL GROUP BY
-    q = db.query(G.id, G.status, G.department_id, G.next_review_date, G.expiry_date, G.current_version, G.published_version,
-                 G.framework_ids, G.applicable_framework_ids).filter(G.tenant_id.in_(scoped), or_(G.status.is_(None), G.status != "archived"))
+    q = db.query(*columns).filter(G.tenant_id.in_(scoped), or_(G.status.is_(None), G.status != "archived"))
     visible = visible_filter(db, user)                               # what the Library list shows this person
     docs = (q if visible is None else q.filter(visible)).all()
 
