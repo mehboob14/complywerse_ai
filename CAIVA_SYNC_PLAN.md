@@ -134,8 +134,12 @@ pg_dump outside the repo):
   KRIs...) that this local DB had never received; applied (0 failures), then re-run → 0.
   **Prod tenants may be in the same state** — run `--all-tables --dry-run` there first.
 
-Seed libraries: the local tenant already holds the CIS library (31,553 rules) and 155
-benchmark-OS mappings. Help Desk seeds itself (statuses, priorities, SLA, roles,
+Seed libraries: the local tenant already holds the CIS library (31,553 rules over 169
+benchmarks in `grc_compliance_plugins`, the same counts as the product) and 155
+benchmark-OS mappings. The SCF catalog was not loaded locally; `python -m
+grc.tools.scf_import --tenant complyverse` loaded release 2026.2 (1,534 controls, 5,956
+objectives, 80,645 mappings, 108 s). Prod tenants that have not run it need it; it is
+idempotent (`--all-tenants` for all). Help Desk seeds itself (statuses, priorities, SLA, roles,
 departments) through `itsm_seed.run_boot_heal()` on startup. Advisories have no seed
 (bulletins are uploaded or synced). `backend/scripts/reconcile_benchmark_mappings.py`
 (the product's Win10-gets-Win11 fix) is included; run it `--dry-run` per tenant.
@@ -254,6 +258,29 @@ The folder can be deleted once this branch is on GitHub.
    whether to apply the non-cyber catch-up too.
 4. Merge target: this branch already contains `main`; merging it into
    `scf-control-plane` should be clean.
+5. **Which control library CTEM Validate maps to.** Validate shows the controls linked
+   to a scope's findings (`ctem_scopes._cc_validate`, reading
+   `grc_vulnerability_control_links` → `grc_normalized_controls` /
+   `grc_parsed_framework_controls`). The AI run that creates those links picks from
+   `ai_control_mapping.load_corpus`, and here the two products differ:
+   - In the product, the corpus is `NormalizedControl` rows; on a tenant with no baseline
+     normalization run that is the SCF catalog (2026.2, 1,534 `SCF-*` controls, loaded
+     by `grc.tools.scf_import`).
+   - In ComplyVerse, `scf-control-plane` added `licence_guard.exclude_restricted` to that
+     query: SCF is CC BY-ND and its terms forbid feeding its text to AI, so **SCF rows are
+     excluded from the AI corpus**. The corpus is the tenant's locked baseline
+     normalization run (`source='ai_normalized'`; 5,290 controls on the local tenant,
+     run 47), which is the legacy **Unified Control Library** at `/control-library` (the page exists, it has no sidebar entry),
+     plus uploaded framework controls not absorbed by it. SCF controls only reach
+     Validate through manual links.
+   - ComplyVerse's SCF library itself lives at **Controls Automation › Common Controls**
+     (`/automation/soc2-controls`, rights `controls:control_library:*` or
+     `compliance:frameworks:*`), loaded per tenant by `grc.tools.scf_import`.
+   No in-product note was added: naming SCF on Validate would be wrong while the licence
+   guard keeps SCF out of the AI mapping. The owner decides: keep Validate on the legacy
+   library (then label it so), or map Validate to SCF without sending SCF text to the
+   model (e.g. via SCF's own CWE/framework crosswalk), then label it "SCF Control Library"
+   with a link to Common Controls.
 
 ## 12. Summary for the owner (plain language)
 
