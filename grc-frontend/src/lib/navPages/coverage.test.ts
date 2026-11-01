@@ -149,8 +149,8 @@ test('the group files: each leaf is declared once and is a sidebar leaf, each pa
 
 /** The page a forward goes to, read from its source: router.replace / redirect with a path (query and hash dropped, a ${...} part standing for :param), else the page it re-exports or renders. */
 function forwardTarget(source: string): { to?: string; renders?: string } {
-  const call = /(?:router\.(?:replace|push)|redirect)\(\s*[`'"]([^`'"?#]*)/.exec(source);
-  if (call) return { to: call[1].replace(/\$\{[^}]*\}.*$/, '').replace(/\/$/, '') };
+  const call = /(?:router\.(?:replace|push)|redirect)\(\s*[`'"]([^`'"?#$]*)/.exec(source);           // the literal start of the path, up to a query, a hash or a ${...}
+  if (call) return { to: call[1].replace(/\/$/, '') };
   const reexport = /export\s*\{\s*default[^}]*\}\s*from\s*['"]([^'"]+)['"]/.exec(source) ?? /^import\s+\w+\s+from\s+['"](\.[^'"]*page)['"]/m.exec(source);
   return reexport ? { renders: reexport[1] } : {};
 }
