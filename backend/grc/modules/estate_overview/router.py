@@ -12,11 +12,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from grc.models import DiscoveryObservation, GRCUser, ITAsset, get_db
-from grc.routers.auth_router import get_user_tenants, require_auth
+from grc.routers.auth_router import get_user_tenants, require_auth, require_tenant_permission
 
 from .service import classify_internal, fingerprint, is_external, summarize
 
-router = APIRouter(prefix="/estate-overview", tags=["IT Assets"])
+# The full asset inventory (hosts, OS, criticality, security posture): the inventory's view right.
+# Fail-closed; Administrator + primary contact pass.
+router = APIRouter(prefix="/estate-overview", tags=["IT Assets"],
+                   dependencies=[Depends(require_tenant_permission("assets:asset_inventory:view"))])
 
 _COLS = ("id", "name", "fqdn", "host_name", "asset_type", "asset_role", "platform_kind", "origin_source",
          "internet_facing", "last_seen_source", "status", "lifecycle_state", "os_family", "os_version",

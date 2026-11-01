@@ -33,12 +33,12 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/vulnerabilities/departments': { title: 'Department Management' },
   '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
   '/dashboard': { title: 'Performance Overview' },
-  // Cybersecurity Assurance: pages with their own body heading get the section only;
+  // Cyber pages (IT Asset / Cybersecurity / Help Desk): those with their own body heading get the section only;
   // the rest have no heading of their own, so the bar carries the page name.
-  '/cyber-assurance/dashboard': { title: 'Performance', section: 'Cybersecurity Assurance' },
-  '/cyber-assurance/asset-discovery': { title: 'IT Asset Discovery', section: 'Cybersecurity Assurance' },
-  '/cyber-assurance/assets': { title: 'IT Asset Inventory', section: 'Cybersecurity Assurance' },
-  '/cyber-assurance/vulnerabilities': { title: 'Vulnerability Register', section: 'Cybersecurity Assurance' },
+  '/cyber-assurance/dashboard': { title: 'Performance', section: 'Cybersecurity' },
+  '/cyber-assurance/asset-discovery': { title: 'IT Asset Discovery', section: 'IT Asset' },
+  '/cyber-assurance/assets': { title: 'IT Asset Inventory', section: 'IT Asset' },
+  '/cyber-assurance/vulnerabilities': { title: 'Vulnerability Register', section: 'Cybersecurity' },
   '/cyber-assurance/licenses': { title: 'Licenses', subtitle: 'Software entitlements vs what is installed — compliance, exposure and renewals.' },
   '/cyber-assurance/risk-posture': { title: 'Assets Risk Posture', subtitle: 'Risk = weighted blend of vulnerabilities, hardening, control gap and business impact' },
   '/cyber-assurance/pentest': { title: 'AI Pentest' },
