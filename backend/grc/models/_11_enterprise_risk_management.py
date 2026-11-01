@@ -100,6 +100,7 @@ class Risk(Base):
     asset_links = relationship("RiskAssetLink", back_populates="risk", cascade="all, delete-orphan")
     evidence_links = relationship("RiskEvidenceLink", back_populates="risk", cascade="all, delete-orphan")
     framework_control_links = relationship("RiskFrameworkControlLink", back_populates="risk", cascade="all, delete-orphan")
+    framework_requirement_links = relationship("RiskFrameworkRequirementLink", back_populates="risk", cascade="all, delete-orphan")
     governance_links = relationship("RiskGovernanceLink", back_populates="risk", cascade="all, delete-orphan")
     kris = relationship("RiskKRI", back_populates="risk", cascade="all, delete-orphan")
     # Disambiguate: source_incident_id (Risk -> RiskIncident.id) creates a second

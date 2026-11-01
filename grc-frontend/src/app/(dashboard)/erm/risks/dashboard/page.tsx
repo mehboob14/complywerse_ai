@@ -58,6 +58,7 @@ const SOURCE_LABELS: Record<string, string> = {
   incident: 'Incident',
   rcsa: 'RCSA finding',
   framework_gap: 'Framework gap',
+  risk_library: 'Risk library',
   ubl_import: 'UBL register',
   nca_import: 'NCA register',
   unknown: 'Unspecified',
