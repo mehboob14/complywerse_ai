@@ -2900,7 +2900,7 @@ def get_asset_trajectory(
 
     def _classify_source(notes: Optional[str]) -> Tuple[str, Optional[str]]:
         if notes and notes.startswith("auto:cwe:"):
-            cwe = notes.split(":", 2)[-1].strip() or None
+            cwe = (notes.split(":", 2)[-1].split() or [None])[0]
             return ("auto_cwe", cwe)
         return ("manual", None)
 

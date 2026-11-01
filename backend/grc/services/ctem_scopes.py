@@ -577,7 +577,8 @@ def portfolio(db: Session, tenant_id: int) -> Dict[str, Any]:
             "tFind": t_find, "tDang": t_dang, "prevFind": prev_find, "prevDang": prev_dang, "prevMob": prev_mob,
             "cw": cw,
         })
-    return {"scopes": out, "quantify": _cc_quantify(db, tenant_id)}
+    from .scf_validate import scf_release_id
+    return {"scopes": out, "quantify": _cc_quantify(db, tenant_id), "scf_loaded": scf_release_id(db) is not None}
 
 
 def _scope_fair(db: Session, tenant_id: int, asset_ids: List[int]) -> Dict[str, Any]:
@@ -672,7 +673,7 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
             covered_of.setdefault(k, []).append(link.vulnerability_id)
             n = link.notes or ""
             if n.startswith("auto:cwe:"):
-                b, why = "rule", f"crosswalk rule · {n[len('auto:cwe:'):].split()[0] or 'vuln-mgmt'}"
+                b, why = "rule", f"crosswalk rule · {n[len('auto:cwe:'):].strip() or 'vuln-mgmt'}"
             elif n.startswith("ai_suggested:"):
                 b, why = "ai", n.split(" · ", 2)[-1] if " · " in n else "accepted AI proposal"
             elif n.startswith("ai_auto:"):
@@ -710,16 +711,16 @@ def _cc_validate(db: Session, tenant_id: int, vuln_ids: List[int]) -> Dict[str, 
                 "covered_ids": covered_of.get(k, []),
                 "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, ""),
             })
-    # Unified Control Library controls (the path AI-accepted proposals write to):
-    # name them by their real code/name, sourced "Unified Control Library".
+    # Library controls: SCF rows (the SCF crosswalk's links) are "SCF Control Library";
+    # the legacy AI-normalized library keeps its own name.
     from ..models import NormalizedControl
     norm_ids = [cid for (kind, cid) in refs if kind == "normalized_control"]
     if norm_ids:
-        for r in db.query(NormalizedControl.id, NormalizedControl.code, NormalizedControl.name).filter(
-                NormalizedControl.id.in_(norm_ids)).all():
+        for r in db.query(NormalizedControl.id, NormalizedControl.code, NormalizedControl.name,
+                          NormalizedControl.source).filter(NormalizedControl.id.in_(norm_ids)).all():
             k = ("normalized_control", r.id)
             items.append({"id": r.id, "kind": "normalized_control", "code": r.code, "title": r.name,
-                          "framework": "Unified Control Library",
+                          "framework": "SCF Control Library" if r.source == "scf" else "Unified Control Library",
                           "tier": tier_of.get(k, "attested_only"), "findings_covered": refs.get(k, 0),
                           "covered_ids": covered_of.get(k, []),
                           "basis": basis_of.get(k, "manual"), "reason": reason_of.get(k, "")})

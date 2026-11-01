@@ -68,7 +68,7 @@ interface Scope {
   prevFind: number | null; prevDang: number | null; prevMob: number | null;
   cw: ControlItem[];
 }
-interface Portfolio { scopes: Scope[]; quantify?: { demo_only?: boolean; ale?: number | null; p95?: number | null; currency?: string | null } | null }
+interface Portfolio { scopes: Scope[]; scf_loaded?: boolean; quantify?: { demo_only?: boolean; ale?: number | null; p95?: number | null; currency?: string | null } | null }
 
 /* ───────────── palette (mock + VulnsWorkspace, kept literal) ───────────── */
 
@@ -903,12 +903,23 @@ export default function CtemScopesRedesign() {
   };
 
   const renderValidate = () => {
+    const scfNote = (
+      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>
+        Controls come from the <b>SCF Control Library</b> (Secure Controls Framework), matched by SCF&apos;s own crosswalks: CWE → OWASP Top 10, CVE → NIST flaw remediation. No AI reads SCF text. Manage it in{' '}
+        <Link href="/automation/soc2-controls" style={{ color: AC, fontWeight: 600 }}>Controls Automation › Common Controls</Link>.
+      </div>
+    );
+    const scfMissing = data?.scf_loaded === false && (
+      <div style={{ border: '1px solid #F5D08A', background: '#FFF8E6', borderRadius: 11, padding: 12, fontSize: 12, color: '#7A4B00', margin: '8px 0' }}>
+        SCF library not loaded — run scf_import (<code>python -m grc.tools.scf_import --tenant &lt;slug&gt;</code>). Validate has no controls to map to until then.
+      </div>
+    );
     if (gated && !g.validate) {
       return (
         <div style={{ textAlign: 'center', padding: '16px 12px' }}>
           {mappingRunning || mapControls.isPending ? (
             <>
-              <p style={{ fontSize: 13.5, fontWeight: 600 }}><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" style={{ color: VIOLET }} /> AI validation is running…</p>
+              <p style={{ fontSize: 13.5, fontWeight: 600 }}><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" style={{ color: VIOLET }} /> Validation is running…</p>
               <p style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>Runs on the server — leave this page and come back; nothing is lost. Mobilise unlocks when it finishes.</p>
               <div style={{ maxWidth: 460, margin: '14px auto 0' }}>
                 <div style={{ height: 10, borderRadius: 999, background: '#EAEEF1', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 999, background: VIOLET, width: `${Math.max(6, Math.round(((aiRun?.findings_sent ?? 0) / Math.max(1, aiRun?.findings_total ?? 1)) * 100))}%`, transition: 'width .7s' }} /></div>
@@ -917,8 +928,10 @@ export default function CtemScopesRedesign() {
           ) : (
             <>
               <div style={{ fontSize: 13.5, fontWeight: 600 }}>Validation hasn&apos;t run in cycle #{s.cycleNo} yet.</div>
-              <div style={{ color: MUTED, maxWidth: 460, margin: '6px auto 15px', fontSize: 11.5 }}>The AI reads each vulnerability against your locked control library — sure picks auto-link (reversible), weak ones wait for review. It auto-stamps this stage when the run finishes.</div>
-              {canEdit && <div style={{ display: 'inline-flex' }}><Btn green disabled={mapControls.isPending || !stageReachable(4)} onClick={() => mapControls.mutate()}><ShieldCheck className="h-4 w-4" /> ▶ Run AI validation</Btn></div>}
+              <div style={{ color: MUTED, maxWidth: 460, margin: '6px auto 15px', fontSize: 11.5 }}>Each vulnerability is linked to the SCF controls that address it, by rule (reversible). It stamps this stage when the run finishes.</div>
+              {scfMissing}
+              {canEdit && <div style={{ display: 'inline-flex' }}><Btn green disabled={mapControls.isPending || !stageReachable(4) || data?.scf_loaded === false} onClick={() => mapControls.mutate()}><ShieldCheck className="h-4 w-4" /> ▶ Run validation</Btn></div>}
+              <div style={{ maxWidth: 460, margin: '0 auto' }}>{scfNote}</div>
             </>
           )}
         </div>
@@ -935,7 +948,8 @@ export default function CtemScopesRedesign() {
     const chips = (codes: string[]) => codes.map((c) => <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: VIOLETBG, color: VIOLET, borderRadius: 7, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, margin: '2px 4px 0 0' }}>{c}</span>);
     return (
       <>
-        {sectionDesc(<>The AI links each real vulnerability to the control(s) that <b>address</b> it — the fix to implement. A link never closes a finding or lowers its score; only a re-scan does.</>,
+        {scfMissing}
+        {sectionDesc(<>Each real vulnerability is linked to the SCF control(s) that <b>address</b> it — the fix to implement. A link never closes a finding or lowers its score; only a re-scan does.{scfNote}</>,
           <>{canEdit && <Btn sm disabled={mapControls.isPending || mappingRunning} onClick={() => mapControls.mutate()}>{(mapControls.isPending || mappingRunning) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} ↻ Re-run mapping</Btn>}
             {gated && (sp?.dispatch ? <Pill bg={GREENBG} c={GREEN}>✓ Dispatched</Pill>
               : canEdit ? <Btn green sm disabled={completeStage.isPending} title="Hand the linked vulnerabilities to Mobilise" onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'dispatch' })}>{completeStage.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Dispatch to Mobilise →</Btn> : null)}

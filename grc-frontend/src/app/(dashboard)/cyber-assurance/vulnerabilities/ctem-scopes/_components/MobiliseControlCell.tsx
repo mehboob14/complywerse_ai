@@ -30,7 +30,7 @@ interface Link {
 
 const codeOf = (l: Link) => l.parsed_control_code || l.framework_control_code || l.normalized_control_code || l.internal_control_name || `#${l.id}`;
 const nameOf = (l: Link) => l.parsed_control_name || l.framework_control_name || l.normalized_control_name || l.internal_control_name || '';
-const fwOf = (l: Link) => l.parsed_framework_name || l.framework_short_code || ((l.satisfies && l.satisfies.length) ? l.satisfies.join(' · ') : (l.normalized_control_id ? 'Unified Control Library' : '—'));
+const fwOf = (l: Link) => l.parsed_framework_name || l.framework_short_code || ((l.satisfies && l.satisfies.length) ? l.satisfies.join(' · ') : (l.normalized_control_id ? (l.normalized_control_code?.startsWith('SCF-') ? 'SCF Control Library' : 'Unified Control Library') : '—'));
 
 function parseNote(notes?: string | null): { basis: string; conf: string | null; reason: string } {
   if (!notes) return { basis: 'manual', conf: null, reason: 'Linked by a person.' };
