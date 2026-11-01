@@ -15,7 +15,7 @@ import { countLabel, nextTab, panelId, reachableKeys, scrollDelta, tabId, type T
 
 export interface TabItem extends TabLike {
   label: string;
-  /** a number beside the name ("Findings 12"); 100 and over read "99+" */
+  /** a number beside the name ("Findings 12"); 100 and over read "99+" unless the Tabs ask for `countFormat="exact"` ("1,247") */
   count?: number;
 }
 
@@ -29,6 +29,8 @@ export interface TabsProps<K extends string = string> {
   onChange: (key: K) => void;
   /** names the tab list for a screen reader: "Vendor record sections" */
   ariaLabel: string;
+  /** how a count reads: 'capped' (the default: 100 and over read "99+") or 'exact' ("1,247"), for a register whose tab counts are the server's totals */
+  countFormat?: 'capped' | 'exact';
   /** the TabPanels */
   children?: ReactNode;
   /** layout only (margin, width) */
@@ -45,7 +47,7 @@ const TAB_OPEN = 'border-ds-primary text-ds-primary-text';
 const TAB_SHUT = 'border-transparent text-ds-fg-muted enabled:hover:border-ds-border-strong enabled:hover:text-ds-fg';
 const BADGE = 'inline-flex min-w-[20px] items-center justify-center rounded-full px-[6px] text-ds-label tabular-nums';
 
-export function Tabs<K extends string = string>({ tabs, value, onChange, ariaLabel, children, className }: TabsProps<K>) {
+export function Tabs<K extends string = string>({ tabs, value, onChange, ariaLabel, countFormat = 'capped', children, className }: TabsProps<K>) {
   const base = useId();
   const strip = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -80,7 +82,7 @@ export function Tabs<K extends string = string>({ tabs, value, onChange, ariaLab
         <div ref={strip} role="tablist" aria-label={ariaLabel} className={STRIP}>
           {shown.map((t) => {
             const open = t.key === value;
-            const count = countLabel(t.count);
+            const count = countLabel(t.count, countFormat === 'exact');
             return (
               <button
                 key={t.key}

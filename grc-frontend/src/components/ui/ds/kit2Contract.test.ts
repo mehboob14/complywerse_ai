@@ -110,3 +110,36 @@ test('Menu: the defaults of every existing caller are unchanged (md trigger, 32 
   assert.match(menu, /aria-haspopup="menu"/);
   assert.doesNotMatch(menu, /window\.(confirm|alert|prompt)|opacity-0|group-hover/);
 });
+
+// ── FilterChips and the Tabs count format ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('FilterChips: a toolbar of real buttons that say whether they are pressed, with one roving tab stop and the arrow keys', () => {
+  const chips = code('FilterChips.tsx');
+  assert.match(chips, /role="toolbar" aria-label=\{label\}/);
+  assert.equal((chips.match(/role="toolbar"/g) ?? []).length, 2);                      // the wrapping row and the scrolling one
+  assert.match(chips, /<button\s+ref=\{register\}\s+type="button"\s+aria-pressed=\{!!chip\.active\}\s+tabIndex=\{tabbable \? 0 : -1\}/);
+  assert.match(chips, /const stop = chipStop\(row, focused\);/);
+  assert.match(chips, /const to = nextChip\(row, key, e\.key\);/);
+  assert.match(chips, /buttons\.current\.get\(to\)\?\.focus\(\);/);                  // an arrow moves focus ...
+  assert.doesNotMatch(chips, /onToggle\(to\)|onToggle\(key\);\s*\n\s*buttons/);         // ... and never toggles
+  assert.match(chips, /if \(e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey\) return;/);       // Alt+Left is the browser's Back
+});
+
+test('FilterChips: a flag always has words (screen-reader text and tooltip), a count is the true number, an empty row draws nothing', () => {
+  const chips = code('FilterChips.tsx');
+  assert.match(chips, /\{flag && <span className="sr-only">\{`, \$\{flag\.label\}`\}<\/span>\}/);
+  assert.match(chips, /aria-hidden className=\{clsx\('h-\[8px\] w-\[8px\] shrink-0 rounded-full'/);   // the dot is decoration: its words are the sr-only text
+  assert.match(chips, /const count = countText\(chip\.count\);/);
+  assert.match(chips, /if \(row\.length === 0\) return null;/);
+  assert.match(chips, /<Menu\s+label=\{trigger\.text\}\s+size="sm"/);                    // the "+N more" menu is the kit's Menu
+  assert.match(chips, /title=\{chip\.title \?\? \(clipped \|\| flag \? chipText\(chip\) : undefined\)\}/);   // the whole text, only when it is cut (or a flag needs words)
+  assert.match(chips, /h-ds-control-sm/);                                                // 28px, 44px on a phone: the token
+  assert.doesNotMatch(chips, /99\+|window\.(confirm|alert|prompt)|opacity-0|group-hover/);
+});
+
+test('Tabs: the count reads "99+" unless the page asks for exact counts, so every existing caller is unchanged', () => {
+  const tabs = code('Tabs.tsx');
+  assert.match(tabs, /countFormat = 'capped'/);
+  assert.match(tabs, /countLabel\(t\.count, countFormat === 'exact'\)/);
+  assert.match(code('../../../lib/tabsModel.ts'), /export function countLabel\(count: number \| null \| undefined, exact: boolean = false\)/);
+});

@@ -131,6 +131,19 @@ test('the count badge caps at 99+ and says nothing when there is no count', () =
   for (const none of [undefined, null, NaN, Infinity]) assert.equal(countLabel(none as number), '', String(none));
 });
 
+test('exact counts: the true number with its separator, so a register of 1,247 says 1,247 and the default look (99+) is untouched', () => {
+  assert.equal(countLabel(1247, true), '1,247');
+  assert.equal(countLabel(100, true), '100');
+  assert.equal(countLabel(99, true), '99');
+  assert.equal(countLabel(0, true), '0');
+  assert.equal(countLabel(1234567, true), '1,234,567');
+  assert.equal(countLabel(4.9, true), '4');
+  assert.equal(countLabel(-3, true), '0');
+  for (const none of [undefined, null, NaN, Infinity]) assert.equal(countLabel(none as number, true), '', String(none));
+  assert.equal(countLabel(1247), '99+');                                                  // no second argument: as it always was
+  assert.equal(countLabel(1247, false), '99+');
+});
+
 test('a tab and its panel point at each other, whatever characters the key holds', () => {
   assert.equal(tabId(':r1:', 'overview'), ':r1:-tab-overview');
   assert.equal(panelId(':r1:', 'overview'), ':r1:-panel-overview');

@@ -3,6 +3,8 @@
 // the ids that tie a tab to its panel, and how far a scrolling strip must move to show the picked tab.
 // The components are components/ui/ds/Tabs.tsx and components/ui/ds/useTabParam.ts.
 
+import { formatCount } from './format.ts';
+
 export interface TabLike { key: string; disabled?: boolean; hidden?: boolean }
 
 /** The keys a person can move to, in order: shown and not disabled. */
@@ -55,10 +57,12 @@ export function withTab(search: string, paramName: string, key: string, fallback
   return next.toString();
 }
 
-/** The badge beside a tab's name: the count, "99+" from 100 up; '' when there is no count (missing or not a number). 0 is a count. */
-export function countLabel(count: number | null | undefined): string {
+/** The badge beside a tab's name: the count, "99+" from 100 up; '' when there is no count (missing or not a number). 0 is a count.
+ *  With `exact` the true count with its thousands separator ("1,247"), for a register whose tab counts are the server's totals. */
+export function countLabel(count: number | null | undefined, exact: boolean = false): string {
   if (typeof count !== 'number' || !Number.isFinite(count)) return '';
   const n = Math.max(0, Math.floor(count));
+  if (exact) return formatCount(n);
   return n > 99 ? '99+' : String(n);
 }
 

@@ -56,6 +56,8 @@ function TabsDemo() {
   const [tab, setTab] = useTabParam('tab', TAB_KEYS, { fallback: 'overview', aliases: { lifecycle: 'history' } });
   const search = useSearchParams()?.toString() ?? '';
   const [wide, setWide] = useState('t1');
+  const [counted, setCounted] = useState('all');
+  const [cappedTab, setCappedTab] = useState('all');
   const many = Array.from({ length: 12 }, (_, i) => ({ key: `t${i + 1}`, label: `Section ${i + 1}`, count: i === 2 ? 128 : i === 5 ? 0 : undefined }));
   return (
     <div className="space-y-[16px]">
@@ -85,6 +87,24 @@ function TabsDemo() {
           <Tabs ariaLabel="Many sections" value={wide} onChange={setWide} tabs={many}>
             {many.map((t) => <TabPanel key={t.key} tabKey={t.key} className="pt-[12px]"><p className="text-ds-body text-ds-fg-body">{t.label} is open.</p></TabPanel>)}
           </Tabs>
+        </div>
+      </Specimen>
+      <Specimen label="countFormat=&quot;exact&quot;: the counts of a register are true totals (1,247, 100, 1,234,567), not 99+; the default stays &quot;99+&quot;">
+        <div className={`${FRAME} space-y-[12px]`}>
+          <Tabs
+            ariaLabel="Library views, exact counts"
+            value={counted}
+            onChange={setCounted}
+            countFormat="exact"
+            tabs={[
+              { key: 'all', label: 'All', count: 1247 },
+              { key: 'mine', label: 'Mine', count: 12 },
+              { key: 'overdue', label: 'Review overdue', count: 100 },
+              { key: 'none', label: 'No owner', count: 0 },
+              { key: 'big', label: 'Everything', count: 1234567 },
+            ]}
+          />
+          <Tabs ariaLabel="Library views, capped counts" value={cappedTab} onChange={setCappedTab} tabs={[{ key: 'all', label: 'All', count: 1247 }, { key: 'overdue', label: 'Review overdue', count: 100 }]} />
         </div>
       </Specimen>
     </div>
