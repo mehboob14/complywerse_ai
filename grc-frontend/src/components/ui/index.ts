@@ -65,3 +65,7 @@ export { useConfirm, type ConfirmOptions } from './ds/useConfirm';
 export { useNotify, type Notify, type NotifyOptions, type NotifyErrorOptions } from './ds/useNotify';
 export { useReportedMutation, type ReportedMutationConfig, type ToastMode } from './ds/useReportedMutation';
 export { DiscardBar, useDiscardGuard } from './ds/DiscardBar';
+// Kit 2 (UX revamp, the chosen designs): the pieces two or more of the four patterns share
+export { SidePanel, type SidePanelProps } from './ds/SidePanel';
+export { Sheet, type SheetProps } from './ds/Sheet';
+export type { PanelMode, PanelWidth } from './ds/sidePanelModel';
