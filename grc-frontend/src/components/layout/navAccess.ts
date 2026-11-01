@@ -166,8 +166,8 @@ export const navigation: NavEntry[] = [
       { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    icon: Activity,   requiredPermissions: ['erm:risks:*'] },
       { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       { name: 'Advisories',             href: '/cyber-assurance/advisories',      icon: AlertCircle, requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      // the catalog has no pentest key: the vulnerability register's, which its API (/pentest) checks
-      { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'], activeMatch: '/cyber-assurance/pentest' },
+      // the right every /pentest call checks (backend modules/pentest/router.py)
+      { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot,        requiredPermissions: ['pentest:workspace:view'], activeMatch: '/cyber-assurance/pentest' },
       { name: 'Cyber Reports',          href: '/cyber-assurance/reports',         icon: FileText,   requiredPermissions: ['assets:asset_inventory:*'] },
       // Connectors, cloud agents and endpoint agents: the same rights as the admin Integrations tab
       { name: 'Connectors',             href: '/cyber-assurance/connectors',      icon: Plug,       requiredPermissions: ['integrations:connections:*'] },

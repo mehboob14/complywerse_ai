@@ -31,8 +31,10 @@ test('an administrator sees every entry; a client feature still needs the tenant
 
 test('Cybersecurity Assurance and Reports show their entries to the rights that open them', () => {
   assert.deepEqual(sees(me(['vulnerabilities:vulnerability_register:view'])), [
-    ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Advisories', 'AI Pentest']],
+    ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Advisories']],
   ]);
+  // AI Pentest has its own right (every /pentest call checks it), not the vulnerability register's
+  assert.deepEqual(sees(me(['pentest:workspace:view'])), [['Cybersecurity Assurance', ['AI Pentest']]]);
   assert.deepEqual(sees(me(['assets:asset_inventory:view'])), [
     ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory', 'Licenses', 'Cyber Reports']],
   ]);
