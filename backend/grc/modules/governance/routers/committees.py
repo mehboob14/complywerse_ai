@@ -1,12 +1,13 @@
 from ....config import get_openai_api_key, get_openai_model
 
-from typing import List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+from datetime import date, datetime, time as dtime, timedelta, timezone
 import json
 import logging
 import io
 
 import os
+import unicodedata
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
@@ -15,13 +16,13 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
     Risk, RegulatoryChange, GRCUser, Tenant, get_db,
-    UploadedFramework, ParsedFrameworkControl, MeetingAttachment,
+    UploadedFramework, ParsedFrameworkControl, MeetingAttachment, MeetingAttendance,
     MeetingAgendaItemVote, AuditExtensionRequest
 )
 # the control-exception model under its own name: imported as "Exception" it hid Python's, and every `except Exception:` here
@@ -294,19 +295,43 @@ def serialize_charter(charter: CommitteeCharter) -> dict:
     }
 
 
-def serialize_meeting(meeting: CommitteeMeeting, db: Session) -> dict:
-    agenda_count = db.query(MeetingAgendaItem).filter(
-        MeetingAgendaItem.meeting_id == meeting.id
-    ).count()
-    
-    action_count = db.query(OversightAction).filter(
-        OversightAction.meeting_id == meeting.id
-    ).count()
-    
-    has_minutes = db.query(MeetingMinutes).filter(
-        MeetingMinutes.meeting_id == meeting.id
-    ).first() is not None
-    
+def _count_by(db: Session, column, ids: List[int]) -> Dict[int, int]:
+    """How many rows point at each of `ids` through `column`, in one grouped query."""
+    return dict(db.query(column, func.count()).filter(column.in_(ids)).group_by(column).all()) if ids else {}
+
+
+def _meeting_counts(db: Session, meetings: List[CommitteeMeeting]) -> Dict[int, Dict[str, Any]]:
+    """What a meeting row says about its readiness, for a whole page of meetings in a few grouped queries (not a few per row): agenda items, actions,
+    whether minutes exist, papers (attachments) and invitees (the committee's active members: there is no separate invite list)."""
+    counts = {m.id: {"agenda": 0, "actions": 0, "minutes": False, "papers": 0, "invitees": 0} for m in meetings}
+    if not counts:
+        return counts
+    ids = list(counts)
+
+    for column, key in ((MeetingAgendaItem.meeting_id, "agenda"), (OversightAction.meeting_id, "actions"), (MeetingAttachment.meeting_id, "papers")):
+        for meeting_id, n in _count_by(db, column, ids).items():
+            counts[meeting_id][key] = n
+    for (meeting_id,) in db.query(MeetingMinutes.meeting_id).filter(MeetingMinutes.meeting_id.in_(ids)):
+        counts[meeting_id]["minutes"] = True
+    invitees = dict(db.query(CommitteeMember.committee_id, func.count()).filter(
+        CommitteeMember.committee_id.in_({m.committee_id for m in meetings}), CommitteeMember.is_active == True,  # noqa: E712
+    ).group_by(CommitteeMember.committee_id).all())
+    for m in meetings:
+        counts[m.id]["invitees"] = invitees.get(m.committee_id, 0)
+    return counts
+
+
+def _quorum_met(meeting: CommitteeMeeting) -> Optional[bool]:
+    """Has the meeting reached its quorum? None when there is nothing to judge it by: no threshold set (or one below 1), or no roll recorded."""
+    if not meeting.quorum_required or meeting.quorum_required < 1 or meeting.quorum_present is None:
+        return None
+    return meeting.quorum_present >= meeting.quorum_required
+
+
+def serialize_meeting(meeting: CommitteeMeeting, db: Session, counts: Optional[Dict[str, Any]] = None) -> dict:
+    """`counts` is this meeting's entry of _meeting_counts, which a list computes once for its page."""
+    counts = counts or _meeting_counts(db, [meeting])[meeting.id]
+
     return {
         "id": meeting.id,
         "tenant_id": meeting.tenant_id,
@@ -324,9 +349,13 @@ def serialize_meeting(meeting: CommitteeMeeting, db: Session) -> dict:
         "created_by": meeting.created_by,
         "creator_name": meeting.creator.display_name if meeting.creator else None,
         "created_at": meeting.created_at,
-        "agenda_item_count": agenda_count,
-        "action_count": action_count,
-        "has_minutes": has_minutes,
+        "agenda_item_count": counts["agenda"],
+        "action_count": counts["actions"],
+        "has_minutes": counts["minutes"],
+        # readiness and quorum, for the Committees lanes and the meeting's live bar
+        "papers_count": counts["papers"],
+        "invitees_count": counts["invitees"],
+        "quorum_met": _quorum_met(meeting),
     }
 
 
@@ -406,6 +435,80 @@ def serialize_action(action: OversightAction, sla_settings: Optional[dict] = Non
         "created_at": action.created_at,
         "is_overdue": is_overdue,
     }
+
+
+def _action_overdue(action, now: datetime) -> bool:
+    """"overdue" is both a persistable status (the OversightAction model documents it and the update endpoint accepts it) AND a derived state (an
+    open or in-progress action past its due date). Count both, so a row saved literally as "overdue" is not dropped from every KPI bucket.
+    `action` is an object or a row with .status and .due_date."""
+    if action.status == "overdue":
+        return True
+    return action.status in ("open", "in_progress") and action.due_date is not None and action.due_date < now
+
+
+def _committee_health(db: Session, committee_ids: List[int], meetings_by_committee: Dict[int, list], actions_by_committee: Dict[int, list],
+                      invitees_by_committee: Dict[int, int], now: datetime) -> Dict[int, Dict[str, Any]]:
+    """The health fields of each committee: ONE function for the rows of GET /overview and for GET /{id}, so a committee reads the same in both.
+    Meetings (objects or rows) need .id .title .status .scheduled_date, actions .status .due_date. Fields:
+      attendance_pct       the mean, over the committee's completed meetings of the last 365 days that have a recorded roll, of
+                           (present + late) / (members who count toward quorum, i.e. not observers), x 100, one decimal; None when there is no such meeting
+      next_meeting         the earliest scheduled meeting dated now or later, with its readiness; None if there is none
+      charter_in_force     the active, unexpired charter (the Governance overview's "current charter" test); the latest effective date wins; None if none
+      meetings_in_progress meetings whose status is in_progress
+      open_actions, in_progress_actions, overdue_actions   as the overview rows have always counted them"""
+    year_ago = now - timedelta(days=365)
+    held = {m.id for ms in meetings_by_committee.values() for m in ms
+            if m.status == "completed" and m.scheduled_date is not None and m.scheduled_date >= year_ago}
+    roll: Dict[int, list] = {}
+    if held:
+        for meeting_id, state, role in db.query(MeetingAttendance.meeting_id, MeetingAttendance.status, MeetingAttendance.role).filter(
+                MeetingAttendance.meeting_id.in_(held)):
+            if (role or "member") != "observer":
+                roll.setdefault(meeting_id, []).append(state)
+
+    coming = {}
+    for cid in committee_ids:
+        scheduled = [m for m in meetings_by_committee.get(cid, []) if m.status == "scheduled" and m.scheduled_date is not None and m.scheduled_date >= now]
+        if scheduled:
+            coming[cid] = min(scheduled, key=lambda m: (m.scheduled_date, m.id))
+    next_ids = [m.id for m in coming.values()]
+    agenda, papers = _count_by(db, MeetingAgendaItem.meeting_id, next_ids), _count_by(db, MeetingAttachment.meeting_id, next_ids)
+
+    in_force: Dict[int, CommitteeCharter] = {}
+    if committee_ids:
+        for charter in db.query(CommitteeCharter).filter(CommitteeCharter.committee_id.in_(committee_ids), CommitteeCharter.status == "active"):
+            if charter.expiry_date is not None and charter.expiry_date < now:
+                continue
+            best = in_force.get(charter.committee_id)
+            if best is None or (charter.effective_date or datetime.min, charter.id) > (best.effective_date or datetime.min, best.id):
+                in_force[charter.committee_id] = charter
+
+    health = {}
+    for cid in committee_ids:
+        meetings, actions = meetings_by_committee.get(cid, []), actions_by_committee.get(cid, [])
+        ratios = []
+        for m in meetings:
+            states = roll.get(m.id) if m.id in held else None
+            if states:
+                ratios.append(sum(1 for s in states if s in ("present", "late")) / len(states))
+        upcoming, charter = coming.get(cid), in_force.get(cid)
+        health[cid] = {
+            "attendance_pct": round(sum(ratios) / len(ratios) * 100, 1) if ratios else None,
+            "next_meeting": {
+                "id": upcoming.id, "date": upcoming.scheduled_date.isoformat(), "title": upcoming.title,
+                "has_agenda": agenda.get(upcoming.id, 0) > 0, "papers_count": papers.get(upcoming.id, 0),
+                "invitees_count": invitees_by_committee.get(cid, 0),
+            } if upcoming else None,
+            "charter_in_force": {
+                "id": charter.id, "version": charter.version,
+                "expires_on": charter.expiry_date.date().isoformat() if charter.expiry_date else None,
+            } if charter else None,
+            "meetings_in_progress": sum(1 for m in meetings if m.status == "in_progress"),
+            "open_actions": sum(1 for a in actions if a.status == "open"),
+            "in_progress_actions": sum(1 for a in actions if a.status == "in_progress"),
+            "overdue_actions": sum(1 for a in actions if _action_overdue(a, now)),
+        }
+    return health
 
 
 def extract_text_from_uploaded_action_file(upload_file: UploadFile, file_bytes: bytes) -> str:
@@ -697,7 +800,9 @@ def get_committee_overview(
 
     Everything committee-wise, computed from live data and tenant-scoped:
       • kpis        — headline counts (committees, meetings, actions, attendance)
-      • committees  — per-committee rollup (next/last meeting, open/overdue actions)
+      • committees  — per-committee rollup (next/last meeting, open/overdue actions) and
+                      the health fields (attendance_pct, next_meeting, charter_in_force,
+                      meetings_in_progress: see _committee_health)
       • upcoming_meetings — the next few scheduled meetings
       • top_performers — members ranked by action completion + on-time rate
       • progress_over_time — 6-month trend (meetings held, actions completed, %)
@@ -752,13 +857,7 @@ def get_committee_overview(
     ).count()
 
     def is_overdue(a) -> bool:
-        # "overdue" is both a persistable status (the OversightAction model enum
-        # documents it, and the update endpoint accepts it) AND a derived state
-        # (an open/in-progress action past its due date). Count both, so a row
-        # saved literally as "overdue" is not dropped from every KPI bucket.
-        if a.status == "overdue":
-            return True
-        return a.status in ("open", "in_progress") and a.due_date is not None and a.due_date < now
+        return _action_overdue(a, now)          # the rule is documented there, and shared with GET /{id}
 
     def month_key(dt) -> str:
         return f"{dt.year:04d}-{dt.month:02d}"
@@ -855,6 +954,7 @@ def get_committee_overview(
     for m in meetings:
         meetings_by_committee[m.committee_id].append(m)
 
+    health = _committee_health(db, [c.id for c in committees], meetings_by_committee, actions_by_committee, members_by_committee, now)
     committee_rows = []
     for c in committees:
         c_actions = actions_by_committee.get(c.id, [])
@@ -879,6 +979,11 @@ def get_committee_overview(
             "overdue_actions": sum(1 for a in c_actions if is_overdue(a)),
             "completed_actions": sum(1 for a in c_actions if a.status == "completed"),
             "total_actions": len(c_actions),
+            # the health strip (see _committee_health): additive, the same values GET /{id} carries
+            "attendance_pct": health[c.id]["attendance_pct"],
+            "next_meeting": health[c.id]["next_meeting"],
+            "charter_in_force": health[c.id]["charter_in_force"],
+            "meetings_in_progress": health[c.id]["meetings_in_progress"],
         })
     # attention-first ordering: most overdue, then most open
     committee_rows.sort(key=lambda r: (-r["overdue_actions"], -r["open_actions"], r["name"].lower()))
@@ -990,6 +1095,84 @@ def get_committee_overview(
 
 
 
+# ── Decisions feed ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# What the committees decided: every agenda item that has an outcome or a decision text, newest meeting first, across committees. Read-only, with
+# the same rule as GET /committees (a signed-in user). Registered before /{committee_id}, so "decisions" is never parsed as an id.
+
+def _fold(text: Any) -> str:
+    """Lower case without accents or Arabic vowel marks, so a search for 'cafe' finds 'Café' and one for a word finds it with its marks."""
+    return "".join(c for c in unicodedata.normalize("NFKD", str(text or "").casefold()) if not unicodedata.combining(c))
+
+
+def _filled(column):
+    return and_(column.isnot(None), func.trim(column) != "")
+
+
+@router.get("/decisions")
+def list_decisions(
+    q: Optional[str] = None,
+    committee_id: Optional[int] = None,
+    from_date: Optional[date] = Query(None, alias="from", description="meeting date, on or after this day"),
+    to_date: Optional[date] = Query(None, alias="to", description="meeting date, on or before this day"),
+    outcome: Optional[str] = None,
+    # "all" (the default), "true" (active committees only: what the Committees lane shows) or "false". A deactivated committee's decisions stay on the record.
+    is_active: Optional[str] = "all",
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Decisions of the committees, newest meeting first (then agenda order). `q`: every word must appear in the item's title or decision text, ignoring
+    case and accents. `total` is the true count after every filter, whatever the page. Who recorded a decision and when are not stored on the item."""
+    wanted = (is_active or "all").strip().lower()
+    if wanted != "all" and wanted not in _BOOL_WORDS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="is_active must be true, false or all")
+    tenants = get_user_tenants(current_user, db)
+    if not tenants:
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+    query = (db.query(MeetingAgendaItem.id, MeetingAgendaItem.item_number, MeetingAgendaItem.title, MeetingAgendaItem.outcome,
+                      MeetingAgendaItem.decision_made, MeetingAgendaItem.status,
+                      CommitteeMeeting.id.label("meeting_id"), CommitteeMeeting.title.label("meeting_title"),
+                      CommitteeMeeting.scheduled_date, CommitteeMeeting.status.label("meeting_status"),
+                      GovernanceCommittee.id.label("committee_id"), GovernanceCommittee.name.label("committee_name"), GovernanceCommittee.is_active)
+             .join(CommitteeMeeting, CommitteeMeeting.id == MeetingAgendaItem.meeting_id)
+             .join(GovernanceCommittee, GovernanceCommittee.id == CommitteeMeeting.committee_id)
+             .filter(MeetingAgendaItem.tenant_id.in_(tenants), CommitteeMeeting.tenant_id.in_(tenants), GovernanceCommittee.tenant_id.in_(tenants),
+                     or_(_filled(MeetingAgendaItem.outcome), _filled(MeetingAgendaItem.decision_made))))
+    if committee_id:
+        query = query.filter(GovernanceCommittee.id == committee_id)
+    if wanted != "all":
+        query = query.filter(GovernanceCommittee.is_active.isnot(False) if _BOOL_WORDS[wanted] else GovernanceCommittee.is_active.is_(False))
+    if outcome and outcome.strip():
+        query = query.filter(func.lower(func.trim(MeetingAgendaItem.outcome)) == outcome.strip().lower())
+    if from_date:
+        query = query.filter(CommitteeMeeting.scheduled_date >= datetime.combine(from_date, dtime.min))
+    if to_date:
+        query = query.filter(CommitteeMeeting.scheduled_date < datetime.combine(to_date + timedelta(days=1), dtime.min))
+    query = query.order_by(CommitteeMeeting.scheduled_date.desc(), MeetingAgendaItem.item_number.asc(), MeetingAgendaItem.id.asc())
+
+    terms = _fold(q).split()
+    if terms:
+        # accents and case are folded in Python (neither database does it the same way); a tenant has hundreds of decisions, not millions
+        rows = [r for r in query.all() if all(t in _fold(f"{r.title} {r.decision_made or ''}") for t in terms)]
+        total, page = len(rows), rows[offset:offset + limit]
+    else:
+        total, page = query.count(), query.offset(offset).limit(limit).all()
+
+    return {
+        "items": [
+            {
+                "id": r.id, "item_number": r.item_number, "title": r.title, "outcome": r.outcome, "decision_made": r.decision_made, "status": r.status,
+                "committee_id": r.committee_id, "committee_name": r.committee_name, "committee_is_active": r.is_active is not False,
+                "meeting_id": r.meeting_id, "meeting_title": r.meeting_title, "meeting_date": r.scheduled_date, "meeting_status": r.meeting_status,
+            }
+            for r in page
+        ],
+        "total": total, "limit": limit, "offset": offset,
+    }
+
+
 @router.put("/charters/{charter_id}")
 def update_charter(
     charter_id: int,
@@ -1073,14 +1256,10 @@ def download_charter_file(
         media_type="application/octet-stream"
     )
 
-@router.get("/meetings/{meeting_id}")
-def get_meeting(
-    meeting_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
+def _meeting_detail(meeting_id: int, current_user: GRCUser, db: Session) -> dict:
+    """The meeting with its agenda and minutes: GET /meetings/{id}, and what start and end answer."""
     user_tenants = get_user_tenants(current_user, db)
-    
+
     meeting = db.query(CommitteeMeeting).options(
         joinedload(CommitteeMeeting.committee),
         joinedload(CommitteeMeeting.creator),
@@ -1090,15 +1269,186 @@ def get_meeting(
         CommitteeMeeting.id == meeting_id,
         CommitteeMeeting.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
-    
+
     result = serialize_meeting(meeting, db)
     result["agenda_items"] = [serialize_agenda_item(a) for a in sorted(meeting.agenda_items, key=lambda x: x.item_number)]
     result["minutes"] = serialize_minutes(meeting.minutes) if meeting.minutes else None
-    
+
     return result
+
+
+@router.get("/meetings/{meeting_id}")
+def get_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    return _meeting_detail(meeting_id, current_user, db)
+
+
+# ── Meeting life cycle: start, end, roll call and quorum ──────────────────────────────────────────────────────────────────────────────────────────
+# scheduled -> in_progress -> completed, and nothing else: cancelling or editing a meeting stays the raw PUT /meetings/{id}, as before. Both calls
+# are idempotent (a meeting already in the target state answers 200 and changes nothing), a past meeting that is still "scheduled" can be ended
+# (closed) without being started, and neither touches quorum, the agenda, the minutes or the actions. Like every committee write they need a sign-in
+# and nothing more (the permission pass will decide who may run a meeting).
+
+def _meeting_of(meeting_id: int, current_user: GRCUser, db: Session, lock: bool = False) -> CommitteeMeeting:
+    """The meeting in the caller's tenant (404 otherwise). `lock` holds its row for this transaction (PostgreSQL), so two people writing to it queue."""
+    query = db.query(CommitteeMeeting).filter(CommitteeMeeting.id == meeting_id, CommitteeMeeting.tenant_id.in_(get_user_tenants(current_user, db)))
+    meeting = (query.with_for_update() if lock else query).first()
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+    return meeting
+
+
+def _refuse_transition(meeting: CommitteeMeeting, what: str) -> None:
+    said = {"completed": "This meeting is already completed", "cancelled": "This meeting was cancelled"}
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=said.get(meeting.status) or f"A meeting that is {meeting.status or 'in an unknown state'} cannot be {what}")
+
+
+@router.post("/meetings/{meeting_id}/start")
+def start_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """scheduled -> in_progress. Already in progress: nothing to do (200). Completed or cancelled: 409."""
+    meeting = _meeting_of(meeting_id, current_user, db, lock=True)
+    if meeting.status == "scheduled":
+        meeting.status = "in_progress"
+        db.commit()
+    elif meeting.status != "in_progress":
+        _refuse_transition(meeting, "started")
+    return _meeting_detail(meeting_id, current_user, db)
+
+
+@router.post("/meetings/{meeting_id}/end")
+def end_meeting(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """in_progress -> completed; a scheduled meeting whose date has passed -> completed too (closing a meeting nobody started). One that is still
+    to come must be started or cancelled (409). Already completed: nothing to do (200). Cancelled: 409. Nothing else is required to end a meeting."""
+    meeting = _meeting_of(meeting_id, current_user, db, lock=True)
+    if meeting.status == "in_progress" or (meeting.status == "scheduled" and meeting.scheduled_date <= datetime.utcnow()):
+        meeting.status = "completed"
+        db.commit()
+    elif meeting.status == "scheduled":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This meeting has not started yet: start it first, or cancel it")
+    elif meeting.status != "completed":
+        _refuse_transition(meeting, "ended")
+    return _meeting_detail(meeting_id, current_user, db)
+
+
+# The roll: one row per member and meeting (models/_29 MeetingAttendance). present and late count toward quorum, absent does not, and nobody who
+# sits on the committee as an observer ever does. quorum_present on the meeting is kept equal to that count after every write (the overviews read it as a
+# count); quorum_met compares it with quorum_required. A meeting nobody took a roll for has no rows and quorum_present stays NULL: "not recorded".
+ATTENDANCE_WORDS = ("present", "late", "absent")
+_ROLE_ORDER = {"chair": 0, "secretary": 1, "member": 2, "observer": 3}
+
+
+class AttendanceEntry(BaseModel):
+    user_id: int
+    status: str            # present | late | absent (any case)
+
+
+class AttendanceBody(BaseModel):
+    members: List[AttendanceEntry] = Field(default_factory=list, max_length=200)
+
+
+def _roll(meeting: CommitteeMeeting, db: Session) -> dict:
+    """The roll of a meeting: every active member of the committee (marked or not yet) and anyone marked who has since left, with the quorum figures."""
+    members = db.query(CommitteeMember).options(joinedload(CommitteeMember.user)).filter(
+        CommitteeMember.committee_id == meeting.committee_id, CommitteeMember.is_active == True).all()  # noqa: E712
+    rows = {r.user_id: r for r in db.query(MeetingAttendance).options(joinedload(MeetingAttendance.user)).filter(MeetingAttendance.meeting_id == meeting.id)}
+
+    def line(user_id: int, user: Optional[GRCUser], member_role: Optional[str], active: bool) -> dict:
+        row = rows.get(user_id)
+        role = (row.role if row is not None and row.role else member_role) or "member"      # the role it was recorded under counts, not today's
+        return {
+            "user_id": user_id,
+            "user_name": (user.display_name or user.username) if user else None,
+            "user_email": user.email if user else None,
+            "role": role,
+            "counts_toward_quorum": role != "observer",
+            "status": row.status if row is not None else None,                 # None: not marked yet
+            "marked_by": row.marked_by if row is not None else None,
+            "marked_at": row.marked_at if row is not None else None,
+            "is_active_member": active,
+        }
+
+    people = [line(m.user_id, m.user, m.role, True) for m in members]
+    on_committee = {m.user_id for m in members}
+    people += [line(uid, r.user, r.role, False) for uid, r in rows.items() if uid not in on_committee]
+    people.sort(key=lambda p: (_ROLE_ORDER.get(p["role"], 2), (p["user_name"] or "").casefold(), p["user_id"]))
+    return {
+        "meeting_id": meeting.id,
+        "committee_id": meeting.committee_id,
+        "meeting_status": meeting.status,
+        "quorum_required": meeting.quorum_required,
+        "quorum_present": meeting.quorum_present,
+        "quorum_met": _quorum_met(meeting),
+        "recorded": bool(rows),
+        "voting_members": sum(1 for p in people if p["counts_toward_quorum"]),
+        "members": people,
+    }
+
+
+@router.get("/meetings/{meeting_id}/attendance")
+def get_meeting_roll(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    return _roll(_meeting_of(meeting_id, current_user, db), db)
+
+
+@router.put("/meetings/{meeting_id}/attendance")
+def record_roll_call(
+    meeting_id: int,
+    body: AttendanceBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Mark members present, late or absent (one entry or many; the last entry for a person wins) while the meeting is in progress, or after it ended to
+    correct the roll. Only active members of the committee can be marked (400). The FIRST marks on a meeting also record every other active member
+    absent, so the roll is complete from then on. Marking someone with the status they already have changes nothing. Answers with the roll."""
+    meeting = _meeting_of(meeting_id, current_user, db, lock=True)
+    if meeting.status not in ("in_progress", "completed"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=(
+            "This meeting was cancelled" if meeting.status == "cancelled" else "Start the meeting before taking the roll call"))
+    wanted: Dict[int, str] = {}
+    for entry in body.members:
+        word = (entry.status or "").strip().lower()
+        if word not in ATTENDANCE_WORDS:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"status must be one of: {', '.join(sorted(ATTENDANCE_WORDS))}")
+        wanted[entry.user_id] = word
+    members = {m.user_id: m for m in db.query(CommitteeMember).filter(
+        CommitteeMember.committee_id == meeting.committee_id, CommitteeMember.is_active == True)}  # noqa: E712
+    strangers = sorted(uid for uid in wanted if uid not in members)
+    if strangers:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"User {strangers[0]} is not an active member of this committee")
+    if wanted:
+        rows = {r.user_id: r for r in db.query(MeetingAttendance).filter(MeetingAttendance.meeting_id == meeting.id)}
+        if not rows:
+            wanted = {**{uid: "absent" for uid in members}, **wanted}
+        now = datetime.utcnow()
+        for uid, word in wanted.items():
+            row = rows.get(uid)
+            if row is None:
+                row = rows[uid] = MeetingAttendance(tenant_id=meeting.tenant_id, meeting_id=meeting.id, user_id=uid, status=word,
+                                                    role=members[uid].role, marked_by=current_user.id, marked_at=now)
+                db.add(row)
+            elif row.status != word:
+                row.status, row.role, row.marked_by, row.marked_at = word, members[uid].role, current_user.id, now
+        meeting.quorum_present = sum(1 for r in rows.values() if r.status in ("present", "late") and (r.role or "member") != "observer")
+        db.commit()
+    return _roll(meeting, db)
 
 @router.put("/meetings/{meeting_id}")
 def update_meeting(
@@ -1463,6 +1813,45 @@ def update_agenda_item(
     db.commit()
     db.refresh(item)
 
+    return serialize_agenda_item(item)
+
+
+# What a committee decided about an item. The words are the ones the audit register already writes when the committee decides an extension request
+# ("Approved", "Rejected"), plus "Deferred" and "Noted"; the item's own status follows (deferred, otherwise discussed).
+OUTCOME_WORDS = ("Approved", "Rejected", "Deferred", "Noted")
+
+
+class AgendaOutcomeBody(BaseModel):
+    outcome: str                                                   # Approved | Rejected | Deferred | Noted (any case)
+    decision_made: Optional[str] = Field(None, max_length=10000)   # what was decided; left out keeps the text there is, empty clears it
+
+
+@router.put("/meetings/agenda/{item_id}/outcome")
+def record_agenda_outcome(
+    item_id: int,
+    body: AgendaOutcomeBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Record the outcome and decision of an agenda item while its meeting is in progress, or after it to correct it (the audit row keeps old and new).
+    A meeting that has not started, or was cancelled, takes none (409). Answers with the item. The raw PUT /meetings/agenda/{id} still accepts any text."""
+    item = db.query(MeetingAgendaItem).filter(
+        MeetingAgendaItem.id == item_id, MeetingAgendaItem.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agenda item not found")
+    word = next((w for w in OUTCOME_WORDS if w.lower() == (body.outcome or "").strip().lower()), None)
+    if word is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"outcome must be one of: {', '.join(OUTCOME_WORDS)}")
+    meeting = db.get(CommitteeMeeting, item.meeting_id)
+    if meeting is None or meeting.status not in ("in_progress", "completed"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=(
+            "This meeting was cancelled" if meeting is not None and meeting.status == "cancelled" else "Start the meeting before recording outcomes"))
+    item.outcome = word
+    if "decision_made" in body.model_fields_set:
+        item.decision_made = (body.decision_made or "").strip() or None
+    item.status = "deferred" if word == "Deferred" else "discussed"
+    db.commit()
+    db.refresh(item)
     return serialize_agenda_item(item)
 
 
@@ -2095,14 +2484,39 @@ def create_oversight_action(
 
     return serialize_action(db_action)
 
+def _due_bound(text: Optional[str], name: str, upper: bool) -> Optional[tuple]:
+    """A due-date bound as (instant, exclusive). A bare date (2026-11-02) is a calendar day, as in Audit Logs' start and end dates: due_after begins at the
+    start of that day and due_before runs to the END of it, so nobody adds a day or looks up the last day of a month. A date and time is that instant
+    (an offset is converted to UTC, the server's clock), included at both ends, as Task Management's own due_after and due_before are."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        if len(text) == 10:
+            day = datetime.combine(date.fromisoformat(text), dtime.min)
+            return (day + timedelta(days=1), True) if upper else (day, False)
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00").replace("z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"{name} must be a date (2026-11-02) or a date and time (2026-11-02T14:30:00)")
+    return (moment.astimezone(timezone.utc).replace(tzinfo=None) if moment.tzinfo else moment), False
+
+
 @router.get("/actions")
 def list_actions(
     tenant_id: Optional[int] = None,
     committee_id: Optional[int] = None,
+    # one status word, or several separated by commas ("open,in_progress")
     status_filter: Optional[str] = Query(None, alias="status"),
     action_type: Optional[str] = None,
-    assigned_to: Optional[int] = None,
+    # a user id, or "me" for the caller
+    assigned_to: Optional[str] = None,
     overdue_only: bool = False,
+    # a due-date range, exact at midnight and at the end of a month (see _due_bound): a bare date is the whole calendar day, so "this week" is
+    # due_after=2026-11-02&due_before=2026-11-08 and November is due_after=2026-11-01&due_before=2026-11-30; a date and time is that instant, included at
+    # both ends ("not overdue yet" is due_after=<now>). An action with no due date never matches.
+    due_after: Optional[str] = None,
+    due_before: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -2126,20 +2540,36 @@ def list_actions(
         query = query.filter(OversightAction.tenant_id == tenant_id)
     if committee_id:
         query = query.filter(OversightAction.committee_id == committee_id)
-    if status_filter:
-        query = query.filter(OversightAction.status == status_filter)
+    words = [w.strip() for w in (status_filter or "").split(",") if w.strip()]
+    if words:
+        query = query.filter(OversightAction.status.in_(words))
     if action_type:
         query = query.filter(OversightAction.action_type == action_type)
-    if assigned_to:
-        query = query.filter(OversightAction.assigned_to == assigned_to)
+    if (assigned_to or "").strip():
+        who = (assigned_to or "").strip().lower()
+        if who == "me":
+            who = current_user.id
+        else:
+            try:
+                who = int(who)
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="assigned_to must be a user id or me")
+        if who:                                   # 0 has always meant no filter
+            query = query.filter(OversightAction.assigned_to == who)
     if overdue_only:
         query = query.filter(
             OversightAction.status.in_(["open", "in_progress"]),
             OversightAction.due_date < datetime.utcnow()
         )
-    
+    after, before = _due_bound(due_after, "due_after", False), _due_bound(due_before, "due_before", True)
+    if after:
+        query = query.filter(OversightAction.due_date >= after[0])
+    if before:
+        query = query.filter(OversightAction.due_date < before[0] if before[1] else OversightAction.due_date <= before[0])
+
     total = query.count()
-    actions = query.order_by(OversightAction.due_date.asc().nullslast()).offset(skip).limit(limit).all()
+    # the id breaks a tie between equal due dates, so a page boundary never repeats or skips a row
+    actions = query.order_by(OversightAction.due_date.asc().nullslast(), OversightAction.id.asc()).offset(skip).limit(limit).all()
     
     sla_settings = {tid: committee_tasks.sla_settings(db, tid) for tid in {a.tenant_id for a in actions}}
     return {
@@ -2367,7 +2797,14 @@ def get_committee(
     result = serialize_committee(committee, db)
     result["members"] = [serialize_member(m) for m in committee.members if m.is_active]
     result["charters"] = [serialize_charter(c) for c in committee.charters]
-    
+    # the health strip: the same function, and so the same values, as this committee's row in GET /overview
+    result.update(_committee_health(
+        db, [committee.id],
+        {committee.id: db.query(CommitteeMeeting.id, CommitteeMeeting.title, CommitteeMeeting.status, CommitteeMeeting.scheduled_date).filter(
+            CommitteeMeeting.committee_id == committee.id).all()},
+        {committee.id: db.query(OversightAction.status, OversightAction.due_date).filter(OversightAction.committee_id == committee.id).all()},
+        {committee.id: len(result["members"])}, datetime.utcnow())[committee.id])
+
     return result
 
 
@@ -2888,9 +3325,10 @@ def list_committee_meetings(
     
     total = query.count()
     meetings = query.order_by(CommitteeMeeting.scheduled_date.desc()).offset(skip).limit(limit).all()
-    
+    counts = _meeting_counts(db, meetings)
+
     return {
-        "items": [serialize_meeting(m, db) for m in meetings],
+        "items": [serialize_meeting(m, db, counts[m.id]) for m in meetings],
         "total": total,
         "skip": skip,
         "limit": limit

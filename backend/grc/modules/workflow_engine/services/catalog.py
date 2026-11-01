@@ -532,6 +532,11 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     # Committees: POST /{id}/deactivate and /reactivate are not trigger hints either (the audit row would read "Create Deactivate Committee")
     ("governance", "committees", "deactivate_committee"): "Deactivate Committee",
     ("governance", "committees", "reactivate_committee"): "Reactivate Committee",
+    # Committees: a meeting's life cycle (POST .../start is a trigger hint, .../end is not; the two PUTs would read "Edit Record ...")
+    ("governance", "committees", "start_meeting"): "Start Meeting",
+    ("governance", "committees", "end_meeting"): "End Meeting",
+    ("governance", "committees", "record_roll_call"): "Record Roll Call",
+    ("governance", "committees", "record_agenda_outcome"): "Record Agenda Outcome",
 
     # ── Duplicate label fixes ─────────────────────────────────────────────────
     # Risk Management > RCSA vs Vendor Risk (same fn names, different domains)
