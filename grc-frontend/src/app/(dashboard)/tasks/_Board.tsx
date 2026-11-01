@@ -85,30 +85,33 @@ export function Board({ canCreate, onNew }: { canCreate: boolean; onNew: () => v
 
       <div className="flex flex-col gap-[8px] lg:flex-row lg:flex-wrap lg:items-center">
         <TextInput type="search" aria-label="Search tasks" placeholder="Search tasks" leftAdornment={<Search aria-hidden />} value={typed} onChange={(e) => setTyped(e.target.value)} className="lg:w-[240px]" />
-        <Select aria-label="Source" placeholder="All sources" value={s.source} onChange={(e) => set({ source: e.target.value, page: 1 })} className={FILTER}>
-          {FILTER_SOURCES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </Select>
-        <Select aria-label="Priority" placeholder="All priorities" value={s.priority} onChange={(e) => set({ priority: e.target.value, page: 1 })} className={FILTER}>
-          {PRIORITIES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </Select>
-        <Select aria-label="Status" placeholder="All statuses" value={s.status} onChange={(e) => set({ status: e.target.value, page: 1 })} className={FILTER}>
-          {STATUSES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </Select>
-        <Select aria-label="Category" placeholder="All categories" value={s.category} onChange={(e) => set({ category: e.target.value, page: 1 })} className={FILTER}>
-          {FILTER_CATEGORIES.map((v) => <option key={v} value={v}>{v}</option>)}
-        </Select>
-        <Combobox
-          label="Owner"
-          clearable
-          searchable
-          options={ownerOptions}
-          value={s.owner || null}
-          onChange={(v) => set({ owner: v ?? '', page: 1 })}
-          placeholder="All owners"
-          searchPlaceholder="Search users"
-          emptyText={users.isError && !onlyMine ? 'The people could not be loaded' : 'No matches'}
-          className="lg:w-[190px]"
-        />
+        {/* on a phone the five filters are two to a row; from 1024px they join the row of the search box (`contents`) */}
+        <div className="grid grid-cols-2 gap-[8px] sm:grid-cols-3 lg:contents">
+          <Select aria-label="Source" placeholder="All sources" value={s.source} onChange={(e) => set({ source: e.target.value, page: 1 })} className={FILTER}>
+            {FILTER_SOURCES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </Select>
+          <Select aria-label="Priority" placeholder="All priorities" value={s.priority} onChange={(e) => set({ priority: e.target.value, page: 1 })} className={FILTER}>
+            {PRIORITIES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </Select>
+          <Select aria-label="Status" placeholder="All statuses" value={s.status} onChange={(e) => set({ status: e.target.value, page: 1 })} className={FILTER}>
+            {STATUSES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </Select>
+          <Select aria-label="Category" placeholder="All categories" value={s.category} onChange={(e) => set({ category: e.target.value, page: 1 })} className={FILTER}>
+            {FILTER_CATEGORIES.map((v) => <option key={v} value={v}>{v}</option>)}
+          </Select>
+          <Combobox
+            label="Owner"
+            clearable
+            searchable
+            options={ownerOptions}
+            value={s.owner || null}
+            onChange={(v) => set({ owner: v ?? '', page: 1 })}
+            placeholder="All owners"
+            searchPlaceholder="Search users"
+            emptyText={users.isError && !onlyMine ? 'The people could not be loaded' : 'No matches'}
+            className="lg:w-[190px]"
+          />
+        </div>
         {users.isError && !onlyMine && canRetry(users.error) && <Button size="sm" onClick={() => { void users.refetch(); }}>Retry loading owners</Button>}
         {filters > 0 && <Button variant="ghost" onClick={clearFilters}>Clear filters</Button>}
         <div className="flex flex-wrap items-center gap-[8px] lg:ml-auto">
