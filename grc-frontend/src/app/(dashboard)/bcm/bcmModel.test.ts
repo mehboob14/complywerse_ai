@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from '../../../lib/addressState.ts';
 import {
   BIA_SORT_KEYS, DRILL_FLOW, DRILL_LIST_SCHEMA, FINDING_HINT, HOURS_MAX, NAME_MAX, OPTION_CAPS, PLAN_FILTERS, PLAN_LIST_SCHEMA, PLAN_SORT_KEYS,
-  asPage, biaCompleteness, biaCreatePayload, biaDirty, biaErrors, biaSortValue, blankBiaForm, blankDependencyForm, blankDrillForm, blankFindingForm, blankPlanForm,
+  asPage, biaCompleteness, biaCreatePayload, coverageTile, biaDirty, biaErrors, biaSortValue, blankBiaForm, blankDependencyForm, blankDrillForm, blankFindingForm, blankPlanForm,
   blankStrategyForm, cutHint, cutNotice, dependencyDeleteWords, dependencyErrors, dependencyPayload, drillCreatePayload, drillDeleteWords, drillDirty, drillErrors,
   drillFormFrom, drillMoves, drillSchedulePayload, drillSortValue, drillUpdatePayload, filterDrills, filterPlans, findingCount, findingDeleteWords, findingErrors,
   findingPayload, fmtHours, isEmptyTenant, linkageOf, listCut, optionsCut, ordered, pageOf, parseHours, percentText, pickOptions, planCount, planCreatePayload,
@@ -398,6 +398,13 @@ test('the pass-rate bar keeps its colours: 80 and over on track, 50 and over a w
   for (const v of [0, 10, 49.9, 50, 79.9, 80, 100]) assert.equal(rateTone(v), old(v), String(v));
   assert.equal(rateTone(null), null, 'not assessed is not 0%: the old page painted it as 0% in the failing colour');
   assert.equal(rateTone(undefined), null);
+});
+
+test('the coverage tile says the server\'s percentage and what it counts; with no active plan there is no rate: Not recorded, not 0%', () => {
+  assert.deepEqual(coverageTile(dash()), { value: '11.6%', progress: 11.6, note: '15 of 129 active plans tested in the last 12 months' });
+  assert.equal(coverageTile(dash({ coverage_detail: { covered: 1, active_plans: 1 }, drill_coverage_pct: 100 })).note, '1 of 1 active plan tested in the last 12 months');
+  assert.deepEqual(coverageTile(dash({ coverage_detail: { covered: 0, active_plans: 0 }, drill_coverage_pct: 0 })), { value: null, progress: null, note: '' });
+  assert.equal(coverageTile(dash({ coverage_detail: { covered: 0, active_plans: 4 }, drill_coverage_pct: 0 })).value, '0%', 'four plans and none tested is a true 0%');
 });
 
 test('an empty tenant has no plan and no drill; the cross-module rollup is absent for an older server and is then not recorded, never zeros', () => {

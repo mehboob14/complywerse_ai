@@ -102,5 +102,5 @@ test('a finding\'s remediation words are the issue\'s open states, its two closi
 test('the tones are plain family names (no stray tone can slip in as a typo: defineStatuses throws on one)', () => {
   const tones = new Set<Tone>();
   for (const registry of ALL) for (const word of registry.words) tones.add(registry.tone(word));
-  for (const tone of tones) assert.ok(FAMILIES.includes(tone));
+  Array.from(tones).forEach((tone) => assert.ok(FAMILIES.includes(tone)));
 });

@@ -438,6 +438,16 @@ export function rateTone(v: number | null | undefined): 'success' | 'warning' | 
   if (v == null) return null;
   return v >= 80 ? 'success' : v >= 50 ? 'warning' : 'danger';
 }
+/** The coverage tile: the server's percentage with the words under it. While there is no active plan to cover (0 of 0) there is no rate to say: the tile reads "Not recorded"
+ *  (value null), it is not 0%. */
+export function coverageTile(d: Dashboard): { value: string | null; progress: number | null; note: string } {
+  const { covered, active_plans: active } = d.coverage_detail;
+  if (active === 0) return { value: null, progress: null, note: '' };
+  return {
+    value: percentText(d.drill_coverage_pct), progress: d.drill_coverage_pct,
+    note: `${formatCount(covered)} of ${formatCount(active)} active ${active === 1 ? 'plan' : 'plans'} tested in the last 12 months`,
+  };
+}
 /** Nothing has been recorded: no plan and no drill. The Overview then shows how to start instead of a page of zeros. */
 export const isEmptyTenant = (d: Dashboard): boolean => d.totals.plans === 0 && d.totals.drills === 0;
 /** The rollup across modules, or null when the server did not send it (an older server): the page says "Not recorded", it does not invent zeros. */
