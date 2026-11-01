@@ -79,14 +79,15 @@ export default function BcmDrillDetailPage() {
 
   if (!drill) {
     const head = <PageHeader variant="page" back={BACK} title="Drill" />;
-    if (query.isError || drillId <= 0) {
+    const noDrill = !(drillId > 0);                                // NaN too: "/bcm/drills/abc" has no drill number
+    if (query.isError || noDrill) {
       return (
         <div className="flex flex-col gap-[16px]">
           {head}
           <ErrorState
-            title={drillId > 0 ? "Couldn't load this drill" : "This drill doesn't exist"}
-            message={drillId > 0 ? errorMessage(query.error) : 'The address does not hold a drill number.'}
-            onRetry={drillId > 0 && canRetry(query.error) ? () => { void query.refetch(); } : undefined}
+            title={noDrill ? "This drill doesn't exist" : "Couldn't load this drill"}
+            message={noDrill ? 'The address does not hold a drill number.' : errorMessage(query.error)}
+            onRetry={!noDrill && canRetry(query.error) ? () => { void query.refetch(); } : undefined}
           />
         </div>
       );

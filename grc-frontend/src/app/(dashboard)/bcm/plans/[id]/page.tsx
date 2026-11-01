@@ -75,14 +75,15 @@ export default function BcmPlanDetailPage() {
 
   if (!plan) {
     const head = <PageHeader variant="page" back={BACK} title="Continuity plan" />;
-    if (query.isError || planId <= 0) {
+    const noPlan = !(planId > 0);                                  // NaN too: "/bcm/plans/abc" has no plan number
+    if (query.isError || noPlan) {
       return (
         <div className="flex flex-col gap-[16px]">
           {head}
           <ErrorState
-            title={planId > 0 ? "Couldn't load this plan" : "This plan doesn't exist"}
-            message={planId > 0 ? errorMessage(query.error) : 'The address does not hold a plan number.'}
-            onRetry={planId > 0 && canRetry(query.error) ? () => { void query.refetch(); } : undefined}
+            title={noPlan ? "This plan doesn't exist" : "Couldn't load this plan"}
+            message={noPlan ? 'The address does not hold a plan number.' : errorMessage(query.error)}
+            onRetry={!noPlan && canRetry(query.error) ? () => { void query.refetch(); } : undefined}
           />
         </div>
       );

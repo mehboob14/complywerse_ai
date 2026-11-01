@@ -23,8 +23,12 @@ export function Pill({ registry, word, size = 'sm' }: { registry: Statuses; word
 
 // the padding and the matching negative margin make a link 24px high (44px on a phone) without moving anything: a line of text is 20px
 export const LINK = 'rounded-ds-control py-[2px] -my-[2px] max-md:py-[12px] max-md:-my-[12px] font-medium text-ds-fg underline-offset-[2px] hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
-/** A link in a muted line (the plan under a drill's title): the muted colour until it is hovered. */
-export const MUTED_LINK = 'rounded-ds-control py-[2px] -my-[2px] max-md:py-[12px] max-md:-my-[12px] text-ds-fg-muted underline-offset-[2px] hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
+// a link in 12px text: its line is 16px, so the padding is 4px (24px high) and 14px on a phone (44px)
+const LABEL_BASE = 'rounded-ds-control py-[4px] -my-[4px] max-md:py-[14px] max-md:-my-[14px] underline-offset-[2px] focus-visible:outline-none focus-visible:shadow-ds-ring';
+/** A link in a muted 12px line (the plan under a drill's title): the muted colour until it is hovered. */
+export const MUTED_LINK = `${LABEL_BASE} text-ds-fg-muted hover:text-ds-primary-text hover:underline`;
+/** A link in a 12px line in the brand's text colour (an issue code, "Open"). */
+export const LABEL_LINK = `${LABEL_BASE} font-medium text-ds-primary-text hover:underline`;
 /** A link inside a sentence or a card line (not a title): the brand's text colour. */
 export const TEXT_LINK = 'rounded-ds-control py-[2px] -my-[2px] max-md:py-[12px] max-md:-my-[12px] font-medium text-ds-primary-text underline-offset-[2px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
 

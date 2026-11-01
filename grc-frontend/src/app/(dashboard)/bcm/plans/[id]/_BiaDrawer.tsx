@@ -15,7 +15,7 @@ import { dependencyType, externalBcp, optionsOf, severity, strategyStatus, strat
 import { RightSlidePanel } from '@/components/ui';
 import { Button, FormField, IconButton, Notice, Select, StatusPill, Textarea, TextInput, useConfirm, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { AssetMultiSelect, ChipList, ClampedText, EntityCombobox, FormProblem, Pill, TEXT_LINK } from '../../_bcm-ui';
+import { AssetMultiSelect, ChipList, ClampedText, EntityCombobox, FormProblem, LABEL_LINK, Pill } from '../../_bcm-ui';
 import {
   NAME_MAX, biaCompleteness, blankDependencyForm, blankStrategyForm, dependencyDeleteWords, dependencyErrors, dependencyPayload, fmtHours, strategyDeleteWords, strategyPayload,
   type Bia, type Dependency, type DependencyForm, type Strategy, type StrategyForm,
@@ -144,7 +144,7 @@ export function BiaDrawer({ bia, planId, onClose }: { bia: Bia; planId: number; 
           {bia.linked_risk_id ? (
             <div className={`${BOX} flex items-center justify-between gap-[8px] bg-ds-surface-subtle`}>
               <span className="min-w-0 break-words text-ds-body font-[500] text-ds-fg">{bia.linked_risk_title || `Risk #${bia.linked_risk_id}`}</span>
-              <Link href={`/erm/risks/${bia.linked_risk_id}`} className={`inline-flex shrink-0 items-center gap-[4px] text-ds-label ${TEXT_LINK}`}>Open <ExternalLink aria-hidden size={14} /></Link>
+              <Link href={`/erm/risks/${bia.linked_risk_id}`} className={`inline-flex shrink-0 items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>Open <ExternalLink aria-hidden size={14} /></Link>
             </div>
           ) : canEdit ? (
             <div className="flex flex-col gap-[8px]">

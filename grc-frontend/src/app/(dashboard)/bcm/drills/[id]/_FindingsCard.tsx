@@ -17,7 +17,7 @@ import {
   Button, EmptyState, FormField, Menu, Pager, RegisterTable, SectionCard, Select, Textarea, TextInput, useConfirm, useReportedMutation, type RegisterColumn, type SortState,
 } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { ClampedText, EntityCombobox, FormProblem, Pill, TEXT_LINK } from '../../_bcm-ui';
+import { ClampedText, EntityCombobox, FormProblem, LABEL_LINK, Pill, TEXT_LINK } from '../../_bcm-ui';
 import {
   FINDING_HINT, NAME_MAX, blankFindingForm, findingDeleteWords, findingErrors, findingPayload, findingSortValue, ordered, pageOf, plural, type Drill, type Finding, type FindingForm,
 } from '../../bcmModel';
@@ -40,7 +40,7 @@ function Remediation({ f }: { f: Finding }) {
     <span className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
       <Pill registry={findingStatus} word={f.issue_status} />
       {f.issue_code && (
-        <Link href="/issues" title="Open in Issues / CAPA" className={`inline-flex items-center gap-[4px] text-ds-label ${TEXT_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>
+        <Link href="/issues" title="Open in Issues / CAPA" className={`inline-flex items-center gap-[4px] text-ds-label ${LABEL_LINK}`}>{f.issue_code}<ExternalLink aria-hidden size={12} /></Link>
       )}
     </span>
   );
