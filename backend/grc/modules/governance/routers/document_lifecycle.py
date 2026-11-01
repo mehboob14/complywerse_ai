@@ -142,6 +142,20 @@ def my_requests(db: Session = Depends(get_db), current_user: GRCUser = Depends(r
     return {"enabled": True, "total": len(items), "items": items}
 
 
+@router.get("/lifecycle/sent")
+def my_sent_requests(kinds: Optional[str] = None, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The reviews, approvals, changes asked for and proposed-change decisions the current user asked of others that still wait ("Sent by
+    me" in Needs my action), one row per document and kind. ``kinds``: a comma-separated subset of the five workflow kinds (all by default)."""
+    if not doc_lifecycle.enabled(db):
+        return {"enabled": False, "items": []}
+    asked = [k.strip() for k in (kinds or "").split(",") if k.strip()] or list(doc_lifecycle.SENT_KINDS)
+    unknown = [k for k in asked if k not in doc_lifecycle.SENT_KINDS]
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unknown kind {unknown[0]!r}: use {', '.join(doc_lifecycle.SENT_KINDS)}.")
+    return {"enabled": True, **doc_lifecycle.sent_requests(db, current_user, asked)}
+
+
 @router.get("/lifecycle/settings")
 def get_lifecycle_settings(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     if not doc_lifecycle.enabled(db):

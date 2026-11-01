@@ -1034,5 +1034,6 @@ def my_pending_signoffs(
             "stage_label": step.stage.label if step.stage.custom else _ROLE_LABEL[step.stage.role_type],
             "stage_name": step.stage.name,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+            "round_started_at": _round(doc),                   # when this review round began: the inbox's "asked on"
         })
     return {"total": len(out), "items": out}
