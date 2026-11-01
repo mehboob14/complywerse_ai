@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
+  BookMarked,
   Calendar,
   GitBranch,
   ListTodo,
@@ -13,6 +14,7 @@ import { clsx } from 'clsx';
 
 const ermNavigation = [
   { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle },
+  { name: 'Risk Library', href: '/erm/risk-library', icon: BookMarked },
   { name: 'Appetite', href: '/erm/appetite', icon: Target },
   { name: 'Mitigation Actions', href: '/erm/mitigation-actions', icon: ListTodo },
   // 'Internal Controls' moved to Control Testing & Assurance (/controls);

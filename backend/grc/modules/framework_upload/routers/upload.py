@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, GRCUser, get_db,
-    EvidenceControlMapping, EvidenceAIAssessment,
+    EvidenceControlMapping, EvidenceAIAssessment, RiskFrameworkRequirementLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -215,6 +215,11 @@ def delete_uploaded_framework(
             EvidenceControlMapping.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)
         
+        # Risks linked to this framework's controls (Risk Library / register Controls tab) lose those links
+        db.query(RiskFrameworkRequirementLink).filter(
+            RiskFrameworkRequirementLink.uploaded_framework_id == framework_id
+        ).delete(synchronize_session=False)
+
         # Invalidate AI assessments that reference this framework
         # Get all assessments that have clause_mappings referencing this framework
         assessments_to_update = db.query(EvidenceAIAssessment).filter(

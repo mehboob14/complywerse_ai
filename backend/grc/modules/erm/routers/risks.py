@@ -1561,6 +1561,9 @@ def get_risk_detail(
                 "notes": link.notes
             })
     
+    from ..services.risk_framework_requirements import serialize_links as _requirement_links
+    linked_framework_requirements = _requirement_links(risk)
+
     linked_assets = []
     for link in risk.asset_links:
         if link.asset:
@@ -1619,6 +1622,7 @@ def get_risk_detail(
         "linked_controls": linked_controls,
         "linked_internal_controls": linked_internal_controls,
         "linked_framework_controls": linked_framework_controls,
+        "linked_framework_requirements": linked_framework_requirements,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,
         "linked_governance": linked_governance

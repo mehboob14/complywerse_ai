@@ -1,0 +1,2332 @@
+{
+ "framework": {
+  "key": "uae_ia",
+  "name": "UAE Information Assurance Standard",
+  "version": "2.1",
+  "source": "UAE INFORMATION ASSURANCE STANDARD.pdf, the \"Relevant Threats and Vulnerabilities\" list of each control objective"
+ },
+ "families": [
+  {
+   "id": "M1",
+   "name": "Strategy and Planning",
+   "kind": "Management",
+   "suggested_category": "strategic"
+  },
+  {
+   "id": "M2",
+   "name": "Information Security Risk Management",
+   "kind": "Management",
+   "suggested_category": "operational"
+  },
+  {
+   "id": "M3",
+   "name": "Awareness and Training",
+   "kind": "Management",
+   "suggested_category": "operational"
+  },
+  {
+   "id": "M4",
+   "name": "Human Resource Security",
+   "kind": "Management",
+   "suggested_category": "operational"
+  },
+  {
+   "id": "M5",
+   "name": "Compliance",
+   "kind": "Management",
+   "suggested_category": "compliance"
+  },
+  {
+   "id": "M6",
+   "name": "Performance Evaluation and Improvement",
+   "kind": "Management",
+   "suggested_category": "operational"
+  },
+  {
+   "id": "T1",
+   "name": "Information Asset Management",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T2",
+   "name": "Physical and Environmental Security",
+   "kind": "Technical",
+   "suggested_category": "operational"
+  },
+  {
+   "id": "T3",
+   "name": "Operations Management",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T4",
+   "name": "Network Security",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T5",
+   "name": "Identity and Access Management",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T6",
+   "name": "Third Party Security",
+   "kind": "Technical",
+   "suggested_category": "third_party"
+  },
+  {
+   "id": "T7",
+   "name": "Information Systems Acquisition, Development and Maintenance",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T8",
+   "name": "Information Security Incident Management",
+   "kind": "Technical",
+   "suggested_category": "technology"
+  },
+  {
+   "id": "T9",
+   "name": "Information Systems Continuity Management",
+   "kind": "Technical",
+   "suggested_category": "operational"
+  }
+ ],
+ "objectives": [
+  {
+   "id": "M1.1",
+   "family_id": "M1",
+   "title": "Entity Context and Leadership",
+   "objective": "To establish leadership and a management framework to initiate and control the implementation of information security within the entity.",
+   "performance_indicator": "Percentage of tasks or milestones from the information security implementation plan that have been completed.",
+   "pdf_page": 13,
+   "controls": [
+    {
+     "control_id": "M1.1.1",
+     "title": "Understanding the Entity and its Context",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.1.2",
+     "title": "Leadership and Management Commitment",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.1.3",
+     "title": "Roles and Responsibilities for Information Security",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M1.2",
+   "family_id": "M1",
+   "title": "Information Security Policy",
+   "objective": "To provide a framework and management direction and support for information security in the entity, in accordance with business requirements and relevant laws and regulations.",
+   "performance_indicator": "Percentage of information security policies reviewed as per defined frequency.",
+   "pdf_page": 16,
+   "controls": [
+    {
+     "control_id": "M1.2.1",
+     "title": "Information Security Policy",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.2.2",
+     "title": "Information Security Objectives",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.2.3",
+     "title": "Supporting Policies for Information Security",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M1.3",
+   "family_id": "M1",
+   "title": "Support",
+   "objective": "To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.",
+   "performance_indicator": "Percentage of incidents that are caused by a lack of qualified resources for information security. Percentage of projects with completed information security risk assessments.",
+   "pdf_page": 20,
+   "controls": [
+    {
+     "control_id": "M1.3.1",
+     "title": "Resources",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.3.2",
+     "title": "Internal and External Communication",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.3.3",
+     "title": "Documentation",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M1.3.4",
+     "title": "Information security in project management",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M1.3.5",
+     "title": "Contact with Special Interest Groups",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M2.1",
+   "family_id": "M2",
+   "title": "Information Security Risk Management Policy",
+   "objective": "To establish a formal information risk management framework for managing an entity’s information security risks by establishing the context, performing risk assessment, implementing risk treatments, and monitoring their implementation.",
+   "performance_indicator": "Trend in the number of occurrences where the risk assessment has not been performed, reviewed, or updated as planned.",
+   "pdf_page": 25,
+   "controls": [
+    {
+     "control_id": "M2.1.1",
+     "title": "Information Security Risk Management Policy",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M2.2",
+   "family_id": "M2",
+   "title": "Information Security Risk Assessment",
+   "objective": "To identify, analyze, and evaluate the information security risks the entity is facing.",
+   "performance_indicator": "Percentage of risk assessments that were completed within the planned or scheduled timeframe.",
+   "pdf_page": 27,
+   "controls": [
+    {
+     "control_id": "M2.2.1",
+     "title": "Information Security Risk Identification",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.2.2",
+     "title": "Information Security Risk Analysis",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.2.3",
+     "title": "Information Security Risk Evaluation",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M2.3",
+   "family_id": "M2",
+   "title": "Information Security Risk Treatment",
+   "objective": "To identify and plan appropriate risk treatment for the risks that have been assessed.",
+   "performance_indicator": "Percentage of identified risks that have been successfully treated within the planned timeframe.",
+   "pdf_page": 32,
+   "controls": [
+    {
+     "control_id": "M2.3.1",
+     "title": "Information Security Risk Treatment Options",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.3.2",
+     "title": "Identification of Controls",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.3.3",
+     "title": "Risk Treatment Plan",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.3.4",
+     "title": "Statement of Applicability",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M2.4",
+   "family_id": "M2",
+   "title": "Ongoing Information Security Risk Management",
+   "objective": "To ensure that the risk management process is communicated, consulted, and monitored.",
+   "performance_indicator": "Percentage of cases in the past year where the information security risk assessment and/or risk treatment was not updated as scheduled, despite significant changes occurring.",
+   "pdf_page": 36,
+   "controls": [
+    {
+     "control_id": "M2.4.1",
+     "title": "Information Security Risk Assessment Review and Update",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M2.4.2",
+     "title": "Risk Communication and Consultation",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M3.1",
+   "family_id": "M3",
+   "title": "Awareness and Training Policy",
+   "objective": "To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.",
+   "performance_indicator": "The trend in the number of employees that have not successfully participated in the awareness and training program.",
+   "pdf_page": 39,
+   "controls": [
+    {
+     "control_id": "M3.1.1",
+     "title": "Awareness and Training Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M3.2",
+   "family_id": "M3",
+   "title": "Awareness and Training Planning",
+   "objective": "To ensure that all person(s) carrying out work affecting information security are sufficiently aware of information security requirements and controls and are adequately trained to execute their responsibilities.",
+   "performance_indicator": "Percentage of actions (planned training, participation in conferences, etc.) that have not been carried out as planned.",
+   "pdf_page": 40,
+   "controls": [
+    {
+     "control_id": "M3.2.1",
+     "title": "Awareness and Training Program",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M3.3",
+   "family_id": "M3",
+   "title": "Security Training",
+   "objective": "To ensure that all personnel who are assigned responsibilities in information security are competent to perform the required tasks.",
+   "performance_indicator": "Percentage of identified information security training requirements that have been met with satisfactory results.",
+   "pdf_page": 42,
+   "controls": [
+    {
+     "control_id": "M3.3.1",
+     "title": "Training Needs",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M3.3.2",
+     "title": "Implementation Plan",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M3.3.3",
+     "title": "Training Execution",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M3.3.4",
+     "title": "Training Results",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M3.3.5",
+     "title": "Records Documentation",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M3.4",
+   "family_id": "M3",
+   "title": "Security Awareness",
+   "objective": "To foster security awareness of the workforce within the entity.",
+   "performance_indicator": "Percentage of identified information security awareness campaigns that have been successfully implemented.",
+   "pdf_page": 45,
+   "controls": [
+    {
+     "control_id": "M3.4.1",
+     "title": "Awareness Campaign",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M4.1",
+   "family_id": "M4",
+   "title": "Prior to Employment",
+   "objective": "To ensure that employees, contractors, and third party users understand their responsibilities, and are suitable for the roles they are considered for.",
+   "performance_indicator": "Percentage of new employees and contractors that have been fully screened and approved in accordance with company policies prior to starting work. Percentage of employees, contractors, and third parties who read and accepted relevant information security policies.",
+   "pdf_page": 47,
+   "controls": [
+    {
+     "control_id": "M4.1.1",
+     "title": "Screening",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M4.1.2",
+     "title": "Terms and Conditions of Employment",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M4.2",
+   "family_id": "M4",
+   "title": "During Employment",
+   "objective": "To ensure that employees, contractors, and third-party users are aware of information security threats and concerns, their responsibilities and liabilities, and are equipped to support organizational security policy in the course of their normal work, and to reduce the risk of human error.",
+   "performance_indicator": "Percentage of employees that participated in information security awareness training.",
+   "pdf_page": 50,
+   "controls": [
+    {
+     "control_id": "M4.2.1",
+     "title": "Notification and Communication of Security Policies",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M4.2.2",
+     "title": "Disciplinary Process",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M4.3",
+   "family_id": "M4",
+   "title": "Termination or Change of Employment",
+   "objective": "To ensure that employees, contractors and third party users exit an entity or change employment in an orderly manner.",
+   "performance_indicator": "Percentage of employees, contractors, and third-party user accounts that are blocked after termination. Percentage of employees, contractors, and third-party users accounts whose profiles are modified based on role change.",
+   "pdf_page": 52,
+   "controls": [
+    {
+     "control_id": "M4.3.1",
+     "title": "Responsibilities after termination or change of employment",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M4.3.2",
+     "title": "Return of Assets",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M5.1",
+   "family_id": "M5",
+   "title": "Compliance with Information Security Legal Requirements",
+   "objective": "To avoid breaches of any information security legal, statutory, regulatory, or contractual obligations.",
+   "performance_indicator": "Number of instances where regulatory fines are imposed on the entity due to non- compliance.",
+   "pdf_page": 54,
+   "controls": [
+    {
+     "control_id": "M5.1.1",
+     "title": "Identification of Applicable Legislation",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M5.1.2",
+     "title": "Intellectual Property Rights (IPR)",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M5.1.3",
+     "title": "Protection of Organizational Records",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "M5.1.4",
+     "title": "Data Protection and Privacy of Personal Information",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M5.2",
+   "family_id": "M5",
+   "title": "Compliance with Information Policies and Standards",
+   "objective": "To ensure compliance with the entity’s information security policies and standards.",
+   "performance_indicator": "Percentage of compliance with the control requirements in this standard.",
+   "pdf_page": 59,
+   "controls": [
+    {
+     "control_id": "M5.2.1",
+     "title": "Information Security Compliance",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M5.3",
+   "family_id": "M5",
+   "title": "Information Systems Audit Considerations",
+   "objective": "To maximize the effectiveness of the information systems audit process",
+   "performance_indicator": "Percentage of audits interrupted due to operational or security issues.",
+   "pdf_page": 60,
+   "controls": [
+    {
+     "control_id": "M5.3.1",
+     "title": "Protection of information systems during audit testing",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M6.1",
+   "family_id": "M6",
+   "title": "Performance Evaluation Policy",
+   "objective": "To maintain a performance evaluation policy outlining the approach to measure and evaluate the effectiveness of the information security of the entity.",
+   "performance_indicator": "Percentage of established KPIs that are actively measured and tracked.",
+   "pdf_page": 61,
+   "controls": [
+    {
+     "control_id": "M6.1.1",
+     "title": "Performance Evaluation Policy",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "M6.2",
+   "family_id": "M6",
+   "title": "Performance Evaluation",
+   "objective": "To ensure that information security performance is measured, analyzed and evaluated.",
+   "performance_indicator": "Percentage of all those non-conformities that have been detected and not resolved within the time frame planned.",
+   "pdf_page": 62,
+   "controls": [
+    {
+     "control_id": "M6.2.1",
+     "title": "Monitoring, Measurement, Analysis and Evaluation",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M6.2.2",
+     "title": "Internal Audits",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M6.2.3",
+     "title": "Management Review",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "M6.3",
+   "family_id": "M6",
+   "title": "Improvement",
+   "objective": "To correct nonconformities with this standard and to continually improve the information security program in place.",
+   "performance_indicator": "Number of all non-conformities that have been detected and not resolved within the time frame planned.",
+   "pdf_page": 67,
+   "controls": [
+    {
+     "control_id": "M6.3.1",
+     "title": "Nonconformity and Corrective Action",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "M6.3.2",
+     "title": "Continual Improvement",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T1.1",
+   "family_id": "T1",
+   "title": "Information Asset Management Policy",
+   "objective": "To maintain an information asset management policy outlining the procedures to identify, classify, and handle information assets.",
+   "performance_indicator": "Extent of asset management policy enforcement across the entity.",
+   "pdf_page": 69,
+   "controls": [
+    {
+     "control_id": "T1.1.1",
+     "title": "Information Asset Management Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T1.2",
+   "family_id": "T1",
+   "title": "Responsibility for Assets",
+   "objective": "To achieve and maintain appropriate protection of the entity’s information assets.",
+   "performance_indicator": "Percentage of employees who have authorized access to information systems only after signing an acknowledgment that they have read and understood rules of behavior. Percentage of entity’s information assets without assigned owners or responsible parties.",
+   "pdf_page": 70,
+   "controls": [
+    {
+     "control_id": "T1.2.1",
+     "title": "Inventory of Information and other Associated Assets",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T1.2.2",
+     "title": "Acceptable Use of Information and other Associated Assets",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T1.3",
+   "family_id": "T1",
+   "title": "Information Protection",
+   "objective": "To ensure that information receives an appropriate level of protection.",
+   "performance_indicator": "Percentage of information assets that are correctly classified and handled.",
+   "pdf_page": 74,
+   "controls": [
+    {
+     "control_id": "T1.3.1",
+     "title": "Classification of Information",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T1.3.2",
+     "title": "Labeling of Information",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T1.3.3",
+     "title": "Handling of Information Assets",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T1.3.4",
+     "title": "Information transfer",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T1.3.5",
+     "title": "Information Leakage Protection",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T1.3.6",
+     "title": "Information Deletion",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T1.4",
+   "family_id": "T1",
+   "title": "Storage Media",
+   "objective": "To ensure authorized disclosure, modification, removal, or destruction of information on storage media.",
+   "performance_indicator": "Percentage of information assets that are not disposed securely.",
+   "pdf_page": 82,
+   "controls": [
+    {
+     "control_id": "T1.4.1",
+     "title": "Management of Removable Storage Media",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T1.4.2",
+     "title": "Secure Re-use or Disposal of Storage Media",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T1.5",
+   "family_id": "T1",
+   "title": "User Endpoint Devices",
+   "objective": "To protect information against the risks introduced by using user endpoint devices.",
+   "performance_indicator": "Percentage of mobile devices given access to company resources without any MDM solution. Percentage of endpoint devices that have full disk encryption enabled.",
+   "pdf_page": 84,
+   "controls": [
+    {
+     "control_id": "T1.5.1",
+     "title": "Security of User Endpoint Devices",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T2.1",
+   "family_id": "T2",
+   "title": "Physical and Environmental Security Policy",
+   "objective": "To maintain a physical and environmental security policy that outlines the security requirements of physical areas and equipment.",
+   "performance_indicator": "Extent of physical and environmental security policy deployment and adoption across the entity.",
+   "pdf_page": 86,
+   "controls": [
+    {
+     "control_id": "T2.1.1",
+     "title": "Physical and Environmental Security Policy",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T2.2",
+   "family_id": "T2",
+   "title": "Secure Areas",
+   "objective": "To prevent unauthorized physical access, damage, and interference to the entity’s premises and information.",
+   "performance_indicator": "Percentage of resolved/closed corrective items identified from periodic physical security site surveys. Percentage of physical access reviews conducted as per the defined frequency.",
+   "pdf_page": 87,
+   "controls": [
+    {
+     "control_id": "T2.2.1",
+     "title": "Physical Security Perimeter",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.2.2",
+     "title": "Physical Entry Controls",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.2.3",
+     "title": "Securing offices, Rooms and Facilities",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.2.4",
+     "title": "Protecting Against External and Environmental Threats",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.2.5",
+     "title": "Protection of Secure Areas",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T2.3",
+   "family_id": "T2",
+   "title": "Equipment Security",
+   "objective": "To prevent loss, damage, theft or compromise of assets and interruption to the entity’s activities.",
+   "performance_indicator": "Percentage of performed checks that revealed unauthorized movement of information assets or other information security-related issues. Percentage of planned maintenance activities for supporting utilities that were not completed as scheduled.",
+   "pdf_page": 93,
+   "controls": [
+    {
+     "control_id": "T2.3.1",
+     "title": "Equipment Siting and Protection",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.2",
+     "title": "Supporting Utilities",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.3",
+     "title": "Cabling Security",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.4",
+     "title": "Equipment Maintenance",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.5",
+     "title": "Security of Equipment off-Premises",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.6",
+     "title": "Secure Disposal or Re-Use of Equipment",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T2.3.7",
+     "title": "Clear Desk and Clear Screen Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T3.1",
+   "family_id": "T3",
+   "title": "Operational Procedures and Responsibilities",
+   "objective": "To ensure the correct and secure operation of information systems.",
+   "performance_indicator": "Percentage of information systems that meet all operational information security requirements.",
+   "pdf_page": 99,
+   "controls": [
+    {
+     "control_id": "T3.1.1",
+     "title": "Configuration Management",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.1.2",
+     "title": "Documented Operating Procedures",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T3.1.3",
+     "title": "Change Management",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.1.4",
+     "title": "Separation of Development, Test and Operational Facilities",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T3.1.5",
+     "title": "Capacity Management",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T3.1.6",
+     "title": "Controls Against Malware",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.1.7",
+     "title": "Information Backup",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.1.8",
+     "title": "Control of Operational Software",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T3.2",
+   "family_id": "T3",
+   "title": "Monitoring",
+   "objective": "To detect, prevent and correct the misuse of systems and information that could impact the security of an entity.",
+   "performance_indicator": "Percentage of critical systems and applications that have audit logging enabled.",
+   "pdf_page": 109,
+   "controls": [
+    {
+     "control_id": "T3.2.1",
+     "title": "Monitoring Policy and Procedures",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T3.2.2",
+     "title": "Logging",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.2.3",
+     "title": "Monitoring System Use",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.2.4",
+     "title": "Clock Synchronization",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T3.3",
+   "family_id": "T3",
+   "title": "Threat and Vulnerability Management",
+   "objective": "To provide awareness of the threat environment and mitigate risks from the exploitation of published or identified technical vulnerabilities.",
+   "performance_indicator": "Percentage of identified vulnerabilities mitigated within the acceptable time periods as defined in security requirements.",
+   "pdf_page": 116,
+   "controls": [
+    {
+     "control_id": "T3.3.1",
+     "title": "Threat Intelligence",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T3.3.2",
+     "title": "Management of Technical Vulnerabilities",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T3.4",
+   "family_id": "T3",
+   "title": "Cryptography and Key Management",
+   "objective": "To protect the confidentiality, authenticity or integrity of information by cryptographic means.",
+   "performance_indicator": "Percentage of systems containing valuable/sensitive data for which suitable cryptographic controls have been fully implemented.",
+   "pdf_page": 120,
+   "controls": [
+    {
+     "control_id": "T3.4.1",
+     "title": "Cryptography Governance",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.4.2",
+     "title": "Data at Rest and in Motion",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.4.3",
+     "title": "Key Management",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T3.4.4",
+     "title": "Cryptographic Requirements in Post Quantum",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T4.1",
+   "family_id": "T4",
+   "title": "Network Security Management",
+   "objective": "To ensure the protection of information in networks and the security of the supporting infrastructure.",
+   "performance_indicator": "Percentage of information systems that meet all network security management requirements.",
+   "pdf_page": 126,
+   "controls": [
+    {
+     "control_id": "T4.1.1",
+     "title": "Network Controls",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T4.1.2",
+     "title": "Security of Network Services",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T4.1.3",
+     "title": "Segregation in Networks",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T4.1.4",
+     "title": "Security of Wireless Networks",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T4.1.5",
+     "title": "Web Filtering",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T5.1",
+   "family_id": "T5",
+   "title": "Identity and Access Management",
+   "objective": "To maintain an identity and access management policy to control access to information and other associated assets.",
+   "performance_indicator": "Extent of identity and access management policy deployment and adoption across the entity.",
+   "pdf_page": 133,
+   "controls": [
+    {
+     "control_id": "T5.1.1",
+     "title": "Identity and Access Management Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T5.2",
+   "family_id": "T5",
+   "title": "User Access Management",
+   "objective": "To enforce authorized user access and to prevent unauthorized access to information systems.",
+   "performance_indicator": "Percentage of identities that are managed by centralized identity management system. The total number of access requests processed within a specified timeframe. The number of unauthorized access attempts detected and prevented. Percentage of accuracy in access provisioning and deprovisioning. Number of delayed access change requests and the average time taken to action them.",
+   "pdf_page": 135,
+   "controls": [
+    {
+     "control_id": "T5.2.1",
+     "title": "Identity Management",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T5.2.2",
+     "title": "Access Rights",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T5.2.3",
+     "title": "Privileged Access Rights",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T5.2.4",
+     "title": "Review of User Access Rights",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T5.3",
+   "family_id": "T5",
+   "title": "Secure authentication and authorization",
+   "objective": "To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.",
+   "performance_indicator": "Percentage of accounts that have MFA enabled. Percentage of accounts that have SSO enabled. Percentage of successful authentication attempts relative to the total number of authentication attempts.",
+   "pdf_page": 139,
+   "controls": [
+    {
+     "control_id": "T5.3.1",
+     "title": "Secure Authentication",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T5.3.2",
+     "title": "Information Access Restriction",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T5.3.3",
+     "title": "Remote Access",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T5.3.4",
+     "title": "Use of privileged utility programs",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T5.4",
+   "family_id": "T5",
+   "title": "Authentication Information",
+   "objective": "To ensure proper authentication and prevent failures of authentication processes.",
+   "performance_indicator": "Percentage of systems compliant with the entity’s password policy.",
+   "pdf_page": 144,
+   "controls": [
+    {
+     "control_id": "T5.4.1",
+     "title": "Allocation of Authentication Information",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T5.4.2",
+     "title": "User Responsibilities",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T5.4.3",
+     "title": "User Credentials Management System",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T6.1",
+   "family_id": "T6",
+   "title": "Third Party Security Policy",
+   "objective": "To maintain a third party security policy covering the security of acquired services.",
+   "performance_indicator": "Extent of third party security policy deployment and adoption across the entity.",
+   "pdf_page": 147,
+   "controls": [
+    {
+     "control_id": "T6.1.1",
+     "title": "Third Party Security Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T6.2",
+   "family_id": "T6",
+   "title": "Management of Third Party and Supply Chain Risks",
+   "objective": "To manage the information security risks associated with the use of supplier’s products or services.",
+   "performance_indicator": "Frequency of information security incidents involving third parties.",
+   "pdf_page": 148,
+   "controls": [
+    {
+     "control_id": "T6.2.1",
+     "title": "Third-Party Risk Management",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T6.2.2",
+     "title": "Third party security assessment during onboarding",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T6.2.3",
+     "title": "Managing information security in the ICT supply chain",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T6.2.4",
+     "title": "Addressing information security within third party agreements",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T6.2.5",
+     "title": "Monitoring, review, and change management of third party services",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T7.1",
+   "family_id": "T7",
+   "title": "Information Systems Acquisition, Development and Maintenance Policy",
+   "objective": "To maintain an information systems acquisition, development and maintenance policy covering the security of information systems throughout its lifecycle.",
+   "performance_indicator": "Extent of information systems acquisition, development and maintenance policy enforcement and adoption across the entity.",
+   "pdf_page": 154,
+   "controls": [
+    {
+     "control_id": "T7.1.1",
+     "title": "Information Systems Acquisition, Development and Maintenance Policy",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T7.2",
+   "family_id": "T7",
+   "title": "Security Requirements of Information Systems",
+   "objective": "To ensure that security requirements are established and functionally integrated into information systems.",
+   "performance_indicator": "Percentage of systems implementations accepted into service with all security requirements implemented.",
+   "pdf_page": 156,
+   "controls": [
+    {
+     "control_id": "T7.2.1",
+     "title": "Application Security Requirements",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T7.2.2",
+     "title": "Secure system engineering principles",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T7.3",
+   "family_id": "T7",
+   "title": "Secure software development",
+   "objective": "To ensure the software is written securely thereby reducing the number of potential information security vulnerabilities in the software.",
+   "performance_indicator": "Instances where critical security vulnerabilities were not fixed before deployment of code into a production environment.",
+   "pdf_page": 160,
+   "controls": [
+    {
+     "control_id": "T7.3.1",
+     "title": "Secure Coding",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T7.3.2",
+     "title": "Outsourced Software Development",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T7.3.3",
+     "title": "Access Control to Program Source Code",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T7.4",
+   "family_id": "T7",
+   "title": "Secure testing and deployment",
+   "objective": "To validate if information security requirements are met when applications or code are deployed to the production environment, protect the production environment and data from compromise by development and test activities, and preserve information security when executing changes.",
+   "performance_indicator": "Number of cases where the change management processes have not been executed correctly.",
+   "pdf_page": 165,
+   "controls": [
+    {
+     "control_id": "T7.4.1",
+     "title": "Change Control Procedures",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T7.4.2",
+     "title": "Protection of System Test Data",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T7.4.3",
+     "title": "Security testing in development and acceptance",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T8.1",
+   "family_id": "T8",
+   "title": "Information Security Incident Management Policy",
+   "objective": "To maintain an information security incident management policy that can provide the framework for the detection, reporting, and treatment of incidents.",
+   "performance_indicator": "Extent of information security incident management policy deployment and adoption across the entity.",
+   "pdf_page": 169,
+   "controls": [
+    {
+     "control_id": "T8.1.1",
+     "title": "Information Security Incident Management Policy",
+     "priority": "P2",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T8.1.2",
+     "title": "Information Security Event Reporting",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    }
+   ]
+  },
+  {
+   "id": "T8.2",
+   "family_id": "T8",
+   "title": "Management of Information Security Incidents and Improvements",
+   "objective": "To ensure a consistent and effective approach to the management of information security incidents.",
+   "performance_indicator": "The percentage of security incidents reported within the required timeframe, classified, and handled according to the incident classification policy.",
+   "pdf_page": 171,
+   "controls": [
+    {
+     "control_id": "T8.2.1",
+     "title": "Incident Response Plan",
+     "priority": "P1",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T8.2.2",
+     "title": "Incident Classification",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T8.2.3",
+     "title": "Incident Response Training",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T8.2.4",
+     "title": "Incident Response Testing",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T8.2.5",
+     "title": "Information Security Incident Documentation",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T8.2.6",
+     "title": "Learning From Information Security Incidents",
+     "priority": "P4",
+     "applicability": "Based on risk assessment"
+    },
+    {
+     "control_id": "T8.2.7",
+     "title": "Collection of Evidence",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T9.1",
+   "family_id": "T9",
+   "title": "ICT readiness for business continuity",
+   "objective": "To ensure the availability of the organization’s information and other associated assets during disruption.",
+   "performance_indicator": "Percentage of organizational units with documented information continuity plans, regular testing and business recovery is meeting expectations, ensuring minimal downtime.",
+   "pdf_page": 178,
+   "controls": [
+    {
+     "control_id": "T9.1.1",
+     "title": "ICT readiness for business continuity",
+     "priority": "P2",
+     "applicability": "Always applicable"
+    },
+    {
+     "control_id": "T9.1.2",
+     "title": "Information security during disruption",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  },
+  {
+   "id": "T9.2",
+   "family_id": "T9",
+   "title": "Testing, Maintaining and Reassessing Plans",
+   "objective": "To ensure the effectiveness of the information systems continuity plans and that they are always up to date.",
+   "performance_indicator": "Percentage of information systems that went through annual testing.",
+   "pdf_page": 181,
+   "controls": [
+    {
+     "control_id": "T9.2.1",
+     "title": "Testing, Maintaining and Re-Assessing Information Systems Continuity Plans",
+     "priority": "P3",
+     "applicability": "Based on risk assessment"
+    }
+   ]
+  }
+ ],
+ "risks": [
+  {
+   "id": "uae_ia:M1.1:01",
+   "objective_id": "M1.1",
+   "title": "Insufficient resources",
+   "description": "A relevant threat or vulnerability for control objective M1.1, Entity Context and Leadership, in the UAE Information Assurance Standard. The objective: \"To establish leadership and a management framework to initiate and control the implementation of information security within the entity.\" Related controls: M1.1.1, M1.1.2, M1.1.3."
+  },
+  {
+   "id": "uae_ia:M1.1:02",
+   "objective_id": "M1.1",
+   "title": "Non-compliance with information security controls",
+   "description": "A relevant threat or vulnerability for control objective M1.1, Entity Context and Leadership, in the UAE Information Assurance Standard. The objective: \"To establish leadership and a management framework to initiate and control the implementation of information security within the entity.\" Related controls: M1.1.1, M1.1.2, M1.1.3."
+  },
+  {
+   "id": "uae_ia:M1.1:03",
+   "objective_id": "M1.1",
+   "title": "Lack of skilled information security personnel",
+   "description": "A relevant threat or vulnerability for control objective M1.1, Entity Context and Leadership, in the UAE Information Assurance Standard. The objective: \"To establish leadership and a management framework to initiate and control the implementation of information security within the entity.\" Related controls: M1.1.1, M1.1.2, M1.1.3."
+  },
+  {
+   "id": "uae_ia:M1.1:04",
+   "objective_id": "M1.1",
+   "title": "Incomplete or not up-to-date documentation",
+   "description": "A relevant threat or vulnerability for control objective M1.1, Entity Context and Leadership, in the UAE Information Assurance Standard. The objective: \"To establish leadership and a management framework to initiate and control the implementation of information security within the entity.\" Related controls: M1.1.1, M1.1.2, M1.1.3."
+  },
+  {
+   "id": "uae_ia:M1.2:01",
+   "objective_id": "M1.2",
+   "title": "Lack of information security policies",
+   "description": "A relevant threat or vulnerability for control objective M1.2, Information Security Policy, in the UAE Information Assurance Standard. The objective: \"To provide a framework and management direction and support for information security in the entity, in accordance with business requirements and relevant laws and regulations.\" Related controls: M1.2.1, M1.2.2, M1.2.3."
+  },
+  {
+   "id": "uae_ia:M1.2:02",
+   "objective_id": "M1.2",
+   "title": "Inadequate information security policies",
+   "description": "A relevant threat or vulnerability for control objective M1.2, Information Security Policy, in the UAE Information Assurance Standard. The objective: \"To provide a framework and management direction and support for information security in the entity, in accordance with business requirements and relevant laws and regulations.\" Related controls: M1.2.1, M1.2.2, M1.2.3."
+  },
+  {
+   "id": "uae_ia:M1.2:03",
+   "objective_id": "M1.2",
+   "title": "Unawareness of information security policies and procedures among third parties and employees",
+   "description": "A relevant threat or vulnerability for control objective M1.2, Information Security Policy, in the UAE Information Assurance Standard. The objective: \"To provide a framework and management direction and support for information security in the entity, in accordance with business requirements and relevant laws and regulations.\" Related controls: M1.2.1, M1.2.2, M1.2.3."
+  },
+  {
+   "id": "uae_ia:M1.2:04",
+   "objective_id": "M1.2",
+   "title": "Non-compliance with information security controls",
+   "description": "A relevant threat or vulnerability for control objective M1.2, Information Security Policy, in the UAE Information Assurance Standard. The objective: \"To provide a framework and management direction and support for information security in the entity, in accordance with business requirements and relevant laws and regulations.\" Related controls: M1.2.1, M1.2.2, M1.2.3."
+  },
+  {
+   "id": "uae_ia:M1.3:01",
+   "objective_id": "M1.3",
+   "title": "Breaches of information security",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:02",
+   "objective_id": "M1.3",
+   "title": "Lack of information security in project management",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:03",
+   "objective_id": "M1.3",
+   "title": "Insufficient resources",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:04",
+   "objective_id": "M1.3",
+   "title": "Non-compliance with information security controls",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:05",
+   "objective_id": "M1.3",
+   "title": "Non-compliance with national regulatory mandates",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:06",
+   "objective_id": "M1.3",
+   "title": "Lack of skilled information security personnel",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M1.3:07",
+   "objective_id": "M1.3",
+   "title": "Incomplete or not up-to-date documentation",
+   "description": "A relevant threat or vulnerability for control objective M1.3, Support, in the UAE Information Assurance Standard. The objective: \"To provide sufficient resources, appropriate communication, and documentation for the entity’s Information Security Program.\" Related controls: M1.3.1, M1.3.2, M1.3.3, M1.3.4, M1.3.5."
+  },
+  {
+   "id": "uae_ia:M2.1:01",
+   "objective_id": "M2.1",
+   "title": "Unsuitable risk management policy",
+   "description": "A relevant threat or vulnerability for control objective M2.1, Information Security Risk Management Policy, in the UAE Information Assurance Standard. The objective: \"To establish a formal information risk management framework for managing an entity’s information security risks by establishing the context, performing risk assessment, implementing risk treatments, and monitoring their implementation.\" Related controls: M2.1.1."
+  },
+  {
+   "id": "uae_ia:M2.1:02",
+   "objective_id": "M2.1",
+   "title": "Inconsistent or incomparable risk assessment results",
+   "description": "A relevant threat or vulnerability for control objective M2.1, Information Security Risk Management Policy, in the UAE Information Assurance Standard. The objective: \"To establish a formal information risk management framework for managing an entity’s information security risks by establishing the context, performing risk assessment, implementing risk treatments, and monitoring their implementation.\" Related controls: M2.1.1."
+  },
+  {
+   "id": "uae_ia:M2.1:03",
+   "objective_id": "M2.1",
+   "title": "Inconsistent or unsuitable risk evaluation criteria",
+   "description": "A relevant threat or vulnerability for control objective M2.1, Information Security Risk Management Policy, in the UAE Information Assurance Standard. The objective: \"To establish a formal information risk management framework for managing an entity’s information security risks by establishing the context, performing risk assessment, implementing risk treatments, and monitoring their implementation.\" Related controls: M2.1.1."
+  },
+  {
+   "id": "uae_ia:M2.2:01",
+   "objective_id": "M2.2",
+   "title": "Unidentified risks",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.2:02",
+   "objective_id": "M2.2",
+   "title": "Incorrect asset valuation",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.2:03",
+   "objective_id": "M2.2",
+   "title": "Threats or vulnerabilities that have not been considered",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.2:04",
+   "objective_id": "M2.2",
+   "title": "Wrongly assessed risks",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.2:05",
+   "objective_id": "M2.2",
+   "title": "Inadequate risk evaluation criteria",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.2:06",
+   "objective_id": "M2.2",
+   "title": "Inadequate skills and knowledge to conduct risk assessment",
+   "description": "A relevant threat or vulnerability for control objective M2.2, Information Security Risk Assessment, in the UAE Information Assurance Standard. The objective: \"To identify, analyze, and evaluate the information security risks the entity is facing.\" Related controls: M2.2.1, M2.2.2, M2.2.3."
+  },
+  {
+   "id": "uae_ia:M2.3:01",
+   "objective_id": "M2.3",
+   "title": "Inadequately treated risks",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.3:02",
+   "objective_id": "M2.3",
+   "title": "Incomplete risk register",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.3:03",
+   "objective_id": "M2.3",
+   "title": "Too high residual risks",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.3:04",
+   "objective_id": "M2.3",
+   "title": "Wrongly assessed residual risks",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.3:05",
+   "objective_id": "M2.3",
+   "title": "Lack of management awareness of information security risks",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.3:06",
+   "objective_id": "M2.3",
+   "title": "Delayed implementation of risk treatment plans",
+   "description": "A relevant threat or vulnerability for control objective M2.3, Information Security Risk Treatment, in the UAE Information Assurance Standard. The objective: \"To identify and plan appropriate risk treatment for the risks that have been assessed.\" Related controls: M2.3.1, M2.3.2, M2.3.3, M2.3.4."
+  },
+  {
+   "id": "uae_ia:M2.4:01",
+   "objective_id": "M2.4",
+   "title": "No review or update of the information security risk assessment and treatment",
+   "description": "A relevant threat or vulnerability for control objective M2.4, Ongoing Information Security Risk Management, in the UAE Information Assurance Standard. The objective: \"To ensure that the risk management process is communicated, consulted, and monitored.\" Related controls: M2.4.1, M2.4.2."
+  },
+  {
+   "id": "uae_ia:M2.4:02",
+   "objective_id": "M2.4",
+   "title": "Unidentified new information security risks",
+   "description": "A relevant threat or vulnerability for control objective M2.4, Ongoing Information Security Risk Management, in the UAE Information Assurance Standard. The objective: \"To ensure that the risk management process is communicated, consulted, and monitored.\" Related controls: M2.4.1, M2.4.2."
+  },
+  {
+   "id": "uae_ia:M2.4:03",
+   "objective_id": "M2.4",
+   "title": "Low engagement from stakeholders",
+   "description": "A relevant threat or vulnerability for control objective M2.4, Ongoing Information Security Risk Management, in the UAE Information Assurance Standard. The objective: \"To ensure that the risk management process is communicated, consulted, and monitored.\" Related controls: M2.4.1, M2.4.2."
+  },
+  {
+   "id": "uae_ia:M3.1:01",
+   "objective_id": "M3.1",
+   "title": "Outdated or insufficient awareness and training policy",
+   "description": "A relevant threat or vulnerability for control objective M3.1, Awareness and Training Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.\" Related controls: M3.1.1."
+  },
+  {
+   "id": "uae_ia:M3.1:02",
+   "objective_id": "M3.1",
+   "title": "Incomplete identification of training needs",
+   "description": "A relevant threat or vulnerability for control objective M3.1, Awareness and Training Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.\" Related controls: M3.1.1."
+  },
+  {
+   "id": "uae_ia:M3.1:03",
+   "objective_id": "M3.1",
+   "title": "Non-comprehensive training identification approach",
+   "description": "A relevant threat or vulnerability for control objective M3.1, Awareness and Training Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.\" Related controls: M3.1.1."
+  },
+  {
+   "id": "uae_ia:M3.1:04",
+   "objective_id": "M3.1",
+   "title": "Accidental information leaks due to lack of awareness",
+   "description": "A relevant threat or vulnerability for control objective M3.1, Awareness and Training Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.\" Related controls: M3.1.1."
+  },
+  {
+   "id": "uae_ia:M3.1:05",
+   "objective_id": "M3.1",
+   "title": "Software malfunction due to lack of trained personnel",
+   "description": "A relevant threat or vulnerability for control objective M3.1, Awareness and Training Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an awareness and training policy outlining the approach to identifying relevant topics, enrollment of stakeholders, and documentation of activities.\" Related controls: M3.1.1."
+  },
+  {
+   "id": "uae_ia:M3.2:01",
+   "objective_id": "M3.2",
+   "title": "Non-compliance with controls due to a lack of awareness",
+   "description": "A relevant threat or vulnerability for control objective M3.2, Awareness and Training Planning, in the UAE Information Assurance Standard. The objective: \"To ensure that all person(s) carrying out work affecting information security are sufficiently aware of information security requirements and controls and are adequately trained to execute their responsibilities.\" Related controls: M3.2.1."
+  },
+  {
+   "id": "uae_ia:M3.2:02",
+   "objective_id": "M3.2",
+   "title": "Unidentified security breaches",
+   "description": "A relevant threat or vulnerability for control objective M3.2, Awareness and Training Planning, in the UAE Information Assurance Standard. The objective: \"To ensure that all person(s) carrying out work affecting information security are sufficiently aware of information security requirements and controls and are adequately trained to execute their responsibilities.\" Related controls: M3.2.1."
+  },
+  {
+   "id": "uae_ia:M3.2:03",
+   "objective_id": "M3.2",
+   "title": "Lack of skilled information security personnel",
+   "description": "A relevant threat or vulnerability for control objective M3.2, Awareness and Training Planning, in the UAE Information Assurance Standard. The objective: \"To ensure that all person(s) carrying out work affecting information security are sufficiently aware of information security requirements and controls and are adequately trained to execute their responsibilities.\" Related controls: M3.2.1."
+  },
+  {
+   "id": "uae_ia:M3.2:04",
+   "objective_id": "M3.2",
+   "title": "Promoting a culture of disinterest in information security matters",
+   "description": "A relevant threat or vulnerability for control objective M3.2, Awareness and Training Planning, in the UAE Information Assurance Standard. The objective: \"To ensure that all person(s) carrying out work affecting information security are sufficiently aware of information security requirements and controls and are adequately trained to execute their responsibilities.\" Related controls: M3.2.1."
+  },
+  {
+   "id": "uae_ia:M3.3:01",
+   "objective_id": "M3.3",
+   "title": "Software malfunction due to lack of trained personnel",
+   "description": "A relevant threat or vulnerability for control objective M3.3, Security Training, in the UAE Information Assurance Standard. The objective: \"To ensure that all personnel who are assigned responsibilities in information security are competent to perform the required tasks.\" Related controls: M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5."
+  },
+  {
+   "id": "uae_ia:M3.3:02",
+   "objective_id": "M3.3",
+   "title": "Error in use due to undelivered training",
+   "description": "A relevant threat or vulnerability for control objective M3.3, Security Training, in the UAE Information Assurance Standard. The objective: \"To ensure that all personnel who are assigned responsibilities in information security are competent to perform the required tasks.\" Related controls: M3.3.1, M3.3.2, M3.3.3, M3.3.4, M3.3.5."
+  },
+  {
+   "id": "uae_ia:M3.4:01",
+   "objective_id": "M3.4",
+   "title": "Successful pretexting due to lack of awareness",
+   "description": "A relevant threat or vulnerability for control objective M3.4, Security Awareness, in the UAE Information Assurance Standard. The objective: \"To foster security awareness of the workforce within the entity.\" Related controls: M3.4.1."
+  },
+  {
+   "id": "uae_ia:M3.4:02",
+   "objective_id": "M3.4",
+   "title": "Accidental leaks of data by staff",
+   "description": "A relevant threat or vulnerability for control objective M3.4, Security Awareness, in the UAE Information Assurance Standard. The objective: \"To foster security awareness of the workforce within the entity.\" Related controls: M3.4.1."
+  },
+  {
+   "id": "uae_ia:M3.4:03",
+   "objective_id": "M3.4",
+   "title": "Illegal processing of data",
+   "description": "A relevant threat or vulnerability for control objective M3.4, Security Awareness, in the UAE Information Assurance Standard. The objective: \"To foster security awareness of the workforce within the entity.\" Related controls: M3.4.1."
+  },
+  {
+   "id": "uae_ia:M4.1:01",
+   "objective_id": "M4.1",
+   "title": "Intentional leaks and sharing of data by staff",
+   "description": "A relevant threat or vulnerability for control objective M4.1, Prior to Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third party users understand their responsibilities, and are suitable for the roles they are considered for.\" Related controls: M4.1.1, M4.1.2."
+  },
+  {
+   "id": "uae_ia:M4.1:02",
+   "objective_id": "M4.1",
+   "title": "Successful pretexting due to lack of information security awareness among employees",
+   "description": "A relevant threat or vulnerability for control objective M4.1, Prior to Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third party users understand their responsibilities, and are suitable for the roles they are considered for.\" Related controls: M4.1.1, M4.1.2."
+  },
+  {
+   "id": "uae_ia:M4.2:01",
+   "objective_id": "M4.2",
+   "title": "Abuse of system access/privileges",
+   "description": "A relevant threat or vulnerability for control objective M4.2, During Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third-party users are aware of information security threats and concerns, their responsibilities and liabilities, and are equipped to support organizational security policy in the course of their normal work, and to reduce the risk of human error.\" Related controls: M4.2.1, M4.2.2."
+  },
+  {
+   "id": "uae_ia:M4.2:02",
+   "objective_id": "M4.2",
+   "title": "Use of unapproved hardware/devices",
+   "description": "A relevant threat or vulnerability for control objective M4.2, During Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third-party users are aware of information security threats and concerns, their responsibilities and liabilities, and are equipped to support organizational security policy in the course of their normal work, and to reduce the risk of human error.\" Related controls: M4.2.1, M4.2.2."
+  },
+  {
+   "id": "uae_ia:M4.2:03",
+   "objective_id": "M4.2",
+   "title": "Illegal processing of data",
+   "description": "A relevant threat or vulnerability for control objective M4.2, During Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third-party users are aware of information security threats and concerns, their responsibilities and liabilities, and are equipped to support organizational security policy in the course of their normal work, and to reduce the risk of human error.\" Related controls: M4.2.1, M4.2.2."
+  },
+  {
+   "id": "uae_ia:M4.2:04",
+   "objective_id": "M4.2",
+   "title": "Non-voluntary disclosure of information",
+   "description": "A relevant threat or vulnerability for control objective M4.2, During Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors, and third-party users are aware of information security threats and concerns, their responsibilities and liabilities, and are equipped to support organizational security policy in the course of their normal work, and to reduce the risk of human error.\" Related controls: M4.2.1, M4.2.2."
+  },
+  {
+   "id": "uae_ia:M4.3:01",
+   "objective_id": "M4.3",
+   "title": "Abuse of system access/privileges",
+   "description": "A relevant threat or vulnerability for control objective M4.3, Termination or Change of Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors and third party users exit an entity or change employment in an orderly manner.\" Related controls: M4.3.1, M4.3.2."
+  },
+  {
+   "id": "uae_ia:M4.3:02",
+   "objective_id": "M4.3",
+   "title": "Intentional leaks and sharing of data by staff",
+   "description": "A relevant threat or vulnerability for control objective M4.3, Termination or Change of Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors and third party users exit an entity or change employment in an orderly manner.\" Related controls: M4.3.1, M4.3.2."
+  },
+  {
+   "id": "uae_ia:M4.3:03",
+   "objective_id": "M4.3",
+   "title": "Illegal processing of data",
+   "description": "A relevant threat or vulnerability for control objective M4.3, Termination or Change of Employment, in the UAE Information Assurance Standard. The objective: \"To ensure that employees, contractors and third party users exit an entity or change employment in an orderly manner.\" Related controls: M4.3.1, M4.3.2."
+  },
+  {
+   "id": "uae_ia:M5.1:01",
+   "objective_id": "M5.1",
+   "title": "Breaches of legal and regulatory requirements",
+   "description": "A relevant threat or vulnerability for control objective M5.1, Compliance with Information Security Legal Requirements, in the UAE Information Assurance Standard. The objective: \"To avoid breaches of any information security legal, statutory, regulatory, or contractual obligations.\" Related controls: M5.1.1, M5.1.2, M5.1.3, M5.1.4."
+  },
+  {
+   "id": "uae_ia:M5.1:02",
+   "objective_id": "M5.1",
+   "title": "Unawareness of legal and regulatory requirements",
+   "description": "A relevant threat or vulnerability for control objective M5.1, Compliance with Information Security Legal Requirements, in the UAE Information Assurance Standard. The objective: \"To avoid breaches of any information security legal, statutory, regulatory, or contractual obligations.\" Related controls: M5.1.1, M5.1.2, M5.1.3, M5.1.4."
+  },
+  {
+   "id": "uae_ia:M5.1:03",
+   "objective_id": "M5.1",
+   "title": "Inaccurate identification of legal and regulatory requirements",
+   "description": "A relevant threat or vulnerability for control objective M5.1, Compliance with Information Security Legal Requirements, in the UAE Information Assurance Standard. The objective: \"To avoid breaches of any information security legal, statutory, regulatory, or contractual obligations.\" Related controls: M5.1.1, M5.1.2, M5.1.3, M5.1.4."
+  },
+  {
+   "id": "uae_ia:M5.2:01",
+   "objective_id": "M5.2",
+   "title": "Non-compliance with requirements of this standard",
+   "description": "A relevant threat or vulnerability for control objective M5.2, Compliance with Information Policies and Standards, in the UAE Information Assurance Standard. The objective: \"To ensure compliance with the entity’s information security policies and standards.\" Related controls: M5.2.1."
+  },
+  {
+   "id": "uae_ia:M5.2:02",
+   "objective_id": "M5.2",
+   "title": "Inaccurate identification of requirements of this standard",
+   "description": "A relevant threat or vulnerability for control objective M5.2, Compliance with Information Policies and Standards, in the UAE Information Assurance Standard. The objective: \"To ensure compliance with the entity’s information security policies and standards.\" Related controls: M5.2.1."
+  },
+  {
+   "id": "uae_ia:M5.2:03",
+   "objective_id": "M5.2",
+   "title": "Lack of understanding of the requirements of this standard",
+   "description": "A relevant threat or vulnerability for control objective M5.2, Compliance with Information Policies and Standards, in the UAE Information Assurance Standard. The objective: \"To ensure compliance with the entity’s information security policies and standards.\" Related controls: M5.2.1."
+  },
+  {
+   "id": "uae_ia:M5.3:01",
+   "objective_id": "M5.3",
+   "title": "Wrongly performed internal audit",
+   "description": "A relevant threat or vulnerability for control objective M5.3, Information Systems Audit Considerations, in the UAE Information Assurance Standard. The objective: \"To maximize the effectiveness of the information systems audit process\" Related controls: M5.3.1."
+  },
+  {
+   "id": "uae_ia:M5.3:02",
+   "objective_id": "M5.3",
+   "title": "Incorrect audit outcomes",
+   "description": "A relevant threat or vulnerability for control objective M5.3, Information Systems Audit Considerations, in the UAE Information Assurance Standard. The objective: \"To maximize the effectiveness of the information systems audit process\" Related controls: M5.3.1."
+  },
+  {
+   "id": "uae_ia:M5.3:03",
+   "objective_id": "M5.3",
+   "title": "Regular operations affected due to non-planned audit activities",
+   "description": "A relevant threat or vulnerability for control objective M5.3, Information Systems Audit Considerations, in the UAE Information Assurance Standard. The objective: \"To maximize the effectiveness of the information systems audit process\" Related controls: M5.3.1."
+  },
+  {
+   "id": "uae_ia:M6.1:01",
+   "objective_id": "M6.1",
+   "title": "Lack of performance evaluation",
+   "description": "A relevant threat or vulnerability for control objective M6.1, Performance Evaluation Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a performance evaluation policy outlining the approach to measure and evaluate the effectiveness of the information security of the entity.\" Related controls: M6.1.1."
+  },
+  {
+   "id": "uae_ia:M6.1:02",
+   "objective_id": "M6.1",
+   "title": "Lack of improvement of information security management system",
+   "description": "A relevant threat or vulnerability for control objective M6.1, Performance Evaluation Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a performance evaluation policy outlining the approach to measure and evaluate the effectiveness of the information security of the entity.\" Related controls: M6.1.1."
+  },
+  {
+   "id": "uae_ia:M6.2:01",
+   "objective_id": "M6.2",
+   "title": "Non-compliance with controls of this standard",
+   "description": "A relevant threat or vulnerability for control objective M6.2, Performance Evaluation, in the UAE Information Assurance Standard. The objective: \"To ensure that information security performance is measured, analyzed and evaluated.\" Related controls: M6.2.1, M6.2.2, M6.2.3."
+  },
+  {
+   "id": "uae_ia:M6.2:02",
+   "objective_id": "M6.2",
+   "title": "Under-performance of information security controls in place",
+   "description": "A relevant threat or vulnerability for control objective M6.2, Performance Evaluation, in the UAE Information Assurance Standard. The objective: \"To ensure that information security performance is measured, analyzed and evaluated.\" Related controls: M6.2.1, M6.2.2, M6.2.3."
+  },
+  {
+   "id": "uae_ia:M6.2:03",
+   "objective_id": "M6.2",
+   "title": "Ineffective controls",
+   "description": "A relevant threat or vulnerability for control objective M6.2, Performance Evaluation, in the UAE Information Assurance Standard. The objective: \"To ensure that information security performance is measured, analyzed and evaluated.\" Related controls: M6.2.1, M6.2.2, M6.2.3."
+  },
+  {
+   "id": "uae_ia:M6.3:01",
+   "objective_id": "M6.3",
+   "title": "Non-compliance with the controls in this standard",
+   "description": "A relevant threat or vulnerability for control objective M6.3, Improvement, in the UAE Information Assurance Standard. The objective: \"To correct nonconformities with this standard and to continually improve the information security program in place.\" Related controls: M6.3.1, M6.3.2."
+  },
+  {
+   "id": "uae_ia:M6.3:02",
+   "objective_id": "M6.3",
+   "title": "Repeated incidents and inappropriate action to information security problems",
+   "description": "A relevant threat or vulnerability for control objective M6.3, Improvement, in the UAE Information Assurance Standard. The objective: \"To correct nonconformities with this standard and to continually improve the information security program in place.\" Related controls: M6.3.1, M6.3.2."
+  },
+  {
+   "id": "uae_ia:M6.3:03",
+   "objective_id": "M6.3",
+   "title": "No improvements to the information security management system",
+   "description": "A relevant threat or vulnerability for control objective M6.3, Improvement, in the UAE Information Assurance Standard. The objective: \"To correct nonconformities with this standard and to continually improve the information security program in place.\" Related controls: M6.3.1, M6.3.2."
+  },
+  {
+   "id": "uae_ia:T1.1:01",
+   "objective_id": "T1.1",
+   "title": "Incomplete asset inventory",
+   "description": "A relevant threat or vulnerability for control objective T1.1, Information Asset Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information asset management policy outlining the procedures to identify, classify, and handle information assets.\" Related controls: T1.1.1."
+  },
+  {
+   "id": "uae_ia:T1.1:02",
+   "objective_id": "T1.1",
+   "title": "Inconsistent classification of information assets",
+   "description": "A relevant threat or vulnerability for control objective T1.1, Information Asset Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information asset management policy outlining the procedures to identify, classify, and handle information assets.\" Related controls: T1.1.1."
+  },
+  {
+   "id": "uae_ia:T1.1:03",
+   "objective_id": "T1.1",
+   "title": "Unrestricted usage of removable media",
+   "description": "A relevant threat or vulnerability for control objective T1.1, Information Asset Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information asset management policy outlining the procedures to identify, classify, and handle information assets.\" Related controls: T1.1.1."
+  },
+  {
+   "id": "uae_ia:T1.2:01",
+   "objective_id": "T1.2",
+   "title": "Use of unapproved hardware and / or devices",
+   "description": "A relevant threat or vulnerability for control objective T1.2, Responsibility for Assets, in the UAE Information Assurance Standard. The objective: \"To achieve and maintain appropriate protection of the entity’s information assets.\" Related controls: T1.2.1, T1.2.2."
+  },
+  {
+   "id": "uae_ia:T1.2:02",
+   "objective_id": "T1.2",
+   "title": "Use of counterfeit or copied software",
+   "description": "A relevant threat or vulnerability for control objective T1.2, Responsibility for Assets, in the UAE Information Assurance Standard. The objective: \"To achieve and maintain appropriate protection of the entity’s information assets.\" Related controls: T1.2.1, T1.2.2."
+  },
+  {
+   "id": "uae_ia:T1.2:03",
+   "objective_id": "T1.2",
+   "title": "Lack of acceptable use of information asset policy",
+   "description": "A relevant threat or vulnerability for control objective T1.2, Responsibility for Assets, in the UAE Information Assurance Standard. The objective: \"To achieve and maintain appropriate protection of the entity’s information assets.\" Related controls: T1.2.1, T1.2.2."
+  },
+  {
+   "id": "uae_ia:T1.2:04",
+   "objective_id": "T1.2",
+   "title": "Lack of updated information asset inventory",
+   "description": "A relevant threat or vulnerability for control objective T1.2, Responsibility for Assets, in the UAE Information Assurance Standard. The objective: \"To achieve and maintain appropriate protection of the entity’s information assets.\" Related controls: T1.2.1, T1.2.2."
+  },
+  {
+   "id": "uae_ia:T1.3:01",
+   "objective_id": "T1.3",
+   "title": "Tampering with information with no appropriate protection",
+   "description": "A relevant threat or vulnerability for control objective T1.3, Information Protection, in the UAE Information Assurance Standard. The objective: \"To ensure that information receives an appropriate level of protection.\" Related controls: T1.3.1, T1.3.2, T1.3.3, T1.3.4, T1.3.5, T1.3.6."
+  },
+  {
+   "id": "uae_ia:T1.3:02",
+   "objective_id": "T1.3",
+   "title": "Unauthorized access to information",
+   "description": "A relevant threat or vulnerability for control objective T1.3, Information Protection, in the UAE Information Assurance Standard. The objective: \"To ensure that information receives an appropriate level of protection.\" Related controls: T1.3.1, T1.3.2, T1.3.3, T1.3.4, T1.3.5, T1.3.6."
+  },
+  {
+   "id": "uae_ia:T1.3:03",
+   "objective_id": "T1.3",
+   "title": "Lack of information classification scheme",
+   "description": "A relevant threat or vulnerability for control objective T1.3, Information Protection, in the UAE Information Assurance Standard. The objective: \"To ensure that information receives an appropriate level of protection.\" Related controls: T1.3.1, T1.3.2, T1.3.3, T1.3.4, T1.3.5, T1.3.6."
+  },
+  {
+   "id": "uae_ia:T1.3:04",
+   "objective_id": "T1.3",
+   "title": "Lack of awareness around information classification and handling",
+   "description": "A relevant threat or vulnerability for control objective T1.3, Information Protection, in the UAE Information Assurance Standard. The objective: \"To ensure that information receives an appropriate level of protection.\" Related controls: T1.3.1, T1.3.2, T1.3.3, T1.3.4, T1.3.5, T1.3.6."
+  },
+  {
+   "id": "uae_ia:T1.4:01",
+   "objective_id": "T1.4",
+   "title": "Insecure destruction of equipment or media",
+   "description": "A relevant threat or vulnerability for control objective T1.4, Storage Media, in the UAE Information Assurance Standard. The objective: \"To ensure authorized disclosure, modification, removal, or destruction of information on storage media.\" Related controls: T1.4.1, T1.4.2."
+  },
+  {
+   "id": "uae_ia:T1.4:02",
+   "objective_id": "T1.4",
+   "title": "Retrieval of information on recycled or discarded media",
+   "description": "A relevant threat or vulnerability for control objective T1.4, Storage Media, in the UAE Information Assurance Standard. The objective: \"To ensure authorized disclosure, modification, removal, or destruction of information on storage media.\" Related controls: T1.4.1, T1.4.2."
+  },
+  {
+   "id": "uae_ia:T1.5:01",
+   "objective_id": "T1.5",
+   "title": "Lack of policy enforcement on endpoints",
+   "description": "A relevant threat or vulnerability for control objective T1.5, User Endpoint Devices, in the UAE Information Assurance Standard. The objective: \"To protect information against the risks introduced by using user endpoint devices.\" Related controls: T1.5.1."
+  },
+  {
+   "id": "uae_ia:T1.5:02",
+   "objective_id": "T1.5",
+   "title": "Insecure devices accessing company resources",
+   "description": "A relevant threat or vulnerability for control objective T1.5, User Endpoint Devices, in the UAE Information Assurance Standard. The objective: \"To protect information against the risks introduced by using user endpoint devices.\" Related controls: T1.5.1."
+  },
+  {
+   "id": "uae_ia:T2.1:01",
+   "objective_id": "T2.1",
+   "title": "Unsuitable environmental security policy",
+   "description": "A relevant threat or vulnerability for control objective T2.1, Physical and Environmental Security Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a physical and environmental security policy that outlines the security requirements of physical areas and equipment.\" Related controls: T2.1.1."
+  },
+  {
+   "id": "uae_ia:T2.1:02",
+   "objective_id": "T2.1",
+   "title": "Unawareness of environmental security policy among staff",
+   "description": "A relevant threat or vulnerability for control objective T2.1, Physical and Environmental Security Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a physical and environmental security policy that outlines the security requirements of physical areas and equipment.\" Related controls: T2.1.1."
+  },
+  {
+   "id": "uae_ia:T2.1:03",
+   "objective_id": "T2.1",
+   "title": "Wrong classification of secure areas",
+   "description": "A relevant threat or vulnerability for control objective T2.1, Physical and Environmental Security Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a physical and environmental security policy that outlines the security requirements of physical areas and equipment.\" Related controls: T2.1.1."
+  },
+  {
+   "id": "uae_ia:T2.2:01",
+   "objective_id": "T2.2",
+   "title": "Under protected secure areas",
+   "description": "A relevant threat or vulnerability for control objective T2.2, Secure Areas, in the UAE Information Assurance Standard. The objective: \"To prevent unauthorized physical access, damage, and interference to the entity’s premises and information.\" Related controls: T2.2.1, T2.2.2, T2.2.3, T2.2.4, T2.2.5."
+  },
+  {
+   "id": "uae_ia:T2.2:02",
+   "objective_id": "T2.2",
+   "title": "Unauthorized access to secure areas",
+   "description": "A relevant threat or vulnerability for control objective T2.2, Secure Areas, in the UAE Information Assurance Standard. The objective: \"To prevent unauthorized physical access, damage, and interference to the entity’s premises and information.\" Related controls: T2.2.1, T2.2.2, T2.2.3, T2.2.4, T2.2.5."
+  },
+  {
+   "id": "uae_ia:T2.2:03",
+   "objective_id": "T2.2",
+   "title": "Destruction of equipment of media",
+   "description": "A relevant threat or vulnerability for control objective T2.2, Secure Areas, in the UAE Information Assurance Standard. The objective: \"To prevent unauthorized physical access, damage, and interference to the entity’s premises and information.\" Related controls: T2.2.1, T2.2.2, T2.2.3, T2.2.4, T2.2.5."
+  },
+  {
+   "id": "uae_ia:T2.2:04",
+   "objective_id": "T2.2",
+   "title": "Interference with security controls",
+   "description": "A relevant threat or vulnerability for control objective T2.2, Secure Areas, in the UAE Information Assurance Standard. The objective: \"To prevent unauthorized physical access, damage, and interference to the entity’s premises and information.\" Related controls: T2.2.1, T2.2.2, T2.2.3, T2.2.4, T2.2.5."
+  },
+  {
+   "id": "uae_ia:T2.3:01",
+   "objective_id": "T2.3",
+   "title": "Equipment failure",
+   "description": "A relevant threat or vulnerability for control objective T2.3, Equipment Security, in the UAE Information Assurance Standard. The objective: \"To prevent loss, damage, theft or compromise of assets and interruption to the entity’s activities.\" Related controls: T2.3.1, T2.3.2, T2.3.3, T2.3.4, T2.3.5, T2.3.6, T2.3.7."
+  },
+  {
+   "id": "uae_ia:T2.3:02",
+   "objective_id": "T2.3",
+   "title": "Tampering with equipment",
+   "description": "A relevant threat or vulnerability for control objective T2.3, Equipment Security, in the UAE Information Assurance Standard. The objective: \"To prevent loss, damage, theft or compromise of assets and interruption to the entity’s activities.\" Related controls: T2.3.1, T2.3.2, T2.3.3, T2.3.4, T2.3.5, T2.3.6, T2.3.7."
+  },
+  {
+   "id": "uae_ia:T2.3:03",
+   "objective_id": "T2.3",
+   "title": "Physical theft of information asset",
+   "description": "A relevant threat or vulnerability for control objective T2.3, Equipment Security, in the UAE Information Assurance Standard. The objective: \"To prevent loss, damage, theft or compromise of assets and interruption to the entity’s activities.\" Related controls: T2.3.1, T2.3.2, T2.3.3, T2.3.4, T2.3.5, T2.3.6, T2.3.7."
+  },
+  {
+   "id": "uae_ia:T3.1:01",
+   "objective_id": "T3.1",
+   "title": "Unauthorized processing of data",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.1:02",
+   "objective_id": "T3.1",
+   "title": "Abuse of system access/privileges",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.1:03",
+   "objective_id": "T3.1",
+   "title": "Equipment malfunction",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.1:04",
+   "objective_id": "T3.1",
+   "title": "Ransomware Attacks",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.1:05",
+   "objective_id": "T3.1",
+   "title": "Zero-day exploits",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.1:06",
+   "objective_id": "T3.1",
+   "title": "Unpatched software",
+   "description": "A relevant threat or vulnerability for control objective T3.1, Operational Procedures and Responsibilities, in the UAE Information Assurance Standard. The objective: \"To ensure the correct and secure operation of information systems.\" Related controls: T3.1.1, T3.1.2, T3.1.3, T3.1.4, T3.1.5, T3.1.6, T3.1.7, T3.1.8."
+  },
+  {
+   "id": "uae_ia:T3.2:01",
+   "objective_id": "T3.2",
+   "title": "Unauthorized access",
+   "description": "A relevant threat or vulnerability for control objective T3.2, Monitoring, in the UAE Information Assurance Standard. The objective: \"To detect, prevent and correct the misuse of systems and information that could impact the security of an entity.\" Related controls: T3.2.1, T3.2.2, T3.2.3, T3.2.4."
+  },
+  {
+   "id": "uae_ia:T3.2:02",
+   "objective_id": "T3.2",
+   "title": "Tampering with information systems",
+   "description": "A relevant threat or vulnerability for control objective T3.2, Monitoring, in the UAE Information Assurance Standard. The objective: \"To detect, prevent and correct the misuse of systems and information that could impact the security of an entity.\" Related controls: T3.2.1, T3.2.2, T3.2.3, T3.2.4."
+  },
+  {
+   "id": "uae_ia:T3.2:03",
+   "objective_id": "T3.2",
+   "title": "Backdoor or command and control",
+   "description": "A relevant threat or vulnerability for control objective T3.2, Monitoring, in the UAE Information Assurance Standard. The objective: \"To detect, prevent and correct the misuse of systems and information that could impact the security of an entity.\" Related controls: T3.2.1, T3.2.2, T3.2.3, T3.2.4."
+  },
+  {
+   "id": "uae_ia:T3.2:04",
+   "objective_id": "T3.2",
+   "title": "Lack of monitoring",
+   "description": "A relevant threat or vulnerability for control objective T3.2, Monitoring, in the UAE Information Assurance Standard. The objective: \"To detect, prevent and correct the misuse of systems and information that could impact the security of an entity.\" Related controls: T3.2.1, T3.2.2, T3.2.3, T3.2.4."
+  },
+  {
+   "id": "uae_ia:T3.3:01",
+   "objective_id": "T3.3",
+   "title": "Exploitation of Unpatched Vulnerabilities",
+   "description": "A relevant threat or vulnerability for control objective T3.3, Threat and Vulnerability Management, in the UAE Information Assurance Standard. The objective: \"To provide awareness of the threat environment and mitigate risks from the exploitation of published or identified technical vulnerabilities.\" Related controls: T3.3.1, T3.3.2."
+  },
+  {
+   "id": "uae_ia:T3.3:02",
+   "objective_id": "T3.3",
+   "title": "Increased Attack Surface",
+   "description": "A relevant threat or vulnerability for control objective T3.3, Threat and Vulnerability Management, in the UAE Information Assurance Standard. The objective: \"To provide awareness of the threat environment and mitigate risks from the exploitation of published or identified technical vulnerabilities.\" Related controls: T3.3.1, T3.3.2."
+  },
+  {
+   "id": "uae_ia:T3.3:03",
+   "objective_id": "T3.3",
+   "title": "Data Breaches",
+   "description": "A relevant threat or vulnerability for control objective T3.3, Threat and Vulnerability Management, in the UAE Information Assurance Standard. The objective: \"To provide awareness of the threat environment and mitigate risks from the exploitation of published or identified technical vulnerabilities.\" Related controls: T3.3.1, T3.3.2."
+  },
+  {
+   "id": "uae_ia:T3.3:04",
+   "objective_id": "T3.3",
+   "title": "Exposure to zero-day vulnerabilities",
+   "description": "A relevant threat or vulnerability for control objective T3.3, Threat and Vulnerability Management, in the UAE Information Assurance Standard. The objective: \"To provide awareness of the threat environment and mitigate risks from the exploitation of published or identified technical vulnerabilities.\" Related controls: T3.3.1, T3.3.2."
+  },
+  {
+   "id": "uae_ia:T3.4:01",
+   "objective_id": "T3.4",
+   "title": "Weak cryptography used for data",
+   "description": "A relevant threat or vulnerability for control objective T3.4, Cryptography and Key Management, in the UAE Information Assurance Standard. The objective: \"To protect the confidentiality, authenticity or integrity of information by cryptographic means.\" Related controls: T3.4.1, T3.4.2, T3.4.3, T3.4.4."
+  },
+  {
+   "id": "uae_ia:T3.4:02",
+   "objective_id": "T3.4",
+   "title": "Eavesdropping / Packet sniffing",
+   "description": "A relevant threat or vulnerability for control objective T3.4, Cryptography and Key Management, in the UAE Information Assurance Standard. The objective: \"To protect the confidentiality, authenticity or integrity of information by cryptographic means.\" Related controls: T3.4.1, T3.4.2, T3.4.3, T3.4.4."
+  },
+  {
+   "id": "uae_ia:T3.4:03",
+   "objective_id": "T3.4",
+   "title": "Replay Attacks",
+   "description": "A relevant threat or vulnerability for control objective T3.4, Cryptography and Key Management, in the UAE Information Assurance Standard. The objective: \"To protect the confidentiality, authenticity or integrity of information by cryptographic means.\" Related controls: T3.4.1, T3.4.2, T3.4.3, T3.4.4."
+  },
+  {
+   "id": "uae_ia:T3.4:04",
+   "objective_id": "T3.4",
+   "title": "Man in the middle attack (MITM)",
+   "description": "A relevant threat or vulnerability for control objective T3.4, Cryptography and Key Management, in the UAE Information Assurance Standard. The objective: \"To protect the confidentiality, authenticity or integrity of information by cryptographic means.\" Related controls: T3.4.1, T3.4.2, T3.4.3, T3.4.4."
+  },
+  {
+   "id": "uae_ia:T4.1:01",
+   "objective_id": "T4.1",
+   "title": "Abuse of system access/privileges",
+   "description": "A relevant threat or vulnerability for control objective T4.1, Network Security Management, in the UAE Information Assurance Standard. The objective: \"To ensure the protection of information in networks and the security of the supporting infrastructure.\" Related controls: T4.1.1, T4.1.2, T4.1.3, T4.1.4, T4.1.5."
+  },
+  {
+   "id": "uae_ia:T4.1:02",
+   "objective_id": "T4.1",
+   "title": "Eavesdropping/packet sniffing",
+   "description": "A relevant threat or vulnerability for control objective T4.1, Network Security Management, in the UAE Information Assurance Standard. The objective: \"To ensure the protection of information in networks and the security of the supporting infrastructure.\" Related controls: T4.1.1, T4.1.2, T4.1.3, T4.1.4, T4.1.5."
+  },
+  {
+   "id": "uae_ia:T4.1:03",
+   "objective_id": "T4.1",
+   "title": "Denial of Service (DOS) or DDOS",
+   "description": "A relevant threat or vulnerability for control objective T4.1, Network Security Management, in the UAE Information Assurance Standard. The objective: \"To ensure the protection of information in networks and the security of the supporting infrastructure.\" Related controls: T4.1.1, T4.1.2, T4.1.3, T4.1.4, T4.1.5."
+  },
+  {
+   "id": "uae_ia:T5.1:01",
+   "objective_id": "T5.1",
+   "title": "Unsuitable identity and access management policy",
+   "description": "A relevant threat or vulnerability for control objective T5.1, Identity and Access Management, in the UAE Information Assurance Standard. The objective: \"To maintain an identity and access management policy to control access to information and other associated assets.\" Related controls: T5.1.1."
+  },
+  {
+   "id": "uae_ia:T5.1:02",
+   "objective_id": "T5.1",
+   "title": "Unawareness of identity and access management policy among all employees",
+   "description": "A relevant threat or vulnerability for control objective T5.1, Identity and Access Management, in the UAE Information Assurance Standard. The objective: \"To maintain an identity and access management policy to control access to information and other associated assets.\" Related controls: T5.1.1."
+  },
+  {
+   "id": "uae_ia:T5.2:01",
+   "objective_id": "T5.2",
+   "title": "Use of stolen login credentials",
+   "description": "A relevant threat or vulnerability for control objective T5.2, User Access Management, in the UAE Information Assurance Standard. The objective: \"To enforce authorized user access and to prevent unauthorized access to information systems.\" Related controls: T5.2.1, T5.2.2, T5.2.3, T5.2.4."
+  },
+  {
+   "id": "uae_ia:T5.2:02",
+   "objective_id": "T5.2",
+   "title": "Brute force and dictionary attacks",
+   "description": "A relevant threat or vulnerability for control objective T5.2, User Access Management, in the UAE Information Assurance Standard. The objective: \"To enforce authorized user access and to prevent unauthorized access to information systems.\" Related controls: T5.2.1, T5.2.2, T5.2.3, T5.2.4."
+  },
+  {
+   "id": "uae_ia:T5.2:03",
+   "objective_id": "T5.2",
+   "title": "Authentication bypass",
+   "description": "A relevant threat or vulnerability for control objective T5.2, User Access Management, in the UAE Information Assurance Standard. The objective: \"To enforce authorized user access and to prevent unauthorized access to information systems.\" Related controls: T5.2.1, T5.2.2, T5.2.3, T5.2.4."
+  },
+  {
+   "id": "uae_ia:T5.2:04",
+   "objective_id": "T5.2",
+   "title": "Phishing and Social Engineering Attacks",
+   "description": "A relevant threat or vulnerability for control objective T5.2, User Access Management, in the UAE Information Assurance Standard. The objective: \"To enforce authorized user access and to prevent unauthorized access to information systems.\" Related controls: T5.2.1, T5.2.2, T5.2.3, T5.2.4."
+  },
+  {
+   "id": "uae_ia:T5.3:01",
+   "objective_id": "T5.3",
+   "title": "Inadequate authentication",
+   "description": "A relevant threat or vulnerability for control objective T5.3, Secure authentication and authorization, in the UAE Information Assurance Standard. The objective: \"To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.\" Related controls: T5.3.1, T5.3.2, T5.3.3, T5.3.4."
+  },
+  {
+   "id": "uae_ia:T5.3:02",
+   "objective_id": "T5.3",
+   "title": "Unauthorized access due to weak or stolen passwords",
+   "description": "A relevant threat or vulnerability for control objective T5.3, Secure authentication and authorization, in the UAE Information Assurance Standard. The objective: \"To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.\" Related controls: T5.3.1, T5.3.2, T5.3.3, T5.3.4."
+  },
+  {
+   "id": "uae_ia:T5.3:03",
+   "objective_id": "T5.3",
+   "title": "Increased susceptibility to phishing attacks",
+   "description": "A relevant threat or vulnerability for control objective T5.3, Secure authentication and authorization, in the UAE Information Assurance Standard. The objective: \"To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.\" Related controls: T5.3.1, T5.3.2, T5.3.3, T5.3.4."
+  },
+  {
+   "id": "uae_ia:T5.3:04",
+   "objective_id": "T5.3",
+   "title": "Password fatigue",
+   "description": "A relevant threat or vulnerability for control objective T5.3, Secure authentication and authorization, in the UAE Information Assurance Standard. The objective: \"To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.\" Related controls: T5.3.1, T5.3.2, T5.3.3, T5.3.4."
+  },
+  {
+   "id": "uae_ia:T5.3:05",
+   "objective_id": "T5.3",
+   "title": "Inconsistent access control policies implementation",
+   "description": "A relevant threat or vulnerability for control objective T5.3, Secure authentication and authorization, in the UAE Information Assurance Standard. The objective: \"To ensure a user or an entity is securely authenticated and authorized, when access to systems, applications and services is granted.\" Related controls: T5.3.1, T5.3.2, T5.3.3, T5.3.4."
+  },
+  {
+   "id": "uae_ia:T5.4:01",
+   "objective_id": "T5.4",
+   "title": "Unintentional/Intentional leaks and sharing of authentication information by staff",
+   "description": "A relevant threat or vulnerability for control objective T5.4, Authentication Information, in the UAE Information Assurance Standard. The objective: \"To ensure proper authentication and prevent failures of authentication processes.\" Related controls: T5.4.1, T5.4.2, T5.4.3."
+  },
+  {
+   "id": "uae_ia:T5.4:02",
+   "objective_id": "T5.4",
+   "title": "Illegal processing of data",
+   "description": "A relevant threat or vulnerability for control objective T5.4, Authentication Information, in the UAE Information Assurance Standard. The objective: \"To ensure proper authentication and prevent failures of authentication processes.\" Related controls: T5.4.1, T5.4.2, T5.4.3."
+  },
+  {
+   "id": "uae_ia:T5.4:03",
+   "objective_id": "T5.4",
+   "title": "Abuse of system access and/or privileges",
+   "description": "A relevant threat or vulnerability for control objective T5.4, Authentication Information, in the UAE Information Assurance Standard. The objective: \"To ensure proper authentication and prevent failures of authentication processes.\" Related controls: T5.4.1, T5.4.2, T5.4.3."
+  },
+  {
+   "id": "uae_ia:T6.1:01",
+   "objective_id": "T6.1",
+   "title": "Unsuitable third party security policy",
+   "description": "A relevant threat or vulnerability for control objective T6.1, Third Party Security Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a third party security policy covering the security of acquired services.\" Related controls: T6.1.1."
+  },
+  {
+   "id": "uae_ia:T6.1:02",
+   "objective_id": "T6.1",
+   "title": "Unawareness of third party security policy among staff",
+   "description": "A relevant threat or vulnerability for control objective T6.1, Third Party Security Policy, in the UAE Information Assurance Standard. The objective: \"To maintain a third party security policy covering the security of acquired services.\" Related controls: T6.1.1."
+  },
+  {
+   "id": "uae_ia:T6.2:01",
+   "objective_id": "T6.2",
+   "title": "Abuse of functionality",
+   "description": "A relevant threat or vulnerability for control objective T6.2, Management of Third Party and Supply Chain Risks, in the UAE Information Assurance Standard. The objective: \"To manage the information security risks associated with the use of supplier’s products or services.\" Related controls: T6.2.1, T6.2.2, T6.2.3, T6.2.4, T6.2.5."
+  },
+  {
+   "id": "uae_ia:T6.2:02",
+   "objective_id": "T6.2",
+   "title": "Unauthorized access to information",
+   "description": "A relevant threat or vulnerability for control objective T6.2, Management of Third Party and Supply Chain Risks, in the UAE Information Assurance Standard. The objective: \"To manage the information security risks associated with the use of supplier’s products or services.\" Related controls: T6.2.1, T6.2.2, T6.2.3, T6.2.4, T6.2.5."
+  },
+  {
+   "id": "uae_ia:T7.1:01",
+   "objective_id": "T7.1",
+   "title": "Unsuitable information systems acquisition, development and maintenance policy",
+   "description": "A relevant threat or vulnerability for control objective T7.1, Information Systems Acquisition, Development and Maintenance Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information systems acquisition, development and maintenance policy covering the security of information systems throughout its lifecycle.\" Related controls: T7.1.1."
+  },
+  {
+   "id": "uae_ia:T7.1:02",
+   "objective_id": "T7.1",
+   "title": "Inadequate policies for the acquisition, development, and maintenance of information systems that do not cover the entire asset lifecycle",
+   "description": "A relevant threat or vulnerability for control objective T7.1, Information Systems Acquisition, Development and Maintenance Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information systems acquisition, development and maintenance policy covering the security of information systems throughout its lifecycle.\" Related controls: T7.1.1."
+  },
+  {
+   "id": "uae_ia:T7.2:01",
+   "objective_id": "T7.2",
+   "title": "Equipment malfunction",
+   "description": "A relevant threat or vulnerability for control objective T7.2, Security Requirements of Information Systems, in the UAE Information Assurance Standard. The objective: \"To ensure that security requirements are established and functionally integrated into information systems.\" Related controls: T7.2.1, T7.2.2."
+  },
+  {
+   "id": "uae_ia:T7.2:02",
+   "objective_id": "T7.2",
+   "title": "Abuse of functionality",
+   "description": "A relevant threat or vulnerability for control objective T7.2, Security Requirements of Information Systems, in the UAE Information Assurance Standard. The objective: \"To ensure that security requirements are established and functionally integrated into information systems.\" Related controls: T7.2.1, T7.2.2."
+  },
+  {
+   "id": "uae_ia:T7.2:03",
+   "objective_id": "T7.2",
+   "title": "Lack of security in design",
+   "description": "A relevant threat or vulnerability for control objective T7.2, Security Requirements of Information Systems, in the UAE Information Assurance Standard. The objective: \"To ensure that security requirements are established and functionally integrated into information systems.\" Related controls: T7.2.1, T7.2.2."
+  },
+  {
+   "id": "uae_ia:T7.3:01",
+   "objective_id": "T7.3",
+   "title": "Exposure to critical vulnerabilities",
+   "description": "A relevant threat or vulnerability for control objective T7.3, Secure software development, in the UAE Information Assurance Standard. The objective: \"To ensure the software is written securely thereby reducing the number of potential information security vulnerabilities in the software.\" Related controls: T7.3.1, T7.3.2, T7.3.3."
+  },
+  {
+   "id": "uae_ia:T7.3:02",
+   "objective_id": "T7.3",
+   "title": "Lack of experienced/unskilled employees",
+   "description": "A relevant threat or vulnerability for control objective T7.3, Secure software development, in the UAE Information Assurance Standard. The objective: \"To ensure the software is written securely thereby reducing the number of potential information security vulnerabilities in the software.\" Related controls: T7.3.1, T7.3.2, T7.3.3."
+  },
+  {
+   "id": "uae_ia:T7.3:03",
+   "objective_id": "T7.3",
+   "title": "Inadequate review/testing",
+   "description": "A relevant threat or vulnerability for control objective T7.3, Secure software development, in the UAE Information Assurance Standard. The objective: \"To ensure the software is written securely thereby reducing the number of potential information security vulnerabilities in the software.\" Related controls: T7.3.1, T7.3.2, T7.3.3."
+  },
+  {
+   "id": "uae_ia:T7.4:01",
+   "objective_id": "T7.4",
+   "title": "Unsuitable security for development and support processes",
+   "description": "A relevant threat or vulnerability for control objective T7.4, Secure testing and deployment, in the UAE Information Assurance Standard. The objective: \"To validate if information security requirements are met when applications or code are deployed to the production environment, protect the production environment and data from compromise by development and test activities, and preserve information security when executing changes.\" Related controls: T7.4.1, T7.4.2, T7.4.3."
+  },
+  {
+   "id": "uae_ia:T7.4:02",
+   "objective_id": "T7.4",
+   "title": "Lack of change management process",
+   "description": "A relevant threat or vulnerability for control objective T7.4, Secure testing and deployment, in the UAE Information Assurance Standard. The objective: \"To validate if information security requirements are met when applications or code are deployed to the production environment, protect the production environment and data from compromise by development and test activities, and preserve information security when executing changes.\" Related controls: T7.4.1, T7.4.2, T7.4.3."
+  },
+  {
+   "id": "uae_ia:T7.4:03",
+   "objective_id": "T7.4",
+   "title": "Information leakage",
+   "description": "A relevant threat or vulnerability for control objective T7.4, Secure testing and deployment, in the UAE Information Assurance Standard. The objective: \"To validate if information security requirements are met when applications or code are deployed to the production environment, protect the production environment and data from compromise by development and test activities, and preserve information security when executing changes.\" Related controls: T7.4.1, T7.4.2, T7.4.3."
+  },
+  {
+   "id": "uae_ia:T8.1:01",
+   "objective_id": "T8.1",
+   "title": "Unsuitable or outdated information security incident management policy",
+   "description": "A relevant threat or vulnerability for control objective T8.1, Information Security Incident Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information security incident management policy that can provide the framework for the detection, reporting, and treatment of incidents.\" Related controls: T8.1.1, T8.1.2."
+  },
+  {
+   "id": "uae_ia:T8.1:02",
+   "objective_id": "T8.1",
+   "title": "Unawareness of information security incident management policy",
+   "description": "A relevant threat or vulnerability for control objective T8.1, Information Security Incident Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information security incident management policy that can provide the framework for the detection, reporting, and treatment of incidents.\" Related controls: T8.1.1, T8.1.2."
+  },
+  {
+   "id": "uae_ia:T8.1:03",
+   "objective_id": "T8.1",
+   "title": "Disclosure of reported weaknesses",
+   "description": "A relevant threat or vulnerability for control objective T8.1, Information Security Incident Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information security incident management policy that can provide the framework for the detection, reporting, and treatment of incidents.\" Related controls: T8.1.1, T8.1.2."
+  },
+  {
+   "id": "uae_ia:T8.1:04",
+   "objective_id": "T8.1",
+   "title": "Unsuitable reporting procedures",
+   "description": "A relevant threat or vulnerability for control objective T8.1, Information Security Incident Management Policy, in the UAE Information Assurance Standard. The objective: \"To maintain an information security incident management policy that can provide the framework for the detection, reporting, and treatment of incidents.\" Related controls: T8.1.1, T8.1.2."
+  },
+  {
+   "id": "uae_ia:T8.2:01",
+   "objective_id": "T8.2",
+   "title": "Lack of incident response training",
+   "description": "A relevant threat or vulnerability for control objective T8.2, Management of Information Security Incidents and Improvements, in the UAE Information Assurance Standard. The objective: \"To ensure a consistent and effective approach to the management of information security incidents.\" Related controls: T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6, T8.2.7."
+  },
+  {
+   "id": "uae_ia:T8.2:02",
+   "objective_id": "T8.2",
+   "title": "Inadequate or lack of incident response plan",
+   "description": "A relevant threat or vulnerability for control objective T8.2, Management of Information Security Incidents and Improvements, in the UAE Information Assurance Standard. The objective: \"To ensure a consistent and effective approach to the management of information security incidents.\" Related controls: T8.2.1, T8.2.2, T8.2.3, T8.2.4, T8.2.5, T8.2.6, T8.2.7."
+  },
+  {
+   "id": "uae_ia:T9.1:01",
+   "objective_id": "T9.1",
+   "title": "Lack of availability of critical assets during crises",
+   "description": "A relevant threat or vulnerability for control objective T9.1, ICT readiness for business continuity, in the UAE Information Assurance Standard. The objective: \"To ensure the availability of the organization’s information and other associated assets during disruption.\" Related controls: T9.1.1, T9.1.2."
+  },
+  {
+   "id": "uae_ia:T9.1:02",
+   "objective_id": "T9.1",
+   "title": "Destruction of equipment or media",
+   "description": "A relevant threat or vulnerability for control objective T9.1, ICT readiness for business continuity, in the UAE Information Assurance Standard. The objective: \"To ensure the availability of the organization’s information and other associated assets during disruption.\" Related controls: T9.1.1, T9.1.2."
+  },
+  {
+   "id": "uae_ia:T9.1:03",
+   "objective_id": "T9.1",
+   "title": "Corruption of data",
+   "description": "A relevant threat or vulnerability for control objective T9.1, ICT readiness for business continuity, in the UAE Information Assurance Standard. The objective: \"To ensure the availability of the organization’s information and other associated assets during disruption.\" Related controls: T9.1.1, T9.1.2."
+  },
+  {
+   "id": "uae_ia:T9.2:01",
+   "objective_id": "T9.2",
+   "title": "Unperformed information systems continuity management testing",
+   "description": "A relevant threat or vulnerability for control objective T9.2, Testing, Maintaining and Reassessing Plans, in the UAE Information Assurance Standard. The objective: \"To ensure the effectiveness of the information systems continuity plans and that they are always up to date.\" Related controls: T9.2.1."
+  },
+  {
+   "id": "uae_ia:T9.2:02",
+   "objective_id": "T9.2",
+   "title": "Outdated information systems continuity management plan",
+   "description": "A relevant threat or vulnerability for control objective T9.2, Testing, Maintaining and Reassessing Plans, in the UAE Information Assurance Standard. The objective: \"To ensure the effectiveness of the information systems continuity plans and that they are always up to date.\" Related controls: T9.2.1."
+  }
+ ]
+}
