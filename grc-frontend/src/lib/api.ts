@@ -485,7 +485,7 @@ export const governanceApi = {
     apiClient.delete(`/governance/workflows/templates/${id}`),
   createWorkflowStep: (templateId: number, data: { name: string; description?: string; sequence: number; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
     apiClient.post(`/governance/workflows/templates/${templateId}/steps`, data),
-  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number | null }) =>
     apiClient.put(`/governance/workflows/templates/${templateId}/steps/${stepId}`, data),
   deleteWorkflowStep: (templateId: number, stepId: number) =>
     apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}`),

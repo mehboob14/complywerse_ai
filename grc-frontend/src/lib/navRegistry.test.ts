@@ -362,7 +362,7 @@ test('the Header names Governance pages from the registry and keeps no Governanc
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
   assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), [
     '/governance', '/governance/committees', '/governance/committees/:id', '/governance/committees/actions', '/governance/committees/meetings/:id', '/governance/kpi-report',
-    '/governance/mappings', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
+    '/governance/mappings', '/governance/workflows', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
   ]);
   assert.equal(ownHeadingSection('/governance'), 'Governance');
   assert.equal(ownHeadingSection('/governance/kpi-report'), 'Governance');
@@ -372,6 +372,8 @@ test('a page that draws its own heading is flagged in the registry, and only its
   for (const url of ['/is-projects', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/150']) assert.equal(ownHeadingSection(url), 'Governance', url);
   // and so does Policy-Control Mappings (standalone: its page head is the kit's; inside a document it is a section, and the page there is the document's own)
   assert.equal(ownHeadingSection('/governance/mappings'), 'Governance');
+  // and so does the legacy Approval Workflows page (its page head is PageHeader variant="page")
+  assert.equal(ownHeadingSection('/governance/workflows'), 'Governance');
   assert.equal(ownHeadingSection('/governance/approvals'), undefined, 'a page without the flag shows its own title in the top bar');
   assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
   assert.equal(ownHeadingSection(null), undefined);

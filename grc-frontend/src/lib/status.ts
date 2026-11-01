@@ -196,6 +196,26 @@ export const priority = defineStatuses('priority', {
   info: 'neutral',
 });
 
+// The legacy approval queue (Governance > Approval Workflows). A DocumentApprovalStep's status is pending, approved, rejected, skipped (the others of a
+// rejected document) or delegated (models/_13: the comment on the column; routers/workflows.py writes each). "overdue" is not a status the server writes:
+// it is the `is_overdue` flag of a pending step (its due moment has passed), said as a word like the review one. A pending step waits for someone.
+export const approvalStep = defineStatuses('approval step', {
+  pending: 'pending',
+  overdue: 'danger',
+  approved: 'success',
+  rejected: 'danger',
+  skipped: 'neutral',
+  delegated: 'progress',
+});
+
+// A workflow template has the flags `is_active` and `is_default` (WorkflowTemplate), not a status column: Active or Inactive says whether it can be used,
+// and Default marks the one a document takes when none is chosen. An inactive template is switched off, not wrong, so it is neutral, not red.
+export const workflowTemplate = defineStatuses('workflow template', {
+  active: 'success',
+  inactive: 'neutral',
+  default: 'progress',
+});
+
 // A KPI / KRI's red-amber-green rating (RiskKRI.current_status: erm/routers/kris.py calculate_kri_status gives green, amber, red, or "unknown" when a
 // threshold is missing; the report also reads "no status" as unknown). The words are the report's own, said as what they mean: green = on track,
 // amber = watch, red = off target. "unknown" says "Not rated" and not "No data": the same rating is given to a metric that has a value but no thresholds.

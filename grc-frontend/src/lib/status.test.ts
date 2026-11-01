@@ -8,8 +8,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { contrast } from './contrast.ts';
 import { EMPTY } from './format.ts';
 import {
-  TONE, actionStatus, attestationStatus, committeeStatus, defineStatuses, departmentStatus, documentStatus, exceptionStatus, meetingStatus, norm, priority,
-  rag, reviewStatus, statusPill, toneOf, type Statuses, type Tone,
+  TONE, actionStatus, approvalStep, attestationStatus, committeeStatus, defineStatuses, departmentStatus, documentStatus, exceptionStatus, meetingStatus, norm, priority,
+  rag, reviewStatus, statusPill, toneOf, workflowTemplate, type Statuses, type Tone,
 } from './status.ts';
 import { TONE as VENDOR_TONE, tones } from '../app/(dashboard)/vendor-risk/_ui/tones.ts';
 import { STATUS_LABEL } from '../app/(dashboard)/governance/documents/_workspace/libraryModel.ts';
@@ -137,6 +137,15 @@ test('attestation campaigns, their requests and the attestations given', () => {
   ]);
 });
 
+test('the legacy approval queue: a step waits, overdue is its flag, and a template is active or not and may be the default', () => {
+  exhaustive(approvalStep, [
+    ['pending', 'pending', 'Pending'], ['overdue', 'danger', 'Overdue'], ['approved', 'success', 'Approved'], ['rejected', 'danger', 'Rejected'],
+    ['skipped', 'neutral', 'Skipped'], ['delegated', 'progress', 'Delegated'],
+  ]);
+  exhaustive(workflowTemplate, [['active', 'success', 'Active'], ['inactive', 'neutral', 'Inactive'], ['default', 'progress', 'Default']]);
+  assert.deepEqual(statusPill(workflowTemplate, 'inactive'), { tone: 'neutral', label: 'Inactive' }, 'switched off is not an error');
+});
+
 test('the Governance priority scale: critical danger, high warning, medium progress, low neutral (the reviewer confirms)', () => {
   exhaustive(priority, [
     ['critical', 'danger', 'Critical'], ['high', 'warning', 'High'], ['medium', 'progress', 'Medium'], ['low', 'neutral', 'Low'], ['info', 'neutral', 'Info'],
@@ -201,6 +210,15 @@ test('committees, reviews, attestations and priorities: the words in the models\
   const attestations = source('models/_27_attestation_certification_management_models.py')!;
   covers(attestationStatus, commented(attestations, 'status', 'draft'), 'models/_27 AttestationCampaign.status');
   covers(attestationStatus, commented(attestations, 'status', 'pending'), 'models/_27 AttestationRequest.status');
+});
+
+test('approval steps: the words the model names and the router writes are all registered',
+  { skip: !present('models/_13_governance_document_management_enhanced.py', 'modules/governance/routers/workflows.py') }, () => {
+  const model = source('models/_13_governance_document_management_enhanced.py')!;
+  const named = /class DocumentApprovalStep[\s\S]*?status = Column\(String\(50\), default="pending"\)\s*#\s*([a-z_, ]+)/.exec(model);
+  covers(approvalStep, named ? named[1].split(',').map((w) => w.trim()).filter(Boolean) : [], 'models/_13 DocumentApprovalStep.status');
+  const router = source('modules/governance/routers/workflows.py')!;
+  covers(approvalStep, Array.from(router.matchAll(/\b(?:step|sibling_step|other_step)\.status = "([a-z_]+)"/g), (m) => m[1]), 'routers/workflows.py step.status');
 });
 
 test('KPI / KRI rating: every rating the server can give is registered', { skip: !present('modules/erm/routers/kris.py') }, () => {
