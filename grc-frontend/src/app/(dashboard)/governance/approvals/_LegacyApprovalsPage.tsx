@@ -1,5 +1,8 @@
 'use client';
 
+// NOT ROUTED. This was /governance/approvals ("My Approvals"); that address now forwards to Needs my action (page.tsx). The code stays because the action-review log it shows
+// (GET /governance/reviews/my-pending-approvals; Approve/Reject flip a status and nothing follows) has no new home yet: a decision for the product owner. Nothing imports it.
+
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';

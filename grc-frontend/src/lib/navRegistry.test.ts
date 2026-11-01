@@ -62,7 +62,7 @@ test('every sidebar leaf has an entry: its name is the label, its rights are the
   for (const leaf of flattenLeaves(navigation)) {
     const e = entry(leaf.href);
     assert.equal(e.label, leaf.name, leaf.href);
-    assert.deepEqual(e.permissions, navPermissions(leaf.href), `${leaf.name}: rights`);
+    assert.deepEqual(e.permissions ?? [], navPermissions(leaf.href), `${leaf.name}: rights`);      // null: none (Needs my action is open to anyone signed in)
     assert.deepEqual(e.groups.map((g) => g.label), groupsOf[leaf.href], `${leaf.name}: groups`);
     assert.equal(e.hidden, undefined, `${leaf.name} is in the menu`);
   }
@@ -116,6 +116,7 @@ test('a forward is another URL of an entry that is a page of its own, under the 
   assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
     ['/governance/attestations', '/governance/documents/attestation'],
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
+    ['/governance/approvals', '/needs-my-action'],                          // "My Approvals" became the global queue; the address forwards to it (a server redirect)
   ]);
   for (const a of aliases) {
     const target = entry(a.aliasOf as string);
@@ -231,7 +232,7 @@ test('titleFor: the destination\'s title, its label by default; a forward has it
 test('the five pages that said only "Governance" in the top bar have their own name now', () => {
   assert.deepEqual(
     ['/governance/approvals', '/governance/mappings', '/governance/reviews', '/governance/workflows', '/governance/exceptions'].map((p) => titleFor(p)),
-    ['My Approvals', 'Policy-Control Mappings', 'Document Reviews', 'Approval Workflows', 'Policy exceptions'],
+    ['Needs my action', 'Policy-Control Mappings', 'Document Reviews', 'Approval Workflows', 'Policy exceptions'],            // /governance/approvals forwards to the queue
   );
   for (const e of routes.filter((r) => r.area === 'governance')) {
     assert.notEqual(titleFor(example(e.path)), 'Governance', e.path);
@@ -374,7 +375,8 @@ test('a page that draws its own heading is flagged in the registry, and only its
   assert.equal(ownHeadingSection('/governance/mappings'), 'Governance');
   // and so does the legacy Approval Workflows page (its page head is PageHeader variant="page")
   assert.equal(ownHeadingSection('/governance/workflows'), 'Governance');
-  assert.equal(ownHeadingSection('/governance/approvals'), undefined, 'a page without the flag shows its own title in the top bar');
+  assert.equal(ownHeadingSection('/governance/exceptions'), undefined, 'a page without the flag shows its own title in the top bar');
+  assert.equal(ownHeadingSection('/governance/approvals'), '', 'the forward is named as its target: the queue draws its own heading, the top bar names no section');
   assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
   assert.equal(ownHeadingSection(null), undefined);
 });

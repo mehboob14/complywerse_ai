@@ -14,8 +14,9 @@ import * as evidence from './evidence.ts';
 import * as assessments from './assessments.ts';
 import * as bcm from './bcm.ts';
 import * as regulatory from './regulatory.ts';
+import * as inbox from './inbox.ts';
 
-const groups: Array<{ LEAVES: Record<string, RouteExtra>; PAGES: PageSpec[] }> = [dashboard, tasks, frameworks, evidence, assessments, bcm, regulatory];
+const groups: Array<{ LEAVES: Record<string, RouteExtra>; PAGES: PageSpec[] }> = [dashboard, tasks, frameworks, evidence, assessments, bcm, regulatory, inbox];
 
 export const MODULE_LEAVES: Record<string, RouteExtra> = Object.assign({}, ...groups.map((group) => group.LEAVES));
 export const MODULE_PAGES: PageSpec[] = groups.reduce<PageSpec[]>((all, group) => all.concat(group.PAGES), []);
