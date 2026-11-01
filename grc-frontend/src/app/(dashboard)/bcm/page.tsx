@@ -2,238 +2,230 @@
 
 export const dynamic = 'force-dynamic';
 
+// Business Continuity > Overview. One request (GET /bcm/dashboard, key ['bcm-dashboard'], refreshed every minute): its figures are the SERVER's (active plans, drill coverage,
+// RTO/RPO pass rates, open findings, the cross-module rollup) and this page only words them: nothing is recomputed, a figure that is not recorded says "Not recorded" and
+// never 0, a failed request says what the server said with Retry (and none for a refusal), and a tenant with nothing yet is shown how to start instead of a page of zeros.
+// On the design-system kit: PageHeader variant="page", StatTile, ProgressBar, SectionCard, StatusPill, Skeleton / ErrorState / EmptyState.
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LifeBuoy, ClipboardList, CalendarClock, AlertTriangle, ShieldCheck,
-  Activity, ArrowRight, Timer, Link2, Siren, ShieldAlert, ClipboardCheck,
-} from 'lucide-react';
+import { CalendarClock, ClipboardList, Plus } from 'lucide-react';
 import { bcmApi } from '@/lib/api';
-import { PageLoader } from '@/components/ui';
+import { usePermissions } from '@/hooks/usePermissions';
+import { EMPTY, NOT_SET, formatCount, formatDate } from '@/lib/format';
+import { titleFor } from '@/lib/navRegistry';
+import { drillStatus, drillType, planStatus, severity } from '@/lib/statuses/bcm';
+import { PageHeader } from '@/components/ui';
+import { Button, EmptyState, ErrorState, ProgressBar, SectionCard, Skeleton, StatTile } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { Pill } from './_bcm-ui';
 import {
-  DrillStatusBadge, DRILL_TYPE_LABEL, fmtDate,
-} from './_bcm-ui';
+  coverageTile, findingCount, isEmptyTenant, linkageOf, listCut, percentText, planCount, plural, rateTone, retryRead, type Dashboard, type Drill,
+} from './bcmModel';
 
-type Dashboard = {
-  totals: { plans: number; active_plans: number; drills: number; overdue_drills: number; bia_records: number; open_findings: number };
-  plans_by_status: Record<string, number>;
-  drills_by_status: Record<string, number>;
-  drill_coverage_pct: number;
-  coverage_detail: { covered: number; active_plans: number };
-  rto_pass_rate: number | null;
-  rpo_pass_rate: number | null;
-  results_scored: number;
-  open_findings_by_severity: Record<string, number>;
-  linkage?: { open_capas: number; total_capas: number; risks_linked: number; incident_invocations: number };
-  recent_drills: any[];
-  overdue_drills: any[];
-};
+const GRID = 'grid grid-cols-2 gap-[12px] md:grid-cols-3 xl:grid-cols-5';
+const ROW_LINK = '-mx-[8px] flex min-h-ds-control items-center justify-between gap-[8px] rounded-ds-control px-[8px] py-[4px] hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
+const COUNT = 'tabular-nums font-[600] text-ds-fg';
 
-const SEV_DOT: Record<string, string> = {
-  critical: 'bg-rose-500', high: 'bg-orange-500', medium: 'bg-amber-500', low: 'bg-emerald-500',
-};
-
-function Kpi({ icon, label, value, tone = 'slate', sub }: { icon: React.ReactNode; label: string; value: React.ReactNode; tone?: string; sub?: string }) {
-  const toneCls: Record<string, string> = {
-    slate: 'bg-slate-50 text-slate-600', rose: 'bg-rose-50 text-rose-600',
-    emerald: 'bg-emerald-50 text-emerald-600', primary: 'bg-primary-50 text-primary-600',
-    amber: 'bg-amber-50 text-amber-600',
-  };
+function OverviewSkeleton() {
+  const card = 'rounded-ds-card border border-ds-border bg-ds-surface p-[16px]';
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center gap-2">
-        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${toneCls[tone] || toneCls.slate}`}>{icon}</span>
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+    <div role="status" aria-busy="true" className="flex flex-col gap-[16px]">
+      <span className="sr-only">Loading the overview</span>
+      <div aria-hidden className={GRID}>
+        {[0, 1, 2, 3, 4].map((i) => <div key={i} className={card}><Skeleton className="h-[12px] w-[72px]" /><Skeleton className="mt-[12px] h-[28px] w-[56px]" /><Skeleton className="mt-[12px] h-[12px] w-[90%]" /></div>)}
       </div>
-      <div className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400">{sub}</div>}
+      <div aria-hidden className="grid gap-[12px] lg:grid-cols-3">
+        {[0, 1, 2].map((i) => <div key={i} className={card}><Skeleton className="h-[16px] w-[140px]" /><Skeleton className="mt-[16px] h-[12px] w-full" /><Skeleton className="mt-[8px] h-[12px] w-[70%]" /><Skeleton className="mt-[8px] h-[12px] w-[85%]" /></div>)}
+      </div>
     </div>
   );
 }
 
-function LinkageCard({ href, icon, label, value, tone, sub, cta }: { href: string; icon: React.ReactNode; label: string; value: React.ReactNode; tone: string; sub: string; cta: string }) {
-  const toneCls: Record<string, string> = {
-    amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600', primary: 'bg-primary-50 text-primary-600',
-  };
+function DrillRow({ d }: { d: Drill }) {
   return (
-    <Link href={href} className="group rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-primary-300 hover:bg-slate-50">
-      <div className="flex items-center justify-between">
-        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${toneCls[tone] || toneCls.primary}`}>{icon}</span>
-        <span className="inline-flex items-center gap-0.5 text-[11px] text-primary-600 opacity-0 transition-opacity group-hover:opacity-100">{cta} <ArrowRight className="h-3 w-3" /></span>
-      </div>
-      <div className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{value}</div>
-      <div className="text-[11px] font-medium text-slate-600">{label}</div>
-      <div className="text-[11px] text-slate-400">{sub}</div>
-    </Link>
+    <li>
+      <Link href={`/bcm/drills/${d.id}`} className={`${ROW_LINK} flex-wrap`}>
+        <span className="min-w-0 flex-1 basis-[14rem]">
+          <span className="line-clamp-2 break-words text-ds-body font-[500] text-ds-fg" title={d.title}>{d.title}</span>
+          <span className="mt-[2px] block break-words text-ds-label font-normal text-ds-fg-muted">
+            {`${drillType.label(d.drill_type)} · ${d.plan_title || EMPTY} · ${formatDate(d.scheduled_date, { calendar: true, empty: NOT_SET })}`}
+          </span>
+        </span>
+        <Pill registry={drillStatus} word={d.effective_status} />
+      </Link>
+    </li>
+  );
+}
+
+/** One of the two drill lists. The server cuts each at six; the card says so next to the figure that is not cut, and links to the whole list. */
+function DrillList({ id, title, info, drills, total, empty, all }: { id: string; title: string; info: string; drills: Drill[]; total: number; empty: string; all: { href: string; label: string } }) {
+  const cut = listCut(drills.length, total);
+  return (
+    <SectionCard id={id} title={title} info={info} meta={cut ?? undefined} actions={<Button size="sm" variant="link" href={all.href}>{all.label}</Button>}>
+      {drills.length === 0 ? (
+        <p className="py-[8px] text-ds-body text-ds-fg-muted">{empty}</p>
+      ) : (
+        <ul className="flex flex-col">{drills.map((d) => <DrillRow key={d.id} d={d} />)}</ul>
+      )}
+    </SectionCard>
   );
 }
 
 export default function BcmDashboardPage() {
-  const { data, isLoading, error } = useQuery<Dashboard>({
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('bcm:plans:create');
+  const query = useQuery<Dashboard>({
     queryKey: ['bcm-dashboard'],
     queryFn: async () => (await bcmApi.dashboard()).data,
     refetchInterval: 60_000,
+    retry: retryRead,
   });
+  const d = query.data;
 
-  if (isLoading) return <PageLoader className="h-64" />;
-  if (error || !data) {
+  const head = (
+    <PageHeader
+      variant="page"
+      title={titleFor('/bcm') ?? 'Business Continuity Overview'}
+      info="Plans, drills and continuity testing at a glance."
+      actions={(
+        <>
+          <Button href="/bcm/plans" leftIcon={<ClipboardList aria-hidden />}>Plans</Button>
+          <Button href="/bcm/drills" leftIcon={<CalendarClock aria-hidden />}>Drills</Button>
+        </>
+      )}
+    />
+  );
+
+  if (query.isError && !d) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
-        <AlertTriangle className="mb-2 h-8 w-8" />
-        <p className="text-sm">Failed to load the BCM dashboard.</p>
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <ErrorState title="Couldn't load the overview" message={errorMessage(query.error)} onRetry={canRetry(query.error) ? () => { void query.refetch(); } : undefined} />
+      </div>
+    );
+  }
+  if (!d) return <div className="flex flex-col gap-[16px]">{head}<OverviewSkeleton /></div>;
+
+  if (isEmptyTenant(d)) {
+    return (
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <EmptyState
+          kind="firstUse"
+          icon={ClipboardList}
+          title="No continuity plans yet"
+          description={canCreate ? 'Start with a plan: add its business impact analysis, then schedule drills to test it.' : 'No continuity plan has been created yet.'}
+          action={canCreate ? <Button variant="primary" href="/bcm/plans?new=1" leftIcon={<Plus aria-hidden />}>Create a plan</Button> : <Button href="/bcm/plans">Open the plans</Button>}
+        />
       </div>
     );
   }
 
-  const t = data.totals;
-  // Defensive default — the `linkage` block is a newer dashboard field; if the
-  // backend hasn't been restarted yet, fall back to zeros instead of crashing.
-  const linkage = data.linkage ?? { open_capas: 0, total_capas: 0, risks_linked: 0, incident_invocations: 0 };
-  const passRate = (v: number | null) => (v == null ? '—' : `${v}%`);
+  const t = d.totals;
+  const cover = coverageTile(d);
+  const linkage = linkageOf(d);
+  const notSent = 'The server did not send this figure.';
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-            <LifeBuoy className="h-5 w-5" strokeWidth={1.75} />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Business Continuity</h1>
-            <p className="text-xs text-slate-500">Plans, drills and continuity testing at a glance.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/bcm/plans" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <ClipboardList size={16} /> Plans
-          </Link>
-          <Link href="/bcm/drills" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            <CalendarClock size={16} /> Drills
-          </Link>
-        </div>
+    <div className="flex flex-col gap-[16px]">
+      {head}
+
+      <div className={GRID}>
+        <StatTile
+          label="Active plans" value={formatCount(t.active_plans)} note={`${formatCount(t.plans)} in total`} info="Plans that are not retired."
+          link={{ href: '/bcm/plans', label: `${plural(t.active_plans, 'active plan')}. Open the plans` }}
+        />
+        <StatTile
+          label="Drill coverage" value={cover.value} progress={cover.progress} note={cover.note}
+          info={cover.value === null ? 'There is no active plan to cover yet.' : 'Active plans with at least one drill scheduled or created in the last 12 months.'}
+        />
+        <StatTile
+          label="Overdue drills" value={formatCount(t.overdue_drills)} tone={t.overdue_drills > 0 ? 'danger' : 'default'} note={`of ${plural(t.drills, 'drill')}`}
+          info="Drills still scheduled whose day has begun."
+          link={t.overdue_drills > 0 ? { href: '/bcm/drills?status=overdue', label: `${plural(t.overdue_drills, 'overdue drill')}. Open them` } : undefined}
+        />
+        <StatTile
+          label="Open findings" value={formatCount(t.open_findings)} tone={t.open_findings > 0 ? 'warning' : 'default'} note="Not yet closed in Issues"
+          info="A finding is open until its linked issue is closed; a finding with no issue yet is open."
+        />
+        <StatTile label="BIA processes" value={formatCount(t.bia_records)} note="Across all plans" info="Business impact analysis processes, counted over every plan." />
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi icon={<ClipboardList size={16} />} tone="primary" label="Active Plans" value={t.active_plans} sub={`${t.plans} total`} />
-        <Kpi icon={<Activity size={16} />} tone="emerald" label="Drill Coverage" value={`${data.drill_coverage_pct}%`} sub={`${data.coverage_detail.covered}/${data.coverage_detail.active_plans} tested · 12 mo`} />
-        <Kpi icon={<CalendarClock size={16} />} tone={t.overdue_drills ? 'rose' : 'slate'} label="Overdue Drills" value={t.overdue_drills} sub={`${t.drills} drills total`} />
-        <Kpi icon={<AlertTriangle size={16} />} tone={t.open_findings ? 'amber' : 'slate'} label="Open Findings" value={t.open_findings} sub={`${t.bia_records} BIA processes`} />
-      </div>
-
-      {/* Cross-module linkage — BCM is the orchestration layer, not a silo */}
-      <div>
-        <h2 className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          <Link2 className="h-3.5 w-3.5" /> Cross-module linkage
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <LinkageCard href="/issues" icon={<ClipboardCheck size={16} />} tone="amber" label="Open CAPAs" value={linkage.open_capas} sub={`${linkage.total_capas} raised from findings`} cta="Issues / CAPA" />
-          <LinkageCard href="/erm/risks" icon={<ShieldAlert size={16} />} tone="rose" label="Risks Linked" value={linkage.risks_linked} sub="from BIA processes & findings" cta="Risk register" />
-          <LinkageCard href="/bcm/drills" icon={<Siren size={16} />} tone="primary" label="Incident Invocations" value={linkage.incident_invocations} sub="real BCP activations" cta="View drills" />
+      <SectionCard id="linkage" title="Cross-module linkage" info="Business continuity hands drill findings to Issues / CAPA and links processes and findings to the Risk Register.">
+        <div className="grid gap-[12px] sm:grid-cols-3">
+          <StatTile
+            label="Open CAPAs" value={linkage ? formatCount(linkage.open_capas) : null} info={linkage ? undefined : notSent}
+            note={linkage ? `${formatCount(linkage.total_capas)} raised from findings` : undefined}
+            link={linkage ? { href: '/issues', label: `${plural(linkage.open_capas, 'open CAPA')}. Open Issues / CAPA` } : undefined}
+          />
+          <StatTile
+            label="Risks linked" value={linkage ? formatCount(linkage.risks_linked) : null} info={linkage ? undefined : notSent}
+            note={linkage ? 'From BIA processes and findings' : undefined}
+            link={linkage ? { href: '/erm/risks', label: `${plural(linkage.risks_linked, 'linked risk')}. Open the risk register` } : undefined}
+          />
+          <StatTile
+            label="Incident invocations" value={linkage ? formatCount(linkage.incident_invocations) : null} info={linkage ? undefined : notSent}
+            note={linkage ? 'Real BCP activations' : undefined}
+            link={linkage && linkage.incident_invocations > 0 ? { href: '/bcm/drills?source=incident_triggered', label: `${plural(linkage.incident_invocations, 'incident invocation')}. Open them` } : undefined}
+          />
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* RTO/RPO pass rates */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <ShieldCheck className="h-4 w-4 text-primary-500" /> Recovery objective pass rate
-          </h3>
-          {data.results_scored === 0 ? (
-            <p className="text-xs text-slate-500">No drills with recorded results yet.</p>
+      <div className="grid gap-[12px] lg:grid-cols-3">
+        <SectionCard id="pass-rate" title="Recovery objective pass rate" info="Of the drills that have a recorded result, the share that met the objective: 80% and over is on track, 50% and over a watch, below that off target.">
+          {d.results_scored === 0 ? (
+            <p className="text-ds-body text-ds-fg-muted">No drills with recorded results yet.</p>
           ) : (
-            <div className="space-y-3">
-              {[{ label: 'RTO met', v: data.rto_pass_rate }, { label: 'RPO met', v: data.rpo_pass_rate }].map((row) => (
+            <div className="flex flex-col gap-[12px]">
+              {[{ label: 'RTO met', v: d.rto_pass_rate }, { label: 'RPO met', v: d.rpo_pass_rate }].map((row) => (
                 <div key={row.label}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-slate-600">{row.label}</span>
-                    <span className="font-semibold tabular-nums text-slate-900">{passRate(row.v)}</span>
+                  <div className="mb-[4px] flex items-center justify-between gap-[8px] text-ds-body">
+                    <span className="text-ds-fg-body">{row.label}</span>
+                    <span className={COUNT}>{percentText(row.v)}</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full rounded-full ${(row.v ?? 0) >= 80 ? 'bg-emerald-500' : (row.v ?? 0) >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                      style={{ width: `${row.v ?? 0}%` }}
-                    />
-                  </div>
+                  <ProgressBar value={row.v} label={row.label} showValue={false} tone={rateTone(row.v) ?? 'primary'} />
                 </div>
               ))}
-              <p className="pt-1 text-[11px] text-slate-400">Across {data.results_scored} drill result{data.results_scored === 1 ? '' : 's'}.</p>
+              <p className="text-ds-label font-normal text-ds-fg-muted">{`Across ${plural(d.results_scored, 'drill result')}.`}</p>
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        {/* Open findings by severity */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <AlertTriangle className="h-4 w-4 text-amber-500" /> Open findings by severity
-          </h3>
-          <div className="grid grid-cols-4 gap-2">
-            {(['critical', 'high', 'medium', 'low'] as const).map((sev) => (
-              <div key={sev} className="rounded-lg border border-slate-200 p-2 text-center">
-                <div className="mx-auto mb-1 flex items-center justify-center gap-1">
-                  <span className={`h-2 w-2 rounded-full ${SEV_DOT[sev]}`} />
-                  <span className="text-[10px] font-semibold uppercase text-slate-500">{sev}</span>
-                </div>
-                <div className="text-lg font-bold tabular-nums text-slate-900">{data.open_findings_by_severity[sev] ?? 0}</div>
-              </div>
+        <SectionCard id="findings" title="Open findings by severity" info="Findings that are not closed yet, by the severity they were raised with.">
+          <ul className="flex flex-col gap-[4px]">
+            {severity.words.map((s) => (
+              <li key={s} className="flex min-h-ds-control items-center justify-between gap-[8px]">
+                <Pill registry={severity} word={s} />
+                <span className={COUNT}>{formatCount(findingCount(d, s))}</span>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </SectionCard>
 
-        {/* Plans by status */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <ClipboardList className="h-4 w-4 text-primary-500" /> Plans by status
-          </h3>
-          <div className="space-y-1.5">
-            {['draft', 'under_review', 'approved', 'retired'].map((s) => (
-              <div key={s} className="flex items-center justify-between text-xs">
-                <span className="capitalize text-slate-600">{s.replace('_', ' ')}</span>
-                <span className="font-semibold tabular-nums text-slate-900">{data.plans_by_status[s] ?? 0}</span>
-              </div>
+        <SectionCard id="plans-by-status" title="Plans by status" info="Every plan, by its status. A row opens the plans in that status.">
+          <ul className="flex flex-col gap-[4px]">
+            {planStatus.words.map((s) => (
+              <li key={s}>
+                <Link href={`/bcm/plans?status=${s}`} className={ROW_LINK} aria-label={`${planStatus.label(s)}: ${plural(planCount(d, s), 'plan')}. Open them`}>
+                  <Pill registry={planStatus} word={s} />
+                  <span className={COUNT}>{formatCount(planCount(d, s))}</span>
+                </Link>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </SectionCard>
       </div>
 
-      {/* Overdue + recent drills */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DrillList title="Overdue drills" icon={<Timer className="h-4 w-4 text-rose-500" />} drills={data.overdue_drills} empty="No overdue drills — nice." />
-        <DrillList title="Recent activity" icon={<Activity className="h-4 w-4 text-primary-500" />} drills={data.recent_drills} empty="No drills yet." />
+      <div className="grid gap-[12px] lg:grid-cols-2">
+        <DrillList
+          id="overdue-drills" title="Overdue drills" info="Drills still scheduled whose day has begun, the oldest first."
+          drills={d.overdue_drills} total={t.overdue_drills} empty="No overdue drills." all={{ href: '/bcm/drills?status=overdue', label: 'View all' }}
+        />
+        <DrillList
+          id="recent-drills" title="Recent activity" info="The drills and invocations changed most recently."
+          drills={d.recent_drills} total={t.drills} empty="No drills yet." all={{ href: '/bcm/drills', label: 'View all' }}
+        />
       </div>
-    </div>
-  );
-}
-
-function DrillList({ title, icon, drills, empty }: { title: string; icon: React.ReactNode; drills: any[]; empty: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-        {icon}<h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-      </div>
-      {(!drills || drills.length === 0) ? (
-        <p className="px-4 py-6 text-center text-xs text-slate-400">{empty}</p>
-      ) : (
-        <ul className="divide-y divide-slate-100">
-          {drills.map((d) => (
-            <li key={d.id}>
-              <Link href={`/bcm/drills/${d.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-slate-50">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-slate-800">{d.title}</div>
-                  <div className="text-[11px] text-slate-400">
-                    {DRILL_TYPE_LABEL[d.drill_type] || d.drill_type} · {d.plan_title || '—'} · {fmtDate(d.scheduled_date)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DrillStatusBadge status={d.effective_status} />
-                  <ArrowRight className="h-4 w-4 text-slate-300" />
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
