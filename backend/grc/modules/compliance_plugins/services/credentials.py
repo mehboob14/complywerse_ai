@@ -28,14 +28,46 @@ For WinRM, host/port/username also fall back to the connection row.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+import socket
+from functools import lru_cache
+from typing import Any, Dict, Optional
 
 from grc.crypto import decrypt_secret
 from grc.models import IntegrationConnection
 from ..runners.live_api_catalog import LIVE_API_PROVIDERS
 
 
-def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dict[str, Any]:
+@lru_cache(maxsize=512)
+def _resolves(host: str) -> bool:
+    """True if `host` is an IP or a DNS-resolvable name. shortcut: cached
+    process-wide, so a name that only starts resolving mid-process keeps the
+    cached 'no' until restart — fine within a scan's lifetime."""
+    h = (host or "").strip()
+    if not h:
+        return False
+    try:
+        socket.getaddrinfo(h, None)
+        return True
+    except Exception:
+        return False
+
+
+def _reachable(stored_host: Optional[str], asset_ip: Optional[str]) -> Optional[str]:
+    """Pick the address the scanner can actually reach. Prefer the stored host
+    when it resolves (honours an operator-chosen FQDN); fall back to the asset's
+    IP when a stored NAME won't resolve from the backend — the common case being
+    a discovered host_name (e.g. a DigitalOcean droplet name) that is not in DNS,
+    which otherwise fails EVERY rule with 'could not resolve host'. Applies to
+    any transport, not just SSH."""
+    s = (stored_host or "").strip()
+    if asset_ip and s and not _resolves(s):
+        return str(asset_ip)
+    return stored_host
+
+
+def resolve_credentials_for_connection(
+    connection: IntegrationConnection, asset_ip: Optional[str] = None
+) -> Dict[str, Any]:
     integration_type = (connection.integration_type or "").lower()
     prefix = (connection.credential_env_prefix or "").strip()
 
@@ -84,6 +116,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
 
     if integration_type in ("linux_ssh", "netdev_ssh"):
         host = env("SSH_HOST") or (connection.console_url or "").replace("https://", "").replace("http://", "").rstrip("/")
+        host = _reachable(host, asset_ip)
         port = env("SSH_PORT") or str(connection.console_port or 22)
         username = env("SSH_USERNAME") or connection.username or "ubuntu"
         password = env("SSH_PASSWORD") or decrypt_secret(connection.password)
@@ -129,6 +162,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
                 .replace("http://", "")
                 .rstrip("/")
             )
+            host = _reachable(host, asset_ip)
             # Pick scheme by stored port FIRST, then fall back to env default.
             # The Connect Wizard auto-probe picks the working port (5986
             # HTTPS preferred, 5985 HTTP fallback) and saves it to
@@ -198,6 +232,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
                 .rstrip("/")
             )
         )
+        host = _reachable(host, asset_ip)
         port_raw = (
             extra.get("oracle_port")
             or env("ORACLE_PORT")
@@ -247,7 +282,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
 
     if integration_type == "mssql_sql":
         return {
-            "mssql_host": extra.get("mssql_host") or connection.console_url,
+            "mssql_host": _reachable(extra.get("mssql_host") or connection.console_url, asset_ip),
             "mssql_port": extra.get("mssql_port") or connection.console_port or 1433,
             "mssql_username": extra.get("mssql_username") or connection.username,
             "mssql_password": decrypt_secret(extra.get("mssql_password") or connection.password),
@@ -255,7 +290,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
         }
     if integration_type == "postgres_sql":
         return {
-            "postgres_host": extra.get("postgres_host") or connection.console_url,
+            "postgres_host": _reachable(extra.get("postgres_host") or connection.console_url, asset_ip),
             "postgres_port": extra.get("postgres_port") or connection.console_port or 5432,
             "postgres_username": extra.get("postgres_username") or connection.username,
             "postgres_password": decrypt_secret(extra.get("postgres_password") or connection.password),
@@ -263,7 +298,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
         }
     if integration_type == "mysql_sql":
         return {
-            "mysql_host": extra.get("mysql_host") or connection.console_url,
+            "mysql_host": _reachable(extra.get("mysql_host") or connection.console_url, asset_ip),
             "mysql_port": extra.get("mysql_port") or connection.console_port or 3306,
             "mysql_username": extra.get("mysql_username") or connection.username,
             "mysql_password": decrypt_secret(extra.get("mysql_password") or connection.password),

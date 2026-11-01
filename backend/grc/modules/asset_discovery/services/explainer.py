@@ -23,11 +23,11 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_MODEL = os.environ.get("AVA_AI_MODEL", "gpt-4o-mini")
+_MODEL = os.environ.get("COMPLYVERSE_AI_MODEL", "gpt-4o-mini")
 
 # ── severity vocabulary ──────────────────────────────────────────────────────
 # blocked   = cannot connect until the user changes something on the host/network
-# actionable= the user can act in Ava right now (add/fix a login, re-scan, adopt)
+# actionable= the user can act in ComplyVerse right now (add/fix a login, re-scan, adopt)
 # ok        = healthy / already connected
 # info      = nothing wrong, just context
 
@@ -61,7 +61,7 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
         if s.get("profiled"):
             return _dx("in_inventory", "ok",
                        f"{name} is connected and inventoried",
-                       "A login worked and Ava read this device's OS, hardware and software. It's a full asset now.",
+                       "A login worked and ComplyVerse read this device's OS, hardware and software. It's a full asset now.",
                        ["Nothing to do here.",
                         "To re-read it, open the asset in IT Asset Inventory and use its Reconnect action."])
         return _dx("promoted_empty", "actionable",
@@ -73,7 +73,7 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
     if s.get("resolution") == "review":
         return _dx("needs_review", "actionable",
                    f"{name} needs an identity decision",
-                   "Ava saw evidence that could match more than one existing asset, so it won't merge automatically.",
+                   "ComplyVerse saw evidence that could match more than one existing asset, so it won't merge automatically.",
                    ["Open the Review queue and confirm whether this is a new asset or the same as an existing one."])
 
     # 3) A previous connect attempt was recorded — explain THAT outcome first.
@@ -103,14 +103,14 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
         if code == "no_login":
             return _dx("no_login_covers_ip", "actionable",
                        f"No saved login covers {name}",
-                       "The device's type is known and reachable, but you haven't given Ava a login of the right kind whose scope "
+                       "The device's type is known and reachable, but you haven't given ComplyVerse a login of the right kind whose scope "
                        "includes this IP. This is 'add a login', not 'the login was wrong' — nothing was sent to the host.",
                        [f"Add a {login_word} login under Connect → Add connection, scoped to a CIDR that includes {s.get('ip_address') or 'this host'} (or leave it tenant-wide).",
                         "A subnet-scoped login is preferred over a broad domain account, on purpose, to avoid lockouts."],
                        safe_to_retry=True, lockout_risk=False)
         if code == "unknown_type":
             return _dx("type_unknown", "actionable",
-                       f"Ava can't tell what {name} is",
+                       f"ComplyVerse can't tell what {name} is",
                        "The sweep saw no Windows (445/3389/5985) or Linux (22) port, so there's no correct login KIND to even try. "
                        "Guessing one would be a guaranteed failed login.",
                        ["Re-run discovery so the sweep can capture its management ports,",
@@ -136,7 +136,7 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
                            ["Click Connect on this row and pick your saved login (Use →) — no re-entry needed."])
             return _dx("ready_need_login", "actionable",
                        f"{name} is ready for login — it just needs a credential",
-                       f"The {login_word} login port is confirmed open. Ava can connect as soon as you give it a matching login.",
+                       f"The {login_word} login port is confirmed open. ComplyVerse can connect as soon as you give it a matching login.",
                        [f"Click Connect and add (or reuse) a {login_word} login with the right username/password.",
                         f"For Windows domain accounts use DOMAIN\\\\user."])
         # WinRM/SSH itself is NOT open, but the sweep saw another real door
@@ -149,7 +149,7 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
                    if "wmi" in alt else "SNMP reads the device with a community string (UDP · 161)")
             return _dx("ready_alt_method", "actionable",
                        f"{name} is ready — reachable via {pretty}",
-                       f"{login_word} is off on this host, but {pretty} answered the sweep, so Ava can still log in that "
+                       f"{login_word} is off on this host, but {pretty} answered the sweep, so ComplyVerse can still log in that "
                        f"way — {how}. You do NOT need to turn {login_word} on to bring this device in.",
                        [f"Click Connect and leave the method on Auto (it uses the door that answered), or pick {pretty} explicitly, then choose your login.",
                         f"Optional only: enabling {login_word} later gives a fuller OS/software read, but it is not required to connect now."],
@@ -170,9 +170,9 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
         if is_win:
             unknown_steps.append("No WinRM? On the Connect panel switch the method to WMI (DCOM · 135) or SNMP (UDP · 161) — neither needs WinRM.")
         return _dx("login_port_unknown", "actionable",
-                   f"Ava hasn't confirmed {login_word} on {name}",
+                   f"ComplyVerse hasn't confirmed {login_word} on {name}",
                    f"This looks like {'Windows' if is_win else 'Linux'} (from its OS guess or open ports), but the last sweep never "
-                   f"probed the {login_word} login port, so its state is unknown. Ava will still let you try — the attempt fast-fails "
+                   f"probed the {login_word} login port, so its state is unknown. ComplyVerse will still let you try — the attempt fast-fails "
                    f"as 'unreachable' (never a lockout) if the port is really closed.",
                    unknown_steps,
                    safe_to_retry=True, lockout_risk=False)
@@ -192,7 +192,7 @@ def diagnose(s: Dict[str, Any]) -> Dict[str, Any]:
     if not ports:
         return _dx("arp_only", "blocked",
                    f"{name} is alive but exposes no login port",
-                   "Ava sees this device on the local network (its MAC answered ARP), but it responded to no TCP or UDP service — "
+                   "ComplyVerse sees this device on the local network (its MAC answered ARP), but it responded to no TCP or UDP service — "
                    "it's firewalled, sleeping, isolated on the network, or simply exposes nothing. There's nothing to log into yet. "
                    "(An ARP entry can also be a few-minute-stale ghost of a device that just went offline.)",
                    ["If it's a managed Windows box: enable WinRM (Enable-PSRemoting + set the network profile to Private + open the "
@@ -241,7 +241,7 @@ def diagnose_nameless(count: int, sources: List[str]) -> Dict[str, Any]:
                "profile, there's no reverse-DNS (PTR) record, and they don't answer mDNS. That's why the queue shows only their IP. "
                "Their real name usually still exists in your DHCP server's lease table (they told it their hostname when they leased "
                f"an address). Seen via: {srcs}.",
-               ["Use 'Fill names' → read the DHCP server's lease table with a saved router login. Ava fills each blank name from the "
+               ["Use 'Fill names' → read the DHCP server's lease table with a saved router login. ComplyVerse fills each blank name from the "
                 "matching lease (by MAC, then IP). It only fills blanks — it never invents a name.",
                 "Or, on the host: set the network to Private / enable File-and-Printer-Sharing so NetBIOS (137) answers, then re-scan.",
                 "Or add reverse-DNS (PTR) records so `nslookup <ip>` resolves.",

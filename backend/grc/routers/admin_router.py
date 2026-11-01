@@ -42,6 +42,7 @@ def _generate_audit_description(
     path: str,
     request_payload: Optional[dict],
     feature: Optional[str] = None,
+    field_changes: Optional[list] = None,
 ) -> str:
     """Return a plain-English summary of an audit log action. `feature` is what
     the endpoint does in the workflow builder's words ("Edit Risk"); it names
@@ -72,11 +73,49 @@ def _generate_audit_description(
         "evidence_collector": "evidence collector", "scf_scope": "controls scope",
         "scf_audit_period": "audit period", "scf_control_state": "control",
         "control_record_link": "control link",
+        # Admin sub-entities — singular labels so rows read "Deleted team #2"
+        # rather than "Deleted teams #2".
+        "teams": "team", "roles": "role", "departments": "department",
+        "password-policy": "password policy", "organization": "organization",
     }
-    rt = RT.get(resource_type, resource_type.replace("_", " ") if resource_type else "record")
+    rt = RT.get(resource_type, resource_type.replace("_", " ").replace("-", " ") if resource_type else "record")
     id_part = f" #{resource_id}" if resource_id else ""
     nm = _name()
     nm_part = f' "{nm}"' if nm else ""
+
+    # Human-friendly labels for changed fields (from the ORM field-diff capture).
+    _FRIENDLY_FIELDS = {
+        "last_login": "last login", "display_name": "name", "is_active": "active status",
+        "assigned_to": "assignee", "due_date": "due date", "cde_environment": "PCI scope",
+    }
+    _NOISE_FIELDS = {"id", "tenant_id", "created_at", "updated_at",
+                     "created_on", "updated_on", "modified_at"}
+
+    def _friendly(k: str) -> str:
+        return _FRIENDLY_FIELDS.get(k, k.replace("_", " "))
+
+    def _entity_name() -> Optional[str]:
+        """Pull the record's display name from the captured field diff (so
+        updates/deletes can name the record even when the request body didn't)."""
+        for ent in (field_changes or []):
+            fields = ent.get("fields") or {}
+            for k in ("name", "title", "display_name", "username", "email", "label"):
+                if k in fields:
+                    v = fields[k].get("new") or fields[k].get("old")
+                    if isinstance(v, str) and v.strip():
+                        return v.strip()
+        return None
+
+    def _changed_labels() -> list:
+        out: list = []
+        for ent in (field_changes or []):
+            for k in (ent.get("fields") or {}):
+                if k in _NOISE_FIELDS or k.endswith("_id"):
+                    continue
+                lbl = _friendly(k)
+                if lbl not in out:
+                    out.append(lbl)
+        return out
 
     # Gap analysis
     if "gap-analysis" in path_lower or "gap_analysis" in path_lower:
@@ -144,19 +183,28 @@ def _generate_audit_description(
 
     if action == "update":
         status_val = payload.get("status")
-        if isinstance(status_val, str):
+        # Only claim "status to X" when status ACTUALLY changed — a payload may
+        # carry an unchanged status alongside the real edits (e.g. editing an
+        # asset's name) and we must not log a false "status changed".
+        status_changed = (field_changes is None) or any(
+            "status" in (ent.get("fields") or {}) for ent in field_changes
+        )
+        if isinstance(status_val, str) and status_changed:
             return f'Updated {rt}{id_part} status to "{status_val}"'
-        if nm:
-            return f'Updated {rt} "{nm}"'
-        return f"Updated {rt}{id_part}"
+        ename = nm or _entity_name()
+        target = f'{rt} "{ename}"' if ename else f"{rt}{id_part}"
+        changed = _changed_labels()
+        suffix = f" — changed {', '.join(changed[:4])}" if changed else ""
+        return f"Updated {target}{suffix}"
 
     if action == "delete":
-        if nm:
-            return f'Deleted {rt} "{nm}"'
+        ename = nm or _entity_name()
+        if ename:
+            return f'Deleted {rt} "{ename}"'
         return f"Deleted {rt}{id_part}"
 
     if action == "read":
-        return f"Viewed {rt} #{resource_id}" if resource_id else f"Viewed {rt} list"
+        return f"Viewed {rt} #{resource_id}" if resource_id else f"Viewed {rt}"
 
     if action.endswith("_failed"):
         base = action.replace("_failed", "")
@@ -986,16 +1034,29 @@ def list_roles(
 
     result = []
     for role in roles:
+        # Connector discovery once wrote a connected database's OWN roles
+        # (pg_read_all_settings, pg_stat_scan_tables, 'DB Superuser', …) into
+        # grc_roles tagged 'Imported from connector'. Those are Postgres roles,
+        # not assignable app RBAC roles — keep them out of the role picker.
+        if (role.description or "").strip() == "Imported from connector":
+            continue
+
         perms = tenant_db.query(Permission).join(RolePermission).filter(
             RolePermission.role_id == role.id
         ).all()
         user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id, PLATFORM_GRANT).count()
-        
+
+        # The Administrator role bypasses per-permission checks (grants *:*:*), so it
+        # legitimately holds zero RolePermission rows. Flag it so the UI shows "full
+        # access" instead of a misleading "0 permissions".
+        bypasses_all = bool(role.is_system_role) and role.name == "Administrator"
+
         result.append({
             "id": role.id,
             "name": role.name,
             "description": role.description,
             "is_system_role": role.is_system_role,
+            "bypasses_all": bypasses_all,
             "user_count": user_count,
             "permissions": [p.name for p in perms],
             "created_at": role.created_at.isoformat() if role.created_at else None
@@ -1215,17 +1276,24 @@ def list_audit_logs(
                 or "Unknown User"
             )
 
-        # A business event (no HTTP method) was written with its own sentence
-        # ("Signed off the design test on AST-01"); a request row is described
-        # from its path and payload.
-        description = (changes.get("summary") if not changes.get("method") and changes.get("summary") else None) \
-            or _generate_audit_description(
+        # Endpoints that journal their own transition store a ready-made
+        # sentence in changes["detail"] (e.g. "Status changed from open to
+        # closed") — prefer it. Otherwise a business event (no HTTP method) was
+        # written with its own sentence ("Signed off the design test on AST-01");
+        # a request row is described from its path and payload.
+        _detail = changes.get("detail")
+        if isinstance(_detail, str) and _detail.strip():
+            description = _detail.strip()
+        else:
+            description = (changes.get("summary") if not changes.get("method") and changes.get("summary") else None) \
+                or _generate_audit_description(
                 action=log.action,
                 resource_type=log.resource_type,
                 resource_id=log.resource_id,
                 path=changes.get("path", ""),
                 request_payload=changes.get("request"),
                 feature=changes.get("feature"),
+                field_changes=changes.get("field_changes"),
             )
         # Rows written before rows named their module are placed by their URL.
         row_module, row_submodule = (changes.get("module"), changes.get("submodule")) if changes.get("module") \

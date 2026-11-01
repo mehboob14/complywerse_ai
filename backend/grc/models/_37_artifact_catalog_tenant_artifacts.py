@@ -807,6 +807,12 @@ class ComplianceAgent(Base):
     enrollment_uses = Column(Integer, nullable=False, server_default="0")
     enrollment_expires_at = Column(DateTime, nullable=True)
     spawned_from_agent_id = Column(Integer, ForeignKey("grc_compliance_agents.id"), nullable=True)
+    # Domain binding: when set, enrollment is REFUSED unless the enrolling
+    # machine reports membership in this AD domain (case-insensitive). This is
+    # how "only our bank's PCs can join" is enforced — a leaked install command
+    # run on a home/WORKGROUP PC reports a non-matching domain and is rejected.
+    # NULL = no domain check (any machine with a valid token may enroll).
+    allowed_domain = Column(String(255), nullable=True)
 
     # ─── Scan-now push (set by the asset page's Scan-now button) ─────────
     # When set, the next /jobs poll from this agent skips its normal 30s

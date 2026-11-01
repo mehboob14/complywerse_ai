@@ -40,6 +40,19 @@ from ..models import (
     CriticalTask, Evidence, GovernanceDocument, GRCUser, InternalControl, Issue, ITAsset,
     MetricSnapshot, MetricTarget, ReportDefinition, Risk, Tenant, Vendor, Vulnerability, get_db,
 )
+# Cyber datasets (Report Builder slice 2) — imported from their submodules
+# directly so the registry does not depend on models/__init__ re-exporting them.
+from ..models._37_artifact_catalog_tenant_artifacts import CompliancePlugin, CompliancePluginRun
+from ..models._60_helpdesk_native_models import (
+    HDTicket, HDTicketStatus, HDTicketPriority, HDTicketType, HDDepartment,
+)
+from ..models._23_track_a_phase_7_cloud_connector_framework_foundation import Team, SoftwareIdentifier
+from ..models._47_asset_discovery_models import DiscoveryObservation
+from ..models._pentest_exploit_results import PentestExploitResult
+from ..models._pentest_scan_jobs import PentestScanJob
+from ..models._52_ctem_scope_models import CtemScope
+from ..models._asset_risk_snapshot import AssetRiskSnapshot
+from ..modules.license_management.models import LicenseEntitlement
 from ..services import metric_catalog, metric_snapshots
 from ..services import report_linkages, report_open_catalog
 from .auth_router import (
@@ -72,6 +85,8 @@ class DatasetSpec:
         filterable: Dict[str, str],
         default_order: tuple,
         user_fields: Optional[Dict[str, str]] = None,
+        ref_fields: Optional[Dict[str, tuple]] = None,
+        computed: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.model = model
         self.permissions = permissions    # any-of module perms that grant this dataset (same as the frontend)
@@ -83,6 +98,13 @@ class DatasetSpec:
         # Maps a raw integer FK column (already in `fields`) to the resolved
         # display-name key that the frontend expects (e.g. owner_id -> owner_name).
         self.user_fields: Dict[str, str] = user_fields or {}
+        # out_key -> (fk_col, TargetModel, target_attr): resolve a non-user FK id
+        # to a readable value from another model (asset name, plugin title, HD
+        # status, …). Generalises user_fields (GRCUser-only, single-output).
+        self.ref_fields: Dict[str, tuple] = ref_fields or {}
+        # out_key -> callable(orm_obj) for a DERIVED (non-column) report cell, e.g.
+        # the asset "scan_mode" category computed from origin_source/discovery_state.
+        self.computed: Dict[str, Any] = computed or {}
 
 
 # Registry — key MUST match the frontend dataset key so the grid can address it.
@@ -90,20 +112,25 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
     "vulnerabilities": DatasetSpec(
         Vulnerability,
         permissions=["vulnerabilities:vulnerability_register:*"],
+        # `source` distinguishes scan findings (nessus/… or null) from pentest
+        # findings (`ai-pentest:<lane>`, vuln_id `AIPT-*`). The export is all-findings
+        # while the register is open-only on managed hosts, so surfacing + filtering
+        # `source` is how an auditor reconciles the two populations in one dataset.
         fields=[
             "id", "vuln_id", "title", "severity", "cvss_score", "cve_id", "cwe_id",
-            "kev_flag", "epss_score", "status", "affected_host", "affected_component",
+            "kev_flag", "epss_score", "status", "source", "affected_host", "affected_component",
             "assigned_to", "due_date", "discovered_at", "resolved_at",
         ],
         search=["title", "vuln_id", "cve_id", "affected_host", "affected_component"],
         sortable=[
             "id", "vuln_id", "title", "severity", "cvss_score", "cve_id", "cwe_id", "status",
-            "kev_flag", "due_date", "discovered_at", "resolved_at", "affected_host",
+            "source", "kev_flag", "due_date", "discovered_at", "resolved_at", "affected_host",
             "affected_component", "assigned_to",
         ],
         filterable={
             "severity": "badge", "status": "badge", "cve_id": "text", "cvss_score": "number",
             "kev_flag": "badge", "due_date": "date", "discovered_at": "date", "title": "text",
+            "source": "text",
             # FE vuln-aligned keys (Asset / Owner / Detected) + the rest of the
             # register's identity/classification columns.
             "affected_host": "text", "assigned_to": "number", "resolved_at": "date",
@@ -143,19 +170,84 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
     "assets": DatasetSpec(
         ITAsset,
         permissions=["assets:asset_inventory:*"],
+        computed={"scan_mode": lambda o: _asset_scan_mode(o)},
+        # Full ITAM-parity projection — identity, ownership, CIA/criticality,
+        # exposure & business-impact (the live risk-posture inputs), lifecycle,
+        # OS, hardware, procurement and discovery provenance. JSON blobs
+        # (known_ips, pci_dss, security_posture, detected_software_json, …) and
+        # long free-text (description, *_notes, *_reason) are intentionally left
+        # out — they don't serialize to a report cell. owner_name is the
+        # denormalized display column, so no owner-FK resolution is needed. NB:
+        # there is NO stored `open_findings` column (it's computed live by the
+        # inventory API), so it cannot be a report field.
         fields=[
-            "id", "name", "asset_type", "criticality", "owner_name", "host_name",
-            "ip_address", "location", "internet_facing", "status", "created_at",
+            # Identity
+            "id", "name", "host_name", "fqdn", "ip_address", "primary_mac",
+            "asset_type", "asset_role", "platform_kind",
+            # Ownership
+            "owner_name", "custodian", "owning_team", "department",
+            "assigned_user", "business_function",
+            # Classification & criticality
+            "criticality", "criticality_score", "confidentiality_rating",
+            "integrity_rating", "availability_rating", "data_classification",
+            "regulated_data_type", "valuation",
+            # Exposure & business impact (risk-posture inputs)
+            "internet_facing", "op_dep_business_impact", "network_segment",
+            "environment", "cde_environment",
+            # Lifecycle & status
+            "status", "lifecycle_state", "discovery_state", "origin_source", "scan_mode",
+            "decommissioned_at",
+            # Operating system
+            "os_family", "os_version", "os_edition",
+            # Hardware
+            "manufacturer", "model", "serial_number", "cpu_cores", "memory_gb",
+            "storage_gb",
+            # Procurement
+            "vendor", "purchase_cost", "purchase_date", "warranty_expiry", "eol_date",
+            # Location & tracking
+            "location", "last_seen_source", "first_seen_at", "last_seen_at", "created_at",
         ],
-        search=["name", "owner_name", "host_name", "ip_address", "location"],
+        search=[
+            "name", "host_name", "fqdn", "ip_address", "primary_mac",
+            "owner_name", "serial_number", "location", "os_version",
+        ],
         sortable=[
-            "id", "name", "asset_type", "criticality", "owner_name", "host_name",
-            "ip_address", "location", "internet_facing", "status", "created_at",
+            "id", "name", "host_name", "ip_address", "asset_type", "asset_role",
+            "platform_kind", "owner_name", "department", "business_function",
+            "criticality", "criticality_score", "confidentiality_rating",
+            "integrity_rating", "availability_rating", "data_classification",
+            "regulated_data_type", "valuation", "internet_facing",
+            "op_dep_business_impact", "environment", "status", "lifecycle_state",
+            "discovery_state", "origin_source", "decommissioned_at", "os_family",
+            "manufacturer", "model", "cpu_cores", "memory_gb", "storage_gb",
+            "vendor", "purchase_cost", "purchase_date", "warranty_expiry",
+            "eol_date", "location", "first_seen_at", "last_seen_at", "created_at",
         ],
         filterable={
-            "asset_type": "badge", "criticality": "badge", "owner_name": "text",
-            "location": "text", "internet_facing": "badge", "status": "badge",
-            "created_at": "date", "name": "text",
+            # badges (enums + booleans)
+            "asset_type": "badge", "asset_role": "badge", "platform_kind": "badge",
+            "criticality": "badge", "data_classification": "badge",
+            "regulated_data_type": "badge", "internet_facing": "badge",
+            "cde_environment": "badge", "op_dep_business_impact": "badge",
+            "environment": "badge", "status": "badge", "lifecycle_state": "badge",
+            "discovery_state": "badge", "origin_source": "badge", "os_family": "badge",
+            # numbers
+            "criticality_score": "number", "confidentiality_rating": "number",
+            "integrity_rating": "number", "availability_rating": "number",
+            "valuation": "number", "cpu_cores": "number", "memory_gb": "number",
+            "storage_gb": "number", "purchase_cost": "number",
+            # dates
+            "purchase_date": "date", "warranty_expiry": "date", "eol_date": "date",
+            "decommissioned_at": "date", "first_seen_at": "date",
+            "last_seen_at": "date", "created_at": "date",
+            # text
+            "name": "text", "host_name": "text", "fqdn": "text", "ip_address": "text",
+            "primary_mac": "text", "owner_name": "text", "custodian": "text",
+            "owning_team": "text", "department": "text", "assigned_user": "text",
+            "business_function": "text", "network_segment": "text",
+            "os_version": "text", "os_edition": "text", "manufacturer": "text",
+            "model": "text", "serial_number": "text", "vendor": "text",
+            "location": "text", "last_seen_source": "text",
         },
         default_order=("id", "desc"),
     ),
@@ -294,7 +386,249 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
         default_order=("created_at", "desc"),
         user_fields={"owner_id": "owner_name"},
     ),
+    # ── ComplyVerse cyber datasets (Report Builder slice 2) ────────────────────────────
+    "cis_results": DatasetSpec(
+        CompliancePluginRun,
+        permissions=["compliance:scan:*"],
+        # asset_name / rule_title / benchmark / severity are resolved from the
+        # linked ITAsset + CompliancePlugin (ref_fields) — the run row stores only
+        # the FK ids + execution result, not those display values.
+        fields=[
+            "id", "asset_name", "benchmark", "rule_title", "severity", "status",
+            "result_summary", "triggered_by", "duration_ms", "started_at", "completed_at",
+        ],
+        search=["result_summary"],
+        sortable=[
+            "id", "status", "triggered_by", "duration_ms", "started_at", "completed_at",
+        ],
+        filterable={
+            "status": "badge", "triggered_by": "badge", "duration_ms": "number",
+            "started_at": "date", "completed_at": "date", "result_summary": "text",
+        },
+        default_order=("started_at", "desc"),
+        ref_fields={
+            "asset_name": ("asset_id", ITAsset, "name"),
+            "rule_title": ("plugin_id", CompliancePlugin, "title"),
+            "benchmark": ("plugin_id", CompliancePlugin, "benchmark"),
+            "severity": ("plugin_id", CompliancePlugin, "severity"),
+        },
+    ),
+    "helpdesk_tickets": DatasetSpec(
+        HDTicket,
+        permissions=["helpdesk:tickets:*"],
+        # status_name / priority / ticket_type / department / agent_group are
+        # resolved from the HD lookup tables + the owning Team (ref_fields);
+        # status_category / agreement_status / assigned_agent are real columns.
+        fields=[
+            "id", "subject", "status_category", "status_name", "priority",
+            "ticket_type", "department", "agent_group", "assigned_agent",
+            "agreement_status", "opening_date", "response_by", "resolution_by",
+            "resolution_date", "resolution_time", "feedback_rating",
+        ],
+        search=["subject"],
+        sortable=[
+            "id", "subject", "status_category", "agreement_status", "assigned_agent",
+            "opening_date", "response_by", "resolution_by", "resolution_date",
+            "resolution_time", "feedback_rating",
+        ],
+        filterable={
+            "status_category": "badge", "agreement_status": "badge",
+            "assigned_agent": "text", "subject": "text", "opening_date": "date",
+            "response_by": "date", "resolution_by": "date", "resolution_date": "date",
+            "resolution_time": "number", "feedback_rating": "number",
+        },
+        default_order=("opening_date", "desc"),
+        ref_fields={
+            "status_name": ("status_id", HDTicketStatus, "label_agent"),
+            "priority": ("priority_id", HDTicketPriority, "level"),
+            "ticket_type": ("ticket_type_id", HDTicketType, "name"),
+            "department": ("department_id", HDDepartment, "name"),
+            "agent_group": ("agent_group_id", Team, "name"),
+        },
+    ),
+    "discovery": DatasetSpec(
+        DiscoveryObservation,
+        permissions=["compliance:discover:*"],
+        # Discovered-device evidence (grc_discovery_observations) — the pre-asset
+        # inbox the identity resolver drains. host/ip/fqdn/mac are the identity
+        # hints a scan wrote; `source` is the scan kind (cidr / active_directory);
+        # `resolution` is the lifecycle (pending → unclaimed → created/merged/
+        # review/ignored); `resolved_asset` resolves resolved_asset_id to the
+        # canonical asset name once the resolver links it. Open ports / OS guess
+        # live in the `raw` JSON evidence blob (not a column), so they cannot be
+        # projected as report cells.
+        fields=[
+            "id", "host_name", "ip_address", "fqdn", "mac_address", "source",
+            "resolution", "resolved_asset", "resolution_note", "observed_at",
+            "created_at",
+        ],
+        search=["host_name", "ip_address", "fqdn", "mac_address"],
+        sortable=[
+            "id", "host_name", "ip_address", "fqdn", "mac_address", "source",
+            "resolution", "observed_at", "created_at",
+        ],
+        filterable={
+            "source": "badge", "resolution": "badge", "host_name": "text",
+            "ip_address": "text", "fqdn": "text", "mac_address": "text",
+            "resolution_note": "text", "observed_at": "date", "created_at": "date",
+        },
+        default_order=("observed_at", "desc"),
+        ref_fields={
+            "resolved_asset": ("resolved_asset_id", ITAsset, "name"),
+        },
+    ),
+    "pentest_findings": DatasetSpec(
+        PentestExploitResult,
+        permissions=["pentest:workspace:view"],
+        # Persisted AI-Pentest exploit results (grc_pentest_exploit_results) — one
+        # row per exploit attempt against a finding on an asset. `asset_name`
+        # resolves asset_id to the canonical asset name (asset_id is a plain int,
+        # no FK — the lookup is simply None for ad-hoc targets). `status` is the
+        # operational outcome (executed / error / needs-creds / …); `exploit_status`
+        # is the prover's honest verdict (exploitable / not-exploitable / …).
+        # Large evidence/log/screenshot/kill_chain/narrative blobs are omitted —
+        # they are not report cells.
+        fields=[
+            "id", "target", "asset_name", "title", "severity", "cve_id", "tool",
+            "technique", "status", "exploit_status", "exploit_class", "confirmed",
+            "access_proven", "cve_specific", "outcome", "created_at",
+        ],
+        search=["target", "title", "cve_id", "technique"],
+        sortable=[
+            "id", "target", "severity", "cve_id", "tool", "status",
+            "exploit_status", "exploit_class", "confirmed", "access_proven",
+            "cve_specific", "created_at",
+        ],
+        filterable={
+            "severity": "badge", "status": "badge", "exploit_status": "badge",
+            "exploit_class": "badge", "confirmed": "badge", "access_proven": "badge",
+            "cve_specific": "badge", "tool": "badge", "cve_id": "text",
+            "target": "text", "title": "text", "created_at": "date",
+        },
+        default_order=("created_at", "desc"),
+        ref_fields={
+            "asset_name": ("asset_id", ITAsset, "name"),
+        },
+    ),
+    "software_inventory": DatasetSpec(
+        SoftwareIdentifier,
+        permissions=["assets:asset_inventory:*"],
+        # Installed software identifiers (grc_software_identifiers) — CPE/PURL
+        # inventory per asset, populated by the CPE matcher + scanner adapters.
+        # `asset_name` resolves asset_id to the canonical asset name.
+        fields=["id", "asset_name", "vendor", "product", "version",
+                "identifier_type", "identifier", "source", "created_at"],
+        search=["vendor", "product", "identifier"],
+        sortable=["id", "vendor", "product", "version", "identifier_type",
+                  "source", "created_at"],
+        filterable={"identifier_type": "badge", "source": "badge",
+                    "vendor": "text", "product": "text", "version": "text",
+                    "identifier": "text", "created_at": "date"},
+        default_order=("created_at", "desc"),
+        ref_fields={"asset_name": ("asset_id", ITAsset, "name")},
+    ),
+    "pentest_scans": DatasetSpec(
+        PentestScanJob,
+        permissions=["pentest:workspace:view"],
+        # Live AI-Pentest scan jobs (grc_pentest_scan_jobs) — one row per scan run.
+        # `asset_name` resolves asset_id (plain int, no FK; None for ad-hoc targets).
+        fields=["id", "target", "asset_name", "lane", "find_mcp", "find_tool",
+                "credentialed", "status", "progress", "stage", "findings_count",
+                "created_at", "started_at", "finished_at", "error"],
+        search=["target", "find_tool", "stage"],
+        sortable=["id", "target", "lane", "status", "findings_count", "progress",
+                  "created_at", "started_at", "finished_at"],
+        filterable={"status": "badge", "lane": "badge", "credentialed": "badge",
+                    "find_mcp": "badge", "find_tool": "badge", "target": "text",
+                    "stage": "text", "findings_count": "number", "created_at": "date"},
+        default_order=("created_at", "desc"),
+        ref_fields={"asset_name": ("asset_id", ITAsset, "name")},
+    ),
+    "ctem_scopes": DatasetSpec(
+        CtemScope,
+        permissions=["pentest:workspace:view"],
+        # CTEM exposure scopes (grc_ctem_scopes) — named, business-owned slices
+        # of the attack surface. `business_owner_id` is projected and resolved to
+        # `owner_name` via user_fields (the raw FK must be in `fields` for the
+        # resolver to see it — same convention as every other user_fields dataset).
+        # membership_rule (JSON) is deliberately omitted — not a report cell.
+        fields=["id", "name", "description", "cadence", "is_active",
+                "created_at", "updated_at", "business_owner_id"],
+        search=["name", "description"],
+        sortable=["id", "name", "cadence", "is_active", "created_at", "updated_at"],
+        filterable={"is_active": "badge", "cadence": "badge", "name": "text",
+                    "description": "text", "created_at": "date", "updated_at": "date"},
+        default_order=("created_at", "desc"),
+        user_fields={"business_owner_id": "owner_name"},
+    ),
+    "risk_posture": DatasetSpec(
+        AssetRiskSnapshot,
+        permissions=["assets:asset_inventory:*"],
+        # Persisted daily risk-posture snapshots (grc_asset_risk_snapshots) — one
+        # row per asset per day. `score` is the composite 0-100 (higher = worse);
+        # `band` is the severity label; dim_* are each dimension's contribution to
+        # the score (CIS gap / vuln burden / CIA / control coverage / linked risk);
+        # `data_quality` is the % of weight covered by measured dimensions.
+        # snapshot_date is the day; a Risk Posture report refreshes the current
+        # day's rows first (see _refresh_risk_snapshots) so a download is current,
+        # and the dated rows form a daily history.
+        fields=["id", "asset_name", "score", "band", "data_quality",
+                "dim_cis", "dim_vuln", "dim_cia", "dim_ctrl", "dim_risk",
+                "known_dimensions", "snapshot_date", "computed_at"],
+        search=["asset_name", "band"],
+        sortable=["id", "asset_name", "score", "band", "data_quality",
+                  "snapshot_date", "computed_at"],
+        filterable={"band": "badge", "asset_name": "text", "score": "number",
+                    "data_quality": "number", "snapshot_date": "date",
+                    "computed_at": "date"},
+        default_order=("snapshot_date", "desc"),
+    ),
+    "licenses": DatasetSpec(
+        LicenseEntitlement,
+        permissions=["assets:asset_inventory:*"],
+        # Software license entitlements (grc_license_entitlements) — what the tenant
+        # OWNS: one row per purchased licence line (publisher / product / edition,
+        # type + metric, quantity, unit cost, PO, expiry). Consumption and the
+        # effective licence position are computed live by modules/license_management
+        # (GET /licenses/positions, /licenses/summary) and are deliberately NOT report
+        # cells here. `status` is the stored lifecycle (active / expired / retired);
+        # lapsed lines are flipped to expired just before this dataset is read (see
+        # _refresh_license_status). product_key (encrypted) is never projected.
+        fields=["id", "publisher", "product", "edition", "license_type", "license_metric",
+                "total_quantity", "unit_cost", "currency", "status", "expiry_date",
+                "po_reference", "created_at"],
+        search=["publisher", "product", "edition", "po_reference"],
+        sortable=["id", "publisher", "product", "edition", "license_type", "license_metric",
+                  "total_quantity", "unit_cost", "currency", "status", "expiry_date",
+                  "po_reference", "created_at"],
+        filterable={"license_type": "badge", "license_metric": "badge", "status": "badge",
+                    "currency": "badge", "publisher": "text", "product": "text",
+                    "edition": "text", "po_reference": "text", "total_quantity": "number",
+                    "unit_cost": "number", "expiry_date": "date", "created_at": "date"},
+        default_order=("publisher", "asc"),
+    ),
 }
+
+
+# Human labels for the dataset keys — used for the PDF report header and as a
+# fallback label. (The FE keeps its own copy for the dropdown.)
+DATASET_LABELS: Dict[str, str] = {
+    "assets": "Assets",
+    "vulnerabilities": "Vulnerabilities",
+    "cis_results": "CIS Benchmark Results",
+    "helpdesk_tickets": "Help Desk Tickets",
+    "discovery": "Discovered Devices",
+    "pentest_findings": "Pentest Findings",
+    "software_inventory": "Software Inventory",
+    "pentest_scans": "Pentest Scans",
+    "ctem_scopes": "CTEM Scopes",
+    "risk_posture": "Risk Posture",
+    "licenses": "Software Licenses",
+}
+
+
+def _dataset_label(key: str) -> str:
+    return DATASET_LABELS.get(key, key.replace("_", " ").title())
 
 
 # ── Per-dataset authorization ──────────────────────────────────────────────
@@ -344,6 +678,10 @@ class QueryBody(BaseModel):
     sorts: List[SortSpec] = Field(default_factory=list)
     filters: List[FilterSpec] = Field(default_factory=list)
     logic: str = "AND"  # how `filters` combine: AND | OR
+    # ITAsset-backed datasets only: a UNION of discovery categories to include —
+    # "credential" | "uncredential" | "easm" | "pci" | "adhoc". None/empty = the
+    # inventory default (all categories except ad-hoc pentest targets).
+    asset_categories: Optional[List[str]] = None
 
 
 class AggregateMeasureSpec(BaseModel):
@@ -361,6 +699,7 @@ class AggregateBody(BaseModel):
     logic: str = "AND"
     group_by: List[str] = Field(default_factory=list)
     measures: List[AggregateMeasureSpec] = Field(default_factory=list)
+    asset_categories: Optional[List[str]] = None
 
 
 _ALLOWED_AGG_FNS = frozenset({"count", "count_distinct", "sum", "avg", "min", "max"})
@@ -639,24 +978,214 @@ def _serialize(spec: DatasetSpec, obj: Any) -> Dict[str, Any]:
         if isinstance(v, (datetime, date)):
             v = v.isoformat()
         out[f] = v
+    for k, fn in spec.computed.items():
+        try:
+            out[k] = fn(obj)
+        except Exception:
+            out[k] = None
     return out
+
+
+def _report_columns(spec: DatasetSpec) -> List[str]:
+    """Export column order: the projected fields, each user-FK id shown as its
+    resolved display-name key (owner_id -> owner_name)."""
+    return [spec.user_fields.get(f, f) for f in spec.fields]
+
+
+def _col_label(key: str) -> str:
+    """snake_case column key -> human header (matches /aggregate's labelling)."""
+    return key.replace("_", " ").title()
+
+
+def _apply_sort(q, model: Any, spec: DatasetSpec, sorts: List[SortSpec]):
+    """ORDER BY over whitelisted columns (else the dataset default), with the PK
+    appended as a stable pagination tiebreaker. Shared by /query and /export."""
+    order_clauses = []
+    for s in sorts:
+        if s.key not in spec.sortable:
+            continue
+        col = _col(model, s.key)
+        if col is None:
+            continue
+        order_clauses.append(col.desc() if str(s.dir).lower() == "desc" else col.asc())
+    if not order_clauses:
+        dcol = _col(model, spec.default_order[0])
+        if dcol is not None:
+            order_clauses.append(dcol.desc() if spec.default_order[1] == "desc" else dcol.asc())
+    if not any(s.key == "id" for s in sorts):
+        pk = _col(model, "id")
+        if pk is not None:
+            order_clauses.append(pk.asc())
+    return q.order_by(*order_clauses) if order_clauses else q
+
+
+def _resolve_user_fields(spec: DatasetSpec, serialized: List[Dict[str, Any]], db: Session) -> None:
+    """Batch-resolve each user-FK id column to a display name, in place. Shared by
+    /query and /export."""
+    if not (spec.user_fields and serialized):
+        return
+    user_id_set: set = set()
+    for fk_col in spec.user_fields:
+        for row in serialized:
+            uid = row.get(fk_col)
+            if uid is not None:
+                try:
+                    user_id_set.add(int(uid))
+                except (TypeError, ValueError):
+                    pass
+    if not user_id_set:
+        return
+    users = db.query(GRCUser).filter(GRCUser.id.in_(list(user_id_set))).all()
+    user_map: Dict[int, str] = {u.id: (u.display_name or u.username or str(u.id)) for u in users}
+    for row in serialized:
+        for fk_col, name_col in spec.user_fields.items():
+            uid = row.get(fk_col)
+            if uid is not None:
+                try:
+                    row[name_col] = user_map.get(int(uid))
+                except (TypeError, ValueError):
+                    pass
+
+
+def _tenant_scope(q, model: Any, user: Any, db: Session):
+    """Scope a dataset query to the caller's tenant(s).
+
+    ComplyVerse is per-tenant-DB, but the rest of the app still filters by the
+    `tenant_id` column (get_user_tenants returns the self-tenant id), so a bare
+    `db.query(model)` can miss the tenant's rows and return nothing. Match that
+    pattern: filter by tenant_id when the model carries it; leave join/lookup
+    models that have no tenant_id untouched.
+    """
+    if hasattr(model, "tenant_id"):
+        q = q.filter(model.tenant_id.in_(get_user_tenants(user, db)))
+    return q
+
+
+def _resolve_ref_fields(spec: DatasetSpec, rows: List[Any], serialized: List[Dict[str, Any]], db: Session) -> None:
+    """Resolve each ref_fields out_key from its target model, in place.
+
+    Reads the raw FK id off the ORM row (so the FK need not be a projected
+    field) and writes the looked-up attribute into the matching serialized dict.
+    One batched query per (fk_col, target model). Generalises user-name
+    resolution to any related model (asset name, plugin title, HD status, …).
+    """
+    if not spec.ref_fields or not rows:
+        return
+    from collections import defaultdict
+    groups: Dict[tuple, List[tuple]] = defaultdict(list)  # (fk_col, model) -> [(out_key, attr)]
+    for out_key, (fk_col, model, attr) in spec.ref_fields.items():
+        groups[(fk_col, model)].append((out_key, attr))
+    for (fk_col, model), outs in groups.items():
+        ids: set = set()
+        for obj in rows:
+            v = getattr(obj, fk_col, None)
+            if v is not None:
+                try:
+                    ids.add(int(v))
+                except (TypeError, ValueError):
+                    pass
+        objmap: Dict[int, Any] = {}
+        if ids:
+            for o in db.query(model).filter(model.id.in_(list(ids))).all():
+                objmap[o.id] = o
+        for obj, row in zip(rows, serialized):
+            v = getattr(obj, fk_col, None)
+            tgt = None
+            if v is not None:
+                try:
+                    tgt = objmap.get(int(v))
+                except (TypeError, ValueError):
+                    tgt = None
+            for out_key, attr in outs:
+                row[out_key] = getattr(tgt, attr, None) if tgt is not None else None
+
+
+# The Cybersecurity Assurance report builder (/cyber-assurance/reports) asks for
+# ?scope=cyber and sees only these; everything else (the platform's own Reports)
+# lists every registered dataset.
+CYBER_DATASET_ALLOWLIST = [
+    "assets", "vulnerabilities", "cis_results", "helpdesk_tickets",
+    "discovery", "pentest_findings", "software_inventory", "pentest_scans", "ctem_scopes",
+    "risk_posture", "licenses",
+]
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
 @router.get("/datasets")
-def list_server_datasets(user=Depends(require_auth)) -> Dict[str, Any]:
-    """Capability discovery — which datasets support server mode and how."""
+def list_server_datasets(scope: Optional[str] = None, user=Depends(require_auth)) -> Dict[str, Any]:
+    """Capability discovery — which datasets support server mode and how.
+    ``scope=cyber`` limits it to CYBER_DATASET_ALLOWLIST."""
     return {
         "datasets": [
             {
                 "key": key,
+                "fields": spec.fields,
+                "user_fields": spec.user_fields,
                 "sortable": spec.sortable,
                 "filterable": spec.filterable,
                 "search": spec.search,
             }
             for key, spec in SERVER_DATASETS.items()
+            if scope != "cyber" or key in CYBER_DATASET_ALLOWLIST
         ]
     }
+
+
+_ASSET_CATEGORIES = ("credential", "uncredential", "easm", "pci", "adhoc")
+_INVENTORY_CATEGORIES = ("credential", "uncredential", "easm", "pci")
+
+
+def _asset_scan_mode(obj: Any) -> Optional[str]:
+    """easm | credential | uncredential | None — mirrors assets_router._scan_mode
+    (origin_source='easm' > discovery_state='managed' > origin_source='network_sweep').
+    Shown as the report's "Scan mode" column."""
+    if (getattr(obj, "origin_source", None) or "") == "easm":
+        return "easm"
+    if getattr(obj, "discovery_state", None) == "managed":
+        return "credential"
+    if (getattr(obj, "origin_source", None) or "") == "network_sweep":
+        return "uncredential"
+    return None
+
+
+def _apply_asset_categories(q, model: Any, categories: Optional[List[str]]):
+    """Scope an ITAsset report dataset to a UNION of discovery categories the user
+    marks in the report builder: credential | uncredential | easm | pci | adhoc.
+    None/empty = inventory default (all categories except ad-hoc pentest targets).
+    Ad-hoc are transient AI-pentest targets (status/last_seen_source), never
+    inventory. The scan-mode predicates mirror assets_router.list_assets exactly."""
+    if model is not ITAsset:
+        return q
+    A = ITAsset
+    not_adhoc = and_(
+        func.coalesce(A.status, "") != "adhoc",
+        func.coalesce(A.last_seen_source, "") != "pentest-adhoc",
+    )
+    is_adhoc = or_(
+        func.coalesce(A.status, "") == "adhoc",
+        func.coalesce(A.last_seen_source, "") == "pentest-adhoc",
+    )
+    uncred = and_(func.coalesce(A.origin_source, "") == "network_sweep",
+                  func.coalesce(A.discovery_state, "") != "managed")
+    # credential = inventory that is neither easm nor uncredential (managed scans +
+    # manual/import rows, matching the register's scan_mode-null-folds-to-credential).
+    cred = and_(func.coalesce(A.origin_source, "") != "easm",
+                or_(func.coalesce(A.origin_source, "") != "network_sweep",
+                    func.coalesce(A.discovery_state, "") == "managed"))
+    per_cat = {
+        "easm": and_(not_adhoc, func.coalesce(A.origin_source, "") == "easm"),
+        "credential": and_(not_adhoc, cred),
+        "uncredential": and_(not_adhoc, uncred),
+        "pci": and_(not_adhoc, A.cde_environment.is_(True)),
+        "adhoc": is_adhoc,
+    }
+    cats = [c.strip().lower() for c in (categories or [])
+            if isinstance(c, str) and c.strip().lower() in per_cat]
+    if not cats:
+        cats = list(_INVENTORY_CATEGORIES)
+    if set(cats) >= set(_ASSET_CATEGORIES):
+        return q  # every category incl. ad-hoc -> no filter
+    return q.filter(or_(*[per_cat[c] for c in cats]))
 
 
 @router.post("/query")
@@ -677,8 +1206,18 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
             detail=f"You do not have permission to report on '{body.dataset}'.",
         )
 
+    # Risk Posture is computed live; refresh its daily snapshot right now so this
+    # read (preview or download) reflects current risk. Write-on-change, so a
+    # no-op write when nothing moved. Must run before we read the snapshot table.
+    if body.dataset == "risk_posture":
+        _refresh_risk_snapshots(db, user)
+    if body.dataset == "licenses":
+        _refresh_license_status(db, user)
+
     model = spec.model
     q = db.query(model)
+    q = _tenant_scope(q, model, user, db)
+    q = _apply_asset_categories(q, model, body.asset_categories)
 
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
@@ -687,28 +1226,8 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
 
     total = q.count()
 
-    # Sorting — only over whitelisted columns; fall back to the dataset default.
-    order_clauses = []
-    for s in body.sorts:
-        if s.key not in spec.sortable:
-            continue
-        col = _col(model, s.key)
-        if col is None:
-            continue
-        order_clauses.append(col.desc() if str(s.dir).lower() == "desc" else col.asc())
-    if not order_clauses:
-        dcol = _col(model, spec.default_order[0])
-        if dcol is not None:
-            order_clauses.append(dcol.desc() if spec.default_order[1] == "desc" else dcol.asc())
-    # Stable tiebreaker: without a unique final sort key, ORDER BY on a non-unique
-    # column lets Postgres return rows in any order for ties, so pagination can
-    # duplicate or skip rows across pages. Append the PK unless already sorting by it.
-    if not any(s.key == "id" for s in body.sorts):
-        pk = _col(model, "id")
-        if pk is not None:
-            order_clauses.append(pk.asc())
-    if order_clauses:
-        q = q.order_by(*order_clauses)
+    # Sorting — whitelisted columns, dataset default, PK tiebreaker (see _apply_sort).
+    q = _apply_sort(q, model, spec, body.sorts)
 
     skip = max(0, body.skip)
     limit = max(1, min(body.limit, MAX_LIMIT))
@@ -717,30 +1236,8 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
     serialized = [_serialize(spec, r) for r in rows]
 
     # Resolve user FKs to display names in one batch query per dataset.
-    if spec.user_fields and serialized:
-        user_id_set: set = set()
-        for fk_col in spec.user_fields:
-            for row in serialized:
-                uid = row.get(fk_col)
-                if uid is not None:
-                    try:
-                        user_id_set.add(int(uid))
-                    except (TypeError, ValueError):
-                        pass
-        if user_id_set:
-            users = db.query(GRCUser).filter(GRCUser.id.in_(list(user_id_set))).all()
-            user_map: Dict[int, str] = {
-                u.id: (u.display_name or u.username or str(u.id))
-                for u in users
-            }
-            for row in serialized:
-                for fk_col, name_col in spec.user_fields.items():
-                    uid = row.get(fk_col)
-                    if uid is not None:
-                        try:
-                            row[name_col] = user_map.get(int(uid))
-                        except (TypeError, ValueError):
-                            pass
+    _resolve_user_fields(spec, serialized, db)
+    _resolve_ref_fields(spec, rows, serialized, db)
 
     result: Dict[str, Any] = {
         "rows": serialized,
@@ -751,6 +1248,229 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
     if skipped_filters:
         result["warnings"] = {"skipped_filters": skipped_filters}
     return result
+
+
+MAX_EXPORT_ROWS = 10000
+
+
+class ExportBody(QueryBody):
+    """A /query request plus the chosen output columns and file format."""
+    columns: List[str] = Field(default_factory=list)
+    format: str = "csv"
+
+
+def _pdf_response(filename_stem: str, dataset_label: str, tenant_name: Optional[str],
+                  headers: List[str], rows: List[List[Any]]):
+    """Clean, unbranded PDF: a text header (title + dataset + generated + tenant),
+    then the selected columns/rows as a paginated table (landscape when wide)."""
+    try:
+        from reportlab.lib.pagesizes import letter, landscape
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="PDF export is unavailable: the reportlab library is not installed on the server.",
+        )
+    import html as _html
+    import io as _io
+
+    wide = len(headers) > 5
+    page = landscape(letter) if wide else letter
+    margin = 0.5 * inch
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=page, leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin, title=dataset_label)
+    styles = getSampleStyleSheet()
+    DARK = colors.HexColor("#0f172a")
+    MUTED = colors.HexColor("#64748b")
+    BORDER = colors.HexColor("#e2e8f0")
+    ROW_ALT = colors.HexColor("#f8fafc")
+
+    title_style = ParagraphStyle("RBTitle", parent=styles["Title"], fontSize=18, leading=22,
+                                 textColor=DARK, alignment=0, spaceAfter=2)
+    sub_style = ParagraphStyle("RBSub", parent=styles["Heading2"], fontSize=12, leading=15,
+                               textColor=DARK, fontName="Helvetica", spaceAfter=2)
+    meta_style = ParagraphStyle("RBMeta", parent=styles["BodyText"], fontSize=9,
+                                textColor=MUTED, spaceAfter=12)
+    cell_style = ParagraphStyle("RBCell", parent=styles["BodyText"], fontSize=7, leading=9, textColor=DARK)
+    head_style = ParagraphStyle("RBHead", parent=cell_style, fontName="Helvetica-Bold", textColor=colors.white)
+
+    MAX_PDF_ROWS = 2000
+    shown = rows[:MAX_PDF_ROWS]
+
+    def esc(v: Any) -> str:
+        return _html.escape("" if v is None else str(v))
+
+    story: List[Any] = [
+        Paragraph("Custom Report", title_style),
+        Paragraph(esc(dataset_label), sub_style),
+    ]
+    gen = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    meta = (f"Generated: {esc(gen)} &nbsp;&middot;&nbsp; Tenant: {esc(tenant_name or '—')}"
+            f" &nbsp;&middot;&nbsp; {len(rows)} row(s)")
+    if len(rows) > MAX_PDF_ROWS:
+        meta += f" &nbsp;&middot;&nbsp; showing first {MAX_PDF_ROWS} (use CSV/XLSX for the full set)"
+    story.append(Paragraph(meta, meta_style))
+
+    data = [[Paragraph(esc(h), head_style) for h in headers]]
+    for r in shown:
+        data.append([Paragraph(esc(c), cell_style) for c in r])
+
+    ncols = max(1, len(headers))
+    avail = page[0] - 2 * margin
+    table = Table(data, colWidths=[avail / ncols] * ncols, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), DARK),
+        ("GRID", (0, 0), (-1, -1), 0.4, BORDER),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, ROW_ALT]),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    story.append(table)
+    doc.build(story)
+    buf.seek(0)
+    # Non-streamed Response: a StreamingResponse here crashes under the audit
+    # BaseHTTPMiddleware ("Unexpected message received: http.request"). The PDF is
+    # already fully rendered in memory.
+    from fastapi.responses import Response
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename_stem}.pdf"'},
+    )
+
+
+def _html_response(filename_stem: str, dataset_label: str, tenant_name: Optional[str],
+                   headers: List[str], rows: List[List[Any]]):
+    """Clean, unbranded standalone HTML report: a title + meta header, then the
+    selected columns/rows as a styled table. Downloads as .html (self-contained,
+    openable in any browser)."""
+    import html as _html
+    from datetime import datetime as _dt
+    esc = lambda v: _html.escape("" if v is None else str(v))
+    gen = _dt.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    thead = "".join(f"<th>{esc(h)}</th>" for h in headers)
+    body_rows = "".join("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + "</tr>" for r in rows)
+    if not body_rows:
+        body_rows = f'<tr><td colspan="{max(1, len(headers))}" class="empty">No rows match the selected filters.</td></tr>'
+    doc = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        f"<title>{esc(dataset_label)} report</title><style>"
+        ":root{color-scheme:light}"
+        "body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:28px}"
+        "h1{font-size:20px;margin:0 0 4px}"
+        ".meta{color:#64748b;font-size:12.5px;margin-bottom:18px}"
+        "table{border-collapse:collapse;width:100%;font-size:12.5px}"
+        "th,td{border:1px solid #e2e8f0;padding:6px 9px;text-align:left;vertical-align:top}"
+        "thead th{background:#0f172a;color:#fff;position:sticky;top:0;font-weight:600}"
+        "tbody tr:nth-child(even){background:#f8fafc}"
+        "td.empty{text-align:center;color:#64748b;padding:22px}"
+        "</style></head><body>"
+        f"<h1>{esc(dataset_label)}</h1>"
+        f'<div class="meta">Generated: {esc(gen)} &middot; Tenant: {esc(tenant_name or "—")} &middot; {len(rows)} row(s)</div>'
+        f"<table><thead><tr>{thead}</tr></thead><tbody>{body_rows}</tbody></table>"
+        "</body></html>"
+    )
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=doc, headers={"Content-Disposition": f'attachment; filename="{filename_stem}.html"'})
+
+
+def _refresh_risk_snapshots(db: Session, user) -> None:
+    """Recompute + persist the current risk snapshot for the caller's tenant(s)
+    right before a Risk Posture report is read, so a downloaded report reflects
+    risk current to THIS moment — not just the last time someone opened the
+    dashboard. The snapshot writer (risk_posture.service) is write-on-change +
+    deduped per day, so this is a no-op write when nothing changed. Non-fatal:
+    a refresh failure must not block the export (the report just reads whatever
+    snapshot is already there)."""
+    try:
+        from ..modules.risk_posture.service import compute_tenant_posture
+        for tid in (get_user_tenants(user, db) or []):
+            compute_tenant_posture(db, tid)  # side effect: persists the snapshot
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def _refresh_license_status(db: Session, user) -> None:
+    """Flip lapsed licence lines to status='expired' right before the Software
+    Licenses dataset is read, so a downloaded report agrees with the register
+    (expiry is otherwise only swept when someone opens the licensing pages).
+    Cheap, write-on-change, non-fatal."""
+    try:
+        from ..modules.license_management.service import sweep_expired
+        for tid in (get_user_tenants(user, db) or []):
+            sweep_expired(db, tid)
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+@router.post("/export")
+def export_dataset(body: ExportBody, db: Session = Depends(get_db), user=Depends(require_auth)):
+    """Stream one registered dataset to CSV/XLSX through the SAME filter/sort engine
+    as /query. Columns default to the full projection (user FKs shown as names).
+    Reuses search_router._report_export so there is one file-building path."""
+    spec = SERVER_DATASETS.get(body.dataset)
+    if spec is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset '{body.dataset}' is not available for export.",
+        )
+    if not _user_can(user, db, spec.permissions):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"You do not have permission to report on '{body.dataset}'.",
+        )
+
+    # Risk Posture is computed live; refresh its daily snapshot right now so this
+    # read (preview or download) reflects current risk. Write-on-change, so a
+    # no-op write when nothing moved. Must run before we read the snapshot table.
+    if body.dataset == "risk_posture":
+        _refresh_risk_snapshots(db, user)
+    if body.dataset == "licenses":
+        _refresh_license_status(db, user)
+
+    model = spec.model
+    q = db.query(model)
+    q = _tenant_scope(q, model, user, db)
+    q = _apply_asset_categories(q, model, body.asset_categories)
+    q, _ = _apply_query_filters(q, model, spec, body.filters, body.logic, body.search)
+    q = _apply_sort(q, model, spec, body.sorts)
+    # ponytail: hard row cap so one export can't OOM the worker; raise if a tenant
+    # legitimately needs a bigger single file.
+    rows = q.limit(MAX_EXPORT_ROWS).all()
+
+    serialized = [_serialize(spec, r) for r in rows]
+    _resolve_user_fields(spec, serialized, db)
+    _resolve_ref_fields(spec, rows, serialized, db)
+
+    valid = set(spec.fields) | set(spec.user_fields.values())
+    chosen = [c for c in body.columns if c in valid] or _report_columns(spec)
+    headers = [_col_label(c) for c in chosen]
+    out_rows = [[row.get(c) for c in chosen] for row in serialized]
+
+    fmt = (body.format or "csv").lower()
+    if fmt in ("pdf", "html"):
+        tenant = db.query(Tenant).first()
+        tenant_name = (getattr(tenant, "name", None) or getattr(tenant, "display_name", None)
+                       or getattr(tenant, "slug", None))
+        if fmt == "pdf":
+            return _pdf_response(body.dataset, _dataset_label(body.dataset), tenant_name, headers, out_rows)
+        return _html_response(body.dataset, _dataset_label(body.dataset), tenant_name, headers, out_rows)
+
+    from .search_router import _report_export  # lazy import: no load-time coupling
+    return _report_export(body.dataset, headers, out_rows, fmt)
 
 
 @router.post("/aggregate")
@@ -776,6 +1496,8 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one measure is required.",
         )
+    if body.dataset == "licenses":
+        _refresh_license_status(db, user)
 
     model = spec.model
     # Allowlist: real table columns that are filterable, sortable, or projected.
@@ -846,6 +1568,8 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
         )
 
     q = db.query(*select_exprs).select_from(model)
+    q = _tenant_scope(q, model, user, db)
+    q = _apply_asset_categories(q, model, body.asset_categories)
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
         db=db, dataset_key=body.dataset, user=user,
@@ -885,6 +1609,7 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
             col = _col(model, field) if field else None
             g_exprs.append(_agg_sql(mm["fn"], col).label(mm["alias"]))
         gq = db.query(*g_exprs).select_from(model)
+        gq = _tenant_scope(gq, model, user, db)
         gq, _ = _apply_query_filters(
             gq, model, spec, body.filters, body.logic, body.search,
             db=db, dataset_key=body.dataset, user=user,

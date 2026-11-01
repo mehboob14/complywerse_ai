@@ -298,9 +298,10 @@ class AssetExternalIdentity(Base):
 CREDENTIAL_KINDS = (
     "winrm", "ssh", "ldap",
     "postgres", "mysql", "mssql", "oracle",   # databases
-    "aws", "azure", "digitalocean",           # cloud
+    "aws", "azure", "gcp", "digitalocean",    # cloud (gcp: secret = service-account JSON, no username)
     "k8s", "cisco",                           # cluster / network
     "snmp",                                   # SNMP v2c (community string) — network gear/printers
+    "github",                                 # repo lane: secret = GitHub token (PAT), no username
 )
 SECRET_KINDS = ("password", "ssh_key")
 

@@ -19,11 +19,12 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
@@ -708,21 +709,26 @@ def vendor_risk(
 # ─── Phase 9: Compliance reports (CSV / Excel exports) ────────────────────
 
 
-def _csv_response(filename: str, headers: List[str], rows: List[List[Any]]) -> StreamingResponse:
+def _csv_response(filename: str, headers: List[str], rows: List[List[Any]]) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(headers)
     for r in rows:
         writer.writerow(r)
-    buf.seek(0)
-    return StreamingResponse(
-        iter([buf.getvalue()]),
-        media_type="text/csv",
+    # Full in-memory Response, NOT StreamingResponse: the audit BaseHTTPMiddleware
+    # reads the request body (await request.body()), which is incompatible with a
+    # streaming response body — Starlette raises "Unexpected message received:
+    # http.request" and the download 500s. A non-streamed Response is safe, and the
+    # file is already fully built in memory so there is nothing to stream. utf-8-sig
+    # adds a BOM so Excel opens the UTF-8 CSV with correct encoding.
+    return Response(
+        content=buf.getvalue().encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-def _xlsx_response(filename: str, headers: List[str], rows: List[List[Any]]) -> StreamingResponse:
+def _xlsx_response(filename: str, headers: List[str], rows: List[List[Any]]) -> Response:
     try:
         from openpyxl import Workbook
     except Exception:
@@ -735,27 +741,40 @@ def _xlsx_response(filename: str, headers: List[str], rows: List[List[Any]]) -> 
         ws.append([_xlsx_safe(c) for c in r])
     buf = io.BytesIO()
     wb.save(buf)
-    buf.seek(0)
-    return StreamingResponse(
-        iter([buf.getvalue()]),
+    # Non-streamed Response (see _csv_response): streaming + the audit middleware
+    # crashes the download. The workbook is already fully built in memory.
+    return Response(
+        content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
+# openpyxl rejects these control bytes with IllegalCharacterError (→ 500 on
+# export). Scanner-plugin text in vuln rows carries them; assets/tickets don't,
+# which is why only the vulnerabilities XLSX was failing.
+_ILLEGAL_XLSX = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def _xlsx_safe(value: Any) -> Any:
-    """Convert datetimes + None to spreadsheet-friendly values."""
+    """Coerce a value to something openpyxl can actually write: strip the control
+    bytes it rejects, keep numbers numeric, and stringify JSON-column dict/list
+    values (a cell can't hold one)."""
     if value is None:
         return ""
+    if isinstance(value, str):
+        return _ILLEGAL_XLSX.sub("", value)
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return value
     if isinstance(value, datetime):
         return value.isoformat()
-    return value
+    return _ILLEGAL_XLSX.sub("", str(value))
 
 
 def _report_export(
     filename_stem: str, headers: List[str], rows: List[List[Any]],
     fmt: Optional[str],
-) -> StreamingResponse:
+) -> Response:
     fmt = (fmt or "csv").lower()
     if fmt == "xlsx":
         return _xlsx_response(f"{filename_stem}.xlsx", headers, rows)

@@ -33,7 +33,7 @@ from ..schemas import (
     AssetDetailResponse, AssetCoverageAnalysis,
     LifecycleTransitionRequest,
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts, has_tenant_permission
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts, has_tenant_permission, require_tenant_permission
 # Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
@@ -45,7 +45,14 @@ logger = logging.getLogger(__name__)
 # Per-database-per-tenant: the tenant DB *is* the active session, so tenant
 # users are just GRCUser rows in the current request's session.
 
-router = APIRouter(prefix="/assets", tags=["IT Assets"])
+# Authz gate (QA finding): the IT Asset Inventory API exposes full asset detail (incl. Rescan
+# controls). Require asset_inventory:view on the whole router so helpdesk-only users can't read
+# assets by direct URL / ticket CI link. Administrator role bypasses (see require_tenant_permission).
+router = APIRouter(
+    prefix="/assets",
+    tags=["IT Assets"],
+    dependencies=[Depends(require_tenant_permission("assets:asset_inventory:view"))],
+)
 
 SECURITY_COMPLIANCE_BENCHMARK = "CIS_WS2012R2"
 SECURITY_COMPLIANCE_CONTROLS_FILE = os.path.abspath(
@@ -293,6 +300,83 @@ def get_rule_based_cia_recommendation(request: CIARecommendationRequest):
     }
 
 
+def _surface_fields(asset):
+    """(scan_depth, open_ports, device_type) for an asset — all derived, not stored.
+    scan_depth is 'surface' iff the asset is an unmanaged (evidence-only) row we never
+    logged into, else 'credentialed'. open_ports/device_type come from the sweep's
+    surface evidence in platform_properties['surface'] (stamped at adopt time),
+    falling back to the discovery_classification device_type."""
+    pp = getattr(asset, "platform_properties", None)
+    pp = pp if isinstance(pp, dict) else {}
+    surface = pp.get("surface") if isinstance(pp.get("surface"), dict) else {}
+    dc = pp.get("discovery_classification") if isinstance(pp.get("discovery_classification"), dict) else {}
+    depth = "surface" if getattr(asset, "discovery_state", None) == "unmanaged" else "credentialed"
+    ports = surface.get("open_ports")
+    return depth, (ports if isinstance(ports, list) else None), (surface.get("device_type") or dc.get("device_type"))
+
+
+# ── Discovery category model — THE frontend contract ─────────────────────────
+# scan_mode is the AUTHORITATIVE way an asset's discovery mode is exactly one of
+#   easm | credential | uncredential   (or None for non-discovery assets:
+#   manually-created / imported rows that never came from discovery).
+# It is DERIVED (not a stored column) from two existing, already-maintained
+# fields, so there is no migration or backfill:
+#   • origin_source   — how the asset was BORN (stamped once, never mutated):
+#                       'easm' (outside-in) | 'network_sweep' | 'connect' | ...
+#   • discovery_state — 'managed' once a credentialed collect succeeds
+#                       (deep_collect.collect_host / promote_observation*),
+#                       'unmanaged'/'discovered' for an uncredential surface row.
+# Precedence (first hit wins):
+#   1. origin_source == 'easm'            → 'easm'        (never logged into)
+#   2. discovery_state == 'managed'       → 'credential'  (we authenticated)
+#   3. origin_source == 'network_sweep'   → 'uncredential'(surface sweep row)
+#   4. otherwise                          → None          (manual/import/…)
+# The list filter (?scan_mode=) in list_assets translates these back to column
+# predicates — keep the two in sync.
+def _scan_mode(asset):
+    if (getattr(asset, "origin_source", None) or "") == "easm":
+        return "easm"
+    if getattr(asset, "discovery_state", None) == "managed":
+        return "credential"
+    if (getattr(asset, "origin_source", None) or "") == "network_sweep":
+        return "uncredential"
+    return None
+
+
+# AI-Pentest fleet lane per asset — reuse the engine's OWN classifier so the launcher's
+# lane filter matches the /pentest/fleet hub card by construction. target_type -> fleet key.
+_FLEET_LANE_BY_TARGET = {
+    "cloud": "cloud", "container": "container", "code": "code",
+    "ad": "internal-ad", "host": "internal-host",
+    "host-external": "external", "web": "external",
+}
+
+
+def _fleet_lane(asset):
+    """The AI-Pentest CANONICAL lane key for an asset — web | windows | linux | network | ad | cloud |
+    k8s | repo | database — via pentest._lane_for_target, THE 9-lane resolver the pentest launcher filters
+    on (so an asset renders under its real lane, e.g. a Linux host under the Linux lane). An asset carries
+    no affected_url, so the resolver cannot web-detect it the way it does a finding; catch the web
+    asset_type here so a web asset lands on the web lane, not network. Lazy import avoids a circular
+    import at module load. Never raises."""
+    try:
+        from grc.modules.pentest.service import _lane_for_target
+        at = (getattr(asset, "asset_type", "") or "").lower()
+        if at in ("web", "website", "url", "webapp"):
+            return "web"
+        # EASM web-probed asset: external_probe found a LIVE http/https service on it (an asset carries no
+        # affected_url for _lane_for_target to web-detect, but the EASM probe is the same signal) → web lane,
+        # not the network default. This is what lets a discovered site (e.g. www.liztek.ca) land under Web.
+        pp = getattr(asset, "platform_properties", None)
+        if isinstance(pp, dict):
+            probe = pp.get("external_probe")
+            if isinstance(probe, dict) and probe.get("live") and str(probe.get("scheme", "")).lower() in ("http", "https"):
+                return "web"
+        return _lane_for_target(asset)
+    except Exception:
+        return None
+
+
 @router.get("", response_model=List[ITAssetResponse])
 def list_assets(
     tenant_id: Optional[int] = None,
@@ -304,6 +388,7 @@ def list_assets(
     lifecycle_state: Optional[str] = None,
     data_classification: Optional[str] = None,
     internet_facing: Optional[bool] = None,
+    scan_mode: Optional[str] = Query(None, description="Discovery category filter: easm | credential | uncredential (see _scan_mode)."),
     stale_only: bool = Query(False, description="When true, return assets where last_seen_at is older than `stale_days` (default 30)."),
     stale_days: int = Query(30, ge=1, le=365),
     skip: int = 0,
@@ -338,6 +423,22 @@ def list_assets(
         query = query.filter(ITAsset.data_classification == data_classification)
     if internet_facing is not None:
         query = query.filter(ITAsset.internet_facing == internet_facing)
+    if scan_mode:
+        # Column predicates that mirror _scan_mode's derivation (keep in sync).
+        if scan_mode == "easm":
+            query = query.filter(func.coalesce(ITAsset.origin_source, "") == "easm")
+        elif scan_mode == "credential":
+            # 'managed' = credentialed, but an EASM asset is never logged into, so
+            # exclude easm-born rows to match _scan_mode's easm-first precedence.
+            query = query.filter(
+                ITAsset.discovery_state == "managed",
+                func.coalesce(ITAsset.origin_source, "") != "easm",
+            )
+        elif scan_mode == "uncredential":
+            query = query.filter(
+                func.coalesce(ITAsset.origin_source, "") == "network_sweep",
+                func.coalesce(ITAsset.discovery_state, "") != "managed",
+            )
     if stale_only:
         from datetime import timedelta
         cutoff = datetime.utcnow() - timedelta(days=stale_days)
@@ -348,6 +449,12 @@ def list_assets(
         )
 
     assets = query.order_by(ITAsset.created_at.desc()).offset(skip).limit(limit).all()
+    # Attach the computed surface fields transiently (same pattern as open_findings)
+    # so the response_model picks them up without new columns on ITAsset.
+    for a in assets:
+        a.scan_depth, a.open_ports, a.device_type = _surface_fields(a)
+        a.scan_mode = _scan_mode(a)
+        a.fleet_lane = _fleet_lane(a)
     return assets
 
 
@@ -370,7 +477,7 @@ _BULK_FIELD_ALIASES = {"type": "asset_type", "lifecycle": "lifecycle_state"}
 _BULK_ALLOWED_FIELDS = {
     "criticality", "status", "lifecycle_state", "asset_type", "environment",
     "department", "data_classification", "owner_id", "primary_owner_id",
-    "internet_facing",
+    "internet_facing", "cde_environment",
 }
 # The people an asset names: each must use the platform (not an account an access review imported).
 _ASSET_PEOPLE = ("owner_id", "primary_owner_id", "secondary_owner_id", "business_owner_id", "escalation_contact_id")
@@ -472,6 +579,16 @@ def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
         ("grc_infra_asset_criticality_items", "linked_asset_id"),
     ):
         db.execute(_sql(f"UPDATE {table} SET {col} = NULL WHERE {col} = :aid"), {"aid": aid})
+    # The agents pinned to this asset get deleted in the PURGE step below; first
+    # clear the collector FK on any connection pointing at them, or that DELETE
+    # raises a ForeignKeyViolation (grc_integration_connections
+    # .assigned_collector_agent_id). Detach, not delete — the connection is a real
+    # entity, and the host-pinned one is already deactivated further down.
+    db.execute(_sql(
+        "UPDATE grc_integration_connections SET assigned_collector_agent_id = NULL "
+        "WHERE assigned_collector_agent_id IN "
+        "(SELECT id FROM grc_compliance_agents WHERE asset_id = :aid)"),
+        {"aid": aid})
     # PURGE — pure association rows that cannot exist without the asset.
     for table, col in (
         ("grc_vulnerability_asset_links", "asset_id"),
@@ -482,6 +599,7 @@ def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
         ("grc_asset_risk_assessments", "asset_id"),
         ("grc_asset_external_identities", "asset_id"),
         ("grc_asset_security_compliance_selections", "asset_id"),
+        ("grc_advisory_asset_applicability", "asset_id"),
         ("grc_asset_alert_states", "asset_id"),
         ("grc_risk_asset_links", "asset_id"),
         ("grc_document_asset_links", "asset_id"),
@@ -489,6 +607,7 @@ def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
         ("grc_issue_asset_links", "asset_id"),
         ("grc_software_identifiers", "asset_id"),
         ("grc_compliance_agents", "asset_id"),
+        ("grc_license_assignments", "asset_id"),
         ("grc_asset_relationships", "source_asset_id"),
         ("grc_asset_relationships", "target_asset_id"),
     ):
@@ -503,6 +622,19 @@ def _purge_asset_references(db: Session, asset: "ITAsset") -> None:
     # Self-references from other assets.
     db.execute(_sql("UPDATE grc_it_assets SET parent_asset_id = NULL WHERE parent_asset_id = :aid"), {"aid": aid})
     db.execute(_sql("UPDATE grc_it_assets SET replacement_asset_id = NULL WHERE replacement_asset_id = :aid"), {"aid": aid})
+    # A promoted software child (asset_role='application'): clear the back-link in
+    # the PARENT host's detected_software_json so its Software tab stops showing
+    # "Asset #<gone>". promoted_asset_id lives in a JSON column, not an FK, so the
+    # parent_asset_id null above never reaches it — this was the dangling-#88 orphan.
+    if asset.parent_asset_id:
+        parent = db.get(ITAsset, asset.parent_asset_id)
+        inv = parent.detected_software_json if parent else None
+        if inv and any(isinstance(e, dict) and e.get("promoted_asset_id") == aid for e in inv):
+            for e in inv:
+                if isinstance(e, dict) and e.get("promoted_asset_id") == aid:
+                    e["promoted_asset_id"] = None
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(parent, "detected_software_json")
 
 
 @router.post("/bulk-delete")
@@ -712,14 +844,19 @@ def get_asset_dashboard(
             assets_needing_assessment=0
         )
     
-    query = db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants))
+    query = db.query(ITAsset).filter(
+        ITAsset.tenant_id.in_(user_tenants),
+        # INVENTORY ONLY: transient AI-pentest ad-hoc targets are not inventory.
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+    )
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
-    
+
     assets = query.all()
     total = len(assets)
-    
+
     by_type = {}
     by_criticality = {}
     by_status = {}
@@ -769,7 +906,12 @@ def get_asset_coverage(
             by_criticality={}
         )
     
-    query = db.query(ITAsset).options(joinedload(ITAsset.control_links)).filter(ITAsset.tenant_id.in_(user_tenants))
+    query = db.query(ITAsset).options(joinedload(ITAsset.control_links)).filter(
+        ITAsset.tenant_id.in_(user_tenants),
+        # INVENTORY ONLY: transient AI-pentest ad-hoc targets are not inventory.
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+    )
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
@@ -1427,7 +1569,8 @@ def get_asset(
             "gaps": latest.gaps,
             "assessor_id": latest.assessor_id
         }
-    
+
+    _d_scan_depth, _d_open_ports, _d_device_type = _surface_fields(asset)
     return {
         "id": asset.id,
         "tenant_id": asset.tenant_id,
@@ -1475,6 +1618,11 @@ def get_asset(
         "last_seen_at": asset.last_seen_at.isoformat() if asset.last_seen_at else None,
         "last_seen_source": asset.last_seen_source,
         "origin_source": asset.origin_source,
+        "scan_mode": _scan_mode(asset),
+        # Surface evidence for the uncredential detail popup (IP/hostname/ports/type).
+        "scan_depth": _d_scan_depth,
+        "open_ports": _d_open_ports,
+        "device_type": _d_device_type,
         "dns_aliases": asset.dns_aliases,
         "linked_controls": [link.normalized_control_id for link in asset.control_links],
         "linked_risks": [link.risk_id for link in asset.risk_links],
@@ -1549,6 +1697,12 @@ def update_asset(
         # reads, instead of the retired duplicate column that nothing reads anymore.
         if field == "is_internet_facing":
             setattr(asset, "internet_facing", value)
+            continue
+        # CIA ratings are a 1-5 scale; 0 or null means "unset", never a real
+        # value. The asset edit form defaults untouched ratings to 0 and PUTs
+        # the whole object, so applying a 0 would silently destroy a stored
+        # rating (reported: editing name+owner zeroed CIA). Only 1-5 writes.
+        if field in ("confidentiality_rating", "integrity_rating", "availability_rating") and not value:
             continue
         setattr(asset, field, value)
 
@@ -1728,6 +1882,147 @@ def delete_asset(
             detail=f"Could not delete this asset — it is still referenced: {str(exc)[:300]}",
         )
     return None
+
+
+@router.get("/{asset_id}/vuln-risk-profile")
+def asset_vuln_risk_profile(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Asset-level Before->After vulnerability risk, averaged across the asset's
+    OPEN findings with the SAME 7-signal model the finding detail shows.
+    Before = raw CVSS alone (the flaw in the abstract); After = scored on THIS
+    host (CVSS severity + EPSS + exploit maturity + KEV + reachability +
+    internet exposure + asset criticality). Returns the headline raw/contextual
+    average + a per-parameter breakdown (average points) for one table."""
+    import re as _re
+    from grc.models import Vulnerability, VulnerabilityAssetLink
+    user_tenants = get_user_tenants(current_user, db)
+    asset = (db.query(ITAsset)
+             .filter(ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants)).first())
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    _CLOSED = {"remediated", "verified", "closed", "resolved", "accepted",
+               "false_positive", "auto_closed_decommissioned", "auto_closed_fixed"}
+    vulns = (db.query(Vulnerability)
+             .join(VulnerabilityAssetLink, VulnerabilityAssetLink.vulnerability_id == Vulnerability.id)
+             .filter(VulnerabilityAssetLink.asset_id == asset_id).all())
+    openv = [v for v in vulns if (v.status or "open").lower() not in _CLOSED]
+    # Fold to DISTINCT findings (same dedup_key as every other count surface) so the
+    # before/after score + its denominators read the truth number, not raw links.
+    from grc.modules.pentest.service import _fold_distinct as _fd
+    _rows = [{"id": v.id, "cve_id": v.cve_id, "title": v.title, "severity": v.severity,
+              "affected_url": getattr(v, "affected_url", None),
+              "affected_component": getattr(v, "affected_component", None)} for v in openv]
+    _keep = {r['id'] for r in _fd(_rows, asset.asset_type)}
+    openv = [v for v in openv if v.id in _keep]
+    internet = bool(getattr(asset, "internet_facing", False))
+    crit = (asset.criticality or "").lower() or None
+    exposure_pts = 10 if internet else 0
+    crit_pts = 10 if crit in ("critical", "high") else (5 if crit is None else 3)
+    n = len(openv)
+    if n == 0:
+        return {"count": 0, "scored": 0, "raw": None, "contextual": 0, "delta": 0,
+                "internet_facing": internet, "criticality": asset.criticality, "groups": [], "before_groups": []}
+    tot = {"sev": 0.0, "epss": 0.0, "mat": 0.0, "kev": 0.0, "av": 0.0, "raw": 0.0, "ctx": 0.0}
+    cvss_sum = 0.0; cvss_n = 0; epss_sum = 0.0; epss_n = 0; kev_n = 0; exp_n = 0; net_n = 0; raw_n = 0
+    for v in openv:
+        cvss = v.cvss_score; epss = v.epss_score
+        vector = v.cvss_vector or v.nvd_cvss_vector or ""
+        has_exp = (v.public_exploit_count or 0) > 0 or (v.exploitdb_count or 0) > 0
+        sev_pts = round((cvss / 10) * 20) if cvss is not None else 0
+        epss_pts = round(epss * 20, 1) if epss is not None else 0
+        mat_pts = 15 if (v.exploitdb_verified_count or 0) > 0 else (6 if has_exp else 0)
+        kev_pts = 15 if v.kev_flag else 0
+        av_pts = 10 if _re.search(r"AV:N", vector) else 0
+        tot["sev"] += sev_pts; tot["epss"] += epss_pts; tot["mat"] += mat_pts
+        tot["kev"] += kev_pts; tot["av"] += av_pts
+        tot["ctx"] += sev_pts + epss_pts + mat_pts + kev_pts + av_pts + exposure_pts + crit_pts
+        if cvss is not None:
+            cvss_sum += cvss; cvss_n += 1; tot["raw"] += round(cvss * 10); raw_n += 1
+        if epss is not None:
+            epss_sum += epss; epss_n += 1
+        if v.kev_flag:
+            kev_n += 1
+        if has_exp:
+            exp_n += 1
+        if av_pts:
+            net_n += 1
+    avg = lambda x: round(x / n, 1)
+    raw_avg = round(tot["raw"] / raw_n) if raw_n else None
+    ctx_avg = round(tot["ctx"] / n)
+    # BEFORE breakdown - the CVSS base metrics that make up the raw score, summarized across the
+    # asset's open findings (dominant value + share; bar = share at the most-severe value). v3 + v2.
+    _V3 = [("AV","Attack vector",{"N":"Network","A":"Adjacent","L":"Local","P":"Physical"},"N"),
+           ("AC","Attack complexity",{"L":"Low","H":"High"},"L"),  # Low complexity = easier to exploit = most severe
+           ("PR","Privileges required",{"N":"None","L":"Low","H":"High"},"N"),
+           ("UI","User interaction",{"N":"None","R":"Required"},"N"),
+           ("S","Scope",{"U":"Unchanged","C":"Changed"},"C"),
+           ("C","Confidentiality impact",{"H":"High","L":"Low","N":"None"},"H"),
+           ("I","Integrity impact",{"H":"High","L":"Low","N":"None"},"H"),
+           ("A","Availability impact",{"H":"High","L":"Low","N":"None"},"H")]
+    _V2 = [("AV","Attack vector",{"N":"Network","A":"Adjacent","L":"Local"},"N"),
+           ("AC","Attack complexity",{"L":"Low","M":"Medium","H":"High"},"L"),  # v2: Low complexity = most severe
+           ("Au","Authentication",{"N":"None","S":"Single","M":"Multiple"},"N"),
+           ("C","Confidentiality impact",{"C":"Complete","P":"Partial","N":"None"},"C"),
+           ("I","Integrity impact",{"C":"Complete","P":"Partial","N":"None"},"C"),
+           ("A","Availability impact",{"C":"Complete","P":"Partial","N":"None"},"C")]
+    def _bparse(vec):
+        out = {}
+        for part in vec.split("/"):
+            if ":" in part:
+                k, _, val = part.partition(":"); out[k.strip()] = val.strip()
+        return out
+    _btally = {}; _bworst = {}; _border = []
+    for v in openv:
+        vec = (v.cvss_vector or v.nvd_cvss_vector or "").strip()
+        if not vec:
+            continue
+        pd = _bparse(vec)
+        spec = _V3 if (vec.upper().startswith("CVSS:3") or "UI" in pd) else _V2
+        for key, label, vmap, worst in spec:
+            val = pd.get(key)
+            if val is None:
+                continue
+            lab = vmap.get(val, val)
+            if label not in _btally:
+                _btally[label] = {}; _border.append(label); _bworst[label] = vmap.get(worst, worst)
+            _btally[label][lab] = _btally[label].get(lab, 0) + 1
+    before_groups = []
+    for label in _border:
+        bucket = _btally[label]; _btot = sum(bucket.values())
+        wn = bucket.get(_bworst[label], 0)
+        ev = " · ".join("%s %d%%" % (lab, round(100 * c / _btot)) for lab, c in sorted(bucket.items(), key=lambda kv: -kv[1])[:3])
+        before_groups.append({"label": label, "evidence": ev, "pts": round(100 * wn / _btot), "max": 100})
+    if not before_groups:
+        before_groups = [{"label": "CVSS severity", "max": 100,
+                          "evidence": ("avg CVSS %s/10" % round(cvss_sum / cvss_n, 1)) if cvss_n else "no CVSS vector stored",
+                          "pts": round((cvss_sum / cvss_n) * 10) if cvss_n else 0}]
+    groups = [
+        {"label": "Severity — the flaw itself", "rows": [
+            {"label": "CVSS severity",
+             "evidence": f"avg CVSS {round(cvss_sum / cvss_n, 1)} / 10" if cvss_n else "no CVSS stored",
+             "pts": avg(tot["sev"]), "max": 20}]},
+        {"label": "Exploitability — likelihood it's used", "rows": [
+            {"label": "Exploit probability",
+             "evidence": f"avg EPSS {round((epss_sum / epss_n) * 100, 1)}%" if epss_n else "not enriched",
+             "pts": avg(tot["epss"]), "max": 20},
+            {"label": "Exploit maturity",
+             "evidence": f"{exp_n} of {n} with a public exploit", "pts": avg(tot["mat"]), "max": 15},
+            {"label": "Known exploited",
+             "evidence": f"{kev_n} of {n} on CISA KEV", "pts": avg(tot["kev"]), "max": 15}]},
+        {"label": "Context & reachability — on this host", "rows": [
+            {"label": "Attack vector (reachability)",
+             "evidence": f"{net_n} of {n} network-reachable", "pts": avg(tot["av"]), "max": 10},
+            {"label": "Internet exposure",
+             "evidence": "exposed" if internet else "internal only", "pts": exposure_pts, "max": 10},
+            {"label": "Asset criticality",
+             "evidence": asset.criticality or "assumed medium", "pts": crit_pts, "max": 10}]},
+    ]
+    return {"count": n, "scored": raw_n, "raw": raw_avg, "contextual": ctx_avg,
+            "delta": (raw_avg - ctx_avg) if raw_avg is not None else 0,
+            "internet_facing": internet, "criticality": asset.criticality, "groups": groups, "before_groups": before_groups}
 
 
 @router.post("/{asset_id}/valuation", response_model=ITAssetResponse)
@@ -2095,6 +2390,18 @@ def get_asset_detail(
         VulnerabilityAssetLink.asset_id == asset_id,
         Vulnerability.tenant_id.in_(user_tenants)
     ).all()
+    # dedup_key per linked vuln — the SAME canonical fold the register uses
+    # (_fold_distinct), so the Vulnerabilities tab can collapse to DISTINCT findings
+    # and its tiles/status/bar/table match the deduped count, not the raw link rows.
+    from grc.modules.pentest.dedup_tables import dedup_key as _dedup_key
+    def _dk_for(v):
+        try:
+            k = _dedup_key({"cve_id": v.cve_id, "title": v.title, "asset_type": asset.asset_type,
+                            "affected_url": getattr(v, "affected_url", None),
+                            "affected_component": getattr(v, "affected_component", None)})
+            return "|".join(map(str, k)) if isinstance(k, (tuple, list)) else str(k)
+        except Exception:
+            return f"_id:{v.id}"
     for link in vuln_links:
         vuln = link.vulnerability
         if vuln:
@@ -2111,8 +2418,22 @@ def get_asset_detail(
                 # Provenance — Auto badge + source chip on the UI.
                 "link_source": getattr(link, "link_source", "manual") or "manual",
                 "auto_linked": bool(getattr(link, "auto_linked", False)),
+                "dedup_key": _dk_for(vuln),
             })
-    
+
+    # DISTINCT open findings — same dedup_key fold as the pentest view / register, so
+    # the Vulnerabilities tab badge reads the deduped truth (788), not raw rows (864).
+    _CLOSED_V = {"remediated", "verified", "closed", "resolved", "accepted",
+                 "false_positive", "auto_closed_decommissioned", "auto_closed_fixed"}
+    from grc.modules.pentest.service import _fold_distinct
+    _open_v = [l.vulnerability for l in vuln_links
+               if l.vulnerability and (l.vulnerability.status or "open").lower() not in _CLOSED_V]
+    vuln_count_distinct = len(_fold_distinct(
+        [{"id": v.id, "cve_id": v.cve_id, "title": v.title, "severity": v.severity,
+          "affected_url": getattr(v, "affected_url", None),
+          "affected_component": getattr(v, "affected_component", None)} for v in _open_v],
+        asset.asset_type))
+
     risk_assessments = []
     for assessment in asset.risk_assessments:
         risk_assessments.append({
@@ -2161,6 +2482,8 @@ def get_asset_detail(
     def _g(name, default=None):
         return getattr(asset, name, default)
 
+    _scan_depth, _open_ports, _device_type = _surface_fields(asset)
+
     return AssetDetailResponse(
         id=asset.id,
         tenant_id=asset.tenant_id,
@@ -2192,6 +2515,7 @@ def get_asset_detail(
         linked_risks=linked_risks,
         linked_evidence=linked_evidence,
         linked_vulnerabilities=linked_vulnerabilities,
+        vuln_count_distinct=vuln_count_distinct,
         risk_assessments=risk_assessments,
         coverage_percentage=float(coverage),
         # Business-impact inputs (risk-posture panel). Wire name
@@ -2269,6 +2593,11 @@ def get_asset_detail(
         # collect. This was the real reason the page looked "still old".
         platform_kind=_g("platform_kind"),
         platform_properties=_g("platform_properties"),
+        # Surface vs credentialed view + the sweep's surface evidence.
+        scan_depth=_scan_depth,
+        open_ports=_open_ports,
+        device_type=_device_type,
+        scan_mode=_scan_mode(asset),
     )
 
 
@@ -3701,7 +4030,7 @@ def get_detected_software(
     if posture is None and inventory:
         try:
             from ..modules.compliance_plugins.services.security_classifier import summarize_posture
-            posture = summarize_posture(inventory)
+            posture = summarize_posture(inventory, asset.platform_properties)
         except Exception:
             posture = None
     return {

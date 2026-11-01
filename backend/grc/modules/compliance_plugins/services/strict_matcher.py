@@ -249,13 +249,19 @@ def applicable_benchmarks_for_asset(db: Session, tenant_id: int, asset) -> List[
 
     software = getattr(asset, "detected_software_json", None) or []
     if isinstance(software, list) and software:
-        from .software_normaliser import benchmark_for_software_key
+        from .software_normaliser import (
+            benchmark_for_software_key, all_os_key_tokens, software_key_could_match,
+        )
+        # Pre-filter the per-package benchmark lookup: one query for every
+        # advertised os_key token, then skip packages that can't match (the N+1
+        # that made manual-checks / benchmark-match ~60s on a 1000+ app host).
+        all_tokens = all_os_key_tokens(db)
         for item in software:
             if not isinstance(item, dict):
                 continue
             key = item.get("software_key")
             bench = item.get("benchmark_name")
-            if not bench and key:
+            if not bench and key and software_key_could_match(all_tokens, key):
                 bench = benchmark_for_software_key(db, key)
             if bench and bench not in seen:
                 seen.add(bench)

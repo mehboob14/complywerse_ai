@@ -15,12 +15,13 @@ from .services.hosted_scan import run_hosted_scan
 from .services.exception_service import ExceptionService
 from .services.scoring_service import ScoringService
 from .services.sla_integration_service import SLAIntegrationService
-from .services.control_mapping_service import ControlMappingService
 from .services.analytics_service import AnalyticsService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
+
+SCANNER_TYPES = ("nessus", "tenable", "nexpose")
 
 
 class ConnectionCreate(BaseModel):
@@ -114,11 +115,17 @@ def list_connections(
     _perm: bool = Depends(require_tenant_permission("admin:integrations:view")),
     integration_type: Optional[str] = None,
     is_active: Optional[bool] = None,
+    scanners_only: bool = False,
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
     query = db.query(IntegrationConnection).filter(
         IntegrationConnection.tenant_id == tenant_id,
     )
+    if scanners_only:
+        # This table holds every connector kind (native help desk/ticketing, dropped
+        # Frappe, discovery/WinRM creds, siem, ...). Wizard/onboarding rows can even
+        # carry the default vuln_scanner category, so match on scanner adapter type.
+        query = query.filter(IntegrationConnection.integration_type.in_(SCANNER_TYPES))
     if integration_type:
         query = query.filter(IntegrationConnection.integration_type == integration_type)
     if is_active is not None:
@@ -1122,38 +1129,6 @@ def send_sla_notifications(
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
     return SLAIntegrationService.run_sla_notifications(db, tenant_id)
-
-
-@router.post("/control-mapping/auto-map/{vulnerability_id}")
-def auto_map_controls(
-    vulnerability_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
-    use_ai: bool = Query(default=True),
-):
-    tenant_id = get_user_primary_tenant(current_user, db)
-    try:
-        return ControlMappingService.auto_map_vulnerability(
-            db, vulnerability_id, tenant_id, use_ai=use_ai,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.post("/control-mapping/batch-map")
-def batch_map_controls(
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
-    _perm: bool = Depends(require_tenant_permission("admin:integrations:edit")),
-    connection_id: Optional[int] = None,
-    use_ai: bool = Query(default=False),
-    limit: int = Query(default=50, le=200),
-):
-    tenant_id = get_user_primary_tenant(current_user, db)
-    return ControlMappingService.batch_auto_map(
-        db, tenant_id, connection_id=connection_id, use_ai=use_ai, limit=limit,
-    )
 
 
 @router.get("/analytics/overview")

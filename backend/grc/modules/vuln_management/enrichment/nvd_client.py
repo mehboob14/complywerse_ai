@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 import requests
 
@@ -39,6 +39,13 @@ NVD_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 # (Phase 1) — without the bump, a CVE cached before the change would keep reading
 # back with no CWE for up to the 7-day TTL.
 NVD_CACHE_KEY = "nvd:v2:"
+# Separate negative cache for the existence check below. A positive result is
+# already cached under NVD_CACHE_KEY (a stored NvdResult == the CVE exists); the
+# only thing missing was a record of "NVD positively has no such CVE" so a
+# reserved/synthetic feed id isn't re-looked-up on every re-scan. A 404 is stable
+# for far longer than real metadata, so this TTL is long.
+NVD_NOTFOUND_KEY = "nvd:notfound:v1:"
+NVD_NOTFOUND_TTL_SECONDS = 30 * 24 * 3600  # 30 days
 
 
 @dataclass
@@ -274,3 +281,138 @@ def fetch_nvd(cve_id: str) -> Optional[NvdResult]:
     if result is not None:
         _to_cache(redis_client, result)
     return result
+
+
+# ----------------------------------------------------------------------------------------------------
+# Existence check — does a CVE id actually exist in NVD?
+#
+# The nmap-vulners feed can surface CURRENT-YEAR CVE ids that no date/digit heuristic can tell apart from
+# a real id — a genuinely unassigned/reserved id looks exactly like a legitimate high-number current-year
+# CVE. The only reliable signal is: ask NVD. This drops ONLY ids NVD positively does not have; a real
+# current-year CVE (e.g. an old service's freshly-published flaw) returns a record and is kept. `fetch_nvd()`
+# collapses "not found" and "network error" both to None, so it can't be reused here — we must distinguish a
+# POSITIVE 404/empty (drop) from an error (keep, fail-open).
+# ----------------------------------------------------------------------------------------------------
+def existence_filter_enabled() -> bool:
+    """Master switch for the NVD existence filter at the scan ingest boundary.
+
+    Default OFF: shipped inactive (the observed 2026 CVEs turned out to be REAL per
+    live NVD, so this fixes nothing active and would add scan-time lookups). It is a
+    durable guard available on demand — set ``VULN_NVD_EXISTENCE_FILTER=1`` to enable
+    (and set ``NVD_API_KEY`` first to avoid rate-limit scan slowdown). Mirrors
+    ``VULN_AUTO_LINK_ASSETS``. When positively enabled it drops only CVE ids NVD 404s.
+    """
+    return os.getenv("VULN_NVD_EXISTENCE_FILTER", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _neg_cached(redis_client, cve_id: str) -> bool:
+    if redis_client is None:
+        return False
+    try:
+        return bool(redis_client.get(f"{NVD_NOTFOUND_KEY}{cve_id}"))
+    except Exception:
+        return False
+
+
+def _neg_cache(redis_client, cve_id: str) -> None:
+    if redis_client is None:
+        return
+    try:
+        redis_client.set(f"{NVD_NOTFOUND_KEY}{cve_id}", "1", ex=NVD_NOTFOUND_TTL_SECONDS)
+    except Exception:
+        logger.debug("NVD not-found cache write failed for %s", cve_id, exc_info=False)
+
+
+def cve_exists(cve_id: str) -> Optional[bool]:
+    """Does this CVE exist in authoritative data?
+
+    Returns:
+        True  — the CVE exists (KEV, a cached NVD result, or a live NVD hit).
+        False — NVD POSITIVELY reports no such CVE (reserved/synthetic feed id).
+        None  — couldn't determine (network error / rate-limit / bad id). The
+                caller MUST fail open and KEEP the finding; we never drop a CVE
+                we only failed to confirm.
+
+    Order is cheapest-first so the common case costs no network: KEV in-memory →
+    Redis positive cache → Redis negative cache → one live NVD lookup (whose
+    result is cached, so a repeat scan of the same id is free).
+    """
+    if not cve_id or not cve_id.upper().startswith("CVE-"):
+        return None
+    cve_id = cve_id.upper().strip()
+
+    try:
+        from .kev_cache import is_kev
+        if is_kev(cve_id):  # in the exploited-in-the-wild catalogue => unquestionably real
+            return True
+    except Exception:
+        pass  # KEV unavailable is not a signal either way — fall through
+
+    redis_client = _redis_client()
+    if _from_cache(redis_client, cve_id) is not None:  # a stored NvdResult means it exists
+        return True
+    if _neg_cached(redis_client, cve_id):
+        return False
+
+    params = {"cveId": cve_id}
+    headers = {"User-Agent": "complywerse-vuln-enrichment/1.0"}
+    api_key = (os.environ.get("NVD_API_KEY") or "").strip()
+    if api_key:
+        headers["apiKey"] = api_key
+    try:
+        response = requests.get(NVD_API_URL, params=params, headers=headers, timeout=NVD_TIMEOUT_SECONDS)
+    except Exception as exc:
+        logger.info("NVD existence network error for %s: %s", cve_id, exc)
+        return None
+    if response.status_code == 404:
+        _neg_cache(redis_client, cve_id)
+        return False
+    if response.status_code != 200:
+        logger.info("NVD existence non-200 for %s: %s", cve_id, response.status_code)
+        return None
+    try:
+        raw = response.json()
+    except Exception:
+        return None
+    # A well-formed but unassigned id comes back 200 with an empty list — also "does not exist".
+    if not (raw.get("vulnerabilities") or []):
+        _neg_cache(redis_client, cve_id)
+        return False
+    result = _extract_payload(raw, cve_id)
+    if result is not None:
+        _to_cache(redis_client, result)  # warm the positive cache so enrichment doesn't re-fetch
+    return True
+
+
+def confirmed_absent_cves(cve_ids: Iterable[str]) -> Set[str]:
+    """Of the given ids, the subset NVD POSITIVELY reports do not exist.
+
+    Fail-open: an id we cannot resolve (error / rate-limit) is NOT returned, so
+    the caller keeps it. Only CURRENT-YEAR-or-newer ids are checked live — older
+    ids are overwhelmingly real, and a cold-cache scan must not pay an NVD lookup
+    per historical CVE. shortcut: scopes the live check to the current year (the
+    one window the date guard in `_parse_nmap` can't catch); widen the year test
+    here if the feed is ever seen emitting reserved ids for past years.
+    """
+    absent: Set[str] = set()
+    try:
+        cur_year = datetime.utcnow().year
+        seen: Set[str] = set()
+        for raw in cve_ids:
+            if not raw:
+                continue
+            cid = str(raw).upper().strip()
+            if cid in seen or not cid.startswith("CVE-"):
+                continue
+            seen.add(cid)
+            try:
+                if int(cid[4:8]) < cur_year:  # historical id — trust it, no lookup
+                    continue
+            except ValueError:
+                continue
+            if cve_exists(cid) is False:
+                absent.add(cid)
+    except Exception:  # noqa: BLE001 — the filter must never sink an ingest; keep everything
+        logger.warning("confirmed_absent_cves failed; keeping all CVEs (fail-open)", exc_info=True)
+        return set()
+    return absent

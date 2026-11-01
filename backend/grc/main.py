@@ -308,6 +308,26 @@ app.include_router(pentest_router)
 # Performance (exec) dashboard read-only aggregates (isolated cyber module: grc/modules/exec_dashboard)
 from .modules.exec_dashboard.router import router as exec_dashboard_router  # noqa: E402
 app.include_router(exec_dashboard_router)
+# Cybersecurity Assurance modules (each isolated in its own grc/modules/<name> folder):
+# IT Asset Inventory Overview estate composition (read-only)
+from .modules.estate_overview.router import router as estate_overview_router  # noqa: E402
+app.include_router(estate_overview_router)
+# Software license management (entitlements vs installed software)
+from .modules.license_management.router import router as license_management_router  # noqa: E402
+app.include_router(license_management_router)
+# Scheduled & emailed cyber reports (CRUD + run-now; timed send needs celery + SMTP)
+from .modules.report_scheduler.router import router as report_scheduler_router  # noqa: E402
+app.include_router(report_scheduler_router)
+# Security advisories (CERT/vendor bulletins matched to assets by CVE)
+from .modules.advisories.router import router as advisories_router  # noqa: E402
+app.include_router(advisories_router)
+# Native Help Desk (ITIL-lite service desk; findings become remediation incidents)
+from .modules.helpdesk_native.router import helpdesk_native_router  # noqa: E402
+app.include_router(helpdesk_native_router)
+# Endpoint agent (Go binary: enroll / report / recon / CIS jobs). At /endpoint-agents
+# because the native collector agent above owns /agents; both use grc_compliance_agents.
+from .routers.agents_router import router as endpoint_agents_router  # noqa: E402
+app.include_router(endpoint_agents_router)
 app.include_router(compliance_plugins_router)
 app.include_router(automation_soc2_router)
 app.include_router(scf_router)
@@ -360,6 +380,15 @@ def on_startup():
     _embed_worker_autostart = os.getenv("COMPLYCHAT_EMBED_WORKER_AUTOSTART", "true").strip().lower()
     if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
         start_complychat_embedding_worker()
+
+    # Help Desk per-tenant boot heal: its own column self-heal + governance/department
+    # seed. Idempotent, never raises (DISABLE_HELPDESK_SCHEMA_SYNC / _DATA_SEED turn it off).
+    try:
+        from grc.modules.helpdesk_native.itsm_seed import run_boot_heal
+        run_boot_heal()
+    except Exception:  # noqa: BLE001
+        import logging as _logging
+        _logging.getLogger(__name__).warning("helpdesk boot heal skipped", exc_info=True)
 
     # Pentest Find scans (grc_pentest_scan_jobs): their worker thread dies on restart, so re-drive
     # nessus/openvas and fail the in-process ones with a clear reason instead of leaving them 'running'.

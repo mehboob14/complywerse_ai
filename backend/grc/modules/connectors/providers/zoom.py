@@ -70,7 +70,7 @@ class ZoomAdapter(CollabAdapter):
             if resp.status_code == 200:
                 return ConnectionTestResult(
                     success=True,
-                    message="Zoom S2S auth OK (beta).",
+                    message="Zoom S2S auth OK.",
                     details={"account_id": resp.json().get("account_id")},
                 )
             return ConnectionTestResult(
@@ -151,7 +151,7 @@ META = ProviderMeta(
     provider="zoom",
     label="Zoom",
     category="collab",
-    description="Schedule committee meetings, post Team Chat notifications, and pull recordings for transcription. Beta.",
+    description="Schedule committee meetings, post Team Chat notifications, and pull recordings for transcription.",
     auth_method="oauth2",
     fields=[
         ProviderField(key="zoom_account_id", label="Account id",
@@ -166,6 +166,5 @@ META = ProviderMeta(
                       is_credential=False),
     ],
     adapter_cls=ZoomAdapter,
-    beta=True,
     docs_url="https://developers.zoom.us/docs/api/",
 )

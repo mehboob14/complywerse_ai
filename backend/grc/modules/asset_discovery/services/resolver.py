@@ -31,6 +31,7 @@ from confirmed inventory instead of dumping raw scan hits into the register.
 """
 from __future__ import annotations
 
+import ipaddress
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -184,6 +185,9 @@ def _merge_into(db: Session, asset: ITAsset, obs: DiscoveryObservation) -> None:
         _record_external_identity(db, asset.tenant_id, asset.id, src, ext, raw.get("id_type"))
     # Enrich with the protocol-aware classification — fill blanks only.
     _apply_classification(asset, _classification(obs), fill_only=True)
+    # Refresh surface evidence (open ports / banners / credential-free bucket-B
+    # enrichment) — observation, not a curated field, so a re-scan keeps it current.
+    _apply_surface(asset, raw)
 
 
 # ── Discovery classification -> inventory mapping ───────────────────────────
@@ -273,6 +277,37 @@ def _apply_classification(asset: ITAsset, cls: Dict[str, Any], *, fill_only: boo
     asset.platform_properties = pp
 
 
+def _apply_surface(asset: ITAsset, raw: Dict[str, Any]) -> None:
+    """Carry the sweep's SURFACE evidence (open ports / banners / device type)
+    onto the asset under platform_properties['surface']. These live in the
+    observation raw and were previously dropped on adoption, so the inventory
+    'surface' view had nothing to show for a device we can't log into. Additive:
+    preserves every other platform_properties key, and omits blanks."""
+    fp = raw.get("fingerprint") if isinstance(raw.get("fingerprint"), dict) else {}
+    ports = raw.get("open_ports")
+    banners = {k: fp[k] for k in ("ssh_banner", "http_server", "http_title", "snmp_sysdescr")
+               if fp.get(k)}
+    surface = {
+        "open_ports": ports if isinstance(ports, list) else None,
+        "banners": banners or None,
+        "device_type": raw.get("device_type"),
+    }
+    # Credential-free bucket-B enrichment captured by the sweep (SMB identity,
+    # service+version, TLS certs, SNMP installed-software). Merged flat so the
+    # inventory 'surface' view finds each field predictably.
+    enrich = fp.get("surface_scan") if isinstance(fp.get("surface_scan"), dict) else {}
+    for k in ("services", "smb", "tls_certs", "snmp_host_resources", "provenance"):
+        if enrich.get(k):
+            surface[k] = enrich[k]
+    surface = {k: v for k, v in surface.items() if v is not None}
+    if not surface:
+        return
+    pp = dict(asset.platform_properties or {})
+    prev = pp.get("surface")
+    pp["surface"] = {**prev, **surface} if isinstance(prev, dict) else surface
+    asset.platform_properties = pp
+
+
 def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAsset:
     """Create a new asset from an observation, tagged as discovered, carrying the
     protocol-aware classification so a network device / printer / DNS box keeps
@@ -298,6 +333,14 @@ def _create_from(db: Session, tenant_id: int, obs: DiscoveryObservation) -> ITAs
         discovery_state="discovered",
     )
     _apply_classification(asset, cls, fill_only=False)
+    _apply_surface(asset, raw)  # keep the sweep's open-ports/banners for the surface view
+    # Store the CIDR/scope this host was swept from so the Uncredential inventory
+    # view can group by it. network_segment is the authoritative CIDR field; the
+    # sweep writes scope into obs.raw['scope'] (executor). EASM (domain) obs carry
+    # no scope, so this is skipped for them.
+    scope = raw.get("scope")
+    if scope and not getattr(asset, "network_segment", None):
+        asset.network_segment = str(scope)[:100]
     db.add(asset)
     db.flush()  # assign id for the external-identity link + later same-run matches
     ext = raw.get("external_id")
@@ -355,11 +398,43 @@ def _mark_internet_facing(asset: ITAsset) -> None:
         logger.exception("resolver: criticality recompute failed for internet-facing asset")
 
 
+# Docker bridges, loopback and link-local are host-internal plumbing, never a
+# device ON the network — so they must NOT be auto-adopted into inventory no
+# matter what CIDR is swept. This is exactly what let the box's own docker0
+# (172.17.0.1) and a container (172.17.0.2) land as assets #85/#86.
+# shortcut: 172.17/16 + 172.18/16 are docker's DEFAULT bridge ranges; a real
+# network deliberately using those would also be skipped — upgrade to per-host
+# docker-subnet detection (read the scanner's docker0/br-* ifaces) if that comes up.
+_NON_INVENTORY_NETS = tuple(ipaddress.ip_network(n) for n in (
+    "127.0.0.0/8", "169.254.0.0/16", "172.17.0.0/16", "172.18.0.0/16"))
+
+
+def _is_non_inventory_ip(ip: Optional[str]) -> bool:
+    if not ip:
+        return False
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _NON_INVENTORY_NETS)
+
+
 def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any]:
     """Resolve one observation. Mutates the observation (and possibly creates or
     updates an asset). Caller commits. Returns a small decision dict."""
     if obs.resolution not in ("pending", "review"):
         return {"action": "skip", "reason": f"already {obs.resolution}"}
+
+    # Never auto-adopt host-internal plumbing (docker/loopback/link-local) — it's
+    # not a device on the network. Still recorded as an observation (resolution
+    # 'ignored') so a sweep of such a range isn't silently empty.
+    if obs.source != "external" and _is_non_inventory_ip(obs.ip_address):
+        obs.resolution = "ignored"
+        obs.resolved_asset_id = None
+        obs.resolution_note = (
+            "docker / loopback / link-local address — host-internal plumbing, "
+            "not added to inventory")
+        return {"action": "ignored", "reason": "non_inventory_ip"}
 
     tier, candidate_ids = _candidates(db, obs.tenant_id, obs)
     # Link any scanner findings already imported for a just-adopted external host
@@ -417,28 +492,32 @@ def resolve_observation(db: Session, obs: DiscoveryObservation) -> Dict[str, Any
             f"external attack surface — evidence-only asset #{asset.id} (internet-facing)")
         return {"action": "created", "asset_id": asset.id, "external": True}
 
-    # No match, nothing ignored. Discovery NEVER writes inventory on its own — a
-    # swept device is evidence, not an asset. Everything unmatched lands in the
-    # Connect queue as 'unclaimed'; it earns an inventory row only when a human
-    # promotes it from Connect (save a credential, select the device, run the
-    # login → deep-collect), or by an explicit merge into an asset already
-    # tracked. Even a positively-identified non-host device (printer / switch /
-    # DNS) waits here rather than auto-creating an empty shell — this pipeline
-    # was rebuilt to stop producing those. The identification is preserved on the
-    # observation (raw + note) so Connect can show "what we think this is".
+    # No match, nothing ignored. A swept host is taken into inventory DIRECTLY as
+    # an uncredential (evidence-only, surface) asset — no credential required. The
+    # owner's model: finding a device on the managed network IS owning it; the
+    # login later just ADDS depth (uncredential → credential), it isn't the gate
+    # for the device to exist. This replaces the old 'unclaimed'/Waiting-to-connect
+    # park. Idempotent: a re-sweep of the same host matches the row created here
+    # (hostname/MAC/IP tiers above) and merges instead of duplicating.
+    #
+    # Category: _create_from stamps origin_source='network_sweep'; manual_adopt
+    # sets discovery_state='unmanaged' (surface). That pair derives scan_mode
+    # ='uncredential' in the API (see assets_router._scan_mode). A later
+    # credentialed collect flips discovery_state='managed' → scan_mode='credential'.
+    asset = manual_adopt(db, obs)
     cls = _classification(obs)
     dt = cls.get("device_type")
     identified = bool(dt and dt not in ("host", "unknown", None)
                       and (cls.get("confidence") or 0) >= 0.7)
-    obs.resolution = "unclaimed"
-    obs.resolved_asset_id = None
     obs.resolution_note = (
         f"identified as {dt} via {', '.join(cls.get('evidence') or [])} — "
-        f"promote from Connect to add to inventory"
+        f"added to inventory (uncredential); connect a credential to deep-scan"
         if identified else
-        "found on the network — needs a login before it enters inventory"
+        "found on the network — added to inventory (uncredential); "
+        "connect a credential to deep-scan"
     )
-    return {"action": "unclaimed", "identified": identified}
+    return {"action": "created", "asset_id": asset.id, "uncredential": True,
+            "identified": identified}
 
 
 # ── Operator-driven resolution (the Inbox actions) ──────────────────────────
@@ -515,11 +594,11 @@ def resolve_run(db: Session, run_id: int) -> Dict[str, int]:
         db.flush()  # so same-run duplicates of a host see the row we just created
 
     run = db.get(DiscoveryRun, run_id)
-    # assets_new counts rows that actually entered inventory. A network sweep
-    # creates none (its unmatched hosts wait for a login), so a CIDR run holds
-    # this at 0 until credentials promote the devices. An external (EASM) run
-    # DOES increment it — an outside-in find is adopted as an evidence-only asset
-    # right here, because there's no login to wait for.
+    # assets_new counts rows that actually entered inventory. Both a network sweep
+    # (CIDR) and an external (EASM) run now increment it: an unmatched swept host
+    # is taken into inventory directly as an uncredential asset — no login to wait
+    # for — exactly as an outside-in EASM find is. A credential later adds depth,
+    # it is not the gate for the asset to exist.
     run.assets_new = (run.assets_new or 0) + created
     run.assets_updated = (run.assets_updated or 0) + updated
     db.commit()

@@ -376,6 +376,21 @@ def promote_observation(db: Session, obs: DiscoveryObservation,
             db.delete(asset)
             db.flush()
         raise
+    # The authoritative "we logged in" flip: a successful authenticated collect means this host is
+    # managed, so a previously-unmanaged (surface-only) asset moves into the credentialed inventory view.
+    # Best-effort (older schemas may lack the column).
+    try:
+        asset.discovery_state = "managed"
+    except Exception:
+        pass
+    # Store the EXACT login that just authenticated this host as the asset's own
+    # per-PC credential link — the launcher + scan use this for THIS host only,
+    # instead of borrowing a CIDR profile that merely covers its IP. Best-effort
+    # (older schemas may lack the column).
+    try:
+        asset.credential_profile_id = profile.id
+    except Exception:
+        pass
     obs.resolution = "created" if created else "merged"
     obs.resolved_asset_id = asset.id
     obs.resolution_note = f"credential '{profile.name}' succeeded — {'promoted to' if created else 'linked to existing'} asset #{asset.id}"
@@ -618,6 +633,10 @@ def promote_observation_typed(db: Session, obs: DiscoveryObservation,
         asset.platform_properties = merged
         asset.last_seen_at = datetime.utcnow()
         asset.last_seen_source = "agentless"
+        # Credentialed typed connect — same upgrade flip as collect_host: managed
+        # ⇒ scan_mode='credential' (uncredential→credential when re-connecting an
+        # already-swept db/cloud device).
+        asset.discovery_state = "managed"
     except Exception:
         if created:
             db.delete(asset)
@@ -788,7 +807,8 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
 
         for entry in enriched:
             key = entry.get("software_key")
-            if not key or not probes_for(key, transport):
+            # WMI (DCOM) has no command shell — product probes are WinRM/SSH only.
+            if not key or transport == "wmi" or not probes_for(key, transport):
                 continue
             attrs = profile_software(_run, key, transport)
             if attrs:
@@ -798,7 +818,6 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
                     asset.ip_address, exc_info=True)
 
     asset.detected_software_json = preserve_promotions(asset.detected_software_json, enriched)
-    apply_posture(asset)
 
     # OS profile — the network sweep and the hardware probe never set it, but the
     # CIS matcher routes ENTIRELY off os_normalized (a blank key = no benchmark can
@@ -807,9 +826,17 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     # profiled AND CIS-ready in a single pass — no second connection, no manual
     # re-detect. Best-effort: a detection miss must never fail the collect.
     try:
-        from grc.modules.compliance_plugins.services.os_detector import detect_for_runner_full
-        runner = "windows_winrm" if transport == "windows" else "linux_ssh"
-        fam, ver, norm, build, edition = detect_for_runner_full(runner, creds)
+        from grc.modules.compliance_plugins.services.os_detector import (
+            detect_for_runner_full, normalize_os_string,
+        )
+        if transport == "wmi":
+            # No shell over DCOM, but a WMI answer proves Windows; the collector read
+            # the caption (no DisplayVersion over plain WMI → a major-level key).
+            ver = (hardware or {}).get("os_version")
+            fam, norm, build, edition = normalize_os_string(ver or "Windows")
+        else:
+            runner = "windows_winrm" if transport == "windows" else "linux_ssh"
+            fam, ver, norm, build, edition = detect_for_runner_full(runner, creds)
         if fam:
             asset.os_family = fam
         if ver:
@@ -835,9 +862,10 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     deep_sections: Dict[str, Any] = {}
     try:
         from grc.modules.compliance_plugins.services.agentless_inventory import (
-            collect_windows_deep, collect_linux_deep,
+            collect_windows_deep, collect_windows_wmi_deep, collect_linux_deep,
         )
         deep_sections = (collect_windows_deep(creds) if transport == "windows"
+                         else collect_windows_wmi_deep(creds) if transport == "wmi"
                          else collect_linux_deep(creds))
     except Exception as exc:  # noqa: BLE001 — deep inventory must never fail the collect
         logger.info("deep_collect: deep platform inventory failed for %s",
@@ -852,6 +880,8 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
         props.update(deep_sections)  # merge/refresh sections; keep unrelated keys
         asset.platform_properties = props
         _fill_columns_from_deep(asset, deep_sections)
+    # After the deep merge: the posture reads THIS run's defender/security_products.
+    apply_posture(asset)
     # platform_kind stays "server" for an agentless OS host (the UI routes the
     # detail card off it); set it if nothing else has.
     if not getattr(asset, "platform_kind", None):
@@ -859,6 +889,13 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
 
     asset.last_seen_at = datetime.utcnow()
     asset.last_seen_source = "agentless"
+    # Authoritative "we logged in" flip: a successful authenticated collect upgrades
+    # the asset to managed (credentialed). This is the single sink every host
+    # credentialed path routes through (promote_observation AND deep_collect_run
+    # re-scans), so it is the one place the uncredential→credential upgrade is
+    # guaranteed. scan_mode (assets_router._scan_mode) and scan_depth both derive
+    # from discovery_state=='managed', so both flip together.
+    asset.discovery_state = "managed"
     db.add(asset)
     db.flush()
 
