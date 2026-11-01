@@ -9,7 +9,7 @@ import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 import { usePermissions } from '@/hooks/usePermissions';
-import { ownHeadingSection, routeFor, subtitleFor, titleFor } from '@/lib/navRegistry';
+import { ownHeadingSection, registryNamesPage, subtitleFor, titleFor } from '@/lib/navRegistry';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
@@ -263,8 +263,9 @@ export default function Header() {
           // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
           // they are the library's, so someone only asked about a document (no library right) gets none
           if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : null;
-          // a Governance page is named by the registry, whatever page it is; every other page still reads PAGE_TITLES
-          const named = routeFor(pathname)?.area === 'governance' ? titleFor(pathname) : undefined;
+          // a Governance page is named by the registry, whatever page it is, and so is any page that has moved to the kit's own heading
+          // (`ownHeading`); every other page still reads PAGE_TITLES
+          const named = registryNamesPage(pathname) ? titleFor(pathname) : undefined;
           const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: ownHeadingSection(pathname) } : PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
@@ -281,9 +282,10 @@ export default function Header() {
           // Pages that render their own big heading in the body (redesign kit)
           // get a breadcrumb here instead of a repeated title+subtitle, so the
           // page name doesn't appear twice on screen.
-          if (info.section) {
+          if (info.section !== undefined) {
             // Section label only — the page name lives in the body <h1>, so we
             // deliberately don't repeat the title here (no double heading).
+            // '' = the page is its module's top page: its own heading IS the module's name, so the bar names nothing.
             return (
               <div className="flex items-center min-w-0 text-sm leading-none">
                 <span className="font-medium text-[var(--color-muted)] truncate">{info.section}</span>

@@ -10,8 +10,9 @@
 // label is read out of its menu group ("Overview" -> "Governance Overview"); `keywords` are the names it used to go by (a future command palette
 // finds the page by any of them).
 //
-// WHAT READS IT: the Header (the top-bar title of Governance pages), DocumentsTabs (its tabs and the "in the area" rule). Other modules still read
-// their own title map until they move over; `area` says whose top bar the registry owns ('governance' so far).
+// WHAT READS IT: the Header (the top-bar title of Governance pages, and of any page that has `ownHeading`), DocumentsTabs (its tabs and the "in the area"
+// rule). A page of another module reads the Header's own title map (PAGE_TITLES) until it moves to the kit's page head and sets `ownHeading`; each group
+// of such pages declares its entries in its own file, lib/navPages/<group>.ts (collected by navPages/index.ts), so the groups never edit the same lines.
 //
 // RIGHTS: `permissions` is what navAccess says the page needs today (null: nothing, any signed-in user; that is how the app behaves, many Governance
 // pages guard nothing and some of their APIs are open: G3_permission_matrix). Nothing here adds, removes or enforces a right or a guard.
@@ -53,6 +54,7 @@
 // Document library (Documents), Key Risk Indicators (KRIs), Regulatory changes (case), Pending Approvals (two sections of Document Reviews), and the back links "Reviews", "Campaigns", "Attestations", "Studio".
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry, type NavItem } from '../components/layout/navAccess.ts';
 import { cleanPath, underPath } from '../components/layout/navActive.ts';
+import { MODULE_LEAVES, MODULE_PAGES } from './navPages/index.ts';
 
 export interface Crumb { label: string; href: string }
 
@@ -99,6 +101,9 @@ export interface RouteEntry {
   /** the page draws its own heading in its body (PageHeader variant="page"): the top bar then names only its section, so the page's name is not on
    *  screen twice. Set it on a page when it moves to the kit's page head. */
   ownHeading?: boolean;
+  /** the section the top bar names for a page with an `ownHeading`, where its area's name would be wrong (the Regulatory pages are under /governance
+   *  but sit in the Compliance Management menu group). Default: the area's name (SECTION below). */
+  section?: string;
 }
 
 /** An entry that is a tab of a strip. */
@@ -117,7 +122,11 @@ function walk(entries: NavEntry[], groups: Crumb[]): void {
 }
 walk(navigation, []);
 
-type Extra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading'>>;
+/** What a page group adds to the entry of a sidebar leaf, or says about a page of its own (lib/navPages/<group>.ts). */
+export type RouteExtra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading' | 'section'>>;
+/** A page with no menu entry, declared by the group that owns it. `area` is the sidebar group's slug ('compliance-management'), or the leaf's for a top-level module ('task-management'). */
+export type PageSpec = RouteExtra & { path: string; label: string; area: string; aliasOf?: string };
+type Extra = RouteExtra;
 
 const DOCS = '/governance/documents';
 const ATTEST = `${DOCS}/attestation`;
@@ -143,6 +152,7 @@ const leaves: RouteEntry[] = sidebar.map(({ item, groups }) => ({
   groups,
   permissions: rights(item.href),
   ...OF_LEAF[item.href],
+  ...MODULE_LEAVES[item.href],
 }));
 
 // ---- the Governance pages that have no menu entry ----
@@ -174,8 +184,11 @@ const pages: RouteEntry[] = [
   gov('/attest/:token', 'Acknowledge', { hidden: 'public page for people outside the organisation (an e-mailed link): no menu, no top bar' }),
 ];
 
+// ---- the pages that have no menu entry in the other modules: each group of pages declares its own, in lib/navPages/<group>.ts ----
+const modulePages: RouteEntry[] = MODULE_PAGES.map((page) => ({ groups: [], permissions: rights(page.path), ...page }));
+
 /** Every destination: the sidebar's leaves in menu order, then the pages that have no menu entry. */
-export const routes: readonly RouteEntry[] = leaves.concat(pages);
+export const routes: readonly RouteEntry[] = leaves.concat(pages, modulePages);
 
 const byPath: Record<string, RouteEntry> = {};
 routes.forEach((entry) => { byPath[entry.path] = entry; });
@@ -217,14 +230,41 @@ export function subtitleFor(pathname: string | null | undefined): string | undef
   return hit ? hit.subtitle ?? canonical(hit).subtitle : undefined;
 }
 
-/** The area names the top bar shows for a page that draws its own heading (only Governance is registry-owned so far). */
-const SECTION: Record<string, string> = { governance: 'Governance' };
+/** The area names the top bar shows for a page that draws its own heading: a sidebar group's name, or the module's own for a top-level destination. */
+const SECTION: Record<string, string> = {
+  governance: 'Governance',
+  'risk-management': 'Risk Management',
+  'third-party-vendor-risk': 'Third-Party Vendor Risk',
+  'compliance-management': 'Compliance Management',
+  'controls-automation': 'Controls Automation',
+  'issue-incident-management': 'Issue & Incident Management',
+  'auditor-portal': 'Auditor Portal',
+  reports: 'Reports',
+  'performance-overview': 'Performance Overview',
+  'task-management': 'Task Management',
+};
 
-/** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name; undefined when the
- *  page has no own heading (the top bar then shows its title) or is no route. */
+/** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name, or '' (nothing) when
+ *  the section is the page's own name (a module's top page: Task Management says "Task Management" in its body, not twice); undefined when the page has
+ *  no own heading (the top bar then shows its title) or is no route. */
 export function ownHeadingSection(pathname: string | null | undefined): string | undefined {
   const hit = routeFor(pathname);
-  return hit && canonical(hit).ownHeading ? SECTION[hit.area] : undefined;
+  if (!hit) return undefined;
+  const entry = canonical(hit);
+  return entry.ownHeading ? sectionOfEntry(entry) : undefined;
+}
+
+/** The section the top bar names for an entry that draws its own heading ('' when that is the entry's own name, or its area has no name). */
+export function sectionOfEntry(entry: Pick<RouteEntry, 'area' | 'label' | 'title' | 'section'>): string {
+  const section = entry.section ?? SECTION[entry.area] ?? '';
+  return section === entry.label || section === (entry.title ?? entry.label) ? '' : section;
+}
+
+/** Whether the registry names the page in the top bar: every Governance page, and any other page that has moved to the kit's own heading
+ *  (`ownHeading`); the rest still read the Header's own title map (PAGE_TITLES). */
+export function registryNamesPage(pathname: string | null | undefined): boolean {
+  const hit = routeFor(pathname);
+  return !!hit && (hit.area === 'governance' || !!canonical(hit).ownHeading);
 }
 
 /** The trail to a page: its sidebar groups, then the pages it hangs under, then the page itself (the last one is current). [] for a path that is no route. */

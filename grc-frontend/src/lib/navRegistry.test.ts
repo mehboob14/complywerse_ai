@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, routeFor, routes, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
+import { activeTab, breadcrumbFor, isInArea, ownHeadingSection, registryNamesPage, routeFor, routes, sectionOfEntry, subtitleFor, tabsFor, titleFor, type RouteEntry } from './navRegistry.ts';
 import { flattenLeaves, isGroup, navigation, navPermissions, type NavEntry } from '../components/layout/navAccess.ts';
 import { activeNavHref } from '../components/layout/navActive.ts';
 
@@ -360,7 +360,7 @@ test('the Header names Governance pages from the registry and keeps no Governanc
 });
 
 test('a page that draws its own heading is flagged in the registry, and only its section is shown in the top bar', () => {
-  assert.deepEqual(routes.filter((e) => e.ownHeading).map((e) => e.path).sort(), [
+  assert.deepEqual(routes.filter((e) => e.ownHeading && e.area === 'governance').map((e) => e.path).sort(), [
     '/governance', '/governance/committees', '/governance/committees/:id', '/governance/committees/actions', '/governance/committees/meetings/:id', '/governance/kpi-report',
     '/governance/mappings', '/governance/workflows', '/is-projects', '/is-projects/:id', '/is-projects/dashboard', '/is-projects/my-projects',
   ]);
@@ -377,4 +377,39 @@ test('a page that draws its own heading is flagged in the registry, and only its
   assert.equal(ownHeadingSection('/governance/approvals'), undefined, 'a page without the flag shows its own title in the top bar');
   assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
   assert.equal(ownHeadingSection(null), undefined);
+});
+
+// ---- the other modules' groups of pages (lib/navPages/<group>.ts): the rules every builder's entries must keep ----
+
+test("no URL is declared twice: a sidebar leaf, a Governance page and a group's page are one entry each", () => {
+  const seen = new Set<string>();
+  for (const e of routes) { assert.ok(!seen.has(e.path), `${e.path} is declared twice`); seen.add(e.path); }
+});
+
+test('the registry names the Governance pages and the pages with ownHeading, in any module, and no others', () => {
+  for (const e of routes) {
+    const url = example(e.path);
+    const target = e.aliasOf ? entry(e.aliasOf) : e;
+    assert.equal(registryNamesPage(url), e.area === 'governance' || !!target.ownHeading, e.path);
+    assert.equal(ownHeadingSection(url) !== undefined, !!target.ownHeading, `${e.path}: a section for exactly the pages that draw their own heading`);
+  }
+  assert.equal(registryNamesPage('/nowhere/at/all'), false, 'not a route');
+  assert.equal(registryNamesPage(null), false);
+});
+
+test("the section of a page that draws its own heading: its group's name, nothing for a module's top page, an override where the URL says otherwise", () => {
+  assert.equal(sectionOfEntry({ area: 'task-management', label: 'Task Management' }), '', 'Task Management says "Task Management" in its body, not also in the bar');
+  assert.equal(sectionOfEntry({ area: 'task-management', label: 'Task' }), 'Task Management');
+  assert.equal(sectionOfEntry({ area: 'performance-overview', label: 'Performance Overview' }), '');
+  assert.equal(sectionOfEntry({ area: 'governance', label: 'Overview', title: 'Governance Overview' }), 'Governance');
+  assert.equal(sectionOfEntry({ area: 'compliance-management', label: 'Frameworks' }), 'Compliance Management');
+  assert.equal(sectionOfEntry({ area: 'governance', label: 'Regulatory Changes', section: 'Compliance Management' }), 'Compliance Management', 'the URL is under /governance, the menu group is Compliance Management');
+  assert.equal(sectionOfEntry({ area: 'no-such-area', label: 'X' }), '', 'an area with no name shows nothing rather than a wrong name');
+});
+
+test("an own-heading page shows a section unless it is its module's top page: an area missing from SECTION cannot pass unnoticed", () => {
+  for (const e of routes.filter((r) => r.ownHeading)) {
+    const section = sectionOfEntry(e);
+    if (section === '') assert.ok(e.groups.length === 0 && !e.hidden && !e.parent, `${e.path} shows no section: only a module's top page may (its area '${e.area}' needs a name in SECTION, or a section override)`);
+  }
 });
