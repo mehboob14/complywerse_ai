@@ -77,6 +77,7 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 const monthLabel = (key: string): string => MONTH_ABBR[(parseInt(key.split('-')[1], 10) || 1) - 1] || key;
 const short = (name: string): string => truncate(name, 60).text;
 const SUB_HEAD = 'text-ds-label text-ds-fg-muted';
+const SR_CELL = 'text-[12px] text-ds-fg';                       // a bare <th>/<td> gets 11.5px from the platform CSS, even in a table only a screen reader reads
 const PAGE_SIZES = [10, 25, 50];
 /** The status filter lives in the address (?status=inactive); a value nobody listed opens on Active. */
 const ADDRESS = { status: oneOf<CommitteeStatusFilter>(COMMITTEE_STATUS_VALUES, DEFAULT_COMMITTEE_STATUS) };
@@ -659,16 +660,24 @@ function ProgressChart({ data, held }: { data: OverviewMonth[]; held: { recorded
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          {/* the same numbers for a screen reader: the chart is a picture of this table */}
-          <table className="sr-only">
-            <caption>Progress over time, last 6 months</caption>
-            <thead><tr><th scope="col">Month</th>{held.recorded && <th scope="col">Meetings held</th>}<th scope="col">Actions completed</th></tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.month}><th scope="row">{r.month}</th>{held.recorded && <td>{r['Meetings held']}</td>}<td>{r['Actions completed']}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          {/* the same numbers for a screen reader: the chart is a picture of this table. The table sits INSIDE the clipped box rather than being it: the platform
+              CSS makes every table 100% wide, which beat sr-only's 1px and made the absolutely placed table push the whole page sideways (a horizontal scrollbar
+              at every width) */}
+          <div className="sr-only">
+            <table>
+              <caption>Progress over time, last 6 months</caption>
+              <thead><tr><th scope="col" className={SR_CELL}>Month</th>{held.recorded && <th scope="col" className={SR_CELL}>Meetings held</th>}<th scope="col" className={SR_CELL}>Actions completed</th></tr></thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.month}>
+                    <th scope="row" className={SR_CELL}>{r.month}</th>
+                    {held.recorded && <td className={SR_CELL}>{r['Meetings held']}</td>}
+                    <td className={SR_CELL}>{r['Actions completed']}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <p className="mt-[8px] flex flex-wrap items-center gap-x-[16px] gap-y-[4px] text-ds-label font-normal text-ds-fg-muted">
             <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[8px] w-[8px] rounded-full" style={{ background: TONE.success.dot }} />Actions completed</span>
             {held.recorded && <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[8px] w-[8px] rounded-full" style={{ background: TONE.progress.dot }} />Meetings held</span>}

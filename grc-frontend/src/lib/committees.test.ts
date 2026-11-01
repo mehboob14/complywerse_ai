@@ -7,9 +7,9 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import {
-  ACTION_TYPES, COMMITTEE_STATUS_VALUES, COMMITTEE_TABS, DEFAULT_COMMITTEE_STATUS, DEFAULT_COMMITTEE_TAB, INACTIVE_NOTE, NOT_RECORDED, actionListParams, actionTypeLabel,
+  ACTION_TYPES, COMMITTEE_STATUS_VALUES, COMMITTEE_TABS, DEFAULT_COMMITTEE_STATUS, DEFAULT_COMMITTEE_TAB, NOT_RECORDED, actionListParams, actionTypeLabel,
   actionsDoneReading, activeCommittees, attendanceReading, attendanceWhy, committeeChoiceLabel, committeeTypeLabel, cutNotice, deactivateCommitteePlan, deactivatedLine,
-  emptyListReading, formChanged, gradeTone, isActiveCommittee, isOverdueAction, listOf, matchesCommittee, matchesStatus, measureHasData, measureReason, meetingsHeldReading,
+  emptyListReading, formChanged, gradeTone, inactiveNote, isActiveCommittee, isOverdueAction, listOf, matchesCommittee, matchesStatus, measureHasData, measureReason, meetingsHeldReading,
   overdueFromSearch, overdueReading, performanceReading, reactivatedLine, removeMemberPlan, slaPill, statusCounts, statusOptions, upcomingMeetings, whatStays,
   type OverviewKpis, type OverviewMetric, type SlaLike,
 } from './committees.ts';
@@ -380,10 +380,10 @@ test('a new meeting or action is offered the active committees only; a filter th
   assert.equal(committeeChoiceLabel({ name: 'Risk', is_active: false }), 'Risk (inactive)');
 });
 
-test('the inactive committee\'s note is one line that says what it takes and how to get it back', () => {
-  assert.match(INACTIVE_NOTE, /^Inactive: kept for the record, no new meetings, actions or members\./);
-  assert.match(INACTIVE_NOTE, /Reactivate it/);
-  assert.ok(!INACTIVE_NOTE.includes('\n'));
+test('the inactive committee\'s note is one line that says what it takes, and how to get it back only to someone who can', () => {
+  assert.equal(inactiveNote(true), 'Inactive: kept for the record, no new meetings, actions or members. Reactivate it to use it again.');
+  assert.equal(inactiveNote(false), 'Inactive: kept for the record, no new meetings, actions or members.');
+  assert.ok(!inactiveNote(true).includes('\n') && !inactiveNote(false).includes('\n'));
 });
 
 test('a form is changed when its typed input differs from what it opened with', () => {

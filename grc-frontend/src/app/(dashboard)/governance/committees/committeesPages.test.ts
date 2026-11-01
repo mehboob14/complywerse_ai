@@ -105,7 +105,7 @@ test('Deactivate and Reactivate are offered to the delete right only (the server
   assert.match(SOURCES.committee, /Deactivate<\/Button>/);
   assert.match(SOURCES.committee, /Reactivate<\/Button>/);
   assert.doesNotMatch(SOURCES.committee, /variant="dangerOutline"[^\n]*>Delete<\/Button>/);
-  assert.match(SOURCES.committee, /\{!active && <p role="note"[^>]*>\{INACTIVE_NOTE\}<\/p>\}/, 'one line says what Inactive means');
+  assert.match(SOURCES.committee, /\{!active && <p role="note"[^>]*>\{inactiveNote\(canDelete\)\}<\/p>\}/, 'one line says what Inactive means, and the way back only to whoever can take it');
   // no way to add a meeting, an action or a member to it: all six entry points are behind canAdd (= canCreate and active)
   assert.match(SOURCES.committee, /const canAdd = canCreate && active;/);
   assert.equal((SOURCES.committee.match(/\bcanAdd\b/g) || []).length, 1 + 6, 'the definition and the six places that add');

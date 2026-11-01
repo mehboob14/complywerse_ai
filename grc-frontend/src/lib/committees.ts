@@ -417,8 +417,8 @@ export function committeeChoiceLabel(c: { name: string; is_active?: boolean | nu
   return isActiveCommittee(c) ? c.name : `${c.name} (inactive)`;
 }
 
-/** The one line an inactive committee's page carries. */
-export const INACTIVE_NOTE = 'Inactive: kept for the record, no new meetings, actions or members. Reactivate it to use it again.';
+/** The one line an inactive committee's page carries. The way back ("Reactivate it") is said only to someone who can take it: the delete right. */
+export const inactiveNote = (canReactivate: boolean): string => `Inactive: kept for the record, no new meetings, actions or members.${canReactivate ? ' Reactivate it to use it again.' : ''}`;
 
 /** What stays exactly as it is when a committee is deactivated: its open actions (open, in progress, overdue) and the meetings still to come. null: the count
  *  could not be read, and the question then says so without a number. */

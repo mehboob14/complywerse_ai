@@ -39,7 +39,7 @@ import { EMPTY, NOT_SET, formatCount, formatDate, statusLabel, truncate } from '
 import { pageRange } from '@/lib/pagerModel';
 import { actionStatus, meetingStatus, statusPill } from '@/lib/status';
 import {
-  ACTION_TYPES, COMMITTEE_TABS, DEFAULT_COMMITTEE_TAB, INACTIVE_NOTE, actionTypeLabel, committeeTypeLabel, cutNotice, dueDay, formChanged, isActiveCommittee, isOverdueAction,
+  ACTION_TYPES, COMMITTEE_TABS, DEFAULT_COMMITTEE_TAB, actionTypeLabel, committeeTypeLabel, cutNotice, dueDay, formChanged, inactiveNote, isActiveCommittee, isOverdueAction,
   listOf, meetingDay, meetingWhen, removeMemberPlan, type CommitteeTab, type SlaLike,
 } from '@/lib/committees';
 import {
@@ -861,7 +861,7 @@ export default function CommitteeDetailPage() {
             </>
           )}
         />
-        {!active && <p role="note" className="mt-[8px] max-w-3xl text-ds-body text-ds-fg-body">{INACTIVE_NOTE}</p>}
+        {!active && <p role="note" className="mt-[8px] max-w-3xl text-ds-body text-ds-fg-body">{inactiveNote(canDelete)}</p>}
         {committee.description && (
           <p className="mt-[8px] max-w-3xl text-ds-body text-ds-fg-body"><ClampedText text={committee.description} max={280} buttonLabel="the description" /></p>
         )}
