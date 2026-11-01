@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/next.mjs dev -p 3000",
-    "build": "node scripts/next.mjs build",
-    "start": "next start",
+    "dev": "node scripts/guard-postcss.js && node scripts/next.mjs dev -p 3000",
+    "build": "node scripts/guard-postcss.js && node scripts/next.mjs build",
+    "start": "node scripts/guard-postcss.js && next start",
     "lint": "next lint",
     "test": "node --test \"src/**/*.test.ts\""
   },
