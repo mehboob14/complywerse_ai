@@ -1,6 +1,7 @@
 'use client';
 
-// The Overview: Verity's four tiles and cards (each a way into the list it counts), then Compliverse's own posture charts below.
+// The Overview, the module's one overview page: Verity's four tiles and cards (each a way into the list it counts; what needs attention and
+// what is planned are cards here, their full lists one click away), then Compliverse's own posture charts below.
 // Live from /vendor-risk/tpra/dashboard and /risk-trend; Portfolio, or My queue (the vendors the caller owns). The title and the
 // two ways to bring a vendor in are the module header's (layout).
 
@@ -14,7 +15,7 @@ import AddVendorDialog from './_lib/AddVendorDialog';
 import { errText } from './_lib/intake/types';
 import type { Dashboard, Scope } from './_lib/overviewModel';
 import { TPRM_QUERY_OPTS } from './_lib/tprmQuery';
-import { AttentionCard, CoverageCard, IntakeCard, OpenFindingsCard, ResidualCard, StatusCard, Tiles, TierCard } from './_overview/Cards';
+import { AttentionCard, CoverageCard, IntakeCard, OpenFindingsCard, PlannedCard, ResidualCard, StatusCard, Tiles, TierCard } from './_overview/Cards';
 import Posture, { type Trend } from './_overview/Posture';
 
 export default function VendorRiskOverviewPage() {
@@ -81,6 +82,7 @@ export default function VendorRiskOverviewPage() {
         <StatusCard d={data} />
         <IntakeCard d={data} />
         <ResidualCard d={data} />
+        <PlannedCard scope={scope} />
       </div>
       <Posture d={data} trend={trend} />
     </div>

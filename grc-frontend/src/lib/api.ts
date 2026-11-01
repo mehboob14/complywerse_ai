@@ -267,6 +267,13 @@ export const risksApi = {
   updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
   linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
+  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab and the Risk Library link to these.
+  requirementFrameworks: () => apiClient.get<{ items: Array<{ id: number; name: string; slug: string | null; version: string | null; controls: number }> }>('/erm/framework-requirements/frameworks'),
+  searchRequirements: (params: { framework_id: number; q?: string; skip?: number; limit?: number }) =>
+    apiClient.get<{ items: Array<{ id: number; code: string; title: string; domain: string | null; category: string | null; priority_level: string | null; is_mandatory: boolean }>; total: number }>('/erm/framework-requirements', { params }),
+  linkRequirements: (id: number, data: { framework_id: number; control_ids: number[]; mitigation_effectiveness: string; notes?: string }) =>
+    apiClient.post(`/erm/risks/${id}/framework-requirements`, data),
+  unlinkRequirement: (id: number, linkId: number) => apiClient.delete(`/erm/risks/${id}/framework-requirements/${linkId}`),
   linkGovernance: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-governance`, data),
   unlinkGovernance: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-governance/${linkId}`),
   linkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/controls`, data),
@@ -2697,27 +2704,6 @@ export const vendorLeaksApi = {
     apiClient.post(`/vendor-risk/leaks/own/${id}`, data),
   checkVat: (vendorId: number, vatNumber: string) =>
     apiClient.post(`/vendor-risk/vendors/${vendorId}/vat`, { vat_number: vatNumber }, { timeout: 30000 }),
-};
-
-export const vendorShadowApi = {
-  board: (params?: { status?: string }) => apiClient.get('/vendor-risk/shadow-saas', { params: params || {} }),
-  template: () => apiClient.get('/vendor-risk/shadow-saas/import/template', { responseType: 'blob' }),
-  importFile: (file: File, dryRun: boolean) => {
-    const form = new FormData();
-    form.append('file', file);
-    return apiClient.post('/vendor-risk/shadow-saas/import', form, {
-      params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-  syncGrip: () => apiClient.post('/vendor-risk/shadow-saas/sync', {}, { timeout: 180000 }),
-  fromRecords: (name: string) => apiClient.post('/vendor-risk/shadow-saas/from-records', { name }),
-  onboard: (id: number, note?: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/onboard`, { note }),
-  deny: (id: number, note: string, block: boolean) => apiClient.post(`/vendor-risk/shadow-saas/${id}/deny`, { note, block }),
-  dismiss: (id: number, note: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/dismiss`, { note }),
-  reopen: (id: number) => apiClient.post(`/vendor-risk/shadow-saas/${id}/reopen`),
-  people: (id: number, search?: string) => apiClient.get(`/vendor-risk/shadow-saas/${id}/people`, { params: search ? { search } : {} }),
-  gateway: (data: { domain: string; action: 'block' | 'allow'; reason: string }) => apiClient.post('/vendor-risk/shadow-saas/gateway', data),
-  gatewayHistory: () => apiClient.get('/vendor-risk/shadow-saas/gateway'),
 };
 
 // FAIR analyses of supplier loss scenarios (tpra/fair.py).
