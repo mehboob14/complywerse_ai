@@ -8,8 +8,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { formatCount } from '@/lib/format';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, Checkbox, Combobox, EmptyState, Notice, Pager, SegmentedControl, Select, TextInput, useAddressState } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { Button, Checkbox, Combobox, EmptyState, ErrorState, Notice, Pager, SegmentedControl, Select, TextInput, useAddressState } from '@/components/ui/ds';
+import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
 import { useMyUserId } from '@/components/governance/DocumentTaskActions';
 import { AiPriorities } from './_AiPriorities';
 import { BulkBar } from './_BulkBar';
@@ -54,6 +54,9 @@ export function Board({ canCreate, onNew }: { canCreate: boolean; onNew: () => v
   useEffect(() => {
     if (s.view === 'table' && data && !q.isPlaceholderData && s.page > lastPage(data.total, size)) set({ page: lastPage(data.total, size) });
   }, [data, q.isPlaceholderData, s.page, s.view, size]);                                                   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the server refused the whole board (no right to Task Management): its words, once, and no filters or buttons that could only fail
+  if (q.isError && statusOf(q.error) === 403) return <ErrorState title="Couldn't load the tasks" message={errorMessage(q.error)} />;
 
   const ownerOptions = userOptions(onlyMine ? data?.owners : users.data);
   const toggle = (id: number) => setSelected((cur) => { const next = new Set<number>(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });

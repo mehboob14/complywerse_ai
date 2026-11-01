@@ -9,9 +9,12 @@ import { criticalTasksApi } from '@/lib/api';
 import { PageHeader } from '@/components/ui';
 import { Button, ErrorState, Skeleton, SkeletonLines } from '@/components/ui/ds';
 import { canRetry, errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
+import { routeFor } from '@/lib/navRegistry';
 import { retryRead } from '../_queries';
 import type { TaskDetail } from '../tasksModel';
 import { TaskView } from './_TaskView';
+
+const TITLE = routeFor('/tasks/1')?.label ?? 'Task';
 
 export default function TaskDetailPage() {
   const params = useParams();
@@ -35,9 +38,9 @@ export default function TaskDetailPage() {
     const missing = statusOf(q.error) === 404;
     return (
       <div className="flex flex-col gap-[16px]">
-        <PageHeader variant="page" title={missing ? 'Task not found' : 'Task'} back={{ href: '/tasks', label: 'Back to Task Management' }} />
+        <PageHeader variant="page" title={TITLE} back={{ href: '/tasks', label: 'Back to Task Management' }} />
         <ErrorState
-          title={missing ? 'This task is not available' : "Couldn't open this task"}
+          title={missing ? 'Task not found' : "Couldn't open this task"}
           message={missing ? 'It was deleted, or it is not one of the tasks you may see.' : errorMessage(q.error)}
           onRetry={canRetry(q.error) ? () => { void q.refetch(); } : undefined}
         />
