@@ -14,8 +14,17 @@
 // rule). A page of another module reads the Header's own title map (PAGE_TITLES) until it moves to the kit's page head and sets `ownHeading`; each group
 // of such pages declares its entries in its own file, lib/navPages/<group>.ts (collected by navPages/index.ts), so the groups never edit the same lines.
 //
-// RIGHTS: `permissions` is what navAccess says the page needs today (null: nothing, any signed-in user; that is how the app behaves, many Governance
-// pages guard nothing and some of their APIs are open: G3_permission_matrix). Nothing here adds, removes or enforces a right or a guard.
+// RIGHTS: `permissions` is who is offered the page (any one of them; null: any signed-in user). A sidebar leaf has navAccess's; a page navAccess lists
+// (PAGE_PERMISSIONS: /complychat, /users, /reports/...) has those; a page that gates itself says so in its group file (`permissions`, or `adminOnly`);
+// every other page has the rights of the page it hangs under (or forwards to), so a detail page is never offered to someone who cannot open its list.
+// `adminOnly`: the Administration menu's destinations, which the shell shows to administrators only. How the app behaves is unchanged: most pages guard
+// nothing themselves and some of their APIs are open (G3_permission_matrix; navRegistry.test.ts keeps that list on navPermissions itself). Nothing here
+// adds, removes or enforces a right or a guard.
+//
+// THE WHOLE APP (R-REG, 2026-11-01): every page of src/app that is a destination of the signed-in shell has exactly one entry (navPages/coverage.test.ts
+// walks the folders and proves it); the pages outside the shell (sign-in, the public token pages) are on that test's allow-list, with the reason.
+// `duplicateOf`: the page exists twice (the GRC-native cyber pages and Ava's copies under /cyber-assurance); the entry that is NOT in the sidebar names
+// the one that is, and search and the Work panel offer only that one. `aliasOf` entries are another URL of a destination (a forward or the same page).
 //
 // THE NAMES BEFORE THIS FILE (read from the code and from a browser pass over every route, 2026-10-31) and the label chosen. "bar" is the top bar's title,
 // "tabs" the Documents tab bar that replaces it in the Documents area, "back" the page's own back link (no Governance page renders a breadcrumb).
@@ -95,8 +104,12 @@ export interface RouteEntry {
   aliasOf?: string;
   /** why it has no menu entry or tab: where it is reached from */
   hidden?: string;
-  /** what the page needs today, as navAccess says (any one of them); null: no right, any signed-in user */
+  /** who is offered the page (any one of these rights; null: any signed-in user): the sidebar's for a leaf, the page's own gate, else the rights of the page it hangs under */
   permissions: string[] | null;
+  /** only administrators are offered it (the Administration menu's destinations) */
+  adminOnly?: true;
+  /** the entry of the same page that the sidebar (or the top bar) uses: this one is an older copy that is still a page, and search and the Work panel skip it */
+  duplicateOf?: string;
   keywords?: string[];
   /** the page draws its own heading in its body (PageHeader variant="page"): the top bar then names only its section, so the page's name is not on
    *  screen twice. Set it on a page when it moves to the kit's page head. */
@@ -111,7 +124,8 @@ export type TabEntry = RouteEntry & { tab: TabSpec };
 
 // ---- the sidebar's leaves, read from navAccess ----
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const rights = (path: string): string[] | null => { const own = navPermissions(path); return own.length ? own : null; };
+/** What navAccess lists for a page (a leaf's rights, or PAGE_PERMISSIONS'); undefined for a page it does not list, which then takes its parent's (accessOf below). */
+const navAccessRights = (path: string): string[] | undefined => { const own = navPermissions(path); return own.length ? own : undefined; };
 
 const sidebar: Array<{ item: NavItem; groups: Crumb[] }> = [];
 function walk(entries: NavEntry[], groups: Crumb[]): void {
@@ -123,10 +137,13 @@ function walk(entries: NavEntry[], groups: Crumb[]): void {
 walk(navigation, []);
 
 /** What a page group adds to the entry of a sidebar leaf, or says about a page of its own (lib/navPages/<group>.ts). */
-export type RouteExtra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading' | 'section'>>;
-/** A page with no menu entry, declared by the group that owns it. `area` is the sidebar group's slug ('compliance-management'), or the leaf's for a top-level module ('task-management'). */
+export type RouteExtra = Partial<Pick<RouteEntry, 'shortLabel' | 'title' | 'subtitle' | 'parent' | 'tab' | 'hidden' | 'keywords' | 'ownHeading' | 'section' | 'permissions' | 'adminOnly' | 'duplicateOf'>>;
+/** A page with no menu entry, declared by the group that owns it. `area` is the sidebar group's slug ('compliance-management'), or the leaf's for a top-level module ('task-management').
+ *  `permissions` / `adminOnly` are for a page that gates itself; without them the page takes the rights of the page it hangs under. */
 export type PageSpec = RouteExtra & { path: string; label: string; area: string; aliasOf?: string };
 type Extra = RouteExtra;
+/** An entry before its rights are resolved: `permissions` / `adminOnly` undefined mean "not said here". */
+type Draft = Omit<RouteEntry, 'permissions' | 'adminOnly'> & { permissions?: string[] | null; adminOnly?: true };
 
 const DOCS = '/governance/documents';
 const ATTEST = `${DOCS}/attestation`;
@@ -145,20 +162,20 @@ const OF_LEAF: Record<string, Extra> = {
   [PROJECTS]: { subtitle: 'Track and manage information security projects across the organization', keywords: ['IS Projects'], ownHeading: true },
 };
 
-const leaves: RouteEntry[] = sidebar.map(({ item, groups }) => ({
+const leaves: Draft[] = sidebar.map(({ item, groups }) => ({
   path: item.href,
   label: item.name,
   area: item.href.startsWith('/governance') ? 'governance' : slug(groups.length ? groups[0].label : item.name),
   groups,
-  permissions: rights(item.href),
+  permissions: navAccessRights(item.href),
   ...OF_LEAF[item.href],
   ...MODULE_LEAVES[item.href],
 }));
 
 // ---- the Governance pages that have no menu entry ----
-const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): RouteEntry => ({ path, label, area: 'governance', groups: [], permissions: rights(path), ...rest });
+const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): Draft => ({ path, label, area: 'governance', groups: [], permissions: navAccessRights(path), ...rest });
 
-const pages: RouteEntry[] = [
+const pages: Draft[] = [
   gov(`${DOCS}/:id`, 'Document', { parent: DOCS, hidden: 'opens from a library row or its drawer, a task, a notification or an e-mail link' }),
   gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 2, studio: true, claims: `${DOCS}/:id` } }),
   gov(`${DOCS}/studio/:sessionId`, 'Studio draft', { parent: `${DOCS}/studio`, hidden: 'opens from the Studio start page ("Your work") or from a document' }),
@@ -185,10 +202,29 @@ const pages: RouteEntry[] = [
 ];
 
 // ---- the pages that have no menu entry in the other modules: each group of pages declares its own, in lib/navPages/<group>.ts ----
-const modulePages: RouteEntry[] = MODULE_PAGES.map((page) => ({ groups: [], permissions: rights(page.path), ...page }));
+const modulePages: Draft[] = MODULE_PAGES.map((page) => ({ groups: [], permissions: navAccessRights(page.path), ...page }));
+
+// ---- rights: a page's own say (navAccess's list, or `permissions` / `adminOnly` in its group file), else the page it hangs under or forwards to ----
+const drafts: Draft[] = leaves.concat(pages, modulePages);
+const draftAt: Record<string, Draft> = {};
+drafts.forEach((draft) => { draftAt[draft.path] = draft; });
+
+function accessOf(draft: Draft): { permissions: string[] | null; adminOnly: boolean } {
+  let at: Draft | undefined = draft;
+  for (let hops = 0; at && hops < 8; hops++) {
+    if (at.permissions !== undefined || at.adminOnly !== undefined) return { permissions: at.permissions ?? null, adminOnly: !!at.adminOnly };
+    const next: string | undefined = at.aliasOf ?? at.parent;
+    at = next ? draftAt[next] : undefined;
+  }
+  return { permissions: null, adminOnly: false };            // a page that hangs under nothing with rights (the public /attest page)
+}
 
 /** Every destination: the sidebar's leaves in menu order, then the pages that have no menu entry. */
-export const routes: readonly RouteEntry[] = leaves.concat(pages, modulePages);
+export const routes: readonly RouteEntry[] = drafts.map((draft) => {
+  const { permissions, adminOnly } = accessOf(draft);
+  const { permissions: ignoredRights, adminOnly: ignoredAdmin, ...rest } = draft;
+  return adminOnly ? { ...rest, permissions, adminOnly: true as const } : { ...rest, permissions };
+});
 
 const byPath: Record<string, RouteEntry> = {};
 routes.forEach((entry) => { byPath[entry.path] = entry; });
@@ -242,7 +278,15 @@ const SECTION: Record<string, string> = {
   reports: 'Reports',
   'performance-overview': 'Performance Overview',
   'task-management': 'Task Management',
+  'cybersecurity-assurance': 'Cybersecurity Assurance',
+  administration: 'Administration',
+  complychat: 'ComplyChat',
 };
+
+/** The display name of an area (the sidebar group, or the module's own name): what a search result or the Work panel puts beside a page. '' for an unknown area. */
+export function areaName(area: string): string {
+  return SECTION[area] ?? '';
+}
 
 /** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name, or '' (nothing) when
  *  the section is the page's own name (a module's top page: Task Management says "Task Management" in its body, not twice); undefined when the page has
@@ -267,14 +311,20 @@ export function registryNamesPage(pathname: string | null | undefined): boolean 
   return !!hit && (hit.area === 'governance' || !!canonical(hit).ownHeading);
 }
 
-/** The trail to a page: its sidebar groups, then the pages it hangs under, then the page itself (the last one is current). [] for a path that is no route. */
+/** The trail to a page: its sidebar groups, then the pages it hangs under, then the page itself (the last one is current). [] for a path that is no route.
+ *  An older copy that hangs under the page it copies is not repeated on the way ("IT Asset Inventory > IT Asset Inventory > Asset"), and a copy that is the page itself
+ *  replaces the name of the page it copies (the current page is named once, with its real URL). */
 export function breadcrumbFor(pathname: string | null | undefined): Crumb[] {
   const hit = routeFor(pathname);
   if (!hit) return [];
   const chain: RouteEntry[] = [];
   for (let entry: RouteEntry | undefined = canonical(hit); entry && chain.length < 8; entry = entry.parent ? byPath[entry.parent] : undefined) chain.unshift(entry);
   const here = cleanPath(pathname as string);
-  return chain[0].groups.concat(chain.map((entry, i) => ({ label: entry.label, href: i === chain.length - 1 && entry === hit ? here : entry.path })));
+  const shown = chain.filter((entry, i) => i === chain.length - 1 || !entry.duplicateOf || entry.duplicateOf !== entry.parent);
+  const crumbs = chain[0].groups.concat(shown.map((entry) => ({ label: entry.label, href: entry === hit ? here : entry.path })));
+  const last = crumbs.length - 1;
+  if (last >= 1 && hit.duplicateOf && hit.duplicateOf === hit.parent && crumbs[last].label === crumbs[last - 1].label) crumbs.splice(last - 1, 1);
+  return crumbs;
 }
 
 // ---- tab strips ----
@@ -311,4 +361,70 @@ export function activeTab(area: string, pathname: string | null | undefined, con
   let best: TabEntry | undefined;
   for (const tab of tabs) if (underPath(path, tab.path) && (!best || tab.path.length > best.path.length)) best = tab;
   return best && listed(best) ? best : undefined;
+}
+
+// ---- finding pages: what the command palette and the Work panel call ----
+
+// Unicode property escapes in a RegExp built from a string: the source is compiled for ES5, which would reject them in a literal.
+const MARKS = new RegExp('[\\p{M}\\u0640]', 'gu');
+const SEPARATORS = new RegExp('[^\\p{L}\\p{N}]+', 'gu');
+
+/** Text as a search compares it: lower case, no accents, no Arabic vowel signs, no tatweel ("Café" = "cafe", "الْمَخَاطِر" = "المخاطر"). The kit's own fold
+ *  (listboxModel.ts) strips Latin accents only, so Arabic text with vowel signs would not match there; on Latin text the two agree. */
+export function fold(text: string): string {
+  return text.normalize('NFKD').replace(MARKS, '').toLowerCase();
+}
+
+/** Folded, with every run of other characters as one space: "/erm/Risk-Library" -> " erm risk library " (a leading and a trailing space make a word test one `includes`). */
+const spaced = (text: string): string => ` ${fold(text).replace(SEPARATORS, ' ').trim()} `;
+
+/** A destination a person can go to: a path with no :param (a record needs its id), not another URL of a destination, not an older copy of a page the sidebar has. */
+const openable = (entry: RouteEntry): boolean => entry.path.indexOf(':') < 0 && !entry.aliasOf && !entry.duplicateOf;
+
+/** The pages of one area that a person can open, the menu's leaves first (in menu order), then the others in registry order. Not for a record page, a forward or an older copy. */
+export function pagesForArea(area: string): RouteEntry[] {
+  return routes.filter((entry) => entry.area === area && openable(entry));
+}
+
+/** How well `text` (already `spaced`) matches the query `q` (folded, single-spaced): 0 equal, 1 starts with it, 2 a word starts with it, 3 inside a word; -1 no match. */
+function tier(text: string, q: string): number {
+  if (text === ` ${q} `) return 0;
+  if (text.indexOf(` ${q}`) === 0) return 1;
+  if (text.indexOf(` ${q}`) > 0) return 2;
+  return text.indexOf(q) >= 0 ? 3 : -1;
+}
+
+/** Lower is better, Infinity: not a match. How well the query matches comes first (equal, starts with it, a word starts with it, inside a word: 0-3), then where:
+ *  a name (label, title, short label) before a keyword of the same quality, so a keyword that a word starts with still beats the middle of a name. That makes 0-7;
+ *  a query of several words that are all somewhere in the page's names, menu groups, area and path ranks 8, a part of the path 9. */
+function score(entry: RouteEntry, q: string): number {
+  let best = Infinity;
+  const names = [entry.label, entry.title, entry.shortLabel].filter((name): name is string => !!name);
+  names.forEach((name) => { const t = tier(spaced(name), q); if (t >= 0) best = Math.min(best, 2 * t); });
+  (entry.keywords ?? []).forEach((word) => { const t = tier(spaced(word), q); if (t >= 0) best = Math.min(best, 2 * t + 1); });
+  if (best < Infinity) return best;
+  const words = q.split(' ');
+  if (words.length > 1) {
+    const where = spaced(names.concat(entry.keywords ?? [], entry.groups.map((g) => g.label), areaName(entry.area), entry.path).join(' '));
+    if (words.every((word) => where.indexOf(word) >= 0)) return 8;
+  }
+  return spaced(entry.path).indexOf(q) >= 0 ? 9 : Infinity;
+}
+
+/** The pages that match what a person typed, best first: the name that is the query, then a name that starts with it, then a word of a name, then inside a
+ *  name, each step ahead of the same step for the names it used to go by (`keywords`); then the path. Equal matches keep registry order (menu first), so the list is stable. Case, accents and Arabic vowel signs do
+ *  not matter. Only openable pages are searched (openable above). `allow` drops what the person may not open (rights and module gates are the caller's) BEFORE
+ *  the limit is applied. An empty query finds nothing. */
+export function searchRoutes(query: string, options: { limit?: number; allow?: (entry: RouteEntry) => boolean } = {}): RouteEntry[] {
+  const q = fold(query).replace(SEPARATORS, ' ').trim();
+  if (!q) return [];
+  const { limit = 20, allow } = options;
+  const hits: Array<{ entry: RouteEntry; rank: number; at: number }> = [];
+  routes.forEach((entry, at) => {
+    if (!openable(entry) || (allow && !allow(entry))) return;
+    const rank = score(entry, q);
+    if (rank < Infinity) hits.push({ entry, rank, at });
+  });
+  hits.sort((a, b) => a.rank - b.rank || a.at - b.at);
+  return hits.slice(0, limit).map((hit) => hit.entry);
 }
