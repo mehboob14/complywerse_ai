@@ -12,7 +12,7 @@
 // for every module; "Schedule meeting" still sends what it sent (the server stores the date; start and end time are asked and not kept).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AlertTriangle, Calendar, CheckCircle, CheckSquare, ChevronDown, ChevronRight, Copy, Download, Edit2, Eye, FileText, GitCompare, Paperclip, Plus, Power, PowerOff, Save,
@@ -254,7 +254,6 @@ function getScoreRingColor(score: number) {
 
 export default function CommitteeDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const committeeId = parseInt(params.id as string);
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
