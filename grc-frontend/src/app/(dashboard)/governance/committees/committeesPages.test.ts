@@ -210,9 +210,9 @@ test('the drawers ask before they throw typing away (dirty) and none of them is 
   }
 });
 
-test('the shared API file only gained optional things: getActions skip and limit, an optional is_active on getCommittees, optional filters on getMeetings, and the two new calls', () => {
+test('the shared API file only gained optional things: getActions skip and limit and the optional assigned_to / due_after / due_before, an optional is_active on getCommittees, optional filters on getMeetings, and the new calls', () => {
   const api = readFileSync('src/lib/api.ts', 'utf8');
-  assert.match(api, /getActions: \(params\?: \{ status\?: string; committee_id\?: number; overdue_only\?: boolean; skip\?: number; limit\?: number \}\)/);
+  assert.match(api, /getActions: \(params\?: \{ status\?: string; committee_id\?: number; overdue_only\?: boolean; assigned_to\?: number \| 'me'; due_after\?: string; due_before\?: string; skip\?: number; limit\?: number \}\)/);
   assert.match(api, /getCommittees: \(params\?: \{ is_active\?: 'true' \| 'false' \| 'all' \}\) => apiClient\.get\('\/governance\/committees', \{ params \}\)/);
   assert.match(api, /getMeetings: \(committeeId: number, params\?: \{ status\?: string; from_date\?: string; limit\?: number \}\) =>/);
   assert.equal(ALL.length, 5);
