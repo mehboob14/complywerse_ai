@@ -84,7 +84,7 @@ test("the rights of a page without a menu entry are those of the page it hangs u
     '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
     '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
     '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
-    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token',
+    '/governance/regulatory-changes/:id', '/is-projects/dashboard', '/is-projects/my-projects', '/is-projects/:id', '/attest/:token', '/documents',
   ]);
 });
 
@@ -122,6 +122,22 @@ test('a forward is another URL of an entry that is a page of its own, under the 
   assert.deepEqual(aliases.map((e) => [e.path, e.aliasOf]), [
     ['/governance/attestations', '/governance/documents/attestation'],
     ['/governance/reviews/calendar', '/governance/reviews'],                // not a forward: the same page opened on its calendar view
+    // the rest of the app (R-REG): forwards and second addresses of the same page; navPages/coverage.test.ts reads every page file and holds each one to its target
+    ['/erm/internal-controls', '/controls'],
+    ['/erm/internal-controls/:id', '/controls'],
+    ['/erm/ai-risk-assessment', '/erm/risk-assessments/ai-risk-assessment'],
+    ['/erm/risks/dashboard', '/erm/risks'],                                  // not a forward: /erm/risks renders this page
+    ['/erm/risk-assessments/dashboard', '/erm/risk-assessments'],            // not a forward: /erm/risk-assessments renders this page
+    ['/vendor-risk/procurement', '/vendor-risk'],
+    ['/vendor-risk/shadow-saas', '/vendor-risk'],
+    ['/vendor-risk/settings/alert-rules', '/vendor-risk/policy'],
+    ['/automation/scope', '/automation/soc2-controls'],
+    ['/admin/access-reviews', '/compliance/access-reviews'],
+    ['/admin/access-reviews/connect', '/compliance/access-reviews/connect'],
+    ['/admin/access-reviews/rules', '/compliance/access-reviews/rules'],
+    ['/admin/access-reviews/:id', '/compliance/access-reviews/:id'],
+    ['/admin/teams', '/admin'],
+    ['/cyber-assurance/admin/teams', '/cyber-assurance/admin'],
   ]);
   for (const a of aliases) {
     const target = entry(a.aliasOf as string);
