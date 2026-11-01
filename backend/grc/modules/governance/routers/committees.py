@@ -177,8 +177,9 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
 # ── Deactivating a committee ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 # The reversible way to retire a committee (the screens have no Delete): POST /{id}/deactivate sets is_active false and removes nothing (members,
 # charters, meetings, agendas, votes, minutes, actions and their Task Management copies all stay, open actions and scheduled meetings as they are);
-# POST /{id}/reactivate sets it back. While it is off the three ways to add to it (a meeting, an action, a member) answer 400. Both calls need the
-# delete right (governance:committees:delete), enforced here; the other committee routes keep the behaviour they had.
+# POST /{id}/reactivate sets it back. While it is off the ways to add to it (a meeting, an action from the committee or from one of its meetings, a
+# member) answer 400. Both calls need the delete right (governance:committees:delete), enforced here; the other committee routes keep the behaviour
+# they had (PUT can still set is_active, as before, but it too is refused while an extension request waits).
 # is_active NULL counts as ACTIVE everywhere below: nothing writes NULL (the column defaults to true), and the readers used to disagree about it.
 INACTIVE_REFUSED = "This committee is inactive: reactivate it first"
 _remove = Depends(require_tenant_permission("governance:committees:delete"))
@@ -203,6 +204,16 @@ def _extension_requests_on(db: Session, committee_id: int, open_only: bool) -> i
     if open_only:
         query = query.filter(AuditExtensionRequest.status == "requested")
     return query.count()
+
+
+def _refuse_deactivation_while_a_request_waits(db: Session, committee: GovernanceCommittee) -> None:
+    """409 with words while an audit-register extension request waits for the committee's decision at one of its meetings (Deactivate and PUT is_active false)."""
+    waiting = _extension_requests_on(db, committee.id, open_only=True)
+    if waiting:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"{waiting} audit extension {'request is' if waiting == 1 else 'requests are'} still waiting for a decision at a meeting of "
+                    "this committee. Decide or withdraw it in Auditor Portal > Issue Register, then deactivate the committee"))
 
 
 def serialize_committee(committee: GovernanceCommittee, db: Session) -> dict:
@@ -2381,6 +2392,8 @@ def update_committee(
     from ....routers.auth_router import refuse_imported_accounts
     refuse_imported_accounts(db, [update_data.get("chair_id"), update_data.get("secretary_id")],
                              kept=[committee.chair_id, committee.secretary_id])
+    if update_data.get("is_active") is False and _is_active(committee):
+        _refuse_deactivation_while_a_request_waits(db, committee)       # the same rule as POST /deactivate, whichever way in
     for key, value in update_data.items():
         setattr(committee, key, value)
     
@@ -2412,12 +2425,7 @@ def deactivate_committee(
     its meetings. Already inactive: nothing to do, the committee comes back as it is."""
     committee = _committee_of(committee_id, current_user, db)
     if _is_active(committee):
-        waiting = _extension_requests_on(db, committee.id, open_only=True)
-        if waiting:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(f"{waiting} audit extension {'request is' if waiting == 1 else 'requests are'} still waiting for a decision at a meeting of "
-                        "this committee. Decide or withdraw it in Auditor Portal > Issue Register, then deactivate the committee"))
+        _refuse_deactivation_while_a_request_waits(db, committee)
         committee.is_active = False
         db.commit()
         db.refresh(committee)

@@ -463,6 +463,13 @@ def test_deactivate_is_refused_while_an_extension_request_waits_at_one_of_its_me
     assert db.get(m.GovernanceCommittee, 1).is_active is True      # nothing changed
     assert http.post("/committees/2/deactivate").status_code == 200  # another committee's has no request
 
+    # PUT is_active=false is the other way in: the same rule, whichever way; a PUT that keeps it active (or only edits it) is not touched
+    put = http.put("/committees/1", json={"is_active": False})
+    assert (put.status_code, put.json()["detail"]) == (409, r.json()["detail"])
+    assert http.put("/committees/1", json={"description": "Edited while a request waits", "is_active": True}).status_code == 200
+    db.expire_all()
+    assert db.get(m.GovernanceCommittee, 1).is_active is True and db.get(m.GovernanceCommittee, 1).description == "Edited while a request waits"
+
     db.add(m.AuditExtensionRequest(tenant_id=1, issue_id=6, requested_date=datetime.utcnow().date(), reason="Second", status="requested", meeting_id=10))
     db.commit()
     assert "2 audit extension requests are still waiting" in http.post("/committees/1/deactivate").json()["detail"]
