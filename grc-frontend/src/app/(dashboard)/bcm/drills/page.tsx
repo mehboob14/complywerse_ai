@@ -2,187 +2,211 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useMemo } from 'react';
+// Business Continuity > Drills & Invocations. The request is the one it always was (GET /bcm/drills, key ['bcm-drills']: the server sends up to 200 drills, latest scheduled first, and the TRUE
+// total); the search and the status, type and source filters work on the rows that came, and the count is the server's total, not the length of what loaded. The filters, the sort and the page
+// are kept in the address (?q= status= type= source= sort= page= size=; `?status=overdue` is where the Overview's overdue counter opens), so a link, a reload and the Back button land where the
+// person was. On the design-system kit: PageHeader variant="page", RegisterTable (cards below 768px) with Pager, a row menu that is always visible, useConfirm before a delete (it names what
+// goes with the drill), useReportedMutation for the delete, DrillForm (a drawer that asks before it throws typing away).
+import { useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Plus, Eye, Trash2, CalendarClock, Siren } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ExternalLink, Plus, Search, Trash2 } from 'lucide-react';
 import { bcmApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, AnimatedModal, PageLoader } from '@/components/ui';
-import EmptyState from '@/components/common/EmptyState';
+import { NOT_SET, formatCount, formatDate, truncate } from '@/lib/format';
+import { routeFor } from '@/lib/navRegistry';
+import { drillStatus, drillType, sourceType } from '@/lib/statuses/bcm';
+import { PageHeader } from '@/components/ui';
 import {
-  DrillStatusBadge, DRILL_STATUS_LABEL, DRILL_TYPE_LABEL, DRILL_TYPE_OPTIONS,
-  SOURCE_TYPE_LABEL, fmtDate, BcmSelect, BcmEntitySelect, useBcmToast,
-} from '../_bcm-ui';
+  Button, EmptyState, ErrorState, Menu, Notice, Pager, PersonChip, RegisterTable, Select, TextInput, rowCountText, useAddressState, useConfirm, useReportedMutation,
+  type RegisterColumn,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { MUTED_LINK, Pill, TitleLink } from '../_bcm-ui';
+import {
+  DRILL_LIST_SCHEMA, PAGE_SIZES, asPage, cutNotice, drillDeleteWords, drillSortValue, filterDrills, ordered, pageOf, retryRead, type Drill, type Page,
+} from '../bcmModel';
+import { DrillForm } from './_DrillForm';
 
-const SOURCE_OPTIONS = [
-  { value: 'scheduled_test', label: 'Scheduled Test' },
-  { value: 'incident_triggered', label: 'Incident-Triggered' },
-];
-
-const input = 'w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none';
-const lbl = 'mb-0.5 block text-xs font-medium text-slate-600';
+const MUTED = 'text-ds-fg-muted';
+const NOUN = { one: 'drill', other: 'drills' };
 
 export default function BcmDrillsPage() {
+  const router = useRouter();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('bcm:drills:create');
   const canDelete = hasPermission('bcm:drills:delete');
-  const qc = useQueryClient();
-  const { ok, fail } = useBcmToast();
+  const [addr, setAddr] = useAddressState(DRILL_LIST_SCHEMA);
+  const { q, status, type, source, sort, page, size } = addr;
+  const { confirm, confirmDialog } = useConfirm();
+  const searchField = useRef<HTMLInputElement>(null);
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [showCreate, setShowCreate] = useState(false);
-
-  const { data, isLoading, error } = useQuery({
+  const list = useQuery<Page<Drill>>({
     queryKey: ['bcm-drills'],
-    queryFn: async () => (await bcmApi.drills.list()).data.items as any[],
+    queryFn: async () => {
+      const answer = asPage<Drill>((await bcmApi.drills.list()).data);
+      if (!answer) throw new Error('The server answered in a form this page cannot read.');
+      return answer;
+    },
     placeholderData: keepPreviousData,
+    retry: retryRead,
   });
 
-  const delMut = useMutation({ mutationFn: (id: number) => bcmApi.drills.remove(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['bcm-drills'] }); ok('Drill deleted'); }, onError: (e) => fail(e, 'Could not delete drill') });
+  const remove = useReportedMutation({
+    mutationFn: async (d: Drill) => (await bcmApi.drills.remove(d.id)).data,
+    success: 'Drill deleted', failure: "Couldn't delete the drill", invalidate: [['bcm-drills']],
+    // the row the person was on is gone, and focus with it: back to where the list starts, unless they are typing or a dialog is open
+    onSuccess: () => {
+      const here = document.activeElement;
+      const busy = !!here && here !== document.body && !!(here.closest('[role="dialog"]') || here.matches('input, textarea, select'));
+      if (!busy) searchField.current?.focus();
+    },
+  });
+  const askDelete = async (d: Drill) => {
+    if (await confirm({ ...drillDeleteWords(d), tone: 'danger' })) remove.mutate(d);
+  };
 
-  const filtered = useMemo(() => {
-    let rows = data || [];
-    if (statusFilter !== 'all') rows = rows.filter((d) => d.effective_status === statusFilter);
-    if (typeFilter !== 'all') rows = rows.filter((d) => d.drill_type === typeFilter);
-    if (sourceFilter !== 'all') rows = rows.filter((d) => d.source_type === sourceFilter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      rows = rows.filter((d) => (d.title || '').toLowerCase().includes(q) || (d.plan_title || '').toLowerCase().includes(q));
-    }
-    return rows;
-  }, [data, statusFilter, typeFilter, sourceFilter, search]);
+  const drills = useMemo(() => list.data?.items ?? [], [list.data]);
+  const total = list.data?.total ?? drills.length;
+  const matches = useMemo(() => ordered(filterDrills(drills, { q, status, type, source }), sort, drillSortValue), [drills, q, status, type, source, sort]);
+  const { rows, range } = pageOf(matches, page, size);
+  const cut = cutNotice({ loaded: drills.length, total, noun: NOUN, order: 'latest scheduled' });
+  const clearFilters = () => setAddr({ q: '', status: 'all', type: 'all', source: 'all', page: 1 });
+  const openCreate = () => setAddr({ new: true });
+  const failed = list.isError && !list.data;
+  const loading = !failed && !list.data;
+  const creating = addr.new && canCreate;
 
-  if (isLoading) return <PageLoader className="h-64" />;
-  if (error) return <div className="px-3 sm:px-6"><div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-600">Failed to load drills.</div></div>;
+  const head = (
+    <PageHeader
+      variant="page"
+      title={routeFor('/bcm/drills')?.label ?? 'Drills & Invocations'}
+      info="Continuity tests of the plans and the real activations of them, with what each found."
+      actions={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={openCreate}>Schedule drill</Button> : undefined}
+    />
+  );
+
+  if (failed) {
+    return (
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <ErrorState title="Couldn't load the drills" message={errorMessage(list.error)} onRetry={canRetry(list.error) ? () => { void list.refetch(); } : undefined} />
+        {confirmDialog}
+      </div>
+    );
+  }
+
+  /** what can be done to one drill: always visible (a "⋯" button), never behind a hover */
+  const rowMenu = (d: Drill) => (
+    <Menu
+      iconOnly
+      label={`Actions for ${truncate(d.title, 60).text}`}
+      items={[
+        { key: 'open', label: 'Open', icon: ExternalLink, onSelect: () => router.push(`/bcm/drills/${d.id}`) },
+        { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => { void askDelete(d); } },
+      ]}
+    />
+  );
+
+  const title = (d: Drill) => (
+    <div className="min-w-0">
+      <TitleLink href={`/bcm/drills/${d.id}`} title={d.title} />
+      {d.plan_title && (
+        <Link href={`/bcm/plans/${d.plan_id}`} title={d.plan_title} className={`mt-[2px] block text-ds-label font-normal ${MUTED_LINK}`}>
+          <span className="line-clamp-1 break-words">{d.plan_title}</span>
+        </Link>
+      )}
+    </div>
+  );
+
+  const columns: RegisterColumn<Drill>[] = [
+    { key: 'title', header: 'Drill', isRowHeader: true, sortable: true, cell: title },
+    {
+      key: 'type', header: 'Type', width: 'w-[132px]', priority: 2, sortable: true, card: 'meta',
+      cell: (d) => (
+        <span className="block min-w-0">
+          <span className="block whitespace-nowrap">{drillType.label(d.drill_type)}</span>
+          <span className={`block whitespace-nowrap text-ds-label font-normal ${MUTED}`}>{sourceType.label(d.source_type)}</span>
+        </span>
+      ),
+      cardCell: (d) => <span>{`${drillType.label(d.drill_type)} · ${sourceType.label(d.source_type)}`}</span>,
+    },
+    { key: 'status', header: 'Status', width: 'w-[124px]', sortable: true, card: 'meta', cell: (d) => <Pill registry={drillStatus} word={d.effective_status} /> },
+    {
+      key: 'scheduled', header: 'Scheduled', width: 'w-[116px]', sortable: true, card: 'meta',
+      cell: (d) => <span className={`whitespace-nowrap ${d.scheduled_date ? '' : MUTED}`}>{formatDate(d.scheduled_date, { calendar: true, empty: NOT_SET })}</span>,
+    },
+    {
+      key: 'owner', header: 'Owner', width: 'w-[160px]', priority: 3, sortable: true, card: 'meta',
+      cell: (d) => <div className="max-w-[148px]"><PersonChip name={d.owner_name} /></div>,
+      cardCell: (d) => <PersonChip name={d.owner_name} />,
+    },
+    { key: 'findings', header: 'Findings', width: 'w-[92px]', align: 'right', priority: 2, sortable: true, card: 'meta', cell: (d) => <span className="tabular-nums">{formatCount(d.finding_count)}</span> },
+    ...(canDelete ? [{ key: 'actions', header: 'Actions', width: 'w-[64px]', align: 'right' as const, cell: rowMenu }] : []),
+  ];
+
+  const empty = drills.length === 0 ? (
+    <EmptyState
+      bare
+      kind="firstUse"
+      title="No drills yet"
+      description={canCreate ? 'Schedule a continuity test or link a real incident-triggered invocation.' : 'No drill has been scheduled yet.'}
+      action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={openCreate}>Schedule drill</Button> : undefined}
+    />
+  ) : (
+    <EmptyState bare kind="noMatches" title="No drills match" description="Try another search or filter." onClearFilters={clearFilters} />
+  );
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600"><CalendarClock className="h-5 w-5" strokeWidth={1.75} /></span>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Drills & Invocations</h1>
-            <p className="text-xs text-slate-500">{filtered.length} of {data?.length || 0}</p>
-          </div>
-        </div>
-        {canCreate && (
-          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"><Plus size={16} /> Schedule Drill</button>
-        )}
-      </div>
+    <div className="flex flex-col gap-[16px]">
+      {head}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="min-w-[200px] flex-1 sm:max-w-md"><SearchInput value={search} onChange={setSearch} placeholder="Search drills…" size="md" /></div>
-        <div className="flex flex-wrap items-center gap-2">
-          <MultiSelectDropdown title="Status" items={Object.entries(DRILL_STATUS_LABEL).map(([value, label]) => ({ value, label }))} selectedValues={statusFilter === 'all' ? [] : [statusFilter]} onApply={(v: string[]) => setStatusFilter(v[0] || 'all')} multiSelect={false} />
-          <MultiSelectDropdown title="Type" items={DRILL_TYPE_OPTIONS} selectedValues={typeFilter === 'all' ? [] : [typeFilter]} onApply={(v: string[]) => setTypeFilter(v[0] || 'all')} multiSelect={false} />
-          <MultiSelectDropdown title="Source" items={Object.entries(SOURCE_TYPE_LABEL).map(([value, label]) => ({ value, label }))} selectedValues={sourceFilter === 'all' ? [] : [sourceFilter]} onApply={(v: string[]) => setSourceFilter(v[0] || 'all')} multiSelect={false} />
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState icon={<CalendarClock />} title="No drills yet" description="Schedule a continuity test or link a real incident-triggered invocation." primaryAction={canCreate ? { label: 'Schedule Drill', onClick: () => setShowCreate(true) } : undefined} />
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-600">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Drill</th>
-                  <th className="px-3 py-2 text-left font-semibold">Type</th>
-                  <th className="px-3 py-2 text-left font-semibold">Source</th>
-                  <th className="px-3 py-2 text-left font-semibold">Status</th>
-                  <th className="px-3 py-2 text-left font-semibold">Scheduled</th>
-                  <th className="px-3 py-2 text-right font-semibold">Findings</th>
-                  <th className="px-3 py-2 text-right font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50">
-                    <td className="max-w-[260px] px-3 py-2">
-                      <Link href={`/bcm/drills/${d.id}`} className="block truncate text-sm font-medium text-slate-900 hover:text-primary-600">{d.title}</Link>
-                      <div className="truncate text-[11px] text-slate-400">{d.plan_title || '—'}</div>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{DRILL_TYPE_LABEL[d.drill_type] || d.drill_type}</td>
-                    <td className="px-3 py-2">
-                      {d.source_type === 'incident_triggered'
-                        ? <span className="inline-flex items-center gap-1 text-rose-600"><Siren className="h-3.5 w-3.5" /> Incident</span>
-                        : <span className="text-slate-500">Test</span>}
-                    </td>
-                    <td className="px-3 py-2"><DrillStatusBadge status={d.effective_status} /></td>
-                    <td className="px-3 py-2 text-slate-600">{fmtDate(d.scheduled_date)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{d.finding_count}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-0.5">
-                        <Link href={`/bcm/drills/${d.id}`} aria-label={`View ${d.title}`} className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600" title="View"><Eye size={16} /></Link>
-                        {canDelete && <button onClick={() => { if (window.confirm(`Delete drill "${d.title}"?`)) delMut.mutate(d.id); }} aria-label={`Delete ${d.title}`} className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" title="Delete"><Trash2 size={16} /></button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {!loading && drills.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+          <TextInput
+            ref={searchField} className="w-full sm:w-[280px]" aria-label="Search drills" placeholder="Search drills" maxLength={100} leftAdornment={<Search aria-hidden />}
+            value={q} onChange={(e) => setAddr({ q: e.target.value, page: 1 })}
+          />
+          <Select aria-label="Status" className="w-full sm:w-[160px]" value={status} onChange={(e) => setAddr({ status: e.target.value, page: 1 })}>
+            <option value="all">All statuses</option>
+            {drillStatus.words.map((s) => <option key={s} value={s}>{drillStatus.label(s)}</option>)}
+          </Select>
+          <Select aria-label="Type" className="w-full sm:w-[150px]" value={type} onChange={(e) => setAddr({ type: e.target.value, page: 1 })}>
+            <option value="all">All types</option>
+            {drillType.words.map((s) => <option key={s} value={s}>{drillType.label(s)}</option>)}
+          </Select>
+          <Select aria-label="Source" className="w-full sm:w-[184px]" value={source} onChange={(e) => setAddr({ source: e.target.value, page: 1 })}>
+            <option value="all">All sources</option>
+            {sourceType.words.map((s) => <option key={s} value={s}>{sourceType.label(s)}</option>)}
+          </Select>
+          <span aria-live="polite" className={`text-ds-body ${MUTED} sm:ml-auto`}>{rowCountText({ shown: matches.length, total, noun: NOUN.one, plural: NOUN.other })}</span>
         </div>
       )}
 
-      {showCreate && <CreateDrillModal onClose={() => setShowCreate(false)} />}
+      {cut && <Notice tone="warning" title={cut.title}>{cut.message}</Notice>}
+
+      <RegisterTable
+        caption="Drills and invocations"
+        columns={columns}
+        rows={rows}
+        getRowId={(d) => d.id}
+        sort={sort}
+        onSortChange={(next) => setAddr({ sort: next, page: 1 })}
+        loading={loading}
+        empty={empty}
+        cardTitle={title}
+        cardActions={canDelete ? rowMenu : undefined}
+        footer={matches.length > 0 ? (
+          <Pager
+            page={range.page} pageSize={size} total={matches.length} noun={NOUN} pageSizes={PAGE_SIZES}
+            onPage={(p) => setAddr({ page: p })} onPageSize={(n) => setAddr({ size: n, page: 1 })}
+          />
+        ) : undefined}
+      />
+
+      {creating && <DrillForm mode={{ kind: 'create' }} onClose={() => setAddr({ new: false })} />}
+      {confirmDialog}
     </div>
-  );
-}
-
-function CreateDrillModal({ onClose }: { onClose: () => void }) {
-  const qc = useQueryClient();
-  const { ok } = useBcmToast();
-  const { data: plans } = useQuery({ queryKey: ['bcm-plans-min'], queryFn: async () => (await bcmApi.plans.list()).data.items as any[] });
-  const [f, setF] = useState<any>({ plan_id: '', title: '', drill_type: 'tabletop', source_type: 'scheduled_test', scheduled_date: '', scenario: '', incident_id: null, incident_title: '' });
-  const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
-
-  const mut = useMutation({
-    mutationFn: () => bcmApi.drills.create({
-      plan_id: Number(f.plan_id), title: f.title, drill_type: f.drill_type, source_type: f.source_type,
-      scheduled_date: f.scheduled_date || null, scenario: f.scenario || null,
-      linked_incident_id: f.source_type === 'incident_triggered' ? f.incident_id : null,
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bcm-drills'] }); ok('Drill created'); onClose(); },
-  });
-
-  const valid = f.plan_id && f.title.trim() && (f.source_type !== 'incident_triggered' || f.incident_id);
-
-  return (
-    <AnimatedModal isOpen onClose={onClose} title="Schedule drill / log invocation" size="md"
-      footer={<div className="flex justify-end gap-2">
-        <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700">Cancel</button>
-        <button disabled={!valid || mut.isPending} onClick={() => mut.mutate()} className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-[#0a0a0a] disabled:opacity-40">{mut.isPending ? 'Saving…' : 'Create'}</button>
-      </div>}>
-      <div className="space-y-3 p-5">
-        <div><label className={lbl}>Plan *</label>
-          <BcmSelect value={f.plan_id} onChange={(v) => set('plan_id', v)}
-            options={(plans || []).map((p) => ({ value: String(p.id), label: p.title }))}
-            placeholder="Select a plan…" ariaLabel="Plan" />
-        </div>
-        <div><label className={lbl}>Title *</label><input className={input} value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Q3 failover tabletop" /></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className={lbl}>Type</label><BcmSelect value={f.drill_type} onChange={(v) => set('drill_type', v)} options={DRILL_TYPE_OPTIONS} ariaLabel="Drill type" /></div>
-          <div><label className={lbl}>Source</label><BcmSelect value={f.source_type} onChange={(v) => set('source_type', v)} options={SOURCE_OPTIONS} ariaLabel="Source" /></div>
-        </div>
-        {f.source_type === 'incident_triggered' && (
-          <div>
-            <label className={lbl}>Linked incident *</label>
-            <BcmEntitySelect kind="incidents" value={f.incident_id} onChange={(id) => set('incident_id', id)} placeholder="Select an incident…" />
-            <p className="mt-1 text-[11px] text-slate-400">Links a real incident so its invocation reports alongside rehearsed drills.</p>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className={lbl}>Scheduled date</label><input type="date" className={input} value={f.scheduled_date} onChange={(e) => set('scheduled_date', e.target.value)} /></div>
-        </div>
-        <div><label className={lbl}>Scenario</label><textarea rows={2} className={input} value={f.scenario} onChange={(e) => set('scenario', e.target.value)} /></div>
-        {mut.isError && <p className="text-xs text-rose-600">{(mut.error as any)?.response?.data?.detail || 'Failed to create drill.'}</p>}
-      </div>
-    </AnimatedModal>
   );
 }

@@ -15,7 +15,7 @@ import { dependencyType, externalBcp, optionsOf, severity, strategyStatus, strat
 import { RightSlidePanel } from '@/components/ui';
 import { Button, FormField, IconButton, Notice, Select, StatusPill, Textarea, TextInput, useConfirm, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { AssetMultiSelect, ChipList, ClampedText, EntityCombobox, FormProblem, Pill, TEXT_LINK } from '../../_parts';
+import { AssetMultiSelect, ChipList, ClampedText, EntityCombobox, FormProblem, Pill, TEXT_LINK } from '../../_bcm-ui';
 import {
   NAME_MAX, biaCompleteness, blankDependencyForm, blankStrategyForm, dependencyDeleteWords, dependencyErrors, dependencyPayload, fmtHours, strategyDeleteWords, strategyPayload,
   type Bia, type Dependency, type DependencyForm, type Strategy, type StrategyForm,
@@ -51,6 +51,7 @@ export function BiaDrawer({ bia, planId, onClose }: { bia: Bia; planId: number; 
   const [depShowErrors, setDepShowErrors] = useState(false);
   const [depProblem, setDepProblem] = useState<string | null>(null);
   const [allDeps, setAllDeps] = useState(false);
+  const [riskDraft, setRiskDraft] = useState<number | null>(null);
   const [stratOpen, setStratOpen] = useState(false);
   const [strat, setStrat] = useState<StrategyForm>(blankStrategyForm);
   const [stratProblem, setStratProblem] = useState<string | null>(null);
@@ -97,6 +98,13 @@ export function BiaDrawer({ bia, planId, onClose }: { bia: Bia; planId: number; 
     success: 'Linked assets updated', failure: "Couldn't update the assets", invalidate: refresh,
   });
 
+  const askNewRisk = async () => {
+    const yes = await confirm({
+      title: 'Create a new risk from this process?', confirmLabel: 'Create risk',
+      message: 'A new risk is added to the Risk Register and linked to this process. It cannot be unlinked from here.',
+    });
+    if (yes) linkRisk.mutate(undefined);
+  };
   const askRemoveDependency = async (d: Dependency) => { if (await confirm({ ...dependencyDeleteWords(d.name), tone: 'danger' })) delDep.mutate(d); };
   const askDeleteStrategy = async (s: Strategy) => { if (await confirm({ ...strategyDeleteWords(strategyType.label(s.strategy_type)), tone: 'danger' })) delStrat.mutate(s); };
 
@@ -112,7 +120,7 @@ export function BiaDrawer({ bia, planId, onClose }: { bia: Bia; planId: number; 
   const shownDependencies = allDeps ? dependencies : dependencies.slice(0, SHOWN_DEPENDENCIES);
   const cut = truncate(bia.process_name, 80);
   const done = biaCompleteness(bia);
-  const dirty = assetsChanged || (depOpen && (dep.name !== '' || dep.external_bcp_status !== '')) || (stratOpen && strat.description !== '');
+  const dirty = assetsChanged || riskDraft !== null || (depOpen && (dep.name !== '' || dep.external_bcp_status !== '')) || (stratOpen && strat.description !== '');
 
   return (
     <RightSlidePanel
@@ -141,9 +149,10 @@ export function BiaDrawer({ bia, planId, onClose }: { bia: Bia; planId: number; 
           ) : canEdit ? (
             <div className="flex flex-col gap-[8px]">
               {(bia.criticality_rating === 'critical' || bia.criticality_rating === 'high') && <Notice tone="warning">Critical/High process — link it to the register.</Notice>}
-              <EntityCombobox kind="risks" label="Link an existing risk" placeholder="Link an existing risk…" value={null} onChange={(id) => { if (id) linkRisk.mutate(id); }} />
-              <div>
-                <Button size="sm" variant="link" leftIcon={<Plus aria-hidden />} loading={linkRisk.isPending} onClick={() => linkRisk.mutate(undefined)}>Create a new risk from this process</Button>
+              <EntityCombobox kind="risks" label="Link an existing risk" placeholder="Link an existing risk…" value={riskDraft} onChange={setRiskDraft} clearable />
+              <div className="flex flex-wrap items-center gap-[8px]">
+                <Button size="sm" variant="primary" disabled={riskDraft === null} loading={linkRisk.isPending && riskDraft !== null} onClick={() => { if (riskDraft !== null) linkRisk.mutate(riskDraft); }}>Link risk</Button>
+                <Button size="sm" variant="link" leftIcon={<Plus aria-hidden />} onClick={() => { void askNewRisk(); }}>Create a new risk from this process</Button>
               </div>
             </div>
           ) : (

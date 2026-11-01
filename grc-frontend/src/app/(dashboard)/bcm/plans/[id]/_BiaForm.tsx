@@ -1,7 +1,7 @@
 'use client';
 
 // The Add process drawer of a plan's business impact analysis (it was a modal with no `onError`: a refusal showed only as a raw line). On the kit: RightSlidePanel with `dirty`,
-// FormField with whole-hours fields, the asset picker of _parts. It sends exactly what the modal sent (bcmModel.biaCreatePayload), says what is wrong before it sends (a blank
+// FormField with whole-hours fields, the asset picker of _bcm-ui. It sends exactly what the modal sent (bcmModel.biaCreatePayload), says what is wrong before it sends (a blank
 // name, hours that are not whole numbers, an RTO that is not shorter than the MTPD: the rule the server enforces), and shows what the server said when it refuses.
 import { useRef, useState } from 'react';
 import { bcmApi } from '@/lib/api';
@@ -9,7 +9,7 @@ import { optionsOf, severity } from '@/lib/statuses/bcm';
 import { RightSlidePanel } from '@/components/ui';
 import { Button, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { AssetMultiSelect, FormProblem, HoursInput } from '../../_parts';
+import { AssetMultiSelect, FormProblem, HoursInput } from '../../_bcm-ui';
 import { NAME_MAX, biaCreatePayload, biaDirty, biaErrors, blankBiaForm, type BiaForm as Form } from '../../bcmModel';
 
 export function BiaForm({ planId, onClose }: { planId: number; onClose: () => void }) {

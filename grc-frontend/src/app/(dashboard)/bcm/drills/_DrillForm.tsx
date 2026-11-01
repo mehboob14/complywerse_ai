@@ -2,7 +2,7 @@
 
 // The drill drawer, in its three uses: Schedule Drill / log an invocation (the Drills page: the plan is chosen), Schedule drill (a plan's page: the plan is fixed) and Edit drill
 // (a drill's page). They were three modals with a hand-made look; the create one had no `onError` at all, so a refusal showed only as a raw line and the edit one not even that.
-// On the kit: RightSlidePanel with `dirty` (asks "Discard changes?" before typing is thrown away), FormField, native Select for the fixed choices, the Combobox pickers of _parts.
+// On the kit: RightSlidePanel with `dirty` (asks "Discard changes?" before typing is thrown away), FormField, native Select for the fixed choices, the Combobox pickers of _bcm-ui.
 // Each sends exactly what its modal sent (bcmModel.drillCreatePayload / drillSchedulePayload / drillUpdatePayload), says what is missing before it sends, and shows what the
 // server said when it refuses, at the top of the form, with what was typed kept. The failure is shown in the drawer, so the toast only confirms.
 import { useRef, useState } from 'react';
@@ -13,7 +13,7 @@ import { drillType, optionsOf, sourceType } from '@/lib/statuses/bcm';
 import { RightSlidePanel } from '@/components/ui';
 import { Button, Combobox, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { EntityCombobox, FormProblem } from '../_parts';
+import { EntityCombobox, FormProblem } from '../_bcm-ui';
 import {
   NAME_MAX, asPage, blankDrillForm, drillCreatePayload, drillDirty, drillErrors, drillFormFrom, drillSchedulePayload, drillUpdatePayload, retryRead,
   type Drill, type DrillForm as Form, type Plan,

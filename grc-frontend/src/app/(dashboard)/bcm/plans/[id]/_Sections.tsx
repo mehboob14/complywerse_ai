@@ -9,7 +9,7 @@ import { Plus } from 'lucide-react';
 import { NOT_SET, formatCount, formatDate } from '@/lib/format';
 import { drillStatus, drillType, severity, sourceType } from '@/lib/statuses/bcm';
 import { Button, EmptyState, Pager, RegisterTable, SectionCard, StatusPill, type RegisterColumn, type SortState } from '@/components/ui/ds';
-import { HoursText, LINK, Pill, TitleLink } from '../../_parts';
+import { HoursText, LINK, Pill, TitleLink } from '../../_bcm-ui';
 import { biaCompleteness, biaSortValue, drillSortValue, ordered, pageOf, plural, type Bia, type Drill } from '../../bcmModel';
 
 const MUTED = 'text-ds-fg-muted';

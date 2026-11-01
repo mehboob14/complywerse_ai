@@ -339,6 +339,7 @@ test('a list the server cut says the true total and what search and sort then wo
     title: 'Showing 200 of 1,240 plans',
     message: 'The server sends the 200 most recently updated. Search, filters and sorting work on these 200.',
   });
+  assert.equal(cutNotice({ loaded: 200, total: 201, noun: { one: 'drill', other: 'drills' }, order: 'latest scheduled' })?.message, 'The server sends the 200 latest scheduled. Search, filters and sorting work on these 200.');
 });
 
 // ── deletes ──

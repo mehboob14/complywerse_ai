@@ -17,7 +17,7 @@ import { drillStatus, drillType, planStatus, severity } from '@/lib/statuses/bcm
 import { PageHeader } from '@/components/ui';
 import { Button, EmptyState, ErrorState, ProgressBar, SectionCard, Skeleton, StatTile } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { Pill } from './_parts';
+import { Pill } from './_bcm-ui';
 import {
   coverageTile, findingCount, isEmptyTenant, linkageOf, listCut, percentText, planCount, plural, rateTone, retryRead, type Dashboard, type Drill,
 } from './bcmModel';

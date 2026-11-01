@@ -377,11 +377,11 @@ export const DRILL_LIST_SCHEMA = {
 export const PAGE_SIZES: readonly number[] = [10, 25, 50, 100];
 
 /** The line above a list the server cut: the true total, and what the page's own search, filters and sort do (they work on the rows that came). null when it is all there. */
-export function cutNotice({ loaded, total, noun }: { loaded: number; total: number; noun: { one: string; other: string } }): { title: string; message: string } | null {
+export function cutNotice({ loaded, total, noun, order = 'most recently updated' }: { loaded: number; total: number; noun: { one: string; other: string }; order?: string }): { title: string; message: string } | null {
   if (total <= loaded) return null;
   return {
     title: `Showing ${formatCount(loaded)} of ${formatCount(total)} ${noun.other}`,
-    message: `The server sends the ${formatCount(loaded)} most recently updated. Search, filters and sorting work on these ${formatCount(loaded)}.`,
+    message: `The server sends the ${formatCount(loaded)} ${order}. Search, filters and sorting work on these ${formatCount(loaded)}.`,
   };
 }
 

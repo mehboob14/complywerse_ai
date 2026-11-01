@@ -2,7 +2,7 @@
 
 // The Add plan / Edit plan drawer (both were modals with a hand-made look, no focus handling, no guard on typed input, and a failure that only showed as a raw line under the
 // fields). On the kit: RightSlidePanel, which takes focus, wraps Tab, names itself and, because it is given `dirty`, asks "Discard changes?" before Escape, the X or a press
-// outside throws typed input away; FormField with TextInput / Textarea / Select; the pickers of _parts. It sends exactly what the modals sent (bcmModel.planCreatePayload,
+// outside throws typed input away; FormField with TextInput / Textarea / Select; the pickers of _bcm-ui. It sends exactly what the modals sent (bcmModel.planCreatePayload,
 // planUpdatePayload), says what is wrong before it sends (a blank title, a title the column cannot hold, hours that are not whole numbers), and shows what the server said
 // when it refuses, at the top of the form, with what was typed kept. The request is reported once (the drawer shows a failure itself, the toast only confirms).
 import { useRef, useState } from 'react';
@@ -12,7 +12,7 @@ import { frequency, optionsOf } from '@/lib/statuses/bcm';
 import { RightSlidePanel } from '@/components/ui';
 import { Button, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { EntityCombobox, FormProblem, HoursInput } from '../_parts';
+import { EntityCombobox, FormProblem, HoursInput } from '../_bcm-ui';
 import {
   NAME_MAX, blankPlanForm, planCreatePayload, planDirty, planErrors, planFormFrom, planUpdatePayload, type Plan, type PlanForm as Form,
 } from '../bcmModel';

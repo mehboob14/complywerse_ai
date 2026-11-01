@@ -22,7 +22,7 @@ import {
   type RegisterColumn,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { HoursText, Pill, TitleLink } from '../_parts';
+import { HoursText, Pill, TitleLink } from '../_bcm-ui';
 import {
   PAGE_SIZES, PLAN_LIST_SCHEMA, asPage, cutNotice, filterPlans, ordered, pageOf, planDeleteWords, planSortValue, retryRead, type Page, type Plan,
 } from '../bcmModel';

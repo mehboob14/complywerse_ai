@@ -20,7 +20,7 @@ import { PageHeader } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, Menu, PersonChip, ReadOnlyNote, Skeleton, useReportedMutation } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { ClampedText, Clamp, Fact, HoursText, Pill, TitleLink } from '../../_parts';
+import { ClampedText, Clamp, Fact, HoursText, Pill, TitleLink } from '../../_bcm-ui';
 import { planMoves, retryRead, type Plan } from '../../bcmModel';
 import { DrillForm } from '../../drills/_DrillForm';
 import { PlanForm } from '../_PlanForm';
