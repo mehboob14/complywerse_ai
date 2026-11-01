@@ -8,10 +8,11 @@
 // checks the step of every document in review; the sent list is not polled, it is asked while the page is open and when the window gets focus), retried once after one second, and
 // given 20 seconds: the client's default is 15 minutes, which would keep the badge "loading" for ever. A failed refresh keeps the last good answer (the source is "stale") and says so.
 import { useMemo, useRef } from 'react';
-import { useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { errorMessage, statusOf } from '@/components/ui/ds/reportOutcome';
-import { BADGE_SOURCES, buildInbox, type Inbox, type SourceId, type SourceInput, type SourceState } from './buildInbox';
+import { statusOf } from '@/components/ui/ds/reportOutcome';
+import { BADGE_SOURCES, buildInbox, type Inbox, type SourceId, type SourceInput } from './buildInbox';
+import { stateOf } from './sourceState';
 
 export interface SourceRequest {
   /** the legacy query key (kept) */
@@ -33,16 +34,6 @@ export const SOURCE_REQUESTS: Record<SourceId, SourceRequest> = {
 
 export const STALE_MS = 60_000;
 export const TIMEOUT_MS = 20_000;
-
-/** The source as the model needs it, from what its query says. `lastError` is the words of the failure before a retry began: while the retry runs the query has no error of its own
- *  (it is pending again), but the source is still the one that could not be loaded, and its notice stays with a busy Retry instead of flickering away. */
-export function stateOf(id: SourceId, q: Pick<UseQueryResult<unknown>, 'data' | 'isError' | 'error' | 'dataUpdatedAt' | 'errorUpdatedAt' | 'fetchStatus'>, lastError?: string): SourceState {
-  if (q.data === undefined) {
-    if (q.isError) return SOURCE_REQUESTS[id].missingMeansOff && statusOf(q.error) === 404 ? { state: 'off' } : { state: 'unavailable', error: errorMessage(q.error) };
-    return q.errorUpdatedAt > 0 && q.fetchStatus === 'fetching' && lastError ? { state: 'unavailable', error: lastError } : { state: 'loading' };
-  }
-  return q.isError ? { state: 'stale', at: q.dataUpdatedAt, error: errorMessage(q.error) } : { state: 'ready', at: q.dataUpdatedAt };
-}
 
 export interface UseInboxOptions {
   /** ask at all (the top bar waits for the signed-in person) */
@@ -83,7 +74,7 @@ export function useInbox({ enabled = true, includeSent = false }: UseInboxOption
   const signature = results.map((r) => `${r.status}:${r.fetchStatus}:${r.dataUpdatedAt}:${r.errorUpdatedAt}`).join('|') + (includeSent ? '+sent' : '');
   const inbox = useMemo(() => {
     const inputs: SourceInput[] = ids.map((id, i) => {
-      const state = stateOf(id, results[i], lastError.current[id]);
+      const state = stateOf(results[i], { missingMeansOff: SOURCE_REQUESTS[id].missingMeansOff, lastError: lastError.current[id] });
       if (state.state === 'unavailable') lastError.current[id] = state.error;
       else if (state.state === 'ready') delete lastError.current[id];
       return { id, state, raw: results[i].data };

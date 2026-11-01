@@ -18,9 +18,9 @@ const TSX = ALL.filter((s) => s.file.endsWith('.tsx'));
 const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/\s.*$/gm, '$1');
 const read = (file: string) => code(readFileSync(file, 'utf8'));
 
-test('the folders are what the pins read: the page, its section, row and dialog, and the model, view, decision and request files', () => {
+test('the folders are what the pins read: the page, its section, row and dialog, and the model, view, decision, source-state and request files', () => {
   assert.deepEqual(TSX.map((s) => s.file.split('/').pop()).sort(), ['_DecisionDialog.tsx', '_InboxRow.tsx', '_Section.tsx', 'page.tsx']);
-  assert.deepEqual(ALL.filter((s) => s.file.startsWith(LIB)).map((s) => s.file.split('/').pop()).sort(), ['buildInbox.ts', 'decisionModel.ts', 'inboxApi.ts', 'inboxView.ts']);
+  assert.deepEqual(ALL.filter((s) => s.file.startsWith(LIB)).map((s) => s.file.split('/').pop()).sort(), ['buildInbox.ts', 'decisionModel.ts', 'inboxApi.ts', 'inboxView.ts', 'sourceState.ts']);
 });
 
 test('no native dialog: the browser\'s confirm, alert and prompt are never used', () => {
