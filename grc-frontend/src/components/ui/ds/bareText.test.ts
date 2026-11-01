@@ -23,6 +23,7 @@ const FOLDERS = [
   `${ROOT}/governance/reviews`,                   // G4-C Reviews and the Review calendar
   `${ROOT}/governance/_metrics`,                  // G4-F1 KPI Report (kpi-report/page.tsx is listed below)
   `${ROOT}/governance/committees`,                // G4-E Committees (the list, a committee, a meeting, Oversight Actions)
+  `${ROOT}/governance/workflows`,                 // G4-G Approval Workflows (the legacy approval queue and its templates)
   `${ROOT}/is-projects`,                          // G4-F2 Projects
   `${ROOT}/admin/ui-kit`,                         // the style guide, which documents this rule
 ];
