@@ -76,7 +76,8 @@ export function legacyLeftovers(files: readonly string[]): string[] {
   const out: string[] = [];
   for (const file of files) {
     code(read(file)).split('\n').forEach((line, i) => {
-      if (/\b(?:window\.)?(?:confirm|alert|prompt)\(/.test(line)) out.push(`${file}:${i + 1} native dialog: ${line.trim().slice(0, 80)}`);
+      // the browser's own: window.confirm('...'), alert('...'), prompt('...'); the kit's useConfirm().confirm({ ... }) takes an object and is not one
+      if (/\bwindow\.(?:confirm|alert|prompt)\(|(?<![\w.$])(?:confirm|alert|prompt)\((?!\s*\{)/.test(line)) out.push(`${file}:${i + 1} native dialog: ${line.trim().slice(0, 80)}`);
       if (/opacity-0[^'"`]*group-hover|group-hover:opacity|hover:opacity-100/.test(line)) out.push(`${file}:${i + 1} hover-only action: ${line.trim().slice(0, 80)}`);
       if (/governance-light/.test(line)) out.push(`${file}:${i + 1} legacy .governance-light scope`);
       if (/\.toLocale(?:Date|Time)?String\(/.test(line)) out.push(`${file}:${i + 1} a date written by the browser's locale: ${line.trim().slice(0, 80)}`);
