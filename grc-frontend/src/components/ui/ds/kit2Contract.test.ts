@@ -143,3 +143,30 @@ test('Tabs: the count reads "99+" unless the page asks for exact counts, so ever
   assert.match(tabs, /countLabel\(t\.count, countFormat === 'exact'\)/);
   assert.match(code('../../../lib/tabsModel.ts'), /export function countLabel\(count: number \| null \| undefined, exact: boolean = false\)/);
 });
+
+// ── Disclosure and AccordionRow ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('Disclosure and AccordionRow: a button inside a heading, aria-expanded and aria-controls, a panel that is hidden (not removed) and a region named by the button', () => {
+  const d = code('Disclosure.tsx');
+  assert.equal((d.match(/<button type="button" id=\{ids\.button\} aria-expanded=\{shown\} aria-controls=\{ids\.panel\} disabled=\{disabled\} onClick=\{press\}/g) ?? []).length, 2);
+  assert.equal((d.match(/<Heading level=\{level\}>/g) ?? []).length, 2);
+  assert.match(d, /createElement\(`h\$\{headingLevel\(level\)\}`, \{ className: HEADING \}, children\)/);
+  assert.equal((d.match(/<div id=\{ids\.panel\} \{\.\.\.\(region \? \{ role: 'region', 'aria-labelledby': ids\.button \} : \{\}\)\} hidden=\{!shown\}/g) ?? []).length, 2);
+  assert.match(d, /region = true/);                                                                  // a region by default, off for a long stack
+  assert.doesNotMatch(d, /\{shown && |\{open && /);                                                  // the panel is never unmounted to shut it
+});
+
+test('Disclosure and AccordionRow: controlled when `open` is passed (the page is told through onOpenChange), else uncontrolled from defaultOpen', () => {
+  const d = code('Disclosure.tsx');
+  assert.match(d, /const shown = isOpen\(\{ open, inner \}\);/);
+  assert.match(d, /const \{ next, keep \} = pressedState\(\{ open, inner \}\);/);
+  assert.match(d, /if \(keep\) setInner\(next\);\s*onOpenChange\?\.\(next\);/);
+});
+
+test('AccordionRow: the title is cut at two lines on an inner span (a block would defeat line-clamp), a long one is repeated in full, the focus ring is inset', () => {
+  const d = code('Disclosure.tsx');
+  assert.match(d, /<span className="line-clamp-2 break-words text-ds-body font-medium text-ds-fg \[overflow-wrap:anywhere\]">\{title\}<\/span>/);
+  assert.match(d, /repeatsTitle\(title\) && <p className="mb-\[8px\] break-words/);
+  assert.match(d, /focus-visible:shadow-\[inset_0_0_0_2px_var\(--ds-focus\)\]/);
+  assert.doesNotMatch(d, /window\.(confirm|alert|prompt)|opacity-0|group-hover/);
+});

@@ -70,3 +70,4 @@ export { SidePanel, type SidePanelProps } from './ds/SidePanel';
 export { Sheet, type SheetProps } from './ds/Sheet';
 export type { PanelMode, PanelWidth } from './ds/sidePanelModel';
 export { FilterChips, type FilterChip, type FilterChipsProps, type ChipFlag, type FlagTone } from './ds/FilterChips';
+export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps } from './ds/Disclosure';
