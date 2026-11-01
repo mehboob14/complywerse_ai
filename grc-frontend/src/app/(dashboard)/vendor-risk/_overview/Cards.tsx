@@ -4,12 +4,16 @@
 // White cards in Compliverse's colours; explicit hex because the platform CSS repaints slate and white inside the shell.
 
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, AlertTriangle, Check, ChevronRight, Clock, Gauge, Users, type LucideIcon } from 'lucide-react';
+import { vendorActionsApi } from '@/lib/api';
 import { ChartCard, Donut, GradePill, HalfGauge, StatTile, StatusPill, TierBadge, TONE, type Tone } from '../_ui';
 import {
   FINDINGS, REGISTER, attentionRows, barWidth, coverageView, intakeRows, registerHref, severitySlices, statusBars, sum, tiles, tierSlices, topResidual,
   type Dashboard, type Scope,
 } from '../_lib/overviewModel';
+import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { whenLabel, type ActionItem } from '../_lib/actions/shared';
 
 const TILE_ICON: Record<string, LucideIcon> = { not_tiered: Gauge, no_owner: Users, overdue: Clock, critical: AlertTriangle };
 const TONE_ICON: Record<Tone, LucideIcon> = { danger: AlertTriangle, warning: AlertCircle, progress: Clock, success: Check, pending: Clock, neutral: AlertCircle };
@@ -138,10 +142,41 @@ export function IntakeCard({ d }: { d: Dashboard }) {
   );
 }
 
+/** What is due now across every supplier's action plan (the full list is Planned actions, one click from here). */
+export function PlannedCard({ scope }: { scope: Scope }) {
+  const whose = scope === 'mine' ? 'mine' : 'all';
+  const { data } = useQuery({
+    queryKey: ['tprm-actions-all', 'due', whose],                       // the same key as the Planned actions page: one request for both
+    queryFn: async () => (await vendorActionsApi.all({ state: 'due', scope: whose })).data as { items: ActionItem[]; counts: { due: number; failed: number } },
+    ...TPRM_QUERY_OPTS,
+  });
+  const items = (data?.items || []).slice(0, 4);
+  const more = (data?.counts.due || 0) - items.length;
+  return (
+    <ChartCard title="Planned actions" link={{ href: '/vendor-risk/actions', label: 'View all' }}>
+      {items.length === 0 ? <p className={QUIET}>Nothing due.</p> : (
+        <ul className="divide-y divide-[#eef1f4]">
+          {items.map((a) => (
+            <li key={a.id}>
+              <Link href={`${REGISTER}/${a.vendor.id}?tab=actions`} className="block rounded-lg px-2 py-2.5 hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                <span className="block truncate text-[13px] font-semibold leading-5 text-[#1f2933]">{a.title}</span>
+                <span className="block truncate text-[12px] leading-4 text-[#64707e]">
+                  {a.vendor.name || 'Supplier'} · <span style={a.overdue_days > 0 ? { color: TONE.danger.text } : undefined}>{whenLabel(a)}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+          {more > 0 && <li className="px-2 pt-2.5 text-[12px] leading-4 text-[#64707e]">and {more} more</li>}
+        </ul>
+      )}
+    </ChartCard>
+  );
+}
+
 export function ResidualCard({ d }: { d: Dashboard }) {
   const rows = topResidual(d.top_residual_vendors);
   return (
-    <ChartCard title="Highest residual risk" link={{ href: REGISTER, label: 'View register' }} className="lg:col-span-3">
+    <ChartCard title="Highest residual risk" link={{ href: REGISTER, label: 'View register' }} className="lg:col-span-2">
       {rows.length === 0 ? <p className={QUIET}>No scored assessments yet.</p> : (
         <ul>
           {rows.map((v) => (

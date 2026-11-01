@@ -570,17 +570,6 @@ export default function VendorRiskSettingsPage() {
                   </span>
                 </span>
               </label>
-              <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
-                <input type="checkbox" className="mt-1" disabled={!canEdit} checked={!!m.grip_daily}
-                  onChange={(e) => set('monitoring_policy', { ...m, grip_daily: e.target.checked })} />
-                <span>
-                  Sync shadow SaaS from Grip Security every day
-                  <span className="mt-0.5 block text-[11px] text-slate-500">
-                    New apps and who uses each arrive on their own each day, once Grip is connected under Admin → Connectors.
-                    A sync can still be run by hand from the Shadow SaaS page.
-                  </span>
-                </span>
-              </label>
             </>
           );
         },

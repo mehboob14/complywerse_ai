@@ -1,6 +1,6 @@
-// The calls of the Intake page and of Shadow SaaS (backend vendor_risk/tpra/onboarding.py and shadow_saas.py).
-// The request questions themselves stay with IntakeForm (_lib/intake/); these are the cards, the request dialog,
-// the decisions, and the two Shadow SaaS additions (record an app by hand, link it to a supplier we already have).
+// The calls of the Intake page (backend vendor_risk/tpra/onboarding.py).
+// The request questions themselves stay with IntakeForm (_lib/intake/); these are the cards, the request dialog
+// and the decisions.
 
 import { apiClient } from '@/lib/api';
 import type { RequestStatus } from './intake/types';
@@ -72,20 +72,4 @@ export const intakeApi = {
     answers?: Record<string, unknown>; justifications?: Record<string, string>;
     vendor?: Record<string, unknown>; request?: Partial<RequestFields>;
   }) => apiClient.put(`/vendor-risk/vendors/${id}/intake`, body),
-};
-
-// ── Shadow SaaS ──────────────────────────────────────────────────────────────
-
-export interface VendorHit { id: number; name: string; website: string | null; tier: string | null }
-
-export const shadowApi = {
-  /** An app someone knows is in use, entered by hand (source "manual"). */
-  record: (body: { name: string; users?: number | null; domain?: string }) =>
-    apiClient.post('/vendor-risk/shadow-saas', body),
-  /** The app is a supplier we already have: settles it as "Already ours". */
-  link: (id: number, vendorId: number, note?: string) =>
-    apiClient.post(`/vendor-risk/shadow-saas/${id}/link`, { vendor_id: vendorId, note: note || undefined }),
-  /** The register's own search, for the picker. */
-  vendors: (search: string) =>
-    apiClient.get<{ items: VendorHit[] }>('/vendor-risk/vendors', { params: { search: search || undefined, limit: 8 } }),
 };
