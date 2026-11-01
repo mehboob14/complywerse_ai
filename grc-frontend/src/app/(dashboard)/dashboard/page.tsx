@@ -48,13 +48,16 @@ import {
   ClipboardList, ListTodo, AlertCircle, FileCheck as FileCheck2, BookOpen,
   Clock as ClockIcon, Folder, RefreshCw, CheckCircle as CheckCircleIcon,
   Gauge, Flame, Building2,
-  Inbox, ArrowRight,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
-import MainModuleCards from '@/components/dashboard/MainModuleCards';
-import CyberKpiPanel from '@/components/dashboard/CyberKpiPanel';
+import { PageHeader } from '@/components/ui';
+import { Button } from '@/components/ui/ds';
+import { titleFor } from '@/lib/navRegistry';
+import { ModuleOverview } from './_overview/ModuleCards';
+import { CyberKpis } from './_overview/CyberKpis';
 
 import {
   ExecutivePortfolioWidget,
@@ -2465,11 +2468,10 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
   }
 }
 
-// Executive Board Reporting layout. Fixed 2 column grid skipping the
-// WidgetWorkspace drag/resize chrome so the dashboard reads as a printable
-// board pack. Card chrome aligns with the platform's existing widget cards
-// (white background, slate 200 border, subtle slate header strip, no
-// gradients, no oversize accents).
+// WHAT IS LIVE: only the component below. It draws the page head, `ModuleOverview` (the four tiles, the nine module cards, "Where to act first") and
+// `CyberKpis`, all in ./_overview (rules in overviewModel.ts and kpiModel.ts, tested). Everything above it in this file, the tab bar and the draggable
+// WidgetWorkspace with ModuleSubWidgets and FrameworkComplianceCards is unreachable: it renders only when `SHOW_LEGACY_TABS` below is turned on, and
+// `ExecutiveOverviewTab` is not used at all. None of it is part of the UX revamp (audit: features/ux-revamp-reports/G5_dashboard_audit.md, section 8).
 
 export default function MainDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>('executive');
@@ -2478,30 +2480,21 @@ export default function MainDashboard() {
   const canSeeMyWork = isAdmin || hasAnyPermission(['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*']);
 
   // Hidden for now: the legacy "Executive Overview" tab bar + draggable widget
-  // workspace. The new aggregated dashboard (MainModuleCards + CyberKpiPanel)
+  // workspace. The aggregated dashboard (ModuleOverview + CyberKpis)
   // stands alone. Flip to `true` to bring the old tabbed dashboard back.
   const SHOW_LEGACY_TABS = false;
 
   return (
-    <div className="dash -m-4 flex flex-col lg:-m-5">
-      {/* Aggregated module scorecards — each ring-card links to its module overview. */}
-      <div className="px-3 pt-4 sm:px-6">
-        {canSeeMyWork && (
-          <Link href="/my-work" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 transition-colors hover:bg-primary-100">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-500 text-[#0a0a0a]"><Inbox className="h-5 w-5" strokeWidth={1.75} /></span>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">My Work</p>
-                <p className="text-xs text-slate-500">Your assigned requirements across every framework, in one queue</p>
-              </div>
-            </div>
-            <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary-700">Open <ArrowRight className="h-4 w-4" /></span>
-          </Link>
-        )}
-        <MainModuleCards />
-        {/* Cyber Security KPI reporting dashboard (quarterly target vs actual). */}
-        <CyberKpiPanel />
-      </div>
+    <div className="flex flex-col gap-[16px]">
+      {/* The page: its head (the top bar names only the section: navPages/dashboard.ts `ownHeading`), the modules and their tiles, the Cyber Security KPIs. */}
+      <PageHeader
+        variant="page"
+        title={titleFor('/dashboard') ?? 'Performance Overview'}
+        info="How each module you can open is doing: its score and its weakest sections, then the Cyber Security KPIs. Your assigned requirements across every framework are in My Work."
+        actions={canSeeMyWork ? <Button href="/my-work" variant="primary" leftIcon={<Inbox aria-hidden />}>My Work</Button> : undefined}
+      />
+      <ModuleOverview />
+      <CyberKpis />
 
       {SHOW_LEGACY_TABS && (
         <>
