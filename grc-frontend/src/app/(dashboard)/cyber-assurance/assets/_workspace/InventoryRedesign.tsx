@@ -10,14 +10,16 @@
  */
 
 import { useMemo, useState } from 'react';
-import { registrableDomain } from '@/cyber-assurance/lib/domains';
+import { useSearchParams } from 'next/navigation';
+import { registrableDomain, rollupCounts, rollupAssets, isExternalAsset } from '@/cyber-assurance/lib/domains';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/cyber-assurance/lib/api';
 import { SCORECARD_QUERY_KEYS } from '@/cyber-assurance/components/dashboard/scorecard-query-keys';
 import InventoryScorecard from '@/cyber-assurance/components/dashboard/InventoryScorecard';
 import { RowActionsMenu } from './RowActionsMenu';
+import { FilterSelect } from './FilterSelect';
 import type { ITAsset } from '@/cyber-assurance/types';
-import { Search, Download, Plus, AlertTriangle, Eye, Pencil, Trash2, Plug } from 'lucide-react';
+import { Search, Download, Plus, AlertTriangle, Eye, Pencil, Trash2, Plug, X } from 'lucide-react';
 import '../inventory-redesign.css';
 
 interface Props {
@@ -36,16 +38,55 @@ interface Props {
   hideHead?: boolean;
 }
 
-const isExt = (a: ITAsset) => !!(a.internet_facing || a.origin_source === 'easm' || a.last_seen_source === 'external');
+const isExt = (a: ITAsset) => isExternalAsset(a);  // single source of truth (@/lib/domains)
 const hasCia = (a: ITAsset) => !!(a.confidentiality_rating && a.integrity_rating && a.availability_rating);
 const isStale = (a: ITAsset) => (a.last_seen_at ? (Date.now() - new Date(a.last_seen_at).getTime()) / 864e5 > 30 : false);
 const critOf = (a: ITAsset) => (a.criticality || '').toLowerCase();
 const typeKey = (a: ITAsset) => (a.asset_type || '').toLowerCase().replace(/[ _-]/g, '');
+// Lane-aware type — the stored asset_type is unreliable (web domains saved as
+// "infrastructure"), so derive the scan-lane from real signals instead. Lanes
+// mirror the New-scan modal: External/Web · Host · Database · Active Directory ·
+// Cloud · Code/Repo · Container.
+const REPO_RE = /(github\.com|gitlab\.com|bitbucket\.org)|\.git(\/|$)/i;
+const IP_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
+const DOMAIN_RE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
+const laneOf = (a: ITAsset): string => {
+  const t = (a.asset_type || '').toLowerCase();
+  const name = a.name || ''; const host = a.host_name || '';
+  const ports = a.open_ports || [];
+  if (t === 'repository' || REPO_RE.test(name) || REPO_RE.test(host)) return 'repo';
+  if (t === 'container' || t === 'kubernetes' || t === 'k8s') return 'container';
+  if (t === 'cloud') return 'cloud';
+  if (t === 'database' || ports.some((p) => [1433, 1521, 3306, 5432, 6379, 27017].includes(p))) return 'database';
+  if (ports.some((p) => [88, 389, 636].includes(p))) return 'ad';
+  if (t === 'web' || a.scan_mode === 'easm' || (!!a.internet_facing && DOMAIN_RE.test(name) && !IP_RE.test(name))) return 'web';
+  return 'host';
+};
+const LANE_LABEL: Record<string, string> = { web: 'External / Web', host: 'Host', database: 'Database', ad: 'Active Directory', cloud: 'Cloud', repo: 'Code / Repo', container: 'Container / K8s' };
+const laneLabel = (a: ITAsset): string => {
+  const l = laneOf(a);
+  if (l !== 'host') return LANE_LABEL[l];
+  if (a.origin_source === 'agent') return 'Host · Windows';
+  if (a.platform_kind === 'server') return 'Host · Server';
+  return 'Host';
+};
 const canConnect = (a: ITAsset) => !!a.host_name && a.discovery_state !== 'unmanaged';
+// 3-mode inventory bucket (pentest discovery contract): EASM (domain/website from
+// EASM), Uncredential (credential-free network sweep), Credential (full depth —
+// credentialed scan OR manual/import; scan_mode null folds into Credential).
+const modeOf = (a: ITAsset): 'easm' | 'credential' | 'uncredential' =>
+  a.scan_mode === 'easm' ? 'easm' : a.scan_mode === 'uncredential' ? 'uncredential' : 'credential';
+// Agent-managed = born from an installed Complyverse agent. origin_source is provenance
+// (a host discovered first and given an agent later keeps its origin), which is
+// accurate for how agents are deployed here; upgrade to a server agent_managed
+// flag if a mid-life agent install must reclassify the row.
+const agentManaged = (a: ITAsset) => (a as any).origin_source === 'agent';
+const MODE_LABEL: Record<'all' | 'easm' | 'credential' | 'uncredential' | 'agent' | 'pci', string> = { all: 'All', easm: 'EASM', credential: 'Credential', uncredential: 'Uncredential', agent: 'Agent', pci: 'PCI' };
 
 const TILE: Record<string, { bg: string; fg: string }> = {
   application: { bg: '#DBE8FA', fg: '#28578F' }, infrastructure: { bg: '#CFF2E7', fg: '#014A81' },
   data: { bg: '#F6E7C2', fg: '#8A5A0C' }, cloud: { bg: '#E0DAF6', fg: '#5A45B5' }, thirdparty: { bg: '#F6E7C2', fg: '#8A5A0C' },
+  repository: { bg: '#D9E7E3', fg: '#0B6B4F' },
 };
 const CRIT: Record<string, { bg: string; fg: string }> = {
   critical: { bg: '#F7D8D8', fg: '#A32B2B' }, high: { bg: '#F6E7C2', fg: '#8A5A0C' },
@@ -53,8 +94,41 @@ const CRIT: Record<string, { bg: string; fg: string }> = {
 };
 const CRIT_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
-const td: React.CSSProperties = { padding: '11px 12px', borderBottom: '1px solid #F0F3F5', color: '#3A4653' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #E8ECEE', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#8A95A1', fontWeight: 600, position: 'sticky', top: 0, background: '#FAFBFC', zIndex: 1, whiteSpace: 'nowrap' };
+// Uniform pill — nowrap + flex:none so a row's tag line never wraps and every
+// row stays the same height (was: verbose tags wrapping unevenly).
+const chip = (bg: string, fg: string): React.CSSProperties => ({ background: bg, color: fg, borderRadius: 999, padding: '1px 7px', fontSize: 9, fontWeight: 600, whiteSpace: 'nowrap', flex: 'none' });
+const td: React.CSSProperties = { padding: '9px 10px', borderBottom: '1px solid #F0F3F5', color: '#3A4653' };
+// Prominent header bar — brand blue, bold white (owner ask). Sticky over the body.
+const th: React.CSSProperties = { textAlign: 'left', padding: '9px 10px', borderBottom: '1px solid #0A4C84', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: '#fff', fontWeight: 700, position: 'sticky', top: 0, background: '#005B96', zIndex: 1, whiteSpace: 'nowrap' };
+// Clamp wide free-text cells so all columns fit one view without a right-scroll.
+const clip: React.CSSProperties = { maxWidth: 128, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+// Sortable columns — click a header to sort by it (replaces the old Sort select).
+const HEADS: { key: string; label: string; sortable: boolean }[] = [
+  { key: 'name', label: 'Asset', sortable: true },
+  { key: 'type', label: 'Type', sortable: true },
+  { key: 'owner', label: 'Owner', sortable: true },
+  { key: 'department', label: 'Department', sortable: true },
+  { key: 'dataclass', label: 'Data Class', sortable: true },
+  { key: 'bizfn', label: 'Business Function', sortable: true },
+  { key: 'crit', label: 'Criticality', sortable: true },
+  { key: 'cia', label: 'CIA', sortable: false },
+  { key: 'scan', label: 'Last scan', sortable: true },
+  { key: 'value', label: 'Value', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+];
+const SORTERS: Record<string, (a: ITAsset, b: ITAsset) => number> = {
+  name: (a, b) => (a.name || '').localeCompare(b.name || ''),
+  type: (a, b) => laneLabel(a).localeCompare(laneLabel(b)),
+  owner: (a, b) => (a.owner_name || '').localeCompare(b.owner_name || ''),
+  department: (a, b) => (a.department || '').localeCompare(b.department || ''),
+  dataclass: (a, b) => (a.data_classification || '').localeCompare(b.data_classification || ''),
+  bizfn: (a, b) => (a.business_function || '').localeCompare(b.business_function || ''),
+  crit: (a, b) => (CRIT_ORDER[critOf(a)] || 0) - (CRIT_ORDER[critOf(b)] || 0),
+  scan: (a, b) => new Date(a.last_seen_at || 0).getTime() - new Date(b.last_seen_at || 0).getTime(),
+  value: (a, b) => (a.valuation || a.purchase_cost || 0) - (b.valuation || b.purchase_cost || 0),
+  status: (a, b) => (a.status || '').localeCompare(b.status || ''),
+};
+const TEXT_SORTS = new Set(['name', 'type', 'owner', 'department', 'dataclass', 'bizfn', 'status']);
 
 // ── EASM subdomain roll-up ──────────────────────────────────────────────────
 // registrableDomain (apex) is the full Public Suffix List, imported from @/cyber-assurance/lib/domains.
@@ -63,10 +137,26 @@ const isExternalRow = (a: any) => !!(a.internet_facing || a.origin_source === 'e
 
 export default function InventoryRedesign(p: Props) {
   const assets = p.assets || [];
-  const [view, setView] = useState('all');
+  // ?view=external|internal|unowned|stale… and ?scan_depth=surface|credentialed — deep links land pre-filtered.
+  const sp = useSearchParams();
+  const initialView = sp?.get('view') || '';
+  const initialMode = sp?.get('scan_mode') || '';
   const [tab, setTab] = useState<'reg' | 'ins'>('reg');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('crit');
+  const [dir, setDir] = useState<1 | -1>(-1); // -1 = desc (critical / newest / highest first)
+  // Independent filter axes, AND-combined — each its own clearly-labeled top-bar
+  // control (was one lumped "Views" select). fFlag is single-select across the
+  // non-column flags. shortcut: one flag at a time; add per-flag toggles if a
+  // user needs e.g. Internet AND PCI together.
+  const [fType, setFType] = useState(['web', 'host', 'database', 'ad', 'cloud', 'repo', 'container'].includes(initialView) ? initialView : '');
+  const [fCrit, setFCrit] = useState(['critical', 'high', 'medium', 'low'].includes(initialView) ? initialView : '');
+  const [fStatus, setFStatus] = useState('');
+  const [fFlag, setFFlag] = useState(['internet', 'cde', 'unowned', 'needcia', 'stale', 'vulns'].includes(initialView) ? initialView : '');
+  // Scan-posture axis — EASM / Credentialed / Agentless / Agent (scan_mode from
+  // the discovery backend; null folds into Credential via modeOf).
+  const [mode, setMode] = useState<'all' | 'easm' | 'credential' | 'uncredential' | 'agent'>(
+    ['easm', 'credential', 'uncredential', 'agent'].includes(initialMode) ? (initialMode as any) : 'all');
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [openApex, setOpenApex] = useState<Set<string>>(new Set());
 
@@ -78,46 +168,77 @@ export default function InventoryRedesign(p: Props) {
   const grade: string | null = ov.data?.performance?.grade ?? null;
   const openVulns: number = ov.data?.counts?.open_vulnerabilities ?? 0;
 
+  // Advisory exposure — assets matched to a security advisory CVE (verdict=affected).
+  // Read-only: no scanning, just the durable applicability rows. [[ava backend owns the data]]
+  const adv = useQuery({
+    queryKey: ['advisories', 'affected-assets'],
+    queryFn: async () => { try { return (await apiClient.get('/advisories/affected-assets')).data as any; } catch { return null; } },
+  });
+  const affected = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const g of (adv.data?.assets || [])) m.set(g.asset_id, (g.items || []).length);
+    return m;
+  }, [adv.data]);
+  const advAssetCount: number = adv.data?.total ?? 0;
+
   const c = useMemo(() => {
-    const total = assets.length;
-    const external = assets.filter(isExt).length;
+    // Canonical roll-up: one registrable (apex) domain = ONE external asset
+    // (subdomains folded in), internal assets flat — the shared rule every
+    // dashboard uses, so these headline counts reconcile with them. `total` is
+    // the rolled-up estate size; the flat per-row count still drives the table.
+    const roll = rollupCounts(assets, isExt, dnsName);
+    const total = roll.total;
+    const external = roll.external;
+    // Count every chip over the SAME rolled-up logical set as `total`, not the
+    // raw array — otherwise a chip ("Infrastructure 12") exceeds the folded
+    // total ("6") because subdomains are counted per-row while total folds them.
+    // `logical` = one row per logical asset, so each facet <= total and the chip
+    // count matches the rows the table shows when that filter is applied.
+    const logical = rollupAssets(assets, isExt, dnsName);
     return {
-      total, external, internal: total - external,
-      critical: assets.filter((a) => critOf(a) === 'critical').length,
-      cde: assets.filter((a) => a.cde_environment).length,
-      internet: assets.filter((a) => a.internet_facing).length,
-      unowned: assets.filter((a) => !a.owner_name).length,
-      needcia: assets.filter((a) => !hasCia(a)).length,
-      stale: assets.filter(isStale).length,
-      scanned: assets.filter((a) => a.last_seen_at).length,
-      byType: (k: string) => assets.filter((a) => typeKey(a) === k).length,
-      mix: { critical: assets.filter((a) => critOf(a) === 'critical').length, high: assets.filter((a) => critOf(a) === 'high').length, medium: assets.filter((a) => critOf(a) === 'medium').length, low: assets.filter((a) => critOf(a) === 'low').length },
+      total, external, internal: roll.internal,
+      critical: logical.filter((a) => critOf(a) === 'critical').length,
+      cde: logical.filter((a) => a.cde_environment).length,
+      internet: logical.filter((a) => a.internet_facing).length,
+      unowned: logical.filter((a) => !a.owner_name).length,
+      needcia: logical.filter((a) => !hasCia(a)).length,
+      stale: logical.filter(isStale).length,
+      scanned: logical.filter((a) => a.last_seen_at).length,
+      easmN: logical.filter((a) => modeOf(a) === 'easm').length,
+      credN: logical.filter((a) => modeOf(a) === 'credential').length,
+      uncredN: logical.filter((a) => modeOf(a) === 'uncredential').length,
+      agentN: logical.filter(agentManaged).length,
+      byType: (k: string) => logical.filter((a) => typeKey(a) === k).length,
+      byLane: (k: string) => logical.filter((a) => laneOf(a) === k).length,
+      withVulns: logical.filter((a) => (a.open_findings || 0) > 0).length,
+      mix: { critical: logical.filter((a) => critOf(a) === 'critical').length, high: logical.filter((a) => critOf(a) === 'high').length, medium: logical.filter((a) => critOf(a) === 'medium').length, low: logical.filter((a) => critOf(a) === 'low').length },
     };
   }, [assets]);
 
-  const match = (a: ITAsset) => {
-    switch (view) {
-      case 'all': return true;
-      case 'critical': return critOf(a) === 'critical';
-      case 'needcia': return !hasCia(a);
-      case 'unowned': return !a.owner_name;
-      case 'stale': return isStale(a);
-      case 'internet': return !!a.internet_facing;
-      case 'cde': return !!a.cde_environment;
-      case 'internal': return !isExt(a);
-      case 'external': return isExt(a);
-      default: return typeKey(a) === view;
-    }
-  };
+  const flagOk = (a: ITAsset) =>
+    !fFlag
+    || (fFlag === 'internet' ? !!a.internet_facing
+      : fFlag === 'cde' ? !!a.cde_environment
+      : fFlag === 'unowned' ? !a.owner_name
+      : fFlag === 'needcia' ? !hasCia(a)
+      : fFlag === 'stale' ? isStale(a)
+      : fFlag === 'vulns' ? (a.open_findings ?? 0) > 0
+      : fFlag === 'advisory' ? affected.has(a.id)
+      : true);
   const rows = useMemo(() => {
-    const r = assets.filter((a) => match(a) && (!q || (a.name || '').toLowerCase().includes(q.toLowerCase())));
-    const s = [...r];
-    if (sort === 'crit') s.sort((a, b) => (CRIT_ORDER[critOf(b)] || 0) - (CRIT_ORDER[critOf(a)] || 0));
-    else if (sort === 'scan') s.sort((a, b) => new Date(b.last_seen_at || 0).getTime() - new Date(a.last_seen_at || 0).getTime());
-    else if (sort === 'value') s.sort((a, b) => (b.valuation || b.purchase_cost || 0) - (a.valuation || a.purchase_cost || 0));
-    else if (sort === 'name') s.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    return s;
-  }, [assets, view, q, sort]);
+    const r = assets.filter((a) =>
+      (!q || (a.name || '').toLowerCase().includes(q.toLowerCase())) &&
+      (!fType || laneOf(a) === fType) &&
+      (!fCrit || critOf(a) === fCrit) &&
+      (!fStatus || (a.status || '').toLowerCase() === fStatus) &&
+      (mode === 'all' ? true : mode === 'agent' ? agentManaged(a) : modeOf(a) === mode) &&
+      flagOk(a));
+    const cmp = SORTERS[sort] || SORTERS.crit;
+    return [...r].sort((a, b) => cmp(a, b) * dir);
+  }, [assets, q, sort, dir, fType, fCrit, fStatus, mode, fFlag]);
+  // Click a header: same column flips direction, a new column sorts text A→Z and
+  // metrics high→low by default.
+  const sortBy = (k: string) => { if (sort === k) setDir((d) => (d === 1 ? -1 : 1)); else { setSort(k); setDir(TEXT_SORTS.has(k) ? 1 : -1); } };
 
   // Nest external subdomains under their apex. Apex rows get a ▸ toggle + "N subs"
   // badge; children are inserted right after the apex only when it's expanded.
@@ -154,17 +275,11 @@ export default function InventoryRedesign(p: Props) {
     : 'linear-gradient(90deg,#A32B2B,#DB4A4A)';
   const gradeLbl = grade || (score == null ? '—' : score >= 80 ? 'STRONG' : score >= 55 ? 'FAIR' : 'WEAK');
   const scorePct = score == null ? 0 : Math.round(score);
-  const attnTotal = openVulns + c.unowned + c.needcia + c.stale;
 
   const toggle = (id: number) => setSel((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allChecked = rows.length > 0 && rows.every((r) => sel.has(r.id));
   const selIds = Array.from(sel);
 
-  const railBtn = (id: string, label: string, count: number, dot?: string) => (
-    <button key={id} className={'rbtn' + (view === id ? ' on' : '')} onClick={() => { setView(id); setTab('reg'); }}>
-      <span className="bar" />{dot ? <span className="dot" style={{ background: dot }} /> : null}{label}<span className="cnt num">{count}</span>
-    </button>
-  );
 
   const lastScan = (a: ITAsset) => {
     if (!a.last_seen_at) return <span className="mono" style={{ color: '#A32B2B', fontWeight: 600 }}>Never</span>;
@@ -178,8 +293,9 @@ export default function InventoryRedesign(p: Props) {
     return <span className="num">{v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`}</span>;
   };
 
+  // zoom 0.8 matches the Vulnerability Register's house-compact scale.
   return (
-    <div className="inv2 fade" style={{ fontSize: 13.5 }}>
+    <div className="inv2 fade" style={{ fontSize: 13.5, zoom: 0.8 }}>
       {/* PAGE HEAD — parent now renders the common title + toggle header, so this
           is skipped when embedded (hideHead) to avoid a duplicate heading. */}
       {!p.hideHead && (
@@ -206,56 +322,76 @@ export default function InventoryRedesign(p: Props) {
         <div className="rib-tot">
           <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Total assets</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600 }}>{c.total}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>{c.internal} internal · {c.external} external</div></div>
           <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>Critical</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#A32B2B' }}>{c.critical}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>highest tier</div></div>
-          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>CDE / PCI</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#28578F' }}>{c.cde}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>cardholder env</div></div>
+          <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>PCI scope</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#28578F' }}>{c.cde}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>marked PCI</div></div>
         </div>
         <div className="rib-att">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span><b className="num" style={{ marginLeft: 'auto', fontSize: 15, color: '#8A5A0C' }}>{attnTotal}</b></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span></div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-            <button className="att" onClick={() => { setView('critical'); setTab('reg'); }}>{openVulns} open vulns</button>
-            <button className="att" onClick={() => { setView('unowned'); setTab('reg'); }}>{c.unowned} unowned</button>
-            <button className="att" onClick={() => { setView('needcia'); setTab('reg'); }}>{c.needcia} unassessed</button>
-            <button className="att" onClick={() => { setView('stale'); setTab('reg'); }}>{c.stale} stale</button>
+            <button className="att" title="Assets with at least one open linked vulnerability" onClick={() => { setFFlag('vulns'); setTab('reg'); }}>{c.withVulns} with vulns</button>
+            <button className="att" onClick={() => { setFFlag('unowned'); setTab('reg'); }}>{c.unowned} unowned</button>
+            <button className="att" onClick={() => { setFFlag('needcia'); setTab('reg'); }}>{c.needcia} unassessed</button>
+            <button className="att" onClick={() => { setFFlag('stale'); setTab('reg'); }}>{c.stale} stale</button>
+            <button className="att" title="Assets matched to a published security advisory CVE" style={advAssetCount > 0 ? { background: '#FBD5D5', borderColor: '#E7A3A3', color: '#B42318' } : undefined} onClick={() => { setFFlag('advisory'); setTab('reg'); }}>{advAssetCount} advisory-affected</button>
           </div>
         </div>
       </section>
 
       {/* WORKSPACE */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,224px) minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
-        <aside className="rail card" style={{ padding: '9px 9px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <div className="railcap">Views</div>
-          {railBtn('all', 'All assets', c.total)}
-          {railBtn('critical', 'Critical', c.critical, '#C2453F')}
-          {railBtn('needcia', 'Needs CIA', c.needcia, '#5A45B5')}
-          {railBtn('unowned', 'Unowned', c.unowned, '#8A5A0C')}
-          {railBtn('stale', 'Stale > 30d', c.stale, '#8A95A1')}
-          {railBtn('internet', 'Internet-facing', c.internet, '#28578F')}
-          {railBtn('cde', 'CDE / PCI', c.cde, '#014A81')}
-          <div className="railcap" style={{ paddingTop: 14 }}>By origin</div>
-          {railBtn('internal', 'Internal', c.internal)}
-          {railBtn('external', 'External', c.external)}
-          <div className="railcap" style={{ paddingTop: 14 }}>By type</div>
-          {[['application', 'Applications', '#28578F'], ['infrastructure', 'Infrastructure', '#014A81'], ['data', 'Data', '#8A5A0C'], ['cloud', 'Cloud', '#5A45B5'], ['thirdparty', 'Third-party', '#DB7B45']].map(([id, label, sw]) => (
-            <button key={id} className={'rbtn' + (view === id ? ' on' : '')} onClick={() => { setView(id); setTab('reg'); }}>
-              <span className="bar" /><span style={{ width: 8, height: 8, borderRadius: 2, background: sw, flex: 'none' }} />{label}<span className="cnt num">{c.byType(id)}</span>
-            </button>
-          ))}
-          <div style={{ marginTop: 12, background: '#F7F9FA', borderRadius: 10, padding: '11px 12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', fontWeight: 500 }}><span>Scan coverage</span><b className="num" style={{ color: 'var(--ink)' }}>{c.scanned} / {c.total}</b></div>
-            <div className="track" style={{ marginTop: 8, height: 6 }}><i className="grow" style={{ width: (c.total ? Math.round((c.scanned / c.total) * 100) : 0) + '%', background: 'var(--ac)' }} /></div>
-          </div>
-        </aside>
-
+      {/* Sidebar removed — its View/Type filters moved to the top bar dropdown
+          below so the register gets the full width. */}
+      <div>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
             <div className="segwrap">
               <button className={'seg' + (tab === 'reg' ? ' on' : '')} onClick={() => setTab('reg')}>Register</button>
               <button className={'seg' + (tab === 'ins' ? ' on' : '')} onClick={() => setTab('ins')}>Insights</button>
             </div>
-            <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 170 }}>
               <Search size={16} style={{ position: 'absolute', left: 11, top: 11, color: '#78838F' }} />
-              <input className="search" placeholder="Search this view…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input className="search" placeholder="Search assets…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <select className="sel" value={sort} onChange={(e) => setSort(e.target.value)}><option value="crit">Sort: Criticality</option><option value="scan">Sort: Recently scanned</option><option value="value">Sort: Value</option><option value="name">Sort: Name</option></select>
+            {/* One named control per filter dimension — no lumped "Views" grab-bag.
+                Column-backed filters (Type/Criticality/Status) sit beside the
+                non-column ones (Scan posture, and the Internet/PCI flag chips). */}
+            <FilterSelect title="Filter by type (scan lane)" value={fType} onChange={(v) => { setFType(v); setTab('reg'); }}
+              options={[
+                { value: '', label: `All types (${c.total})` },
+                { value: 'web', label: `External / Web (${c.byLane('web')})` },
+                { value: 'host', label: `Host (${c.byLane('host')})` },
+                { value: 'database', label: `Database (${c.byLane('database')})` },
+                { value: 'ad', label: `Active Directory (${c.byLane('ad')})` },
+                { value: 'cloud', label: `Cloud (${c.byLane('cloud')})` },
+                { value: 'repo', label: `Code / Repo (${c.byLane('repo')})` },
+                { value: 'container', label: `Container / K8s (${c.byLane('container')})` },
+              ]} />
+            <FilterSelect title="Filter by criticality" value={fCrit} onChange={(v) => { setFCrit(v); setTab('reg'); }}
+              options={[
+                { value: '', label: 'All criticality' },
+                { value: 'critical', label: `Critical (${c.mix.critical})` },
+                { value: 'high', label: `High (${c.mix.high})` },
+                { value: 'medium', label: `Medium (${c.mix.medium})` },
+                { value: 'low', label: `Low (${c.mix.low})` },
+              ]} />
+            <FilterSelect title="Filter by status" value={fStatus} onChange={(v) => { setFStatus(v); setTab('reg'); }}
+              options={[
+                { value: '', label: 'All status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'decommissioned', label: 'Decommissioned' },
+              ]} />
+            <FilterSelect title="Filter by scan posture" value={mode} onChange={(v) => { setMode(v as any); setSel(new Set()); setTab('reg'); }}
+              options={[
+                { value: 'all', label: `All scans (${c.total})` },
+                { value: 'easm', label: `EASM · external (${c.easmN})` },
+                { value: 'credential', label: `Credentialed (${c.credN})` },
+                { value: 'uncredential', label: `Agentless (${c.uncredN})` },
+                { value: 'agent', label: `Agent (${c.agentN})` },
+              ]} />
+            <button type="button" className={'fchip' + (fFlag === 'internet' ? ' on' : '')} onClick={() => { setFFlag(fFlag === 'internet' ? '' : 'internet'); setTab('reg'); }} title="Internet-facing only">Internet-facing ({c.internet})</button>
+            <button type="button" className={'fchip' + (fFlag === 'cde' ? ' on' : '')} onClick={() => { setFFlag(fFlag === 'cde' ? '' : 'cde'); setTab('reg'); }} title="PCI scope only">PCI scope ({c.cde})</button>
+            {(fType || fCrit || fStatus || mode !== 'all' || fFlag) && (
+              <button type="button" className="fchip" onClick={() => { setFType(''); setFCrit(''); setFStatus(''); setMode('all'); setFFlag(''); }} title="Clear all filters">Clear</button>
+            )}
           </div>
 
           {tab === 'reg' ? (
@@ -265,26 +401,34 @@ export default function InventoryRedesign(p: Props) {
                   <b style={{ marginRight: 6 }}>{selIds.length} selected</b>
                   {p.onBulkConnect && <button className="bulkb" onClick={() => p.onBulkConnect!(rows.filter((r) => sel.has(r.id) && canConnect(r)).map((r) => r.id))}>Connect</button>}
                   {p.onBulkUpdate && p.canEdit && (['critical', 'high', 'medium', 'low'] as const).map((k) => <button key={k} className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { criticality: k })}>Set {k[0].toUpperCase() + k.slice(1)}</button>)}
+                  {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { cde_environment: true })}>Mark PCI</button>}
+                  {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { cde_environment: false })}>Remove PCI</button>}
                   {p.onBulkDelete && p.canDelete && <button className="bulkb danger" onClick={() => { if (confirm(`Delete ${selIds.length} asset(s)? This can't be undone.`)) p.onBulkDelete!(selIds); }}>Delete</button>}
                   <span style={{ flex: 1 }} /><button className="bulkb" onClick={() => setSel(new Set())}>Deselect all</button>
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid var(--bd2)' }}>
-                <h3 style={{ fontSize: 13.5 }}>Asset Register</h3>
-                <span style={{ fontSize: 11.5, color: 'var(--muted2)' }}><b className="num" style={{ color: 'var(--sec)' }}>{rows.length}</b> shown · {c.total} total</span>
-              </div>
-              <div style={{ overflow: 'auto', maxHeight: '58vh' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 860 }}>
+              <div style={{ overflowY: 'auto', overflowX: 'auto', maxHeight: '58vh' }}>
+                {mode === 'uncredential' ? (
+                  <UncredentialView rows={rows} onOpen={p.onView} />
+                ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
                   <thead><tr>
-                    <th style={{ ...th, width: 38 }}><input type="checkbox" checked={allChecked} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} style={{ accentColor: '#014A81', width: 15, height: 15 }} /></th>
-                    {['Asset', 'Type', 'Owner', 'Criticality', 'CIA', 'Last scan', 'Value', 'Status'].map((h) => <th key={h} style={th}>{h}</th>)}
-                    <th style={{ ...th, width: 36 }}></th>
+                    <th style={{ ...th, width: 34 }}><input type="checkbox" checked={allChecked} onChange={(e) => setSel(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} style={{ accentColor: '#fff', width: 15, height: 15 }} /></th>
+                    {HEADS.map((h) => (
+                      <th key={h.key} style={{ ...th, cursor: h.sortable ? 'pointer' : 'default', userSelect: 'none' }}
+                        onClick={h.sortable ? () => sortBy(h.key) : undefined}
+                        title={h.sortable ? `Sort by ${h.label}` : undefined}>
+                        {h.label}{sort === h.key ? <span style={{ marginLeft: 4 }}>{dir === -1 ? '▾' : '▴'}</span> : null}
+                      </th>
+                    ))}
+                    <th style={{ ...th, width: 34 }}>PCI</th>
+                    <th style={{ ...th, width: 34 }}></th>
                   </tr></thead>
                   <tbody>
                     {p.loading ? (
-                      <tr><td colSpan={10} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>Loading…</td></tr>
+                      <tr><td colSpan={14} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>Loading…</td></tr>
                     ) : rows.length === 0 ? (
-                      <tr><td colSpan={10} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>No assets match this view.</td></tr>
+                      <tr><td colSpan={14} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>No assets match this view.</td></tr>
                     ) : orderedRows.map((a) => {
                       const tl = TILE[typeKey(a)] || { bg: '#E4E9ED', fg: '#78838F' };
                       const ck = CRIT[critOf(a)];
@@ -303,26 +447,45 @@ export default function InventoryRedesign(p: Props) {
                                   onClick={(e) => { e.stopPropagation(); setOpenApex((s) => { const n = new Set(s); const k = dnsName(a); if (n.has(k)) n.delete(k); else n.add(k); return n; }); }}
                                   style={{ width: 18, height: 18, flex: 'none', border: 'none', background: 'transparent', cursor: 'pointer', color: '#78838F', fontSize: 12, lineHeight: 1, transform: apexOpen ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}>▸</button>
                               ) : isChild ? <span style={{ width: 18, flex: 'none', color: '#C4CCD3', textAlign: 'center' }}>└</span> : null}
-                              <span style={{ width: 32, height: 32, borderRadius: 9, background: tl.bg, color: tl.fg, display: 'grid', placeItems: 'center', fontWeight: 600, flex: 'none' }}>{(a.name || '?').match(/[a-z0-9]/i)?.[0]?.toUpperCase() || '?'}</span>
+                              <span style={{ width: 26, height: 26, borderRadius: 7, fontSize: 12, background: tl.bg, color: tl.fg, display: 'grid', placeItems: 'center', fontWeight: 600, flex: 'none' }}>{(a.name || '?').match(/[a-z0-9]/i)?.[0]?.toUpperCase() || '?'}</span>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontWeight: 600, color: '#0F1F2B' }}>{a.name}</span>
-                                <span style={{ display: 'inline-flex', gap: 4, marginLeft: 6, verticalAlign: 'middle' }}>
-                                  {nSubs > 0 ? <span style={{ background: '#E4EDF6', color: '#3A5A80', borderRadius: 999, padding: '1px 7px', fontSize: 9, fontWeight: 600 }}>{nSubs} sub{nSubs > 1 ? 's' : ''}</span> : null}
-                                  {a.internet_facing ? <span style={{ background: '#DBE8FA', color: '#28578F', borderRadius: 999, padding: '1px 7px', fontSize: 9, fontWeight: 600 }}>Internet-facing</span> : null}
-                                  {a.cde_environment ? <span style={{ background: '#F7D8D8', color: '#A32B2B', borderRadius: 999, padding: '1px 7px', fontSize: 9, fontWeight: 600 }}>CDE</span> : null}
-                                  {(a.open_findings ?? 0) > 0 ? <span style={{ background: '#F2D3C6', color: '#6B2412', borderRadius: 999, padding: '1px 7px', fontSize: 9, fontWeight: 600 }}>{a.open_findings} vuln{(a.open_findings ?? 0) > 1 ? 's' : ''}</span> : null}
+                                <span style={{ display: 'flex', flexWrap: 'nowrap', gap: 4, marginTop: 3 }}>
+                                  {agentManaged(a)
+                                    ? <span title="Managed by an installed Complyverse agent (local collector)" style={chip('#CFF2E7', '#0B6B4F')}>Agent</span>
+                                    : (a.scan_depth ?? 'credentialed') === 'surface'
+                                      ? <span title="Discovered by an agentless sweep — no credentials" style={chip('#EEF1F3', '#6B7787')}>Agentless</span>
+                                      : <span title="Credentialed remote scan (deep)" style={chip('#E7F0F8', '#28578F')}>Credentialed</span>}
+                                  {nSubs > 0 ? <span style={chip('#E4EDF6', '#3A5A80')}>{nSubs} sub{nSubs > 1 ? 's' : ''}</span> : null}
+                                  {a.internet_facing ? <span title="Internet-facing" style={chip('#DBE8FA', '#28578F')}>Internet</span> : null}
+                                  {a.cde_environment ? <span title="In PCI scope" style={chip('#F7D8D8', '#A32B2B')}>PCI</span> : null}
+                                  {(a.open_findings ?? 0) > 0 ? <span style={chip('#F2D3C6', '#6B2412')}>{a.open_findings} vuln{(a.open_findings ?? 0) > 1 ? 's' : ''}</span> : null}
+                                  {affected.has(a.id) ? <span title="Affected by a published security advisory (advisory CVE matches this asset)" style={chip('#FBD5D5', '#B42318')}>{affected.get(a.id)} advisor{(affected.get(a.id) || 0) > 1 ? 'ies' : 'y'}</span> : null}
                                 </span>
                                 {a.environment ? <span style={{ display: 'block', fontSize: 10.5, color: '#78838F', textTransform: 'capitalize' }}>{a.environment}</span> : null}
                               </div>
                             </div>
                           </td>
-                          <td style={{ ...td, textTransform: 'capitalize' }}>{(a.asset_type || '').replace(/_/g, ' ') || '—'}</td>
-                          <td style={td}>{a.owner_name ? a.owner_name : <span style={{ color: '#A32B2B', fontWeight: 600 }}>Unassigned</span>}</td>
+                          <td style={{ ...td, ...clip }} title={laneLabel(a)}>{laneLabel(a)}</td>
+                          <td style={{ ...td, ...clip }} title={a.owner_name || ''}>{a.owner_name ? a.owner_name : <span style={{ color: '#A32B2B', fontWeight: 600 }}>Unassigned</span>}</td>
+                          <td style={{ ...td, ...clip }} title={a.department || ''}>{a.department || <span style={{ color: '#C4CCD3' }}>—</span>}</td>
+                          <td style={{ ...td, ...clip, textTransform: 'capitalize' }} title={a.data_classification || ''}>{a.data_classification || <span style={{ color: '#C4CCD3' }}>—</span>}</td>
+                          <td style={{ ...td, ...clip }} title={a.business_function || ''}>{a.business_function || <span style={{ color: '#C4CCD3' }}>—</span>}</td>
                           <td style={td}>{ck ? <span style={{ background: ck.bg, color: ck.fg, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 600, textTransform: 'capitalize' }}>{a.criticality}</span> : <span style={{ color: '#B4BDC6' }}>—</span>}</td>
                           <td style={td}>{hasCia(a) ? <span className="mono">{a.confidentiality_rating}·{a.integrity_rating}·{a.availability_rating}</span> : <span style={{ color: '#8A5A0C' }}>— assess</span>}</td>
                           <td style={td}>{lastScan(a)}</td>
                           <td style={td}>{val(a)}</td>
                           <td style={td}>{st && stMap[st] ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#3A4653' }}><i style={{ width: 7, height: 7, borderRadius: '50%', background: stMap[st].c }} />{stMap[st].l}</span> : <span style={{ color: '#B4BDC6' }}>—</span>}</td>
+                          <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            {p.onBulkUpdate && p.canEdit ? (
+                              <input type="checkbox" checked={!!a.cde_environment}
+                                onChange={() => p.onBulkUpdate!([a.id], { cde_environment: !a.cde_environment })}
+                                title={a.cde_environment ? 'In PCI scope — click to remove' : 'Mark this asset in PCI scope'}
+                                style={{ accentColor: '#A32B2B', width: 15, height: 15, cursor: 'pointer' }} />
+                            ) : (
+                              <span title={a.cde_environment ? 'In PCI scope' : 'Not in PCI scope'} style={{ color: a.cde_environment ? '#A32B2B' : '#C4CCD3' }}>{a.cde_environment ? '✓' : '—'}</span>
+                            )}
+                          </td>
                           <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                             <RowActionsMenu actions={[
                               { key: 'view', label: 'View', icon: Eye, onClick: () => p.onView(a) },
@@ -336,8 +499,9 @@ export default function InventoryRedesign(p: Props) {
                     })}
                   </tbody>
                 </table>
+                )}
               </div>
-              <div style={{ padding: '12px 16px', fontSize: 11.5, color: 'var(--muted2)', borderTop: '1px solid var(--bd2)' }}>Empty cells are honest — <b style={{ color: '#55606D' }}>Unassigned</b>, <b style={{ color: '#55606D' }}>—</b> and <b style={{ color: '#55606D' }}>Never</b> mean the fact isn't set.</div>
+              <div style={{ padding: '12px 16px', fontSize: 11.5, color: 'var(--muted2)', borderTop: '1px solid var(--bd2)' }}>{mode === 'uncredential' ? 'Credential-free sweep view — click a device for the captured detail; Apply credentials to pull full richness.' : <>Empty cells are honest — <b style={{ color: '#55606D' }}>Unassigned</b>, <b style={{ color: '#55606D' }}>—</b> and <b style={{ color: '#55606D' }}>Never</b> mean the fact isn&rsquo;t set.</>}</div>
             </div>
           ) : (
             <div className="fade" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -355,6 +519,101 @@ export default function InventoryRedesign(p: Props) {
               <InventoryScorecard />
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Uncredential mode — swept hosts grouped by the CIDR they were discovered on.
+// Credential-free: we show only what the sweep captured; clicking a device opens
+// the detail pop-up. Promotion to full richness happens via the Connect Wizard.
+function UncredentialView({ rows, onOpen }: { rows: ITAsset[]; onOpen: (a: ITAsset) => void }) {
+  const groups = useMemo(() => {
+    const m = new Map<string, ITAsset[]>();
+    for (const a of rows) { const k = a.network_segment || 'Unknown subnet'; const arr = m.get(k) ?? []; arr.push(a); m.set(k, arr); }
+    return Array.from(m.entries()).sort((x, y) => x[0].localeCompare(y[0], undefined, { numeric: true }));
+  }, [rows]);
+  const [closed, setClosed] = useState<Set<string>>(() => new Set());
+  if (rows.length === 0) {
+    return <div style={{ padding: 28, textAlign: 'center', color: '#78838F', fontSize: 12.5 }}>No uncredentialed assets yet. Run a network sweep from Asset Discovery — discovered hosts land here automatically, no credentials needed.</div>;
+  }
+  return (
+    <div>
+      {groups.map(([cidr, devs]) => {
+        const isClosed = closed.has(cidr);
+        return (
+          <div key={cidr} style={{ borderBottom: '1px solid #F0F3F5' }}>
+            <button type="button"
+              onClick={() => setClosed((s) => { const n = new Set(s); if (n.has(cidr)) n.delete(cidr); else n.add(cidr); return n; })}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', border: 'none', background: '#F7F9FA', padding: '9px 16px', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ color: '#78838F', fontSize: 12, display: 'inline-block', transform: isClosed ? 'none' : 'rotate(90deg)', transition: 'transform .12s' }}>&#9656;</span>
+              <span className="mono" style={{ fontWeight: 700, color: '#0F1F2B', fontSize: 12.5 }}>{cidr}</span>
+              <span style={{ fontSize: 11, color: '#78838F' }}>swept subnet</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#78838F' }}><b className="num" style={{ color: '#005B96' }}>{devs.length}</b> device{devs.length > 1 ? 's' : ''}</span>
+            </button>
+            {!isClosed && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <tbody>
+                  {devs.map((a) => (
+                    <tr key={a.id} className="rrow" style={{ cursor: 'pointer' }} onClick={() => onOpen(a)}>
+                      <td style={{ ...td, paddingLeft: 42 }}>
+                        <span style={{ fontWeight: 600, color: '#0F1F2B' }}>{a.host_name || a.name || a.ip_address || 'Unknown host'}</span>
+                        {a.device_type ? <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 600, color: '#55606D', background: '#EEF1F3', borderRadius: 999, padding: '1px 7px', textTransform: 'capitalize' }}>{a.device_type}</span> : null}
+                      </td>
+                      <td style={{ ...td, width: 150 }}><span className="mono" style={{ color: '#3A4653' }}>{a.ip_address || '—'}</span></td>
+                      <td style={td}>
+                        {a.open_ports && a.open_ports.length ? (
+                          <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                            {a.open_ports.slice(0, 8).map((pt) => <span key={pt} className="mono" style={{ fontSize: 10, color: '#28578F', background: '#E7F0F8', borderRadius: 4, padding: '1px 5px' }}>{pt}</span>)}
+                            {a.open_ports.length > 8 ? <span style={{ fontSize: 10, color: '#78838F' }}>+{a.open_ports.length - 8}</span> : null}
+                          </span>
+                        ) : <span style={{ color: '#B4BDC6' }}>no open ports</span>}
+                      </td>
+                      <td style={{ ...td, width: 86, textAlign: 'right', color: '#78838F', fontSize: 11 }}>details &rarr;</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Detail pop-up for an uncredential (sweep) device — only the fields the sweep
+// captured. "Apply credentials" routes to the Connect Wizard (contract: credit
+// via Connect, NOT the old promote-from-unclaimed flow).
+function UncredPopup({ asset, onClose, onConnect }: { asset: ITAsset; onClose: () => void; onConnect: (a: ITAsset) => void }) {
+  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '7px 0', borderBottom: '1px solid #F0F3F5', fontSize: 12.5 }}>
+      <span style={{ color: '#78838F' }}>{k}</span><span style={{ color: '#0F1F2B', fontWeight: 500, textAlign: 'right', maxWidth: '62%' }}>{v}</span>
+    </div>
+  );
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,31,43,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 14, boxShadow: '0 18px 50px rgba(16,24,40,.22)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px', borderBottom: '1px solid #EEF1F3' }}>
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ fontSize: 14, color: '#0F1F2B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.host_name || asset.name || asset.ip_address || 'Swept device'}</h3>
+            <span style={{ fontSize: 11, color: '#78838F' }}>What the credential-free sweep captured</span>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#78838F', flex: 'none' }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '6px 18px 14px' }}>
+          <Row k="IP address" v={<span className="mono">{asset.ip_address || '—'}</span>} />
+          <Row k="Hostname" v={asset.host_name || '—'} />
+          <Row k="Device type" v={<span style={{ textTransform: 'capitalize' }}>{asset.device_type || asset.platform_kind || '—'}</span>} />
+          <Row k="Subnet (CIDR)" v={<span className="mono">{asset.network_segment || '—'}</span>} />
+          <Row k="Open ports" v={asset.open_ports && asset.open_ports.length ? <span className="mono">{asset.open_ports.join(', ')}</span> : 'none detected'} />
+          <Row k="Scan mode" v="Uncredential (sweep)" />
+          <Row k="Depth" v={asset.scan_depth === 'credentialed' ? 'Credentialed' : 'Surface / agentless'} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 18px', borderTop: '1px solid #EEF1F3', background: '#FAFBFC', borderRadius: '0 0 14px 14px' }}>
+          <button onClick={onClose} style={{ border: '1px solid #D7DDE2', background: '#fff', borderRadius: 9, padding: '7px 13px', fontSize: 12.5, fontWeight: 600, color: '#3A4653', cursor: 'pointer' }}>Close</button>
+          {canConnect(asset) && <button onClick={() => { onConnect(asset); onClose(); }} style={{ border: 'none', background: '#005B96', color: '#fff', borderRadius: 9, padding: '7px 13px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plug size={14} />Apply credentials</button>}
         </div>
       </div>
     </div>

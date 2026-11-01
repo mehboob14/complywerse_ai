@@ -2,9 +2,10 @@
 // An entry is shown to an administrator, or to someone who holds one of its requiredPermissions, inside the modules and the
 // client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone.
 import {
-  Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
-  Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, Radar, Rss, ScrollText, Server, ShieldAlert, ShieldCheck, Target, Users, Workflow, Zap,
+  Activity, AlertCircle, AlertTriangle, BarChart3, BookOpen, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
+  Contact, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, KeyRound, Landmark, Layers, LayoutDashboard, LifeBuoy,
+  ListTodo, MessageSquareText, Plug, Radar, Rss, ScrollText, Server, Settings, Shield, ShieldAlert, ShieldCheck, Target, Ticket,
+  Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -150,9 +151,10 @@ export const navigation: NavEntry[] = [
   {
     name: 'Cybersecurity Assurance',
     icon: ShieldCheck,
-    // Cloned from Ava (the standalone cyber product) into the /cyber-assurance
-    // namespace: these routes render Ava's UI on GRC's shell + DB + login.
-    // Mirrors Ava's own sidebar exactly. GRC's native cyber pages
+    // The standalone cyber product's UI, cloned into the /cyber-assurance
+    // namespace on GRC's shell + DB + login, and kept in step with that
+    // product's own sidebar. Scanning lives inside Vulnerabilities now
+    // (/cyber-assurance/scan-flows still resolves). GRC's native cyber pages
     // (/asset-discovery, /assets, /vulnerabilities, /risk-posture) stay in the
     // codebase untouched, just no longer linked from here.
     items: [
@@ -160,11 +162,60 @@ export const navigation: NavEntry[] = [
       { name: 'Performance',            href: '/cyber-assurance/dashboard',       icon: LayoutDashboard, requiredPermissions: ['assets:asset_inventory:*', 'vulnerabilities:vulnerability_register:*', 'erm:risks:*'] },
       { name: 'IT Asset Discovery',     href: '/cyber-assurance/asset-discovery', icon: Radar,      requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'IT Asset Inventory',     href: '/cyber-assurance/assets',          icon: Server,     requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'Licenses',               href: '/cyber-assurance/licenses',        icon: KeyRound,   requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    icon: Activity,   requiredPermissions: ['erm:risks:*'] },
       { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Vulnerability Scanning', href: '/cyber-assurance/scan-flows',      icon: Crosshair,  requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Advisories',             href: '/cyber-assurance/advisories',      icon: AlertCircle, requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       // the catalog has no pentest key: the vulnerability register's, which its API (/pentest) checks
-      { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'], activeMatch: '/cyber-assurance/pentest' },
+      { name: 'Cyber Reports',          href: '/cyber-assurance/reports',         icon: FileText,   requiredPermissions: ['assets:asset_inventory:*'] },
+      // Connectors, cloud agents and endpoint agents: the same rights as the admin Integrations tab
+      { name: 'Connectors',             href: '/cyber-assurance/connectors',      icon: Plug,       requiredPermissions: ['integrations:connections:*'] },
+      {
+        // Native ITIL-lite service desk (modules/helpdesk_native); findings become remediation Incidents.
+        name: 'Help Desk',
+        icon: LifeBuoy,
+        items: [
+          {
+            name: 'Agent Console',
+            icon: LayoutDashboard,
+            items: [
+              { name: 'Dashboard',        href: '/cyber-assurance/helpdesk/dashboard',        icon: LayoutDashboard,   requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Tickets',          href: '/cyber-assurance/helpdesk/tickets',          icon: Ticket,            requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Incidents',        href: '/cyber-assurance/helpdesk/incidents',        icon: AlertCircle,       requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Problems',         href: '/cyber-assurance/helpdesk/problems',         icon: Bug,               requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Changes',          href: '/cyber-assurance/helpdesk/changes',          icon: GitPullRequest,    requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Service Requests', href: '/cyber-assurance/helpdesk/service-requests', icon: ClipboardList,     requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Agents',           href: '/cyber-assurance/helpdesk/agents',           icon: Users,             requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Customers',        href: '/cyber-assurance/helpdesk/customers',        icon: Building2,         requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Contacts',         href: '/cyber-assurance/helpdesk/contacts',         icon: Contact,           requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Knowledge Base',   href: '/cyber-assurance/helpdesk/kb',               icon: BookOpen,          requiredPermissions: ['helpdesk:tickets:view'] },
+              { name: 'Canned Responses', href: '/cyber-assurance/helpdesk/canned',           icon: MessageSquareText, requiredPermissions: ['helpdesk:tickets:view'] },
+            ],
+          },
+          {
+            name: 'Service Desk Admin',
+            icon: Settings,
+            items: [
+              { name: 'Service Catalogue', href: '/cyber-assurance/helpdesk/admin/catalogue',  icon: Bookmark, requiredPermissions: ['helpdesk:settings:manage'] },
+              { name: 'CMDB',              href: '/cyber-assurance/helpdesk/admin/cmdb',       icon: Server,   requiredPermissions: ['helpdesk:settings:manage'] },
+              { name: 'Governance',        href: '/cyber-assurance/helpdesk/admin/governance', icon: Shield,   requiredPermissions: ['helpdesk:settings:manage'] },
+              { name: 'Settings',          href: '/cyber-assurance/helpdesk/settings',         icon: Settings, requiredPermissions: ['helpdesk:settings:manage'] },
+            ],
+          },
+          {
+            name: 'End-user Portal',
+            icon: ClipboardCheck,
+            items: [
+              { name: 'Request something',     href: '/cyber-assurance/helpdesk/portal/request',      icon: ClipboardCheck,    requiredPermissions: ['helpdesk:requests:create', 'helpdesk:requests:view_own'] },
+              { name: 'My Requests',           href: '/cyber-assurance/helpdesk/portal/my-requests',  icon: ListTodo,          requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+              { name: 'My Approvals',          href: '/cyber-assurance/helpdesk/portal/my-approvals', icon: ShieldCheck,       requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+              { name: 'Report an issue',       href: '/cyber-assurance/helpdesk/portal/report',       icon: MessageSquareText, requiredPermissions: ['helpdesk:requests:create', 'helpdesk:requests:view_own'] },
+              { name: 'Help / Knowledge Base', href: '/cyber-assurance/helpdesk/portal/kb',           icon: BookOpen,          requiredPermissions: ['helpdesk:requests:view_own', 'helpdesk:requests:create'] },
+            ],
+          },
+        ],
+      },
     ],
   },
   {

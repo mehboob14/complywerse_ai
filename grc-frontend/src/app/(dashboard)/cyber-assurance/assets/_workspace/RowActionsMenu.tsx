@@ -9,7 +9,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, ChevronDown, Check } from 'lucide-react';
 
 export interface RowAction {
   key: string;
@@ -18,9 +18,12 @@ export interface RowAction {
   onClick: () => void;
   variant?: 'default' | 'danger';
   hidden?: boolean;
+  active?: boolean; // marks the current choice (e.g. the active view) with a check
 }
 
-export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
+// `label` turns the ⋯ icon trigger into a labeled "word" button (current choice +
+// chevron) — used for the top-right view/actions menu. Omit it for the row ⋯.
+export function RowActionsMenu({ actions, label }: { actions: RowAction[]; label?: string }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -53,7 +56,7 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
     if (open) { setOpen(false); return; }
     const r = btnRef.current?.getBoundingClientRect();
     if (r) {
-      const MENU_W = 180;
+      const MENU_W = label ? 208 : 180;
       const left = Math.max(8, Math.min(r.right - MENU_W, window.innerWidth - MENU_W - 8));
       const spaceBelow = window.innerHeight - r.bottom;
       const top = spaceBelow < 200 ? r.top - 4 - Math.min(220, visible.length * 40) : r.bottom + 4;
@@ -64,23 +67,37 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
 
   return (
     <>
-      <button
-        ref={btnRef}
-        onClick={(e) => { e.stopPropagation(); toggle(); }}
-        className={`rounded-md p-1.5 transition-colors ${open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
-        title="Actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
-      </button>
+      {label ? (
+        <button
+          ref={btnRef}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300"
+          title="Switch view or add assets"
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
+          {label}
+          <ChevronDown className="h-4 w-4 text-slate-400" strokeWidth={1.75} />
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          className={`rounded-md p-1.5 transition-colors ${open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
+          title="Actions"
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
+          <MoreHorizontal className="h-4 w-4" strokeWidth={1.75} />
+        </button>
+      )}
       {open && pos && typeof document !== 'undefined' &&
         createPortal(
           <div
             ref={menuRef}
             onClick={(e) => e.stopPropagation()}
-            style={{ top: pos.top, left: pos.left }}
-            className="fixed z-[70] w-[180px] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-elevated"
+            style={{ top: pos.top, left: pos.left, width: label ? 208 : 180 }}
+            className="fixed z-[70] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-elevated"
             role="menu"
           >
             {visible.map((a) => {
@@ -90,10 +107,11 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
                   key={a.key}
                   role="menuitem"
                   onClick={() => { setOpen(false); a.onClick(); }}
-                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${a.variant === 'danger' ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${a.variant === 'danger' ? 'text-rose-600 hover:bg-rose-50' : a.active ? 'bg-slate-50 font-semibold text-slate-900' : 'text-slate-700 hover:bg-slate-50'}`}
                 >
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                  {a.label}
+                  <span className="flex-1">{a.label}</span>
+                  {a.active && <Check className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} />}
                 </button>
               );
             })}

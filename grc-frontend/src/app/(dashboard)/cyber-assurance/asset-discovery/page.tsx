@@ -9,16 +9,17 @@
  * deep-collection (OS / software / antivirus on discovered hosts).
  */
 import { useState, useEffect, useRef, Fragment } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radar, Inbox, Network, History, Play, Plus, Trash2, X,
   ShieldCheck, RefreshCw, Check, Plug,
 } from 'lucide-react';
-import { discoveryApi } from '@/cyber-assurance/lib/api';
+import apiClient, { discoveryApi } from '@/cyber-assurance/lib/api';
+import { useToast } from '@/cyber-assurance/components/ui/ToastProvider';
 import { useTabParam } from '@/cyber-assurance/lib/useTabParam';
 import ConnectWizardPage, { PLATFORMS, PLATFORM_GROUPS, type Platform } from '../admin/integrations/connect/page';
 import AgentsAdminPage from '../admin/agents/page';
-import NetworkMap from './_NetworkMap';
 import '../assets/_suite/asset-suite.css';
 import './discovery-antimetal.css';
 import './discovery-command.css';
@@ -29,12 +30,11 @@ import './discovery-command.css';
 // 'score' (the standalone attack-surface scorecard) was removed — external
 // assets and their hygiene grade live in the IT Asset Inventory and on the
 // asset's own Overview, not in a separate Discovery page.
-type Tab = 'overview' | 'discover' | 'map' | 'connections' | 'inbox' | 'runs';
+type Tab = 'overview' | 'discover' | 'connections' | 'inbox' | 'runs';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview',    label: 'Overview' },
   { id: 'discover',    label: 'Discovery' },
-  { id: 'map',         label: 'Network map' },
   { id: 'runs',        label: 'Scan history' },
   { id: 'connections', label: 'Connections' },
   { id: 'inbox',       label: 'Review queue' },
@@ -174,43 +174,6 @@ const td: React.CSSProperties = { padding: '9px 12px', borderBottom: '1px solid 
 /* ─── Overview ─────────────────────────────────────────────────────── */
 
 /* Live discovery radar — ported verbatim from the antimetal mockup canvas loop. */
-function RadarCanvas({ labels = [] }: { labels?: string[] }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const cv = ref.current; if (!cv) return; const ctx = cv.getContext('2d'); if (!ctx) return;
-    const W = cv.width, H = cv.height, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 12, A = 'rgba(0,91,150,';
-    // One blip per real discovered device, spread deterministically so positions are stable.
-    const names = (labels.length ? labels : ['host-01', 'host-02', 'host-03', 'host-04', 'host-05', 'host-06']).slice(0, 7);
-    const blips = names.map((nm, i) => ({ a: (i / names.length) * 6.2832 + 0.4, r: 0.34 + ((i * 41) % 52) / 100, lit: 0, nm }));
-    let sweep = 0, raf = 0; const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const frame = () => {
-      ctx.clearRect(0, 0, W, H);
-      ctx.strokeStyle = A + '.16)'; ctx.lineWidth = 1;
-      for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(cx, cy, R * i / 3, 0, 7); ctx.stroke(); }
-      ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
-      for (let k = 0; k < 30; k++) { const a = sweep - k * 0.045; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + 0.05); ctx.closePath(); ctx.fillStyle = A + (0.14 * (1 - k / 30)) + ')'; ctx.fill(); }
-      ctx.strokeStyle = A + '.85)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R); ctx.stroke();
-      ctx.textBaseline = 'middle';
-      blips.forEach((b) => {
-        const d = ((sweep - b.a) % 6.2832 + 6.2832) % 6.2832; if (d < 0.09) b.lit = 1; b.lit *= 0.978;
-        const x = cx + Math.cos(b.a) * R * b.r, y = cy + Math.sin(b.a) * R * b.r;
-        ctx.beginPath(); ctx.arc(x, y, 2.2 + b.lit * 3.2, 0, 7); ctx.fillStyle = A + (0.42 + b.lit * 0.58) + ')'; ctx.fill();
-        // Name only while the sweep is passing this dot (ping reveal) — never a wall of overlapping labels.
-        if (b.lit > 0.14) {
-          const nm = b.nm.length > 16 ? b.nm.slice(0, 15) + '…' : b.nm;
-          const right = x >= cx; ctx.textAlign = right ? 'left' : 'right';
-          ctx.font = '600 10px Inter, system-ui, sans-serif';
-          ctx.fillStyle = 'rgba(0,91,150,' + Math.min(1, b.lit) + ')';
-          ctx.fillText(nm, x + (right ? 9 : -9), y);
-        }
-      });
-      sweep += 0.028; if (sweep > 6.2832) sweep -= 6.2832; if (!reduce) raf = requestAnimationFrame(frame);
-    };
-    frame(); return () => cancelAnimationFrame(raf);
-  }, [labels.join('|')]);
-  return <canvas ref={ref} width={360} height={208} className="radar-cv" />;
-}
-
 function Overview({ go }: { go: (t?: string) => void }) {
   const campaigns = useQuery({ queryKey: ['disc-campaigns'], queryFn: async () => (await discoveryApi.listCampaigns()).data.campaigns as any[] });
   // Pull enough run history that EVERY campaign's latest run is present — a small
@@ -218,7 +181,10 @@ function Overview({ go }: { go: (t?: string) => void }) {
   const runs = useQuery({ queryKey: ['disc-runs'], queryFn: async () => (await discoveryApi.listRuns(undefined, 200)).data.runs as any[] });
   const inbox = useQuery({ queryKey: ['disc-inbox'], queryFn: async () => (await discoveryApi.inbox('open')).data.observations as any[] });
   const radarDevQ = useQuery({ queryKey: ['disc-discovered-devices', 'all'], queryFn: async () => (await discoveryApi.discoveredDevices()).data as any });
-  const radarLabels: string[] = (radarDevQ.data?.devices ?? []).slice(0, 7).map((d: any) => d.host_name || d.name || d.ip_address || 'device');
+  // Authoritative managed-estate composition — the SAME source the IT Asset
+  // Inventory Overview uses, so external/internal counts match what the operator
+  // sees there (the discovered-devices feed classifies external differently).
+  const estateQ = useQuery({ queryKey: ['assets', 'estate-overview'], queryFn: async () => (await apiClient.get('/estate-overview')).data as any });
 
   const camps = campaigns.data ?? [];
   const runList = runs.data ?? [];
@@ -263,6 +229,12 @@ function Overview({ go }: { go: (t?: string) => void }) {
   const observed = allDevices.length;
   const linkedTotal = allDevices.filter((d: any) => d.in_inventory).length;
   const linkage = observed ? Math.round((linkedTotal / observed) * 100) : 0;
+  // Managed estate (authoritative, matches the IT Asset Inventory Overview).
+  const estate = estateQ.data ?? {};
+  const estHosts = Number(estate.total ?? 0);
+  const estAssets = Number(estate.rolled_total ?? 0);
+  const estExt = Number(estate.external?.total ?? 0);
+  const estInt = Number(estate.internal?.total ?? 0);
   const covered = camps.filter((c) => runList.some((r) => r.campaign_id === c.id && r.status === 'succeeded')).length;
   const coverage = camps.length ? Math.round((covered / camps.length) * 100) : 0;
   // network status composition (real): connected vs awaiting-login vs evidence-only
@@ -300,7 +272,6 @@ function Overview({ go }: { go: (t?: string) => void }) {
         <div>
           <span className="eyebrow">Command center</span>
           <h2>Discovery posture</h2>
-          <p>What is covered, what changed, and what needs attention now — across owned networks and the public attack surface.</p>
         </div>
         <div className="actions">
           <select className="select" defaultValue="Last 30 days"><option>Last 30 days</option><option>Last 7 days</option><option>Today</option></select>
@@ -325,10 +296,28 @@ function Overview({ go }: { go: (t?: string) => void }) {
           </section>
         </div>
         <div className="ovhero-r">
-          <div className="radar-card">
-            <div className="rc-head"><span className="live"><i></i> Live · sweeping</span><code>{netScope ? scopeText(netScope) : '—'}</code></div>
-            <RadarCanvas labels={radarLabels} />
-            <div className="rc-foot"><b>{netSeen}</b> hosts found this sweep · <b>{netWait}</b> need review</div>
+          <div className="radar-card estate-card">
+            <div className="rc-head"><span className="estate-eyebrow">Managed estate</span><code>{estHosts} hosts · {estAssets} assets</code></div>
+            <div className="estate">
+              {([
+                { label: 'External hosts', n: estExt, cls: 'bar-easm' },
+                { label: 'Internal hosts', n: estInt, cls: 'bar-net' },
+              ] as { label: string; n: number; cls: string }[]).map((r) => (
+                <div className="estate-row" key={r.label}>
+                  <div className="estate-top"><span>{r.label}</span><b>{r.n}</b></div>
+                  <div className="estate-track"><i className={r.cls} style={{ width: `${estHosts ? Math.max(r.n > 0 ? 4 : 0, Math.round((r.n / estHosts) * 100)) : 0}%` }}></i></div>
+                </div>
+              ))}
+              <div className="estate-row">
+                <div className="estate-top"><span>Onboarded from discovery</span><b>{linkedTotal}<em>{linkage}%</em></b></div>
+                <div className="estate-track"><i className="bar-linked" style={{ width: `${observed ? Math.max(linkedTotal > 0 ? 4 : 0, Math.round((linkedTotal / observed) * 100)) : 0}%` }}></i></div>
+              </div>
+              <div className="estate-row">
+                <div className="estate-top"><span>Awaiting a decision</span><b>{inboxCount}</b></div>
+                <div className="estate-track"><i className="bar-wait" style={{ width: `${observed ? Math.max(inboxCount > 0 ? 4 : 0, Math.round((inboxCount / observed) * 100)) : 0}%` }}></i></div>
+              </div>
+            </div>
+            <div className="rc-foot"><b>{observed}</b> discovered across this estate · <b>{coverage}%</b> scope coverage</div>
           </div>
         </div>
       </div>
@@ -1697,7 +1686,7 @@ function DeviceExplainerModal({ device, onClose }: { device: any; onClose: () =>
                 <strong style={{ fontSize: 15, color: C.ink }}>{d.headline}</strong>
                 {ai.data
                   ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.teal, border: `1px solid ${C.teal}`, borderRadius: 6, padding: '1px 6px' }}>AI</span>
-                  : <span title="Ava’s built-in diagnosis. The AI wording is loading (or OPENAI_API_KEY is unset)." style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.faint, border: `1px solid ${C.bInput}`, borderRadius: 6, padding: '1px 6px' }}>RULES</span>}
+                  : <span title="Complyverse’s built-in diagnosis. The AI wording is loading (or OPENAI_API_KEY is unset)." style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.faint, border: `1px solid ${C.bInput}`, borderRadius: 6, padding: '1px 6px' }}>RULES</span>}
               </div>
               <div style={{ fontSize: 13, color: C.muted2, lineHeight: 1.6, marginBottom: 14 }}>{d.why}</div>
               {Array.isArray(d.steps) && d.steps.length > 0 && (
@@ -2009,8 +1998,14 @@ function CsDeviceRow({ d, checked, onToggle, onConnect, onAdopt, adopting }: any
   );
 }
 
-function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all' }) {
+function DiscoveredQueue({ seg, setSeg, counts }: {
+  seg: 'login' | 'adopt' | 'inventory' | 'all' | 'logins';
+  setSeg: (v: 'login' | 'adopt' | 'inventory' | 'all' | 'logins') => void;
+  counts: { cLogin: number; cAdopt: number; cInv: number; savedCount: number };
+}) {
   const qc = useQueryClient();
+  const { toast } = useToast();
+  const [adoptedN, setAdoptedN] = useState(0);   // last successful surface-adopt count → inline deep-link to inventory
   const [connecting, setConnecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectedCreds, setSelectedCreds] = useState<Set<number>>(new Set());  // logins to try; empty = auto
@@ -2031,7 +2026,7 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
   // The active view ('login' | 'adopt' | 'inventory' | 'all') is chosen by the
   // parent ConnectionsTab's single tab bar and passed in — one tab row, not
   // tabs-under-tabs. Clear the selection when the view changes.
-  useEffect(() => { setSelected(new Set()); }, [seg, bulkMethod]);
+  useEffect(() => { setSelected(new Set()); setAdoptedN(0); }, [seg, bulkMethod]);
   const creds = useQuery({ queryKey: ['disc-creds'], queryFn: async () => (await discoveryApi.listCredentials()).data.credentials as any[] });
   const hostCreds = (creds.data ?? []).filter((c: any) => c.kind === 'winrm' || c.kind === 'ssh');
   const q = useQuery({
@@ -2091,11 +2086,16 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
   // UNMANAGED, evidence-only asset (IP/MAC/vendor/type). This is the managed
   // home for the leftover devices — reachable right here, not only in the Inbox.
   const runAdopt = useMutation({
-    mutationFn: async (ids: number[]) => {
-      // No bulk endpoint yet — resolve each observation as 'adopt' in parallel.
-      await Promise.all(ids.map((id) => discoveryApi.resolve(id, 'adopt')));
+    mutationFn: (ids: number[]) => discoveryApi.bulkResolve(ids, 'adopt').then((r) => r.data),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] });
+      qc.invalidateQueries({ queryKey: ['disc-inbox'] });
+      setSelected(new Set());
+      const n = res?.adopted ?? 0;
+      setAdoptedN(n);
+      toast({ type: n ? 'success' : 'info', title: `${n} adopted`,
+        message: n ? 'Added to inventory as surface assets — no credentials used.' : 'Nothing new to adopt.' });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); qc.invalidateQueries({ queryKey: ['disc-inbox'] }); },
   });
   // Dismiss a row (resolve 'ignore') — removes stale/ghost devices (e.g. a
   // machine that moved IP and lingers via a stale ARP entry) from the queue.
@@ -2156,82 +2156,158 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
   //  host → attemptable hosts (WinRM/SSH/typed service); wmi → Windows only;
   //  snmp → any device with an IP (SNMP needs no host login — that's the point,
   //  it's for the no-login network gear). So the checkboxes light up accordingly.
-  const bulkSelectable = (d: any) => !d.connected && !d.in_inventory && d.resolution !== 'review' && !!d.observation_id && (
+  const connSelectable = (d: any) => !d.connected && !d.in_inventory && d.resolution !== 'review' && !!d.observation_id && (
     bulkMethod === 'auto' ? ((d.login_methods || []).length > 0)
       : bulkMethod === 'snmp' ? !!d.ip_address
       : bulkMethod === 'wmi' ? d.transport === 'windows'
       : attemptOf(d));
-  const selectableIds: number[] = shown.filter(bulkSelectable).map((d) => d.observation_id);
-  // Non-host devices (phones/printers/silent) that can only be brought in via Adopt.
-  const adoptableIds: number[] = shown.filter((d) => nonTerminal(d) && !attemptOf(d) && d.observation_id).map((d) => d.observation_id);
+  // Surface-adopt candidate: a non-host device (phone/printer/silent) brought in
+  // WITHOUT credentials as a surface (unmanaged, evidence-only) asset. Firewall
+  // echoes are SIP/IPS proxy reflections, not real devices — never adoptable.
+  const adoptSelectable = (d: any) => nonTerminal(d) && !attemptOf(d) && !!d.observation_id && d.device_type !== 'firewall_echo';
+  // A row's checkbox is live if EITHER action can target it; the two sets are
+  // disjoint (attemptable→connect vs not→adopt), so one selection is unambiguous.
+  const rowSelectable = (d: any) => connSelectable(d) || adoptSelectable(d);
+  const connSelectableIds: number[] = shown.filter(connSelectable).map((d) => d.observation_id);
+  const adoptableIds: number[] = shown.filter(adoptSelectable).map((d) => d.observation_id);
+  const selectableIds: number[] = Array.from(new Set([...connSelectableIds, ...adoptableIds]));
+  // Connect targets = the attemptable subset of the selection (or all attemptable
+  // when nothing is ticked). Adopt targets = the adoptable subset likewise — so
+  // ticking a mix lights up both buttons, each acting only on its own rows.
+  const connectTargets: number[] = selected.size > 0 ? connSelectableIds.filter((id) => selected.has(id)) : connSelectableIds;
+  const adoptTargets: number[] = selected.size > 0 ? adoptableIds.filter((id) => selected.has(id)) : adoptableIds;
   const allChecked = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
-  const targetIds = selected.size > 0 ? Array.from(selected) : selectableIds;
-  const connectLabel = selected.size > 0 ? `Connect ${selected.size} selected` : `Connect all (${selectableIds.length})`;
+  const targetIds = connectTargets;
+  const connectLabel = selected.size > 0 ? `Connect ${connectTargets.length} selected` : `Connect all (${connSelectableIds.length})`;
   // The device the popup explainer is open for (from the full list, so it
   // survives filter/segment changes while the modal is up).
   const explainDev = explainFor != null ? devices.find((d: any) => d.observation_id === explainFor && !d.in_inventory) : null;
   const connectDev = openFor != null ? devices.find((d: any) => d.observation_id === openFor && !d.in_inventory) : null;
 
   return (
-    <section className="panel">
-      {/* One compact bar: filters (search / run / type) on the left, actions
-          (fill names / logins / connect) pushed to the right. The counts already
-          live in the tab ("Can log in N") and the table footer, so no separate
-          info line. */}
-      <div className="toolbar">
+    <div className="cq-workspace" style={{ flex: '1 1 auto', minHeight: 0, gridTemplateRows: 'minmax(0, 1fr)' }}>
+      {/* LEFT FILTER RAIL — same pattern as the IT Asset Inventory register's
+          left rail (white card column, controls grouped under uppercase caps).
+          Every control that used to crowd the top bar lives here now: the
+          search / run / type filters, plus the bulk connect method and
+          logins-to-try. Same state + filtering logic, only relocated. */}
+      <aside className="cq-rail" style={{ alignSelf: 'start' }}>
+        {/* VIEW — the five segments moved off the old horizontal sub-tab row into
+            the rail so the device table pulls up and shows more rows. Same views,
+            same counts, now a compact vertical list; it always shows (even for
+            Saved logins), the device filters below only show for device segs. */}
+        <div className="cq-railcap">View</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {([
+            { key: 'login', label: 'Can log in', n: counts.cLogin },
+            { key: 'adopt', label: 'Adopt-only', n: counts.cAdopt },
+            { key: 'inventory', label: 'In inventory', n: counts.cInv },
+            { key: 'all', label: 'All', n: null },
+            { key: 'logins', label: 'Saved logins', n: counts.savedCount },
+          ] as const).map((v) => {
+            const on = seg === v.key;
+            return (
+              <button key={v.key} onClick={() => setSeg(v.key)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  width: '100%', textAlign: 'left', border: 'none', borderRadius: 9, cursor: 'pointer',
+                  padding: '7px 9px', fontSize: 12.5, fontWeight: 600,
+                  background: on ? 'var(--mint-soft)' : 'transparent', color: on ? 'var(--mint2)' : 'var(--muted)' }}>
+                <span>{v.label}</span>
+                {v.n != null && <span className="count" style={{ fontSize: 10, fontWeight: 700, borderRadius: 999,
+                  padding: '1px 7px', background: 'var(--amber-soft)', color: 'var(--amber)' }}>{v.n}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {seg !== 'logins' && (<>
+        <div className="cq-railcap">Search</div>
         <input className="input" placeholder="Search device, IP or hostname" value={search} onChange={(e) => setSearch(e.target.value)} />
+
         {runs.length > 1 && (
-          <select className="select" value={runFilter != null ? String(runFilter) : ''} onChange={(e) => setRunFilter(e.target.value ? Number(e.target.value) : undefined)}>
-            <option value="">All runs · {devices.length}</option>
-            {runs.map((r) => <option key={r.run_id} value={String(r.run_id)}>{(r.is_latest ? 'Latest · ' : '') + 'Run #' + r.run_id}</option>)}
-          </select>
+          <>
+            <div className="cq-railcap">Scan run</div>
+            <select className="select" value={runFilter != null ? String(runFilter) : ''} onChange={(e) => setRunFilter(e.target.value ? Number(e.target.value) : undefined)}>
+              <option value="">All runs · {devices.length}</option>
+              {runs.map((r) => <option key={r.run_id} value={String(r.run_id)}>{(r.is_latest ? 'Latest · ' : '') + 'Run #' + r.run_id}</option>)}
+            </select>
+            {runFilter != null && (
+              <button className="btn btn-secondary cq-wide" title="Delete this run" disabled={delRunQ.isPending}
+                onClick={() => { if (window.confirm(`Delete Run #${runFilter}? This removes the scan and its discovered devices — adopted assets stay in inventory.`)) delRunQ.mutate(runFilter); }}
+                style={{ color: '#b91c1c' }}>🗑 Delete run</button>
+            )}
+          </>
         )}
-        {runFilter != null && (
-          <button className="btn btn-secondary" title="Delete this run" disabled={delRunQ.isPending}
-            onClick={() => { if (window.confirm(`Delete Run #${runFilter}? This removes the scan and its discovered devices — adopted assets stay in inventory.`)) delRunQ.mutate(runFilter); }}
-            style={{ color: '#b91c1c' }}>🗑 Delete run</button>
-        )}
+
+        <div className="cq-railcap">Device type</div>
         <select className="select" value={ftype} onChange={(e) => setFtype(e.target.value)}>
           <option value="">All types</option>
           {types.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        {(ftype || search) && <button className="btn btn-secondary" onClick={() => { setFtype(''); setSearch(''); }}>Clear</button>}
-        <span className="push" />
-        {namelessCount > 0 && <button className="btn btn-secondary" onClick={() => setDhcpOpen(true)} title="Pull real device names from your DHCP server lease table">Fill names <span className="count">{namelessCount}</span></button>}
-        {adoptableIds.length > 0 && (
-          <button className="btn btn-secondary" disabled={runAdopt.isPending}
-            onClick={() => { if (window.confirm(`Adopt ${adoptableIds.length} device${adoptableIds.length === 1 ? '' : 's'} as unmanaged, evidence-only assets?`)) runAdopt.mutate(adoptableIds); }}>
-            {runAdopt.isPending ? 'Adopting…' : `Adopt ${adoptableIds.length}`}
-          </button>
-        )}
+
         {/* Bulk method: WinRM/SSH host login (default), WMI (Windows·DCOM, reuses
             the WinRM login), or SNMP (community string). SNMP swaps the login
-            picker for a community field. */}
-        <CsDropdown minWidth={148} value={bulkMethod} onChange={(v) => setBulkMethod(v as any)}
-          options={[
-            { value: 'auto', label: 'Auto · use what each device answers on' },
-            { value: 'host', label: 'Host · WinRM/SSH' },
-            { value: 'wmi', label: 'WMI · Windows' },
-            { value: 'snmp', label: 'SNMP · 161' },
-          ]} />
+            picker below for a community field. */}
+        <div className="cq-railcap">Connect with</div>
+        <div className="cq-field">
+          <CsDropdown value={bulkMethod} onChange={(v) => setBulkMethod(v as any)}
+            options={[
+              { value: 'auto', label: 'Auto · use what each device answers on' },
+              { value: 'host', label: 'Host · WinRM/SSH' },
+              { value: 'wmi', label: 'WMI · Windows' },
+              { value: 'snmp', label: 'SNMP · 161' },
+            ]} />
+        </div>
+
+        <div className="cq-railcap">{bulkMethod === 'snmp' ? 'SNMP community' : 'Logins to try'}</div>
         {bulkMethod === 'snmp'
-          ? <input className="input" style={{ flex: 'none', minWidth: 140, maxWidth: 190 }} placeholder="Community (e.g. public)" value={bulkCommunity} onChange={(e) => setBulkCommunity(e.target.value)} />
-          : hostCreds.length > 0 && (
-            <CsLoginPicker
-              options={hostCreds.map((c: any) => ({ id: c.id, name: c.name, kind: c.kind }))}
-              selected={selectedCreds}
-              onToggle={toggleCred}
-              onToggleAll={(checked) => setSelectedCreds(checked ? new Set<number>(hostCreds.map((c: any) => c.id as number)) : new Set())}
-              minWidth={150}
-            />
+          ? <input className="input" placeholder="Community (e.g. public)" value={bulkCommunity} onChange={(e) => setBulkCommunity(e.target.value)} />
+          : hostCreds.length > 0
+            ? (
+              <div className="cq-field">
+                <CsLoginPicker
+                  options={hostCreds.map((c: any) => ({ id: c.id, name: c.name, kind: c.kind }))}
+                  selected={selectedCreds}
+                  onToggle={toggleCred}
+                  onToggleAll={(checked) => setSelectedCreds(checked ? new Set<number>(hostCreds.map((c: any) => c.id as number)) : new Set())}
+                />
+              </div>
+            )
+            : <div className="cq-hint">No host login saved yet — use ＋ Add connection.</div>}
+
+        {(ftype || search) && <button className="btn btn-secondary cq-wide" onClick={() => { setFtype(''); setSearch(''); }}>Clear filters</button>}
+        </>)}
+      </aside>
+
+      {/* RIGHT — the device table, now with the freed horizontal width. The old
+          crammed top bar is reduced to the primary Connect action (plus the two
+          contextual bulk actions, which still only appear when they apply).
+          height:100% + overflowY:auto → the table scrolls inside this column while the
+          left rail stays put (no page scroll, no empty left column). */}
+      <section className="panel" style={{ minHeight: 0, height: '100%', overflowY: 'auto' }}>
+        {seg === 'logins' ? <Credentials /> : (<>
+        <div className="cq-actionbar">
+          <span className="push" />
+          {namelessCount > 0 && <button className="btn btn-secondary" onClick={() => setDhcpOpen(true)} title="Pull real device names from your DHCP server lease table">Fill names <span className="count">{namelessCount}</span></button>}
+          {adoptedN > 0 && (
+            <Link href="/cyber-assurance/assets?tab=inventory&scan_depth=surface" style={{ color: 'var(--mint2, #1e9e8a)', fontWeight: 700, fontSize: 12.5, textDecoration: 'none', alignSelf: 'center' }}>
+              View {adoptedN} surface asset{adoptedN === 1 ? '' : 's'} →
+            </Link>
           )}
-        <button className="btn btn-primary"
-          disabled={connecting || runConnect.isPending || targetIds.length === 0 || (bulkMethod === 'snmp' && !bulkCommunity.trim())}
-          title={bulkMethod === 'wmi' ? 'WMI needs impacket on the server + TCP 135 reachable' : bulkMethod === 'snmp' ? 'Reads devices over SNMP UDP/161 with the community string' : undefined}
-          onClick={() => runConnect.mutate({ ids: targetIds, credIds: Array.from(selectedCreds), method: bulkMethod, community: bulkCommunity })}>
-          {connecting || runConnect.isPending ? 'Connecting…' : connectLabel}
-        </button>
-      </div>
+          {adoptTargets.length > 0 && (
+            <button className="btn btn-primary" disabled={runAdopt.isPending}
+              title="Bring these in as surface (unmanaged, evidence-only) assets — no login or credentials needed"
+              onClick={() => runAdopt.mutate(adoptTargets)}>
+              {runAdopt.isPending ? 'Adopting…' : `Adopt as surface asset (no credentials) · ${adoptTargets.length}`}
+            </button>
+          )}
+          <button className="btn btn-primary"
+            disabled={connecting || runConnect.isPending || targetIds.length === 0 || (bulkMethod === 'snmp' && !bulkCommunity.trim())}
+            title={bulkMethod === 'wmi' ? 'WMI needs impacket on the server + TCP 135 reachable' : bulkMethod === 'snmp' ? 'Reads devices over SNMP UDP/161 with the community string' : undefined}
+            onClick={() => runConnect.mutate({ ids: targetIds, credIds: Array.from(selectedCreds), method: bulkMethod, community: bulkCommunity })}>
+            {connecting || runConnect.isPending ? 'Connecting…' : connectLabel}
+          </button>
+        </div>
 
       <SweepProgress active={connecting} onIdle={() => { setConnecting(false); qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); }} />
       {runConnect.isError && <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--red)' }}>{(runConnect.error as any)?.response?.data?.detail || 'Could not start connect.'}</div>}
@@ -2244,7 +2320,7 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
           <table className="data-table">
             <thead><tr>
               <th style={{ width: 34 }}><input type="checkbox" checked={allChecked} onChange={() => setSelected(allChecked ? new Set() : new Set(selectableIds))} /></th>
-              <th>Device</th><th>IP</th><th title="Hardware address — the one identifier that does not change when the IP or name changes. Complyverse recognises an existing asset by this.">MAC</th><th>Type</th><th title="Which login doors answered at the last scan — checked automatically for every device">Login methods</th><th>Discovered by</th><th>Last seen</th><th>Status</th><th></th>
+              <th>Device</th><th>IP</th><th title="Hardware address — the one identifier that does not change when the IP or name changes. ComplyVerse recognises an existing asset by this.">MAC</th><th>Type</th><th title="Which login doors answered at the last scan — checked automatically for every device">Login methods</th><th>Discovered by</th><th>Last seen</th><th>Status</th><th></th>
             </tr></thead>
             <tbody>
               {shown.map((d) => {
@@ -2255,8 +2331,9 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
                   : st2 === 'ready' ? 'A login door (WinRM, SSH, WMI or SNMP) was confirmed open at the last scan.'
                   : st2 === 'attempt' ? 'This looks like a Windows/Linux host, but its login port (WinRM/SSH) was NOT seen open at the last scan. You can still try a saved login — it fast-fails as "unreachable" if the port is closed (never a bad-password lockout). If it keeps failing, enable remote management on that host, then re-scan.'
                   : undefined;
-                const canSel = bulkSelectable(d);
+                const canSel = rowSelectable(d);
                 const canConnect = attemptOf(d);
+                const canAdopt = adoptSelectable(d);
                 const ty = (discType(d) || '').toLowerCase();
                 const icon = ty.includes('camera') ? '◉' : ty.includes('dns') ? '⌘' : ty.includes('printer') ? '⎙' : (ty.includes('phone') || ty.includes('voip')) ? '☎' : (ty.includes('host') || ty.includes('linux') || ty.includes('server') || ty.includes('windows')) ? '▣' : '▢';
                 return (
@@ -2311,7 +2388,8 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
                           : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
                             {canConnect ? <button className="btn btn-sm btn-primary" onClick={() => setOpenFor(openFor === d.observation_id ? null : d.observation_id)}>Connect</button>
-                              : <button className="btn btn-sm btn-secondary" disabled={runAdopt.isPending} onClick={() => runAdopt.mutate([d.observation_id])}>Adopt</button>}
+                              : canAdopt ? <button className="btn btn-sm btn-secondary" disabled={runAdopt.isPending} title="Adopt as a surface asset — no credentials" onClick={() => runAdopt.mutate([d.observation_id])}>Adopt</button>
+                              : null}
                             <button onClick={() => { if (window.confirm(`Dismiss ${d.host_name || d.ip_address}? It leaves the queue (marked ignored). A future scan that truly sees it can bring it back.`)) runDismiss.mutate(d.observation_id); }}
                               disabled={runDismiss.isPending}
                               title="Remove this row from the queue — use for ghosts (e.g. a device that moved IP and lingers via a stale ARP entry)"
@@ -2340,7 +2418,9 @@ function DiscoveredQueue({ seg }: { seg: 'login' | 'adopt' | 'inventory' | 'all'
       )}
       {explainDev && <DeviceExplainerModal device={explainDev} onClose={() => setExplainFor(null)} />}
       {connectDev && <ConnectDeviceModal device={connectDev} onClose={() => setOpenFor(null)} onDone={() => { setOpenFor(null); qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); }} />}
-    </section>
+      </>)}
+      </section>
+    </div>
   );
 }
 
@@ -2468,7 +2548,7 @@ function AddConnectionModal({ onClose }: { onClose: () => void }) {
               <p style={{ fontSize: 13.5, color: 'var(--as-secondary)', marginTop: 0, marginBottom: 16 }}>How do you want to connect?</p>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {choice('agentless', 'Agentless', 'Connect with a login — nothing installed on the target. Windows · Linux · database · cloud · network device · Active Directory.')}
-                {choice('agent', 'Agent', "Install a small program on the machine — for endpoints you can't reach inbound: roaming laptops, NAT'd or firewalled boxes.", true)}
+                {choice('agent', 'Agent', "Install a small program on the machine — for endpoints you can't reach inbound: roaming laptops, NAT'd or firewalled boxes.")}
               </div>
             </div>
           )}
@@ -2538,21 +2618,17 @@ function ConnectionsTab() {
   const cInv = devices.filter((d) => d.in_inventory).length;
   const savedCount = (credQ.data ?? []).length;
   return (
-    <div className="disc-cc">
-      <div className="page-line">
+    // Bounded flex column: header + sub-tabs stay fixed, the content below fills the rest and
+    // scrolls INTERNALLY — so the device TABLE scrolls, not the page, and the short left filter
+    // rail no longer drags an empty column through the viewport.
+    <div className="disc-cc" style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="page-line" style={{ flexShrink: 0 }}>
         <div><h2>Connect discovered devices</h2></div>
         <div className="actions">
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>＋ Add connection</button>
         </div>
       </div>
-      <nav className="tabs" style={{ marginBottom: 16 }}>
-        <a className={view === 'login' ? 'active' : ''} onClick={() => setView('login')}>Can log in <span className="count">{cLogin}</span></a>
-        <a className={view === 'adopt' ? 'active' : ''} onClick={() => setView('adopt')}>Adopt-only <span className="count">{cAdopt}</span></a>
-        <a className={view === 'inventory' ? 'active' : ''} onClick={() => setView('inventory')}>In inventory <span className="count">{cInv}</span></a>
-        <a className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All</a>
-        <a className={view === 'logins' ? 'active' : ''} onClick={() => setView('logins')}>Saved logins <span className="count">{savedCount}</span></a>
-      </nav>
-      {view === 'logins' ? <Credentials /> : <DiscoveredQueue seg={view} />}
+      <DiscoveredQueue seg={view} setSeg={setView} counts={{ cLogin, cAdopt, cInv, savedCount }} />
       {showAdd && <AddConnectionModal onClose={() => setShowAdd(false)} />}
     </div>
   );
@@ -2563,8 +2639,8 @@ export default function AssetDiscoveryPage() {
   const inboxQ = useQuery({ queryKey: ['disc-inbox'], queryFn: async () => (await discoveryApi.inbox('open')).data.observations as any[] });
   const inboxN = (inboxQ.data ?? []).length;
   return (
-    <div className="asset-suite discovery-suite as-fadeup" style={{ padding: '4px 2px' }}>
-      <div className="disc-cc"><nav className="tabs" style={{ marginBottom: 18 }}>
+    <div className="asset-suite discovery-suite as-fadeup" style={{ padding: '4px 2px', zoom: 0.8, height: 'calc(100% / 0.8)', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="disc-cc" style={{ flexShrink: 0 }}><nav className="tabs" style={{ marginBottom: 18 }}>
         {TABS.map((t) => (
           <a key={t.id} className={t.id === tab ? 'active' : ''} onClick={() => setTab(t.id)}>
             {t.label}{t.id === 'inbox' && inboxN > 0 && <span className="count">{inboxN}</span>}
@@ -2572,12 +2648,16 @@ export default function AssetDiscoveryPage() {
         ))}
       </nav></div>
 
-      {tab === 'overview' && <Overview go={(t) => setTab((t as any) || 'runs')} />}
-      {tab === 'discover' && <DiscoveryTab go={(t) => setTab(t as any)} />}
-      {tab === 'connections' && <ConnectionsTab />}
-      {tab === 'inbox' && <InboxView />}
-      {tab === 'runs' && <Runs />}
-      {tab === 'map' && <NetworkMap />}
+      {/* One-window lock: the tab bar stays fixed and the tab BODY is the only scroller, so the
+          page fills exactly one viewport with internal scroll — no page-level empty bar when you
+          scroll down (matches how the Vulnerability Register bounds its panes). */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+        {tab === 'overview' && <Overview go={(t) => setTab((t as any) || 'runs')} />}
+        {tab === 'discover' && <DiscoveryTab go={(t) => setTab(t as any)} />}
+        {tab === 'connections' && <ConnectionsTab />}
+        {tab === 'inbox' && <InboxView />}
+        {tab === 'runs' && <Runs />}
+      </div>
     </div>
   );
 }

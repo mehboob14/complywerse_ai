@@ -19,6 +19,7 @@ import {
   Cloud,
   Building2,
   DollarSign,
+  GitBranch,
 } from 'lucide-react';
 
 const ASSET_TYPES = [
@@ -27,9 +28,13 @@ const ASSET_TYPES = [
   { value: 'data', label: 'Data', icon: Database, description: 'Databases, data stores, and data repositories' },
   { value: 'cloud', label: 'Cloud Resource', icon: Cloud, description: 'Cloud services, SaaS, PaaS, and IaaS resources' },
   { value: 'third_party', label: 'Third-Party System', icon: Building2, description: 'External vendor systems and services' },
+  { value: 'repository', label: 'Code / Repository', icon: GitBranch, description: 'Source-code repos (GitHub, GitLab…) — SAST, dependency, secret & CI/CD scanning' },
 ];
 
 const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
+  // Repository's "component" slot holds the repo URL (free text), so it renders a
+  // text field, not this dropdown — kept here only to satisfy the typed map.
+  repository: [],
   infrastructure: ['Server', 'Router', 'Switch', 'Firewall', 'Desktop', 'Laptop', 'Storage', 'Access Point', 'Rack', 'Load Balancer'],
   application: ['Web Application', 'Mobile Application', 'API Service', 'Authentication Service', 'ERP', 'CRM', 'Middleware', 'Microservice'],
   data: ['Database', 'Data Warehouse', 'Data Lake', 'File Repository', 'Backup Store', 'ETL Pipeline', 'Analytics Store'],
@@ -38,6 +43,7 @@ const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
 };
 
 const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]>> = {
+  repository: {},
   infrastructure: {
     Server: ['CPU', 'RAM', 'ROM', 'NIC', 'Power Supply', 'RAID Controller'],
     Router: ['Routing Engine', 'WAN Interface', 'LAN Interface', 'Power Module', 'Management Port'],
@@ -518,6 +524,7 @@ export function AssetModal({
   // only — no backend or schema change.
   const at = formData.asset_type;
   const show = {
+    repo: at === 'repository',
     ip: at === 'infrastructure' || at === 'data' || at === 'cloud' || at === 'application',
     hardware: at === 'infrastructure',
     os: at === 'infrastructure' || at === 'data',
@@ -604,7 +611,24 @@ export function AssetModal({
               </div>
             </div>}
 
-            {/* Row: Primary Component + IP Address */}
+            {show.repo ? (
+              /* A repo's scannable address IS its clone URL — stored in host_name
+                 (via formData.component), ip_address left empty. The vuln scanner
+                 reads ip_address||host_name||name and routes any github/gitlab/… URL
+                 to the repo lane (clone + SAST/deps/secrets/CI-CD), so no other wiring. */
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Repository URL</label>
+                <input
+                  type="text"
+                  value={formData.component}
+                  onChange={(e) => setFormData({ ...formData, component: e.target.value, sub_components: [] })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., https://github.com/org/repo"
+                />
+                <p className="mt-0.5 text-[11px] text-slate-500">The clone URL (GitHub, GitLab, Bitbucket…). A vulnerability scan clones it and runs SAST, dependency, secret &amp; CI/CD checks.</p>
+              </div>
+            ) : (
+            /* Row: Primary Component + IP Address */
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-0.5">Primary Component</label>
@@ -632,6 +656,7 @@ export function AssetModal({
                 </div>
               )}
             </div>
+            )}
 
             {/* Hardware — infrastructure only (servers/network/hardware). Also
                 auto-populated by agent heartbeat or agentless (WinRM/SSH) scan.

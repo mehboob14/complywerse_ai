@@ -21,6 +21,12 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 
+const SCANNER_LABELS: Record<string, string> = {
+  nessus: 'Tenable Nessus',
+  tenable: 'Tenable Nessus',
+  nexpose: 'Rapid7 Nexpose',
+};
+
 interface Connection {
   id: number;
   connection_name: string;
@@ -97,7 +103,7 @@ export default function ConnectionsPage() {
   const canDelete = hasPermission('integrations:connections:delete');
 
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedType, setSelectedType] = useState('nexpose');
+  const [selectedType, setSelectedType] = useState('nessus');
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [detailConn, setDetailConn] = useState<Connection | null>(null);
   const [testResult, setTestResult] = useState<{ id: number; success?: boolean; message?: string } | null>(null);
@@ -116,7 +122,9 @@ export default function ConnectionsPage() {
 
   const { data: connectionsData, isLoading, isError } = useQuery({
     queryKey: ['connections'],
-    queryFn: () => integrationsApi.listConnections(),
+    // Scanners only: this table also holds the native help desk (ticketing),
+    // dropped Frappe, and discovery/WinRM credential rows, which aren't scanners.
+    queryFn: () => integrationsApi.listConnections({ scanners_only: true }),
     // While a background sync is in flight, refetch so we notice it landing.
     refetchInterval: syncingId != null ? 2500 : false,
   });
@@ -238,7 +246,7 @@ export default function ConnectionsPage() {
   const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const integrationType = (form.get('integration_type') as string) || 'nexpose';
+    const integrationType = (form.get('integration_type') as string) || 'nessus';
     createMutation.mutate({
       connection_name: form.get('connection_name') as string,
       integration_type: integrationType,
@@ -307,7 +315,6 @@ export default function ConnectionsPage() {
                 onChange={(e) => setSelectedType(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
-                <option value="nexpose">Rapid7 Nexpose / InsightVM</option>
                 <option value="nessus">Tenable Nessus</option>
               </select>
             </div>
@@ -475,7 +482,7 @@ export default function ConnectionsPage() {
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Configuration</h3>
                 <dl className="space-y-2">
                   {([
-                    ['Scanner Type', detailConn.integration_type === 'nessus' ? 'Tenable Nessus' : 'Rapid7 Nexpose'],
+                    ['Scanner Type', SCANNER_LABELS[detailConn.integration_type] ?? detailConn.integration_type],
                     ['Console URL', `${detailConn.console_url}:${detailConn.console_port}`],
                     ['Credential Prefix', detailConn.credential_env_prefix],
                     ['Auth Method', detailConn.auth_method || '—'],
@@ -585,7 +592,7 @@ export default function ConnectionsPage() {
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
                       conn.integration_type === 'nessus' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-700'
                     }`}>
-                      {conn.integration_type === 'nessus' ? 'Tenable Nessus' : 'Rapid7 Nexpose'}
+                      {SCANNER_LABELS[conn.integration_type] ?? conn.integration_type}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5 truncate">{conn.console_url}:{conn.console_port}</p>
@@ -689,7 +696,7 @@ export default function ConnectionsPage() {
                     <span className="text-xs leading-relaxed">
                       <span className="font-medium text-slate-800">Push decisions to scanner (two-way sync)</span>
                       <span className="block text-slate-500 mt-0.5">
-                        When a finding is marked false positive or granted an exception in Complyverse, mirror that
+                        When a finding is marked false positive or granted an exception in ComplyVerse, mirror that
                         decision in the scanner (e.g. a host-scoped Nessus plugin rule). Actions the scanner&apos;s API
                         can&apos;t represent are recorded as skipped with the reason. Auto-close on verified re-scan is
                         always on and doesn&apos;t modify the scanner.

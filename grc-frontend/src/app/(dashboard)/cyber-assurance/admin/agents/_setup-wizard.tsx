@@ -568,7 +568,7 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
               <div className="border border-slate-200 rounded-lg overflow-hidden mb-3">
                 <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
                   <div className="text-xs font-semibold text-slate-900">Mass-deploy in 3 manual steps + 1 automatic</div>
-                  <div className="text-[11px] text-slate-500">Complyverse can't push to your PCs directly — your Windows AD does that. Set it up once, then it's hands-free.</div>
+                  <div className="text-[11px] text-slate-500">ComplyVerse can't push to your PCs directly — your Windows AD does that. Set it up once, then it's hands-free.</div>
                 </div>
                 <div className="divide-y divide-slate-100">
                   <div className="flex items-start gap-2.5 px-3 py-2">
@@ -590,7 +590,7 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-medium text-slate-900">Drop all 3 on your AD file share</div>
                       <div className="text-[11px] text-slate-600">
-                        e.g. <code className="bg-slate-100 px-1 rounded">\\fileserver\ava\</code>. Permissions: only Domain Computers + Domain Admins.
+                        e.g. <code className="bg-slate-100 px-1 rounded">\\fileserver\complyverse\</code>. Permissions: only Domain Computers + Domain Admins.
                       </div>
                     </div>
                     <span className="flex-none text-[10px] text-primary-700 bg-primary-50 border border-primary-200 rounded px-1.5 py-0.5">You</span>
@@ -630,10 +630,10 @@ export default function SetupWizard({ open, onClose, discoveryPrefill }: SetupWi
                 <p className="mt-2 pl-4 leading-relaxed">
                   <strong>Group Policy Objects (GPO)</strong> are a feature of Microsoft Active
                   Directory — they let one AD admin push settings (or run scripts) on every
-                  PC that joins the domain. Complyverse is a SaaS, so it can't reach into
+                  PC that joins the domain. ComplyVerse is a SaaS, so it can't reach into
                   your bank's network and install anything on PCs directly. We give you the
                   installer + the script + the tokens; your AD admin wires those into GPO
-                  once. After that AD handles the "push" — no Complyverse-side action
+                  once. After that AD handles the "push" — no ComplyVerse-side action
                   needed when new PCs join.
                 </p>
               </details>

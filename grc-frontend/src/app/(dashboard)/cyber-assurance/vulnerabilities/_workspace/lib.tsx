@@ -51,8 +51,17 @@ export interface Vulnerability {
   affected_component?: string;
   affected_host?: string;
   plugin_family?: string;
+  // Provenance of the finding — e.g. "ai-pentest:zap", "ai-pentest:hexstrike",
+  // a Nessus scan tag. Raw engine/tool names; NEVER surfaced verbatim in the UI
+  // (owner rule) — always routed through `assessmentType()` / `deBrandDomain()`.
+  source?: string;
   linked_assets?: string[];
+  assigned_departments?: string[];
   due_date?: string;
+  discovered_at?: string;
+  resolved_at?: string;
+  internet_exposed?: boolean;
+  internet_facing?: boolean;
   assigned_to?: number;
   assignee_name?: string;
   report_id?: number;
@@ -69,6 +78,9 @@ export interface Vulnerability {
   nvd_last_synced_at?: string;
   exploit_references?: string[];
   composite_priority?: number;
+  // Two-flow provenance: 'surface' = unauthenticated scan, 'credentialed' =
+  // authenticated scan, null/absent = unknown (manual/imported findings).
+  scan_mode?: 'surface' | 'credentialed' | null;
   // NCA template payload — present only on bridged NCA vulns.
   template_fields?: Record<string, unknown>;
 }
@@ -529,6 +541,42 @@ export function AssetsCell({ vuln }: { vuln: Pick<Vulnerability, 'linked_assets'
       <Users className="h-3.5 w-3.5" strokeWidth={1.75} /> {n}
     </span>
   );
+}
+
+// ─── De-branding: raw engine/tool names → owner-safe labels ──────────────────
+// Owner rule: scanner/engine/tool names (openvas, zap, nessus, hexstrike,
+// pentestgpt, nuclei, metasploit, netexec…) are NEVER shown in the product. A
+// finding's provenance (`source` like "ai-pentest:zap", or its scanner
+// `plugin_family`) is mapped to one of three assessment TYPES instead.
+const WEB_TOOLS = ['zap', 'nuclei', 'nikto', 'burp', 'wapiti', 'arachni', 'sqlmap', 'webapp', 'web-app'];
+const SCAN_TOOLS = ['nessus', 'openvas', 'openscap', 'nmap', 'tenable', 'qualys'];
+const PENTEST_TOOLS = ['hexstrike', 'pentestgpt', 'metasploit', 'msf', 'netexec', 'crackmap', 'adstrike', 'bloodhound', 'hashcat', 'impacket', 'responder', 'pentest', 'exploit'];
+const TOOL_RE = new RegExp(`\\b(${[...WEB_TOOLS, ...SCAN_TOOLS, ...PENTEST_TOOLS].join('|')})\\b`, 'i');
+
+/** Map a finding's raw provenance (its `source`, else `plugin_family`) to a
+ *  tool-neutral assessment type: "Vulnerability scan" | "Web application scan"
+ *  | "Penetration test". Unknown provenance defaults to a vulnerability scan
+ *  (the bulk of findings), never a tool name. */
+export function assessmentType(raw?: string | null): string {
+  const s = (raw || '').toLowerCase();
+  if (!s) return 'Vulnerability scan';
+  const slug = s.includes(':') ? s.split(':').pop()! : s; // "ai-pentest:zap" → "zap"
+  if (WEB_TOOLS.some((t) => slug.includes(t))) return 'Web application scan';
+  if (SCAN_TOOLS.some((t) => slug.includes(t))) return 'Vulnerability scan';
+  if (s.includes('pentest') || PENTEST_TOOLS.some((t) => slug.includes(t))) return 'Penetration test';
+  return 'Vulnerability scan';
+}
+
+/** De-brand a register "domain" (scanner plugin_family) label for display.
+ *  Legit domain families (Windows, Web Servers, Databases…) pass through
+ *  unchanged; only entries that leak an engine/tool name (e.g. "AI Pentest
+ *  (openvas/zap/PentestGPT/Nessus)") collapse to a clean assessment type. */
+export function deBrandDomain(family?: string | null): string {
+  const f = (family || 'General').trim();
+  const low = f.toLowerCase();
+  if (low.includes('pentest') || TOOL_RE.test(low)) return 'Penetration test';
+  // Strip any trailing tool-list parenthetical, just in case.
+  return f.replace(/\s*\([^)]*\)\s*$/, '').trim() || 'General';
 }
 
 // ─── Vuln letter/id tile ─────────────────────────────────────────────────────

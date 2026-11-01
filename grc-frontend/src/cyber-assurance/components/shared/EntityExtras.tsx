@@ -138,7 +138,7 @@ export function AlertsPanel({ assetId, canEdit }: { assetId: number; canEdit?: b
             <Radar size={14} /> Nothing needs attention on this asset right now.
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
             {items.map((a: any, i: number) => {
               const resolved = a.status === 'resolved';
               return (

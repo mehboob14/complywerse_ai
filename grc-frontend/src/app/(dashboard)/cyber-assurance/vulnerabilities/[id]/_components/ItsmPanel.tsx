@@ -1,19 +1,18 @@
 'use client';
 
 /**
- * CTEM Phase 5 — ITSM mobilisation panel on the finding detail page.
+ * Help Desk panel on the finding detail (Remediation tab).
  *
- * Push this finding to a configured ticketing connector, see its ticket(s)
- * and their status. Statuses are shown "as of last sync" (no scheduler in
- * this deployment — the computed_at honesty pattern), with a manual sync.
- * Resolving a ticket in ServiceNow advances the remediation plan to applied
- * (never verified — that stays the scanner/retest path).
+ * Create a Help Desk ticket for THIS finding, see its ticket(s) and status.
+ * The ticket engine stays invisible: the client never picks a connector — the
+ * backend resolves the tenant's Help Desk connection server-side. Statuses are
+ * shown "as of last sync" with a manual refresh.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { vulnManagementApi, connectorsApi } from '@/cyber-assurance/lib/api';
+import { vulnManagementApi } from '@/cyber-assurance/lib/api';
 import { usePermissions } from '@/cyber-assurance/hooks/usePermissions';
 import { Ticket, Loader2, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
 
@@ -41,27 +40,20 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vulnerabilities:vulnerability_register:edit');
   const [error, setError] = useState<string | null>(null);
-  const [pickConn, setPickConn] = useState<number | ''>('');
-
-  const { data: connData } = useQuery({
-    queryKey: ['ticketing-connectors'],
-    queryFn: async () => (await connectorsApi.list()).data,
-  });
-  const ticketingConns = useMemo(
-    () => (connData?.items || []).filter((c) => c.category === 'ticketing'),
-    [connData],
-  );
 
   const { data: ticketData } = useQuery({
     queryKey: ['itsm-tickets', vulnId],
     queryFn: async () => (await vulnManagementApi.vulnerabilities.itsmTickets(vulnId)).data,
   });
   const tickets: TicketLink[] = ticketData?.tickets || [];
+  // Deep-link straight to the created ticket instead of the whole board.
+  const primaryTicketId = tickets.find((t) => t.external_ticket_id)?.external_ticket_id;
 
+  // No connection_id: the Help Desk engine is invisible, resolved server-side.
   const pushMut = useMutation({
-    mutationFn: (connId: number) => vulnManagementApi.vulnerabilities.pushToItsm(vulnId, connId),
+    mutationFn: () => vulnManagementApi.vulnerabilities.pushToItsm(vulnId),
     onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ['itsm-tickets', vulnId] }); },
-    onError: (e: any) => setError(e?.response?.data?.detail || 'Push failed'),
+    onError: (e: any) => setError(e?.response?.data?.detail || 'Could not create ticket'),
   });
   const syncMut = useMutation({
     mutationFn: (connId: number) => vulnManagementApi.vulnerabilities.syncItsmStatuses(connId),
@@ -69,57 +61,22 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
     onError: (e: any) => setError(e?.response?.data?.detail || 'Sync failed'),
   });
 
-  // No ticketing connector and nothing pushed yet: render an HONEST empty state,
-  // not nothing. Returning null hid the whole Mobilise stage — a user could not
-  // discover that pushing needs a connector (found in the 16 Aug CTEM audit).
-  if (ticketingConns.length === 0 && tickets.length === 0) {
-    return (
-      <section className="cw-card rounded-xl p-4 sm:p-5">
-        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-1">
-          <Ticket className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
-          ITSM mobilisation
-        </h2>
-        <p className="text-xs text-slate-600">
-          No ticketing connector is configured yet, so this finding can&apos;t be pushed to a ticket system.
-          Connect ServiceNow (or another ITSM) and this panel becomes the &ldquo;push to ticket → track resolution&rdquo; step of the CTEM loop.
-        </p>
-        {canEdit && (
-          <Link href="/cyber-assurance/admin/connectors" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline">
-            <ExternalLink className="h-3.5 w-3.5" /> Add a ticketing connector →
-          </Link>
-        )}
-      </section>
-    );
-  }
-
   return (
     <section className="cw-card rounded-xl p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
           <Ticket className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
-          ITSM mobilisation
+          Help Desk
         </h2>
-        {canEdit && ticketingConns.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <select
-              value={pickConn}
-              onChange={(e) => setPickConn(e.target.value ? Number(e.target.value) : '')}
-              className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
-            >
-              <option value="">Connector…</option>
-              {ticketingConns.map((c) => (
-                <option key={c.id} value={c.id}>{c.connection_name}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => pickConn && pushMut.mutate(pickConn)}
-              disabled={!pickConn || pushMut.isPending}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
-            >
-              {pushMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-              Push to ITSM
-            </button>
-          </div>
+        {canEdit && (
+          <button
+            onClick={() => pushMut.mutate()}
+            disabled={pushMut.isPending}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
+          >
+            {pushMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ticket className="h-3.5 w-3.5" />}
+            Create Help Desk ticket
+          </button>
         )}
       </div>
 
@@ -131,20 +88,18 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
 
       {tickets.length === 0 ? (
         <p className="text-xs text-slate-500">
-          Not yet pushed to a ticketing system. Pushing creates (or reuses) a remediation plan
-          and opens a ticket; resolving the ticket advances the plan to <em>applied</em> (a
-          proven fix still requires a re-scan).
+          No Help Desk ticket yet. Creating one opens a ticket (auto-assigned, with an SLA)
+          and a remediation plan; resolving the ticket advances the plan to <em>applied</em>
+          (a proven fix still requires a re-scan).
         </p>
       ) : (
         <ul className="divide-y divide-slate-100">
           {tickets.map((t, i) => {
-            const conn = ticketingConns.find((c) => c.id === t.connection_id);
             const pill = STATUS_PILL[t.normalised_status || 'new'] || STATUS_PILL.new;
             return (
               <li key={i} className="flex items-center justify-between gap-2 py-2 text-xs">
                 <span className="min-w-0">
-                  <span className="font-mono text-slate-700">{t.external_ticket_id || '(push failed)'}</span>
-                  {conn && <span className="text-slate-400"> · {conn.connection_name}</span>}
+                  <span className="font-mono text-slate-700">{t.external_ticket_id || '(create failed)'}</span>
                   {t.plan_advanced_at && <span className="ml-1 text-emerald-600">· plan applied</span>}
                   {t.push_error && <span className="ml-1 text-rose-600">· {t.push_error}</span>}
                 </span>
@@ -157,7 +112,7 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
                       onClick={() => syncMut.mutate(t.connection_id)}
                       disabled={syncMut.isPending}
                       className="text-slate-400 hover:text-slate-700"
-                      title="Sync ticket statuses from the connector"
+                      title="Refresh ticket status"
                     >
                       {syncMut.isPending
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -170,12 +125,9 @@ export default function ItsmPanel({ vulnId }: { vulnId: number }) {
           })}
         </ul>
       )}
-      {tickets.length > 0 && (
-        <p className="mt-1.5 text-[10px] text-slate-400">
-          Statuses as of the last manual sync — there is no scheduler in this deployment; use the
-          sync button to refresh.
-        </p>
-      )}
+      <Link href={primaryTicketId ? `/helpdesk/tickets/${primaryTicketId}` : "/helpdesk/tickets"} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline">
+        <ExternalLink className="h-3.5 w-3.5" /> View in Help Desk →
+      </Link>
     </section>
   );
 }

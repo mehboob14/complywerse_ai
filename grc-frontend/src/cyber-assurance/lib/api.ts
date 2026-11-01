@@ -170,82 +170,10 @@ apiClient.interceptors.response.use(
   }
 );
 
-export const frameworksApi = {
-  getAll: () => apiClient.get<Framework[]>('/frameworks'),
-  getAvailable: () => apiClient.get('/frameworks/available'),
-  getById: (id: string) => apiClient.get<Framework>(`/frameworks/${id}`),
-  create: (data: Partial<Framework>) => apiClient.post<Framework>('/frameworks', data),
-  update: (id: string, data: Partial<Framework>) => apiClient.put<Framework>(`/frameworks/${id}`, data),
-  delete: (id: string) => apiClient.delete(`/frameworks/${id}`),
-};
-
 export const controlsApi = {
+  // Sole remaining caller: vulnerabilities/nca/[id]/page.tsx. NOTE: the backend
+  // /controls router was removed (45fe209) so this call 404s -- flagged for follow-up.
   getAll: () => apiClient.get<Control[]>('/controls'),
-  getById: (id: string) => apiClient.get<Control>(`/controls/${id}`),
-  create: (data: Partial<Control>) => apiClient.post<Control>('/controls', data),
-  update: (id: string, data: Partial<Control>) => apiClient.put<Control>(`/controls/${id}`, data),
-  delete: (id: string) => apiClient.delete(`/controls/${id}`),
-  getNormalized: () => apiClient.get<NormalizedControl[]>('/controls/normalized'),
-  getMappings: () => apiClient.get<ControlMapping[]>('/controls/mappings'),
-  getAIRecommendations: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
-    apiClient.post<{
-      control_id: number;
-      test_procedures: Array<{
-        procedure_type: string;
-        description: string;
-        frequency: string;
-        sample_size: string;
-      }>;
-      evidence_requirements: Array<{
-        evidence_type: string;
-        title: string;
-        description: string;
-        mandatory: boolean;
-      }>;
-      key_risks_addressed: string[];
-      audit_focus_areas: string[];
-      addressed_risks: Array<{
-        id: number; title: string; category: string | null; status: string | null;
-        inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
-      }>;
-      risks_if_not_implemented: Array<{
-        title: string; description?: string; category?: string; severity?: string;
-        likelihood?: number; impact?: number; rationale?: string;
-      }>;
-      }>('/controls/ai-recommendations', data),
-  promoteControlRisk: (data: {
-    control_id: number; framework_name?: string; title: string; description?: string;
-    register_type?: string; category?: string; risk_sub_category?: string;
-    inherent_likelihood?: number; inherent_impact?: number;
-    residual_likelihood?: number; residual_impact?: number;
-    owner_id?: number; business_owner_id?: number;
-    treatment_plan?: string; root_cause?: string; recommendations?: string; due_date?: string;
-  }) => apiClient.post('/controls/ai-recommendations/promote-risk', data),
-  getFrameworkControlsSummary: () => apiClient.get('/controls/framework-controls/summary'),
-  getFrameworkControlsStatusSummary: (frameworkId?: number) =>
-    apiClient.get('/controls/framework-controls/status-summary', {
-      params: frameworkId ? { framework_id: frameworkId } : undefined,
-    }),
-  getFrameworkControls: (params?: {
-    framework_id?: number;
-    domain?: string;
-    search?: string;
-    sort_by?: string;
-    sort_order?: 'asc' | 'desc';
-    skip?: number;
-    limit?: number;
-  }) => apiClient.get('/controls/framework-controls', { params }),
-  getFrameworkControlEvidence: (frameworkControlId: number) =>
-    apiClient.get(`/controls/framework-control/${frameworkControlId}/evidence`),
-  linkFrameworkControlEvidence: (frameworkControlId: number, data: { evidence_id: number }) =>
-    apiClient.post(`/controls/framework-control/${frameworkControlId}/evidence`, data),
-  unlinkFrameworkControlEvidence: (frameworkControlId: number, linkId: number) =>
-    apiClient.delete(`/controls/framework-control/${frameworkControlId}/evidence/${linkId}`),
-  // Standalone per-control owner + implementation stage (no journey required).
-  updateFrameworkControlOwnership: (
-    frameworkControlId: number,
-    data: { status?: string; assigned_user_ids?: number[] },
-  ) => apiClient.patch(`/controls/framework-control/${frameworkControlId}/ownership`, data),
 };
 
 export const evidenceApi = {
@@ -763,6 +691,8 @@ export const assetsApi = {
   }) => apiClient.post<ITAsset>('/assets', data),
   update: (id: number, data: Partial<ITAsset>) => apiClient.put<ITAsset>(`/assets/${id}`, data),
   delete: (id: number) => apiClient.delete(`/assets/${id}`),
+  // Asset-level Before->After vuln risk, averaged across open findings (7-signal model).
+  vulnRiskProfile: (id: number) => apiClient.get(`/assets/${id}/vuln-risk-profile`),
   linkControl: (id: number, data: { normalized_control_id: number; coverage_status?: string }) =>
     apiClient.post(`/assets/${id}/controls`, data),
   unlinkControl: (id: number, linkId: number) =>
@@ -962,6 +892,13 @@ export const discoveryApi = {
   resolve: (obsId: number, action: 'adopt' | 'merge' | 'ignore', targetAssetId?: number) =>
     apiClient.post(`/discovery/observations/${obsId}/resolve`,
       { action, target_asset_id: targetAssetId }),
+  // Bulk self-service adopt — resolve many observations in ONE call (surface
+  // adoption, no credentials). Returns how many were adopted vs skipped and the
+  // resulting asset ids.
+  bulkResolve: (observationIds: number[], action: 'adopt' = 'adopt') =>
+    apiClient.post<{ adopted: number; skipped: number; asset_ids: number[] }>(
+      '/discovery/observations/bulk-resolve',
+      { observation_ids: observationIds, action }),
   listCredentials: () => apiClient.get('/discovery/credentials'),
   createCredential: (data: {
     name: string; kind: string; username: string; secret: string;
@@ -2378,7 +2315,66 @@ export const advancedErmApi = {
     apiClient.get(`/advanced-erm/risks/${riskId}/score-history`, { params: { days } }),
 };
 
+export const advisoriesApi = {
+  getAll: () => apiClient.get('/advisories'),
+  getById: (id: number) => apiClient.get(`/advisories/${id}`),
+  create: (data: {
+    title: string;
+    external_id?: string;
+    summary?: string;
+    severity?: string;
+    url?: string;
+    cves: { cve_id: string; affected_product?: string; affected_versions?: string }[];
+  }) => apiClient.post('/advisories', data),
+  recheck: (id: number, scope?: { mode?: string; ctem_scope_id?: number; asset_ids?: number[] }) =>
+    apiClient.post(`/advisories/${id}/recheck`, scope ?? {}),
+  upload: (formData: FormData) =>
+    apiClient.post('/advisories/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  confirm: (
+    id: number,
+    data: {
+      severity?: string;
+      cves: { cve_id: string; affected_product?: string; affected_versions?: string }[];
+    },
+  ) => apiClient.post(`/advisories/${id}/confirm`, data),
+  listSources: () => apiClient.get('/advisories/sources'),
+  syncSource: (key: string, limit?: number) =>
+    apiClient.post(`/advisories/sources/${key}/sync${limit ? `?limit=${limit}` : ''}`),
+  listPdfSources: () => apiClient.get('/advisories/pdf-sources'),
+  scrapePdfSource: (key: string, limit?: number) =>
+    apiClient.post(`/advisories/pdf-sources/${key}/scrape${limit ? `?limit=${limit}` : ''}`),
+  affectedAssets: () => apiClient.get('/advisories/affected-assets'),
+  listRegions: () => apiClient.get('/advisories/regions'),
+  setRegion: (id: number, region: string) => apiClient.post(`/advisories/${id}/region`, { region }),
+  match: (body: { advisory_ids?: number[]; cve_ids?: number[]; mode?: string; asset_ids?: number[]; label?: string }) =>
+    apiClient.post('/advisories/match', body),
+  listMatchSessions: () => apiClient.get('/advisories/match-sessions'),
+  getMatchSession: (id: number) => apiClient.get(`/advisories/match-sessions/${id}`),
+  downloadMatchSession: (id: number, fmt: 'csv' | 'json' = 'csv') =>
+    apiClient.get(`/advisories/match-sessions/${id}/download?fmt=${fmt}`, { responseType: 'blob' }),
+  delete: (id: number) => apiClient.delete(`/advisories/${id}`),
+};
+
 export const vulnManagementApi = {
+  // Register-owned scanning: launch a live find-scan of ONE inventory asset FROM the
+  // register (no pentest run, no exploit). Findings land in this register. Poll the job.
+  scan: {
+    start: (assetId: number, params?: { allow_uncredentialed?: boolean; coverage?: string; lane?: string; find_mcp?: string; credential_id?: number }) =>
+      apiClient.post(`/vuln-management/assets/${assetId}/scan`, null, { params }),
+    adhoc: (body: { target: string; authorized: boolean; allow_uncredentialed?: boolean; coverage?: string; lane?: string; find_mcp?: string; credential_id?: number }) =>
+      apiClient.post(`/vuln-management/scan/adhoc`, body),
+    plan: (assetId: number) => apiClient.get(`/vuln-management/assets/${assetId}/scan-plan`),
+    job: (jobId: number) => apiClient.get(`/vuln-management/scan-jobs/${jobId}`),
+    list: (limit = 50) => apiClient.get(`/vuln-management/scan-jobs`, { params: { limit } }),
+    remove: (jobId: number) => apiClient.delete(`/vuln-management/scan-jobs/${jobId}`),
+    cancel: (jobId: number) => apiClient.post(`/vuln-management/scan-jobs/${jobId}/cancel`),
+    matchedCredentials: (assetIds: number[]) =>
+      apiClient.post<Record<string, { cred_id: number; cred_name: string; cred_kind: string; cred_username: string }>>(
+        `/vuln-management/assets/matched-credentials`, { asset_ids: assetIds }),
+    latest: (assetId: number) => apiClient.get(`/vuln-management/assets/${assetId}/scan-latest`),
+  },
   reports: {
     getAll: () => apiClient.get('/vuln-management/reports'),
     create: (formData: FormData) => 
@@ -2469,8 +2465,12 @@ export const vulnManagementApi = {
     // CTEM Phase 5 — ITSM mobilisation (push a finding to a ticketing connector,
     // list its tickets). Live sync advances the plan to applied on resolution.
     itsmTickets: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}/itsm-tickets`),
-    pushToItsm: (id: number, connectionId: number) =>
-      apiClient.post(`/vuln-management/vulnerabilities/${id}/push-to-itsm?connection_id=${connectionId}`),
+    // connectionId optional: the Help Desk engine is invisible, so the client omits
+    // it and the backend resolves the tenant's Help Desk connection server-side.
+    pushToItsm: (id: number, connectionId?: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/push-to-itsm${connectionId ? `?connection_id=${connectionId}` : ''}`),
+    bulkPushToItsm: (vulnIds: number[], connectionId?: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/bulk-push-to-itsm`, { vuln_ids: vulnIds, ...(connectionId ? { connection_id: connectionId } : {}) }),
     syncItsmStatuses: (connectionId: number) =>
       apiClient.post(`/vuln-management/itsm/connections/${connectionId}/sync-statuses`),
     // AI attacker-walkthrough for the same (finding × asset): a runtime narration
@@ -3415,6 +3415,53 @@ export const reportsApi = {
     }),
 };
 
+// ── Parameter-driven reporting engine — server-side dataset catalog + export.
+//    Backend: grc/routers/reporting_router.py (/reporting/*). Powers the
+//    Custom Report Builder card on /reports.
+export type ReportFilterType = 'text' | 'number' | 'date' | 'badge';
+
+export interface ReportDatasetMeta {
+  key: string;
+  fields: string[];
+  user_fields: Record<string, string>; // raw FK column -> resolved display-name column
+  sortable: string[];
+  filterable: Record<string, ReportFilterType>;
+  search: string[];
+}
+
+export interface ReportFilter {
+  col: string;
+  op: string;
+  value?: string | number | null;
+}
+
+export const reportingApi = {
+  datasets: () => apiClient.get<{ datasets: ReportDatasetMeta[] }>('/reporting/datasets'),
+  exportReport: (body: {
+    dataset: string;
+    columns: string[];
+    filters?: ReportFilter[];
+    logic?: 'AND' | 'OR';
+    search?: string;
+    format: 'csv' | 'xlsx' | 'pdf' | 'html';
+    asset_categories?: string[];
+  }) => apiClient.post('/reporting/export', body, { responseType: 'blob' }),
+  /** Preview rows (first page) + the exact filtered total, through the same engine as export. */
+  query: (body: {
+    dataset: string; filters?: ReportFilter[]; logic?: 'AND' | 'OR'; limit?: number;
+    asset_categories?: string[];
+  }) => apiClient.post<{ rows: Record<string, unknown>[]; total: number }>('/reporting/query', body),
+  /** Grouped row counts over the whole filtered set (not just the preview page). */
+  countBy: (body: {
+    dataset: string; group_by: string[]; filters?: ReportFilter[]; logic?: 'AND' | 'OR';
+    asset_categories?: string[];
+  }) =>
+    apiClient.post<{ rows: Record<string, unknown>[]; warnings?: { skipped_group_by?: string[] } }>(
+      '/reporting/aggregate',
+      { ...body, measures: [{ id: 'n', fn: 'count' }] },
+    ),
+};
+
 export const enrichedDashboardApi = {
   getExecutiveRiskVelocity: (days?: number) => apiClient.get('/enriched-dashboard/executive/risk-velocity', { params: days ? { days } : {} }),
   getExecutiveRiskAppetiteGauge: () => apiClient.get('/enriched-dashboard/executive/risk-appetite-gauge'),
@@ -3626,6 +3673,9 @@ export interface AdminRole {
   name: string;
   description: string;
   is_system_role: boolean;
+  /** Administrator bypasses per-permission checks (grants *:*:*), so it holds no
+   *  RolePermission rows — the UI shows "Full access" rather than "0". */
+  bypasses_all?: boolean;
   user_count: number;
   permissions: string[];
   created_at: string;
@@ -4113,11 +4163,6 @@ export const integrationsApi = {
   sendSLANotifications: () =>
     apiClient.post('/integrations/sla/send-notifications'),
 
-  autoMapControls: (vulnId: number, params?: Record<string, unknown>) =>
-    apiClient.post(`/integrations/control-mapping/auto-map/${vulnId}`, {}, { params }),
-  batchMapControls: (params?: Record<string, unknown>) =>
-    apiClient.post('/integrations/control-mapping/batch-map', {}, { params }),
-
   analyticsOverview: (params?: Record<string, unknown>) =>
     apiClient.get('/integrations/analytics/overview', { params }),
   analyticsTrends: (params?: Record<string, unknown>) =>
@@ -4528,16 +4573,18 @@ export const riskPostureApi = {
   }) => apiClient.put('/risk-posture/weights', data),
 };
 
+// Endpoint agents (Go agent: enroll / report / recon) live at /endpoint-agents; the platform's
+// native collector agent keeps /agents (scan-now-push etc.). Both share grc_compliance_agents.
 export const agentsApi = {
-  list: () => apiClient.get('/agents'),
-  enroll: (data: { agent_name: string; mode?: 'collector' | 'endpoint'; asset_id?: number; os_family?: string }) =>
-    apiClient.post('/agents', data),
+  list: () => apiClient.get('/endpoint-agents'),
+  enroll: (data: { agent_name: string; mode?: 'collector' | 'endpoint'; asset_id?: number; os_family?: string; allowed_domain?: string; reachability?: 'public' | 'private' }) =>
+    apiClient.post('/endpoint-agents', data),
   bulkEnroll: (data: {
     hosts: Array<{ hostname: string; mode?: 'collector' | 'endpoint'; os_family?: string; asset_id?: number }>;
     backend_url?: string;
-  }) => apiClient.post('/agents/bulk-enroll', data),
+  }) => apiClient.post('/endpoint-agents/bulk-enroll', data),
   revoke: (agentId: number, reason?: string) =>
-    apiClient.post(`/agents/${agentId}/revoke${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
+    apiClient.post(`/endpoint-agents/${agentId}/revoke${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
 };
 
 export const onboardingApi = {
@@ -4553,6 +4600,212 @@ export const onboardingApi = {
     port?: number;
     hosts: Array<{ ip: string; hostname?: string | null; asset_name?: string | null }>;
   }) => apiClient.post('/onboarding/import', data),
+};
+
+// ── Software License Management (backend: grc/modules/license_management) ────
+// Entitlements are what the tenant OWNS (entered by hand / imported from a PO sheet);
+// consumption is what credentialed scans found installed. The backend reconciles the
+// two live, so every GET here is a computed view, not stored state. Status strings are
+// typed as plain `string` on purpose: the UI maps the ones it knows and shows any
+// other value verbatim rather than guessing.
+//
+// Row status vocabulary (entitlement lines + positions):
+//   compliant | over_deployed | expiring_soon | over_licensed | not_measured |
+//   expired | pending | retired
+// Per-asset status: licensed | unlicensed | over_deployed | expiring
+export interface LicenseEntitlement {
+  id: number;
+  publisher: string;
+  product: string;
+  edition?: string | null;
+  license_type: string;
+  license_metric: string;
+  /** Quantity owned on THIS purchase line. */
+  total_quantity: number;
+  /** Computed, POOL-level (all live lines of the same product); null when this line is not live. */
+  consumed?: number | null;
+  position?: number | null;
+  status?: string | null;
+  unit_cost?: number | null;
+  currency?: string | null;
+  purchase_date?: string | null;
+  start_date?: string | null;
+  expiry_date?: string | null;
+  maintenance_expiry?: string | null;
+  po_reference?: string | null;
+  contract_reference?: string | null;
+  reseller?: string | null;
+  notes?: string | null;
+  // ── additive extras the backend also returns ──
+  software_key?: string | null;
+  /** Total owned across every live line of this product (the pool `consumed` is measured against). */
+  product_entitled?: number | null;
+  /** false when the metric (CAL, concurrent user, usage) cannot be counted from installed-software scans. */
+  measured?: boolean;
+  /** Stored lifecycle: active | expired | retired. */
+  lifecycle_status?: string | null;
+  has_product_key?: boolean;
+}
+
+/** The writable subset of an entitlement (POST body / PUT body — PUT changes only the keys sent). */
+export interface LicenseEntitlementInput {
+  publisher: string;
+  product: string;
+  edition?: string | null;
+  license_type: string;
+  license_metric: string;
+  total_quantity: number;
+  unit_cost?: number | null;
+  currency?: string | null;
+  purchase_date?: string | null;
+  start_date?: string | null;
+  expiry_date?: string | null;
+  maintenance_expiry?: string | null;
+  po_reference?: string | null;
+  contract_reference?: string | null;
+  reseller?: string | null;
+  notes?: string | null;
+  /** Optional exact-match key(s) to scanned software: comma-separated, trailing * = prefix. Omit to leave unchanged. */
+  software_key?: string | null;
+}
+
+export interface LicenseConsumingAsset {
+  asset_id: number;
+  name: string;
+  /** Units this asset consumes (cores for per-core licenses, else 1). */
+  quantity?: number | null;
+}
+
+export interface LicensePosition {
+  publisher: string;
+  product: string;
+  edition?: string | null;
+  license_metric: string;
+  entitled: number;
+  consumed: number;
+  position: number;
+  status: string;
+  unit_cost?: number | null;
+  /** 0 when there is no shortfall; null when there IS a shortfall but no unit cost is recorded to price it. */
+  exposure_cost?: number | null;
+  reclaimable_count?: number | null;
+  nearest_expiry?: string | null;
+  /** Capped server-side; `consuming_assets_total` is the true count. */
+  consuming_assets?: LicenseConsumingAsset[];
+  currency?: string | null;
+  measured?: boolean;
+  entitlement_ids?: number[];
+  consuming_assets_total?: number;
+}
+
+/** Installed software with no valid entitlement, one entry per product. */
+export interface UnlicensedSoftware {
+  software_key: string;
+  name: string;
+  publisher?: string | null;
+  /** Installations found, across assets. */
+  install_count: number;
+  assets?: Array<{ asset_id: number; name: string }>;
+  assets_total?: number;
+  /** `entitlement_expired` = it WAS covered and the entitlement lapsed. */
+  reason?: 'no_entitlement' | 'entitlement_expired' | (string & {});
+  note?: string | null;
+}
+
+export interface LicenseSummary {
+  /** compliant ÷ tracked, 0–100; null when no product is tracked yet. */
+  compliance_pct: number | null;
+  /** Products with a live entitlement whose metric scans can count. compliant + over_deployed === tracked_products. */
+  tracked_products: number;
+  compliant: number;
+  over_deployed: number;
+  /** Same count as `over_deployed` (the backend keeps both names) — never add the two together. */
+  under_licensed: number;
+  /** Installations (not products) with no valid entitlement. */
+  unlicensed_count: number;
+  /** Cumulative windows: 30 ⊂ 60 ⊂ 90. Live lines whose licence or maintenance ends inside the window. */
+  expiring_30: number;
+  expiring_60: number;
+  expiring_90: number;
+  /** Money below is in `currency` (the tenant's primary one). */
+  annual_spend: number;
+  renewal_cost_90d: number;
+  reclaimable_count: number;
+  reclaimable_savings: number;
+  // ── additive extras the backend also returns ──
+  currency?: string | null;
+  by_currency?: Record<string, Record<string, number | null>>;
+  exposure_cost?: number;
+  /** Over-deployed products whose shortfall cannot be priced (no unit cost). */
+  exposure_unpriced?: number;
+  not_measured_products?: number;
+  expired_lines?: number;
+  entitlement_lines?: number;
+  /** Coverage: how many assets actually have a software inventory behind these numbers. */
+  assets_total?: number | null;
+  assets_with_inventory?: number | null;
+  as_of?: string;
+}
+
+export interface AssetLicense {
+  detected_name: string;
+  detected_version?: string | null;
+  publisher?: string | null;
+  software_key?: string | null;
+  status: 'licensed' | 'unlicensed' | 'over_deployed' | 'expiring' | (string & {});
+  entitlement_id?: number | null;
+  entitlement_product?: string | null;
+  // ── additive extras ──
+  quantity?: number;
+  license_metric?: string | null;
+  product_status?: string | null;
+  /** Host not seen for 90+ days — a PROXY for an idle seat, not usage metering. */
+  reclaim_candidate?: boolean;
+  note?: string | null;
+}
+
+export interface AssetLicenses {
+  asset_id: number;
+  asset_name?: string;
+  licenses: AssetLicense[];
+  summary?: { licensed: number; unlicensed: number; over_deployed: number; expiring: number; total: number };
+  /** false → no software inventory has been collected for this asset yet. */
+  inventory_collected?: boolean;
+}
+
+export interface LicenseImportResult {
+  dry_run: boolean;
+  total: number;
+  created: number;
+  would_create: number | null;
+  skipped: number;
+  error_count: number;
+  errors: Array<{ row: number; error: string }>;
+  ids: number[];
+  /** Sheet header → entitlement field it was matched to. */
+  columns: Record<string, string>;
+  unmapped: string[];
+}
+
+export const licensesApi = {
+  list: () => apiClient.get<{ entitlements: LicenseEntitlement[] }>('/licenses'),
+  create: (body: LicenseEntitlementInput) => apiClient.post<{ id: number }>('/licenses', body),
+  update: (id: number, body: LicenseEntitlementInput) => apiClient.put<{ id: number }>(`/licenses/${id}`, body),
+  delete: (id: number) => apiClient.delete<{ id: number; deleted: boolean }>(`/licenses/${id}`),
+  getPositions: () =>
+    apiClient.get<{ positions: LicensePosition[]; unlicensed: UnlicensedSoftware[] }>('/licenses/positions'),
+  getSummary: () => apiClient.get<LicenseSummary>('/licenses/summary'),
+  getAssetLicenses: (assetId: number) => apiClient.get<AssetLicenses>(`/licenses/asset/${assetId}`),
+  /** CSV / XLSX of entitlements. `dryRun` validates and reports without writing. */
+  importFile: (file: File, dryRun: boolean) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<LicenseImportResult>('/licenses/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { dry_run: dryRun },
+    });
+  },
+  importTemplate: () => apiClient.get<Blob>('/licenses/import/template', { responseType: 'blob' }),
 };
 
 export default apiClient;

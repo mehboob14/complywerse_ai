@@ -176,25 +176,24 @@ export function MultiSelectDropdown({
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
 
   const toggleDraftValue = (value: string) => {
+    // Compute `next` from the committed draft and fire setState + onApply as plain event-handler
+    // statements. Calling onApply (a PARENT setState) inside the setDraftValues updater ran it
+    // during render → "Cannot update a component while rendering a different component".
     if (!multiSelect) {
-      setDraftValues((current) => {
-        const next = current[0] === value ? [] : [value];
-        onApply(next);
-        // Single-select: commit + close so the picker feels instant.
-        setIsOpen(false);
-        setQuery('');
-        return next;
-      });
+      const next = draftValues[0] === value ? [] : [value];
+      setDraftValues(next);
+      onApply(next);
+      // Single-select: commit + close so the picker feels instant.
+      setIsOpen(false);
+      setQuery('');
       return;
     }
 
-    setDraftValues((current) => {
-      const next = current.includes(value)
-        ? current.filter((entry) => entry !== value)
-        : [...current, value];
-      onApply(next);
-      return next;
-    });
+    const next = draftValues.includes(value)
+      ? draftValues.filter((entry) => entry !== value)
+      : [...draftValues, value];
+    setDraftValues(next);
+    onApply(next);
   };
 
   // Suppress unused-prop warning. autoApply is always-on now; prop kept for compatibility.

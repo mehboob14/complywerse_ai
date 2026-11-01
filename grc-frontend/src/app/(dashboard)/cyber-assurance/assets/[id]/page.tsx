@@ -32,7 +32,7 @@ import {
   // ITAM tab-bar parity — Software / Relationships / Discovery / Lifecycle /
   // Assignments / Activity.
   Package, Radar, GitBranch, Users, Activity as ActivityIcon,
-  MessageSquare, Clock,
+  MessageSquare, Clock, KeyRound,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,12 +48,14 @@ import { ActivityPanel } from './_components/AssetWorkTabs';
 // Redesigned tab panels (Overview design language). Each is a drop-in that
 // absorbs the former inline tab renderer with the same prop contract.
 import SoftwarePanel from './_tabs/SoftwarePanel';
+import LicensesPanel from './_tabs/LicensesPanel';
 import RelationshipsPanel from './_tabs/RelationshipsPanel';
 import LifecyclePanel from './_tabs/LifecyclePanel';
 import NotesPanel from './_tabs/NotesPanel';
 import HistoryPanel from './_tabs/HistoryPanel';
 import RisksPanel from './_tabs/RisksPanel';
 import VulnerabilitiesPanel from './_tabs/VulnerabilitiesPanel';
+import AdvisoriesPanel from './_tabs/AdvisoriesPanel';
 import AttachmentsPanel from './_tabs/AttachmentsPanel';
 import CompliancePanel from './_tabs/CompliancePanel';
 import ScopeAuthorizationCard from './_ScopeAuthorizationCard';
@@ -92,15 +94,18 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   data: 'Data',
   cloud: 'Cloud Resource',
   third_party: 'Third-Party System',
+  repository: 'Code / Repository',
 };
 
-type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations'
+type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'advisories' | 'criticality' | 'trajectory' | 'mapping-recommendations'
   // Parity with the reference ITAM asset tab bar. Each of these reads an
   // endpoint that already exists; see _components/AssetWorkTabs.tsx.
   | 'software' | 'relationships' | 'discovery' | 'lifecycle' | 'assignments' | 'activity'
   // Notes / Alerts / History — the last reference tabs, now backed by real
   // endpoints (Notes + History) and a derived feed (Alerts).
-  | 'alerts' | 'notes' | 'history';
+  | 'alerts' | 'notes' | 'history'
+  // Software license status per installed product (reads /licenses/asset/{id}).
+  | 'licenses';
 
 interface LinkedControl {
   id: number;
@@ -196,6 +201,8 @@ interface AssetDetailData {
   linked_risks: Array<{ risk_id: number; title?: string; status?: string }>;
   linked_evidence: LinkedEvidence[];
   linked_vulnerabilities: LinkedVulnerability[];
+  // DISTINCT open findings (deduped across scanners) — the tab badge's "truth" number.
+  vuln_count_distinct?: number;
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
   // Phase 5 — Operational context. All optional; assets that pre-date the
@@ -272,6 +279,11 @@ interface AssetDetailData {
   source_system?: string | null;
   discovery_state?: string | null;
   first_seen_at?: string | null;
+  // Two-flow scan posture (derived server-side, never null): 'surface' =
+  // evidence-only, never logged into; else 'credentialed'. Surface facts below.
+  scan_depth?: 'surface' | 'credentialed';
+  open_ports?: number[] | null;
+  device_type?: string | null;
   // Classification / cloud
   asset_role?: string | null;
   /** A promoted application's own properties — shape varies by product. */
@@ -347,7 +359,7 @@ export default function AssetDetailPage() {
     'overview', 'details', 'compliance', 'controls', 'evidence', 'risks',
     'vulnerabilities', 'criticality', 'trajectory', 'mapping-recommendations',
     'software', 'relationships', 'discovery', 'lifecycle', 'assignments',
-    'activity', 'alerts', 'notes', 'history',
+    'activity', 'alerts', 'notes', 'history', 'licenses',
   ]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -371,6 +383,15 @@ export default function AssetDetailPage() {
     queryFn: async () => (await assetsApi.getLayoutPlan(assetId)).data?.plan ?? null,
     enabled: !!asset,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // Before->After contextual vuln risk for the Overview cards (raw CVSS vs
+  // scored on this host). Server folds to DISTINCT findings; empty -> cards hide.
+  const { data: riskProfile } = useQuery({
+    queryKey: ['asset-vuln-risk-profile', assetId],
+    queryFn: async () => (await assetsApi.vulnRiskProfile(assetId)).data,
+    enabled: !!asset,
+    staleTime: 60000,
   });
 
   const { data: coverage } = useQuery({
@@ -416,7 +437,7 @@ export default function AssetDetailPage() {
         const response = await ermApi.internalControls.getAll();
         return response.data as Array<{ id: number; control_id?: string; name: string; category?: string }>;
       } catch {
-        // Complyverse's ERM control library isn't wired yet (this endpoint 404s) — degrade
+        // ComplyVerse's ERM control library isn't wired yet (this endpoint 404s) — degrade
         // to an empty list so the Risks tab renders cleanly instead of erroring.
         return [] as Array<{ id: number; control_id?: string; name: string; category?: string }>;
       }
@@ -444,6 +465,19 @@ export default function AssetDetailPage() {
     enabled: activeTab === 'vulnerabilities',
   });
 
+  // Advisory exposure for this asset — advisories whose CVEs match it (verdict=affected).
+  // Always enabled so the tab shows its count badge; degrades to {items:[],total:0}
+  // if the by-asset endpoint isn't live yet.
+  const { data: advByAsset } = useQuery({
+    queryKey: ['advisories-by-asset', assetId],
+    queryFn: async () => {
+      try { return (await apiClient.get(`/advisories/by-asset/${assetId}`)).data as { items: any[]; total: number }; }
+      catch { return { items: [], total: 0 }; }
+    },
+    enabled: !!assetId,
+  });
+  const advCount: number = advByAsset?.total ?? 0;
+
   // Enrich a DB app IN PLACE with its database inventory (a Postgres login,
   // applied to this same asset — no re-discovery).
   const collectSvc = useMutation({
@@ -455,11 +489,15 @@ export default function AssetDetailPage() {
     },
   });
 
+  // "Assess risk" = recompute the live Risk Posture (it computes on GET, no
+  // persist) and refresh the header. Replaces the retired 1-10 control-based
+  // AssetRiskAssessment heuristic, so the Overview shows the SAME score as the
+  // Risk & Controls / Risk Posture view.
   const assessRiskMutation = useMutation({
-    mutationFn: () => assetsApi.assessRisk(assetId),
-    onSuccess: () => {
+    mutationFn: () => riskPostureApi.asset(assetId),
+    onSuccess: (res: any) => {
+      queryClient.setQueryData(['asset-risk-posture', assetId], res?.data);
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
     },
   });
@@ -722,7 +760,7 @@ export default function AssetDetailPage() {
     risks: (asset?.linked_risks?.length ?? 0)
       + (asset?.linked_internal_controls?.length ?? 0)
       + (asset?.linked_framework_controls?.length ?? 0),
-    vulnerabilities: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
+    vulnerabilities: asset?.vuln_count_distinct ?? (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
     alerts: alertsForCount?.length ?? 0,
     software: softwareCount,
     relationships: (ipPeers?.group ?? []).filter((g: any) => !g.is_self).length,
@@ -735,9 +773,13 @@ export default function AssetDetailPage() {
     { id: 'overview', label: 'Overview', icon: Boxes },
     { id: 'risks', label: 'Risk & Controls', icon: Shield },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
+    { id: 'advisories', label: 'Advisories', icon: AlertTriangle },
     // No Software tab for hosts we can only see from outside — the inventory
     // it would show cannot exist without a login.
     ...(showsSoftware ? [{ id: 'software' as TabType, label: 'Software', icon: Package }] : []),
+    // License status is derived from that same installed-software inventory, so it
+    // is hidden for exactly the hosts the Software tab is hidden for.
+    ...(showsSoftware ? [{ id: 'licenses' as TabType, label: 'Licenses', icon: KeyRound }] : []),
     { id: 'relationships', label: 'Relationships', icon: Network },
     // A domain / outside-only asset has no procurement lifecycle (planned→disposed)
     // and no host CIS benchmark — hide both, the same way Software is hidden.
@@ -771,14 +813,16 @@ export default function AssetDetailPage() {
     software,
     posture,
     kpis: {
-      openFindings: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
-      controlCoverage: asset?.coverage_percentage ?? 0,
-      blastRadius: 0,
+      // Single source of truth: the live Risk Posture composite (same number the
+      // Risk & Controls view shows), not the old 1-10 AssetRiskAssessment heuristic.
+      riskScore: assetPosture?.score ?? null,
+      riskBand: assetPosture?.band?.label ?? null,
+      openFindings: asset?.vuln_count_distinct ?? (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
     },
     tabs: sections.map((s) => ({
       label: s.label,
       active: activeTab === s.id,
-      count: s.id === 'software' ? software.length : undefined,
+      count: s.id === 'software' ? software.length : s.id === 'advisories' ? (advCount || undefined) : undefined,
       onClick: () => setActiveTab(s.id),
     })),
     actions: [
@@ -807,9 +851,39 @@ export default function AssetDetailPage() {
     },
   });
 
+  // Surface (agentless) assets carry no deep telemetry — the Overview shows the
+  // sweep facts + an honest "requires credentials" gate instead of blank cards.
+  // EASM/outside-only hosts are excluded: they DO carry rich outside-in probe
+  // telemetry (DNS/TLS/HTTP/email + health breakdown), rendered by the design's
+  // own A.external path — the surface card would hide all of it.
+  const isSurface = !outsideOnly && (asset?.scan_depth ?? (asset?.discovery_state === 'unmanaged' ? 'surface' : 'credentialed')) === 'surface';
+  const _fp = (asset?.platform_properties?.fingerprint || {}) as Record<string, any>;
+  const surfaceFacts = isSurface && asset ? {
+    ip: asset.ip_address || null,
+    mac: asset.primary_mac || null,
+    ports: Array.isArray(asset.open_ports) ? asset.open_ports : null,
+    deviceType: asset.device_type || null,
+    vendor: asset.vendor || null,
+    internetFacing: !!asset.internet_facing,
+    // Credential-free intelligence the sweep already captured (banners, service
+    // versions, OS inference, device classification) — rendered so a surface
+    // asset isn't a bare IP + "requires credentials".
+    fingerprint: {
+      osGuess: _fp.os_guess || null,
+      product: _fp.product || null,
+      sshBanner: _fp.ssh_banner || null,
+      httpServer: _fp.http_server || null,
+      httpTitle: _fp.http_title || null,
+      snmpSysdescr: _fp.snmp_sysdescr || null,
+      confidence: typeof _fp.confidence === 'number' ? _fp.confidence : null,
+      evidence: Array.isArray(_fp.evidence) ? _fp.evidence : null,
+      hostname: _fp.hostname || null,
+    },
+  } : null;
+
   return (
     <>
-      <AssetRecordShell asset={asset} overviewData={overviewData} displayName={displayName} sections={sections} activeTab={activeTab} onTab={setActiveTab} tabCounts={tabCounts} canEdit={canEdit} canDelete={canDelete} getIcon={getAssetIcon} onAssessRisk={() => assessRiskMutation.mutate()} assessing={assessRiskMutation.isPending} onEdit={() => setShowEditModal(true)} onLifecycle={() => setShowLifecycleModal(true)} onCisScans={() => router.push(`/cyber-assurance/compliance-plugins/asset/${assetId}`)} onRiskPosture={() => router.push(`/cyber-assurance/risk-posture/asset/${assetId}`)} onDelete={() => setShowDeleteConfirm(true)}>
+      <AssetRecordShell asset={asset} overviewData={overviewData} displayName={displayName} sections={sections} activeTab={activeTab} onTab={setActiveTab} tabCounts={tabCounts} canEdit={canEdit} canDelete={canDelete} getIcon={getAssetIcon} onAssessRisk={() => assessRiskMutation.mutate()} assessing={assessRiskMutation.isPending} onEdit={() => setShowEditModal(true)} onLifecycle={() => setShowLifecycleModal(true)} onCisScans={() => router.push(`/cyber-assurance/compliance-plugins/asset/${assetId}`)} onRiskPosture={() => router.push(`/cyber-assurance/risk-posture/asset/${assetId}`)} onRunSurfacePentest={(isSurface || outsideOnly) ? () => router.push(`/cyber-assurance/pentest?new=run&asset=${assetId}`) : undefined} onDelete={() => setShowDeleteConfirm(true)}>
             {activeTab === 'overview' && (
               <>
                 {/* External (EASM) assets: scanning-scope authorization sits above
@@ -819,7 +893,18 @@ export default function AssetDetailPage() {
                     only implied the passive scan was incomplete. Re-enable ONLY alongside a real
                     active-scan feature (which the backend requires be authorization-gated). */}
                 {false && overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
-                <AssetOverviewDesign A={overviewData} />
+                {advCount > 0 && (
+                  <button type="button" onClick={() => setActiveTab('advisories')}
+                    className="mb-3 flex w-full items-center gap-3 rounded-xl border border-[#F3C0BE] bg-[#FCEDEC] px-4 py-3 text-left transition-colors hover:bg-[#FBE2E0]">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-[#B42318]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold text-[#B42318]">Affected by {advCount} published security advisor{advCount > 1 ? 'ies' : 'y'}</span>
+                      <span className="block text-[12px] text-[#9A2A22]">This asset matches a CVE in an active advisory — review the Advisories tab.</span>
+                    </span>
+                    <span className="shrink-0 text-[12.5px] font-medium text-[#B42318]">View &rarr;</span>
+                  </button>
+                )}
+                <AssetOverviewDesign A={overviewData} surface={surfaceFacts} riskProfile={riskProfile} />
               </>
             )}
             {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
@@ -844,6 +929,7 @@ export default function AssetDetailPage() {
                 hostIp={asset.ip_address || undefined}
               />
             )}
+            {activeTab === 'licenses' && <LicensesPanel assetId={assetId} />}
             {activeTab === 'relationships' && (
               <RelationshipsPanel asset={asset} assetId={assetId} ipPeers={ipPeers} canEdit={canEdit} />
             )}
@@ -881,17 +967,36 @@ export default function AssetDetailPage() {
               />
             )}
             {activeTab === 'vulnerabilities' && (
-              <VulnerabilitiesPanel
-                assetId={assetId}
-                canEdit={canEdit}
-                asset={asset}
-                allVulnerabilities={allVulnerabilities || []}
-                vulnsLoading={vulnsLoading}
-                onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
-                isLinking={linkVulnerabilityMutation.isPending}
-                onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
-                isUnlinking={unlinkVulnerabilityMutation.isPending}
-              />
+              <>
+                {/* Advisory exposure surfaced on the Vulnerabilities tab too — a
+                    CVE match from a published advisory is a finding beyond the
+                    linked register vulns, so flag it here with the match count. */}
+                {advCount > 0 && (
+                  <button type="button" onClick={() => setActiveTab('advisories')}
+                    className="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#F3C0BE] bg-[#FCEDEC] px-4 py-3 text-left transition-colors hover:bg-[#FBE2E0]">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-[#B42318]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-semibold text-[#B42318]">Also affected by {advCount} published security advisor{advCount > 1 ? 'ies' : 'y'}</span>
+                      <span className="block text-[12px] text-[#9A2A22]">{advCount} advisory CVE match{advCount > 1 ? 'es' : ''} on this asset — beyond the open findings below. Review in the Advisories tab.</span>
+                    </span>
+                    <span className="shrink-0 text-[12.5px] font-medium text-[#B42318]">Advisories &rarr;</span>
+                  </button>
+                )}
+                <VulnerabilitiesPanel
+                  assetId={assetId}
+                  canEdit={canEdit}
+                  asset={asset}
+                  allVulnerabilities={allVulnerabilities || []}
+                  vulnsLoading={vulnsLoading}
+                  onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
+                  isLinking={linkVulnerabilityMutation.isPending}
+                  onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
+                  isUnlinking={unlinkVulnerabilityMutation.isPending}
+                />
+              </>
+            )}
+            {activeTab === 'advisories' && (
+              <AdvisoriesPanel assetId={assetId} data={advByAsset} />
             )}
             {activeTab === 'risks' && (
               // Command Center's three cards (Residual Risk / CIA / CIS) on top,
@@ -937,6 +1042,7 @@ export default function AssetDetailPage() {
           onClose={() => setShowDeleteConfirm(false)}
           onConfirm={() => deleteMutation.mutate()}
           isDeleting={deleteMutation.isPending}
+          error={deleteMutation.isError ? ((deleteMutation.error as any)?.response?.data?.detail || 'Could not delete this asset — please try again.') : undefined}
         />
       )}
 
@@ -2629,9 +2735,9 @@ function VulnerabilitiesTab({
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
           <Bug className="h-5 w-5 text-teal-600" />
-          Linked Vulnerabilities ({(asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
-          {(asset.linked_vulnerabilities ?? []).length !== (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length
-            ? ` · ${(asset.linked_vulnerabilities ?? []).length} total`
+          Linked Vulnerabilities ({asset.vuln_count_distinct ?? (asset.linked_vulnerabilities ?? []).filter(isOpenVuln).length} open
+          {asset.vuln_count_distinct != null && (asset.linked_vulnerabilities ?? []).length !== asset.vuln_count_distinct
+            ? ` · ${(asset.linked_vulnerabilities ?? []).length} scanner rows`
             : ''})
         </h3>
         <InlineLinkPicker
@@ -3150,11 +3256,13 @@ function DeleteConfirmModal({
   onClose,
   onConfirm,
   isDeleting,
+  error,
 }: {
   assetName: string;
   onClose: () => void;
   onConfirm: () => void;
   isDeleting: boolean;
+  error?: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -3169,6 +3277,12 @@ function DeleteConfirmModal({
         <p className="mb-6 text-sm text-slate-600">
           Are you sure you want to delete <strong className="text-slate-900">{assetName}</strong>? This action cannot be undone. All linked controls, evidence, and assessments will be unlinked.
         </p>
+
+        {error && (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" style={{ overflowWrap: 'anywhere' }}>
+            {error}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3">
           <button
@@ -3519,7 +3633,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
 // run history. All API calls go through compliancePluginsApi.
 
 function ComplianceTab({ asset }: { asset: AssetDetailData }) {
-  // Complyverse onboards assets via the bank's CMDB API (we do not do
+  // ComplyVerse onboards assets via the bank's CMDB API (we do not do
   // network discovery). For each onboarded asset we DO run CIS compliance
   // rules — that's our core job. This tab combines four blocks:
   //   1. AI Classification — OS profile from the asset feed
@@ -3736,8 +3850,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         try {
           const r = await compliancePluginsApi.listRuns({ limit: 5000 });
           const list = Array.isArray(r.data) ? r.data : (r.data?.runs || []);
+          // Count only runs that actually REACHED a verdict. A freshly-created
+          // run is 'pending' until the agent (or a direct scan) executes it;
+          // counting created runs as done made the banner declare "complete"
+          // while the agent hadn't run anything yet (0 pass / 0 fail).
           done = list.filter((run: any) =>
-            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id)
+            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id) &&
+            !['pending', 'running', 'queued', 'dispatched', 'in_progress'].includes(String(run.status || '').toLowerCase())
           ).length;
         } catch { /* transient — keep polling */ }
 

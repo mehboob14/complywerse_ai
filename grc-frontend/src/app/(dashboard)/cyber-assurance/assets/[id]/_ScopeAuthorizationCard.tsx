@@ -28,7 +28,7 @@ type ScopeAuth = {
   root: string;
   method?: 'dns_txt' | 'attestation';
   authorized_by?: string; // named authoriser (third-party path)
-  actor?: string;         // the Complyverse user who recorded it
+  actor?: string;         // the ComplyVerse user who recorded it
   authorized_at?: string; // ISO
   evidence_ref?: string;
 };
@@ -124,8 +124,8 @@ export default function ScopeAuthorizationCard({ asset, canManage }: { asset: an
   };
 
   const token = useMemo(() => scopeToken(root || defaultRoot), [root, defaultRoot]);
-  const txtHost = `_ava-scope.${root || defaultRoot}`;
-  const txtValue = `ava-site-verification=${token}`;
+  const txtHost = `_complyverse-scope.${root || defaultRoot}`;
+  const txtValue = `complyverse-site-verification=${token}`;
   const copy = (t: string) => { try { navigator.clipboard?.writeText(t); } catch {} };
 
   const verifyOwnership = async () => {
@@ -250,7 +250,7 @@ export default function ScopeAuthorizationCard({ asset, canManage }: { asset: an
                 </div>
                 <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, fontSize: 11.5, color: '#3A4653', cursor: 'pointer', maxWidth: 520 }}>
                   <input type="checkbox" checked={attested} onChange={e => setAttested(e.target.checked)} style={{ marginTop: 2 }} />
-                  <span>I confirm Complyverse has documented written authorization from the domain owner to perform active scanning of <b className="mono" style={{ fontFamily: MONO }}>{root || defaultRoot}</b>.</span>
+                  <span>I confirm ComplyVerse has documented written authorization from the domain owner to perform active scanning of <b className="mono" style={{ fontFamily: MONO }}>{root || defaultRoot}</b>.</span>
                 </label>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button type="button" onClick={confirmThirdParty} disabled={!attested || !by.trim()} style={{ ...BTN_P, opacity: !attested || !by.trim() ? 0.6 : 1 }}>Authorize active scanning</button>

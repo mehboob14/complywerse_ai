@@ -31,10 +31,10 @@ test('an administrator sees every entry; a client feature still needs the tenant
 
 test('Cybersecurity Assurance and Reports show their entries to the rights that open them', () => {
   assert.deepEqual(sees(me(['vulnerabilities:vulnerability_register:view'])), [
-    ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Vulnerability Scanning', 'AI Pentest']],
+    ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Advisories', 'AI Pentest']],
   ]);
   assert.deepEqual(sees(me(['assets:asset_inventory:view'])), [
-    ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory']],
+    ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory', 'Licenses', 'Cyber Reports']],
   ]);
   assert.deepEqual(sees(me(['reports:analytics:view'])), [['Reports', ['Analytics']]]);
   assert.deepEqual(sees(me(['reports:reports:export'])), [['Reports', ['Quick export', 'Saved exports']]]);

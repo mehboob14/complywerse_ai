@@ -297,7 +297,7 @@ export default function ADDiscoverPage() {
                   type="text"
                   value={bindDn}
                   onChange={(e) => setBindDn(e.target.value)}
-                  placeholder="CN=svc-ava,OU=Service Accounts,DC=bank,DC=local"
+                  placeholder="CN=svc-complyverse,OU=Service Accounts,DC=bank,DC=local"
                   required
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono"
                 />
@@ -405,7 +405,7 @@ export default function ADDiscoverPage() {
                       type="text"
                       value={winrmUser}
                       onChange={(e) => setWinrmUser(e.target.value)}
-                      placeholder="BANK\\ava_scanner"
+                      placeholder="BANK\\complyverse_scanner"
                       className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono"
                     />
                   </div>
