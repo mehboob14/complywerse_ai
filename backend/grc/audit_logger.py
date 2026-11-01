@@ -203,7 +203,7 @@ _KNOWN_SUB_ACTION_VERBS = {
     "claim", "complete", "cancel", "request",
     # Lifecycle state
     "publish", "unpublish", "archive", "unarchive", "restore",
-    "activate", "deactivate", "enable", "disable",
+    "activate", "deactivate", "reactivate", "enable", "disable",
     # Execution
     "trigger", "execute", "run", "rerun", "retry", "schedule",
     # Communication
@@ -364,6 +364,7 @@ _HUMAN_VERBS = {
     "restore": "Restored",
     "activate": "Activated",
     "deactivate": "Deactivated",
+    "reactivate": "Reactivated",
     "trigger": "Triggered",
     "execute": "Ran",
     "rerun": "Re-ran",

@@ -10,6 +10,8 @@
 //  - the four totals are the server's (the overview endpoint: every committee, or the one chosen), not the length of a list cut at 100;
 //  - all 18 action types read as themselves (4 had a label, the rest said "Follow Up").
 // "Add manual action" is open to every signed-in user, as it always was (the server asks for no more): recorded in G3_permission_matrix, not changed here.
+// A deactivated committee's actions are still here: the committee filter lists it too, marked "(inactive)", while the form that adds an action offers the
+// active committees only (the server refuses an inactive one).
 // Opening the page with ?overdue=1 (the Governance Overview's counter links there) starts on the overdue ones.
 import { useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
@@ -30,8 +32,8 @@ import { NOT_SET, formatCount, truncate } from '@/lib/format';
 import { routeFor } from '@/lib/navRegistry';
 import { actionStatus } from '@/lib/status';
 import {
-  ACTION_PAGE_SIZE, ACTION_PAGE_SIZES, ACTION_TYPES, actionListParams, actionTypeLabel, dueDay, dueRelative, formChanged, isOverdueAction, listOf, overdueFromSearch,
-  type Overview, type SlaLike,
+  ACTION_PAGE_SIZE, ACTION_PAGE_SIZES, ACTION_TYPES, actionListParams, actionTypeLabel, activeCommittees, committeeChoiceLabel, dueDay, dueRelative, formChanged,
+  isOverdueAction, listOf, overdueFromSearch, type Overview, type SlaLike,
 } from '@/lib/committees';
 import { ActionStatusPills, DrawerFooter, FileInput, FormProblem, PriorityTag, SlaTag, StatTile } from '../_ui';
 
@@ -51,7 +53,7 @@ interface Action {
   due_date: string | null;
   assigned_to_name?: string;
 }
-interface Committee { id: number; name: string }
+interface Committee { id: number; name: string; is_active?: boolean }
 interface CommitteeMeeting { id: number; title: string }
 
 const STATUS_FILTERS = [
@@ -77,7 +79,7 @@ export default function ActionsPage() {
 
   const committeesQ = useQuery({
     queryKey: ['committees-list'],
-    queryFn: async () => listOf<Committee>((await committeeApi.getCommittees()).data).items,
+    queryFn: async () => listOf<Committee>((await committeeApi.getCommittees({ is_active: 'all' })).data).items,
   });
   const committees = committeesQ.data ?? [];
 
@@ -271,7 +273,7 @@ export default function ActionsPage() {
         </Select>
         <Select aria-label="Committee" value={committeeFilter} placeholder="All committees" onChange={(e) => { setCommitteeFilter(e.target.value); setPage(1); }} className="w-[220px]"
           disabled={committeesQ.isError}>
-          {committees.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+          {committees.map((c) => <option key={c.id} value={String(c.id)}>{committeeChoiceLabel(c)}</option>)}
         </Select>
         <Checkbox label="Overdue only" checked={overdueOnly} onChange={(e) => { setOverdueOnly(e.target.checked); setPage(1); }} />
         {committeesQ.isError && (
@@ -327,7 +329,7 @@ export default function ActionsPage() {
                 required
                 onChange={(e) => setCreateFormData((prev) => ({ ...prev, committee_id: e.target.value, meeting_id: '' }))}
               >
-                {committees.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                {activeCommittees(committees).map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
               </Select>
             </FormField>
             <FormField label="Meeting" optional>

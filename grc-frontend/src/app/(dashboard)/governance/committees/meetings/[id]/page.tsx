@@ -30,7 +30,7 @@ import { useNotify } from '@/components/ui/ds/useNotify';
 import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
 import { formatCount, formatDate, moreCount, statusLabel, truncate } from '@/lib/format';
 import { meetingStatus, statusPill } from '@/lib/status';
-import { ACTION_TYPES, cutNotice, dueDay, formChanged, listOf, meetingWhen } from '@/lib/committees';
+import { ACTION_TYPES, cutNotice, dueDay, formChanged, isActiveCommittee, listOf, meetingWhen } from '@/lib/committees';
 import { ActionStatusPills, ClampedText, DrawerFooter, FormProblem, NotRecorded, PickerField, StatTile } from '../../_ui';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -272,6 +272,15 @@ export default function MeetingDetailPage() {
     enabled: !!meeting,
   });
   const attachments = attachmentsQ.data ?? [];
+
+  // the committee, to know whether it still takes new actions (a deactivated one refuses them with a 400): the committee page's own query key.
+  // While it loads, or if it failed, the control is offered and the server decides.
+  const committeeQ = useQuery({
+    queryKey: ['committee', meeting?.committee_id],
+    queryFn: async () => (await committeeApi.getCommittee(meeting?.committee_id as number)).data as { is_active?: boolean | null },
+    enabled: !!meeting?.committee_id,
+  });
+  const takesActions = isActiveCommittee(committeeQ.data ?? {});
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
@@ -785,7 +794,9 @@ export default function MeetingDetailPage() {
                 <CheckSquare aria-hidden className="h-[20px] w-[20px] text-ds-fg-muted" strokeWidth={1.75} />
                 Actions
               </h2>
-              {canCreate && <IconButton label="Create action" variant="secondary" onClick={() => setIsAddActionOpen(true)}><Plus aria-hidden /></IconButton>}
+              {canCreate && (takesActions
+                ? <IconButton label="Create action" variant="secondary" onClick={() => setIsAddActionOpen(true)}><Plus aria-hidden /></IconButton>
+                : <span className="text-ds-label font-normal text-ds-fg-muted">Committee inactive</span>)}
             </div>
 
             <div className="divide-y divide-ds-border">
@@ -798,7 +809,7 @@ export default function MeetingDetailPage() {
                   <CheckSquare aria-hidden className="mb-[8px] h-[28px] w-[28px] text-ds-fg-muted" strokeWidth={1.5} />
                   <p className="text-ds-body font-medium text-ds-fg">{actionCount > 0 ? 'None of its actions could be loaded here' : 'No actions yet'}</p>
                   {actionCount > 0 && <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">The meeting has {formatCount(actionCount)}; they are among the committee&apos;s other actions.</p>}
-                  {canCreate && actionCount === 0 && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsAddActionOpen(true)}>Create the first action</Button></div>}
+                  {canCreate && takesActions && actionCount === 0 && <div className="mt-[8px]"><Button variant="link" onClick={() => setIsAddActionOpen(true)}>Create the first action</Button></div>}
                 </div>
               ) : actions.map((action) => (
                 <div key={action.id} className="px-[16px] py-[12px]">

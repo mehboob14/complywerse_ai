@@ -12,7 +12,8 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, select
+from sqlalchemy.exc import IntegrityError
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -20,7 +21,8 @@ from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
     Risk, RegulatoryChange, GRCUser, Tenant, get_db,
-    UploadedFramework, ParsedFrameworkControl, MeetingAttachment
+    UploadedFramework, ParsedFrameworkControl, MeetingAttachment,
+    MeetingAgendaItemVote, AuditExtensionRequest
 )
 # the control-exception model under its own name: imported as "Exception" it hid Python's, and every `except Exception:` here
 # raised TypeError instead of catching the error
@@ -35,7 +37,7 @@ from ....schemas import (
     OversightActionCreate, OversightActionUpdate, OversightActionResponse,
     CommitteeDashboardStats, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from .. import committee_tasks
 
 logger = logging.getLogger(__name__)
@@ -172,6 +174,48 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
         )
 
 
+# ── Deactivating a committee ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# The reversible way to retire a committee (the screens have no Delete): POST /{id}/deactivate sets is_active false and removes nothing (members,
+# charters, meetings, agendas, votes, minutes, actions and their Task Management copies all stay, open actions and scheduled meetings as they are);
+# POST /{id}/reactivate sets it back. While it is off the ways to add to it (a meeting, an action from the committee or from one of its meetings, a
+# member) answer 400. Both calls need the delete right (governance:committees:delete), enforced here; the other committee routes keep the behaviour
+# they had (PUT can still set is_active, as before, but it too is refused while an extension request waits).
+# is_active NULL counts as ACTIVE everywhere below: nothing writes NULL (the column defaults to true), and the readers used to disagree about it.
+INACTIVE_REFUSED = "This committee is inactive: reactivate it first"
+_remove = Depends(require_tenant_permission("governance:committees:delete"))
+
+
+def _is_active(committee: GovernanceCommittee) -> bool:
+    return committee.is_active is not False
+
+
+def _refuse_if_inactive(committee: Optional[GovernanceCommittee]) -> None:
+    if committee is not None and not _is_active(committee):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=INACTIVE_REFUSED)
+
+
+def _extension_requests_on(db: Session, committee_id: int, open_only: bool) -> int:
+    """Audit-register extension requests that point at a meeting (or an agenda item of a meeting) of the committee. `open_only`: just the ones still
+    waiting for the committee's decision. Any status blocks a hard delete (both columns are foreign keys); only an open one blocks Deactivate."""
+    meetings = select(CommitteeMeeting.id).where(CommitteeMeeting.committee_id == committee_id)
+    items = select(MeetingAgendaItem.id).where(MeetingAgendaItem.meeting_id.in_(meetings))
+    query = db.query(AuditExtensionRequest.id).filter(or_(
+        AuditExtensionRequest.meeting_id.in_(meetings), AuditExtensionRequest.agenda_item_id.in_(items)))
+    if open_only:
+        query = query.filter(AuditExtensionRequest.status == "requested")
+    return query.count()
+
+
+def _refuse_deactivation_while_a_request_waits(db: Session, committee: GovernanceCommittee) -> None:
+    """409 with words while an audit-register extension request waits for the committee's decision at one of its meetings (Deactivate and PUT is_active false)."""
+    waiting = _extension_requests_on(db, committee.id, open_only=True)
+    if waiting:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"{waiting} audit extension {'request is' if waiting == 1 else 'requests are'} still waiting for a decision at a meeting of "
+                    "this committee. Decide or withdraw it in Auditor Portal > Issue Register, then deactivate the committee"))
+
+
 def serialize_committee(committee: GovernanceCommittee, db: Session) -> dict:
     member_count = db.query(CommitteeMember).filter(
         CommitteeMember.committee_id == committee.id,
@@ -198,7 +242,7 @@ def serialize_committee(committee: GovernanceCommittee, db: Session) -> dict:
         "secretary_id": committee.secretary_id,
         "secretary_name": committee.secretary.display_name if committee.secretary else None,
         "meeting_frequency": committee.meeting_frequency,
-        "is_active": committee.is_active,
+        "is_active": _is_active(committee),
         "created_at": committee.created_at,
         "updated_at": committee.updated_at,
         "member_count": member_count,
@@ -412,11 +456,17 @@ def generate_action_ai_text(prompt: str) -> str:
 # Committee CRUD Endpoints
 # =============================================================================
 
+_BOOL_WORDS = {"true": True, "1": True, "yes": True, "on": True, "t": True, "y": True,
+               "false": False, "0": False, "no": False, "off": False, "f": False, "n": False}
+
+
 @router.get("")
 def list_committees(
     tenant_id: Optional[int] = None,
     committee_type: Optional[str] = None,
-    is_active: Optional[bool] = True,
+    # "true" (the default: active committees only, as ever), "false" (inactive only) or "all" (both: the Oversight Actions filter offers a
+    # deactivated committee's actions). Any other word the old boolean accepted still means what it meant.
+    is_active: Optional[str] = "true",
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
@@ -426,19 +476,26 @@ def list_committees(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"items": [], "total": 0, "skip": skip, "limit": limit}
-    
+
+    wanted = (is_active or "").strip().lower()
+    if wanted != "all" and wanted not in _BOOL_WORDS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="is_active must be true, false or all")
+
     query = db.query(GovernanceCommittee).options(
         joinedload(GovernanceCommittee.chair),
         joinedload(GovernanceCommittee.secretary)
     ).filter(GovernanceCommittee.tenant_id.in_(user_tenants))
-    
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceCommittee.tenant_id == tenant_id)
     if committee_type:
         query = query.filter(GovernanceCommittee.committee_type == committee_type)
-    if is_active is not None:
-        query = query.filter(GovernanceCommittee.is_active == is_active)
+    if wanted != "all":
+        # NULL counts as active (see _is_active)
+        query = query.filter(GovernanceCommittee.is_active.isnot(False) if _BOOL_WORDS[wanted]
+                             else GovernanceCommittee.is_active.is_(False))
     if search:
         search_term = f"%{search}%"
         query = query.filter(
@@ -749,9 +806,12 @@ def get_committee_overview(
 
     open_actions = [a for a in actions if a.status in ("open", "in_progress", "overdue")]
     overdue_open = sum(1 for a in open_actions if is_overdue(a))
-    active_committee_count = sum(1 for c in committees if c.is_active)
+    active_committee_ids = {c.id for c in committees if _is_active(c)}
+    active_committee_count = len(active_committee_ids)
+    # "active committees that met / active committees": a deactivated committee that met would otherwise count in the numerator only (6 of 5 = 120%)
     recent_meeting_committees = {m.committee_id for m in meetings
-                                 if m.scheduled_date and m.scheduled_date >= now - timedelta(days=90)
+                                 if m.committee_id in active_committee_ids
+                                 and m.scheduled_date and m.scheduled_date >= now - timedelta(days=90)
                                  and m.status != "cancelled"}
     completed_180 = [m for m in meetings if m.status == "completed" and m.scheduled_date
                      and m.scheduled_date >= now - timedelta(days=180)]
@@ -807,7 +867,7 @@ def get_committee_overview(
             "id": c.id,
             "name": c.name,
             "committee_type": c.committee_type,
-            "is_active": c.is_active,
+            "is_active": _is_active(c),
             "members_count": members_by_committee.get(c.id, 0),
             "next_meeting_date": next_meeting.scheduled_date.isoformat() if next_meeting else None,
             "last_meeting": {
@@ -901,7 +961,7 @@ def get_committee_overview(
     return {
         "kpis": {
             "total_committees": len(committees),
-            "active_committees": sum(1 for c in committees if c.is_active),
+            "active_committees": active_committee_count,
             "meetings_upcoming": m_upcoming,
             "meetings_completed": m_completed,
             "meetings_this_quarter": m_quarter,
@@ -1422,8 +1482,21 @@ def delete_agenda_item(
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agenda item not found")
 
-    db.delete(item)
-    db.commit()
+    # A vote, or an audit-register extension request, points at the item: the database refuses the delete (it used to surface as a bare 500).
+    # Say so, and remove nothing. (The vote check also holds where foreign keys are not enforced.)
+    if db.query(MeetingAgendaItemVote.id).filter(MeetingAgendaItemVote.agenda_item_id == item.id).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A vote was cast on an agenda item, so it cannot be removed")
+    if db.query(AuditExtensionRequest.id).filter(AuditExtensionRequest.agenda_item_id == item.id).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="An audit extension request is attached to this agenda item, so it cannot be removed")
+    try:
+        db.delete(item)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Another record still points at this agenda item, so it cannot be removed")
     return None
 
 
@@ -1983,7 +2056,8 @@ def create_oversight_action(
     
     if not meeting:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
-    
+    _refuse_if_inactive(db.get(GovernanceCommittee, meeting.committee_id))
+
     action_count = db.query(OversightAction).filter(
         OversightAction.committee_id == meeting.committee_id
     ).count()
@@ -2137,6 +2211,7 @@ def create_manual_action(
 
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+    _refuse_if_inactive(committee)
 
     meeting = None
     if action.meeting_id:
@@ -2317,6 +2392,8 @@ def update_committee(
     from ....routers.auth_router import refuse_imported_accounts
     refuse_imported_accounts(db, [update_data.get("chair_id"), update_data.get("secretary_id")],
                              kept=[committee.chair_id, committee.secretary_id])
+    if update_data.get("is_active") is False and _is_active(committee):
+        _refuse_deactivation_while_a_request_waits(db, committee)       # the same rule as POST /deactivate, whichever way in
     for key, value in update_data.items():
         setattr(committee, key, value)
     
@@ -2326,26 +2403,80 @@ def update_committee(
     return serialize_committee(committee, db)
 
 
+def _committee_of(committee_id: int, current_user: GRCUser, db: Session) -> GovernanceCommittee:
+    committee = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.id == committee_id,
+        GovernanceCommittee.tenant_id.in_(get_user_tenants(current_user, db))
+    ).first()
+    if not committee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+    return committee
+
+
+@router.post("/{committee_id}/deactivate", dependencies=[_remove])
+def deactivate_committee(
+    committee_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Retire a committee without losing anything: it stops being offered (pickers, the audit register's meeting list) and accepts no new meetings,
+    actions or members; every record it holds stays and stays readable, open actions and scheduled meetings exactly as they are. Reversible with
+    /reactivate. Needs governance:committees:delete. Refused (409) while an audit-register extension request is waiting for its decision at one of
+    its meetings. Already inactive: nothing to do, the committee comes back as it is."""
+    committee = _committee_of(committee_id, current_user, db)
+    if _is_active(committee):
+        _refuse_deactivation_while_a_request_waits(db, committee)
+        committee.is_active = False
+        db.commit()
+        db.refresh(committee)
+    return serialize_committee(committee, db)
+
+
+@router.post("/{committee_id}/reactivate", dependencies=[_remove])
+def reactivate_committee(
+    committee_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Undo /deactivate: the committee is offered again and accepts new meetings, actions and members. Needs governance:committees:delete."""
+    committee = _committee_of(committee_id, current_user, db)
+    if not _is_active(committee):
+        committee.is_active = True
+        db.commit()
+        db.refresh(committee)
+    return serialize_committee(committee, db)
+
+
 @router.delete("/{committee_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_committee(
     committee_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    committee = db.query(GovernanceCommittee).filter(
-        GovernanceCommittee.id == committee_id,
-        GovernanceCommittee.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not committee:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+    """An administrator's HARD delete, for API clients and scripts (the screens only Deactivate): removes the committee with its members, charters,
+    meetings, agendas, minutes, attachment rows and actions, and the Task Management copy of every action. It cannot be undone. A vote on any of its
+    agenda items, or an audit-register extension request on one of its meetings, makes it answer 409 and remove nothing: deactivate instead."""
+    committee = _committee_of(committee_id, current_user, db)
+
+    meetings = select(CommitteeMeeting.id).where(CommitteeMeeting.committee_id == committee.id)
+    items = select(MeetingAgendaItem.id).where(MeetingAgendaItem.meeting_id.in_(meetings))
+    if db.query(MeetingAgendaItemVote.id).filter(MeetingAgendaItemVote.agenda_item_id.in_(items)).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A vote was cast on an agenda item. Deactivate the committee instead")
+    if _extension_requests_on(db, committee.id, open_only=False):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="An audit extension request points at a meeting of this committee. Deactivate the committee instead")
 
     for action in db.query(OversightAction).filter(OversightAction.committee_id == committee.id):
         committee_tasks.drop_twin(db, action)
-    db.delete(committee)
-    db.commit()
+    try:
+        db.delete(committee)
+        db.commit()
+    except IntegrityError:
+        # something else still points at it (the checks above name the two known ones): nothing was removed, the twins are back with the rollback
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Another record still points at this committee. Deactivate the committee instead")
     return None
 
 
@@ -2398,29 +2529,38 @@ def add_committee_member(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+    _refuse_if_inactive(committee)
     from ....routers.auth_router import refuse_imported_accounts
 
     refuse_imported_accounts(db, [member.user_id])
 
+    # A removed member's row is kept (left_at set), and (committee, user) is unique: adding the same person again brings that row back
+    # instead of failing on the unique constraint. joined_at / left_at / role are their new values; the audit row keeps the old ones.
     existing = db.query(CommitteeMember).filter(
         CommitteeMember.committee_id == committee_id,
         CommitteeMember.user_id == member.user_id,
-        CommitteeMember.is_active == True
     ).first()
-    
-    if existing:
+
+    if existing and existing.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is already an active member of this committee"
         )
-    
-    db_member = CommitteeMember(
-        tenant_id=committee.tenant_id,
-        committee_id=committee_id,
-        user_id=member.user_id,
-        role=member.role,
-    )
-    db.add(db_member)
+
+    if existing:
+        db_member = existing
+        db_member.is_active = True
+        db_member.left_at = None
+        db_member.joined_at = datetime.utcnow()
+        db_member.role = member.role
+    else:
+        db_member = CommitteeMember(
+            tenant_id=committee.tenant_id,
+            committee_id=committee_id,
+            user_id=member.user_id,
+            role=member.role,
+        )
+        db.add(db_member)
 
     # Mirror chair/secretary roles onto the committee record so that adding a
     # chair after creation is reflected on the overview header (chair_name,
@@ -2773,7 +2913,8 @@ def schedule_meeting(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
-    
+    _refuse_if_inactive(committee)
+
     meeting_count = db.query(CommitteeMeeting).filter(
         CommitteeMeeting.committee_id == committee_id
     ).count()

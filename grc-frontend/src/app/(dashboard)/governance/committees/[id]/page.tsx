@@ -6,16 +6,17 @@
 // the AI comparison (a real dialog now, not a hand-made overlay), and feedback: every write is a useReportedMutation (a confirmation only after the server
 // answered; a failure stays with the server's words and, where repeating helps, Retry), every question a useConfirm. Counts are the server's (`member_count`,
 // `meeting_count`, `pending_actions_count`, a list's `total`), never the length of a list cut at 50 or 100.
-// Not changed: the delete is still the server's hard delete (asked in a dialog that names what goes with it; the plan to replace it with Deactivate is
-// G4_committee_deactivation_plan.md); a removed Chair or Secretary is cleared by the server and the question says so; the Settings tab still edits Task
-// Management's SLA for every module; "Schedule meeting" still sends what it sent (the server stores the date; start and end time are asked and not kept).
+// A committee is DEACTIVATED, never deleted, from here (G4_committee_deactivation_plan.md): the question says what stays (nothing it holds is removed),
+// Reactivate undoes it, and while it is inactive the page says so in one line and offers no way to add a meeting, an action or a member (the server refuses
+// them too). Not changed: a removed Chair or Secretary is cleared by the server and the question says so; the Settings tab still edits Task Management's SLA
+// for every module; "Schedule meeting" still sends what it sent (the server stores the date; start and end time are asked and not kept).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
-  AlertTriangle, Calendar, CheckCircle, CheckSquare, ChevronDown, ChevronRight, Copy, Download, Edit2, Eye, FileText, GitCompare, Paperclip, Plus, Save, Search,
-  ShieldCheck, Sparkles, Star, Trash2, Upload, UserMinus, UserPlus, Users, XCircle,
+  AlertTriangle, Calendar, CheckCircle, CheckSquare, ChevronDown, ChevronRight, Copy, Download, Edit2, Eye, FileText, GitCompare, Paperclip, Plus, Power, PowerOff, Save,
+  Search, ShieldCheck, Sparkles, Star, Trash2, Upload, UserMinus, UserPlus, Users, XCircle,
 } from 'lucide-react';
 import { committeeApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -38,11 +39,11 @@ import { EMPTY, NOT_SET, formatCount, formatDate, statusLabel, truncate } from '
 import { pageRange } from '@/lib/pagerModel';
 import { actionStatus, meetingStatus, statusPill } from '@/lib/status';
 import {
-  ACTION_TYPES, COMMITTEE_TABS, DEFAULT_COMMITTEE_TAB, actionTypeLabel, committeeTypeLabel, cutNotice, deleteCommitteePlan, dueDay, formChanged, isOverdueAction, listOf,
-  meetingDay, meetingWhen, removeMemberPlan, type CommitteeTab, type SlaLike,
+  ACTION_TYPES, COMMITTEE_TABS, DEFAULT_COMMITTEE_TAB, actionTypeLabel, committeeTypeLabel, cutNotice, dueDay, formChanged, inactiveNote, isActiveCommittee, isOverdueAction,
+  listOf, meetingDay, meetingWhen, removeMemberPlan, type CommitteeTab, type SlaLike,
 } from '@/lib/committees';
 import {
-  ActionStatusPills, ClampedText, CommitteeActivity, DrawerFooter, FileInput, FormProblem, PickerField, PriorityTag, SlaTag,
+  ActionStatusPills, ClampedText, CommitteeActivity, DrawerFooter, FileInput, FormProblem, PickerField, PriorityTag, SlaTag, useCommitteeActivation,
 } from '../_ui';
 
 interface Committee {
@@ -253,7 +254,6 @@ function getScoreRingColor(score: number) {
 
 export default function CommitteeDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const committeeId = parseInt(params.id as string);
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
@@ -452,12 +452,10 @@ export default function CommitteeDetailPage() {
     onSuccess: () => setIsEditCommitteeOpen(false),
   });
 
-  const deleteCommitteeMutation = useReportedMutation({
-    mutationFn: () => committeeApi.deleteCommittee(committeeId),
-    success: () => `Deleted ${short(committee?.name ?? 'the committee')}`,
-    failure: "Couldn't delete the committee",
-    invalidate: [['committee-overview'], ['committees']],
-    onSuccess: () => router.push('/governance/committees'),
+  // Deactivate (asked first, with what stays) and Reactivate: the page stays, the committee and the list are refreshed; nothing it holds is removed
+  const activation = useCommitteeActivation({
+    confirm,
+    invalidate: [['committee', committeeId], ['committee-overview'], ['committees']],
   });
 
   const removeMemberMutation = useReportedMutation({
@@ -704,11 +702,6 @@ export default function CommitteeDetailPage() {
     const plan = removeMemberPlan(member, committee);
     if (await confirm({ title: plan.title, message: plan.message, confirmLabel: plan.confirmLabel, tone: 'danger' })) removeMemberMutation.mutate(member);
   };
-  const askDeleteCommittee = async () => {
-    if (!committee) return;
-    const plan = deleteCommitteePlan(short(committee.name));
-    if (await confirm({ title: plan.title, message: plan.message, confirmLabel: plan.confirmLabel, tone: 'danger' })) deleteCommitteeMutation.mutate();
-  };
   const askDeleteCharter = async (charter: Charter) => {
     if (await confirm({
       title: `Delete ${short(charter.title)}?`,
@@ -750,6 +743,9 @@ export default function CommitteeDetailPage() {
     return !memberUserIds.has(user.id);
   });
   const committeeMembers = committee.members ?? [];
+  // an inactive committee takes no new meeting, action or member (the server answers 400): the page does not offer them
+  const active = isActiveCommittee(committee);
+  const canAdd = canCreate && active;
 
   const openEditCommittee = () => {
     const draft = {
@@ -852,16 +848,19 @@ export default function CommitteeDetailPage() {
           chips={(
             <>
               <StatusPill tone="neutral" label={committeeTypeLabel(committee.committee_type, 'long')} />
-              <CommitteeActivity active={committee.is_active !== false} />
+              <CommitteeActivity active={active} />
             </>
           )}
           actions={(
             <>
               {canCreate && <Button leftIcon={<Edit2 aria-hidden />} onClick={openEditCommittee}>Edit committee</Button>}
-              {canDelete && <Button variant="dangerOutline" leftIcon={<Trash2 aria-hidden />} loading={deleteCommitteeMutation.isPending} onClick={() => { void askDeleteCommittee(); }}>Delete</Button>}
+              {canDelete && (active
+                ? <Button leftIcon={<PowerOff aria-hidden />} loading={activation.busy} onClick={() => { void activation.askDeactivate({ id: committee.id, name: committee.name }); }}>Deactivate</Button>
+                : <Button variant="primary" leftIcon={<Power aria-hidden />} loading={activation.busy} onClick={() => activation.reactivate({ id: committee.id, name: committee.name })}>Reactivate</Button>)}
             </>
           )}
         />
+        {!active && <p role="note" className="mt-[8px] max-w-3xl text-ds-body text-ds-fg-body">{inactiveNote(canDelete)}</p>}
         {committee.description && (
           <p className="mt-[8px] max-w-3xl text-ds-body text-ds-fg-body"><ClampedText text={committee.description} max={280} buttonLabel="the description" /></p>
         )}
@@ -895,7 +894,7 @@ export default function CommitteeDetailPage() {
                 leftAdornment={<Search aria-hidden />}
                 className="w-[260px] max-w-full"
               />
-              {canCreate && <Button variant="primary" leftIcon={<UserPlus aria-hidden />} onClick={() => setIsAddMemberModalOpen(true)}>Add member</Button>}
+              {canAdd && <Button variant="primary" leftIcon={<UserPlus aria-hidden />} onClick={() => setIsAddMemberModalOpen(true)}>Add member</Button>}
             </div>
             <RegisterTable<Member>
               caption="Committee members"
@@ -906,7 +905,7 @@ export default function CommitteeDetailPage() {
               error={membersQ.isError && !membersQ.data ? { message: `Couldn't load the members. ${errorMessage(membersQ.error)}`, onRetry: () => { void membersQ.refetch(); } } : null}
               cardTitle={(m) => <PersonChip name={m.user_name} />}
               empty={(members || []).length === 0 ? (
-                <EmptyState kind="firstUse" bare icon={Users} title="No members yet" action={canCreate ? <Button variant="primary" leftIcon={<UserPlus aria-hidden />} onClick={() => setIsAddMemberModalOpen(true)}>Add the first member</Button> : undefined} />
+                <EmptyState kind="firstUse" bare icon={Users} title="No members yet" action={canAdd ? <Button variant="primary" leftIcon={<UserPlus aria-hidden />} onClick={() => setIsAddMemberModalOpen(true)}>Add the first member</Button> : undefined} />
               ) : (
                 <EmptyState kind="noMatches" bare title="No member matches" onClearFilters={() => { setMemberSearch(''); setMemberPage(1); }} />
               )}
@@ -1132,7 +1131,7 @@ export default function CommitteeDetailPage() {
         <TabPanel tabKey="meetings" lazy className="pt-[16px]">
           <div className="space-y-[12px]">
             <div className="flex justify-end">
-              {canCreate && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsScheduleMeetingModalOpen(true)}>Schedule meeting</Button>}
+              {canAdd && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsScheduleMeetingModalOpen(true)}>Schedule meeting</Button>}
             </div>
 
             {meetingsQ.isError && !meetingsQ.data ? (
@@ -1145,7 +1144,7 @@ export default function CommitteeDetailPage() {
                 icon={Calendar}
                 title="No meetings yet"
                 description="Schedule the committee's first meeting to plan its agenda and track actions."
-                action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsScheduleMeetingModalOpen(true)}>Schedule meeting</Button> : undefined}
+                action={canAdd ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsScheduleMeetingModalOpen(true)}>Schedule meeting</Button> : undefined}
               />
             ) : (
               <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
@@ -1275,7 +1274,7 @@ export default function CommitteeDetailPage() {
               <p className="text-ds-body text-ds-fg-muted">
                 {actionsQ.data ? `${formatCount(actionsTotal)} ${actionsTotal === 1 ? 'action' : 'actions'}` : ''}
               </p>
-              {canCreate && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateActionModalOpen(true)}>Add action item</Button>}
+              {canAdd && <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateActionModalOpen(true)}>Add action item</Button>}
             </div>
             {actions && actionsTotal > actions.length && (
               <ListNotice title={cutNotice({ shown: actions.length, total: actionsTotal, noun: 'actions' })}>
@@ -1298,7 +1297,7 @@ export default function CommitteeDetailPage() {
                   icon={CheckSquare}
                   title="No action items yet"
                   description="Create action items by hand, and use AI to reword or summarise their text."
-                  action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateActionModalOpen(true)}>Create the first action item</Button> : undefined}
+                  action={canAdd ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateActionModalOpen(true)}>Create the first action item</Button> : undefined}
                 />
               )}
             />

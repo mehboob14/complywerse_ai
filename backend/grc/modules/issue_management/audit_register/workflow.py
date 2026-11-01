@@ -247,14 +247,21 @@ def validation_state(db: Session, issue: Issue, profile: AuditIssueProfile) -> D
 # ── extensions ───────────────────────────────────────────────────────────────
 
 def audit_committee_meetings(db: Session, tenant_id: int, today: Optional[date] = None) -> List[Dict[str, Any]]:
-    """Upcoming meetings of the Audit Committee (any committee, if none is typed as one)."""
+    """Upcoming meetings of the Audit Committee.
+
+    Only ACTIVE committees are ever offered: a deactivated committee (Governance > Committees > Deactivate) is skipped, and a NULL ``is_active``
+    counts as active. The fallback is deliberate and explicit: when no ACTIVE committee is typed "audit_committee" or has "audit" in its name, the
+    meetings of ANY active committee are offered (``pool = audit or committees`` below), so a request always has an agenda to go on. That means
+    deactivating the tenant's only audit committee moves new requests to another committee's agenda; Deactivate refuses (409) while a request is
+    still waiting at one of the committee's meetings, so nothing already filed is left behind.
+    """
     today = today or date.today()
     committees = (db.query(GovernanceCommittee)
                   .filter(GovernanceCommittee.tenant_id == tenant_id,
                           GovernanceCommittee.is_active.isnot(False)).all())
     audit = [c for c in committees
              if c.committee_type == "audit_committee" or "audit" in (c.name or "").lower()]
-    pool = {c.id: c for c in (audit or committees)}
+    pool = {c.id: c for c in (audit or committees)}   # the fallback: any active committee when none is audit-typed
     if not pool:
         return []
     meetings = (db.query(CommitteeMeeting)
@@ -291,6 +298,11 @@ def request_extension(db: Session, issue: Issue, profile: AuditIssueProfile, act
                            CommitteeMeeting.tenant_id == issue.tenant_id).first())
         if not meeting:
             raise ValueError("That meeting was not found")
+        # the picker never lists a deactivated committee's meetings; a meeting named directly is held to the same rule, so a committee that is
+        # inactive never gains a request that Deactivate would have had to refuse
+        if db.query(GovernanceCommittee.id).filter(GovernanceCommittee.id == meeting.committee_id,
+                                                   GovernanceCommittee.is_active.is_(False)).first():
+            raise ValueError("That meeting belongs to a committee that is inactive. Choose a meeting of an active committee")
     else:
         upcoming = audit_committee_meetings(db, issue.tenant_id, today)
         meeting = db.get(CommitteeMeeting, upcoming[0]["id"]) if upcoming else None
