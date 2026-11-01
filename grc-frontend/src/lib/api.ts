@@ -4089,14 +4089,29 @@ export const committeeApi = {
   aiGenerateCharter: (committeeId: number, frameworkIds?: number[]) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`, { framework_ids: frameworkIds || [] }),
   aiCompareCharter: (committeeId: number, data: { charter_id?: number; charter_text?: string }) =>
     apiClient.post(`/governance/committees/${committeeId}/ai-compare-charter`, data),
+  // Each row also says how ready the meeting is (agenda_item_count, papers_count, invitees_count) and whether its quorum was met (quorum_met: true / false,
+  // null when there is no threshold or no roll).
   getMeetings: (committeeId: number, params?: { status?: string; from_date?: string; limit?: number }) =>
     apiClient.get(`/governance/committees/${committeeId}/meetings`, { params }),
   createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
   getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
   updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
+  // The meeting life cycle: scheduled -> in_progress -> completed. Both answer with the meeting (agenda and minutes included, as getMeeting does) and are
+  // idempotent; a conflict (409) says why in `detail`. Cancelling or editing a meeting is still updateMeeting.
+  startMeeting: (meetingId: number) => apiClient.post(`/governance/committees/meetings/${meetingId}/start`),
+  endMeeting: (meetingId: number) => apiClient.post(`/governance/committees/meetings/${meetingId}/end`),
+  // The roll: every member of the committee with present / late / absent (null: not marked yet) and the quorum figures. Saving takes one entry or
+  // many; the first marks on a meeting also record the other members absent. It answers with the roll.
+  getAttendance: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/attendance`),
+  saveAttendance: (meetingId: number, members: Array<{ user_id: number; status: 'present' | 'late' | 'absent' }>) =>
+    apiClient.put(`/governance/committees/meetings/${meetingId}/attendance`, { members }),
   getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
   addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
   updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/meetings/agenda/${itemId}`, data),
+  // What the committee decided about an item (the meeting must be in progress, or ended and being corrected). The outcome is one of four words, any
+  // case; the item's status follows (deferred, otherwise discussed). `decision_made` left out keeps the text there is.
+  recordAgendaOutcome: (itemId: number, data: { outcome: 'Approved' | 'Rejected' | 'Deferred' | 'Noted'; decision_made?: string | null }) =>
+    apiClient.put(`/governance/committees/meetings/agenda/${itemId}/outcome`, data),
   // Upload PDF / DOCX / TXT agenda doc → backend extracts text +
   // heuristic-parses + AI fallback when needed → inserts MeetingAgendaItem rows.
   uploadAgendaForParse: (meetingId: number, file: File) => {
@@ -4130,7 +4145,8 @@ export const committeeApi = {
   deleteMeetingAttachment: (attachmentId: number) =>
     apiClient.delete(`/governance/committees/meetings/attachments/${attachmentId}`),
   createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
-  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
+  // The router serves minutes under /meetings/minutes/{id}; this used to point at /committees/minutes/{id}, which does not exist.
+  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/meetings/minutes/${minutesId}`, data),
   // Upload a PDF / DOCX / TXT minutes document — backend extracts the
   // text and stores it as the minutes content, dropping any previously
   // approved status back to draft so reviewers see the change.
@@ -4143,7 +4159,15 @@ export const committeeApi = {
   },
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
   createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
-  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean; skip?: number; limit?: number }) => apiClient.get('/governance/committees/actions', { params }),
+  // status may list several words ("open,in_progress"); assigned_to is a user id or 'me'; due_after / due_before take a bare date, which is the whole UTC
+  // day (so "this week" is due_after=<monday>&due_before=<sunday>), or a date and time, which is that instant, included at both ends ("not overdue yet"
+  // is due_after=<now>). An action with no due date never matches a range.
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean; assigned_to?: number | 'me'; due_after?: string; due_before?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/committees/actions', { params }),
+  // What the committees decided (agenda items with an outcome or a decision), newest meeting first, with the true `total`. `q` finds every word in the
+  // title or decision text, ignoring case and accents; from/to are meeting days (to includes its whole day); is_active is 'true' | 'false' | 'all'.
+  listDecisions: (params?: { q?: string; committee_id?: number; from?: string; to?: string; outcome?: string; is_active?: 'true' | 'false' | 'all'; limit?: number; offset?: number }) =>
+    apiClient.get('/governance/committees/decisions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
   aiRewordActionText: (formData: FormData) =>
     apiClient.post('/governance/committees/actions/ai/reword', formData, {
