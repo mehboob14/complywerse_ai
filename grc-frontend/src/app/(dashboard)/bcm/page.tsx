@@ -46,7 +46,7 @@ function DrillRow({ d }: { d: Drill }) {
     <li>
       <Link href={`/bcm/drills/${d.id}`} className={`${ROW_LINK} flex-wrap`}>
         <span className="min-w-0 flex-1 basis-[14rem]">
-          <span className="line-clamp-2 block break-words text-ds-body font-[500] text-ds-fg" title={d.title}>{d.title}</span>
+          <span className="line-clamp-2 break-words text-ds-body font-[500] text-ds-fg" title={d.title}>{d.title}</span>
           <span className="mt-[2px] block break-words text-ds-label font-normal text-ds-fg-muted">
             {`${drillType.label(d.drill_type)} · ${d.plan_title || EMPTY} · ${formatDate(d.scheduled_date, { calendar: true, empty: NOT_SET })}`}
           </span>

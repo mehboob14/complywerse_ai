@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { useQuery } from '@tanstack/react-query';
 import { bcmApi } from '@/lib/api';
-import { truncate } from '@/lib/format';
+import { NOT_SET, truncate } from '@/lib/format';
 import { statusPill, type Statuses } from '@/lib/status';
 import { Button, Combobox, FormField, MultiSelect, StatusPill, TextInput } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
@@ -192,6 +192,11 @@ export function Fact({ label, children, className }: { label: string; children: 
       <dd className="mt-[2px] min-w-0 break-words text-ds-body text-ds-fg">{children}</dd>
     </div>
   );
+}
+
+/** An hours figure: "8h", or "Not set" in muted words where nobody has set it (the person can set it). */
+export function HoursText({ h }: { h: number | null | undefined }) {
+  return h == null ? <span className="whitespace-nowrap text-ds-fg-muted">{NOT_SET}</span> : <span className="whitespace-nowrap tabular-nums">{`${h}h`}</span>;
 }
 
 /** A value that may be long: two lines, the whole of it as the tooltip. */

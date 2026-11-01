@@ -11,7 +11,7 @@ import { drillStatus, frequency, planStatus, severity } from '../../../lib/statu
 
 // ── the shapes of what the API answers (the serializers of backend/grc/modules/bcm/routers/_common.py) ──
 export interface Dependency { id: number; bia_id: number; dependency_type: string; name: string; criticality: string | null; external_bcp_status: string | null; notes: string | null }
-export interface Strategy { id: number; bia_id: number; strategy_type: string; description: string | null; status: string; approved_by_name?: string | null; review_comments?: string | null }
+export interface Strategy { id: number; bia_id: number; strategy_type: string; description: string | null; status: string; approved_by_name?: string | null; approved_date?: string | null; review_comments?: string | null }
 export interface LinkedAsset { id: number; name: string; asset_type?: string | null }
 export interface Bia {
   id: number; plan_id: number; process_name: string; description: string | null; criticality_rating: string;
