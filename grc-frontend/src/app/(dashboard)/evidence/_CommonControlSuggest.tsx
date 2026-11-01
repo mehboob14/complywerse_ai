@@ -3,17 +3,19 @@
 /**
  * Shown right after an upload: which common controls a document like this one can stand for.
  *
- * The matching is rule-based, not a model (SCF's licence does not allow AI to be given its text), so it
- * answers at once from the file's name, type and description. The evidence page runs it again once the
- * text has been read. Each suggestion says which artifact the control asks for, so a link made here shows
- * on that control's own Evidence tab against that artifact.
+ * The matching is rule-based, not a model (SCF's licence does not allow AI to be given its text), so it answers at once from the file's name, type and
+ * description. The evidence page runs it again once the text has been read. Each suggestion says which artifact the control asks for, so a link made here shows
+ * on that control's own Evidence tab against that artifact. On the kit: AnimatedModal, Checkbox rows, Button; a link that fails says so in the server's words
+ * and the dialog stays open, so pressing the button again is the retry.
  */
 import { useState } from 'react';
-import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, ShieldCheck } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { AnimatedModal, useToast } from '@/components/ui';
-import { CheckCircle, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
+import { AnimatedModal } from '@/components/ui';
+import { Button, Checkbox, StatusPill, useNotify } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { truncate } from '@/lib/format';
 
 export interface CommonControlRec {
   id: number;
@@ -27,17 +29,13 @@ export interface CommonControlRec {
 
 const STRONG = 0.8;
 
-export default function CommonControlSuggest({
-  evidence,
-  recs,
-  onClose,
-}: {
+export default function CommonControlSuggest({ evidence, recs, onClose }: {
   evidence: { id: number; name: string };
   recs: CommonControlRec[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const notify = useNotify();
   // The strong matches start ticked; a weaker one is the person's call.
   const [picked, setPicked] = useState<Set<number>>(new Set(recs.filter((r) => r.confidence >= STRONG).map((r) => r.id)));
   const [busy, setBusy] = useState(false);
@@ -58,14 +56,13 @@ export default function CommonControlSuggest({
       })));
     setBusy(false);
     const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    queryClient.invalidateQueries({ queryKey: ['ev-ws-items'] });
-    queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
+    void queryClient.invalidateQueries({ queryKey: ['ev-ws-items'] });
+    void queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
     if (failed.length) {
-      toast({ type: 'error', title: `Could not link ${failed.length} of ${chosen.length}`,
-        message: failed[0].reason?.response?.data?.detail || 'Please try again, or link them from the evidence page.' });
+      notify.error(errorMessage(failed[0].reason, 'Please try again, or link them from the evidence page.'), { title: `Couldn't link ${failed.length} of ${chosen.length}` });
       return;
     }
-    toast({ type: 'success', title: `Linked to ${chosen.length} common ${chosen.length === 1 ? 'control' : 'controls'}` });
+    notify.success(`Linked to ${chosen.length} common ${chosen.length === 1 ? 'control' : 'controls'}`);
     onClose();
   };
 
@@ -74,53 +71,43 @@ export default function CommonControlSuggest({
       isOpen
       onClose={onClose}
       size="lg"
-      title={<span className="inline-flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary-600" /> Common controls for this file</span>}
-      subtitle={`“${evidence.name}” looks like a document these controls ask for.`}
-      footer={
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link href={`/evidence/${evidence.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:underline">
-            Open the evidence <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              Skip
-            </button>
-            <button
-              type="button"
-              onClick={link}
-              disabled={busy || picked.size === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              Link {picked.size > 0 ? picked.size : ''} selected
-            </button>
+      title={<span className="inline-flex items-center gap-[8px]"><ShieldCheck aria-hidden className="h-[20px] w-[20px] text-ds-primary-text" strokeWidth={1.75} /> Common controls for this file</span>}
+      subtitle={`“${truncate(evidence.name, 90).text}” looks like a document these controls ask for.`}
+      footer={(
+        <div className="flex flex-wrap items-center justify-between gap-[8px]">
+          <Button variant="link" href={`/evidence/${evidence.id}`} rightIcon={<ExternalLink aria-hidden />}>Open the evidence</Button>
+          <div className="flex items-center gap-[8px]">
+            <Button onClick={onClose}>Skip</Button>
+            <Button variant="primary" loading={busy} disabled={picked.size === 0} onClick={() => { void link(); }}>{picked.size > 0 ? `Link ${picked.size} selected` : 'Link selected'}</Button>
           </div>
         </div>
-      }
+      )}
     >
-      <div className="p-5">
-      <p className="mb-3 text-xs text-slate-500">Tick the ones to link. You can change links any time on the evidence page.</p>
-      <ul className="space-y-2">
-        {recs.map((r) => {
-          const pct = Math.round(r.confidence * 100);
-          return (
-            <li key={r.id}>
-              <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${picked.has(r.id) ? 'border-primary-300 bg-primary-50/40' : 'border-slate-200 hover:bg-slate-50'}`}>
-                <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600" />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs text-slate-600">{r.code}</span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${pct >= 80 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-500'}`}>{pct}% match</span>
-                  </span>
-                  <span className="mt-0.5 block text-sm font-semibold text-slate-800">{r.title}</span>
-                  {r.subtitle && <span className="block text-xs text-slate-500">{r.subtitle}</span>}
-                  {r.rationale && <span className="mt-1 block text-xs text-slate-500">{r.rationale}</span>}
-                </span>
-              </label>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="p-[20px]">
+        <p className="mb-[12px] text-ds-body text-ds-fg-muted">Tick the ones to link. You can change links any time on the evidence page.</p>
+        <ul className="flex flex-col gap-[8px]">
+          {recs.map((r) => {
+            const pct = Math.round(r.confidence * 100);
+            return (
+              <li key={r.id} className={`rounded-ds-card border p-[12px] ${picked.has(r.id) ? 'border-ds-primary bg-ds-primary-soft' : 'border-ds-border bg-ds-surface'}`}>
+                <Checkbox
+                  checked={picked.has(r.id)} onChange={() => toggle(r.id)}
+                  label={(
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-[8px]">
+                        <span className="font-mono text-ds-label text-ds-fg-body">{r.code}</span>
+                        <StatusPill size="sm" tone={pct >= 80 ? 'success' : 'neutral'} label={`${pct}% match`} />
+                      </span>
+                      <span className="mt-[2px] block break-words text-ds-body font-[600] text-ds-fg">{r.title}</span>
+                      {r.subtitle && <span className="block break-words text-ds-label text-ds-fg-muted">{r.subtitle}</span>}
+                      {r.rationale && <span className="mt-[4px] block break-words text-ds-label text-ds-fg-muted">{r.rationale}</span>}
+                    </span>
+                  )}
+                />
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </AnimatedModal>
   );

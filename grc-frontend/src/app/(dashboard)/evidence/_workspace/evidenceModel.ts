@@ -318,6 +318,45 @@ export function monthName(ym: string): string {
   return y && m && m >= 1 && m <= 12 ? MONTHS[m - 1] : ym;
 }
 
+// ── the owner leaderboard (the Performance view) ──────────────────────────────────────────────────────────────────────────────────────────
+export interface OwnerPerf { owner_id: number | null; owner_name: string | null; total: number; pending: number; approved: number; expired: number }
+const pct = (n: number, d: number): number => (d ? Math.round((n / d) * 100) : 0);
+export const approvedShare = (o: Pick<OwnerPerf, 'approved' | 'total'>): number => pct(o.approved, o.total);
+
+/** The leaderboard: owners ranked by approval rate (ties by volume), the top one, the one with the largest pending backlog, and the team's average rate. null when
+ *  there are no owners. The same formulas the view always used. */
+export function ownerBoard(owners: readonly OwnerPerf[]): { rows: Array<OwnerPerf & { rank: number }>; top: OwnerPerf; needsSupport: OwnerPerf; teamAvg: number } | null {
+  if (!owners.length) return null;
+  const ranked = owners.slice().sort((a, b) => {
+    const ra = pct(a.approved, a.total);
+    const rb = pct(b.approved, b.total);
+    return rb !== ra ? rb - ra : b.total - a.total;
+  });
+  const needsSupport = owners.slice().sort((a, b) => b.pending - a.pending)[0];
+  const totalItems = owners.reduce((s, o) => s + o.total, 0);
+  const totalApproved = owners.reduce((s, o) => s + o.approved, 0);
+  return { rows: ranked.map((o, i) => ({ ...o, rank: i + 1 })), top: ranked[0], needsSupport, teamAvg: pct(totalApproved, totalItems) };
+}
+
+// ── the register's export ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/** One CSV cell: quoted when it holds a comma, a quote or a line break (a quote is doubled); a value that starts like a spreadsheet formula (= + - @) gets a leading
+ *  apostrophe so Excel reads it as text, not as a formula someone typed into a file name. */
+export function csvCell(value: string | number | null | undefined): string {
+  let text = value == null ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** The register as CSV: a header row and a row per file, in the order given (what the person sees, filters and sort applied). */
+export function registerCsv(items: readonly EvidenceItem[]): string {
+  const head = ['Name', 'Type', 'Status', 'Stale', 'Owner', 'Controls linked', 'Maturity %', 'Expiry', 'Uploaded'];
+  const day = (v: string | null | undefined) => (v ? v.slice(0, 10) : '');
+  const rows = items.map((e) => [
+    e.name, typeLabel(e.evidence_type), e.status, e.is_stale ? 'Yes' : 'No', ownerOf(e) ?? '', e.control_mappings_count ?? 0, normPct(e.quality_score) ?? '', day(e.expiry_date), day(e.uploaded_at),
+  ]);
+  return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+}
+
 // ── a page of a list ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface PageOf<T> { range: PageRange; rows: T[] }
 export function pageOfRows<T>(rows: readonly T[], page: number, pageSize: number): PageOf<T> {

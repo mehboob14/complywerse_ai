@@ -5,9 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  NO_FILTERS, PIPELINE_STATUSES, STALL_MS, advanceStep, approvalRate, boardColumns, cutNotice, deriveApplicableFrameworks, effectiveSelected, expiryReading,
+  NO_FILTERS, PIPELINE_STATUSES, STALL_MS, advanceStep, approvalRate, approvedShare, boardColumns, csvCell, ownerBoard, cutNotice, deriveApplicableFrameworks, effectiveSelected, expiryReading,
   filterItems, initialsOf, isFiltered, listIsBusy, matchesStatus, maturityOf, monthName, normPct, offBoard, optionAfter, ownerOf, pageOfId, pageOfRows,
-  reviewWord, statusSplit, tiles, topTypes, trendReading, typeLabel, typeOptions, type EvidenceItem, type EvidenceSummary,
+  registerCsv, reviewWord, statusSplit, tiles, topTypes, trendReading, typeLabel, typeOptions, type EvidenceItem, type EvidenceSummary,
 } from './evidenceModel.ts';
 
 // ── the old code, verbatim ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -256,6 +256,39 @@ test('the trend: approvals over the six months (not "this quarter"), latest minu
   assert.equal(trendReading({ total_count: 1, by_status: {}, by_type: {}, stale_count: 0, expiring_soon_count: 0, pending_review_count: 0 }), null);
   assert.equal(trendReading({ total_count: 1, by_status: {}, by_type: {}, stale_count: 0, expiring_soon_count: 0, pending_review_count: 0, by_month: months.slice(0, 1) })?.delta, null);
   assert.deepEqual(['2026-06', '2026-12', '2026-13', 'junk'].map(monthName), ['Jun', 'Dec', '2026-13', 'junk']);
+});
+
+test('the owner leaderboard: ranked by approval rate then volume, the top owner, the largest backlog, the team average (the formulas the view always used)', () => {
+  const o = (name: string | null, total: number, approved: number, pending: number) => ({ owner_id: name ? name.length : null, owner_name: name, total, pending, approved, expired: 0 });
+  const owners = [o('Ann', 10, 5, 2), o('Bob', 20, 10, 9), o('Cy', 4, 4, 0), o(null, 3, 0, 1)];
+  const board = ownerBoard(owners);
+  assert.deepEqual(board?.rows.map((r) => [r.owner_name, r.rank]), [['Cy', 1], ['Bob', 2], ['Ann', 3], [null, 4]]);       // Ann and Bob are both at 50%: the larger volume first
+  assert.equal(board?.top.owner_name, 'Cy');
+  assert.equal(board?.needsSupport.owner_name, 'Bob');
+  assert.equal(board?.teamAvg, Math.round((19 / 37) * 100));
+  assert.equal(approvedShare(o('X', 0, 0, 0)), 0);
+  assert.equal(ownerBoard([]), null);
+  assert.deepEqual(owners.map((x) => x.owner_name), ['Ann', 'Bob', 'Cy', null], 'the input order is not changed');
+});
+
+test('the register CSV: quoted where needed, quotes doubled, text that looks like a formula defused, one row per file', () => {
+  assert.equal(csvCell('plain'), 'plain');
+  assert.equal(csvCell('a,b'), '"a,b"');
+  assert.equal(csvCell('say "hi"'), '"say ""hi"""');
+  assert.equal(csvCell('line\nbreak'), '"line\nbreak"');
+  for (const lead of ['=SUM(A1)', '+1', '-2', '@x']) assert.equal(csvCell(lead), `'${lead}`, lead);
+  assert.equal(csvCell(null), '');
+  assert.equal(csvCell(0), '0');
+  const csv = registerCsv([
+    item({ name: 'A, "B"', evidence_type: 'audit_report', status: 'approved', is_stale: true, owner_name: 'Olivia Owner', control_mappings_count: 3, quality_score: 0.74, expiry_date: '2026-12-01T00:00:00', uploaded_at: '2026-10-01T10:00:00' }),
+    item({ name: '=cmd', evidence_type: null, uploader_name: null }),
+  ]);
+  const lines = csv.split('\r\n');
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0], 'Name,Type,Status,Stale,Owner,Controls linked,Maturity %,Expiry,Uploaded');
+  assert.equal(lines[1], '"A, ""B""",Audit Report,approved,Yes,Olivia Owner,3,74,2026-12-01,2026-10-01');
+  assert.equal(lines[2], "'=cmd,Other,draft,No,,0,,,2026-10-01");
+  assert.equal(registerCsv([]), 'Name,Type,Status,Stale,Owner,Controls linked,Maturity %,Expiry,Uploaded');
 });
 
 // ── paging and keys ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
 // Uncomment an entry when its page moves to the kit; the builder confirms (or corrects) each label, parent and `hidden` sentence against the code.
 export const LEAVES: Record<string, RouteExtra> = {
-  // '/evidence': { ownHeading: true },
+  '/evidence': { ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [
