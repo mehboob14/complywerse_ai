@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from ....models import (
     DocumentRegulatoryLink, GRCUser, Framework, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from .. import posture
 from ..permissions import ON_ITS_WAY, in_force_number, require_library_reader, visible_filter
 
 # the whole library's dashboard: for those allowed to read the document library
@@ -1448,6 +1449,24 @@ def get_documents_overview(
             "health_trend": health_trend,
         },
     }
+
+
+@router.get("/posture")
+def get_posture(
+    by: Literal["framework", "department"] = "framework",
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """The Overview's "By framework" / "By department" cards: per group the true number of documents the person may read, their review
+    health (the Documents library's rules), what needs attention and the open policy exceptions; weakest first, paged. Same access as
+    every feed here (the router's library-reader rule); the rules and the fields are in modules/governance/posture.py."""
+    user_tenants = get_user_tenants(current_user, db)
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+    return posture.build(db, current_user, [tenant_id] if tenant_id else user_tenants, by, limit, offset)
 
 
 @router.get("/scorecard-config")
