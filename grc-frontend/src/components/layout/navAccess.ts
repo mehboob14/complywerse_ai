@@ -4,7 +4,7 @@
 import {
   Activity, AlertCircle, AlertTriangle, BarChart3, BookOpen, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Contact, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, KeyRound, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, MessageSquareText, Plug, Radar, Rss, ScrollText, Server, Settings, Shield, ShieldAlert, ShieldCheck, Target, Ticket,
+  ListTodo, MessageSquareText, Radar, Rss, ScrollText, Server, Settings, Shield, ShieldAlert, ShieldCheck, Target, Ticket,
   Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -161,8 +161,6 @@ export const navigation: NavEntry[] = [
       { name: 'IT Asset Inventory',  href: '/cyber-assurance/assets',          icon: Server,   requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Licenses',            href: '/cyber-assurance/licenses',        icon: KeyRound, requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Assets Risk Posture', href: '/cyber-assurance/risk-posture',    icon: Activity, requiredPermissions: ['erm:risks:*'] },
-      // Scanners, cloud and endpoint agents, EASM, ticketing...: the same rights as the admin Integrations tab
-      { name: 'Connectors',          href: '/cyber-assurance/connectors',      icon: Plug,     requiredPermissions: ['integrations:connections:*'] },
     ],
   },
   {

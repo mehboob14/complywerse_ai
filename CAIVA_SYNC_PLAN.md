@@ -35,7 +35,7 @@ byte-for-byte, the rest are real ComplyVerse edits.
 | Area | Port | Adapt / note | Skip |
 |---|---|---|---|
 | Frontend namespace | 104 new files, 29 fast-forwards, 12 clean merges, 14 hand-resolved | see §4 | `SbpInventoryPanel` |
-| Sidebar (`components/layout/navAccess.ts`) | Owner's layout: after Issue & Incident Management → **IT Asset** (Discovery, Inventory, Licenses, Risk Posture, Connectors) → **Cybersecurity** (Vulnerabilities, Advisories, AI Pentest) → **Help Desk** (Agent Console / Service Desk Admin / End-user Portal) → **Reports** (+ Cyber Reports) → Auditor Portal | Scanning lives inside Vulnerabilities (`/cyber-assurance/scan-flows` still resolves) | the product's Performance dashboard (ComplyVerse has its own; the route still works) |
+| Sidebar (`components/layout/navAccess.ts`) | Owner's layout: after Issue & Incident Management → **IT Asset** (Discovery, Inventory, Licenses, Risk Posture) → **Cybersecurity** (Vulnerabilities, Advisories, AI Pentest) → **Help Desk** (Agent Console / Service Desk Admin / End-user Portal) → **Reports** (+ Cyber Reports) → Auditor Portal | Scanning lives inside Vulnerabilities (`/cyber-assurance/scan-flows` still resolves) | the product's Performance dashboard (ComplyVerse has its own; the route still works) |
 | Backend `grc/` | 116 new files (help desk 38, pentest 20, advisories 17, connectors 6, license mgmt 6, report scheduler 6, estate overview 3, ...), 36 fast-forwards, 21 clean merges, 13 hand-resolved | see §4 | `modules/sbp_inventory/*` |
 | Endpoint agent | Go source in `agent/`, API `routers/agents_router.py` | mounted at **`/endpoint-agents`** (ComplyVerse's native collector owns `/agents`; both use `grc_compliance_agents`) | — |
 | Tooling | 16 pentest lane Dockerfiles, pentest-engine router/config, `backend/run-worker.sh`, `backend/scripts` (backfill, enrich sweep, benchmark-mapping reconcile), `deploy/systemd/README.md` | `run-worker.sh` no longer hard-codes `/root/AVA` | — |
@@ -58,9 +58,12 @@ byte-for-byte, the rest are real ComplyVerse edits.
   with ComplyVerse's `PermissionGuard` kept.
 - **Risk posture workspace**: product's rebuilt page; its apex/subdomain roll-up
   supersedes ComplyVerse's earlier subdomain-nesting tweak.
-- **Connectors page**: union — product's EDR / Identity categories, bundled logos and
-  cloud providers + ComplyVerse's security-rating / SaaS-discovery / web-gateway
-  categories; internal providers (help desk engine) are hidden from customers.
+- **Connectors**: they live in ComplyVerse's own **Administration → Connectors** page, which
+  now carries what the product added (EDR + Identity categories, the 20 bundled brand
+  logos, vulnerability-scanner and cloud sections) on top of its own security-rating /
+  SaaS-discovery / web-gateway / code-search categories (three-way merge, same API client).
+  Not in the IT Asset sidebar; `/cyber-assurance/connectors` still resolves. Internal
+  providers (help desk engine) are hidden from customers.
 - **Auth** (`require_permission`): ComplyVerse's `has_tenant_permission` kept; the
   product's idle-session enforcement added in front of it.
 - **Compliance runs**: product's `_finalize_run()` refactor (reused by agent results)
