@@ -2,12 +2,13 @@
 
 // The few pieces the Task Management pages share, on the design-system tokens and the kit (components/ui/ds): the words of a task as pills, a title that is a link, the people of a task,
 // the "via ..." line that says where a task came from, a section's heading and the line a form shows when the server refused it.
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { clsx } from 'clsx';
 import { ArrowUpRight } from 'lucide-react';
 import { Checkbox, PersonChip, PersonStack, StatusPill } from '@/components/ui/ds';
 import { DocumentTaskLink } from '@/components/governance/DocumentTaskActions';
+import { formatDate } from '@/lib/format';
 import { isDocumentTask } from '@/lib/documentTasks';
 import { statusPill } from '@/lib/status';
 import { subTaskStatus, taskApproval, taskPriority, taskSla, taskStatus } from '@/lib/statuses/tasks';
@@ -21,6 +22,9 @@ export const SubTaskPill = ({ word }: { word: string | null | undefined }) => <S
 
 // the padding and the matching negative margin make the link 24px high (44px on a phone) without moving anything: a line of text is 20px
 const LINK = 'rounded-ds-control py-[2px] -my-[2px] max-md:py-[12px] max-md:-my-[12px] font-medium text-ds-fg underline-offset-[2px] hover:text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring';
+
+/** "Due 12 Nov 2026" (the day as written), or "Due date not set": a due date is the person's to set. */
+export const dueLine = (due: string | null | undefined): string => (due ? `Due ${formatDate(due, { calendar: true })}` : 'Due date not set');
 
 /** A task's title as the link that opens it. A long title wraps (even one with no spaces) and is cut at two lines; the whole of it is the tooltip. The cut is on an inner span:
  *  `line-clamp` on the link itself shows its third line through the link's own padding. */
@@ -72,6 +76,16 @@ export function FormProblem({ message, onRetry }: { message: string | null | und
       {onRetry && <button type="button" onClick={onRetry} className="inline-flex min-h-ds-control shrink-0 items-center rounded-ds-control border border-ds-danger-border bg-ds-surface px-[12px] font-[600] text-ds-danger hover:bg-ds-danger-soft focus-visible:outline-none focus-visible:shadow-ds-ring">Retry</button>}
     </div>
   );
+}
+
+/** `value`, once it has stayed the same for `ms`: a search box answers at once and the request follows when the person pauses. */
+export function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
 }
 
 /** A row's tick box with a hit area of 32px (44px on a phone) around the 16px box, so a finger can find it; the label names the task it selects. */

@@ -10,9 +10,10 @@ import { withoutLocked } from '../../../lib/documentTasks.ts';
 import {
   BOARD_SCHEMA, DEFAULT_PAGE_SIZE, FILTER_CATEGORIES, FILTER_SOURCES, KANBAN_LIMIT, SORT_KEYS, STATUSES, SYSTEM_CATEGORIES, SYSTEM_SOURCES, TITLE_MAX, VALID_TRANSITIONS,
   activeCount, aiContextOf, aiContextRequest, aiDescriptionText, allowedTransitions, applyAiContext, assigneeNames, bars, bulkReport, coverage, createPayload, editDirty,
-  editFormOf, editPayload, emptyTask, fallbackFill, filterCount, formDirty, kanbanColumns, lastPage, listParams, myTasksView, pageSizeOf, pickerOptions, rowsOf, sortFromHeader,
-  titleProblem, trendHeight, trendMax, workloadBars, type EditForm, type NewTaskForm, type PickerOption, type TaskRow,
+  editFormOf, editPayload, emptyTask, fallbackFill, filterCount, formDirty, kanbanColumns, lastPage, listParams, myTasksView, orderBars, pageSizeOf, pickerOptions, recentlyCompleted, rowsOf, sortFromHeader,
+  titleProblem, trendHeight, trendMax, userOptions, workloadBars, type EditForm, type NewTaskForm, type PickerOption, type TaskRow,
 } from './tasksModel.ts';
+import { TASK_SLA_DEFAULTS, TASK_SLA_ORDER, daysFromDraft } from './slaConfig.ts';
 
 const BACKEND = new URL('../../../../../backend/grc/', import.meta.url);
 const read = (rel: string) => readFileSync(new URL(rel, BACKEND), 'utf8');
@@ -224,11 +225,21 @@ test('the Kanban has a column per status and a place for a task whose status is 
   assert.deepEqual(kanbanColumns([]).other, []);
 });
 
+test('a person in a list is their name (else the user name, else the address, else the id) with the address under it', () => {
+  assert.deepEqual(userOptions([{ id: 1, display_name: 'Ann', username: 'ann', email: 'a@x.test' }, { id: 2, display_name: null, username: 'bo', email: 'b@x.test' }, { id: 3, display_name: null, username: null, email: '' }]),
+    [{ value: '1', label: 'Ann', description: 'a@x.test' }, { value: '2', label: 'bo', description: 'b@x.test' }, { value: '3', label: 'User #3', description: undefined }]);
+  assert.deepEqual(userOptions(null), []);
+});
+
 test('everyone on a task is named, not only the first; an older answer has the single owner; nobody is an empty list', () => {
   const user = (id: number, name: string | null) => ({ id, display_name: name, username: `u${id}`, email: `u${id}@x.test` });
   assert.deepEqual(assigneeNames({ assignees: [user(1, 'Ann'), user(2, null)], assigned_owner: user(1, 'Ann') }), ['Ann', 'u2']);
   assert.deepEqual(assigneeNames({ assigned_owner: user(3, 'Cy') }), ['Cy']);
   assert.deepEqual(assigneeNames({ assignees: [], assigned_owner: null }), []);
+  // editing the owner of a task changes the owner but not the assignee list: the owner stays first, the others follow, nobody twice
+  assert.deepEqual(assigneeNames({ assignees: [user(2, 'Bo'), user(3, 'Cy')], assigned_owner: user(1, 'Ann') }), ['Ann', 'Bo', 'Cy']);
+  assert.deepEqual(assigneeNames({ assignees: [user(2, 'Bo'), user(1, 'Ann')], assigned_owner: user(1, 'Ann') }), ['Ann', 'Bo']);
+  assert.deepEqual(assigneeNames({ assignees: [user(2, 'Bo')], assigned_owner: null }), ['Bo'], 'no owner: the assignees alone');
 });
 
 // ── pickers and AI Generate ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -291,6 +302,34 @@ test('My Tasks: active, overdue (Breached), at risk, completed; priorities group
   assert.deepEqual(v.groups.map((g) => [g.priority, g.tasks.map((x) => x.id)]), [['Critical', [1]], ['High', [2]], ['Medium', [6]], ['Low', []]]);
   assert.deepEqual(v.other.map((x) => x.id), [5]);
   assert.equal(v.active.length, v.groups.reduce((n, g) => n + g.tasks.length, 0) + v.other.length, 'every active task is in a group');
+});
+
+test('SLA days typed on the SLA page: a whole number of at least one (what the page has always stored)', () => {
+  assert.equal(daysFromDraft('30'), 30);
+  assert.equal(daysFromDraft('12.9'), 12);
+  assert.equal(daysFromDraft('0'), 1);
+  assert.equal(daysFromDraft('-5'), 1);
+  assert.equal(daysFromDraft(''), 1);
+  assert.equal(daysFromDraft('abc'), 1);
+  assert.equal(daysFromDraft(7), 7);
+  assert.deepEqual(TASK_SLA_ORDER, ['critical', 'high', 'medium', 'low', 'info']);
+  assert.deepEqual(TASK_SLA_ORDER.map((l) => TASK_SLA_DEFAULTS[l]), [7, 30, 90, 180, 365]);
+});
+
+test('Recently completed lists the latest completions first, a task with no completion time last, and no more than ten', () => {
+  const t = (id: number, at: string | null) => ({ id, completed_at: at });
+  const list = [t(1, '2026-10-01T09:00:00'), t(2, null), t(3, '2026-10-05T09:00:00'), t(4, '2026-10-03T09:00:00'), t(5, '2026-10-05T09:00:00')];
+  assert.deepEqual(recentlyCompleted(list).map((x) => x.id), [3, 5, 4, 1, 2], 'newest first, ties keep their order, none last');
+  assert.deepEqual(recentlyCompleted(list, 2).map((x) => x.id), [3, 5]);
+  assert.equal(recentlyCompleted(Array.from({ length: 25 }, (_, i) => t(i, `2026-10-${String(1 + (i % 28)).padStart(2, '0')}T00:00:00`))).length, 10);
+  assert.deepEqual(recentlyCompleted([]), []);
+});
+
+test('Reports list the statuses in the workflow\'s order and the priorities from Critical to Low, whatever order the server sent; a word nobody knows follows', () => {
+  const rows = bars({ Verified: 1, Open: 5, Reopened: 2, planned: 3, 'In Progress': 4 }, 15);
+  assert.deepEqual(orderBars(rows, STATUSES).map((b) => b.label), ['Open', 'In Progress', 'Verified', 'Reopened', 'planned']);
+  assert.deepEqual(orderBars(bars({ low: 1, Critical: 2, Medium: 3 }, 6), ['Critical', 'High', 'Medium', 'Low']).map((b) => b.label), ['Critical', 'Medium', 'low']);
+  assert.deepEqual(orderBars([], STATUSES), []);
 });
 
 test('Reports: each bar is a share of the total (0 with no total), the workload is most first and relative to the busiest, Active is what is not done', () => {

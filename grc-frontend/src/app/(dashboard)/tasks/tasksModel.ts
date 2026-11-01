@@ -187,12 +187,49 @@ export function kanbanColumns<T extends { status: string }>(tasks: readonly T[])
 // ── the people of a task ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const personName = (u: Pick<TaskUser, 'display_name' | 'username' | 'email'> | null | undefined): string | null => u?.display_name || u?.username || u?.email || null;
 
-/** Everyone on the task, by name: the server's `assignees` list, else the single owner it has always sent (an older answer). */
+/** Everyone on the task, by name, the owner first (what the Owner column has always shown) and then the other assignees the server lists: editing a task's owner changes the
+ *  owner but not the assignee list (the server syncs only the other way), so the two can differ and both are on the task. An older answer without `assignees` has the owner alone. */
 export function assigneeNames(task: Pick<TaskRow, 'assignees' | 'assigned_owner'>): string[] {
-  const list = (task.assignees ?? []).map((u) => personName(u)).filter((n): n is string => !!n);
-  if (list.length > 0) return list;
-  const owner = personName(task.assigned_owner);
-  return owner ? [owner] : [];
+  const owner = task.assigned_owner;
+  const names: string[] = [];
+  const first = personName(owner);
+  if (first) names.push(first);
+  (task.assignees ?? []).forEach((u) => {
+    const name = personName(u);
+    if (name && !(owner && u.id === owner.id)) names.push(name);
+  });
+  return names;
+}
+
+/** A task as its own page reads it: the list's fields and the rest of the record (people, links, approval, recurrence, sub-tasks, comments, history). */
+export interface SubTask { id: number; title: string; status: string; assigned_owner_id: number | null; assigned_owner: TaskUser | null; due_date: string | null; completed_at: string | null; created_at: string | null }
+export interface TaskComment { id: number; content: string; user: TaskUser | null; created_at: string | null }
+export interface TaskHistoryEntry { id: number; action: string; field_changed: string | null; old_value: string | null; new_value: string | null; user: TaskUser | null; created_at: string | null }
+export interface TaskDetail extends TaskRow {
+  tenant_id: number;
+  linked_risk_id: number | null;
+  linked_control_id: number | null;
+  linked_finding_id: number | null;
+  linked_vulnerability_id: number | null;
+  linked_issue_id?: number | null;
+  evidence_notes: string | null;
+  verified_at: string | null;
+  sub_tasks: SubTask[];
+  comments: TaskComment[];
+  history: TaskHistoryEntry[];
+  recurrence_pattern: string | null;
+  recurrence_interval: number | null;
+  approval_required: boolean;
+  approval_status: string | null;
+  approved_by_id: number | null;
+  approved_at: string | null;
+  approved_by: TaskUser | null;
+}
+
+/** A person as a choice in a list (the Owner filter, the owners and reviewer pickers): the name the old pickers showed, the e-mail under it. */
+export interface PersonOption { value: string; label: string; description?: string }
+export function userOptions(users: readonly TaskUser[] | null | undefined): PersonOption[] {
+  return (users ?? []).map((u) => ({ value: String(u.id), label: u.display_name || u.username || u.email || `User #${u.id}`, description: u.email || undefined }));
 }
 
 // ── the create form (moved from tasks/page.tsx; `createPayload` is what handleCreate sent) ────────────────────────────────────────────────
@@ -470,6 +507,19 @@ export function myTasksView<T extends { status: string; priority: string; sla_st
 /** how many completed tasks My Tasks lists */
 export const COMPLETED_SHOWN = 10;
 
+/** The completed tasks, the most recently completed first (a task with no completion time last), cut to the `COMPLETED_SHOWN` My Tasks lists. The server orders the whole list
+ *  by due date, so its first ten were the oldest-due, not the latest done. */
+export function recentlyCompleted<T extends { completed_at: string | null }>(done: readonly T[], shown: number = COMPLETED_SHOWN): T[] {
+  const at = (t: T) => (t.completed_at ? Date.parse(/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(t.completed_at) ? t.completed_at : `${t.completed_at}Z`) : NaN);
+  const rows = done.map((t, i) => ({ t, i, at: at(t) }));
+  rows.sort((a, b) => {
+    const none = [Number.isNaN(a.at), Number.isNaN(b.at)];
+    if (none[0] || none[1]) return none[0] === none[1] ? a.i - b.i : none[0] ? 1 : -1;
+    return b.at - a.at || a.i - b.i;
+  });
+  return rows.slice(0, Math.max(0, shown)).map((x) => x.t);
+}
+
 // ── Reports ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface Bar { label: string; count: number; percent: number }
 
@@ -479,6 +529,15 @@ export function bars(counts: Record<string, number> | null | undefined, total: n
     const count = Number((counts as Record<string, number>)[label]) || 0;
     return { label, count, percent: total > 0 ? (count / total) * 100 : 0 };
   });
+}
+
+/** The bars in the order of `order` (the workflow's statuses, the priorities from Critical to Low), however the words are written; a word that is not in `order` keeps the server's order after them. */
+export function orderBars(rows: Bar[], order: readonly string[]): Bar[] {
+  const rank = (b: Bar): number => {
+    const at = order.map(norm).indexOf(norm(b.label));
+    return at < 0 ? order.length : at;
+  };
+  return rows.map((b, i) => ({ b, i })).sort((x, y) => rank(x.b) - rank(y.b) || x.i - y.i).map((x) => x.b);
 }
 
 /** The owners by their active tasks, most first, each as a share of the busiest (so the longest bar is full). */
