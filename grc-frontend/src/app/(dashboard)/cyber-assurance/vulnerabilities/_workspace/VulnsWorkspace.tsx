@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, Download, Plus, Upload, FileSpreadsheet, Loader2, Building2, Clock, Target, LayoutDashboard, ChevronDown, Server, Ticket, ScanLine, Trash2, ArrowUpDown, Check, X, List } from 'lucide-react';
+import { Search, Download, Plus, Upload, FileSpreadsheet, Loader2, Building2, Clock, Target, LayoutDashboard, ChevronDown, Server, Ticket, ScanLine, Trash2, ArrowUpDown, Check, X, List, Crosshair } from 'lucide-react';
 import { shortenVulnTitle, deBrandDomain, PriorityRawCell, PriorityContextualCell, enrichmentPriority, type Vulnerability } from './lib';
 import RowActionsMenu from '../../assets/_workspace/RowActionsMenu';
 import CtemScopesRedesign from '../ctem-scopes/CtemScopesRedesign';

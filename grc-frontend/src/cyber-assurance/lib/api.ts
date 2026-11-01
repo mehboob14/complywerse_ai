@@ -3436,7 +3436,7 @@ export interface ReportFilter {
 }
 
 export const reportingApi = {
-  datasets: () => apiClient.get<{ datasets: ReportDatasetMeta[] }>('/reporting/datasets'),
+  datasets: () => apiClient.get<{ datasets: ReportDatasetMeta[] }>('/reporting/datasets', { params: { scope: 'cyber' } }),
   exportReport: (body: {
     dataset: string;
     columns: string[];
