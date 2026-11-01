@@ -12,8 +12,8 @@ import html
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, select
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import func, or_, and_, select
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -44,6 +44,7 @@ AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 from .. import doc_lifecycle  # noqa: E402
+from .. import library_lean  # noqa: E402
 from .. import permissions  # noqa: E402
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
@@ -216,7 +217,9 @@ def create_audit_log(
     return audit_log
 
 
-def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
+def serialize_document(doc: GovernanceDocument, db: Session = None, statement_count: Optional[int] = None) -> dict:
+    """The document as the API sends it. ``statement_count``: its number of statements when the caller already has it (a list counts
+    them for the whole page in one query); None: counted here, as for every single document."""
     result = {
         "id": doc.id,
         "tenant_id": doc.tenant_id,
@@ -258,7 +261,9 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
         "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
     }
     
-    if db:
+    if statement_count is not None:
+        result["policy_statement_count"] = statement_count
+    elif db:
         try:
             from ...compliance.schema_migrations import ensure_assigned_column
             ensure_assigned_column(db)
@@ -312,6 +317,24 @@ def _serve_in_force(result: dict, row: Optional[GovernanceDocumentVersion]) -> d
     return result
 
 
+# What a list may be sorted by (``sort_by``); any other name sorts by created_at, as an unknown attribute name always did. Not the text, the
+# description or the file columns (the newer, unpublished value would order the rows of a reader who is served the one in force),
+# nor the internal bookkeeping and JSON columns.
+_SORT_COLUMNS = {key: getattr(GovernanceDocument, key) for key in (
+    "id", "document_code", "title", "doc_type", "doc_sub_type", "classification", "current_version", "status", "owner_id", "author_id",
+    "department_id", "parent_document_id", "effective_date", "expiry_date", "review_cycle_months", "next_review_date", "last_reviewed_at",
+    "approved_at", "published_at", "created_at", "updated_at")}
+
+
+def _statement_counts(db: Session, ids: List[int]) -> Dict[int, int]:
+    """How many statements each of these documents has, in one query (a document with none is not in the answer)."""
+    counts: Dict[int, int] = {}
+    for chunk in library_lean.chunks(ids):
+        counts.update(db.query(PolicyStatement.document_id, func.count(PolicyStatement.id))
+                      .filter(PolicyStatement.document_id.in_(chunk)).group_by(PolicyStatement.document_id).all())
+    return counts
+
+
 @router.get("")
 def list_documents(
     tenant_id: Optional[int] = None,
@@ -328,20 +351,29 @@ def list_documents(
     skip: int = 0,
     limit: int = 100,
     brief: bool = False,
+    lean: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     """The documents the person may read, with their text. ``brief=1`` is the list for pickers in other modules (linking a risk,
     an issue, evidence or another document): only ``id``, ``title``, ``doc_type``, ``status`` and ``current_version`` (the number
     the person reads), no text, file or description; for someone outside the library it holds the documents in force as well as
-    their own and those they are asked about, for a library reader what the library shows them."""
-    user_tenants = get_user_tenants(current_user, db)
-    if not user_tenants:
-        return {"items": [], "total": 0, "skip": skip, "limit": limit}
+    their own and those they are asked about, for a library reader what the library shows them.
 
-    query = db.query(GovernanceDocument).options(
-        joinedload(GovernanceDocument.owner)
-    ).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    ``lean=1`` is the list for the library, which draws and counts everything from the whole list (``library_lean.py``): the same
+    documents for the same person, without ``content`` or any per-row query, ``limit`` up to 10,000 in one request, ``truncated``
+    when ``total`` is more than the response holds, and the names its rows use. ``brief`` wins when both are sent.
+
+    ``sort_by`` is one of ``_SORT_COLUMNS`` (anything else: ``created_at``); equal values are ordered by id, in the direction of
+    the sort, so pages never repeat or skip a document."""
+    user_tenants = get_user_tenants(current_user, db)
+    lean = lean and not brief
+    if lean:                                    # a request holds up to LEAN_LIMIT rows; a negative offset or limit is no request
+        skip, limit = max(skip, 0), max(min(limit, library_lean.LEAN_LIMIT), 0)
+    if not user_tenants:
+        return library_lean.empty(skip, limit) if lean else {"items": [], "total": 0, "skip": skip, "limit": limit}
+
+    query = db.query(GovernanceDocument).filter(GovernanceDocument.tenant_id.in_(user_tenants))
     # only what the person may read (in the body, not a dependency: the six type lists below call this function)
     visible = permissions.visible_filter(db, current_user)
     if brief and visible is not None and not permissions.can_read_library(db, current_user):
@@ -380,24 +412,42 @@ def list_documents(
     
     total = query.count()
     
-    sort_column = getattr(GovernanceDocument, sort_by, GovernanceDocument.created_at)
+    sort_column = _SORT_COLUMNS.get(sort_by, GovernanceDocument.created_at)
     if sort_order == "asc":
-        query = query.order_by(sort_column.asc())
+        query = query.order_by(sort_column.asc(), GovernanceDocument.id.asc())
     else:
-        query = query.order_by(sort_column.desc())
-    
-    documents = query.offset(skip).limit(limit).all()
-    in_force = _in_force_for(db, current_user, visible is None)
+        query = query.order_by(sort_column.desc(), GovernanceDocument.id.desc())
+
+    if lean:
+        return library_lean.list_lean(db, current_user, query, user_tenants, total, skip, limit, visible is None)
+
     if brief:
+        documents = query.offset(skip).limit(limit).all()
+        in_force = library_lean.in_force_rows(db, current_user, visible is None, documents, entity=False)
+
         def item(doc):
-            row = in_force(doc)
+            row = in_force.get(doc.id)
             return {"id": doc.id, "title": doc.title, "doc_type": doc.doc_type, "status": doc.status,
                     "current_version": row.version_number if row is not None else doc.current_version,
                     "document_code": doc.document_code, "parent_document_id": doc.parent_document_id, "tags": doc.tags or []}
         return {"items": [item(doc) for doc in documents], "total": total, "skip": skip, "limit": limit}
 
+    # the owner, the author and the workflow instance (with its template and step) of the whole page come with the rows
+    documents = query.options(
+        joinedload(GovernanceDocument.owner), joinedload(GovernanceDocument.author),
+        selectinload(GovernanceDocument.workflow_instance).options(
+            joinedload(DocumentWorkflowInstance.template), joinedload(DocumentWorkflowInstance.current_step)),
+    ).offset(skip).limit(limit).all()
+    if documents:                               # the self-heal of a missing column: once for the page (it ran for every row)
+        try:
+            from ...compliance.schema_migrations import ensure_assigned_column
+            ensure_assigned_column(db)
+        except Exception:
+            pass
+    counts = _statement_counts(db, [doc.id for doc in documents])
+    in_force = library_lean.in_force_rows(db, current_user, visible is None, documents)
     return {
-        "items": [_serve_in_force(serialize_document(doc, db), in_force(doc)) for doc in documents],
+        "items": [_serve_in_force(serialize_document(doc, db, counts.get(doc.id, 0)), in_force.get(doc.id)) for doc in documents],
         "total": total,
         "skip": skip,
         "limit": limit
