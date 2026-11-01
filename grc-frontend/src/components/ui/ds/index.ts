@@ -49,3 +49,4 @@ export { SidePanel, type SidePanelProps } from './SidePanel';
 export { Sheet, type SheetProps } from './Sheet';
 export type { PanelMode, PanelWidth } from './sidePanelModel';
 export { FilterChips, type FilterChip, type FilterChipsProps, type ChipFlag, type FlagTone } from './FilterChips';
+export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps } from './Disclosure';
