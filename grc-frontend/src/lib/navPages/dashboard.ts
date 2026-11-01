@@ -2,9 +2,10 @@
 // `ownHeading: true` goes on a page the moment it draws the kit's page head (PageHeader variant="page"): the top bar then names only its section.
 import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 
-// Uncomment an entry when its page moves to the kit; the builder confirms (or corrects) each label, parent and `hidden` sentence against the code.
+// /dashboard is the sidebar leaf "Performance Overview" (navAccess.ts: `dashboard:overview:*`). Its page draws the kit's head with that name, so the top bar says nothing
+// (the section is the page's own name: sectionOfEntry returns ''). The page has no sub-pages and no tabs.
 export const LEAVES: Record<string, RouteExtra> = {
-  // '/dashboard': { ownHeading: true },
+  '/dashboard': { ownHeading: true },
 };
 
 export const PAGES: PageSpec[] = [
