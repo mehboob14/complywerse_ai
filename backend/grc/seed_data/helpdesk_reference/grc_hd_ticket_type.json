@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Incident",
+    "description": null,
+    "priority": null,
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  },
+  {
+    "name": "Request",
+    "description": null,
+    "priority": null,
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  },
+  {
+    "name": "Question",
+    "description": null,
+    "priority": null,
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  },
+  {
+    "name": "Problem",
+    "description": null,
+    "priority": "Medium",
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  },
+  {
+    "name": "Change",
+    "description": null,
+    "priority": "Medium",
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  },
+  {
+    "name": "Service Request",
+    "description": null,
+    "priority": "Medium",
+    "department": null,
+    "is_system": false,
+    "disabled": false
+  }
+]

@@ -381,14 +381,7 @@ def on_startup():
     if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
         start_complychat_embedding_worker()
 
-    # Help Desk per-tenant boot heal: its own column self-heal + governance/department
-    # seed. Idempotent, never raises (DISABLE_HELPDESK_SCHEMA_SYNC / _DATA_SEED turn it off).
-    try:
-        from grc.modules.helpdesk_native.itsm_seed import run_boot_heal
-        run_boot_heal()
-    except Exception:  # noqa: BLE001
-        import logging as _logging
-        _logging.getLogger(__name__).warning("helpdesk boot heal skipped", exc_info=True)
+    # The Help Desk boot heal runs from backend/main.py's startup (this app is mounted there).
 
     # Pentest Find scans (grc_pentest_scan_jobs): their worker thread dies on restart, so re-drive
     # nessus/openvas and fail the in-process ones with a clear reason instead of leaving them 'running'.

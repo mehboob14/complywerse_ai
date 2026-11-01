@@ -1,0 +1,1010 @@
+[
+  {
+    "key": "HARDWARE",
+    "name": "Hardware",
+    "level": "category",
+    "parent": null,
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/LAPTOP",
+    "name": "Laptop",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/DESKTOP",
+    "name": "Desktop",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/MONITOR",
+    "name": "Monitor",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/PERIPHERALS",
+    "name": "Peripherals",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/DOCKING-STATION",
+    "name": "Docking Station",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/PRINTER-SCANNER",
+    "name": "Printer/Scanner",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "HARDWARE/AUDIO-VIDEO",
+    "name": "Audio/Video",
+    "level": "subcategory",
+    "parent": "HARDWARE",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE",
+    "name": "Software",
+    "level": "category",
+    "parent": null,
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/INSTALLATION",
+    "name": "Installation",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/LICENSING",
+    "name": "Licensing",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/UPDATES-PATCHING",
+    "name": "Updates/Patching",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/APPLICATION-ERROR",
+    "name": "Application Error",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/CONFIGURATION",
+    "name": "Configuration",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "SOFTWARE/ACCESS-PERMISSIONS",
+    "name": "Access/Permissions",
+    "level": "subcategory",
+    "parent": "SOFTWARE",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK",
+    "name": "Network",
+    "level": "category",
+    "parent": null,
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/CONNECTIVITY",
+    "name": "Connectivity",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/VPN",
+    "name": "VPN",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/WI-FI",
+    "name": "Wi-Fi",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/DNS-DHCP",
+    "name": "DNS/DHCP",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/FIREWALL",
+    "name": "Firewall",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "NETWORK/BANDWIDTH-PERFORMANCE",
+    "name": "Bandwidth/Performance",
+    "level": "subcategory",
+    "parent": "NETWORK",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS",
+    "name": "Access & Accounts",
+    "level": "category",
+    "parent": null,
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/PASSWORD-RESET",
+    "name": "Password Reset",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/ACCOUNT-LOCKOUT",
+    "name": "Account Lockout",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/NEW-ACCOUNT",
+    "name": "New Account",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/ACCESS-REQUEST",
+    "name": "Access Request",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/MFA",
+    "name": "MFA",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/GROUP-MEMBERSHIP",
+    "name": "Group Membership",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "ACCESS-ACCOUNTS/DEPROVISIONING",
+    "name": "Deprovisioning",
+    "level": "subcategory",
+    "parent": "ACCESS-ACCOUNTS",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION",
+    "name": "Email & Collaboration",
+    "level": "category",
+    "parent": null,
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/EMAIL-DELIVERY",
+    "name": "Email Delivery",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/MAILBOX",
+    "name": "Mailbox",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/DISTRIBUTION-LIST",
+    "name": "Distribution List",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/CALENDAR",
+    "name": "Calendar",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/CHAT-TEAMS",
+    "name": "Chat/Teams",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/FILE-SHARING",
+    "name": "File Sharing",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "EMAIL-COLLABORATION/VIDEO-CONFERENCING",
+    "name": "Video Conferencing",
+    "level": "subcategory",
+    "parent": "EMAIL-COLLABORATION",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY",
+    "name": "Security",
+    "level": "category",
+    "parent": null,
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/PHISHING",
+    "name": "Phishing",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/MALWARE",
+    "name": "Malware",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/DATA-BREACH",
+    "name": "Data Breach",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/SUSPICIOUS-ACTIVITY",
+    "name": "Suspicious Activity",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/POLICY-EXCEPTION",
+    "name": "Policy Exception",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/CERTIFICATE",
+    "name": "Certificate",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "SECURITY/VULNERABILITY",
+    "name": "Vulnerability",
+    "level": "subcategory",
+    "parent": "SECURITY",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES",
+    "name": "Mobile Devices",
+    "level": "category",
+    "parent": null,
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES/ENROLLMENT",
+    "name": "Enrollment",
+    "level": "subcategory",
+    "parent": "MOBILE-DEVICES",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES/MDM",
+    "name": "MDM",
+    "level": "subcategory",
+    "parent": "MOBILE-DEVICES",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES/APP-INSTALL",
+    "name": "App Install",
+    "level": "subcategory",
+    "parent": "MOBILE-DEVICES",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES/LOST-STOLEN",
+    "name": "Lost/Stolen",
+    "level": "subcategory",
+    "parent": "MOBILE-DEVICES",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "MOBILE-DEVICES/DATA-WIPE",
+    "name": "Data Wipe",
+    "level": "subcategory",
+    "parent": "MOBILE-DEVICES",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING",
+    "name": "Printing",
+    "level": "category",
+    "parent": null,
+    "sort_order": 7,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING/PRINTER-SETUP",
+    "name": "Printer Setup",
+    "level": "subcategory",
+    "parent": "PRINTING",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING/PRINT-QUEUE",
+    "name": "Print Queue",
+    "level": "subcategory",
+    "parent": "PRINTING",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING/TONER-SUPPLIES",
+    "name": "Toner/Supplies",
+    "level": "subcategory",
+    "parent": "PRINTING",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING/SCAN-TO-EMAIL",
+    "name": "Scan to Email",
+    "level": "subcategory",
+    "parent": "PRINTING",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "PRINTING/PRINT-QUALITY",
+    "name": "Print Quality",
+    "level": "subcategory",
+    "parent": "PRINTING",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY",
+    "name": "Telephony",
+    "level": "category",
+    "parent": null,
+    "sort_order": 8,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/DESK-PHONE",
+    "name": "Desk Phone",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/SOFTPHONE",
+    "name": "Softphone",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/VOICEMAIL",
+    "name": "Voicemail",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/CONFERENCE-LINE",
+    "name": "Conference Line",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/CALL-ROUTING",
+    "name": "Call Routing",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "TELEPHONY/MOBILE-PLAN",
+    "name": "Mobile Plan",
+    "level": "subcategory",
+    "parent": "TELEPHONY",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES",
+    "name": "Facilities",
+    "level": "category",
+    "parent": null,
+    "sort_order": 9,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/OFFICE-SPACE",
+    "name": "Office Space",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/HVAC",
+    "name": "HVAC",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/LIGHTING",
+    "name": "Lighting",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/FURNITURE",
+    "name": "Furniture",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/ACCESS-BADGE",
+    "name": "Access Badge",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/PARKING",
+    "name": "Parking",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/CLEANING",
+    "name": "Cleaning",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "FACILITIES/MAINTENANCE",
+    "name": "Maintenance",
+    "level": "subcategory",
+    "parent": "FACILITIES",
+    "sort_order": 7,
+    "enabled": true
+  },
+  {
+    "key": "HR",
+    "name": "HR",
+    "level": "category",
+    "parent": null,
+    "sort_order": 10,
+    "enabled": true
+  },
+  {
+    "key": "HR/ONBOARDING",
+    "name": "Onboarding",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "HR/OFFBOARDING",
+    "name": "Offboarding",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "HR/PAYROLL",
+    "name": "Payroll",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "HR/BENEFITS",
+    "name": "Benefits",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "HR/LEAVE-TIME-OFF",
+    "name": "Leave/Time-off",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "HR/PERSONAL-INFO",
+    "name": "Personal Info",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "HR/TRAINING",
+    "name": "Training",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "HR/POLICY",
+    "name": "Policy",
+    "level": "subcategory",
+    "parent": "HR",
+    "sort_order": 7,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE",
+    "name": "Finance",
+    "level": "category",
+    "parent": null,
+    "sort_order": 11,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/EXPENSE",
+    "name": "Expense",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/PROCUREMENT",
+    "name": "Procurement",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/INVOICING",
+    "name": "Invoicing",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/PAYMENT",
+    "name": "Payment",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/BUDGET",
+    "name": "Budget",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "FINANCE/VENDOR",
+    "name": "Vendor",
+    "level": "subcategory",
+    "parent": "FINANCE",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM",
+    "name": "Sales/CRM",
+    "level": "category",
+    "parent": null,
+    "sort_order": 12,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/CRM-ACCESS",
+    "name": "CRM Access",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/CRM-ISSUE",
+    "name": "CRM Issue",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/LEAD-OPPORTUNITY",
+    "name": "Lead/Opportunity",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/REPORTING",
+    "name": "Reporting",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/QUOTES-CONTRACTS",
+    "name": "Quotes/Contracts",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "SALES-CRM/DATA-IMPORT",
+    "name": "Data Import",
+    "level": "subcategory",
+    "parent": "SALES-CRM",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS",
+    "name": "Operations",
+    "level": "category",
+    "parent": null,
+    "sort_order": 13,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/PROCESS",
+    "name": "Process",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/LOGISTICS",
+    "name": "Logistics",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/INVENTORY",
+    "name": "Inventory",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/SCHEDULING",
+    "name": "Scheduling",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/QUALITY",
+    "name": "Quality",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "OPERATIONS/VENDOR-MANAGEMENT",
+    "name": "Vendor Management",
+    "level": "subcategory",
+    "parent": "OPERATIONS",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL",
+    "name": "Legal",
+    "level": "category",
+    "parent": null,
+    "sort_order": 14,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/CONTRACT-REVIEW",
+    "name": "Contract Review",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/COMPLIANCE",
+    "name": "Compliance",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/NDA",
+    "name": "NDA",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/POLICY",
+    "name": "Policy",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/INTELLECTUAL-PROPERTY",
+    "name": "Intellectual Property",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "LEGAL/DISPUTE",
+    "name": "Dispute",
+    "level": "subcategory",
+    "parent": "LEGAL",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING",
+    "name": "Marketing",
+    "level": "category",
+    "parent": null,
+    "sort_order": 15,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/ASSET-REQUEST",
+    "name": "Asset Request",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/CAMPAIGN",
+    "name": "Campaign",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/WEBSITE",
+    "name": "Website",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/SOCIAL-MEDIA",
+    "name": "Social Media",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/BRANDING",
+    "name": "Branding",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/EVENT",
+    "name": "Event",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "key": "MARKETING/ANALYTICS",
+    "name": "Analytics",
+    "level": "subcategory",
+    "parent": "MARKETING",
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING",
+    "name": "Onboarding/Offboarding",
+    "level": "category",
+    "parent": null,
+    "sort_order": 16,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING/NEW-HIRE-SETUP",
+    "name": "New Hire Setup",
+    "level": "subcategory",
+    "parent": "ONBOARDING-OFFBOARDING",
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING/EQUIPMENT-PROVISIONING",
+    "name": "Equipment Provisioning",
+    "level": "subcategory",
+    "parent": "ONBOARDING-OFFBOARDING",
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING/ACCESS-GRANT",
+    "name": "Access Grant",
+    "level": "subcategory",
+    "parent": "ONBOARDING-OFFBOARDING",
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING/EXIT-CHECKLIST",
+    "name": "Exit Checklist",
+    "level": "subcategory",
+    "parent": "ONBOARDING-OFFBOARDING",
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "key": "ONBOARDING-OFFBOARDING/EQUIPMENT-RETURN",
+    "name": "Equipment Return",
+    "level": "subcategory",
+    "parent": "ONBOARDING-OFFBOARDING",
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "key": "OTHER",
+    "name": "Other",
+    "level": "category",
+    "parent": null,
+    "sort_order": 99,
+    "enabled": true
+  }
+]

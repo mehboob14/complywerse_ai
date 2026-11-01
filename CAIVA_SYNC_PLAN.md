@@ -139,8 +139,8 @@ benchmarks in `grc_compliance_plugins`, the same counts as the product) and 155
 benchmark-OS mappings. The SCF catalog was not loaded locally; `python -m
 grc.tools.scf_import --tenant complyverse` loaded release 2026.2 (1,534 controls, 5,956
 objectives, 80,645 mappings, 108 s). Prod tenants that have not run it need it; it is
-idempotent (`--all-tenants` for all). Help Desk seeds itself (statuses, priorities, SLA, roles,
-departments) through `itsm_seed.run_boot_heal()` on startup. Advisories have no seed
+idempotent (`--all-tenants` for all). Help Desk seeds itself (its full reference
+configuration, §13) through `itsm_seed.run_boot_heal()` on startup. Advisories have no seed
 (bulletins are uploaded or synced). `backend/scripts/reconcile_benchmark_mappings.py`
 (the product's Win10-gets-Win11 fix) is included; run it `--dry-run` per tenant.
 
@@ -258,31 +258,85 @@ The folder can be deleted once this branch is on GitHub.
    whether to apply the non-cyber catch-up too.
 4. Merge target: this branch already contains `main`; merging it into
    `scf-control-plane` should be clean.
-5. **Which control library CTEM Validate maps to.** Validate shows the controls linked
-   to a scope's findings (`ctem_scopes._cc_validate`, reading
-   `grc_vulnerability_control_links` → `grc_normalized_controls` /
-   `grc_parsed_framework_controls`). The AI run that creates those links picks from
-   `ai_control_mapping.load_corpus`, and here the two products differ:
-   - In the product, the corpus is `NormalizedControl` rows; on a tenant with no baseline
-     normalization run that is the SCF catalog (2026.2, 1,534 `SCF-*` controls, loaded
-     by `grc.tools.scf_import`).
-   - In ComplyVerse, `scf-control-plane` added `licence_guard.exclude_restricted` to that
-     query: SCF is CC BY-ND and its terms forbid feeding its text to AI, so **SCF rows are
-     excluded from the AI corpus**. The corpus is the tenant's locked baseline
-     normalization run (`source='ai_normalized'`; 5,290 controls on the local tenant,
-     run 47), which is the legacy **Unified Control Library** at `/control-library` (the page exists, it has no sidebar entry),
-     plus uploaded framework controls not absorbed by it. SCF controls only reach
-     Validate through manual links.
-   - ComplyVerse's SCF library itself lives at **Controls Automation › Common Controls**
-     (`/automation/soc2-controls`, rights `controls:control_library:*` or
-     `compliance:frameworks:*`), loaded per tenant by `grc.tools.scf_import`.
-   No in-product note was added: naming SCF on Validate would be wrong while the licence
-   guard keeps SCF out of the AI mapping. The owner decides: keep Validate on the legacy
-   library (then label it so), or map Validate to SCF without sending SCF text to the
-   model (e.g. via SCF's own CWE/framework crosswalk), then label it "SCF Control Library"
-   with a link to Common Controls.
+5. **Prod tenants need `scf_import` (ops step for the ComplyVerse side).** CTEM Validate
+   now maps to the SCF Control Library (see §12). A tenant with no SCF release shows
+   "SCF library not loaded — run scf_import" on Validate and cannot run it.
+   `python -m grc.tools.scf_import --all-tenants` (idempotent; ~2 min per tenant).
+   We did not run it on prod.
 
-## 12. Summary for the owner (plain language)
+## 12. CTEM Validate on the SCF Control Library
+
+Owner decision: Validate maps findings to the **SCF Control Library** (Secure Controls
+Framework 2026.2, 1,534 controls) without sending SCF text to a model.
+
+- **Where the library lives.** In the product, SCF is the AI mapper's corpus. In ComplyVerse,
+  `scf-control-plane`'s `licence_guard.exclude_restricted` keeps SCF out of every AI
+  corpus (CC BY-ND: no AI over SCF text). That guard is unchanged. The library is managed at
+  **Controls Automation › Common Controls** (`/automation/soc2-controls`) and loaded per
+  tenant by `grc.tools.scf_import`, one `NormalizedControl` bridge row per SCF control
+  (`source='scf'`, code `SCF-*`).
+- **How Validate maps now** (`grc/services/scf_validate.py`, by rule, no AI):
+  - CWE → its OWASP Top 10 2025 category (OWASP's published per-category CWE lists) →
+    the SCF controls SCF maps to that category (`grc_scf_mapping`, `owasp_top_10_2025`).
+    The 5 most category-specific are kept (fewest OWASP categories, then SCF weight).
+  - CVE → NIST 800-53 R5 SI-02 Flaw Remediation → SCF's VPM controls for it (SCF also maps
+    antimalware signature updates there; that is not the fix for a CVE, so it is left out).
+  - Links carry an `auto:cwe:` note (`auto:cwe:CWE-89 · OWASP A05:2025 → SCF CFG-03`), so
+    Validate shows them with basis **rule**. Re-running adds only missing links and never
+    relabels a human or AI link.
+- **Run.** "Run validation" on a scope calls the same endpoint as before
+  (`/vuln-management/ai-control-proposals/generate?ctem_scope_id=`). With a scope it now runs
+  the SCF crosswalk synchronously and stamps the stage. Without a scope (the register's
+  own AI mapping) it is unchanged, and still maps to the legacy Unified Control Library
+  (`/control-library`).
+- **Labels.** SCF links read "SCF Control Library" in Validate, the review queue and the
+  Mobilise control cell. Legacy-library links keep "Unified Control Library". The Validate
+  stage has a note naming the library and its crosswalks, linking to Common Controls.
+- **Not loaded.** `portfolio` returns `scf_loaded`. When false, Validate shows "SCF library
+  not loaded — run scf_import" and disables the run. The endpoint answers 409 with the
+  same text. There is no fallback to another library.
+- **Verified locally:** a scope over the two assets with findings (32 findings, all with a
+  CWE and a CVE). Run 1 created 177 links on 32/32 findings and run 2 created 0. Validate
+  lists 35 controls, all "SCF Control Library", basis "rule" (e.g. CWE-89 → CFG-01, CFG-03,
+  VPM-01, VPM-02, VPM-06 via OWASP A05:2025, + VPM-05 via its CVE → NIST SI-02). The stage was stamped.
+- **Limits.** The CWE list covers the common CWEs of each OWASP category; a CWE outside it gets
+  only the CVE rule. Memory-safety CWEs (787, 125, 416…) are not in the OWASP Top 10. A link a
+  person removes comes back on the next run (no rejection memory for rule links yet).
+
+## 13. Help Desk reference configuration
+
+The full standard Help Desk configuration ships as seed data and is recreated on every
+tenant at backend start:
+
+- **Data:** `backend/grc/seed_data/helpdesk_reference/<table>.json` (22 tables; 739 rows:
+  6 ticket types incl. "Request", 127 templates, 126 each of incident / problem / change
+  categories, 17 service categories, 108 request items, 4 SLAs + 16 priorities + 20 service
+  days + 16 SLA targets, 4 priorities, 4 statuses, 9 departments, 5 feedback options, 4 change
+  types, 9 risk-matrix cells, 5 CI types, 2 CI relationship types, 3 agent statuses, the
+  priority matrix and the default settings row). Config only: no tickets, CIs, agents or
+  articles. One description was reworded to drop the other product's name.
+- **Code:** `helpdesk_native/reference_seed.py` `ensure_reference_seed(db, tid)`. It
+  inserts in dependency order, matches each row on its natural key (scoped to the tenant,
+  or through the SLA for the SLA child tables), remaps FKs through the parents' natural
+  keys, and **adds only what is missing**. An existing row is never updated, so tenant edits
+  stand, and nothing is duplicated. One transaction per tenant.
+- **Hook:** `itsm_seed.seed_if_empty` runs it on every boot, after the native catalogue
+  seed. `run_boot_heal` is now called from **`backend/main.py`**'s startup. It was in
+  `grc/main.py`, which prod mounts as a sub-app, and a mounted app's startup never fires, so
+  the heal would not have run on prod. `DISABLE_HELPDESK_DATA_SEED=1` turns it off.
+- **Verified locally** (backend started with the prod entrypoint `uvicorn main:app`):
+  - Before: the local tenant had 708 of the 739 rows. The native seed uses the same natural
+    keys, so there were no clashes.
+  - Restart 1: added the missing 31 (3 agent statuses, "Request", 18 templates, 5 CI types,
+    2 relationship types, priority matrix, settings). Every table now equals the export,
+    with 0 duplicate keys. A row edited beforehand (`Incident` description) kept its edit.
+  - Restart 2: added 0; counts unchanged, 0 duplicates.
+  - A brand-new tenant (rolled-back transaction): 739 rows over 22 tables, FKs resolved; a
+    second run added 0.
+  - `tests/test_helpdesk_reference_seed.py` checks insert order, unique keys, FK targets and
+    branding.
+
+## 14. Summary for the owner (plain language)
 
 ComplyVerse now has everything the cyber product built since late September: the new
 asset inventory and discovery, CIS dashboards, the vulnerability register with scanning

@@ -1,0 +1,155 @@
+[
+  {
+    "code": "CAT-HARDWARE",
+    "name": "Hardware",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 0,
+    "enabled": true
+  },
+  {
+    "code": "CAT-SOFTWARE",
+    "name": "Software",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 1,
+    "enabled": true
+  },
+  {
+    "code": "CAT-NETWORK",
+    "name": "Network",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 2,
+    "enabled": true
+  },
+  {
+    "code": "CAT-ACCESS-ACCOUNTS",
+    "name": "Access & Accounts",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 3,
+    "enabled": true
+  },
+  {
+    "code": "CAT-EMAIL-COLLABORATION",
+    "name": "Email & Collaboration",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 4,
+    "enabled": true
+  },
+  {
+    "code": "CAT-SECURITY",
+    "name": "Security",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 5,
+    "enabled": true
+  },
+  {
+    "code": "CAT-MOBILE-DEVICES",
+    "name": "Mobile Devices",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 6,
+    "enabled": true
+  },
+  {
+    "code": "CAT-PRINTING",
+    "name": "Printing",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 7,
+    "enabled": true
+  },
+  {
+    "code": "CAT-TELEPHONY",
+    "name": "Telephony",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 8,
+    "enabled": true
+  },
+  {
+    "code": "CAT-FACILITIES",
+    "name": "Facilities",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 9,
+    "enabled": true
+  },
+  {
+    "code": "CAT-HR",
+    "name": "HR",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 10,
+    "enabled": true
+  },
+  {
+    "code": "CAT-FINANCE",
+    "name": "Finance",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 11,
+    "enabled": true
+  },
+  {
+    "code": "CAT-SALES-CRM",
+    "name": "Sales/CRM",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 12,
+    "enabled": true
+  },
+  {
+    "code": "CAT-OPERATIONS",
+    "name": "Operations",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 13,
+    "enabled": true
+  },
+  {
+    "code": "CAT-LEGAL",
+    "name": "Legal",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 14,
+    "enabled": true
+  },
+  {
+    "code": "CAT-MARKETING",
+    "name": "Marketing",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 15,
+    "enabled": true
+  },
+  {
+    "code": "CAT-ONBOARDING-OFFBOARDING",
+    "name": "Onboarding/Offboarding",
+    "description": null,
+    "parent": null,
+    "icon": null,
+    "sort_order": 16,
+    "enabled": true
+  }
+]

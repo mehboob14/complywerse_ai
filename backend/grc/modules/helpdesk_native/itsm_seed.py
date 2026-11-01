@@ -66,6 +66,7 @@ from ...models import (
 )
 from . import agent_status, sla
 from .common import require_edit, tenant_id
+from .reference_seed import ensure_reference_seed
 
 logger = logging.getLogger(__name__)
 
@@ -1268,14 +1269,12 @@ def seed_if_empty(db: Session, tid: int) -> bool:
                 pass
             logger.warning("itsm_seed: boot heal %s failed for tenant %s",
                            getattr(_heal, "__name__", _heal), tid, exc_info=True)
+    seeded = False
     try:
-        already = db.query(HDServiceCategory).filter(
-            HDServiceCategory.tenant_id == tid).first() is not None
-        if already:
-            return gov_healed
-        seed_itsm(db, tid)
-        logger.info("itsm_seed: boot-seeded standard ITSM data for empty tenant %s", tid)
-        return True
+        if db.query(HDServiceCategory).filter(HDServiceCategory.tenant_id == tid).first() is None:
+            seed_itsm(db, tid)
+            logger.info("itsm_seed: boot-seeded standard ITSM data for empty tenant %s", tid)
+            seeded = True
     except Exception:  # noqa: BLE001 — never block boot
         try:
             db.rollback()
@@ -1283,6 +1282,17 @@ def seed_if_empty(db: Session, tid: int) -> bool:
             pass
         logger.error("itsm_seed: boot data-seed FAILED for tenant %s", tid, exc_info=True)
         return False
+    # The full reference configuration (seed_data/helpdesk_reference): add-only by
+    # natural key on every boot, after the catalogue seed above so a new tenant still
+    # gets seed_itsm's roles, agents and SLA recompute.
+    try:
+        added = ensure_reference_seed(db, tid)
+        if added:
+            logger.info("itsm_seed: reference seed added %s for tenant %s", added, tid)
+    except Exception:  # noqa: BLE001 — never block boot
+        added = {}
+        logger.warning("itsm_seed: reference seed failed for tenant %s", tid, exc_info=True)
+    return gov_healed or seeded or bool(added)
 
 
 def run_boot_heal() -> None:

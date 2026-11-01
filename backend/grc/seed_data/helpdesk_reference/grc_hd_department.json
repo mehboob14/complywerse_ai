@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Sales",
+    "description": "Sales requests",
+    "enabled": true,
+    "code": "SAL"
+  },
+  {
+    "name": "Facilities",
+    "description": null,
+    "enabled": true,
+    "code": "FAC"
+  },
+  {
+    "name": "Operations",
+    "description": null,
+    "enabled": true,
+    "code": "OPS"
+  },
+  {
+    "name": "Marketing",
+    "description": null,
+    "enabled": true,
+    "code": "MKT"
+  },
+  {
+    "name": "Security",
+    "description": null,
+    "enabled": true,
+    "code": "SEC"
+  },
+  {
+    "name": "Information Technology",
+    "description": null,
+    "enabled": true,
+    "code": "IT"
+  },
+  {
+    "name": "Finance & Accounting",
+    "description": null,
+    "enabled": true,
+    "code": "FIN"
+  },
+  {
+    "name": "Human Resources",
+    "description": null,
+    "enabled": true,
+    "code": "HR"
+  },
+  {
+    "name": "Legal & Compliance",
+    "description": null,
+    "enabled": true,
+    "code": "LEG"
+  }
+]

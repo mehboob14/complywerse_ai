@@ -1,0 +1,54 @@
+[
+  {
+    "label_agent": "Open",
+    "label_customer": null,
+    "different_view": false,
+    "category": "Open",
+    "color": "Blue",
+    "order": 1,
+    "enabled": true,
+    "process": null,
+    "is_initial": false,
+    "is_terminal": false,
+    "sort_order": null
+  },
+  {
+    "label_agent": "Replied",
+    "label_customer": null,
+    "different_view": false,
+    "category": "Open",
+    "color": "Amber",
+    "order": 2,
+    "enabled": true,
+    "process": null,
+    "is_initial": false,
+    "is_terminal": false,
+    "sort_order": null
+  },
+  {
+    "label_agent": "Resolved",
+    "label_customer": null,
+    "different_view": false,
+    "category": "Resolved",
+    "color": "Green",
+    "order": 3,
+    "enabled": true,
+    "process": null,
+    "is_initial": false,
+    "is_terminal": false,
+    "sort_order": null
+  },
+  {
+    "label_agent": "Closed",
+    "label_customer": null,
+    "different_view": false,
+    "category": "Resolved",
+    "color": "Gray",
+    "order": 4,
+    "enabled": true,
+    "process": null,
+    "is_initial": false,
+    "is_terminal": false,
+    "sort_order": null
+  }
+]
