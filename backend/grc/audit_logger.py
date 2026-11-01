@@ -252,6 +252,10 @@ def _extract_sub_action(path: str) -> Optional[str]:
         return None
 
     last_lower = last.lower()
+    # A committee meeting's life cycle: .../committees/meetings/{id}/start|end. Scoped to that path because other modules also have a /start or /end
+    # that has always been logged as a create, and their rows must not change.
+    if last_lower in ("start", "end") and parts[-4:-2] == ["committees", "meetings"]:
+        return last_lower
     # Hyphenated trailing segment: in this codebase these are always verb
     # phrases (ai-suggest, parse-policy, bulk-archive, start-review, etc.)
     if "-" in last:
@@ -365,6 +369,8 @@ _HUMAN_VERBS = {
     "activate": "Activated",
     "deactivate": "Deactivated",
     "reactivate": "Reactivated",
+    "start": "Started",
+    "end": "Ended",
     "trigger": "Triggered",
     "execute": "Ran",
     "rerun": "Re-ran",
