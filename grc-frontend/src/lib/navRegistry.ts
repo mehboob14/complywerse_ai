@@ -283,9 +283,10 @@ const SECTION: Record<string, string> = {
   complychat: 'ComplyChat',
 };
 
-/** The display name of an area (the sidebar group, or the module's own name): what a search result or the Work panel puts beside a page. '' for an unknown area. */
+/** The display name of an area (the sidebar group, or the module's own name): what a search result or the Work panel puts beside a page. An area of a top-level
+ *  sidebar leaf that SECTION does not name (a destination added later) is named by that leaf; '' for an unknown area. */
 export function areaName(area: string): string {
-  return SECTION[area] ?? '';
+  return SECTION[area] ?? routes.find((e) => e.area === area && e.groups.length === 0 && !e.parent && !e.hidden)?.label ?? '';
 }
 
 /** What the top bar shows instead of the page's title when the page draws its own heading (`ownHeading`): its section's name, or '' (nothing) when

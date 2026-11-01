@@ -16,7 +16,7 @@ export const PAGES: PageSpec[] = [
     keywords: ['Company', 'Company Profile', 'User Management', 'Role Management', 'Roles', 'Departments', 'Teams', 'Password Policy', 'Integrations', 'Cloud Connectors', 'Connectors', 'Connections', 'Identity Providers', 'SSO', 'Workflow Engine', 'Audit Logs', 'Settings'] },
   // the tabs that are also pages
   { path: `${ADMIN}/organization`, label: 'Company Profile', area: AREA, parent: ADMIN, hidden: TAB('Company') },
-  { path: `${ADMIN}/users`, label: 'User Management', area: AREA, parent: ADMIN, hidden: 'opens from the user menu in the top bar (Admin Users); the Administration page shows the same view as its User Management tab' },
+  { path: `${ADMIN}/users`, label: 'User Management', area: AREA, parent: ADMIN, hidden: 'opens from the user menu in the top bar (Admin Users); the Administration page shows the same view as its User Management tab', keywords: ['Admin Users'] },
   { path: `${ADMIN}/users/:id/usage`, label: 'User usage', area: AREA, parent: `${ADMIN}/users`, hidden: 'opens from a user row of User Management (Usage)' },
   { path: `${ADMIN}/roles`, label: 'Role Management', area: AREA, parent: ADMIN, hidden: TAB('Role Management') },
   { path: `${ADMIN}/departments`, label: 'Departments', area: AREA, parent: ADMIN, hidden: TAB('Departments') },
