@@ -74,6 +74,7 @@ test('readings keep the values only; the trend is drawn from two readings and sa
   const history = [{ date: '2026-10-05', value: 62 }, { date: '2026-10-12', value: null }, { date: '2026-11-01', value: 71.4 }];
   assert.deepEqual(readings(history).map((p) => p.value), [62, 71.4]);
   assert.deepEqual(readings(null), []);
+  assert.deepEqual(readings([{ date: '2026-11-01', value: 3 }, { date: '2026-10-04', value: 1 }, { date: '2026-10-25', value: 2 }]).map((p) => p.value), [1, 2, 3], 'oldest first, whatever order they arrive in');
   assert.equal(spark(history.slice(0, 1), 90), null, 'one reading is a point, not a line');
   assert.equal(spark([], 90), null);
   const line = spark(history, 90, 200, 48, 4);

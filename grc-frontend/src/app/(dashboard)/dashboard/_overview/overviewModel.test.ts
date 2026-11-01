@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  MODULES, MODULE_BY_KEY, PAST_SLA_SOURCES, SLOW_MS, cardRows, cutText, dictSegs, failedViews, isRefusal, isScored, loadOf, modulesTile, modulesWithData, pastSlaTile,
+  MODULES, MODULE_BY_KEY, PAST_SLA_SOURCES, SLOW_MS, cardRows, cutText, dictSegs, failedViews, isRefusal, isScored, listNames, loadOf, modulesTile, modulesWithData, pastSlaTile,
   posture, postureTile, priorities, readiness, readinessTile, retryDashboard, retryableViews, ringLabel, scoreText, sectionSubs, sliceTable, slices, viewOf, visibleModules,
   type Card, type Feed, type ModuleView,
 } from './overviewModel.ts';
@@ -362,6 +362,9 @@ test('the past-SLA tile adds the three overdue counts, names each, and says so w
   assert.equal(tile.state, 'ready');
   assert.deepEqual((tile as any).value.parts.map((p: any) => [p.label, p.value, p.href]), [['Overdue gaps', 3, '/assessments'], ['SLA-breached issues', 2, '/issues'], ['Overdue control tests', 4, '/control-library/assurance']]);
   assert.equal((tile as any).value.total, 9);
+  assert.deepEqual((tile as any).value.notShown, [], 'all three modules are shown');
+  const some = pastSlaTile([views[0]]);
+  assert.deepEqual([(some as any).value.total, (some as any).value.notShown], [3, ['Issues & Incidents', 'Control Testing & Assurance']], 'the sum covers only the module the person is shown, and says which it leaves out');
   const partial = pastSlaTile([views[0], failed('issues'), loading('assurance')]);
   assert.deepEqual(partial, { state: 'loading' }, 'it waits for every source');
   const missing = pastSlaTile([views[0], failed('issues'), views[2]]);
@@ -441,4 +444,13 @@ test('isScored: a score of its own or one section with a score; a count snapshot
   assert.equal(isScored(card({ subs: [{ label: 'a', score: null }] })), false);
   assert.equal(isScored(card({ subs: [{ label: 'a', score: 0 }] })), true);
   assert.equal(isScored(card({})), false);
+});
+
+test('listNames: one, two, three, and "and N more" past three: a tile or a notice never prints nine names', () => {
+  assert.equal(listNames([]), '');
+  assert.equal(listNames(['A']), 'A');
+  assert.equal(listNames(['A', 'B']), 'A and B');
+  assert.equal(listNames(['A', 'B', 'C']), 'A, B and C');
+  assert.equal(listNames(['A', 'B', 'C', 'D']), 'A, B, C and 1 more');
+  assert.equal(listNames(MODULES.map((m) => m.label)), 'Governance, Compliance, Assessments and 6 more');
 });

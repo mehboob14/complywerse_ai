@@ -50,8 +50,11 @@ export const targetState = (k: Pick<Kpi, 'onTarget'>): TargetState => (k.onTarge
 // ── the trend ────────────────────────────────────────────────────────────────
 export interface Reading { date: string; value: number }
 
-/** The readings of a history that have a value. */
-export const readings = (history: readonly Point[] | null | undefined): Reading[] => (history || []).filter((h): h is Reading => h.value != null);
+/** The readings of a history that have a value, oldest first (a reading is a day written YYYY-MM-DD, which sorts as text; the order the server sends them in is not relied on). */
+export const readings = (history: readonly Point[] | null | undefined): Reading[] => (history || [])
+  .filter((h): h is Reading => h.value != null)
+  .slice()
+  .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
 const clamp = (v: number | null) => Math.max(0, Math.min(100, v ?? 0));
 

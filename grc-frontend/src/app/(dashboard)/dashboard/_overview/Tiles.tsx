@@ -11,7 +11,7 @@ import { statusPill, type Tone } from '@/lib/status';
 import { bandStatus, riskPosture } from '@/lib/statuses/dashboard';
 import { scoreBand } from '@/components/dashboard/score-kit';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import type { PastSla, PostureTile, Readiness, TileOf } from './overviewModel';
+import { listNames, type PastSla, type PostureTile, type Readiness, type TileOf } from './overviewModel';
 import { BOX } from './parts';
 
 /** The score the old tile was drawn against (a literal in the old code, as it still is in the module cards' own scorecards). */
@@ -19,7 +19,7 @@ const TARGET = 85;
 
 const toneOf = (tone: Tone): StatTone => (tone === 'success' || tone === 'warning' || tone === 'danger' ? tone : 'default');
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const names = (labels: string[]) => labels.join(', ');
+const names = listNames;
 
 function Unavailable({ label, text, info }: { label: string; text: string; info: string }) {
   return (
@@ -85,14 +85,19 @@ export function PastSlaTile({ tile, onRetry }: { tile: TileOf<PastSla>; onRetry?
   if (tile.state === 'loading') return <StatTile label={label} value={null} loading />;
   if (tile.state === 'none') return <Unavailable label={label} text="Not recorded" info="Overdue gaps, SLA-breached issues and overdue control tests come from modules your role does not show." />;
   if (tile.state === 'error') return <StatTile label={label} value={null} error={{ title: "Couldn't load overdue items", message: `${names(tile.failed)} did not answer.`, onRetry }} />;
-  const { total, parts } = tile.value;
+  const { total, parts, notShown } = tile.value;
   return (
     <StatTile
       label={label}
       value={formatCount(total)}
       tone={total > 0 ? 'danger' : 'success'}
       info="Overdue gaps from Assessments, SLA-breached issues and overdue control tests, added together."
-      note={tile.missing.length > 0 ? <Left missing={tile.missing} /> : undefined}
+      note={tile.missing.length > 0 || notShown.length > 0 ? (
+        <>
+          {tile.missing.length > 0 && <Left missing={tile.missing} />}
+          {notShown.length > 0 && <span className="mt-[4px] block">{`Not counted: ${names(notShown)} (your role does not show ${notShown.length === 1 ? 'it' : 'them'}).`}</span>}
+        </>
+      ) : undefined}
     >
       <ul className="space-y-[2px] text-ds-label font-normal text-ds-fg-muted">
         {parts.map((p) => (

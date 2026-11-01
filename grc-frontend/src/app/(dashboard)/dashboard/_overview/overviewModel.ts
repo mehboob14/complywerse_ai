@@ -422,13 +422,19 @@ export const PAST_SLA_SOURCES = [
   { key: 'assurance', label: 'Overdue control tests' },
 ] as const;
 
-export interface PastSla { total: number; parts: Array<{ key: string; label: string; href: string; value: number | null }> }
+export interface PastSla {
+  total: number;
+  parts: Array<{ key: string; label: string; href: string; value: number | null }>;
+  /** the modules the person is not shown (their rights do not open them): their overdue counts are not part of the sum, and the tile says so */
+  notShown: string[];
+}
 
 /** The tile's sum over the modules that answered, and each part (null for a module that did not answer or is not shown). The sum is the old one: every
  *  visible card's `pastSla ?? 0`. With no source shown the tile has nothing to say (the old tile said 0). */
 export function pastSlaTile(views: readonly ModuleView[]): TileOf<PastSla> {
   const sources = views.filter((v) => PAST_SLA_SOURCES.some((s) => s.key === v.def.key));
   return tileOf(sources, (answered) => ({
+    notShown: PAST_SLA_SOURCES.filter((s) => !sources.some((v) => v.def.key === s.key)).map((s) => MODULE_BY_KEY[s.key].label),
     total: answered.reduce((n, v) => n + ((v.card as Card).pastSla ?? 0), 0),
     parts: PAST_SLA_SOURCES.map((s) => {
       const view = views.find((v) => v.def.key === s.key);
@@ -471,6 +477,13 @@ export function priorities(views: readonly ModuleView[], max = 6): { rows: Prior
   });
   weak.sort((a, b) => a.score - b.score);
   return { rows: weak.slice(0, max), total: weak.length };
+}
+
+/** "A", "A and B", "A, B and C"; with more than `max`: "A, B, C and 6 more" (a tile or a notice never prints nine names). */
+export function listNames(labels: readonly string[], max = 3): string {
+  if (labels.length <= 1) return labels.join('');
+  if (labels.length <= max) return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+  return `${labels.slice(0, max).join(', ')} and ${labels.length - max} more`;
 }
 
 /** The modules whose requests failed, for the line above the cards and its one Retry. */

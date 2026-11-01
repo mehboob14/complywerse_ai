@@ -23,7 +23,7 @@ import { ScoreRing, scoreBand } from '@/components/dashboard/score-kit';
 import { ModulesTile, PastSlaTile, ReadinessTile, RiskTile } from './Tiles';
 import { BOX, FOCUS, FailedRow, Loading, SectionHead, useSlow } from './parts';
 import {
-  RISK_PATH, RISK_PERMISSIONS, RISK_QUERY_KEY, cardRows, cutText, failedViews, loadOf, modulesTile, pastSlaTile, postureTile, priorities, readinessTile,
+  RISK_PATH, RISK_PERMISSIONS, RISK_QUERY_KEY, cardRows, cutText, failedViews, listNames, loadOf, modulesTile, pastSlaTile, postureTile, priorities, readinessTile,
   retryDashboard, retryableViews, ringLabel, scoreText, sliceTable, sliceText, slices, viewOf, visibleModules,
   type Card, type ModuleView, type Slice,
 } from './overviewModel';
@@ -67,7 +67,7 @@ function Rows({ card }: { card: Card }) {
         {rows.map((s, i) => (
           <li key={`${s.label}-${i}`}>
             <div className="flex items-baseline justify-between gap-[8px] text-ds-body">
-              <span className="min-w-0 break-words font-[500] text-ds-fg">{s.label}</span>
+              <span title={s.label.length > 40 ? s.label : undefined} className="line-clamp-2 min-w-0 break-words font-[500] text-ds-fg">{s.label}</span>
               <span className="shrink-0 tabular-nums text-ds-fg-muted">{scoreText(s.score)}</span>
             </div>
             {typeof s.score === 'number' && <ProgressBar value={s.score} label={`${s.label} score`} showValue={false} tone={barTone(s.score)} className="mt-[4px]" />}
@@ -160,7 +160,7 @@ function ModuleCard({ view, onRetry }: { view: ModuleView; onRetry: () => void }
     pill = <StatusPill tone="neutral" label={card.hasData ? 'Count snapshot' : 'No data'} size="sm" className="mt-[6px]" />;
     body = list.length > 0
       ? <Donut card={card} />
-      : <EmptyState kind="firstUse" icon={Icon} bare title={card.hasData ? 'Nothing to chart yet' : 'No data yet'} description={`Open ${def.label} to get started.`} className="py-[16px]" />;
+      : <p className="text-ds-body text-ds-fg-muted">{card.hasData ? `There is nothing to chart yet. Open ${def.label} for the details.` : `No data yet. Open ${def.label} to get started.`}</p>;
   }
   return (
     <article aria-labelledby={headId} className={`${BOX} relative flex flex-col hover:border-ds-border-strong`}>
@@ -198,7 +198,7 @@ function Priorities({ views }: { views: ModuleView[] }) {
           <li key={`${p.moduleKey}-${p.label}-${i}`}>
             <Link href={p.href} className={`flex min-h-ds-control items-center gap-[12px] rounded-ds-control px-[8px] py-[6px] hover:bg-ds-surface-hover ${FOCUS}`}>
               <span className="min-w-0 flex-1">
-                <span className="block break-words text-ds-body font-[500] text-ds-fg">{p.label}</span>
+                <span title={p.label.length > 40 ? p.label : undefined} className="line-clamp-2 break-words text-ds-body font-[500] text-ds-fg">{p.label}</span>
                 <span className="block break-words text-ds-label font-normal text-ds-fg-muted">{p.module}</span>
               </span>
               <span aria-hidden className="h-[6px] w-[48px] shrink-0 rounded-full bg-ds-border">
@@ -294,7 +294,7 @@ export function ModuleOverview() {
         />
         {failed.length > 0 && (
           <Notice tone="warning" title={`${failed.length} of ${views.length} ${views.length === 1 ? 'module' : 'modules'} did not load`} className="mb-[12px]">
-            {`${failed.map((v) => v.def.label).join(', ')}. The totals above leave ${failed.length === 1 ? 'it' : 'them'} out.`}
+            {`${listNames(failed.map((v) => v.def.label))}. The totals above leave ${failed.length === 1 ? 'it' : 'them'} out.`}
           </Notice>
         )}
         <div className="grid items-stretch gap-[12px] sm:grid-cols-2 xl:grid-cols-3">

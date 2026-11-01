@@ -68,7 +68,7 @@ function KpiCard({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
     >
       <span className="flex items-start justify-between gap-[12px]">
         <span className="min-w-0">
-          <span className="block break-words text-ds-label text-ds-fg-muted">{k.domain}</span>
+          <span title={k.domain.length > 40 ? k.domain : undefined} className="line-clamp-2 break-words text-ds-label text-ds-fg-muted">{k.domain}</span>
           <span className="mt-[2px] block break-words text-ds-body font-[500] text-ds-fg">{k.topic}</span>
         </span>
         <span className="shrink-0 text-right">
