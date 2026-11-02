@@ -89,6 +89,13 @@ const nextConfig = {
         destination: '/asset-discovery?tab=connectors',
         permanent: false,
       },
+      // Help Desk lives under Cyber Assurance here; ported CAIVA links and ticket emails
+      // still point at /helpdesk/... (e.g. "View in Help Desk" on a finding).
+      {
+        source: '/helpdesk/:path*',
+        destination: '/cyber-assurance/helpdesk/:path*',
+        permanent: false,
+      },
     ];
   },
   webpack: (config, { isServer }) => {
