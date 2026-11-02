@@ -15,6 +15,27 @@ Base = **`scf-control-plane` with `main` merged in**.
   scf-control-plane is a fast-forward or near-trivial; merging into `main` brings
   scf-control-plane with it (that reconcile was already owed).
 
+**Update (2026-11-02): rebased onto the team's integration line.** Mehboob's colleague
+asked for `ux-revamp/integration@3043f55` as the base. It is merged in (`cb1fa3e0`) and
+PR #4 targets `ux-revamp/integration`. Three conflicts, resolved as:
+- `backend/grc/models/__init__.py`: both sides' model imports (TPRM roster, risk-framework
+  links + pentest, help desk, advisories).
+- `Header.tsx`: the cyber page titles kept; `/dashboard`'s title dropped as ux-revamp did
+  (that page draws its own heading).
+- `navAccess.ts`: the icon import is the union. The menu is **this branch's** (IT Asset /
+  Cybersecurity / Help Desk): ux-revamp's side still had the old single "Cybersecurity
+  Assurance" group, and keeping both would list IT Asset and Vulnerabilities twice and
+  bring back the hidden Performance entry and the weaker AI Pentest right.
+
+ux-revamp adds a navigation registry (`lib/navRegistry.ts`, `lib/navPages/*`) whose tests
+hold every page and menu entry to an inventory. It still described the old cyber menu, so
+it was brought to the new one. The areas are `it-asset` / `cybersecurity` / `help-desk`,
+and every new cyber page (advisories, pentest runs, help desk, connectors) is registered.
+The cyber Performance dashboard and the pages no leaf claims hang under Performance
+Overview. ux-revamp's `activeMatch` rules moved onto the matching leaves, and the tests'
+inventories were updated. Four cyber redirects that pointed outside `/cyber-assurance` (help
+desk home, the pentest run addresses) were fixed. The frontend suite is 1,980/1,980.
+
 ## 2. What the payload is
 
 The cyber product (source repo hasanshahidd/AVA) was last mirrored into ComplyVerse at
