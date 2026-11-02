@@ -51,7 +51,7 @@ export default function AdminPage() {
     // Org departments — the one list the document, sign-off, asset, assessment and risk pickers read.
     { id: 'departments', label: 'Departments', icon: UsersRound },
     // Password & session policy — controls complexity, lockout, and idle timeout.
-    { id: 'password-policy', label: 'Password Policy', icon: Lock },
+    { id: 'password-policy', label: 'Sign-in & Session', icon: Lock },
     { id: 'integrations', label: 'Integrations', icon: Bot },
     // Phase 7 — Cloud Connectors (AWS Inspector, Azure Defender, GCP SCC).
     { id: 'cloud-connectors', label: 'Cloud Connectors', icon: Cloud },

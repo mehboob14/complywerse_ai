@@ -430,7 +430,7 @@ const ADMIN_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: s
   { id: 'ai-governance',    label: 'AI Governance',      icon: Sparkles, href: '/admin/ai-governance' },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'departments',      label: 'Departments',        icon: Users },
-  { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
+  { id: 'password-policy',  label: 'Sign-in & Session',  icon: Shield },
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
   { id: 'connectors',       label: 'Connectors',         icon: Layers },

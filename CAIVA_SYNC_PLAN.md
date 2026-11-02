@@ -452,6 +452,10 @@ ComplyVerse's own.
   cleaned facts (hardware "HP EliteBook 840 G8", "31 packages, e.g. ..."). Bulk HIPAA mark → true,
   remove → false. New `tests/test_agent_deep_identity.py` passes. The build passes.
 
+**Follow-up batch 3** (`3384e24`, `1373b7d`; targeted hunks — these are shared platform files, applied to ComplyVerse's own diverged versions, not bulk-copied):
+- Admin "Password Policy" → "Sign-in & Session" (tab in admin/page.tsx + the admin popover in NavTree.tsx). The page gains a Domain sign-in (SSO) card via `ssoApi.getConfig` (`/sso/config`): when connected, the local-password card collapses behind a "first admin / break-glass only" link and the edit controls are shared with the session card; the idle timeout stays editable for everyone. Card 2 renamed "Session & lockout". Wording neutralised (no product name).
+- A tenant whose `subdomain` is `''` lives on the bare/apex domain: login/page.tsx, AuthHandoff.tsx and the 401 interceptor in lib/api.ts no longer fall back to `<slug>.<base>` for it. Generic and harmless for tenants that do have subdomains. ComplyVerse's code matched CAIVA's base, so the hunks applied cleanly. Build passes.
+
 ## 15. Summary for the owner (plain language)
 
 ComplyVerse now has everything the cyber product built since late September: the new
