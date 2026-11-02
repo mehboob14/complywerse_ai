@@ -381,16 +381,8 @@ def on_startup():
     if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
         start_complychat_embedding_worker()
 
-    # The Help Desk boot heal runs from backend/main.py's startup (this app is mounted there).
-
-    # Pentest Find scans (grc_pentest_scan_jobs): their worker thread dies on restart, so re-drive
-    # nessus/openvas and fail the in-process ones with a clear reason instead of leaving them 'running'.
-    try:
-        from grc.modules.pentest.service import resume_inflight_scans
-        resume_inflight_scans(os.getenv("DEFAULT_TENANT_SLUG", "ava"))
-    except Exception:  # noqa: BLE001
-        import logging as _logging
-        _logging.getLogger(__name__).warning("pentest resume-on-startup skipped", exc_info=True)
+    # The Help Desk boot heal and the per-tenant scan resume run from backend/main.py's startup
+    # (this app is mounted there, and a mounted app's startup never fires).
 
     # Auto-start the pentest MCP fleet's PERSISTENT backends (HexStrike's :8888 server, and the
     # Greenbone/OpenVAS stack when built) so scanners are available without a manual restart — a WSL
