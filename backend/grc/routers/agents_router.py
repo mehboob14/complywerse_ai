@@ -42,7 +42,7 @@ STALE_AFTER = timedelta(minutes=10)
 # The agent version currently shipped in agent-dist. Returned on heartbeat so a
 # running agent self-updates when it differs (bump this AND the Go agentVersion
 # together, and rebuild the binaries, to roll a new version to the fleet).
-AGENT_VERSION = "1.3.0"
+AGENT_VERSION = "1.3.1"
 ENROLLMENT_TTL = timedelta(hours=24)
 
 
@@ -294,6 +294,51 @@ def agent_enroll(body: AgentEnrollIn, db: Session = Depends(get_db)):
     return {"agent_id": agent.id, "api_token": api_token, "report_interval_s": 3600}
 
 
+def _is_link_local(ip: Optional[str]) -> bool:
+    import ipaddress
+    try:
+        return ipaddress.ip_address((ip or "").strip()).is_link_local
+    except ValueError:
+        return False
+
+
+def _routed_ipv4(network: Any) -> Optional[str]:
+    """The host's real address from the deep probe's adapter list: an IPv4 on an
+    adapter that has a default gateway, skipping link-local / loopback."""
+    import ipaddress
+    data = (network or {}).get("data") if isinstance(network, dict) else None
+    for nic in data if isinstance(data, list) else []:
+        if not isinstance(nic, dict) or not any(nic.get("gateway") or []):
+            continue
+        for ip in nic.get("ipv4") or []:
+            try:
+                a = ipaddress.ip_address(str(ip).strip())
+            except ValueError:
+                continue
+            if a.version == 4 and not (a.is_link_local or a.is_loopback):
+                return str(a)
+    return None
+
+
+def _apply_deep_identity(asset: ITAsset, pp: Dict[str, Any]) -> None:
+    """Copy the agent's own hardware identity and routed IP onto the asset's columns.
+    The deep probe already reports them (pp['identity'], pp['network']) but they only
+    lived in platform_properties, so the record showed no maker/model/serial and kept
+    whatever IP the first adapter happened to have (often a 169.254 placeholder)."""
+    from grc.modules.compliance_plugins.services.agentless_inventory import _clean_hw
+    idn = pp.get("identity") if isinstance(pp.get("identity"), dict) else {}
+    data = idn.get("data") if isinstance(idn.get("data"), dict) else {}
+    hw = _clean_hw({"manufacturer": data.get("manufacturer"), "model": data.get("model"),
+                    "serial_number": data.get("serial") or data.get("bios_serial")})
+    for col, val in hw.items():
+        if not getattr(asset, col, None):
+            setattr(asset, col, val)
+    ip = _routed_ipv4(pp.get("network"))
+    # The agent is ground truth for its own host: refresh a missing / link-local / changed address.
+    if ip and ip != asset.ip_address:
+        asset.ip_address = ip
+
+
 def _upsert_asset_from_report(db: Session, agent: ComplianceAgent, body: ReportIn, now: datetime) -> int:
     """Land the agent's locally-collected inventory on an ITAsset — additive,
     mirroring the agentless credentialed path (platform_properties + software).
@@ -318,7 +363,8 @@ def _upsert_asset_from_report(db: Session, agent: ComplianceAgent, body: ReportI
         db.add(asset)
         db.flush()
     # Fill blanks only for curated identity; always refresh observed telemetry.
-    if body.ip_address and not asset.ip_address:
+    # A link-local 169.254.x address is a disconnected adapter, never the host's address.
+    if body.ip_address and not asset.ip_address and not _is_link_local(body.ip_address):
         asset.ip_address = body.ip_address
     if body.os_family:
         asset.os_family = body.os_family
@@ -362,6 +408,7 @@ def _upsert_asset_from_report(db: Session, agent: ComplianceAgent, body: ReportI
                 pp[k] = v
         except Exception:
             pass
+        _apply_deep_identity(asset, pp)
     # Local recon (ground truth from the host itself): namespaced under 'recon'
     # so the pentest arming can read authoritative open ports/services. Projected
     # to the agreed keys (evidence is dropped here — it rides the finding rows).

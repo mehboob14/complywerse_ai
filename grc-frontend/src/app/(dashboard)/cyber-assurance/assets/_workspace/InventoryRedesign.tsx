@@ -35,6 +35,8 @@ interface Props {
   onBulkUpdate?: (ids: number[], patch: Record<string, unknown>) => void;
   /** Ticking an asset INTO PCI scope opens the edit sidebar at its PCI attributes instead of a bare flag flip. */
   onMarkPci?: (a: ITAsset) => void;
+  /** Same for HIPAA: ticking INTO ePHI scope opens the edit sidebar at its HIPAA attributes. */
+  onMarkHipaa?: (a: ITAsset) => void;
   onAdd?: () => void;
   /** Parent renders the common title+toggle header; skip the local one. */
   hideHead?: boolean;
@@ -405,6 +407,8 @@ export default function InventoryRedesign(p: Props) {
                   {p.onBulkUpdate && p.canEdit && (['critical', 'high', 'medium', 'low'] as const).map((k) => <button key={k} className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { criticality: k })}>Set {k[0].toUpperCase() + k.slice(1)}</button>)}
                   {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { cde_environment: true })}>Mark PCI</button>}
                   {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { cde_environment: false })}>Remove PCI</button>}
+                  {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { ephi_environment: true })}>Mark HIPAA</button>}
+                  {p.onBulkUpdate && p.canEdit && <button className="bulkb" onClick={() => p.onBulkUpdate!(selIds, { ephi_environment: false })}>Remove HIPAA</button>}
                   {p.onBulkDelete && p.canDelete && <button className="bulkb danger" onClick={() => { if (confirm(`Delete ${selIds.length} asset(s)? This can't be undone.`)) p.onBulkDelete!(selIds); }}>Delete</button>}
                   <span style={{ flex: 1 }} /><button className="bulkb" onClick={() => setSel(new Set())}>Deselect all</button>
                 </div>
@@ -424,13 +428,14 @@ export default function InventoryRedesign(p: Props) {
                       </th>
                     ))}
                     <th style={{ ...th, width: 34 }}>PCI</th>
+                    <th style={{ ...th, width: 44 }}>HIPAA</th>
                     <th style={{ ...th, width: 34 }}></th>
                   </tr></thead>
                   <tbody>
                     {p.loading ? (
-                      <tr><td colSpan={14} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>Loading…</td></tr>
+                      <tr><td colSpan={15} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>Loading…</td></tr>
                     ) : rows.length === 0 ? (
-                      <tr><td colSpan={14} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>No assets match this view.</td></tr>
+                      <tr><td colSpan={15} style={{ ...td, textAlign: 'center', color: '#78838F', padding: 26 }}>No assets match this view.</td></tr>
                     ) : orderedRows.map((a) => {
                       const tl = TILE[typeKey(a)] || { bg: '#E4E9ED', fg: '#78838F' };
                       const ck = CRIT[critOf(a)];
@@ -486,6 +491,16 @@ export default function InventoryRedesign(p: Props) {
                                 style={{ accentColor: '#A32B2B', width: 15, height: 15, cursor: 'pointer' }} />
                             ) : (
                               <span title={a.cde_environment ? 'In PCI scope' : 'Not in PCI scope'} style={{ color: a.cde_environment ? '#A32B2B' : '#C4CCD3' }}>{a.cde_environment ? '✓' : '—'}</span>
+                            )}
+                          </td>
+                          <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            {p.onBulkUpdate && p.canEdit ? (
+                              <input type="checkbox" checked={!!a.ephi_environment}
+                                onChange={() => (!a.ephi_environment && p.onMarkHipaa ? p.onMarkHipaa(a) : p.onBulkUpdate!([a.id], { ephi_environment: !a.ephi_environment }))}
+                                title={a.ephi_environment ? 'In HIPAA scope — click to remove' : 'Mark this asset in HIPAA (ePHI) scope'}
+                                style={{ accentColor: '#4F46E5', width: 15, height: 15, cursor: 'pointer' }} />
+                            ) : (
+                              <span title={a.ephi_environment ? 'In HIPAA scope' : 'Not in HIPAA scope'} style={{ color: a.ephi_environment ? '#4F46E5' : '#C4CCD3' }}>{a.ephi_environment ? '✓' : '—'}</span>
                             )}
                           </td>
                           <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>

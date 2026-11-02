@@ -433,6 +433,25 @@ ComplyVerse's own.
   - Tests: frontend 1,980/1,980; `test_risk_posture_easm_weights.py` (new) and the existing
     risk posture tests pass; the build passes.
 
+**Follow-up batch 2** (`a3f8c09` + `5a7baf7`, `3e20c42`, `2e62a3e`; one three-way merge per file, base `765dece`):
+- CIA card on the asset's Risk tab is read-only; its Edit opens the sidebar at Risk & criticality.
+  AI suggest lives there, fills the ratings and gives one reason per C/I/A plus the facts used.
+  `/assets/cia-recommendation` returns `reasons`. In Edit mode it is grounded in the stored record,
+  where a service banner stored as the description is dropped, hardware is sent as maker+model,
+  vendor only when it differs, and software as a count plus 10 examples. In Add mode the typed
+  fields are used as given (same as the product).
+- HIPAA column in the register mirrors PCI: ticking opens the sidebar at Compliance scope with
+  ePHI on; unticking and the bulk Mark/Remove HIPAA buttons use `PATCH /assets/bulk`, which now
+  allows `ephi_environment`.
+- Endpoint agent: `_apply_deep_identity` copies the deep probe's maker/model/serial onto empty
+  columns and sets the IP from the adapter with a default gateway, never a 169.254 address.
+  The Go agent is 1.3.1 (prefers the OS's routed source address). Its binaries are not built
+  here (no Go toolchain locally); build them at deploy with the other agent builds.
+- The only conflict was AssetModal's state block (the custom-fields state and the AI suggest state): both kept.
+- Verified: CIA suggest on a real host returned `source: ai` with a reason per dimension and the
+  cleaned facts (hardware "HP EliteBook 840 G8", "31 packages, e.g. ..."). Bulk HIPAA mark → true,
+  remove → false. New `tests/test_agent_deep_identity.py` passes. The build passes.
+
 ## 15. Summary for the owner (plain language)
 
 ComplyVerse now has everything the cyber product built since late September: the new

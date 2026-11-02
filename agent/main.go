@@ -40,7 +40,7 @@ import (
 	"time"
 )
 
-const agentVersion = "1.3.0"
+const agentVersion = "1.3.1"
 
 type state struct {
 	APIToken string `json:"api_token"`
@@ -306,9 +306,12 @@ func software() []sw {
 	return list
 }
 
-// primaryIP returns the first non-loopback IPv4, plus all MACs seen.
+// netInfo returns the host's primary IPv4 plus all MACs seen. Primary = the source
+// address the OS would use for outbound traffic (a UDP "dial" sends no packets);
+// otherwise the first up, non-loopback, non-link-local IPv4. Link-local 169.254.x
+// is what a disconnected Windows adapter carries — never the host's real address.
 func netInfo() (string, []string) {
-	ip := ""
+	ip := routedIPv4()
 	var macs []string
 	ifaces, _ := net.Interfaces()
 	for _, i := range ifaces {
@@ -316,10 +319,10 @@ func netInfo() (string, []string) {
 			continue
 		}
 		macs = append(macs, i.HardwareAddr.String())
-		if ip == "" {
+		if ip == "" && i.Flags&net.FlagUp != 0 {
 			addrs, _ := i.Addrs()
 			for _, a := range addrs {
-				if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil && !ipn.IP.IsLoopback() {
+				if ipn, ok := a.(*net.IPNet); ok && usableIPv4(ipn.IP) {
 					ip = ipn.IP.String()
 					break
 				}
@@ -327,6 +330,22 @@ func netInfo() (string, []string) {
 		}
 	}
 	return ip, macs
+}
+
+func usableIPv4(ip net.IP) bool {
+	return ip.To4() != nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast()
+}
+
+func routedIPv4() string {
+	c, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer c.Close()
+	if a, ok := c.LocalAddr().(*net.UDPAddr); ok && usableIPv4(a.IP) {
+		return a.IP.String()
+	}
+	return ""
 }
 
 func collectInventory() (map[string]any, string, string) {

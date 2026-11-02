@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import apiClient, { assetsApi } from '@/cyber-assurance/lib/api';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import PciAttributesFields from '@/cyber-assurance/components/assets/PciAttributesFields';
 import HipaaAttributesFields from '@/cyber-assurance/components/assets/HipaaAttributesFields';
 import { ITAsset, AssetType } from '@/cyber-assurance/types';
@@ -20,6 +20,7 @@ import {
   Building2,
   DollarSign,
   GitBranch,
+  Sparkles,
 } from 'lucide-react';
 
 const ASSET_TYPES = [
@@ -328,6 +329,21 @@ export function AssetModal({
   const choices = (key: string, current: string, shipped: ComboBoxOption[]): ComboBoxOption[] =>
     listOptions(fieldSettings, key, current, shipped)
       .map((o) => ({ ...shipped.find((x) => x.value === o.value), value: o.value, label: o.label }));
+
+  // AI suggest for CIA. Edit mode grounds it in the stored asset (asset_id); Add mode in the form.
+  type CiaSuggestion = Awaited<ReturnType<typeof assetsApi.getCIARecommendation>>['data'];
+  const [ciaSuggestion, setCiaSuggestion] = useState<CiaSuggestion | null>(null);
+  const ciaSuggest = useMutation({
+    mutationFn: async () => (await assetsApi.getCIARecommendation({
+      name: formData.name, description: formData.description, asset_type: formData.asset_type,
+      vendor: formData.vendor, location: formData.location, asset_id: initialData?.id,
+    })).data,
+    onSuccess: (r) => {
+      setCiaSuggestion(r);
+      setFormData((f) => ({ ...f, confidentiality_rating: r.confidentiality_rating, integrity_rating: r.integrity_rating, availability_rating: r.availability_rating }));
+    },
+  });
+
   // Land on the section the user came for and flash it so they can see which fields belong to it.
   const [flash, setFlash] = useState<AssetFormSection | undefined>(focusSection);
   useEffect(() => {
@@ -1021,6 +1037,44 @@ export function AssetModal({
             </FormSection>
 
             <FormSection id="risk" title="Risk & criticality" hint="Inputs to the calculated criticality" flash={flash}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-500">
+                  AI suggest reads this asset&apos;s type, role, hardware, OS, environment, department, business function,
+                  data classification, exposure, network segment, PCI / HIPAA scope, open ports and installed software.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => ciaSuggest.mutate()}
+                  disabled={ciaSuggest.isPending || !formData.name}
+                  className="flex flex-none items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {ciaSuggest.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} AI suggest
+                </button>
+              </div>
+              {ciaSuggest.isError && <p className="mb-3 text-xs text-rose-700">Could not get a suggestion — set the ratings by hand.</p>}
+              {ciaSuggestion && (
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-800">
+                  <p className="mb-1 font-semibold">
+                    {ciaSuggestion.source === 'ai' ? 'AI suggestion' : 'Rule-based estimate (AI unavailable)'} — applied below, review before saving
+                  </p>
+                  {ciaSuggestion.reasons ? (
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      <li><b>Confidentiality {ciaSuggestion.confidentiality_rating}:</b> {ciaSuggestion.reasons.confidentiality}</li>
+                      <li><b>Integrity {ciaSuggestion.integrity_rating}:</b> {ciaSuggestion.reasons.integrity}</li>
+                      <li><b>Availability {ciaSuggestion.availability_rating}:</b> {ciaSuggestion.reasons.availability}</li>
+                    </ul>
+                  ) : (
+                    <p>{ciaSuggestion.recommendation}</p>
+                  )}
+                  {!!ciaSuggestion.basis?.length && (
+                    <details className="mt-1 text-[11px] text-slate-500">
+                      <summary className="cursor-pointer">Facts used ({ciaSuggestion.basis.length})</summary>
+                      <ul className="mt-1 list-disc pl-4">{ciaSuggestion.basis.map((b) => <li key={b}>{b}</li>)}</ul>
+                    </details>
+                  )}
+                </div>
+              )}
+
               {/* CIA Ratings — primary input to derived criticality */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">

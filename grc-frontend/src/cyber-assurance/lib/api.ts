@@ -673,6 +673,8 @@ export const assetsApi = {
     source?: 'ai' | 'rules';
     /** The asset facts the suggestion was based on. */
     basis?: string[];
+    /** One short reason per dimension (AI source only). */
+    reasons?: { confidentiality: string; integrity: string; availability: string };
   }>('/assets/cia-recommendation', data),
   create: (data: {
     name: string;
