@@ -260,6 +260,8 @@ export function AssetModal({
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+  const initialAv = ((initialData as any)?.security_posture?.antivirus_products || []).join(', ') as string;
+  const initialEdr = ((initialData as any)?.security_posture?.edr_products || []).join(', ') as string;
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
@@ -304,6 +306,12 @@ export function AssetModal({
     manufacturer: ((initialData as any)?.manufacturer || '') as string,
     model: ((initialData as any)?.model || '') as string,
     serial_number: ((initialData as any)?.serial_number || '') as string,
+    fqdn: ((initialData as any)?.fqdn || '') as string,
+    primary_mac: ((initialData as any)?.primary_mac || '') as string,
+    os_build: ((initialData as any)?.os_build || '') as string,
+    os_edition: ((initialData as any)?.os_edition || '') as string,
+    av_products: initialAv,
+    edr_products: initialEdr,
     // Ownership chain + CMDB details + procurement (full record capture).
     secondary_owner_id: (((initialData as any)?.secondary_owner_id ?? null)) as number | null,
     business_owner_id: (((initialData as any)?.business_owner_id ?? null)) as number | null,
@@ -479,6 +487,14 @@ export function AssetModal({
       manufacturer: formData.manufacturer || undefined,
       model: formData.model || undefined,
       serial_number: formData.serial_number || undefined,
+      fqdn: formData.fqdn || undefined,
+      primary_mac: formData.primary_mac || undefined,
+      os_build: formData.os_build || undefined,
+      os_edition: formData.os_edition || undefined,
+      // Sent only when touched, so saving an unrelated field never replaces the scan's posture.
+      security_posture: formData.av_products !== initialAv || formData.edr_products !== initialEdr
+        ? { antivirus_products: parseSubComponents(formData.av_products), edr_products: parseSubComponents(formData.edr_products) }
+        : undefined,
       // Ownership chain + CMDB details + procurement.
       secondary_owner_id: formData.secondary_owner_id || undefined,
       business_owner_id: formData.business_owner_id || undefined,
@@ -760,11 +776,11 @@ export function AssetModal({
             </div>
             </FormSection>
 
-            {/* Hardware/OS telemetry is machine-collected (scan / agent) and shown on the asset page;
-                editing is for manual fields only. Add keeps it: a hand-added asset has no scan yet and
-                the OS picker is what lets CIS match a benchmark. */}
-            {!isEditMode && (show.hardware || show.os) && (
-            <FormSection id="technical" title="Technical profile" hint="Hardware and OS — auto-filled by scans" flash={flash}>
+            {/* Hardware / OS / security telemetry is filled by the agent or agentless scan, so Edit
+                opens with it pre-filled. Typing here is a manual override for hosts no scan reaches;
+                the next scan that sees the host replaces it. */}
+            {(show.hardware || show.os) && (
+            <FormSection id="technical" title="Technical profile" hint="Auto-filled by agent / agentless scan — values entered here are a manual override until the next scan" flash={flash}>
             {/* Hardware — infrastructure only (servers/network/hardware). Also
                 auto-populated by agent heartbeat or agentless (WinRM/SSH) scan.
                 Kept editable for manual entry. */}
@@ -778,6 +794,17 @@ export function AssetModal({
                 <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
                 <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
                 <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.fqdn} onChange={(e) => setFormData({ ...formData, fqdn: e.target.value })} placeholder="FQDN" className="col-span-2 w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.primary_mac} onChange={(e) => setFormData({ ...formData, primary_mac: e.target.value })} placeholder="MAC address" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+            )}
+            {show.hardware && (
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Endpoint protection <span className="text-slate-400">(auto-filled by scan — comma-separated product names)</span></label>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <input type="text" value={formData.av_products} onChange={(e) => setFormData({ ...formData, av_products: e.target.value })} placeholder="Antivirus, e.g. Microsoft Defender" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.edr_products} onChange={(e) => setFormData({ ...formData, edr_products: e.target.value })} placeholder="EDR, e.g. CrowdStrike Falcon" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
             )}
@@ -833,6 +860,11 @@ export function AssetModal({
                   Leave blank if unknown — but Compliance tab will show &quot;no benchmark&quot; and the asset can&apos;t be checkbox-included in a room scan until this is set.
                 </p>
               )}
+              <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-3">
+                <input type="text" value={formData.os_version} onChange={(e) => setFormData({ ...formData, os_version: e.target.value })} placeholder="OS version" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.os_build} onChange={(e) => setFormData({ ...formData, os_build: e.target.value })} placeholder="Build" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <input type="text" value={formData.os_edition} onChange={(e) => setFormData({ ...formData, os_edition: e.target.value })} placeholder="Edition" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+              </div>
             </div>
             )}
             </FormSection>

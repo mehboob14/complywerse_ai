@@ -852,6 +852,13 @@ class DocumentControlLinkCreate(BaseModel):
     normalized_control_id: int
 
 
+class ManualSecurityPosture(BaseModel):
+    """Hand-entered endpoint protection for a host no scan has reached yet;
+    stored as source='manual' and replaced once a scan sees the host's software."""
+    antivirus_products: List[str] = []
+    edr_products: List[str] = []
+
+
 class ITAssetBase(BaseModel):
     name: str
     custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
@@ -905,6 +912,10 @@ class ITAssetBase(BaseModel):
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    # Identity + endpoint protection — scan-filled; manual entry is an override.
+    fqdn: Optional[str] = None
+    primary_mac: Optional[str] = None
+    security_posture: Optional[ManualSecurityPosture] = None
     # CMDB details + procurement / cost. All optional; manually entered on
     # the Add Asset form and also editable on the asset detail page. Accepted
     # on create so the full record can be captured in one step.
@@ -1002,6 +1013,9 @@ class ITAssetUpdate(BaseModel):
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    fqdn: Optional[str] = None
+    primary_mac: Optional[str] = None
+    security_posture: Optional[ManualSecurityPosture] = None
     department: Optional[str] = None
     assigned_user: Optional[str] = None
     purchase_cost: Optional[float] = None

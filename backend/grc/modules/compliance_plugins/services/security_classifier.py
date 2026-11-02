@@ -220,6 +220,32 @@ def summarize_posture(detected_software: Optional[List[Dict[str, Any]]],
     }
 
 
+def manual_posture(antivirus: Optional[List[str]], edr: Optional[List[str]]) -> Dict[str, Any]:
+    """Shape hand-entered AV/EDR product names like a scanned posture, tagged
+    source='manual' so apply_posture keeps it until a scan sees the host's software."""
+    def clean(names):
+        out = []
+        for n in names or []:
+            n = str(n).strip()[:120]
+            if n and n.lower() not in {o.lower() for o in out}:
+                out.append(n)
+        return out[:20]
+    av, ed = clean(antivirus), clean(edr)
+    return {
+        "source": "manual",
+        "has_antivirus": bool(av),
+        "antivirus_products": av,
+        "has_edr": bool(ed),
+        "edr_products": ed,
+        "edr_stopped": [],
+        "endpoint_protected": bool(av or ed),
+        "security_tools": av + ed,
+        "categories": {},
+        "software_total": 0,
+        "computed_at": datetime.utcnow().isoformat(),
+    }
+
+
 def apply_posture(asset) -> Dict[str, Any]:
     """Compute the posture from an asset's detected_software_json (+ its deep
     scan's security sections) and store it on asset.security_posture. Returns
@@ -227,6 +253,11 @@ def apply_posture(asset) -> Dict[str, Any]:
     inventory, so agent and agentless hosts get the same treatment."""
     posture = summarize_posture(getattr(asset, "detected_software_json", None),
                                 getattr(asset, "platform_properties", None))
+    prev = getattr(asset, "security_posture", None)
+    # A hand-entered posture stands until a scan actually sees software on the host.
+    if isinstance(prev, dict) and prev.get("source") == "manual" \
+            and not posture["software_total"] and not posture["security_tools"]:
+        return prev
     try:
         asset.security_posture = posture
     except Exception:

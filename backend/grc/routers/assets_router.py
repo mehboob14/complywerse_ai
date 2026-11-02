@@ -747,6 +747,7 @@ def create_asset(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
+    from ..modules.compliance_plugins.services.security_classifier import manual_posture
     db_asset = ITAsset(
         origin_source="manual",  # stamped once at birth; never mutated
         tenant_id=tenant_id,
@@ -814,6 +815,11 @@ def create_asset(
         manufacturer=asset.manufacturer,
         model=asset.model,
         serial_number=asset.serial_number,
+        fqdn=asset.fqdn,
+        primary_mac=asset.primary_mac,
+        security_posture=(manual_posture(asset.security_posture.antivirus_products,
+                                         asset.security_posture.edr_products)
+                          if asset.security_posture else None),
         # CMDB details + procurement / cost — manual entry.
         department=asset.department,
         assigned_user=asset.assigned_user,
@@ -1694,6 +1700,11 @@ def update_asset(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="criticality_override_reason is required when overriding the derived criticality",
             )
+
+    if update_data.get("security_posture") is not None:
+        from ..modules.compliance_plugins.services.security_classifier import manual_posture
+        _sp = update_data["security_posture"]
+        update_data["security_posture"] = manual_posture(_sp.get("antivirus_products"), _sp.get("edr_products"))
 
     for field, value in update_data.items():
         # ── Risk Posture v2 column rename translation ───────────────────
