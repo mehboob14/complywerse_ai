@@ -1039,6 +1039,15 @@ class TenantRiskWeights(Base):
     weight_cia  = Column(Numeric(5, 2), nullable=False, default=15)
     weight_ctrl = Column(Numeric(5, 2), nullable=False, default=15)
     weight_risk = Column(Numeric(5, 2), nullable=False, default=15)
+    # EASM (external asset) weights — the outside-in model uses a SEPARATE set of
+    # dimensions (hygiene/exploitability/exposure/business), so internal CIS/CIA/
+    # ctrl/risk weights don't apply to external assets. Nullable: when all four
+    # are NULL the compute falls back to the fixed defaults in service.py, so
+    # existing rows keep scoring exactly as before until a tenant tunes them.
+    weight_easm_hygiene  = Column(Numeric(5, 2), nullable=True)
+    weight_easm_exploit  = Column(Numeric(5, 2), nullable=True)
+    weight_easm_exposure = Column(Numeric(5, 2), nullable=True)
+    weight_easm_business = Column(Numeric(5, 2), nullable=True)
     preset_name = Column(String(40), nullable=True)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by  = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)

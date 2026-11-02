@@ -662,11 +662,17 @@ export const assetsApi = {
     vendor?: string;
     location?: string;
     criticality?: 'low' | 'medium' | 'high' | 'critical';
+    /** Ground the suggestion in the stored asset record instead of the bare form fields. */
+    asset_id?: number;
   }) => apiClient.post<{
     recommendation: string;
     confidentiality_rating: number;
     integrity_rating: number;
     availability_rating: number;
+    /** 'ai' = a model produced it; 'rules' = fixed fallback table (AI unavailable). */
+    source?: 'ai' | 'rules';
+    /** The asset facts the suggestion was based on. */
+    basis?: string[];
   }>('/assets/cia-recommendation', data),
   create: (data: {
     name: string;
@@ -4569,6 +4575,10 @@ export const riskPostureApi = {
     weight_cia: number;
     weight_ctrl: number;
     weight_risk: number;
+    weight_easm_hygiene?: number;
+    weight_easm_exploit?: number;
+    weight_easm_exposure?: number;
+    weight_easm_business?: number;
     preset_name?: string;
   }) => apiClient.put('/risk-posture/weights', data),
 };

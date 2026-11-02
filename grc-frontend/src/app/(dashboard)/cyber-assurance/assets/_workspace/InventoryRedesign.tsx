@@ -33,6 +33,8 @@ interface Props {
   onBulkConnect?: (ids: number[]) => void;
   onBulkDelete?: (ids: number[]) => void;
   onBulkUpdate?: (ids: number[], patch: Record<string, unknown>) => void;
+  /** Ticking an asset INTO PCI scope opens the edit sidebar at its PCI attributes instead of a bare flag flip. */
+  onMarkPci?: (a: ITAsset) => void;
   onAdd?: () => void;
   /** Parent renders the common title+toggle header; skip the local one. */
   hideHead?: boolean;
@@ -479,7 +481,7 @@ export default function InventoryRedesign(p: Props) {
                           <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                             {p.onBulkUpdate && p.canEdit ? (
                               <input type="checkbox" checked={!!a.cde_environment}
-                                onChange={() => p.onBulkUpdate!([a.id], { cde_environment: !a.cde_environment })}
+                                onChange={() => (!a.cde_environment && p.onMarkPci ? p.onMarkPci(a) : p.onBulkUpdate!([a.id], { cde_environment: !a.cde_environment }))}
                                 title={a.cde_environment ? 'In PCI scope — click to remove' : 'Mark this asset in PCI scope'}
                                 style={{ accentColor: '#A32B2B', width: 15, height: 15, cursor: 'pointer' }} />
                             ) : (

@@ -1257,6 +1257,9 @@ class AssetDetailResponse(BaseModel):
     # cannot link a child application back to its parent machine.
     parent_asset_id: Optional[int] = None
     cloud_resource_id: Optional[str] = None
+    # Without these the full Edit form reads an override as "off" and Save clears it.
+    criticality_manual_override: Optional[bool] = None
+    criticality_override_reason: Optional[str] = None
     cde_environment: Optional[bool] = None
     pci_dss: Optional[Any] = None
     ephi_environment: Optional[bool] = None

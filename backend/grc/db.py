@@ -331,6 +331,19 @@ def _ensure_asset_origin_source(engine: Engine) -> None:
         ))
 
 
+def _ensure_tenant_risk_weight_columns(engine: Engine) -> None:
+    """Risk Posture EASM weights (external assets): four nullable columns; NULL means the
+    fixed defaults in risk_posture/service.py, so existing rows score as before."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    if not sa_inspect(engine).has_table("grc_tenant_risk_weights"):
+        return
+    with engine.begin() as conn:
+        for col in ("weight_easm_hygiene", "weight_easm_exploit", "weight_easm_exposure", "weight_easm_business"):
+            conn.execute(text(f"ALTER TABLE grc_tenant_risk_weights ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2)"))
+
+
 def _ensure_asset_ephi_environment(engine: Engine) -> None:
     """HIPAA ePHI flag: colleague added a non-nullable bool, but existing asset
     rows hold NULL. Backfill those to false and pin a server default so GET
@@ -514,6 +527,10 @@ def _init_tenant_schema(engine: Engine, slug: str) -> None:
             _ensure_asset_ephi_environment(engine)
         except Exception:
             logger.exception("asset ephi_environment ensure failed for slug=%s", slug)
+        try:
+            _ensure_tenant_risk_weight_columns(engine)
+        except Exception:
+            logger.exception("risk weight EASM column ensure failed for slug=%s", slug)
         try:
             from .modules.compliance.schema_migrations import _ensure_for_engine
 

@@ -59,6 +59,19 @@ DEFAULT_WEIGHTS = {
 # `resolve_weights_for_tenant()` (see below).
 WEIGHTS = dict(DEFAULT_WEIGHTS)
 
+# EASM (external asset) default weights. External assets are graded by the
+# outside-in model in `_compute_easm_risk`, which uses these four dimensions
+# instead of the internal CIS/CIA/ctrl/risk ones. Per-tenant overrides come via
+# `resolve_easm_weights_for_tenant()`. (The `subdomains` rollup component keeps
+# its own fixed structural weight — it's present only for parent domains and is
+# not a tunable dimension.)
+DEFAULT_EASM_WEIGHTS = {
+    "hygiene":        0.30,
+    "exploitability": 0.35,
+    "exposure":       0.20,
+    "business":       0.15,
+}
+
 
 def _session_cache(db) -> dict:
     """Request-scoped memo bag living on the Session (one SQLAlchemy
@@ -125,6 +138,41 @@ def resolve_weights_for_tenant(db, tenant_id: int) -> dict:
         }
     cache[ck] = resolved
     return dict(resolved)
+
+
+def resolve_easm_weights_for_tenant(db, tenant_id: int) -> dict:
+    """Return the EASM (external asset) weight map for this tenant.
+
+    Mirrors `resolve_weights_for_tenant` but for the four outside-in
+    dimensions. Falls back to `DEFAULT_EASM_WEIGHTS` unless the tenant has
+    tuned all four (the four columns are nullable and move together — a
+    partial set can't happen through the PUT, which validates the whole set).
+    """
+    if db is None:
+        return dict(DEFAULT_EASM_WEIGHTS)
+    cache = _session_cache(db)
+    ck = ("easm_weights", tenant_id)
+    if ck in cache:
+        return dict(cache[ck])
+    try:
+        from grc.models import TenantRiskWeights
+        row = db.query(TenantRiskWeights).filter(
+            TenantRiskWeights.tenant_id == tenant_id,
+        ).first()
+    except Exception:
+        return dict(DEFAULT_EASM_WEIGHTS)
+    vals = None if not row else (
+        row.weight_easm_hygiene, row.weight_easm_exploit,
+        row.weight_easm_exposure, row.weight_easm_business,
+    )
+    if not vals or any(v is None for v in vals):
+        resolved = dict(DEFAULT_EASM_WEIGHTS)
+    else:
+        h, e, x, b = (float(v) / 100.0 for v in vals)
+        resolved = {"hygiene": h, "exploitability": e, "exposure": x, "business": b}
+    cache[ck] = resolved
+    return dict(resolved)
+
 
 VULN_SEVERITY_POINTS = {
     "critical": 10.0,
@@ -929,18 +977,22 @@ def _easm_cve_counts(asset: ITAsset, ep: Dict[str, Any], db=None) -> Tuple[int, 
         return cve, kev
 
 
-def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None, tenant_id: Optional[int] = None) -> Dict[str, Any]:
     """Risk posture for an EXTERNAL asset. Health is an input, not the inverse."""
     health = ep.get("health") or {}
     hscore = health.get("score")
     cve_n, kev_n = _easm_cve_counts(asset, ep, db=db)
+
+    # Per-tenant EASM weights (falls back to DEFAULT_EASM_WEIGHTS when the tenant
+    # hasn't tuned them, or when called without a db — e.g. the subdomain rollup).
+    ew = resolve_easm_weights_for_tenant(db, tenant_id) if tenant_id is not None else dict(DEFAULT_EASM_WEIGHTS)
 
     components: Dict[str, Any] = {}
 
     if isinstance(hscore, (int, float)):
         components["hygiene"] = {
             "score": round(1.0 - (float(hscore) / 100.0), 4),
-            "weight": 0.30, "known": True,
+            "weight": ew["hygiene"], "known": True,
             "label": _EASM_RISK_LABELS["hygiene"],
             "detail": f"health {health.get('grade') or '—'} · {int(hscore)}/100",
         }
@@ -952,7 +1004,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
     else:
         expl, expl_d = 0.0, "no linked CVEs (banner CPE is a heuristic — see note)"
     components["exploitability"] = {
-        "score": round(expl, 4), "weight": 0.35, "known": True,
+        "score": round(expl, 4), "weight": ew["exploitability"], "known": True,
         "label": _EASM_RISK_LABELS["exploitability"], "detail": expl_d,
     }
 
@@ -964,7 +1016,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
     if live and not https:
         exp += 0.25
     components["exposure"] = {
-        "score": round(min(1.0, exp), 4), "weight": 0.20, "known": True,
+        "score": round(min(1.0, exp), 4), "weight": ew["exposure"], "known": True,
         "label": _EASM_RISK_LABELS["exposure"],
         "detail": (
             f"{'internet-facing' if getattr(asset, 'internet_facing', None) else 'not marked facing'}"
@@ -981,7 +1033,7 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: 
         biz = c_s if k_s is None else max(c_s, k_s)
         detail = ", ".join(x for x in (crit or None, klass or None) if x) or "set"
         components["business"] = {
-            "score": round(biz, 4), "weight": 0.15, "known": True,
+            "score": round(biz, 4), "weight": ew["business"], "known": True,
             "label": _EASM_RISK_LABELS["business"], "detail": detail,
         }
 
@@ -1158,7 +1210,7 @@ def compute_asset_risk(
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
         # Subdomains feed the parent as a weighted "Subdomain exposure" component.
         roll = _external_subdomain_rollup(db, tenant_id, asset)
-        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll)
+        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll, tenant_id=tenant_id)
         if roll:
             res["subdomain_rollup"] = roll
         return res

@@ -701,7 +701,8 @@ export interface OverviewOpts {
   kpis?: { riskScore?: any; riskBand?: string | null; openFindings?: any; blastRadius?: any; controlCoverage?: any; refreshDue?: any };
   tabs?: { label: string; count?: number; active?: boolean; onClick?: () => void }[];
   actions?: { label: string; primary?: boolean; danger?: boolean; onClick?: () => void }[];
-  onEdit?: () => void;
+  /** Opens the edit sidebar; the section names which part of the form to land on. */
+  onEdit?: (section?: 'identity' | 'procurement') => void;
   onSoftwareClick?: (s: any) => void;
   // AI layout plan (Layer 2). null/undefined → generic cards exactly as before.
   plan?: { fields: Array<{ key: string; heading: string; card: string }>; cards: Array<{ name: string; size: 'half' | 'full'; order: number }> } | null;
@@ -938,7 +939,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     machine,
     manual: [
       {
-        title: 'Identity & Ownership', note: 'Manual entry', onEdit: o.onEdit,
+        title: 'Identity & Ownership', note: 'Manual entry', onEdit: o.onEdit && (() => o.onEdit!('identity')),
         fields: [
           { label: 'Category', value: dash(asset?.asset_type) },
           { label: 'Assigned User', value: dash(asset?.assigned_user) },
@@ -958,7 +959,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
         ],
       },
       {
-        title: 'Procurement & Cost', note: 'Manual · finance / CMDB', onEdit: o.onEdit,
+        title: 'Procurement & Cost', note: 'Manual · finance / CMDB', onEdit: o.onEdit && (() => o.onEdit!('procurement')),
         fields: [
           { label: 'Vendor', value: dash(asset?.vendor) },
           { label: 'Purchase Cost', value: dash(asset?.purchase_cost) },

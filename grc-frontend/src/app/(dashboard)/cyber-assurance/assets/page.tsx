@@ -85,6 +85,7 @@ export default function AssetsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
+  const [editPci, setEditPci] = useState(false);
   const [expandedAsset, setExpandedAsset] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
@@ -194,6 +195,7 @@ export default function AssetsPage() {
       queryClient.invalidateQueries({ queryKey: ['assets'] });
       queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
       setEditingAsset(null);
+      setEditPci(false);
     },
   });
 
@@ -410,6 +412,7 @@ export default function AssetsPage() {
         onConnect={(asset) => handleConnect(noopEvent, asset)}
         onBulkDelete={(ids) => bulkDeleteMutation.mutate(ids)}
         onBulkUpdate={(ids, patch) => bulkUpdateMutation.mutate({ ids, patch })}
+        onMarkPci={(asset) => { setEditPci(true); setEditingAsset(asset); }}
         onBulkConnect={(ids) => {
           const next = new Set(ids);
           setSelectedAssetIds(next);
@@ -435,10 +438,12 @@ export default function AssetsPage() {
 
       {editingAsset && (
         <AssetModal
-          onClose={() => setEditingAsset(null)}
+          onClose={() => { setEditingAsset(null); setEditPci(false); }}
           onSave={(data) => updateMutation.mutate({ id: editingAsset.id, data })}
           isLoading={updateMutation.isPending}
           initialData={editingAsset}
+          forceCde={editPci}
+          focusSection={editPci ? 'compliance' : undefined}
         />
       )}
 

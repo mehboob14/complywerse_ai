@@ -372,7 +372,68 @@ tenant at backend start:
   - `tests/test_helpdesk_reference_seed.py` checks insert order, unique keys, FK targets and
     branding.
 
-## 14. Summary for the owner (plain language)
+## 14. Follow-up port: Risk Posture weights, the asset edit sidebar, CIA AI suggest
+
+Eight later product commits, ported as one three-way merge per file (base = the product
+before `cd77b4c`, theirs = the product at `765dece`, ours = ComplyVerse). No product commit
+between our sync point and `cd77b4c` touched these files, so every difference on our side is
+ComplyVerse's own.
+
+- **`cd77b4c` Tune Weights 500.** ComplyVerse had the same raw SQL against a `tenant_<slug>`
+  schema that does not exist (one database per tenant), so every save 500'd. The admin check
+  now uses the platform's `is_tenant_admin` (Administrator granted by the platform, or the
+  primary contact), not the product's role-name query, which would also accept a role a
+  tenant named "Administrator" itself.
+- **`95035e7` EASM weights.** Four nullable `grc_tenant_risk_weights` columns
+  (`weight_easm_hygiene / _exploit / _exposure / _business`). NULL means the fixed defaults
+  30/35/20/15, so untuned tenants score as before. `resolve_easm_weights_for_tenant` feeds
+  `_compute_easm_risk`. GET/PUT `/risk-posture/weights` carry them; the four are
+  all-or-nothing and must sum to 100. The Tune Weights modal has an External group. The
+  subdomain roll-up weight stays fixed by design.
+- **`6faaf2c` the columns on every tenant.** `_ensure_tenant_risk_weight_columns` in
+  `grc/db.py`, run from `_init_tenant_schema` with the other per-tenant self-heals. That runs
+  for each tenant database when it is first opened, and the help desk boot heal in
+  `backend/main.py` opens every registry tenant at start, so a restart adds them everywhere.
+- **`d6ae4fb` / `a2f47e8` / `1584d06` / `5a1cfce` one edit sidebar.**
+  - The asset page's Edit opens the full `AssetModal` (the old ~580-line edit form is gone).
+  - The detail response returns `criticality_manual_override` / `criticality_override_reason`,
+    so saving no longer clears an override.
+  - Ticking PCI in the register opens the same sidebar at Compliance scope with CDE on.
+    Unticking still removes PCI.
+  - The form is in titled sections, and Edit links land on and highlight their section.
+  - Technical profile (scan telemetry) shows in Add only.
+  - **Kept from ComplyVerse:** the product rewrote this form, so ComplyVerse's own additions
+    were re-applied on top. These are the Custom fields tab and saving `custom_values`, plus
+    tenant labels / visibility / options on 11 built-in fields (`showBuiltin`,
+    `builtinLabel`, `choices`, `statusChoices`). The asset page keeps "Owning department",
+    and the SBP inventory tab stays removed.
+- **`765dece` CIA "AI suggest".** It called `openai.ChatCompletion`, removed in openai 1.x, so it
+  always fell back to rules labelled "AI". It now uses ComplyVerse's `get_openai_client`
+  (JSON mode). It is grounded on the asset's stored facts via `asset_id` (criticality
+  excluded: it is derived from CIA). It returns `source` (`ai` / `rules`) and `basis`, and the
+  card says which.
+- **Also fixed:**
+  - The pentest tenant fallback and the startup scan-resume fallback defaulted to the
+    product's tenant slug `"ava"`. The request path now refuses without a tenant, and startup
+    skips when `DEFAULT_TENANT_SLUG` is empty.
+  - Four cyber links left `/cyber-assurance`: the asset overview's Register and its filters,
+    the PCI lens, the Help Desk lens (which 404'd), and CTEM's View findings.
+- **Verified locally:**
+  - Asset page Edit opens the five-section form prefilled (no Technical profile in Edit;
+    Custom fields tab present).
+  - The PCI tick opens it at Compliance scope, highlighted, with the PCI DSS attributes shown;
+    Cancel leaves the asset unchanged.
+  - Tune Weights PUT returns 200 for an administrator and 403 without the right. A bad EASM
+    sum, a partial EASM set and a bad internal sum each return 400.
+  - Scores move with the weights. External (www.liztek.ca): 50.0 hygiene-heavy, 20.0
+    exploit-heavy, 41.3 on defaults. Internal (a Windows 11 host): 51.5, 53.9, 52.4. The
+    defaults were restored afterwards.
+  - Restart 1 added the four columns. Restart 2 changed nothing (no errors, values kept).
+  - CIA suggest on www.liztek.ca returned `source: ai` with its basis facts.
+  - Tests: frontend 1,980/1,980; `test_risk_posture_easm_weights.py` (new) and the existing
+    risk posture tests pass; the build passes.
+
+## 15. Summary for the owner (plain language)
 
 ComplyVerse now has everything the cyber product built since late September: the new
 asset inventory and discovery, CIS dashboards, the vulnerability register with scanning

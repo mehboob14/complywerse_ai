@@ -25,6 +25,10 @@ type WeightsResponse = {
   weight_cia: number;
   weight_ctrl: number;
   weight_risk: number;
+  weight_easm_hygiene: number;
+  weight_easm_exploit: number;
+  weight_easm_exposure: number;
+  weight_easm_business: number;
   preset_name: string;
   updated_at: string | null;
   is_custom: boolean;
@@ -49,6 +53,21 @@ const DIM_COLOR: Record<string, string> = {
   risk: '#d97706',
 };
 
+// External (EASM) dimensions — external assets are graded by the outside-in
+// model, which uses these four instead of the internal five.
+const EASM_LABEL: Record<string, string> = {
+  hygiene:  'Exposure hygiene',
+  exploit:  'Exploitability',
+  exposure: 'Internet exposure',
+  business: 'Business impact',
+};
+const EASM_COLOR: Record<string, string> = {
+  hygiene:  '#0891b2',
+  exploit:  '#dc2626',
+  exposure: '#d97706',
+  business: '#9333ea',
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -68,6 +87,7 @@ export default function WeightsPanel({ open, onClose }: Props) {
 
   // Local form state — initialised from server, edited via sliders.
   const [w, setW] = useState({ cis: 25, vuln: 30, cia: 15, ctrl: 15, risk: 15 });
+  const [ew, setEw] = useState({ hygiene: 30, exploit: 35, exposure: 20, business: 15 });
   const [preset, setPreset] = useState<string>('Banking (default)');
 
   useEffect(() => {
@@ -77,6 +97,10 @@ export default function WeightsPanel({ open, onClose }: Props) {
         cis: d.weight_cis, vuln: d.weight_vuln, cia: d.weight_cia,
         ctrl: d.weight_ctrl, risk: d.weight_risk,
       });
+      setEw({
+        hygiene: d.weight_easm_hygiene, exploit: d.weight_easm_exploit,
+        exposure: d.weight_easm_exposure, business: d.weight_easm_business,
+      });
       setPreset(d.preset_name || 'Custom');
     }
   }, [q.data?.data]);
@@ -85,12 +109,20 @@ export default function WeightsPanel({ open, onClose }: Props) {
     () => Math.round((w.cis + w.vuln + w.cia + w.ctrl + w.risk) * 100) / 100,
     [w],
   );
+  const easmTotal = useMemo(
+    () => Math.round((ew.hygiene + ew.exploit + ew.exposure + ew.business) * 100) / 100,
+    [ew],
+  );
   const isValid = Math.abs(total - 100) < 0.5;
+  const isEasmValid = Math.abs(easmTotal - 100) < 0.5;
 
   const saveMut = useMutation({
     mutationFn: () => riskPostureApi.updateWeights({
       weight_cis: w.cis, weight_vuln: w.vuln, weight_cia: w.cia,
-      weight_ctrl: w.ctrl, weight_risk: w.risk, preset_name: preset,
+      weight_ctrl: w.ctrl, weight_risk: w.risk,
+      weight_easm_hygiene: ew.hygiene, weight_easm_exploit: ew.exploit,
+      weight_easm_exposure: ew.exposure, weight_easm_business: ew.business,
+      preset_name: preset,
     }),
     onSuccess: () => {
       toast.toast({ title: 'Weights saved', message: 'Risk Posture will recompute with the new formula on next refresh.', type: 'success' });
@@ -119,6 +151,12 @@ export default function WeightsPanel({ open, onClose }: Props) {
     setW({
       cis: p.cis, vuln: p.vuln, cia: p.cia, ctrl: p.ctrl, risk: p.risk,
     });
+    if (p.easm_hygiene !== undefined) {
+      setEw({
+        hygiene: p.easm_hygiene, exploit: p.easm_exploit,
+        exposure: p.easm_exposure, business: p.easm_business,
+      });
+    }
     setPreset(name);
   };
 
@@ -132,7 +170,7 @@ export default function WeightsPanel({ open, onClose }: Props) {
             <h2 className="text-lg font-semibold text-slate-900">Tune risk weights</h2>
             <p className="text-xs text-slate-500 mt-1">
               Each bank tunes how much each dimension drives the composite score.
-              Total must equal 100%.
+              Internal and external assets use separate dimensions — each group must total 100%.
             </p>
           </div>
           <button onClick={onClose}
@@ -160,7 +198,10 @@ export default function WeightsPanel({ open, onClose }: Props) {
           </div>
         </div>
 
-        {/* Sliders */}
+        {/* Internal-asset sliders */}
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+          Internal / agent-scanned assets
+        </div>
         {(['cis','vuln','cia','ctrl','risk'] as const).map((dim) => (
           <div key={dim} className="mb-3">
             <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
@@ -183,15 +224,57 @@ export default function WeightsPanel({ open, onClose }: Props) {
           </div>
         ))}
 
-        {/* Total */}
+        {/* Internal total */}
         <div className={`flex items-center justify-between rounded p-3 mt-4 ${
           isValid ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'
         }`}>
-          <span className="text-xs text-slate-600">Total</span>
+          <span className="text-xs text-slate-600">Internal total</span>
           <span className={`text-sm font-bold ${isValid ? 'text-emerald-700' : 'text-rose-700'}`}>
             {total.toFixed(1)}% {isValid ? '✓' : '— must equal 100%'}
           </span>
         </div>
+
+        {/* External-asset (EASM) sliders */}
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mt-6 mb-2">
+          External (EASM) assets
+        </div>
+        {(['hygiene','exploit','exposure','business'] as const).map((dim) => (
+          <div key={dim} className="mb-3">
+            <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
+              <span>{EASM_LABEL[dim]}</span>
+              <span style={{ color: EASM_COLOR[dim] }} className="font-semibold">
+                {ew[dim].toFixed(0)}%
+              </span>
+            </div>
+            <input
+              type="range" min="0" max="100" step="1"
+              value={ew[dim]}
+              disabled={!canEdit}
+              onChange={(e) => {
+                setEw({ ...ew, [dim]: Number(e.target.value) });
+                setPreset('Custom');
+              }}
+              style={{ accentColor: EASM_COLOR[dim], width: '100%' }}
+              className="cursor-pointer disabled:cursor-not-allowed"
+            />
+          </div>
+        ))}
+
+        {/* External total */}
+        <div className={`flex items-center justify-between rounded p-3 mt-4 ${
+          isEasmValid ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'
+        }`}>
+          <span className="text-xs text-slate-600">External total</span>
+          <span className={`text-sm font-bold ${isEasmValid ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {easmTotal.toFixed(1)}% {isEasmValid ? '✓' : '— must equal 100%'}
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-400 mt-2">
+          External assets are scored by the outside-in model, so they use these four
+          dimensions instead of the internal five. (The subdomain-exposure rollup keeps
+          a fixed structural weight.)
+        </p>
 
         {q.data?.data?.updated_at && (
           <p className="text-[11px] text-slate-400 mt-3 text-center">
@@ -212,7 +295,7 @@ export default function WeightsPanel({ open, onClose }: Props) {
           </button>
           <button
             onClick={() => saveMut.mutate()}
-            disabled={!canEdit || !isValid || saveMut.isPending}
+            disabled={!canEdit || !isValid || !isEasmValid || saveMut.isPending}
             className="px-4 py-2 bg-primary-600 text-[#0a0a0a] text-sm font-medium rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saveMut.isPending ? 'Saving…' : 'Save weights'}
