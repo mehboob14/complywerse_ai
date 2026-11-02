@@ -196,6 +196,10 @@ configuration, §13) through `itsm_seed.run_boot_heal()` on startup. Advisories 
   Pentest test results identical before and after (4 failures pre-exist on this branch:
   `test_ai_registry` pentest-calls + 3 `test_module_access` pentest reads; the nmap-parser
   assert in `pentest/service.py`'s self-check also pre-exists).
+- **Endpoint-agent Linux/macOS packages** (the product's `a575c71`): package list -> synthesized
+  SBOM -> grype (repo-scan lane image, offline db) -> CVE findings on that host only, never
+  through the global `VULN_AUTO_LINK_ASSETS` CPE match. Needs the repo-scan lane image with
+  grype + its db on the host; without it the consumer logs and writes nothing.
 
 ## 8. Verification (all local, nothing deployed)
 
