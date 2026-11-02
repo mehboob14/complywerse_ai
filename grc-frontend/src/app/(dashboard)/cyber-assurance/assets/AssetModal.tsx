@@ -788,14 +788,30 @@ export function AssetModal({
             <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-1">Hardware <span className="text-slate-400">(optional — auto-filled by scan)</span></label>
               <div className="grid grid-cols-3 gap-x-4 gap-y-3">
-                <input type="text" value={formData.manufacturer} onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })} placeholder="Manufacturer" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} placeholder="Model" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} placeholder="Serial number" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.fqdn} onChange={(e) => setFormData({ ...formData, fqdn: e.target.value })} placeholder="FQDN" className="col-span-2 w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.primary_mac} onChange={(e) => setFormData({ ...formData, primary_mac: e.target.value })} placeholder="MAC address" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Manufacturer</span>
+                  <input type="text" value={formData.manufacturer} onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })} placeholder="Manufacturer" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Model</span>
+                  <input type="text" value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} placeholder="Model" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Serial number</span>
+                  <input type="text" value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} placeholder="Serial number" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">vCPU</span>
+                  <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">RAM (GB)</span>
+                  <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Disk (GB)</span>
+                  <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">FQDN</span>
+                  <input type="text" value={formData.fqdn} onChange={(e) => setFormData({ ...formData, fqdn: e.target.value })} placeholder="FQDN" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">MAC address</span>
+                  <input type="text" value={formData.primary_mac} onChange={(e) => setFormData({ ...formData, primary_mac: e.target.value })} placeholder="MAC address" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
               </div>
             </div>
             )}
@@ -803,8 +819,12 @@ export function AssetModal({
             <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-1">Endpoint protection <span className="text-slate-400">(auto-filled by scan — comma-separated product names)</span></label>
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                <input type="text" value={formData.av_products} onChange={(e) => setFormData({ ...formData, av_products: e.target.value })} placeholder="Antivirus, e.g. Microsoft Defender" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.edr_products} onChange={(e) => setFormData({ ...formData, edr_products: e.target.value })} placeholder="EDR, e.g. CrowdStrike Falcon" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Antivirus</span>
+                  <input type="text" value={formData.av_products} onChange={(e) => setFormData({ ...formData, av_products: e.target.value })} placeholder="Antivirus, e.g. Microsoft Defender" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">EDR</span>
+                  <input type="text" value={formData.edr_products} onChange={(e) => setFormData({ ...formData, edr_products: e.target.value })} placeholder="EDR, e.g. CrowdStrike Falcon" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
               </div>
             </div>
             )}
@@ -861,9 +881,15 @@ export function AssetModal({
                 </p>
               )}
               <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-3">
-                <input type="text" value={formData.os_version} onChange={(e) => setFormData({ ...formData, os_version: e.target.value })} placeholder="OS version" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.os_build} onChange={(e) => setFormData({ ...formData, os_build: e.target.value })} placeholder="Build" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.os_edition} onChange={(e) => setFormData({ ...formData, os_edition: e.target.value })} placeholder="Edition" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS version</span>
+                  <input type="text" value={formData.os_version} onChange={(e) => setFormData({ ...formData, os_version: e.target.value })} placeholder="OS version" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS build</span>
+                  <input type="text" value={formData.os_build} onChange={(e) => setFormData({ ...formData, os_build: e.target.value })} placeholder="Build" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS edition</span>
+                  <input type="text" value={formData.os_edition} onChange={(e) => setFormData({ ...formData, os_edition: e.target.value })} placeholder="Edition" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
               </div>
             </div>
             )}
