@@ -1,0 +1,30 @@
+[
+  {
+    "code": "standard",
+    "name": "Standard",
+    "requires_cab": false,
+    "auto_approve": true,
+    "description": "Pre-authorised, low-risk, repeatable change — skips CAB."
+  },
+  {
+    "code": "normal",
+    "name": "Normal",
+    "requires_cab": true,
+    "auto_approve": false,
+    "description": "Assessed and authorised by the CAB before implementation."
+  },
+  {
+    "code": "major",
+    "name": "Major",
+    "requires_cab": true,
+    "auto_approve": false,
+    "description": "High-impact normal change requiring full CAB review."
+  },
+  {
+    "code": "emergency",
+    "name": "Emergency",
+    "requires_cab": true,
+    "auto_approve": false,
+    "description": "Urgent change authorised by the Emergency CAB (ECAB)."
+  }
+]

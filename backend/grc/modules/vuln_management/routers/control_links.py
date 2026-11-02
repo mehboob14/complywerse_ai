@@ -15,10 +15,8 @@ from ....routers.auth_router import (
     require_auth, get_user_tenants,
 )
 
-# Legacy link-note prefix — recognised for DISPLAY only. The CWE rule crosswalk
-# that once wrote these was removed (the AI mapper is the sole control-mapping
-# decision-maker now); no code writes new `auto:cwe:` links, but rows written
-# before removal still render their provenance chip.
+# Rule-link note prefix. CTEM Validate's SCF crosswalk (services/scf_validate.py)
+# writes these; rows from the removed CWE→framework crosswalk still carry it too.
 AUTO_LINK_NOTES_PREFIX = "auto:cwe:"
 
 router = APIRouter(tags=["Vulnerability Control Links"])
@@ -45,7 +43,7 @@ def _parse_auto_marker(notes: Optional[str]) -> tuple[str, Optional[str]]:
     is returned so the UI can show "Auto • CWE-89" chips.
     """
     if isinstance(notes, str) and notes.startswith(AUTO_LINK_NOTES_PREFIX):
-        suffix = notes[len(AUTO_LINK_NOTES_PREFIX):].strip()
+        suffix = (notes[len(AUTO_LINK_NOTES_PREFIX):].split() or [""])[0]
         # `vuln-mgmt` / `kev` markers are the always-applicable rules — no
         # specific CWE to surface in that case.
         cwe = suffix if suffix.upper().startswith("CWE-") else None

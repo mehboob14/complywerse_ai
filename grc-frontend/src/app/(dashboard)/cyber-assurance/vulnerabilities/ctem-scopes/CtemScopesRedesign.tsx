@@ -15,7 +15,8 @@
  * palette — no external stylesheet needed on the vulnerabilities route.
  */
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import '../../pentest/_components/pentest-redesign.css';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -67,7 +68,7 @@ interface Scope {
   prevFind: number | null; prevDang: number | null; prevMob: number | null;
   cw: ControlItem[];
 }
-interface Portfolio { scopes: Scope[]; quantify?: { demo_only?: boolean; ale?: number | null; p95?: number | null; currency?: string | null } | null }
+interface Portfolio { scopes: Scope[]; scf_loaded?: boolean; quantify?: { demo_only?: boolean; ale?: number | null; p95?: number | null; currency?: string | null } | null }
 
 /* ───────────── palette (mock + VulnsWorkspace, kept literal) ───────────── */
 
@@ -115,7 +116,9 @@ function Btn({ green, sm, onClick, disabled, title, style, children }: { green?:
   // One border property only — mixing the `border` shorthand with a `borderColor`
   // override across rerenders trips React's conflicting-style warning.
   const base: React.CSSProperties = { border: `1px solid ${green ? AC : '#E4E8EC'}`, background: '#fff', color: SEC, borderRadius: 9, padding: sm ? '5px 10px' : '7px 12px', fontSize: sm ? 11.5 : 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.45 : 1, whiteSpace: 'nowrap' };
-  const g: React.CSSProperties = green ? { background: AC, color: '#06342B', fontWeight: 600 } : {};
+  // Primary action: white text on the brand-blue AC. (Was #06342B near-black text,
+  // which went invisible once AC became the dark blue #005B96.)
+  const g: React.CSSProperties = green ? { background: AC, color: '#fff', fontWeight: 600 } : {};
   return <button type="button" title={title} disabled={disabled} onClick={onClick} style={{ ...base, ...g, ...style }}>{children}</button>;
 }
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
@@ -155,6 +158,15 @@ export default function CtemScopesRedesign() {
   // Navigation: 'home' = program (scope cards); 'scope' = journey.
   const [screen, setScreen] = useState<'home' | 'scope'>('home');
   const [selId, setSelId] = useState<number | null>(null);
+  // Resizable sessions column (drag handle + localStorage, delta-based, clamp 220–560).
+  const [listW, setListW] = useState<number>(() => { try { return Number(localStorage.getItem('ctem.listW')) || 300; } catch { return 300; } });
+  const dragRef = useRef<{ x: number; w: number } | null>(null);
+  useEffect(() => {
+    const mv = (e: MouseEvent) => { if (!dragRef.current) return; setListW(Math.max(220, Math.min(560, dragRef.current.w + e.clientX - dragRef.current.x))); };
+    const up = () => { if (dragRef.current) { dragRef.current = null; try { localStorage.setItem('ctem.listW', String(listW)); } catch { /* ignore */ } } };
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    return () => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); };
+  }, [listW]);
   const [showAllCw, setShowAllCw] = useState(false);
   const [showAllRanked, setShowAllRanked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +184,7 @@ export default function CtemScopesRedesign() {
   // Discover asset filter (machine name, or 'all').
   const [discAsset, setDiscAsset] = useState<string>('all');
   // "By control" evidence popup.
-  const [ctrlPopup, setCtrlPopup] = useState<{ id: number; code: string; name: string; coveredIds: number[]; findings: number } | null>(null);
+  const [ctrlPopup, setCtrlPopup] = useState<{ id: number; code: string; name: string; coveredIds: number[]; findings: number; tier?: string; reason?: string; basis?: string; standards?: string[] } | null>(null);
   const [peek, setPeek] = useState<any | null>(null);
   // Which stage's accordion body is open. null → resolves to the first
   // stage that isn't done yet, so opening a scope lands on the live work.
@@ -201,7 +213,7 @@ export default function CtemScopesRedesign() {
   const aiRun = (aiRunData as any)?.last_run ?? null;
   const mappingRunning = !!aiRun?.running;
   useEffect(() => {
-    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] }); setActiveStage(null); }
+    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] }); setActiveStage(4); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRun?.running]);
 
@@ -241,7 +253,10 @@ export default function CtemScopesRedesign() {
   const completeStage = useMutation({
     mutationFn: async (args: { scopeId: number; stage: 'discover' | 'prioritise' | 'dispatch' }) =>
       (await ctemScopesApi.completeStage(args.scopeId, args.stage)).data,
-    onSuccess: () => { setError(null); setActiveStage(null); invalidate(); },
+    // Stay on the stage that just finished so its results show, instead of
+    // jumping to the next incomplete stage (the "it doesn't show results, it
+    // just moves forward" bug). dispatch hands off to Mobilise(5).
+    onSuccess: (_d, args) => { setError(null); setActiveStage(({ discover: 2, prioritise: 3, dispatch: 5 } as Record<string, number>)[args.stage] ?? null); invalidate(); },
     onError: (e: any) => setError(e?.response?.data?.detail || 'Could not advance the stage'),
   });
   // Re-run the attack-path engine over the scope. Inside an open cycle this IS
@@ -252,7 +267,7 @@ export default function CtemScopesRedesign() {
       setError(null);
       const inOpenCycle = (data?.scopes ?? []).find((x) => x.id === scopeId)?.stageProgress != null;
       if (inOpenCycle) {
-        try { await ctemScopesApi.completeStage(scopeId, 'prioritise'); setActiveStage(null); }
+        try { await ctemScopesApi.completeStage(scopeId, 'prioritise'); setActiveStage(3); }
         catch (e: any) { setError(e?.response?.data?.detail || 'Prioritise ran, but the stage could not be stamped'); }
       }
       invalidate(); qc.invalidateQueries({ queryKey: ['choke-points'] });
@@ -397,7 +412,7 @@ export default function CtemScopesRedesign() {
     );
   }
 
-  const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
+  const findingsHref = `/cyber-assurance/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   // ── Gated loop ────────────────────────────────────────────────────────────
   const sp = s.stageProgress ?? null;
@@ -542,40 +557,74 @@ export default function CtemScopesRedesign() {
       <div><div style={{ ...SK, ...(color ? { color } : {}) }}>{label}</div><div style={{ fontSize: 15, fontWeight: 700, ...MONO, ...(color ? { color } : {}) }}>{val}</div></div>
     );
     return (
-      <div key={sc.id} style={{ ...CARD, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '11px 14px', marginBottom: 10 }}>
-        <span style={{ width: 38, height: 38, borderRadius: 11, background: ACSOFT, color: ACS, display: 'grid', placeItems: 'center', flex: 'none' }}><Crosshair className="h-[18px] w-[18px]" /></span>
-        <div style={{ minWidth: 0, flex: '1 1 210px' }}>
-          <b style={{ fontSize: 13.5 }}>{sc.name}</b> <span style={{ color: MUTED, fontSize: 11.5 }}>{membText(sc)} · owner {sc.owner ?? 'Unassigned'}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            {open ? (
-              <>
-                <Pill bg={ACSOFT} c={ACS}>● Cycle #{sc.cycleNo} · Open{sc.cycleDay != null ? ` · day ${sc.cycleDay}` : ''}</Pill>
-                {sc.cycleOverdue
-                  ? <Pill bg={REDBG} c={RED}>Overdue</Pill>
-                  : sc.cycleDueAt ? <span style={{ fontSize: 10.5, color: AMBER, fontWeight: 600 }}>due {fmtDate(sc.cycleDueAt)}</span> : null}
-                {cur && <span style={{ fontSize: 10.5, color: FAINT }}>at <b style={{ color: SEC }}>{cur}</b></span>}
-              </>
-            ) : (
-              <>
-                <Pill bg="#EEF1F3" c="#475569">■ No cycle running</Pill>
-                <span style={{ fontSize: 10.5, color: FAINT }}>last closed {fmtDate(sc.lastClosed)} · {(sc.cycleHistory?.length ?? 0)} in history</span>
-              </>
-            )}
+      <div key={sc.id} style={{ ...CARD, display: 'flex', overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '11px 14px' }}>
+          <span style={{ width: 38, height: 38, borderRadius: 11, background: ACSOFT, color: ACS, display: 'grid', placeItems: 'center', flex: 'none' }}><Crosshair className="h-[18px] w-[18px]" /></span>
+          <div style={{ minWidth: 0, flex: '1 1 210px' }}>
+            <b style={{ fontSize: 13.5 }}>{sc.name}</b> <span style={{ color: MUTED, fontSize: 11.5 }}>{membText(sc)} · owner {sc.owner ?? 'Unassigned'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+              {open ? (
+                <>
+                  <Pill bg={ACSOFT} c={ACS}>● Cycle #{sc.cycleNo} · Open{sc.cycleDay != null ? ` · day ${sc.cycleDay}` : ''}</Pill>
+                  {sc.cycleOverdue
+                    ? <Pill bg={REDBG} c={RED}>Overdue</Pill>
+                    : sc.cycleDueAt ? <span style={{ fontSize: 10.5, color: AMBER, fontWeight: 600 }}>due {fmtDate(sc.cycleDueAt)}</span> : null}
+                  {cur && <span style={{ fontSize: 10.5, color: FAINT }}>at <b style={{ color: SEC }}>{cur}</b></span>}
+                </>
+              ) : (
+                <>
+                  <Pill bg="#EEF1F3" c="#475569">■ No cycle running</Pill>
+                  <span style={{ fontSize: 10.5, color: FAINT }}>last closed {fmtDate(sc.lastClosed)} · {(sc.cycleHistory?.length ?? 0)} in history</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', flex: 'none' }}>
+            {num('Findings', sc.findings)}
+            {num('Dangerous', sc.dangerous, REDD)}
+            {num('Fixed ✓', fixed, GREEN)}
+          </div>
+          <div style={{ marginLeft: 'auto', flex: 'none', display: 'flex', gap: 7 }}>
+            {open
+              ? <Btn sm onClick={() => enterScope(sc.id)}>Open →</Btn>
+              : <>
+                  <Btn sm onClick={() => enterScope(sc.id)}>History →</Btn>
+                  {canEdit && <Btn green sm onClick={() => enterScope(sc.id, true)}>▶ Start Cycle #{sc.cycleNo + 1}</Btn>}
+                </>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', flex: 'none' }}>
-          {num('Findings', sc.findings)}
-          {num('Dangerous', sc.dangerous, REDD)}
-          {num('Fixed ✓', fixed, GREEN)}
-        </div>
-        <div style={{ marginLeft: 'auto', flex: 'none', display: 'flex', gap: 7 }}>
-          {open
-            ? <Btn sm onClick={() => enterScope(sc.id)}>Open →</Btn>
-            : <>
-                <Btn sm onClick={() => enterScope(sc.id)}>History →</Btn>
-                {canEdit && <Btn green sm onClick={() => enterScope(sc.id, true)}>▶ Start Cycle #{sc.cycleNo + 1}</Btn>}
-              </>}
-        </div>
+        {open && (() => {
+          // The 5-stage flow as an independent vertical SIDE COLUMN on the card
+          // (owner wants a side column, not a horizontal strip). Done = ✓, current
+          // = coloured number, upcoming = grey. Click = open the scope journey.
+          const sp2 = sc.stageProgress ?? null;
+          const d: Record<number, boolean> = {
+            1: sc.assets > 0,
+            2: sp2 ? !!sp2.discover : sc.findings > 0,
+            3: sp2 ? !!sp2.prioritise : (sc.buckets?.chainless ?? 0) === 0,
+            4: sp2 ? !!sp2.validate : sc.controls > 0,
+            5: (sc.tasks ?? 0) > 0 || sc.fixes > 0,
+          };
+          const firstInc = [1, 2, 3, 4, 5].find((n) => !d[n]) ?? 5;
+          return (
+            <div onClick={() => enterScope(sc.id)} title="Open the scope journey"
+              style={{ flex: 'none', width: 190, borderLeft: `1px solid ${BORDER2}`, background: '#FAFBFC', padding: '12px 14px', cursor: 'pointer' }}>
+              {STAGES.map((st, i) => {
+                const on = d[st.n] || st.n === firstInc;
+                const last = i === STAGES.length - 1;
+                return (
+                  <div key={st.n} style={{ display: 'flex', gap: 9, alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none' }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 999, display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 800, flex: 'none', background: on ? st.c : '#EEF1F3', color: on ? '#fff' : FAINT }}>{d[st.n] ? '✓' : st.n}</span>
+                      {!last && <span style={{ width: 2, flex: 1, minHeight: 12, background: d[st.n] ? st.c : '#E8ECEE', margin: '2px 0', borderRadius: 2 }} />}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 600, paddingTop: 2, paddingBottom: last ? 0 : 9, color: d[st.n] ? st.c : st.n === firstInc ? INK : FAINT }}>{st.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -854,12 +903,23 @@ export default function CtemScopesRedesign() {
   };
 
   const renderValidate = () => {
+    const scfNote = (
+      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>
+        Controls come from the <b>SCF Control Library</b> (Secure Controls Framework), matched by SCF&apos;s own crosswalks: CWE → OWASP Top 10, CVE → NIST flaw remediation. No AI reads SCF text. Manage it in{' '}
+        <Link href="/automation/soc2-controls" style={{ color: AC, fontWeight: 600 }}>Controls Automation › Common Controls</Link>.
+      </div>
+    );
+    const scfMissing = data?.scf_loaded === false && (
+      <div style={{ border: '1px solid #F5D08A', background: '#FFF8E6', borderRadius: 11, padding: 12, fontSize: 12, color: '#7A4B00', margin: '8px 0' }}>
+        SCF library not loaded — run scf_import (<code>python -m grc.tools.scf_import --tenant &lt;slug&gt;</code>). Validate has no controls to map to until then.
+      </div>
+    );
     if (gated && !g.validate) {
       return (
         <div style={{ textAlign: 'center', padding: '16px 12px' }}>
           {mappingRunning || mapControls.isPending ? (
             <>
-              <p style={{ fontSize: 13.5, fontWeight: 600 }}><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" style={{ color: VIOLET }} /> AI validation is running…</p>
+              <p style={{ fontSize: 13.5, fontWeight: 600 }}><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" style={{ color: VIOLET }} /> Validation is running…</p>
               <p style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>Runs on the server — leave this page and come back; nothing is lost. Mobilise unlocks when it finishes.</p>
               <div style={{ maxWidth: 460, margin: '14px auto 0' }}>
                 <div style={{ height: 10, borderRadius: 999, background: '#EAEEF1', overflow: 'hidden' }}><div style={{ height: '100%', borderRadius: 999, background: VIOLET, width: `${Math.max(6, Math.round(((aiRun?.findings_sent ?? 0) / Math.max(1, aiRun?.findings_total ?? 1)) * 100))}%`, transition: 'width .7s' }} /></div>
@@ -868,8 +928,10 @@ export default function CtemScopesRedesign() {
           ) : (
             <>
               <div style={{ fontSize: 13.5, fontWeight: 600 }}>Validation hasn&apos;t run in cycle #{s.cycleNo} yet.</div>
-              <div style={{ color: MUTED, maxWidth: 460, margin: '6px auto 15px', fontSize: 11.5 }}>The AI reads each vulnerability against your locked control library — sure picks auto-link (reversible), weak ones wait for review. It auto-stamps this stage when the run finishes.</div>
-              {canEdit && <div style={{ display: 'inline-flex' }}><Btn green disabled={mapControls.isPending || !stageReachable(4)} onClick={() => mapControls.mutate()}><ShieldCheck className="h-4 w-4" /> ▶ Run AI validation</Btn></div>}
+              <div style={{ color: MUTED, maxWidth: 460, margin: '6px auto 15px', fontSize: 11.5 }}>Each vulnerability is linked to the SCF controls that address it, by rule (reversible). It stamps this stage when the run finishes.</div>
+              {scfMissing}
+              {canEdit && <div style={{ display: 'inline-flex' }}><Btn green disabled={mapControls.isPending || !stageReachable(4) || data?.scf_loaded === false} onClick={() => mapControls.mutate()}><ShieldCheck className="h-4 w-4" /> ▶ Run validation</Btn></div>}
+              <div style={{ maxWidth: 460, margin: '0 auto' }}>{scfNote}</div>
             </>
           )}
         </div>
@@ -886,7 +948,8 @@ export default function CtemScopesRedesign() {
     const chips = (codes: string[]) => codes.map((c) => <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: VIOLETBG, color: VIOLET, borderRadius: 7, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, margin: '2px 4px 0 0' }}>{c}</span>);
     return (
       <>
-        {sectionDesc(<>The AI links each real vulnerability to the control(s) that <b>address</b> it — the fix to implement. A link never closes a finding or lowers its score; only a re-scan does.</>,
+        {scfMissing}
+        {sectionDesc(<>Each real vulnerability is linked to the SCF control(s) that <b>address</b> it — the fix to implement. A link never closes a finding or lowers its score; only a re-scan does.{scfNote}</>,
           <>{canEdit && <Btn sm disabled={mapControls.isPending || mappingRunning} onClick={() => mapControls.mutate()}>{(mapControls.isPending || mappingRunning) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} ↻ Re-run mapping</Btn>}
             {gated && (sp?.dispatch ? <Pill bg={GREENBG} c={GREEN}>✓ Dispatched</Pill>
               : canEdit ? <Btn green sm disabled={completeStage.isPending} title="Hand the linked vulnerabilities to Mobilise" onClick={() => completeStage.mutate({ scopeId: s.id, stage: 'dispatch' })}>{completeStage.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Dispatch to Mobilise →</Btn> : null)}
@@ -923,7 +986,7 @@ export default function CtemScopesRedesign() {
                   <div style={{ fontWeight: 600, fontSize: 12.5 }}>{v.title}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3, fontSize: 10.5, color: FAINT }}><SevBadge sev={v.severity} /><span style={MONO}>{v.composite_priority != null ? `${Math.round(Number(v.composite_priority) * 10)}/100` : '—'}</span>{(v.linked_assets ?? [])[0] && <span>{v.linked_assets[0]}</span>}{v.kev_flag && <Kev />}</div>
                 </div>
-                <div style={{ flex: '1 1 200px', minWidth: 0 }}><div style={{ fontSize: 9.5, color: FAINT, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Addressed by</div><div>{chips(v.linked_control_codes)}</div></div>
+                <div style={{ flex: '1 1 200px', minWidth: 0 }}><div title="Controls crosswalked to mitigate this finding — the fix to implement" style={{ fontSize: 9.5, color: FAINT, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>Addressed by</div><div>{chips(v.linked_control_codes)}</div></div>
                 <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8 }}><Pill bg={GREENBG} c={GREEN}>auto-linked</Pill></div>
               </div>
             ))}
@@ -952,9 +1015,9 @@ export default function CtemScopesRedesign() {
                 const ok = c.basis === 'ai' || c.basis === 'ai_auto' || c.basis === 'ai_family' || c.basis === 'reused';
                 return (
                   <tr key={`${c.kind}-${c.control_id ?? c.code}`}>
-                    <td style={TD}><b style={MONO}>{c.code}</b><div style={{ color: MUTED, fontSize: 10.5 }}>{c.title}</div></td>
+                    <td style={TD}><button type="button" onClick={() => setCtrlPopup({ id: c.control_id ?? 0, code: c.code, name: c.title, coveredIds: covered, findings: c.findings, tier: c.tier, reason: c.reason, basis: c.basis, standards: c.standards ?? [c.fw] })} title="View control detail" style={{ border: 0, background: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}><b style={{ ...MONO, color: ACS }}>{c.code}</b><div style={{ color: MUTED, fontSize: 10.5 }}>{c.title}</div></button></td>
                     <td style={TD}>{(c.standards ?? [c.fw]).filter(Boolean).map((t) => <span key={t} style={{ display: 'inline-block', border: `1px solid #E4E8EC`, background: '#F7F9FA', borderRadius: 6, padding: '1px 7px', fontSize: 10, fontWeight: 600, color: '#5B6673', margin: '2px 3px 0 0' }}>{t}</span>)}</td>
-                    <td style={TD}><Btn sm disabled={c.findings === 0} onClick={() => setCtrlPopup({ id: c.control_id ?? 0, code: c.code, name: c.title, coveredIds: covered, findings: c.findings })}><b style={MONO}>{c.findings}</b> findings</Btn></td>
+                    <td style={TD}><Btn sm disabled={c.findings === 0} onClick={() => setCtrlPopup({ id: c.control_id ?? 0, code: c.code, name: c.title, coveredIds: covered, findings: c.findings, tier: c.tier, reason: c.reason, basis: c.basis, standards: c.standards ?? [c.fw] })}><b style={MONO}>{c.findings}</b> findings</Btn></td>
                     <td style={TD}><Pill bg={ok ? VIOLETBG : AMBERBG} c={ok ? VIOLET : AMBER}>{basisLabel[c.basis as string] ?? 'crosswalk rule'}</Pill></td>
                   </tr>
                 );
@@ -1121,57 +1184,111 @@ export default function CtemScopesRedesign() {
     return renderMobilise();
   };
 
-  const accordion = () => (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden' }}>
-      {STAGES.map((st, i) => {
+  const DISC = (st: { n: number; c: string }, done: boolean, locked: boolean): React.ReactNode => done
+    ? <span style={{ width: 26, height: 26, borderRadius: 999, border: `2px solid ${st.c}`, color: st.c, background: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, flex: 'none' }}>✓</span>
+    : locked
+    ? <span style={{ width: 26, height: 26, borderRadius: 999, background: '#EEF1F3', color: FAINT, display: 'grid', placeItems: 'center', fontSize: 10, flex: 'none' }}>🔒</span>
+    : <span style={{ width: 26, height: 26, borderRadius: 999, background: st.c, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800, flex: 'none' }}>{st.n}</span>;
+
+  // Left rail: the 5 stages as a vertical nav — always visible so the whole flow
+  // is clear and you can jump between stages; the active stage's results fill the
+  // pane on the right. (Replaces the stacked accordion that hid results on jump.)
+  const stageNav = () => (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {STAGES.map((st) => {
         const done = stageDone[st.n];
         const reachable = stageReachable(st.n);
         const locked = (gated && !done && !reachable) || (gated && st.n === 5 && !sp?.dispatch);
+        const active = st.n === activeStage && !locked;
         const isCurrent = st.n === firstIncomplete;
-        const open = st.n === activeStage && !locked;
-        const last = i === STAGES.length - 1;
-        const disc = done
-          ? <span style={{ width: 26, height: 26, borderRadius: 999, border: `2px solid ${st.c}`, color: st.c, background: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>✓</span>
-          : locked
-          ? <span style={{ width: 26, height: 26, borderRadius: 999, background: '#EEF1F3', color: FAINT, display: 'grid', placeItems: 'center', fontSize: 10 }}>🔒</span>
-          : <span style={{ width: 26, height: 26, borderRadius: 999, background: st.c, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>{st.n}</span>;
-        const tag = open ? null
-          : done ? <span style={{ color: FAINT, fontSize: 14 }}>›</span>
-          : locked ? <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.05em', color: FAINT }}>LOCKED</span>
-          : isCurrent ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.06em', color: '#fff', background: INK, borderRadius: 5, padding: '2px 7px' }}>CURRENT</span>
-          : <span style={{ color: FAINT, fontSize: 14 }}>›</span>;
         return (
-          <div key={st.n} style={{ display: 'flex', gap: 14 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', width: 26, paddingTop: 14 }}>{disc}{!last && <span style={{ flex: 1, width: 2, background: done ? st.c : '#E4E8EC', marginTop: 4, borderRadius: 2 }} />}</div>
-            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14 }}>
-              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)' } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
-                <div onClick={() => { if (!locked) setActiveStage(st.n); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 13px', cursor: locked ? 'default' : 'pointer' }}>
-                  <b style={{ fontSize: 13, color: locked ? FAINT : INK, flex: 'none' }}>{st.label}</b>
-                  <span style={{ fontSize: 11.5, color: locked ? FAINT : MUTED, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(st.n)}</span>
-                  {tag}
-                </div>
-                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px' }}>{stageBody(st.n)}</div>}
-              </div>
-            </div>
-          </div>
+          <button key={st.n} type="button" disabled={locked} onClick={() => { if (!locked) setActiveStage(st.n); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left', width: '100%', border: `1px solid ${active ? st.c : BORDER}`, background: active ? '#fff' : '#FAFBFC', borderRadius: 11, padding: '10px 12px', cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.6 : 1, boxShadow: active ? '0 2px 10px rgba(2,6,23,.06)' : 'none' }}>
+            {DISC(st, done, locked)}
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <b style={{ fontSize: 12.5, color: locked ? FAINT : INK }}>{st.label}</b>
+                {isCurrent && !done && <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '.05em', color: '#fff', background: INK, borderRadius: 4, padding: '1px 5px' }}>NOW</span>}
+              </span>
+              <span style={{ display: 'block', fontSize: 10.5, color: locked ? FAINT : MUTED, marginTop: 2, lineHeight: 1.4, wordBreak: 'break-word' }}>{stageStat(st.n)}</span>
+            </span>
+          </button>
         );
       })}
     </div>
   );
 
-  const journeyScreen = () => (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 0' }}>
-      <div style={{ marginBottom: 10, flexShrink: 0 }}><Btn sm onClick={() => { setScreen('home'); setSelId(null); }}>← All scopes</Btn></div>
-      <div style={{ flexShrink: 0 }}>{commandBar()}</div>
-      {s.cycleOpen
-        ? <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{accordion()}</div>
-        : <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 12 }}>{closedState()}</div>}
+  const journeyScreen = () => {
+    const st = STAGES[activeStage - 1] ?? STAGES[0];
+    return (
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', maxWidth: 1320, width: '100%', margin: '0 auto', padding: '4px 18px 0' }}>
+        <div style={{ marginBottom: 10, flexShrink: 0 }}><Btn sm onClick={() => { setScreen('home'); setSelId(null); }}>← All scopes</Btn></div>
+        <div style={{ flexShrink: 0 }}>{commandBar()}</div>
+        {s.cycleOpen
+          ? <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 16 }}>
+              {stageNav()}
+              <main style={{ ...CARD, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 16px', borderBottom: `1px solid ${BORDER2}`, flexShrink: 0 }}>
+                  {DISC(st, stageDone[activeStage], false)}
+                  <div style={{ minWidth: 0 }}>
+                    <b style={{ fontSize: 14 }}>{st.label}</b>
+                    <span style={{ display: 'block', fontSize: 11, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(activeStage)}</span>
+                  </div>
+                </div>
+                <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px' }}>{stageBody(activeStage)}</div>
+              </main>
+            </div>
+          : <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 12 }}>{closedState()}</div>}
+      </div>
+    );
+  };
+
+  // One compact row in the left Sessions column (replaces the big floating cards).
+  const sessionRow = (sc: Scope) => {
+    const active = sc.id === selId && screen === 'scope';
+    const cur = curStageLabel(sc) ?? (sc.cycleOpen ? 'Discover' : null);
+    return (
+      <button key={sc.id} type="button" onClick={() => enterScope(sc.id)}
+        style={{ display: 'block', textAlign: 'left', width: '100%', border: 0, borderLeft: `3px solid ${active ? 'var(--base)' : 'transparent'}`, borderBottom: '1px solid var(--line)', background: active ? 'var(--base-soft)' : 'transparent', padding: '10px 13px', cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <b style={{ fontSize: 12.5, color: 'var(--text)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sc.name}</b>
+          {sc.cycleOpen
+            ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--base-strong)', background: 'var(--base-soft)', borderRadius: 20, padding: '2px 7px', flex: 'none' }}>● C#{sc.cycleNo}{sc.cycleOverdue ? ' · overdue' : ''}</span>
+            : <span style={{ fontSize: 9, fontWeight: 700, color: '#64748B', background: '#EEF1F3', borderRadius: 20, padding: '2px 7px', flex: 'none' }}>idle</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, fontSize: 10.5, color: 'var(--muted)' }}>
+          {cur && <span style={{ color: 'var(--base-strong)', fontWeight: 600 }}>at {cur}</span>}
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 9 }}>
+            <span>{sc.findings} find</span>
+            {sc.dangerous > 0 && <span style={{ color: REDD, fontWeight: 600 }}>{sc.dangerous} danger</span>}
+          </span>
+        </div>
+      </button>
+    );
+  };
+
+  // The portfolio overview — shown in the main area when no session is selected.
+  const overviewMain = () => (
+    <div style={{ padding: '16px 18px', maxWidth: 1100 }}>
+      <h1 style={{ fontSize: 20, letterSpacing: '-.02em', fontWeight: 700 }}>Exposure program</h1>
+      <p style={{ fontSize: 12, color: 'var(--muted)', margin: '3px 0 12px' }}>Pick a session on the left to work its stages — or review the portfolio below.</p>
+      <div style={{ ...STRIP, flexWrap: 'nowrap', gap: 10, marginBottom: 10, alignItems: 'stretch', background: '#fff' }}>
+        {kpiCell('Scopes', portfolio.scopes)}{SEP}
+        {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
+        {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
+        {kpiCell('Findings', portfolio.findings)}{ARROW}
+        {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
+        {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
+        {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '14px 2px 8px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: 'var(--muted)' }}>across closed cycles · provable period over period</span></div>
+      {trends()}
     </div>
   );
 
   /* ─────────────────── root ─────────────────── */
   return (
-    <div style={{ fontFamily: "var(--font-poppins, 'Poppins', system-ui, -apple-system, 'Segoe UI', sans-serif)", color: INK, fontSize: 13.5, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div className="ptx" style={{ fontSize: 13.5, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--subtle)' }}>
       {toast && <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', background: INK, color: '#fff', padding: '10px 16px', borderRadius: 10, fontSize: 12, zIndex: 80, boxShadow: '0 8px 24px rgba(2,6,23,.3)', maxWidth: '80vw' }}>{toast}</div>}
       {error && <p className="flex items-start gap-1.5 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700" style={{ marginBottom: 12 }}><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {error}</p>}
 
@@ -1267,6 +1384,18 @@ export default function CtemScopesRedesign() {
               <Btn sm onClick={() => setCtrlPopup(null)}><X className="h-3.5 w-3.5" /></Btn>
             </div>
             <div style={{ fontSize: 10.5, color: FAINT, margin: '6px 0 8px' }}>A link is the fix to implement — it does <b>not</b> close these findings.</div>
+            {(ctrlPopup.standards?.filter(Boolean).length || ctrlPopup.tier || ctrlPopup.basis || ctrlPopup.reason) ? (
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 10, background: '#FAFBFC', padding: '10px 12px', marginBottom: 10, fontSize: 11.5 }}>
+                <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                  {ctrlPopup.standards && ctrlPopup.standards.filter(Boolean).length > 0 && (
+                    <div><div style={SK}>Standards</div><div style={{ marginTop: 3 }}>{ctrlPopup.standards.filter(Boolean).map((t) => <span key={t} style={{ display: 'inline-block', border: `1px solid #E4E8EC`, background: '#fff', borderRadius: 6, padding: '1px 7px', fontSize: 10, fontWeight: 600, color: '#5B6673', margin: '0 3px 0 0' }}>{t}</span>)}</div></div>
+                  )}
+                  {ctrlPopup.tier && <div><div style={SK}>Tier</div><div style={{ fontWeight: 600, marginTop: 3, textTransform: 'capitalize' }}>{ctrlPopup.tier}</div></div>}
+                  {ctrlPopup.basis && <div><div style={SK}>Why linked</div><div style={{ fontWeight: 600, marginTop: 3 }}>{({ ai: 'AI · accepted', ai_auto: 'AI · auto-linked', ai_family: 'AI · via group', reused: 'reused decision', manual: 'manual', rule: 'crosswalk rule' } as Record<string, string>)[ctrlPopup.basis] ?? ctrlPopup.basis}</div></div>}
+                </div>
+                {ctrlPopup.reason && <div style={{ marginTop: 8, color: SEC, lineHeight: 1.5 }}><div style={SK}>Rationale</div><div style={{ marginTop: 2 }}>{ctrlPopup.reason}</div></div>}
+              </div>
+            ) : null}
             {(() => {
               const evItems = (ctrlEvidence as any)?.items ?? [];
               const list: any[] = evItems.length ? evItems : ctrlPopup.coveredIds.map((id) => (scopeFindings ?? []).find((v: any) => v.id === id)).filter(Boolean);
@@ -1314,7 +1443,7 @@ export default function CtemScopesRedesign() {
             </div>
             {Array.isArray(peek.linked_control_codes) && peek.linked_control_codes.length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <div style={SK}>Addressed by</div>
+                <div style={SK} title="Controls crosswalked to mitigate this finding — the fix to implement">Addressed by</div>
                 <div style={{ marginTop: 4 }}>{peek.linked_control_codes.map((c: string) => <span key={c} style={{ display: 'inline-flex', background: VIOLETBG, color: VIOLET, borderRadius: 7, padding: '2px 8px', fontSize: 10.5, fontWeight: 600, margin: '2px 4px 0 0' }}>{c}</span>)}</div>
                 <div style={{ fontSize: 10, color: FAINT, marginTop: 6 }}>A control link is the fix to implement — it does <b>not</b> close this finding or lower its score. Only a Nessus re-scan closes it.</div>
               </div>
@@ -1328,7 +1457,48 @@ export default function CtemScopesRedesign() {
 
       {SCOPES.length === 0 ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><EmptyState onCreate={() => setShowCreate(true)} onTemplate={(preset) => { setForm((prev) => ({ ...prev, ...preset })); setShowCreate(true); }} canEdit={canEdit} /></div>
-      ) : screen === 'scope' ? journeyScreen() : homeScreen()}
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          {/* PANE 1 — Sessions (resizable left column) */}
+          <aside style={{ width: listW, flexShrink: 0, background: '#fff', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ padding: '11px 13px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>Sessions</div>
+                <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{SCOPES.length} scope{SCOPES.length === 1 ? '' : 's'} · worst first</div>
+              </div>
+              {canEdit && <Btn green sm onClick={() => setShowCreate(true)}><Plus className="h-3.5 w-3.5" /> New</Btn>}
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {[...SCOPES].sort((a, b) => (Number(!!(b.cycleOpen && b.cycleOverdue)) - Number(!!(a.cycleOpen && a.cycleOverdue))) || (b.dangerous - a.dangerous) || (b.findings - a.findings)).map(sessionRow)}
+            </div>
+          </aside>
+          {/* drag handle */}
+          <div onMouseDown={(e) => { dragRef.current = { x: e.clientX, w: listW }; }} title="Drag to resize" style={{ width: 5, cursor: 'col-resize', flexShrink: 0, background: 'transparent' }} />
+          {/* PANES 2 + 3 — stage rail + results, or the portfolio overview */}
+          {screen === 'scope' && s ? (
+            s.cycleOpen ? (
+              <>
+                <aside style={{ width: 208, flexShrink: 0, background: '#fff', borderRight: '1px solid var(--border)', overflowY: 'auto', padding: 12, minHeight: 0 }}>{stageNav()}</aside>
+                <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fcfdfe' }}>
+                  <div style={{ flexShrink: 0, padding: '12px 16px 0' }}>{commandBar()}</div>
+                  <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '4px 17px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, margin: '2px 0 11px' }}>
+                      {DISC(STAGES[activeStage - 1] ?? STAGES[0], stageDone[activeStage], false)}
+                      <b style={{ fontSize: 14 }}>{(STAGES[activeStage - 1] ?? STAGES[0]).label}</b>
+                      <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(activeStage)}</span>
+                    </div>
+                    {stageBody(activeStage)}
+                  </div>
+                </main>
+              </>
+            ) : (
+              <main style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: '12px 17px 16px', background: '#fcfdfe' }}>{commandBar()}{closedState()}</main>
+            )
+          ) : (
+            <main style={{ flex: 1, minWidth: 0, overflow: 'auto', background: '#fcfdfe' }}>{overviewMain()}</main>
+          )}
+        </div>
+      )}
     </div>
   );
 }

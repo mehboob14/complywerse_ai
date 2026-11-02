@@ -315,7 +315,7 @@ export default function ConnectWizardPage({
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-900 mb-2">Connect your first server</h1>
             <p className="text-slate-600">
-              Complyverse needs at least one connected server to scan against. Pick a platform — we&apos;ll generate a one-liner that sets up everything for you.
+              ComplyVerse needs at least one connected server to scan against. Pick a platform — we&apos;ll generate a one-liner that sets up everything for you.
             </p>
           </div>
         )}
@@ -333,7 +333,7 @@ export default function ConnectWizardPage({
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-slate-900">One device at a time</h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Each connection pairs ONE credential (username + password) with ONE target host. Complyverse encrypts the password with your tenant&apos;s Fernet key and only uses it at scan time.
+                    Each connection pairs ONE credential (username + password) with ONE target host. ComplyVerse encrypts the password with your tenant&apos;s Fernet key and only uses it at scan time.
                   </p>
                   <p className="mt-2 text-xs text-slate-600">
                     <strong>Got assets in IT Assets already?</strong>{' '}
@@ -608,8 +608,8 @@ function ManualCredsForm({
   // connection record after creation (/integrations/connections page).
   const port = DEFAULT_PORTS[platform];
   const userHint = platform === 'windows'
-    ? 'Service account on the Windows server (e.g., ava_scanner)'
-    : 'Linux user with read-only audit rights (e.g., ava_scanner)';
+    ? 'Service account on the Windows server (e.g., complyverse_scanner)'
+    : 'Linux user with read-only audit rights (e.g., complyverse_scanner)';
   const [hostname, setHostname] = useState(initialHostname);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -825,7 +825,7 @@ function ManualCredsForm({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={platform === 'windows' ? 'ava_scanner' : 'audit_readonly'}
+                  placeholder={platform === 'windows' ? 'complyverse_scanner' : 'audit_readonly'}
                   required
                   autoComplete="off"
                   spellCheck={false}
@@ -956,8 +956,8 @@ function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => voi
       <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
         <div className="text-5xl mb-3">✅</div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">DigitalOcean Account Connected!</h2>
-        <p className="text-slate-600 mb-4">Complyverse discovered your account resources (droplets, volumes, VPCs, databases, Kubernetes…). Open the asset to see them.</p>
-        <button onClick={() => window.location.href = '/assets'}
+        <p className="text-slate-600 mb-4">ComplyVerse discovered your account resources (droplets, volumes, VPCs, databases, Kubernetes…). Open the asset to see them.</p>
+        <button onClick={() => window.location.href = '/cyber-assurance/assets'}
           className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
           Go to inventory →
         </button>
@@ -1137,7 +1137,7 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
       <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
         <div className="text-5xl mb-3">✅</div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">AWS Account Connected!</h2>
-        <p className="text-slate-600 mb-4">Complyverse can now run read-only CIS AWS Foundations scans against this account.</p>
+        <p className="text-slate-600 mb-4">ComplyVerse can now run read-only CIS AWS Foundations scans against this account.</p>
         <div className="text-xs text-slate-400">Reloading…</div>
         <button
           onClick={() => window.location.href = '/asset-discovery'}
@@ -1156,7 +1156,7 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
         <div>
           <h2 className="font-semibold text-slate-900">Connect AWS Account</h2>
           <p className="text-xs text-slate-600">
-            Paste an IAM <strong>ReadOnlyAccess</strong> key. Complyverse never modifies your AWS — only reads config for scanning.
+            Paste an IAM <strong>ReadOnlyAccess</strong> key. ComplyVerse never modifies your AWS — only reads config for scanning.
           </p>
         </div>
       </div>
@@ -1167,7 +1167,7 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
         </summary>
         <ol className="list-decimal ml-5 mt-2 space-y-1">
           <li>Sign in to AWS Console → IAM → Users → <strong>Create user</strong></li>
-          <li>Username: <code className="bg-white px-1 rounded">ava-scanner</code></li>
+          <li>Username: <code className="bg-white px-1 rounded">complyverse-scanner</code></li>
           <li>Attach policies directly: <code className="bg-white px-1 rounded">ReadOnlyAccess</code> + <code className="bg-white px-1 rounded">SecurityAudit</code></li>
           <li>After creation → Security credentials → <strong>Create access key</strong> → Use case: "Application running outside AWS"</li>
           <li>Copy the Access Key ID and Secret Access Key, paste below</li>
@@ -1362,7 +1362,7 @@ function BulkCredsForm({
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={platform === 'windows' ? 'ava_scanner' : 'audit_readonly'}
+                placeholder={platform === 'windows' ? 'complyverse_scanner' : 'audit_readonly'}
                 disabled={running}
                 required
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono disabled:bg-slate-50"

@@ -63,6 +63,19 @@ def generate(
     saw a 500 while the server was still working. Returns immediately; the
     panel polls `last_run` (started_at set, finished_at null = running)."""
     tenant_id = get_user_primary_tenant(current_user, db)
+    if ctem_scope_id:
+        # CTEM Validate maps to the SCF Control Library by SCF's own crosswalks, no AI
+        # (SCF's licence forbids AI over its text). Fast and synchronous.
+        from ....services import scf_validate
+        from ....services.ctem_scopes import stamp_validate_stage
+        vuln_ids = _scope_vuln_ids(db, tenant_id, ctem_scope_id) or []
+        try:
+            summary = scf_validate.map_findings(db, tenant_id, vuln_ids, actor_id=current_user.id)
+        except scf_validate.ScfNotLoaded as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        stamp_validate_stage(db, tenant_id, ctem_scope_id)
+        db.commit()
+        return {"status": "finished", "library": "scf", **summary}
     # SINGLE-FLIGHT: one mapping run at a time per tenant. A second click (or a
     # second tab) must join the running one, not spawn a racing duplicate —
     # two concurrent runs were proven to collide on the unique (finding, control)

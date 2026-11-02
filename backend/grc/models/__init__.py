@@ -63,5 +63,17 @@ from ._86_tpra_engagements import *  # noqa: F401,F403 - TPRM: what we use a sup
 from ._87_tpra_supplier_requests import *  # noqa: F401,F403 - TPRM: what we ask a supplier for outside a questionnaire, and messages with them
 from ._88_tpra_reviews import *  # noqa: F401,F403 - TPRM: who reviews which part of a supplier's answers
 from ._89_tpra_alert_rules import *  # noqa: F401,F403 - TPRM: what a monitoring signal sets off
+from ._pentest_runs import PentestRun  # noqa: F401 - ComplyVerse pentest batch/run domain object (P1)
+from ._pentest_run_assets import PentestRunAsset  # noqa: F401 - ComplyVerse pentest per-asset run state (P1)
+from ._pentest_run_findings import PentestRunFinding  # noqa: F401 - ComplyVerse pentest immutable per-run finding snapshot
+from ._asset_risk_snapshot import AssetRiskSnapshot  # noqa: F401 - ComplyVerse risk posture daily per-asset snapshot
+
+from ._60_helpdesk_native_models import *  # noqa: F401,F403 - ComplyVerse-native Help Desk engine models
+from ._61_helpdesk_mail_models import *  # noqa: F401,F403 - ComplyVerse-native Help Desk email model
+from ._62_helpdesk_itsm_models import *  # noqa: F401,F403 - ComplyVerse-native Help Desk ITSM foundation (workbook ingest)
+
+# Advisory module tables live in their own feature folder (modules/advisories)
+# to stay isolated from other work; register them here so create_all builds them.
+from ..modules.advisories.models import *  # noqa: F401,F403 - Advisory ingestion/applicability tables
 from ._90_tpra_roster import *  # noqa: F401,F403 - TPRM: who the workflow asks at each review stage
 from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework (Risk Library)

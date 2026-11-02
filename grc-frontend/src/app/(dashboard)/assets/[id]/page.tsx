@@ -336,7 +336,16 @@ type AssetUpdatePayload = Partial<
     | 'eol_date'
     | 'environment'
   >
->;
+> & {
+  // Scan-filled telemetry; a manual value is an override until the next scan.
+  os_family?: string;
+  os_version?: string;
+  os_build?: string;
+  os_edition?: string;
+  fqdn?: string;
+  primary_mac?: string;
+  security_posture?: { antivirus_products: string[]; edr_products: string[] };
+};
 
 export default function AssetDetailPage() {
   const params = useParams();
@@ -1417,6 +1426,10 @@ function EditAssetModal({
     staleTime: 60 * 1000,
   });
 
+  const initialAv = (asset.security_posture?.antivirus_products || []).join(', ');
+  const initialEdr = (asset.security_posture?.edr_products || []).join(', ');
+  const splitNames = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
+
   const [form, setForm] = useState({
     name: asset.name || '',
     description: asset.description || '',
@@ -1461,6 +1474,14 @@ function EditAssetModal({
     warranty_expiry: asset.warranty_expiry ? asset.warranty_expiry.slice(0, 10) : '',
     eol_date: asset.eol_date ? asset.eol_date.slice(0, 10) : '',
     environment: asset.environment || '',
+    os_family: asset.os_family || '',
+    os_version: asset.os_version || '',
+    os_build: asset.os_build || '',
+    os_edition: asset.os_edition || '',
+    fqdn: asset.fqdn || '',
+    primary_mac: asset.primary_mac || '',
+    av_products: initialAv,
+    edr_products: initialEdr,
   });
 
   const parseId = (v: string | number): number | undefined => {
@@ -1520,6 +1541,16 @@ function EditAssetModal({
       warranty_expiry: form.warranty_expiry || undefined,
       eol_date: form.eol_date || undefined,
       environment: form.environment || undefined,
+      os_family: form.os_family || undefined,
+      os_version: form.os_version || undefined,
+      os_build: form.os_build || undefined,
+      os_edition: form.os_edition || undefined,
+      fqdn: form.fqdn || undefined,
+      primary_mac: form.primary_mac || undefined,
+      // Sent only when touched, so saving an unrelated field never replaces the scan's posture.
+      security_posture: form.av_products !== initialAv || form.edr_products !== initialEdr
+        ? { antivirus_products: splitNames(form.av_products), edr_products: splitNames(form.edr_products) }
+        : undefined,
     });
   };
 
@@ -1869,6 +1900,33 @@ function EditAssetModal({
                   value={form.business_owner_id as number | ''}
                   onChange={(v) => setForm({ ...form, business_owner_id: v })}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Scan telemetry: OS, identity, endpoint protection ──────── */}
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">OS, Network Identity & Endpoint Protection</p>
+            <p className="mb-3 text-[11px] text-slate-500">Auto-filled by agent / agentless scan. Values entered here are a manual override for hosts no scan reaches; the next scan replaces them.</p>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              {([
+                ['os_family', 'OS Family'], ['os_version', 'OS Version'], ['os_build', 'OS Build'],
+                ['os_edition', 'OS Edition'], ['fqdn', 'FQDN'], ['primary_mac', 'MAC Address'],
+              ] as const).map(([key, label]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-slate-600">{label}</label>
+                  <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+                </div>
+              ))}
+              <div className="md:col-span-3 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600">Antivirus <span className="font-normal text-slate-400">(comma-separated)</span></label>
+                  <input value={form.av_products} onChange={(e) => setForm({ ...form, av_products: e.target.value })} placeholder="e.g. Microsoft Defender" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600">EDR <span className="font-normal text-slate-400">(comma-separated)</span></label>
+                  <input value={form.edr_products} onChange={(e) => setForm({ ...form, edr_products: e.target.value })} placeholder="e.g. CrowdStrike Falcon" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900" />
+                </div>
               </div>
             </div>
           </div>

@@ -1,0 +1,162 @@
+[
+  {
+    "process": "incident",
+    "priority_label": "Urgent",
+    "priority_code": "P1",
+    "service_window": "24x7",
+    "response_minutes": 60,
+    "resolution_minutes": 240,
+    "notes": null,
+    "sort_order": 1
+  },
+  {
+    "process": "incident",
+    "priority_label": "High",
+    "priority_code": "P2",
+    "service_window": "24x7",
+    "response_minutes": 120,
+    "resolution_minutes": 480,
+    "notes": null,
+    "sort_order": 2
+  },
+  {
+    "process": "incident",
+    "priority_label": "Medium",
+    "priority_code": "P3",
+    "service_window": "24x7",
+    "response_minutes": 240,
+    "resolution_minutes": 1440,
+    "notes": null,
+    "sort_order": 3
+  },
+  {
+    "process": "incident",
+    "priority_label": "Low",
+    "priority_code": "P5",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 2880,
+    "notes": null,
+    "sort_order": 5
+  },
+  {
+    "process": "service_request",
+    "priority_label": "Urgent",
+    "priority_code": "P1",
+    "service_window": "24x7",
+    "response_minutes": 240,
+    "resolution_minutes": 480,
+    "notes": null,
+    "sort_order": 1
+  },
+  {
+    "process": "service_request",
+    "priority_label": "High",
+    "priority_code": "P2",
+    "service_window": "24x7",
+    "response_minutes": 240,
+    "resolution_minutes": 960,
+    "notes": null,
+    "sort_order": 2
+  },
+  {
+    "process": "service_request",
+    "priority_label": "Medium",
+    "priority_code": "P3",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 2400,
+    "notes": null,
+    "sort_order": 3
+  },
+  {
+    "process": "service_request",
+    "priority_label": "Low",
+    "priority_code": "P5",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 4800,
+    "notes": null,
+    "sort_order": 5
+  },
+  {
+    "process": "change",
+    "priority_label": "Urgent",
+    "priority_code": "P1",
+    "service_window": "24x7",
+    "response_minutes": 240,
+    "resolution_minutes": 1440,
+    "notes": null,
+    "sort_order": 1
+  },
+  {
+    "process": "change",
+    "priority_label": "High",
+    "priority_code": "P2",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 4320,
+    "notes": null,
+    "sort_order": 2
+  },
+  {
+    "process": "change",
+    "priority_label": "Medium",
+    "priority_code": "P3",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 7200,
+    "notes": null,
+    "sort_order": 3
+  },
+  {
+    "process": "change",
+    "priority_label": "Low",
+    "priority_code": "P5",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 14400,
+    "notes": null,
+    "sort_order": 5
+  },
+  {
+    "process": "problem",
+    "priority_label": "Urgent",
+    "priority_code": "P1",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 4320,
+    "notes": null,
+    "sort_order": 1
+  },
+  {
+    "process": "problem",
+    "priority_label": "High",
+    "priority_code": "P2",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 7200,
+    "notes": null,
+    "sort_order": 2
+  },
+  {
+    "process": "problem",
+    "priority_label": "Medium",
+    "priority_code": "P3",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 14400,
+    "notes": null,
+    "sort_order": 3
+  },
+  {
+    "process": "problem",
+    "priority_label": "Low",
+    "priority_code": "P5",
+    "service_window": "24x7",
+    "response_minutes": 480,
+    "resolution_minutes": 28800,
+    "notes": null,
+    "sort_order": 5
+  }
+]

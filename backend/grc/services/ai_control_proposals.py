@@ -489,7 +489,8 @@ def list_proposals(db: Session, tenant_id: int, *, status: Optional[str] = None,
                        "domain": pc.domain, "framework": fw.name if fw else None}
         elif c is not None:
             control = {"id": c.id, "kind": "normalized_control", "code": c.code, "name": c.name,
-                       "domain": c.domain, "framework": "Unified Control Library"}
+                       "domain": c.domain,
+                       "framework": "SCF Control Library" if c.source == "scf" else "Unified Control Library"}
         else:
             continue
         out.append({

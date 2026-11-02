@@ -79,45 +79,23 @@ function fmtTs(ts: string) {
 
 // ── Module / sub-module derivation ───────────────────────────────────────────
 //
-// The audit log records URL paths like `/grc/erm/risks/5` or
-// `/grc/governance/documents/3/policy-statements`. We split the path into a
+// The audit log records URL paths like `/grc/vulnerabilities/42` or
+// `/grc/compliance-plugins/runs/7`. We split the path into a
 // module (first segment) and an optional sub-module (second segment when it
 // isn't a numeric id), then look each up in the friendly-label maps below.
 // Anything not in the maps falls back to title-cased text so the column never
-// blank-renders.
+// blank-renders — so unmapped/new modules degrade gracefully instead of crashing.
 
 const MODULE_LABELS: Record<string, string> = {
-  erm: 'Risks & ERM',
-  evidence: 'Evidence',
-  'evidence-mgmt': 'Evidence',
-  governance: 'Governance',
-  compliance: 'Compliance',
   'vuln-management': 'Vulnerability Mgmt',
   vulnerabilities: 'Vulnerability Mgmt',
-  frameworks: 'Frameworks',
-  'framework-upload': 'Frameworks',
-  certifications: 'Certifications',
+  pentest: 'AI Pentest',
+  assets: 'Assets',
+  dashboard: 'Dashboard',
+  reports: 'Reports',
+  integrations: 'Integrations',
   admin: 'Administration',
   auth: 'Authentication',
-  'vendor-risk': 'Vendor Risk',
-  vendor_risk: 'Vendor Risk',
-  tasks: 'Critical Tasks',
-  'critical-tasks': 'Critical Tasks',
-  assets: 'Assets',
-  'control-library': 'Control Library',
-  controls: 'Controls',
-  dashboard: 'Dashboard',
-  'workflow-engine': 'Workflow Engine',
-  workflow: 'Workflow Engine',
-  chatbot: 'AI Assistant',
-  complychat: 'AI Assistant',
-  integrations: 'Integrations',
-  'auditor-portal': 'Auditor Portal',
-  'auditor-portal/statutory-audit': 'Statutory Audit',
-  audits: 'Auditor Portal',
-  'is-projects': 'IS Projects',
-  reports: 'Reports',
-  documents: 'Documents',
   system: 'System',
   risks: 'Risks & ERM',
   // Issue Management — URL prefix `/issue-management/...` from the
@@ -130,60 +108,23 @@ const MODULE_LABELS: Record<string, string> = {
   // Criticality Assessments — `/criticality-assessments/...` for the
   // ISCA + IACA endpoints under Asset Management.
   'criticality-assessments': 'Criticality Assessments',
+  chatbot: 'AI Assistant',
   // CIS Compliance Plugins — `/compliance-plugins/...` (library
   // listing, runs, benchmark-mappings, library-tree, scan-all, ingest).
   'compliance-plugins': 'CIS Compliance Plugins',
   // Connect Wizard — `/connect-wizard/...` (issue-token, status poll,
   // windows/linux script download, handshake).
   'connect-wizard': 'Connect Wizard',
-  // Compliance Agents — `/agents/...` (enrollment, installer downloads,
+  // Scan Agents — `/agents/...` (enrollment, installer downloads,
   // results push, revoke, scan-now-push).
-  agents: 'Compliance Agents',
+  agents: 'Scan Agents',
 };
 
 const SUBMODULE_LABELS: Record<string, string> = {
-  // ERM
-  risks: 'Risks',
-  kris: 'KRIs',
-  incidents: 'Incidents',
-  'mitigation-actions': 'Mitigation Actions',
-  'internal-controls': 'Internal Controls',
-  reviews: 'Reviews',
-  appetite: 'Risk Appetite',
-  rcsa: 'RCSA',
-  'risk-assessments': 'Risk Assessments',
-  'framework-risk-assessments': 'Framework Risk Assessments',
-  scales: 'Scoring Scales',
-  dependencies: 'Risk Dependencies',
-  // Governance
-  documents: 'Documents',
-  'gap-analysis': 'Gap Analysis',
-  attestations: 'Attestations',
-  'attestation-campaigns': 'Attestation Campaigns',
-  committees: 'Committees',
-  'regulatory-changes': 'Regulatory Changes',
-  'regulatory-feeds': 'Regulatory Feeds',
-  workflows: 'Workflows',
-  'workflow-templates': 'Workflow Templates',
-  mappings: 'Mappings',
-  exceptions: 'Exceptions',
-  applicability: 'Applicability',
-  versions: 'Document Versions',
-  // Compliance
-  policies: 'Policies',
-  statements: 'Policy Statements',
-  assessments: 'Assessments',
-  // Evidence
-  'cross-links': 'Cross-Module Links',
-  'audit-packages': 'Audit Packages',
   // Vulnerability
   vulnerabilities: 'Findings',
   sla: 'SLA Config',
   departments: 'Departments',
-  // Vendor risk
-  vendors: 'Vendors',
-  questionnaires: 'Questionnaires',
-  'questionnaire-templates': 'Questionnaire Templates',
   // Admin
   users: 'Users',
   roles: 'Roles',
@@ -192,29 +133,6 @@ const SUBMODULE_LABELS: Record<string, string> = {
   'audit-logs': 'Audit Logs',
   // AI / cross-cutting
   ai: 'AI Assistant',
-  // Workflow engine
-  definitions: 'Definitions',
-  instances: 'Instances',
-  notifications: 'Notifications',
-  'escalation-configs': 'Escalation Configs',
-  // Frameworks
-  parser: 'Parser',
-  controls: 'Controls',
-  alignment: 'Alignment',
-  // Issue Management (URL: /issue-management/{issues|actions|comments|links|...})
-  issues: 'Issues',
-  actions: 'CAPA Actions',
-  comments: 'Comments',
-  links: 'Linked Items',
-  matrices: 'Severity & Classification Matrices',
-  'automation-flags': 'Automation Flags',
-  'by-source': 'By Source',
-  'from-source': 'Auto-Create from Source',
-  // Criticality Assessments
-  'info-system': 'Information System Assessments',
-  'infra-asset': 'Infrastructure Asset Assessments',
-  'by-asset': 'By Asset',
-  coverage: 'Coverage Stats',
   // CIS Compliance Plugins (URL: /compliance-plugins/{runs|benchmarks|ingest|...})
   runs: 'Plugin Runs',
   benchmarks: 'Benchmarks',
@@ -237,7 +155,7 @@ const SUBMODULE_LABELS: Record<string, string> = {
   'control-mappings': 'Plugin Control Mappings',
   'asset-scope': 'Plugin Asset Scope',
   schedule: 'Plugin Schedule',
-  // Compliance Agents (URL: /agents/{enroll|heartbeat|results|installer.*|...})
+  // Scan Agents (URL: /agents/{enroll|heartbeat|results|installer.*|...})
   enroll: 'Agent Enrollment',
   heartbeat: 'Agent Heartbeat',
   results: 'Agent Results',
@@ -266,13 +184,9 @@ const SUBMODULE_LABELS: Record<string, string> = {
 };
 
 const SUB_ENTITY_MODULES = new Set([
-  'erm', 'evidence-mgmt', 'vuln-management',
-  'control-library', 'governance', 'compliance', 'vendor-risk',
-  'workflow-engine', 'framework-upload', 'auditor-portal',
-  // Phase-2 additions — both surfaces nest resources under module prefix.
-  'issue-management', 'criticality-assessments',
-  // CIS additions — all three modules nest resources under the
-  // top-level URL prefix (e.g. /compliance-plugins/runs/...).
+  'vuln-management',
+  // CIS + platform flows nest resources under the top-level URL prefix
+  // (e.g. /compliance-plugins/runs/..., /agents/enroll, /connect-wizard/status).
   'compliance-plugins', 'connect-wizard', 'agents',
 ]);
 
@@ -324,17 +238,9 @@ function deriveModuleContext(log: AuditLogEntry): { module: string; submodule: s
  * extra "in Governance" hint would be noise).
  */
 function enrichDescription(log: AuditLogEntry): string {
-  const base = log.description || `${titleCase(log.action || 'action')} on ${log.resource_type || 'record'}`;
-  const ctx = deriveModuleContext(log);
-  const moduleLabel = ctx.submodule || ctx.module;
-  if (!moduleLabel || moduleLabel === 'System') return base;
-  const lower = base.toLowerCase();
-  if (lower.includes(moduleLabel.toLowerCase())) return base;
-  // Some backend phrasings already say "in <module>" — don't double up.
-  if (/\bin\s+\w/.test(lower) && (lower.includes('module') || lower.includes('framework') || lower.includes('document'))) {
-    return base;
-  }
-  return `${base} — in ${moduleLabel}`;
+  // The MODULE column already shows the module, so we no longer append
+  // "— in <module>" here — it was pure duplication that made rows read poorly.
+  return log.description || `${titleCase(log.action || 'action')} on ${log.resource_type || 'record'}`;
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -657,6 +563,53 @@ export default function AuditLogsPage() {
                 )}
               </div>
             </section>
+
+            {/* Field-level before/after diff, captured automatically at the ORM
+                layer for every create/update/delete the request made. New shape
+                is a list of entities; older pilot rows stored a flat field map. */}
+            {(() => {
+              type FieldMap = Record<string, { old: unknown; new: unknown }>;
+              type Entity = { entity?: string; op?: string; pk?: unknown; fields: FieldMap };
+              const raw = selectedLog.details?.field_changes as Entity[] | FieldMap | undefined;
+              if (!raw) return null;
+              // Normalize: array = new shape; plain {field:{old,new}} = old pilot row.
+              const entities: Entity[] = Array.isArray(raw)
+                ? raw
+                : [{ fields: raw }];
+              const nonEmpty = entities.filter((e) => e.fields && Object.keys(e.fields).length > 0);
+              if (nonEmpty.length === 0) return null;
+              const show = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+              const opColor: Record<string, string> = {
+                create: 'text-emerald-700', update: 'text-slate-600', delete: 'text-rose-700',
+              };
+              return (
+                <section>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Changes</p>
+                  <div className="space-y-2">
+                    {nonEmpty.map((e, i) => (
+                      <div key={`${e.entity ?? 'record'}-${String(e.pk ?? i)}`} className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+                        {(e.entity || e.op) && (
+                          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 text-[11px]">
+                            {e.op && <span className={`font-semibold uppercase tracking-wide ${opColor[e.op] ?? 'text-slate-500'}`}>{e.op}</span>}
+                            {e.entity && <span className="font-mono text-slate-500">{e.entity}{e.pk != null ? ` #${String(e.pk)}` : ''}</span>}
+                          </div>
+                        )}
+                        <div className="divide-y divide-slate-100">
+                          {Object.entries(e.fields).map(([field, v]) => (
+                            <div key={field} className="flex items-center gap-2 px-3 py-2 text-xs">
+                              <span className="font-mono text-slate-500 w-32 shrink-0 truncate">{field}</span>
+                              <span className="text-rose-600 line-through break-all">{show(v?.old)}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="text-emerald-700 font-medium break-all">{show(v?.new)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Payload */}
             {hasPayload && (

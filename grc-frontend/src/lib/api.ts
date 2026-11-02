@@ -123,7 +123,9 @@ apiClient.interceptors.response.use(
       // subdomain — e.g. user pasted a layeron link while logged in to acme,
       // or a stale tab navigated cross-tenant — redirect to the canonical
       // subdomain WITHOUT clearing storage. This is preserved from before.
-      const canonicalSub = localStorage.getItem('tenant_subdomain') || localStorage.getItem('tenant_slug');
+      // '' = the tenant lives on the bare domain (no subdomain).
+      const storedSub = localStorage.getItem('tenant_subdomain');
+      const canonicalSub = storedSub === '' ? '' : (storedSub || localStorage.getItem('tenant_slug'));
       let currentSub: string | null = null;
       if (host.endsWith('.localhost')) {
         const parts = host.split('.');
@@ -133,12 +135,13 @@ apiClient.interceptors.response.use(
         const parts = host.split('.');
         if (parts.length >= 3) currentSub = parts[0];
       }
-      if (canonicalSub && currentSub && canonicalSub !== currentSub) {
+      if (canonicalSub !== null && currentSub && canonicalSub !== currentSub) {
         const { protocol, port } = window.location;
         const baseHost = host.endsWith('.localhost')
           ? 'localhost'
           : host.split('.').slice(-2).join('.');
-        window.location.href = `${protocol}//${canonicalSub}.${baseHost}${port ? ':' + port : ''}/dashboard`;
+        const dest = canonicalSub ? `${canonicalSub}.${baseHost}` : baseHost;
+        window.location.href = `${protocol}//${dest}${port ? ':' + port : ''}/dashboard`;
         return Promise.reject(error);
       }
 

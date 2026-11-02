@@ -2,28 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug, PlugZap } from 'lucide-react';
+import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Lock, UsersRound, Plug } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
 import DepartmentsAdminPage from './departments/page';
 import AuditLogsPage from './audit-logs/page';
 import PasswordPolicyPage from './password-policy/page';
-import CloudConnectorsAdminPage from './cloud-connectors/page';
-import ConnectorsAdminPage from './connectors/page';
-import EvidenceCollectorsPage from './evidence-collectors/page';
-import IntegrationsConnectionsPage from '../integrations/connections/page';
-import { IdentityProvidersCard } from '@/cyber-assurance/components/integrations/IdentityProvidersCard';
+import ConnectorsHub from './_connectors-hub';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'departments' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'audit';
+type AdminTab = 'company' | 'users' | 'roles' | 'departments' | 'connectors' | 'password-policy' | 'audit';
+
+// Tabs folded into the unified Connectors tab (External Connectors, Vulnerability Scanners,
+// Cloud, Discovery Hosts and Identity/SSO are categories there): old deep-links land on it.
+const CONNECTOR_TABS = new Set(['integrations', 'cloud-connectors', 'evidence-collectors', 'identity']);
 
 const VALID_ADMIN_TABS = new Set<AdminTab>([
-  'company','users','roles','departments','password-policy','integrations',
-  'cloud-connectors','connectors','evidence-collectors','identity','audit',
+  'company','users','roles','departments','connectors','password-policy','audit',
 ]);
 
 const tabOf = (asked: string | null | undefined): AdminTab | null => {
-  const raw = asked === 'teams' ? 'departments' : asked;      // ?tab=teams: teams are departments now (old links and bookmarks)
+  const raw = asked === 'teams' ? 'departments'               // ?tab=teams: teams are departments now (old links and bookmarks)
+    : asked && CONNECTOR_TABS.has(asked) ? 'connectors' : asked;
   return raw && VALID_ADMIN_TABS.has(raw as AdminTab) ? (raw as AdminTab) : null;
 };
 
@@ -51,19 +51,19 @@ export default function AdminPage() {
     { id: 'departments', label: 'Departments', icon: UsersRound },
     // Password & session policy — controls complexity, lockout, and idle timeout.
     { id: 'password-policy', label: 'Password Policy', icon: Lock },
-    { id: 'integrations', label: 'Integrations', icon: Bot },
-    // Phase 7 — Cloud Connectors (AWS Inspector, Azure Defender, GCP SCC).
-    { id: 'cloud-connectors', label: 'Cloud Connectors', icon: Cloud },
-    // External connector framework — ServiceNow, Splunk, MS Teams, Fireflies, …
+    // Unified connectors — External Connectors, Vulnerability Scanners, Cloud,
+    // Discovery Hosts and Identity/SSO as categories on one page.
     { id: 'connectors', label: 'Connectors', icon: Plug },
-    // SOC 2 SaaS evidence collectors — github/okta/slack/… → live evidence.
-    { id: 'evidence-collectors', label: 'Connections', icon: PlugZap },
-    { id: 'identity', label: 'Identity Providers', icon: KeyRound },
+    // Tenant-scoped activity trail — who did what, when (audit_log middleware).
     { id: 'audit', label: 'Audit Logs', icon: ScrollText },
   ];
 
   return (
     <div className="-m-4 lg:-m-5 text-slate-900">
+      {/* zoom:0.85 — same density knob the dashboards use; scales the tab bar
+          AND every tab's content uniformly so admin cards aren't oversized.
+          Kept off the negative-margin wrapper so edge alignment stays exact. */}
+      <div style={{ zoom: 0.85 }}>
       <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {adminTabs.map(({ id, label, icon: Icon }) => {
@@ -93,12 +93,9 @@ export default function AdminPage() {
         {activeTab === 'roles' && <RolesManagementPage />}
         {activeTab === 'departments' && <DepartmentsAdminPage />}
         {activeTab === 'password-policy' && <PasswordPolicyPage />}
-        {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
-        {activeTab === 'cloud-connectors' && <CloudConnectorsAdminPage />}
-        {activeTab === 'connectors' && <ConnectorsAdminPage />}
-        {activeTab === 'evidence-collectors' && <EvidenceCollectorsPage />}
-        {activeTab === 'identity' && <IdentityProvidersCard />}
+        {activeTab === 'connectors' && <ConnectorsHub />}
         {activeTab === 'audit' && <AuditLogsPage />}
+      </div>
       </div>
     </div>
   );

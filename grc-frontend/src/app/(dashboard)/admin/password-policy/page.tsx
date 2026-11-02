@@ -2,8 +2,9 @@
 
 import { detailText } from '@/lib/apiError';
 import { useEffect, useState } from 'react';
-import { Lock, Shield } from 'lucide-react';
-import { adminApi } from '@/lib/api';
+import Link from 'next/link';
+import { KeyRound, Lock, Shield } from 'lucide-react';
+import { adminApi, ssoApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 
 // Mirrors the GET /admin/password-policy response shape. Kept local because
@@ -30,6 +31,14 @@ export default function PasswordPolicyPage() {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMessage, setOkMessage] = useState<string | null>(null);
+  // Domain sign-in (Entra SSO): when connected, password + lockout rules are the directory's, not ours.
+  const [ssoConnected, setSsoConnected] = useState<boolean | null>(null);
+  const [showLocal, setShowLocal] = useState(false);
+  useEffect(() => {
+    ssoApi.getConfig()
+      .then((r) => setSsoConnected(!!(r.data?.connected && r.data?.is_enabled !== false)))
+      .catch(() => setSsoConnected(false));
+  }, []);
   // Edit-mode draft. We only mutate this; on Cancel we discard back to the
   // last-loaded policy. Mirrors the pattern used by the Company Profile page.
   const [draft, setDraft] = useState<Policy | null>(null);
@@ -140,6 +149,37 @@ export default function PasswordPolicyPage() {
     </div>
   );
 
+  // Shared by both cards: with domain sign-in on, the password card is hidden but the session card still needs the controls.
+  const editControls = !editing ? (
+    <button
+      onClick={() => setEditing(true)}
+      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors"
+    >
+      Edit Policy
+    </button>
+  ) : (
+    <div className="flex space-x-3">
+      <button
+        onClick={() => {
+          setEditing(false);
+          setDraft(policy);
+          setError(null);
+          setOkMessage(null);
+        }}
+        className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm transition-colors"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors disabled:opacity-50"
+      >
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {error && (
@@ -153,42 +193,44 @@ export default function PasswordPolicyPage() {
         </div>
       )}
 
-      {/* ── Card 1: Password Complexity ───────────────────────────────────── */}
+      {/* ── Card 0: Domain sign-in (SSO) ──────────────────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-card p-6">
+        <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <KeyRound size={16} className="text-slate-600" />
+          Domain sign-in (SSO)
+        </h2>
+        {ssoConnected === null ? (
+          <p className="text-sm text-slate-500 mt-1">Checking…</p>
+        ) : ssoConnected ? (
+          <p className="text-sm text-slate-600 mt-1">
+            <span className="font-medium text-emerald-700">Connected.</span> Users who sign in with your organization&apos;s
+            domain account follow your directory&apos;s password, expiry and lockout policy — not the settings below.
+          </p>
+        ) : (
+          <p className="text-sm text-slate-600 mt-1">
+            <span className="font-medium text-amber-700">Not connected.</span> Users sign in with local passwords, so the
+            local account rules below apply to everyone. Connect your directory (Microsoft Entra ID) under{' '}
+            <Link href="/admin?tab=connectors" className="font-medium text-primary-700 hover:underline">Connectors</Link>{' '}
+            to use your domain&apos;s own password policy.
+          </p>
+        )}
+      </div>
+
+      {ssoConnected && !showLocal && (
+        <button onClick={() => setShowLocal(true)} className="text-sm font-medium text-primary-700 hover:underline">
+          Show local-account password rules (first admin / break-glass accounts only)
+        </button>
+      )}
+
+      {/* ── Card 1: Local account passwords ───────────────────────────────── */}
+      {(!ssoConnected || showLocal) && (
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Lock size={16} className="text-slate-600" />
-            Password Complexity
+            Local account passwords
           </h2>
-          {!editing ? (
-            <button
-              onClick={() => setEditing(true)}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors"
-            >
-              Edit Policy
-            </button>
-          ) : (
-            <div className="flex space-x-3">
-              <button
-                onClick={() => {
-                  setEditing(false);
-                  setDraft(policy);
-                  setError(null);
-                  setOkMessage(null);
-                }}
-                className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          )}
+          {editControls}
         </div>
 
         <div className="p-6">
@@ -271,17 +313,19 @@ export default function PasswordPolicyPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* ── Card 2: Account Lockout & Session ─────────────────────────────── */}
+      {/* ── Card 2: Session & lockout ─────────────────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200">
+          {ssoConnected && !showLocal && <div className="float-right">{editControls}</div>}
           <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Shield size={16} className="text-slate-600" />
-            Account Lockout & Session
+            Session &amp; lockout
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Brute-force protection and idle-session enforcement. Changes apply to all subsequent
-            logins.
+            The idle timeout applies to every user. Lockout applies to local-password sign-ins; domain (SSO)
+            sign-ins are locked out by your directory.
           </p>
         </div>
 

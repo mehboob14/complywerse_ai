@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import apiClient, { assetsApi } from '@/cyber-assurance/lib/api';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import PciAttributesFields from '@/cyber-assurance/components/assets/PciAttributesFields';
 import HipaaAttributesFields from '@/cyber-assurance/components/assets/HipaaAttributesFields';
 import { ITAsset, AssetType } from '@/cyber-assurance/types';
@@ -19,6 +19,8 @@ import {
   Cloud,
   Building2,
   DollarSign,
+  GitBranch,
+  Sparkles,
 } from 'lucide-react';
 
 const ASSET_TYPES = [
@@ -27,9 +29,13 @@ const ASSET_TYPES = [
   { value: 'data', label: 'Data', icon: Database, description: 'Databases, data stores, and data repositories' },
   { value: 'cloud', label: 'Cloud Resource', icon: Cloud, description: 'Cloud services, SaaS, PaaS, and IaaS resources' },
   { value: 'third_party', label: 'Third-Party System', icon: Building2, description: 'External vendor systems and services' },
+  { value: 'repository', label: 'Code / Repository', icon: GitBranch, description: 'Source-code repos (GitHub, GitLab…) — SAST, dependency, secret & CI/CD scanning' },
 ];
 
 const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
+  // Repository's "component" slot holds the repo URL (free text), so it renders a
+  // text field, not this dropdown — kept here only to satisfy the typed map.
+  repository: [],
   infrastructure: ['Server', 'Router', 'Switch', 'Firewall', 'Desktop', 'Laptop', 'Storage', 'Access Point', 'Rack', 'Load Balancer'],
   application: ['Web Application', 'Mobile Application', 'API Service', 'Authentication Service', 'ERP', 'CRM', 'Middleware', 'Microservice'],
   data: ['Database', 'Data Warehouse', 'Data Lake', 'File Repository', 'Backup Store', 'ETL Pipeline', 'Analytics Store'],
@@ -38,6 +44,7 @@ const ASSET_COMPONENT_SUGGESTIONS: Record<AssetType, string[]> = {
 };
 
 const ASSET_SUB_COMPONENT_SUGGESTIONS: Record<AssetType, Record<string, string[]>> = {
+  repository: {},
   infrastructure: {
     Server: ['CPU', 'RAM', 'ROM', 'NIC', 'Power Supply', 'RAID Controller'],
     Router: ['Routing Engine', 'WAN Interface', 'LAN Interface', 'Power Module', 'Management Port'],
@@ -203,6 +210,27 @@ const CRITICALITY_OPTIONS: ComboBoxOption[] = [
 ];
 
 
+export type AssetFormSection = 'basics' | 'technical' | 'identity' | 'compliance' | 'risk' | 'procurement';
+const FLASH_MS = 4000;
+
+function FormSection({ id, title, hint, flash, children }: {
+  id: AssetFormSection; title: string; hint?: string; flash?: AssetFormSection; children: React.ReactNode;
+}) {
+  const on = flash === id;
+  return (
+    <section
+      id={`asset-form-${id}`}
+      className={`scroll-mt-2 rounded-lg border p-4 transition-colors duration-700 ${on ? 'border-blue-400 bg-blue-50/70 ring-2 ring-blue-300' : 'border-slate-200 bg-white'}`}
+    >
+      <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2">
+        <h3 className="text-[13px] font-semibold text-slate-900">{title}</h3>
+        {hint && <span className="text-[11px] text-slate-500">{hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function AssetModal({
   onClose,
   onSave,
@@ -210,6 +238,7 @@ export function AssetModal({
   initialData,
   forceCde,
   forceEphi,
+  focusSection,
 }: {
   onClose: () => void;
   onSave: (data: Parameters<typeof assetsApi.create>[0]) => void;
@@ -221,6 +250,8 @@ export function AssetModal({
   /** Default the "ePHI Environment" toggle on (used by the HIPAA ePHI
    *  Inventory, which only ever creates ePHI assets). */
   forceEphi?: boolean;
+  /** Open scrolled to this section and briefly highlight it (overview card Edit links, PCI tick). */
+  focusSection?: AssetFormSection;
 }) {
   const parseSubComponents = (value?: string) =>
     value
@@ -229,6 +260,8 @@ export function AssetModal({
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+  const initialAv = ((initialData as any)?.security_posture?.antivirus_products || []).join(', ') as string;
+  const initialEdr = ((initialData as any)?.security_posture?.edr_products || []).join(', ') as string;
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
@@ -273,6 +306,12 @@ export function AssetModal({
     manufacturer: ((initialData as any)?.manufacturer || '') as string,
     model: ((initialData as any)?.model || '') as string,
     serial_number: ((initialData as any)?.serial_number || '') as string,
+    fqdn: ((initialData as any)?.fqdn || '') as string,
+    primary_mac: ((initialData as any)?.primary_mac || '') as string,
+    os_build: ((initialData as any)?.os_build || '') as string,
+    os_edition: ((initialData as any)?.os_edition || '') as string,
+    av_products: initialAv,
+    edr_products: initialEdr,
     // Ownership chain + CMDB details + procurement (full record capture).
     secondary_owner_id: (((initialData as any)?.secondary_owner_id ?? null)) as number | null,
     business_owner_id: (((initialData as any)?.business_owner_id ?? null)) as number | null,
@@ -298,6 +337,29 @@ export function AssetModal({
   const choices = (key: string, current: string, shipped: ComboBoxOption[]): ComboBoxOption[] =>
     listOptions(fieldSettings, key, current, shipped)
       .map((o) => ({ ...shipped.find((x) => x.value === o.value), value: o.value, label: o.label }));
+
+  // AI suggest for CIA. Edit mode grounds it in the stored asset (asset_id); Add mode in the form.
+  type CiaSuggestion = Awaited<ReturnType<typeof assetsApi.getCIARecommendation>>['data'];
+  const [ciaSuggestion, setCiaSuggestion] = useState<CiaSuggestion | null>(null);
+  const ciaSuggest = useMutation({
+    mutationFn: async () => (await assetsApi.getCIARecommendation({
+      name: formData.name, description: formData.description, asset_type: formData.asset_type,
+      vendor: formData.vendor, location: formData.location, asset_id: initialData?.id,
+    })).data,
+    onSuccess: (r) => {
+      setCiaSuggestion(r);
+      setFormData((f) => ({ ...f, confidentiality_rating: r.confidentiality_rating, integrity_rating: r.integrity_rating, availability_rating: r.availability_rating }));
+    },
+  });
+
+  // Land on the section the user came for and flash it so they can see which fields belong to it.
+  const [flash, setFlash] = useState<AssetFormSection | undefined>(focusSection);
+  useEffect(() => {
+    if (!focusSection) return;
+    document.getElementById(`asset-form-${focusSection}`)?.scrollIntoView({ block: 'start' });
+    const t = setTimeout(() => setFlash(undefined), FLASH_MS);
+    return () => clearTimeout(t);
+  }, [focusSection]);
 
   // OS Knowledge Registry — drives the OS/Product picker so the user can
   // pick what kind of asset this is, and the benchmark matcher resolves the
@@ -425,6 +487,14 @@ export function AssetModal({
       manufacturer: formData.manufacturer || undefined,
       model: formData.model || undefined,
       serial_number: formData.serial_number || undefined,
+      fqdn: formData.fqdn || undefined,
+      primary_mac: formData.primary_mac || undefined,
+      os_build: formData.os_build || undefined,
+      os_edition: formData.os_edition || undefined,
+      // Sent only when touched, so saving an unrelated field never replaces the scan's posture.
+      security_posture: formData.av_products !== initialAv || formData.edr_products !== initialEdr
+        ? { antivirus_products: parseSubComponents(formData.av_products), edr_products: parseSubComponents(formData.edr_products) }
+        : undefined,
       // Ownership chain + CMDB details + procurement.
       secondary_owner_id: formData.secondary_owner_id || undefined,
       business_owner_id: formData.business_owner_id || undefined,
@@ -518,6 +588,7 @@ export function AssetModal({
   // only — no backend or schema change.
   const at = formData.asset_type;
   const show = {
+    repo: at === 'repository',
     ip: at === 'infrastructure' || at === 'data' || at === 'cloud' || at === 'application',
     hardware: at === 'infrastructure',
     os: at === 'infrastructure' || at === 'data',
@@ -541,7 +612,8 @@ export function AssetModal({
         <form onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-5 py-4">
             <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
-            <div data-tab="details" className={tab === 'details' ? '' : 'hidden'}>
+            <div data-tab="details" className={tab === 'details' ? 'space-y-4' : 'hidden'}>
+            <FormSection id="basics" title="Basics" hint="What the asset is" flash={flash}>
             {/* Row 1: Name + Description */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
@@ -565,7 +637,6 @@ export function AssetModal({
                 />
               </div>}
             </div>
-
             {/* Asset Type */}
             {showBuiltin(fieldSettings, 'asset_type') && <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-1">{builtinLabel(fieldSettings, 'asset_type', 'Asset Type')} *</label>
@@ -603,8 +674,24 @@ export function AssetModal({
                 })}
               </div>
             </div>}
-
-            {/* Row: Primary Component + IP Address */}
+            {show.repo ? (
+              /* A repo's scannable address IS its clone URL — stored in host_name
+                 (via formData.component), ip_address left empty. The vuln scanner
+                 reads ip_address||host_name||name and routes any github/gitlab/… URL
+                 to the repo lane (clone + SAST/deps/secrets/CI-CD), so no other wiring. */
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Repository URL</label>
+                <input
+                  type="text"
+                  value={formData.component}
+                  onChange={(e) => setFormData({ ...formData, component: e.target.value, sub_components: [] })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., https://github.com/org/repo"
+                />
+                <p className="mt-0.5 text-[11px] text-slate-500">The clone URL (GitHub, GitLab, Bitbucket…). A vulnerability scan clones it and runs SAST, dependency, secret &amp; CI/CD checks.</p>
+              </div>
+            ) : (
+            /* Row: Primary Component + IP Address */
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-0.5">Primary Component</label>
@@ -632,7 +719,68 @@ export function AssetModal({
                 </div>
               )}
             </div>
+            )}
+            {/* Sub-components */}
+            {subComponentSuggestions.length > 0 && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Sub-components</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {subComponentSuggestions.map((subComponent) => {
+                    const isSelected = formData.sub_components.includes(subComponent);
+                    return (
+                      <button
+                        key={subComponent}
+                        type="button"
+                        onClick={() => toggleSubComponent(subComponent)}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                          isSelected
+                            ? 'border-blue-400 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {subComponent}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* Custom sub-component */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Custom Sub-component</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customSubComponent}
+                  onChange={(e) => setCustomSubComponent(e.target.value)}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g., WiFi Controller"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomSubComponent(); } }}
+                />
+                <button type="button" onClick={addCustomSubComponent} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                  Add
+                </button>
+              </div>
+              {formData.sub_components.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {formData.sub_components.map((subComponent) => (
+                    <span key={subComponent} className="inline-flex items-center gap-1 rounded-full border border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700">
+                      {subComponent}
+                      <button type="button" onClick={() => toggleSubComponent(subComponent)} className="text-blue-500 hover:text-blue-700" aria-label={`Remove ${subComponent}`}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            </FormSection>
 
+            {/* Hardware / OS / security telemetry is filled by the agent or agentless scan, so Edit
+                opens with it pre-filled. Typing here is a manual override for hosts no scan reaches;
+                the next scan that sees the host replaces it. */}
+            {(show.hardware || show.os) && (
+            <FormSection id="technical" title="Technical profile" hint="Auto-filled by agent / agentless scan — values entered here are a manual override until the next scan" flash={flash}>
             {/* Hardware — infrastructure only (servers/network/hardware). Also
                 auto-populated by agent heartbeat or agentless (WinRM/SSH) scan.
                 Kept editable for manual entry. */}
@@ -640,16 +788,46 @@ export function AssetModal({
             <div className="mb-3">
               <label className="block text-xs font-medium text-slate-600 mb-1">Hardware <span className="text-slate-400">(optional — auto-filled by scan)</span></label>
               <div className="grid grid-cols-3 gap-x-4 gap-y-3">
-                <input type="text" value={formData.manufacturer} onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })} placeholder="Manufacturer" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} placeholder="Model" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="text" value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} placeholder="Serial number" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Manufacturer</span>
+                  <input type="text" value={formData.manufacturer} onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })} placeholder="Manufacturer" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Model</span>
+                  <input type="text" value={formData.model} onChange={(e) => setFormData({ ...formData, model: e.target.value })} placeholder="Model" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Serial number</span>
+                  <input type="text" value={formData.serial_number} onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })} placeholder="Serial number" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">vCPU</span>
+                  <input type="number" min="0" value={formData.cpu_cores} onChange={(e) => setFormData({ ...formData, cpu_cores: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="vCPU" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">RAM (GB)</span>
+                  <input type="number" min="0" value={formData.memory_gb} onChange={(e) => setFormData({ ...formData, memory_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="RAM (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Disk (GB)</span>
+                  <input type="number" min="0" value={formData.storage_gb} onChange={(e) => setFormData({ ...formData, storage_gb: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="Disk (GB)" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block col-span-2"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">FQDN</span>
+                  <input type="text" value={formData.fqdn} onChange={(e) => setFormData({ ...formData, fqdn: e.target.value })} placeholder="FQDN" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">MAC address</span>
+                  <input type="text" value={formData.primary_mac} onChange={(e) => setFormData({ ...formData, primary_mac: e.target.value })} placeholder="MAC address" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
               </div>
             </div>
             )}
-
+            {show.hardware && (
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Endpoint protection <span className="text-slate-400">(auto-filled by scan — comma-separated product names)</span></label>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">Antivirus</span>
+                  <input type="text" value={formData.av_products} onChange={(e) => setFormData({ ...formData, av_products: e.target.value })} placeholder="Antivirus, e.g. Microsoft Defender" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">EDR</span>
+                  <input type="text" value={formData.edr_products} onChange={(e) => setFormData({ ...formData, edr_products: e.target.value })} placeholder="EDR, e.g. CrowdStrike Falcon" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+              </div>
+            </div>
+            )}
             {/* OS / Product picker — drives benchmark matching. Without
                 this, manually-added assets land with os_normalized=NULL and
                 the Host-Applications panel shows 'no benchmark' + no
@@ -702,82 +880,100 @@ export function AssetModal({
                   Leave blank if unknown — but Compliance tab will show &quot;no benchmark&quot; and the asset can&apos;t be checkbox-included in a room scan until this is set.
                 </p>
               )}
+              <div className="mt-3 grid grid-cols-3 gap-x-4 gap-y-3">
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS version</span>
+                  <input type="text" value={formData.os_version} onChange={(e) => setFormData({ ...formData, os_version: e.target.value })} placeholder="OS version" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS build</span>
+                  <input type="text" value={formData.os_build} onChange={(e) => setFormData({ ...formData, os_build: e.target.value })} placeholder="Build" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+                <label className="block"><span className="mb-0.5 block text-[11px] font-medium text-slate-500">OS edition</span>
+                  <input type="text" value={formData.os_edition} onChange={(e) => setFormData({ ...formData, os_edition: e.target.value })} placeholder="Edition" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </label>
+              </div>
             </div>
             )}
-
-            {/* Sub-components */}
-            {subComponentSuggestions.length > 0 && (
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Sub-components</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {subComponentSuggestions.map((subComponent) => {
-                    const isSelected = formData.sub_components.includes(subComponent);
-                    return (
-                      <button
-                        key={subComponent}
-                        type="button"
-                        onClick={() => toggleSubComponent(subComponent)}
-                        className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                          isSelected
-                            ? 'border-blue-400 bg-blue-50 text-blue-700'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                        }`}
-                      >
-                        {subComponent}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            </FormSection>
             )}
 
-            {/* Custom sub-component */}
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Custom Sub-component</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={customSubComponent}
-                  onChange={(e) => setCustomSubComponent(e.target.value)}
-                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g., WiFi Controller"
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomSubComponent(); } }}
-                />
-                <button type="button" onClick={addCustomSubComponent} className="rounded border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
-                  Add
-                </button>
-              </div>
-              {formData.sub_components.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {formData.sub_components.map((subComponent) => (
-                    <span key={subComponent} className="inline-flex items-center gap-1 rounded-full border border-blue-400 bg-blue-50 px-2.5 py-0.5 text-xs text-blue-700">
-                      {subComponent}
-                      <button type="button" onClick={() => toggleSubComponent(subComponent)} className="text-blue-500 hover:text-blue-700" aria-label={`Remove ${subComponent}`}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-slate-200 pt-3 mt-1">
-              {/* Row: Vendor + Location — vendor for SaaS/cloud/data/third-party;
-                  location for on-prem infrastructure/data. */}
-              {(show.vendor || show.location) && (
+            <FormSection id="identity" title="Identity & Ownership" hint="Who owns it, where it lives, what it does" flash={flash}>
+              {/* Ownership chain — people & team responsible (all asset types). */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                {show.vendor && showBuiltin(fieldSettings, 'vendor') && (
+                {showBuiltin(fieldSettings, 'owner') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'owner', 'Owner')}</label>
+                  <select value={formData.owner_id ?? ''} onChange={(e) => setFormData({ ...formData, owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Unassigned —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>}
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'vendor', 'Vendor')}</label>
-                  <ComboBoxInput
-                    value={formData.vendor}
-                    onChange={(v) => setFormData({ ...formData, vendor: v })}
-                    options={choices('vendor', formData.vendor, VENDOR_SUGGESTIONS)}
-                    placeholder="Search or type a vendor…"
-                    ariaLabel="Vendor"
-                  />
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Secondary Owner</label>
+                  <select value={formData.secondary_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, secondary_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
                 </div>
-                )}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Owner</label>
+                  <select value={formData.business_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Escalation Contact</label>
+                  <select value={formData.escalation_contact_id ?? ''} onChange={(e) => setFormData({ ...formData, escalation_contact_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— None —</option>
+                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
+                  </select>
+                </div>
+              </div>
+              {/* CMDB details — team / department / assigned user / environment / lifecycle. */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Owning Team</label>
+                  <input type="text" value={formData.owning_team} onChange={(e) => setFormData({ ...formData, owning_team: e.target.value })} placeholder="e.g., Platform Engineering" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Department</label>
+                  <input type="text" value={formData.department} onChange={(e) => setFormData({ ...formData, department: e.target.value })} placeholder="e.g., IT Operations" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned User</label>
+                  <input type="text" value={formData.assigned_user} onChange={(e) => setFormData({ ...formData, assigned_user: e.target.value })} placeholder="Primary day-to-day user" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                {showBuiltin(fieldSettings, 'environment') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'environment', 'Environment')}</label>
+                  <select value={formData.environment} onChange={(e) => setFormData({ ...formData, environment: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Not set —</option>
+                    {choices('environment', formData.environment, ENVIRONMENT_OPTIONS).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Lifecycle</label>
+                  <select value={formData.lifecycle_state} onChange={(e) => setFormData({ ...formData, lifecycle_state: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
+                    <option value="">— Not set —</option>
+                    {listOptions(undefined, 'lifecycle_state', formData.lifecycle_state, LIFECYCLE_OPTIONS).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+<div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                {showBuiltin(fieldSettings, 'data_classification') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'data_classification', 'Data Classification')}</label>
+                  <ComboBoxInput
+                    value={formData.data_classification}
+                    onChange={(v) => setFormData({ ...formData, data_classification: (v || '') as typeof formData.data_classification })}
+                    options={choices('data_classification', formData.data_classification, DATA_CLASSIFICATION_OPTIONS)}
+                    allowCustom={false}
+                    displayLabelInsteadOfValue
+                    placeholder="None — search to pick…"
+                    ariaLabel="Data classification"
+                  />
+                </div>}
                 {show.location && showBuiltin(fieldSettings, 'location') && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'location', 'Location')}</label>
@@ -790,41 +986,47 @@ export function AssetModal({
                   />
                 </div>
                 )}
-              </div>
-              )}
-
-              {/* Row: Asset Value (criticality is now derived — see below) */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Asset Value (USD)</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="number"
-                      value={formData.valuation || ''}
-                      onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
-                      className="w-full rounded border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                      placeholder="0"
-                      min="0"
+                {isEditMode && showBuiltin(fieldSettings, 'status') && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
+                    <ComboBoxInput
+                      value={formData.status}
+                      onChange={(v) => setFormData({ ...formData, status: (v || 'active') as typeof formData.status })}
+                      options={statusChoices(fieldSettings, STATUS_OPTIONS)}
+                      allowCustom={false}
+                      displayLabelInsteadOfValue
+                      placeholder="Select status…"
+                      ariaLabel="Status"
                     />
                   </div>
-                </div>
-                {show.network && showBuiltin(fieldSettings, 'network_segment') && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'network_segment', 'Network Segment')}</label>
-                  <ComboBoxInput
-                    value={formData.network_segment}
-                    onChange={(v) => setFormData({ ...formData, network_segment: v })}
-                    options={choices('network_segment', formData.network_segment, NETWORK_SEGMENT_SUGGESTIONS)}
-                    placeholder="Search or type a segment…"
-                    ariaLabel="Network segment"
-                  />
-                </div>
                 )}
+</div>
+              {/* Business function — structured catalogue, drives criticality
+                  boost. Searchable + supports free-text for teams whose
+                  function isn't in the seeded catalogue. */}
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Function</label>
+                <ComboBoxInput
+                  value={formData.business_function}
+                  onChange={(v) => setFormData({ ...formData, business_function: v })}
+                  options={Object.entries(businessFunctionGroups).flatMap(([group, items]) =>
+                    items.map((item) => ({
+                      value: item.id,
+                      label: item.label,
+                      group,
+                      hint: item.high_impact ? '⬆ boosts criticality' : undefined,
+                    })),
+                  )}
+                  placeholder="Search or type a function…"
+                  emptyText="No matches — Enter to use the typed value as a custom function."
+                  ariaLabel="Business function"
+                  displayLabelInsteadOfValue
+                />
               </div>
+            </FormSection>
 
-              {/* Row: PCI DSS + Status(edit) */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+            <FormSection id="compliance" title="Compliance scope" hint="PCI DSS and HIPAA" flash={flash}>
+<div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">PCI DSS Scope</label>
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -844,22 +1046,7 @@ export function AssetModal({
                     <span className="text-xs text-slate-700">CDE Environment</span>
                   </label>
                 </div>
-                {isEditMode && showBuiltin(fieldSettings, 'status') && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
-                    <ComboBoxInput
-                      value={formData.status}
-                      onChange={(v) => setFormData({ ...formData, status: (v || 'active') as typeof formData.status })}
-                      options={statusChoices(fieldSettings, STATUS_OPTIONS)}
-                      allowCustom={false}
-                      displayLabelInsteadOfValue
-                      placeholder="Select status…"
-                      ariaLabel="Status"
-                    />
-                  </div>
-                )}
-              </div>
-
+</div>
               {/* PCI DSS attributes — revealed when the asset is in the CDE.
                   Shared component so the IT Assets form and the PCI Cardholder
                   Data Inventory show identical fields. */}
@@ -871,7 +1058,6 @@ export function AssetModal({
                   />
                 </div>
               )}
-
               {/* Row: HIPAA ePHI scope — mirror of the PCI CDE toggle above. */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
                 <div>
@@ -906,6 +1092,46 @@ export function AssetModal({
                   />
                 </div>
               )}
+            </FormSection>
+
+            <FormSection id="risk" title="Risk & criticality" hint="Inputs to the calculated criticality" flash={flash}>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[11px] text-slate-500">
+                  AI suggest reads this asset&apos;s type, role, hardware, OS, environment, department, business function,
+                  data classification, exposure, network segment, PCI / HIPAA scope, open ports and installed software.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => ciaSuggest.mutate()}
+                  disabled={ciaSuggest.isPending || !formData.name}
+                  className="flex flex-none items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {ciaSuggest.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} AI suggest
+                </button>
+              </div>
+              {ciaSuggest.isError && <p className="mb-3 text-xs text-rose-700">Could not get a suggestion — set the ratings by hand.</p>}
+              {ciaSuggestion && (
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-800">
+                  <p className="mb-1 font-semibold">
+                    {ciaSuggestion.source === 'ai' ? 'AI suggestion' : 'Rule-based estimate (AI unavailable)'} — applied below, review before saving
+                  </p>
+                  {ciaSuggestion.reasons ? (
+                    <ul className="list-disc space-y-0.5 pl-4">
+                      <li><b>Confidentiality {ciaSuggestion.confidentiality_rating}:</b> {ciaSuggestion.reasons.confidentiality}</li>
+                      <li><b>Integrity {ciaSuggestion.integrity_rating}:</b> {ciaSuggestion.reasons.integrity}</li>
+                      <li><b>Availability {ciaSuggestion.availability_rating}:</b> {ciaSuggestion.reasons.availability}</li>
+                    </ul>
+                  ) : (
+                    <p>{ciaSuggestion.recommendation}</p>
+                  )}
+                  {!!ciaSuggestion.basis?.length && (
+                    <details className="mt-1 text-[11px] text-slate-500">
+                      <summary className="cursor-pointer">Facts used ({ciaSuggestion.basis.length})</summary>
+                      <ul className="mt-1 list-disc pl-4">{ciaSuggestion.basis.map((b) => <li key={b}>{b}</li>)}</ul>
+                    </details>
+                  )}
+                </div>
+              )}
 
               {/* CIA Ratings — primary input to derived criticality */}
               <div>
@@ -933,21 +1159,7 @@ export function AssetModal({
                   />
                 </div>
               </div>
-
-              {/* Data classification + Internet-facing — secondary inputs */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-3 mb-3">
-                {showBuiltin(fieldSettings, 'data_classification') && <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'data_classification', 'Data Classification')}</label>
-                  <ComboBoxInput
-                    value={formData.data_classification}
-                    onChange={(v) => setFormData({ ...formData, data_classification: (v || '') as typeof formData.data_classification })}
-                    options={choices('data_classification', formData.data_classification, DATA_CLASSIFICATION_OPTIONS)}
-                    allowCustom={false}
-                    displayLabelInsteadOfValue
-                    placeholder="None — search to pick…"
-                    ariaLabel="Data classification"
-                  />
-                </div>}
+<div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
                 {show.internet && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Internet-Facing</label>
@@ -969,120 +1181,19 @@ export function AssetModal({
                   </label>
                 </div>
                 )}
-              </div>
-
-              {/* Business function — structured catalogue, drives criticality
-                  boost. Searchable + supports free-text for teams whose
-                  function isn't in the seeded catalogue. */}
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Function</label>
-                <ComboBoxInput
-                  value={formData.business_function}
-                  onChange={(v) => setFormData({ ...formData, business_function: v })}
-                  options={Object.entries(businessFunctionGroups).flatMap(([group, items]) =>
-                    items.map((item) => ({
-                      value: item.id,
-                      label: item.label,
-                      group,
-                      hint: item.high_impact ? '⬆ boosts criticality' : undefined,
-                    })),
-                  )}
-                  placeholder="Search or type a function…"
-                  emptyText="No matches — Enter to use the typed value as a custom function."
-                  ariaLabel="Business function"
-                  displayLabelInsteadOfValue
-                />
-              </div>
-
-              {/* Ownership chain — people & team responsible (all asset types). */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                {showBuiltin(fieldSettings, 'owner') && <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'owner', 'Owner')}</label>
-                  <select value={formData.owner_id ?? ''} onChange={(e) => setFormData({ ...formData, owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— Unassigned —</option>
-                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
-                  </select>
-                </div>}
+                {show.network && showBuiltin(fieldSettings, 'network_segment') && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Secondary Owner</label>
-                  <select value={formData.secondary_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, secondary_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— None —</option>
-                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
-                  </select>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'network_segment', 'Network Segment')}</label>
+                  <ComboBoxInput
+                    value={formData.network_segment}
+                    onChange={(v) => setFormData({ ...formData, network_segment: v })}
+                    options={choices('network_segment', formData.network_segment, NETWORK_SEGMENT_SUGGESTIONS)}
+                    placeholder="Search or type a segment…"
+                    ariaLabel="Network segment"
+                  />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Owner</label>
-                  <select value={formData.business_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— None —</option>
-                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Escalation Contact</label>
-                  <select value={formData.escalation_contact_id ?? ''} onChange={(e) => setFormData({ ...formData, escalation_contact_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— None —</option>
-                    {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
-                  </select>
-                </div>
-              </div>
-
-              {/* CMDB details — team / department / assigned user / environment / lifecycle. */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Owning Team</label>
-                  <input type="text" value={formData.owning_team} onChange={(e) => setFormData({ ...formData, owning_team: e.target.value })} placeholder="e.g., Platform Engineering" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Department</label>
-                  <input type="text" value={formData.department} onChange={(e) => setFormData({ ...formData, department: e.target.value })} placeholder="e.g., IT Operations" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned User</label>
-                  <input type="text" value={formData.assigned_user} onChange={(e) => setFormData({ ...formData, assigned_user: e.target.value })} placeholder="Primary day-to-day user" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                </div>
-                {showBuiltin(fieldSettings, 'environment') && <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'environment', 'Environment')}</label>
-                  <select value={formData.environment} onChange={(e) => setFormData({ ...formData, environment: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— Not set —</option>
-                    {choices('environment', formData.environment, ENVIRONMENT_OPTIONS).map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Lifecycle</label>
-                  <select value={formData.lifecycle_state} onChange={(e) => setFormData({ ...formData, lifecycle_state: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
-                    <option value="">— Not set —</option>
-                    {listOptions(undefined, 'lifecycle_state', formData.lifecycle_state, LIFECYCLE_OPTIONS).map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Procurement & Cost */}
-              <div className="border-t border-slate-200 pt-3 mb-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Procurement &amp; Cost</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Cost (USD)</label>
-                    <input type="number" min="0" value={formData.purchase_cost ?? ''} onChange={(e) => setFormData({ ...formData, purchase_cost: e.target.value ? Number(e.target.value) : null })} placeholder="0" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Date</label>
-                    <input type="date" value={formData.purchase_date} onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Warranty Expiry</label>
-                    <input type="date" value={formData.warranty_expiry} onChange={(e) => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">End of Life</label>
-                    <input type="date" value={formData.eol_date} onChange={(e) => setFormData({ ...formData, eol_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
-                  </div>
-                </div>
-              </div>
-
+                )}
+</div>
               {/* Derived criticality — live preview + override */}
               <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50/40 p-3 mb-3">
                 <div className="flex items-center justify-between gap-3">
@@ -1153,7 +1264,56 @@ export function AssetModal({
                   </div>
                 )}
               </div>
-            </div>
+            </FormSection>
+
+            <FormSection id="procurement" title="Procurement & Cost" hint="Finance / CMDB" flash={flash}>
+<div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
+                {show.vendor && showBuiltin(fieldSettings, 'vendor') && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'vendor', 'Vendor')}</label>
+                  <ComboBoxInput
+                    value={formData.vendor}
+                    onChange={(v) => setFormData({ ...formData, vendor: v })}
+                    options={choices('vendor', formData.vendor, VENDOR_SUGGESTIONS)}
+                    placeholder="Search or type a vendor…"
+                    ariaLabel="Vendor"
+                  />
+                </div>
+                )}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Asset Value (USD)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={formData.valuation || ''}
+                      onChange={(e) => setFormData({ ...formData, valuation: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full rounded border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Cost (USD)</label>
+                    <input type="number" min="0" value={formData.purchase_cost ?? ''} onChange={(e) => setFormData({ ...formData, purchase_cost: e.target.value ? Number(e.target.value) : null })} placeholder="0" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Purchase Date</label>
+                    <input type="date" value={formData.purchase_date} onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Warranty Expiry</label>
+                    <input type="date" value={formData.warranty_expiry} onChange={(e) => setFormData({ ...formData, warranty_expiry: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">End of Life</label>
+                    <input type="date" value={formData.eol_date} onChange={(e) => setFormData({ ...formData, eol_date: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
+                  </div>
+                </div>
+            </FormSection>
             </div>
             <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
               <CustomFieldsTab moduleKey="assets" values={customValues} onChange={setCustomValues} />

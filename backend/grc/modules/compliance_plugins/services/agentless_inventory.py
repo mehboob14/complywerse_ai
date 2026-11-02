@@ -38,7 +38,7 @@ from grc.modules.compliance_plugins.services.software_normaliser import (
 # asset.platform_properties (see platform_collectors/status.py).
 from grc.modules.asset_discovery.services.platform_collectors import (
     discovered, section, PERMISSION_DENIED, NOT_SUPPORTED, NOT_APPLICABLE,
-    UNAVAILABLE, ERROR, classify_error,
+    UNAVAILABLE, ERROR, classify_error, collect_section,
 )
 
 logger = logging.getLogger(__name__)
@@ -214,7 +214,8 @@ def _clean_hw(raw: dict) -> dict[str, Any]:
                 out[k] = v
         except (TypeError, ValueError):
             pass
-    for k in ("manufacturer", "model", "serial_number", "assigned_user", "fqdn", "primary_mac", "host_name"):
+    for k in ("manufacturer", "model", "serial_number", "assigned_user", "fqdn", "primary_mac", "host_name",
+              "os_version"):
         v = str(raw.get(k) or "").strip()
         if v and v.lower() not in _HW_JUNK:
             out[k] = v[:255]
@@ -357,6 +358,8 @@ def collect_windows_wmi(credentials: dict, timeout: int = 60) -> tuple[list[dict
             "model": cs.get("Model"),
             "serial_number": bios.get("SerialNumber"),
             "host_name": os_.get("CSName") or cs.get("Name"),
+            # WMI has no shell for os_detector — collect_host derives the OS from this.
+            "os_version": os_.get("Caption"),
             "fqdn": (f"{cs.get('Name')}.{_dom}" if cs.get("Name") and "." in _dom else None),
             "primary_mac": (macs[0] if macs else None),
             "memory_gb": (round(mem_bytes / 1024 / 1024 / 1024) or None) if mem_bytes else None,
@@ -583,7 +586,7 @@ $out.network = S {
       gateway      = @($c.DefaultIPGateway)
       dns          = @($c.DNSServerSearchOrder)
       dhcp_enabled = [bool]$c.DHCPEnabled
-      speed_bps    = $(if ($ad.Speed) { [int64]$ad.Speed } else { 0 })
+      speed_bps    = $(if ($ad.Speed -and $ad.Speed -gt 0 -and $ad.Speed -lt 1000000000000) { [int64]$ad.Speed } else { $null })
       status       = "$($ad.NetConnectionStatus)"
     }
   })
@@ -877,6 +880,104 @@ def collect_windows_deep(credentials: dict, timeout: int = 120) -> dict[str, dic
     return {"collection_status": section(ERROR, None, note=note)}
 
 
+# ── WMI twin of the deep probe's SECURITY sections ──────────────────────────
+# A WMI-only host (WinRM off) has no shell to run _WIN_DEEP_PS, but Defender,
+# SecurityCenter2 and the service list are plain WMI classes. Same {status,data}
+# shape, so summarize_posture reads a WMI host exactly like a WinRM one.
+# ponytail: security sections only — port the rest of _WIN_DEEP_PS (cpu/memory/
+# disks/…) over WMI when a WMI host's deep card needs them.
+
+# Same product → service map as `$known` in _WIN_DEEP_PS (a test keeps them in sync).
+_EDR_SERVICES = {
+    "CrowdStrike Falcon": "CSFalconService", "SentinelOne": "SentinelAgent",
+    "VMware Carbon Black": "CbDefense", "Microsoft Defender for Endpoint": "Sense",
+    "Palo Alto Cortex XDR": "cyserver", "Cylance": "CylanceSvc",
+    "Sophos Intercept X": "Sophos MCS Agent", "Trend Micro Apex One": "ntrtscan",
+    "Elastic Defend": "ElasticEndpoint", "Tanium": "Tanium Client",
+    "Cybereason": "CybereasonActiveProbe",
+}
+
+
+def _wmi_bool(v: Any) -> bool:
+    # impacket decodes CIM booleans as the STRINGS 'True'/'False' — bool('False') is True.
+    return str(v).lower() == "true"
+
+
+def _wmi_security_sections(q) -> dict[str, dict]:
+    """`defender` + `security_products` exactly as _WIN_DEEP_PS shapes them, from
+    WMI rows. `q(namespace, wql) -> [row]` does the I/O and raises on failure."""
+    def defender() -> dict:
+        m = q("root/Microsoft/Windows/Defender",
+              "SELECT AntivirusEnabled,RealTimeProtectionEnabled,AntispywareEnabled,IsTamperProtected,"
+              "AMEngineVersion,AntivirusSignatureVersion,AntivirusSignatureAge FROM MSFT_MpComputerStatus")[0]
+        return {
+            "antivirus_enabled": _wmi_bool(m.get("AntivirusEnabled")),
+            "realtime_protection": _wmi_bool(m.get("RealTimeProtectionEnabled")),
+            "antispyware_enabled": _wmi_bool(m.get("AntispywareEnabled")),
+            "tamper_protected": _wmi_bool(m.get("IsTamperProtected")),
+            "engine_version": str(m.get("AMEngineVersion") or ""),
+            "signature_version": str(m.get("AntivirusSignatureVersion") or ""),
+            "signature_age_days": int(m.get("AntivirusSignatureAge") or 0),
+        }
+
+    def rows(namespace: str, wql: str) -> list:
+        # The PS probe reads these with SilentlyContinue: SecurityCenter2 doesn't
+        # exist on Windows Server, and an unreadable service list means "none seen".
+        try:
+            return q(namespace, wql)
+        except Exception:  # noqa: BLE001
+            return []
+
+    def security_products() -> dict:
+        av = []
+        for r in rows("root/SecurityCenter2", "SELECT displayName,productState FROM AntiVirusProduct"):
+            st = int(r.get("productState") or 0)
+            av.append({"name": str(r.get("displayName") or ""), "enabled": bool(st & 0x1000),
+                       "up_to_date": not (st & 0x10), "state_hex": f"0x{st:X}"})
+        product = {svc.lower(): p for p, svc in _EDR_SERVICES.items()}
+        where = " OR ".join(f"Name='{svc}'" for svc in _EDR_SERVICES.values())
+        edr = []
+        for r in rows("root/cimv2", f"SELECT Name,State FROM Win32_Service WHERE {where}"):
+            name, state = str(r.get("Name") or ""), str(r.get("State") or "")
+            edr.append({"product": product.get(name.lower(), name), "type": "EDR/XDR", "service": name,
+                        "status": state, "running": state == "Running"})
+        return {"antivirus": av, "edr_xdr": edr, "edr_present": bool(edr)}
+
+    return {"defender": collect_section(defender), "security_products": collect_section(security_products)}
+
+
+def collect_windows_wmi_deep(credentials: dict) -> dict[str, dict]:
+    """The security sections of collect_windows_deep over WMI/DCOM, for a host
+    where WinRM is off. Connects exactly like collect_windows_wmi (same
+    smoke-test caveat); an unreadable section degrades to a tagged status, a
+    failed connect raises."""
+    from impacket.dcerpc.v5.dcomrt import DCOMConnection
+    from impacket.dcerpc.v5.dcom import wmi
+    from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login
+    from impacket.dcerpc.v5.dtypes import NULL
+
+    dcom = DCOMConnection(credentials.get("wmi_host"), credentials.get("wmi_username"),
+                          credentials.get("wmi_password"), credentials.get("wmi_domain") or "",
+                          "", "", None, oxidResolver=True)
+    try:
+        login = wmi.IWbemLevel1Login(dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login))
+
+        def q(namespace: str, wql: str) -> list[dict[str, Any]]:
+            it = login.NTLMLogin(f"//./{namespace}", NULL, NULL).ExecQuery(wql)
+            rows: list[dict[str, Any]] = []
+            while True:
+                try:
+                    obj = it.Next(0xffffffff, 1)[0]
+                except Exception:  # noqa: BLE001 — S_FALSE marks the end of the results
+                    return rows
+                props = obj.getProperties()
+                rows.append({k: props[k].get("value") for k in props})
+
+        return _wmi_security_sections(q)
+    finally:
+        dcom.disconnect()
+
+
 # ── Linux deep-probe parsing ────────────────────────────────────────────────
 _PERM_HINTS = ("permission denied", "must be root", "operation not permitted",
                "/dev/mem", "are you root", "access denied", "not permitted")
@@ -1009,9 +1110,13 @@ def _parse_deep_linux(stdout: str) -> dict[str, dict]:
     disks = []
     for line in sec_map.get("storage_disks", "").splitlines():
         kv = dict(_LSBLK_KV_RE.findall(line))
-        if kv.get("NAME"):
+        _name = kv.get("NAME") or ""
+        # Skip virtual / non-storage block devices: snap loopbacks (loopN),
+        # ramdisks (ramN), optical (srN), floppy (fdN). They aren't real disks
+        # and otherwise flood "Physical Disks" with meaningless boxes.
+        if _name and not _name.lower().startswith(("loop", "ram", "sr", "fd")):
             disks.append({
-                "name": kv.get("NAME"), "model": kv.get("MODEL"),
+                "name": _name, "model": kv.get("MODEL"),
                 "serial": kv.get("SERIAL"), "size": kv.get("SIZE"),
                 "media_type": "HDD" if kv.get("ROTA") == "1" else "SSD",
                 "interface": kv.get("TRAN"),

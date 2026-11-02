@@ -1,0 +1,130 @@
+[
+  {
+    "sla": "Incident SLA",
+    "idx": 1,
+    "priority": "Urgent",
+    "default_priority": false,
+    "response_time": 3600.0,
+    "resolution_time": 14400.0
+  },
+  {
+    "sla": "Incident SLA",
+    "idx": 2,
+    "priority": "High",
+    "default_priority": false,
+    "response_time": 7200.0,
+    "resolution_time": 28800.0
+  },
+  {
+    "sla": "Incident SLA",
+    "idx": 3,
+    "priority": "Medium",
+    "default_priority": true,
+    "response_time": 14400.0,
+    "resolution_time": 86400.0
+  },
+  {
+    "sla": "Incident SLA",
+    "idx": 4,
+    "priority": "Low",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 172800.0
+  },
+  {
+    "sla": "Service Request SLA",
+    "idx": 1,
+    "priority": "Urgent",
+    "default_priority": false,
+    "response_time": 14400.0,
+    "resolution_time": 28800.0
+  },
+  {
+    "sla": "Service Request SLA",
+    "idx": 2,
+    "priority": "High",
+    "default_priority": false,
+    "response_time": 14400.0,
+    "resolution_time": 57600.0
+  },
+  {
+    "sla": "Service Request SLA",
+    "idx": 3,
+    "priority": "Medium",
+    "default_priority": true,
+    "response_time": 28800.0,
+    "resolution_time": 144000.0
+  },
+  {
+    "sla": "Service Request SLA",
+    "idx": 4,
+    "priority": "Low",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 288000.0
+  },
+  {
+    "sla": "Change SLA",
+    "idx": 1,
+    "priority": "Urgent",
+    "default_priority": false,
+    "response_time": 14400.0,
+    "resolution_time": 86400.0
+  },
+  {
+    "sla": "Change SLA",
+    "idx": 2,
+    "priority": "High",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 259200.0
+  },
+  {
+    "sla": "Change SLA",
+    "idx": 3,
+    "priority": "Medium",
+    "default_priority": true,
+    "response_time": 28800.0,
+    "resolution_time": 432000.0
+  },
+  {
+    "sla": "Change SLA",
+    "idx": 4,
+    "priority": "Low",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 864000.0
+  },
+  {
+    "sla": "Problem SLA",
+    "idx": 1,
+    "priority": "Urgent",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 259200.0
+  },
+  {
+    "sla": "Problem SLA",
+    "idx": 2,
+    "priority": "High",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 432000.0
+  },
+  {
+    "sla": "Problem SLA",
+    "idx": 3,
+    "priority": "Medium",
+    "default_priority": true,
+    "response_time": 28800.0,
+    "resolution_time": 864000.0
+  },
+  {
+    "sla": "Problem SLA",
+    "idx": 4,
+    "priority": "Low",
+    "default_priority": false,
+    "response_time": 28800.0,
+    "resolution_time": 1728000.0
+  }
+]

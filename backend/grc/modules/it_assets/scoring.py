@@ -37,7 +37,15 @@ def score_inventory(db, tids, now=None):
     # CompliancePluginRun (CIS scanner results) is imported lazily inside the CIS
     # section below so a missing model/table never breaks the whole scorecard.
     now = now or datetime.utcnow()
-    assets = db.query(ITAsset).filter(ITAsset.tenant_id.in_(tids)).all()
+    # INVENTORY ONLY: transient AI-pentest ad-hoc targets (status='adhoc' / source 'pentest-adhoc')
+    # are not inventory. Every section below derives from this list / asset_ids (vuln links, CIS
+    # runs, assessments, lifecycle), so filtering once here scopes the whole scorecard.
+    from sqlalchemy import func
+    assets = db.query(ITAsset).filter(
+        ITAsset.tenant_id.in_(tids),
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
+    ).all()
     N = len(assets)
     asset_ids = {a.id for a in assets}
 
@@ -305,6 +313,40 @@ def score_inventory(db, tids, now=None):
             "1 - (errored checks / all checks run)", inverse=True),
     ]
 
+    # ---------- Fleet CIS score rollup ----------
+    # Each asset's own CIS score (passed / definitive checks) — the SAME number the
+    # asset-detail score donut shows — rolled up across the fleet so the top-level
+    # inventory dashboard answers "how do our assets score" without opening each one.
+    # Reuses per_asset_latest (already in memory above); no extra query.
+    def _band(s):
+        return "excellent" if s >= 85 else "good" if s >= 70 else "fair" if s >= 50 else "poor"
+    _name_by_id = {a.id: (getattr(a, "name", None) or getattr(a, "host_name", None)
+                          or getattr(a, "ip_address", None) or f"Asset {a.id}") for a in assets}
+    _crit_by_id = {a.id: getattr(a, "criticality", None) for a in assets}
+    per_asset_cis_scores = []  # [(asset_id, score 0-100)] for assets with >=1 definitive check
+    for _aid, _pm in per_asset_latest.items():
+        _p = sum(1 for _s in _pm.values() if _s == "passed")
+        _f = sum(1 for _s in _pm.values() if _s == "failed")
+        _den = _p + _f
+        if _den:
+            per_asset_cis_scores.append((_aid, round(_p / _den * 100, 1)))
+    _scanned = len(per_asset_cis_scores)
+    _avg = round(sum(s for _, s in per_asset_cis_scores) / _scanned, 1) if _scanned else None
+    _bands = {"excellent": 0, "good": 0, "fair": 0, "poor": 0}
+    for _, s in per_asset_cis_scores:
+        _bands[_band(s)] += 1
+    _worst = sorted(per_asset_cis_scores, key=lambda x: x[1])[:8]
+    fleet_cis = {
+        "avg": _avg,
+        "grade": (None if _avg is None else _band(_avg)),
+        "scanned": _scanned,
+        "unscanned": max(0, N - _scanned),
+        "bands": _bands,
+        "worst": [{"id": _aid, "name": _name_by_id.get(_aid, f"Asset {_aid}"),
+                   "score": s, "band": _band(s), "criticality": _crit_by_id.get(_aid)}
+                  for _aid, s in _worst],
+    }
+
     sections = {
         "hygiene": {"key": "hygiene", "label": "Inventory Hygiene", "weight": 0.18, "score": _sec(hygiene), "metrics": hygiene},
         "criticality": {"key": "criticality", "label": "Criticality Coverage", "weight": 0.15, "score": _sec(crit), "metrics": crit},
@@ -334,6 +376,37 @@ def score_inventory(db, tids, now=None):
             for m in s.get("metrics", []):
                 m["score"] = None
 
+    # ── Rolled-up ASSET BASIS for the headline governance counts ──────────────
+    # One registrable (apex) domain = ONE managed asset (its subdomains fold in);
+    # internal assets stay flat. This is the basis the Performance dashboard and the
+    # register reconcile against, so "assets under management", PCI-scoped, owner and
+    # criticality coverage are all counted per asset — a domain's 200 subdomains are
+    # one asset, not 200. (The scored SECTION metrics above keep their per-host
+    # denominators; those feed the 0-100 score, not a displayed "X of Y" total.)
+    from .asset_rollup import is_external as _is_external, unit_key_for as _unit_key
+    _units: dict = {}
+    for a in assets:
+        u = _units.get(_unit_key(a))
+        if u is None:
+            u = {"owner": False, "assessed": False, "cde": False, "stale": True, "external": _is_external(a)}
+            _units[_unit_key(a)] = u
+        if has_owner(a):
+            u["owner"] = True
+        if a.id in assessed_ids:
+            u["assessed"] = True
+        if getattr(a, "cde_environment", None):
+            u["cde"] = True
+        if not stale(a):           # a domain is "stale" only if every one of its names is stale
+            u["stale"] = False
+    rolled_n = len(_units)
+    rolled_without_owner = sum(1 for u in _units.values() if not u["owner"])
+    rolled_unassessed = sum(1 for u in _units.values() if not u["assessed"])
+    rolled_cde = sum(1 for u in _units.values() if u["cde"])
+    rolled_stale = sum(1 for u in _units.values() if u["stale"])
+    rolled_inet_unassessed = sum(1 for u in _units.values() if u["external"] and not u["assessed"])
+    rolled_external = sum(1 for u in _units.values() if u["external"])
+    rolled_internal = rolled_n - rolled_external
+
     comps = [{"key": s["key"], "label": s["label"], "score": s["score"], "weight": s["weight"], "target": _target}
              for s in sections.values()]
     scored = [c for c in comps if c["score"] is not None]
@@ -342,21 +415,34 @@ def score_inventory(db, tids, now=None):
     grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
              else "fair" if perf >= 50 else "poor")
 
+    # Headline vuln counts use the SHARED deduped-distinct helper, so the inventory's
+    # "open vulns / Needs attention" reconciles exactly with the register Overview and the
+    # AI Pentest dashboard (one dedup truth, inventory-scoped, ad-hoc excluded). The per-metric
+    # ratios above intentionally keep their raw open_vulns inputs.
+    from ..vuln_management.dedup_count import distinct_vuln_count as _distinct
+    _distinct_total = _distinct(db, tids, inventory_only=True)
+    _distinct_open = _distinct(db, tids, open_only=True, inventory_only=True)
+
     return {
         "as_of": now.isoformat(),
         # True when there is no inventory to score at all — the UI should show
         # "No assets yet", never a number.
         "no_data": N == 0,
-        "counts": {"assets": N, "vulnerabilities": len(vulns), "open_vulnerabilities": len(open_vulns)},
+        # counts.assets is the ROLLED-UP managed-asset count (apex domain = 1 asset).
+        # `hosts` keeps the flat per-name count so a scanning/attack-surface card can
+        # still show "N domains · M hosts" without hiding the host figure.
+        "counts": {"assets": rolled_n, "hosts": N, "external": rolled_external, "internal": rolled_internal,
+                   "vulnerabilities": _distinct_total, "open_vulnerabilities": _distinct_open, "cde_scoped": rolled_cde},
         "performance": {"score": perf, "grade": grade, "components": comps},
+        "fleet_cis": fleet_cis,
         "sections": sections,
         "attention_queue": {
-            "assets_without_owner": sum(1 for a in assets if not has_owner(a)),
-            "assets_unassessed": sum(1 for a in assets if a.id not in assessed_ids),
+            # Rolled to the same managed-asset basis as counts.assets (one apex = one asset).
+            "assets_without_owner": rolled_without_owner,
+            "assets_unassessed": rolled_unassessed,
             "open_critical_high_vulns": len(severe_open),
-            "stale_assets": sum(1 for a in assets if stale(a)),
-            "internet_facing_unassessed": sum(1 for a in inet if a.id not in assessed_ids),
-            "total": (sum(1 for a in assets if not has_owner(a)) + len(severe_open)
-                      + sum(1 for a in assets if stale(a))),
+            "stale_assets": rolled_stale,
+            "internet_facing_unassessed": rolled_inet_unassessed,
+            "total": rolled_without_owner + len(severe_open) + rolled_stale,
         },
     }

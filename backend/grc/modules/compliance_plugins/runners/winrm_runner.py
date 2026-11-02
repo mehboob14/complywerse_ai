@@ -139,11 +139,27 @@ def _is_command_safe(cmd: str) -> tuple[bool, str]:
 
 def _evaluate(stdout: str, exit_status: int, expect: Dict[str, Any]) -> tuple[bool, str]:
     kind = (expect or {}).get("kind", "exit_zero")
+    # Compound kinds are pipe-separated (e.g. "exit_zero|stdout_contains"); ALL
+    # sub-conditions must hold against the same expect dict.
+    if "|" in kind:
+        all_ok = True
+        details = []
+        for k in [p.strip() for p in kind.split("|") if p.strip()]:
+            sub = dict(expect)
+            sub["kind"] = k
+            ok, _d = _evaluate(stdout, exit_status, sub)
+            all_ok = all_ok and ok
+            details.append(f"{k}={ok}")
+        return all_ok, "; ".join(details)
     if kind == "exit_zero":
         return exit_status == 0, f"exit_status={exit_status}"
     if kind == "stdout_contains":
         v = str(expect.get("value", ""))
         return v in stdout, f"contains {v!r}: {v in stdout}"
+    if kind == "stdout_equals":
+        v = str(expect.get("value", expect.get("expected", "")))
+        actual = (stdout or "").strip()
+        return actual == v, f"equals {v!r}: {actual == v}"
     if kind == "stdout_not_contains":
         v = str(expect.get("value", ""))
         return v not in stdout, f"not contains {v!r}: {v not in stdout}"
@@ -395,6 +411,25 @@ def windows_winrm_runner(check_definition: Dict[str, Any], credentials: Dict[str
             error_message=str(exc),
         )
 
+    return evaluate_windows_result(check_definition, out, rc, err)
+
+
+# Public aliases so other execution paths (the installed agent, which runs the
+# command locally as SYSTEM and ships raw stdout) can reuse the IDENTICAL
+# safety gate and verdict logic — no duplicated scoring, verdicts byte-align
+# with the credentialed WinRM path.
+def is_command_safe(cmd: str) -> tuple[bool, str]:
+    return _is_command_safe(cmd)
+
+
+def evaluate_windows_result(check_definition: Dict[str, Any], out: str, rc: int,
+                            err: str = "") -> RunnerResult:
+    """Score a Windows check from its raw (stdout, exit_status, stderr), using
+    the same expect-evaluation + no-evidence guard the WinRM runner applies.
+    Called by the WinRM runner after a remote exec AND by the agent results
+    endpoint after a local exec, so both produce the same verdict."""
+    command = check_definition.get("command") or ""
+    shell = (check_definition.get("shell") or "powershell").lower()
     expect = check_definition.get("expect") or {}
     ok, detail = _evaluate(out, rc, expect)
 

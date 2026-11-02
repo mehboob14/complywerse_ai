@@ -290,6 +290,44 @@ def benchmark_for_software_key(db: Session, software_key: str) -> Optional[str]:
     return None
 
 
+def all_os_key_tokens(db: Session) -> set[str]:
+    """Every token any enabled plugin advertises in os_keys, in ONE query. A
+    cheap pre-filter: a host can report 1000+ detected packages, and calling
+    benchmark_for_software_key per package (each a JSONB-contains scan, with a
+    version walk) took ~60s. Only a few dozen products actually have a CIS
+    benchmark, so this lets the caller skip the lookup for the rest."""
+    from grc.models import CompliancePlugin
+    toks: set[str] = set()
+    rows = (
+        db.query(CompliancePlugin.os_keys)
+        .filter(CompliancePlugin.enabled.is_(True), CompliancePlugin.os_keys.isnot(None))
+        .all()
+    )
+    for (ok,) in rows:
+        if isinstance(ok, list):
+            for t in ok:
+                if isinstance(t, str):
+                    toks.add(t)
+    return toks
+
+
+def software_key_could_match(all_tokens: set[str], software_key: Optional[str]) -> bool:
+    """True if software_key or any version-parent is an advertised os_key token.
+    Mirrors benchmark_for_software_key's walk exactly, so returning False (→skip
+    the full lookup) never changes a result: a key absent from every plugin's
+    os_keys can't produce a benchmark match anyway."""
+    if not software_key:
+        return False
+    cand: Optional[str] = software_key
+    seen: set[str] = set()
+    while cand and cand not in seen:
+        seen.add(cand)
+        if cand in all_tokens:
+            return True
+        cand = _version_parent(cand)
+    return False
+
+
 def enrich_inventory(db: Session, raw_items: list) -> list:
     """Take the raw inventory and stamp each entry with software_key +
     benchmark availability.

@@ -7,7 +7,7 @@ EDR, and what does it run". DB-free.
 import pytest
 
 from grc.modules.compliance_plugins.services.security_classifier import (
-    classify, summarize_posture, apply_posture,
+    classify, summarize_posture, apply_posture, manual_posture,
 )
 
 
@@ -95,3 +95,25 @@ def test_apply_posture_writes_to_the_asset():
 def test_asset_model_has_security_posture_column():
     from grc.models import ITAsset
     assert "security_posture" in ITAsset.__table__.columns
+
+
+def test_manual_posture_is_shaped_like_a_scan_and_cleaned():
+    p = manual_posture([" Sophos ", "sophos", ""], ["CrowdStrike Falcon"])
+    assert p["source"] == "manual"
+    assert p["antivirus_products"] == ["Sophos"]
+    assert p["has_edr"] is True and p["endpoint_protected"] is True
+
+
+def test_manual_posture_survives_a_scan_that_saw_nothing():
+    a = _Asset()
+    a.security_posture = manual_posture(["Sophos"], [])
+    a.detected_software_json = []
+    assert apply_posture(a)["source"] == "manual"
+
+
+def test_scan_with_software_replaces_manual_posture():
+    a = _Asset()
+    a.security_posture = manual_posture(["Sophos"], [])
+    a.detected_software_json = [sw("CrowdStrike Falcon Sensor")]
+    out = apply_posture(a)
+    assert "source" not in out and out["has_edr"] is True

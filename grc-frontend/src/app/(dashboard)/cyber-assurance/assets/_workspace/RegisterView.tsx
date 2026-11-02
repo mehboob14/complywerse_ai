@@ -300,8 +300,20 @@ export function RegisterView({
         return <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: s.c }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: s.c }} />{s.label}</span>;
       },
     },
-    // Extra columns — hidden by default (available via the Columns toggle) so
-    // the register matches the handoff's clean 10-column default.
+    // Department is a first-view column — it's the CMDB field auditors read a
+    // register for, and the add-asset form captures it, so it belongs here, not
+    // hidden behind the Columns toggle (owner). The rest below stay in the
+    // toggle so the clean default view doesn't sprawl, but every captured field
+    // is reachable: turn on Environment / Data Class / Business Function / Risk.
+    {
+      id: 'department',
+      header: 'Department',
+      accessor: 'department',
+      minWidth: '120px',
+      render: (a) => a.department
+        ? <span style={{ fontSize: 12, color: 'var(--as-secondary)' }}>{a.department}</span>
+        : <span style={{ color: 'var(--as-disabled)' }}>—</span>,
+    },
     {
       id: 'environment',
       header: 'Environment',
@@ -313,12 +325,24 @@ export function RegisterView({
         : <span style={{ color: 'var(--as-disabled)' }}>—</span>,
     },
     {
-      id: 'department',
-      header: 'Department',
-      accessor: 'department',
+      id: 'data_classification',
+      header: 'Data Class',
+      accessor: 'data_classification',
       hidden: true,
-      minWidth: '120px',
-      render: (a) => <span style={{ fontSize: 12, color: 'var(--as-secondary)' }}>{a.department || '—'}</span>,
+      minWidth: '110px',
+      render: (a) => a.data_classification
+        ? <span className="capitalize" style={{ fontSize: 12, color: 'var(--as-secondary)' }}>{a.data_classification}</span>
+        : <span style={{ color: 'var(--as-disabled)' }}>—</span>,
+    },
+    {
+      id: 'business_function',
+      header: 'Business Function',
+      accessor: 'business_function',
+      hidden: true,
+      minWidth: '140px',
+      render: (a) => a.business_function
+        ? <span style={{ fontSize: 12, color: 'var(--as-secondary)' }}>{a.business_function}</span>
+        : <span style={{ color: 'var(--as-disabled)' }}>—</span>,
     },
     {
       id: 'risk',

@@ -1,0 +1,27 @@
+[
+  {
+    "rating": 0.2,
+    "label": "Very poor",
+    "disabled": false
+  },
+  {
+    "rating": 0.4,
+    "label": "Poor",
+    "disabled": false
+  },
+  {
+    "rating": 0.6,
+    "label": "Neutral",
+    "disabled": false
+  },
+  {
+    "rating": 0.8,
+    "label": "Good",
+    "disabled": false
+  },
+  {
+    "rating": 1.0,
+    "label": "Excellent",
+    "disabled": false
+  }
+]

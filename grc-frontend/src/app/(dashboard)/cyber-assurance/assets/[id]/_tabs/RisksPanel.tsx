@@ -289,51 +289,16 @@ function FindingsBanner({ assetId }: { assetId: number }) {
 
 /* ─── Card 2: CIA Impact Ratings (editable, single home) ──────────────── */
 
-function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
-  const qc = useQueryClient();
-  const [c, setC] = useState(asset.confidentiality_rating || 0);
-  const [i, setI] = useState(asset.integrity_rating || 0);
-  const [a, setA] = useState(asset.availability_rating || 0);
-  const [rationale, setRationale] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
-
-  useEffect(() => {
-    setC(asset.confidentiality_rating || 0);
-    setI(asset.integrity_rating || 0);
-    setA(asset.availability_rating || 0);
-  }, [asset.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const suggest = useMutation({
-    mutationFn: async () => (await assetsApi.getCIARecommendation({
-      name: asset.name, description: asset.description, asset_type: asset.asset_type,
-      vendor: asset.vendor, location: asset.location, criticality: asset.criticality,
-    })).data,
-    onSuccess: (r: any) => {
-      setC(r.confidentiality_rating); setI(r.integrity_rating); setA(r.availability_rating);
-      setRationale(r.recommendation || null); setDirty(true);
-    },
-  });
-
-  const save = useMutation({
-    mutationFn: () => assetsApi.update(assetId, { confidentiality_rating: c, integrity_rating: i, availability_rating: a } as any),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      qc.invalidateQueries({ queryKey: ['asset', assetId] });
-      qc.invalidateQueries({ queryKey: ['asset-risk-posture', assetId] });
-      setDirty(false); setRationale(null);
-    },
-  });
-
-  const Row = ({ label, value, set }: { label: string; value: number; set: (n: number) => void }) => (
+function CIACard({ asset, onEdit }: { asset: any; onEdit?: () => void }) {
+  // Read-only: CIA is changed (and AI-suggested) in the asset's Edit sidebar, Risk & criticality.
+  const Row = ({ label, value }: { label: string; value: number }) => (
     <div className="flex items-center gap-3 py-1.5">
       <span className="w-28 flex-none text-[12px] text-[#3A4653]">{label}</span>
       <div className="flex flex-1 gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
-          <button
+          <span
             key={n}
-            onClick={() => { set(n); setDirty(true); }}
-            title={CIA_LABELS[n]}
-            className="h-[22px] flex-1 rounded transition-colors"
+            className="h-[22px] flex-1 rounded"
             style={{ background: n <= value ? (value >= 4 ? '#B23A3A' : value === 3 ? '#9A6410' : '#2E63A8') : '#F0F3F5' }}
           />
         ))}
@@ -348,32 +313,24 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
       title="CIA Impact Ratings"
       guide={<GuideMarker id="asset.cia" n={8} />}
       right={
-        <span className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[10.5px] font-semibold text-[#6B7787] whitespace-nowrap">
-          {asset.criticality_manual_override ? 'manual override' : 'auto-derived'}
+        <span className="flex items-center gap-2">
+          <span
+            title="Criticality is calculated from these CIA ratings plus exposure, data class and business function, unless someone overrode it."
+            className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[10.5px] font-semibold text-[#6B7787] whitespace-nowrap"
+          >
+            {asset.criticality_manual_override ? 'Criticality: manual override' : 'Criticality: calculated from CIA'}
+          </span>
+          {onEdit && (
+            <button type="button" onClick={onEdit} className="text-[12px] font-semibold text-[#014A81] hover:text-[#005B96]">Edit</button>
+          )}
         </span>
       }
     >
-      <Row label="Confidentiality" value={c} set={setC} />
-      <Row label="Integrity" value={i} set={setI} />
-      <Row label="Availability" value={a} set={setA} />
-
-      {rationale && (
-        <p className="mt-3 rounded-lg bg-[#EFF5FA] px-3 py-2 text-[12px] leading-relaxed text-[#0F1F2B]">
-          <b>AI:</b> {rationale}
-        </p>
-      )}
-
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0F3F5] pt-3">
-        <button onClick={() => suggest.mutate()} disabled={suggest.isPending} className={BTN_GHOST}>
-          {suggest.isPending ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} AI suggest
-        </button>
-        <button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={BTN_PRIMARY}>
-          {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />} Save &amp; recalculate
-        </button>
-        {save.isSuccess && !dirty && <span className="text-[12px] text-[#1F7A54]">Saved — risk recalculated.</span>}
-      </div>
+      <Row label="Confidentiality" value={asset.confidentiality_rating || 0} />
+      <Row label="Integrity" value={asset.integrity_rating || 0} />
+      <Row label="Availability" value={asset.availability_rating || 0} />
       <p className="mt-2 text-[11px] text-[#AEB8C2]">
-        Saving updates the asset’s derived criticality and re-scores its risk. CIA is edited here only — the one place it lives.
+        Edit opens the asset’s edit sidebar at Risk &amp; criticality, where AI suggest is available. Saving re-derives criticality and re-scores risk.
       </p>
     </BigCard>
   );
@@ -913,6 +870,8 @@ export interface RisksPanelProps {
   assetId: number;
   asset: RisksPanelAsset;
   onOpenCompliance?: () => void;
+  /** Opens the asset's edit sidebar at Risk & criticality (CIA is edited there). */
+  onEditCia?: () => void;
   /** Authoritative coverage % from /assets/{id}/coverage-analysis (kept for parity; the cards above own the headline number). */
   coveragePctFromApi?: number | null;
   allControls: Array<{ id: number | string; internal_id?: string; name: string; category?: string }>;
@@ -926,7 +885,7 @@ export interface RisksPanelProps {
 }
 
 export default function RisksPanel({
-  assetId, asset, onOpenCompliance, coveragePctFromApi,
+  assetId, asset, onOpenCompliance, onEditCia, coveragePctFromApi,
   allControls, controlsLoading, onLinkControl, isLinkingControl,
   onUnlinkInternalControl, onUnlinkFrameworkControl, isUnlinkingInternal, isUnlinkingFramework,
 }: RisksPanelProps) {
@@ -964,7 +923,7 @@ export default function RisksPanel({
 
       {!isExternal && (
         <div className="grid gap-3.5 lg:grid-cols-2">
-          <CIACard assetId={assetId} asset={asset} />
+          <CIACard asset={asset} onEdit={onEditCia} />
           <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
         </div>
       )}

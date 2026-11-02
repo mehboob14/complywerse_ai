@@ -1,0 +1,23 @@
+[
+  {
+    "agent_status": "Active",
+    "status_order": 1,
+    "category": "Active",
+    "color": "Green",
+    "enabled": true
+  },
+  {
+    "agent_status": "Away",
+    "status_order": null,
+    "category": "Away",
+    "color": null,
+    "enabled": true
+  },
+  {
+    "agent_status": "Unavailable",
+    "status_order": null,
+    "category": "Unavailable",
+    "color": null,
+    "enabled": true
+  }
+]

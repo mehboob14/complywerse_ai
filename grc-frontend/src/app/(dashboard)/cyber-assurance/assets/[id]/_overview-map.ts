@@ -145,7 +145,12 @@ function sectionBlocks(key: string, data: any): { blocks?: any[]; sectionExtra?:
   }
   if (key === 'storage' && data && typeof data === 'object' && !Array.isArray(data)) {
     const b: any[] = [];
-    if (Array.isArray(data.physical_disks) && data.physical_disks.length) b.push(objList(data.physical_disks, 'Physical Disks'));
+    // Drop virtual block devices (snap loopbacks loopN, ramN, optical srN, floppy fdN)
+    // so stored data collected before the backend filter doesn't flood the list with junk boxes.
+    const realDisks = Array.isArray(data.physical_disks)
+      ? data.physical_disks.filter((d: any) => !/^(loop|ram|sr|fd)\d/i.test(String(d?.name ?? d?.NAME ?? '')))
+      : [];
+    if (realDisks.length) b.push(objList(realDisks, 'Physical Disks'));
     if (Array.isArray(data.volumes) && data.volumes.length) b.push(objList(data.volumes, 'Volumes'));
     if (b.length) return { blocks: b };
   }
@@ -693,10 +698,11 @@ function buildExternalDeep(asset: any, pr: any): any[] {
 export interface OverviewOpts {
   software?: any[];
   posture?: any;
-  kpis?: { riskScore?: any; openFindings?: any; blastRadius?: any; controlCoverage?: any; refreshDue?: any };
+  kpis?: { riskScore?: any; riskBand?: string | null; openFindings?: any; blastRadius?: any; controlCoverage?: any; refreshDue?: any };
   tabs?: { label: string; count?: number; active?: boolean; onClick?: () => void }[];
   actions?: { label: string; primary?: boolean; danger?: boolean; onClick?: () => void }[];
-  onEdit?: () => void;
+  /** Opens the edit sidebar; the section names which part of the form to land on. */
+  onEdit?: (section?: 'identity' | 'procurement') => void;
   onSoftwareClick?: (s: any) => void;
   // AI layout plan (Layer 2). null/undefined → generic cards exactly as before.
   plan?: { fields: Array<{ key: string; heading: string; card: string }>; cards: Array<{ name: string; size: 'half' | 'full'; order: number }> } | null;
@@ -779,6 +785,41 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     }];
   }
 
+  // Credential-free ("surface") card. A host we can't log into has no deep
+  // inventory groups — this shows what the sweep pulled without any login: SMB
+  // identity, service+version banners, TLS certs, SNMP installed software. Only
+  // when deep groups are absent (the credential-free case this exists for) and
+  // the sweep actually captured bucket-B evidence, so credentialed hosts (which
+  // already render full deep cards) never get a redundant card.
+  const surf = pp.surface;
+  const hasSurfaceEnrich = surf && (surf.smb || (Array.isArray(surf.services) && surf.services.length)
+    || (Array.isArray(surf.tls_certs) && surf.tls_certs.length) || surf.snmp_host_resources);
+  if (!outside && deep.groups.length === 0 && hasSurfaceEnrich) {
+    const sf: any[] = [];
+    if (Array.isArray(surf.open_ports) && surf.open_ports.length)
+      sf.push({ label: 'Open ports', value: surf.open_ports.join(', ') });
+    const smb = surf.smb || {};
+    if (smb.computer_name) sf.push({ label: 'Computer name', value: smb.computer_name });
+    if (smb.domain || smb.netbios_domain) sf.push({ label: 'Domain', value: smb.domain || smb.netbios_domain });
+    if (smb.os) sf.push({ label: 'OS (SMB)', value: smb.os });
+    if (smb.signing_required != null)
+      sf.push({ label: 'SMB signing', value: smb.signing_required ? 'Required' : 'Not required', tone: smb.signing_required ? 'ok' : 'warn' });
+    for (const s of (surf.services || []).slice(0, 8)) {
+      const v = [s.product, s.version].filter(Boolean).join(' ') || s.banner || s.service || '—';
+      sf.push({ label: `Port ${s.port}${s.service ? ' · ' + s.service : ''}`, value: String(v).slice(0, 80) });
+    }
+    for (const c of (surf.tls_certs || []).slice(0, 3)) {
+      const exp = c.not_after ? `exp ${String(c.not_after).slice(0, 11)}${c.days_to_expiry != null ? ` (${c.days_to_expiry}d)` : ''}` : '';
+      sf.push({ label: `TLS :${c.port}`, value: [c.subject_cn, exp].filter(Boolean).join(' · ') || '—', tone: c.days_to_expiry != null && c.days_to_expiry < 0 ? 'bad' : undefined });
+    }
+    const hr = surf.snmp_host_resources;
+    if (hr && hr.software_count) {
+      const sample = (hr.installed_software || []).slice(0, 3).join(', ');
+      sf.push({ label: 'Installed software (SNMP)', value: `${hr.software_count} packages${sample ? ' — ' + sample + '…' : ''}` });
+    }
+    if (sf.length) machine = [...machine, { title: 'Surface (credential-free)', note: 'observed without a login', fields: sf }];
+  }
+
   // Health-score breakdown — how the grade·score is composed, dimension by
   // dimension. Same signals as the Risk & Controls / posture breakdown, shown
   // here as HEALTH (higher = better). It is NOT rendered as an always-on card;
@@ -820,7 +861,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
     const out: any[] = [];
     const of = K.openFindings ?? 0;
     if (K.riskScore != null && K.riskScore !== '') {
-      out.push({ label: 'Risk Score', value: dash(K.riskScore), sub: 'Assessed' });
+      out.push({ label: 'Risk Score', value: String(Math.round(K.riskScore)), sub: K.riskBand ? `${K.riskBand} · Risk Posture` : 'Risk Posture', tone: K.riskScore >= 75 ? 'bad' : K.riskScore >= 50 ? 'warn' : 'ok' });
     } else if (probe?.health?.grade) {
       out.push({ label: 'Risk Score', value: `${probe.health.grade} · ${probe.health.score}`,
         sub: hygieneBreakdown ? 'Outside-in health · click for breakdown' : 'Outside-in health (not risk)',
@@ -892,16 +933,13 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // score — surface the health grade here so the tile isn't "Not assessed".
       probe?.health?.grade
         ? { label: 'Attack-surface hygiene', value: `${probe.health.grade} · ${probe.health.score}`, sub: hygieneBreakdown ? 'Outside-in health — click for breakdown' : 'Outside-in health (not risk)', tone: ['A', 'B'].includes(probe.health.grade) ? 'ok' : probe.health.grade === 'C' ? 'warn' : 'bad', breakdown: hygieneBreakdown, breakdownTitle: `Attack-surface hygiene — ${probe.health.grade} · ${probe.health.score}/100`, breakdownNote: 'Formula: score = ( Σ parameter × weight ) ÷ ( Σ weights of the applicable parameters ) × 100. Each row shows its % weight. Higher is healthier. Parameters that don’t apply to this host (no mail, no cookies, no CDN) are marked N/A and left out of the maths — never scored 0.' }
-        : { label: 'Risk Score', value: dash(K.riskScore), sub: K.riskScore ? 'Assessed' : 'Not assessed', tone: K.riskScore ? undefined : 'muted' },
+        : { label: 'Risk Score', value: K.riskScore != null ? String(Math.round(K.riskScore)) : '—', sub: K.riskScore != null ? (K.riskBand ? `${K.riskBand} · Risk Posture` : 'Risk Posture') : 'Not scored', tone: K.riskScore == null ? 'muted' : K.riskScore >= 75 ? 'bad' : K.riskScore >= 50 ? 'warn' : 'ok' },
       { label: 'Open Findings', value: String(K.openFindings ?? 0), sub: (K.openFindings ?? 0) ? 'Needs attention' : 'None open', tone: (K.openFindings ?? 0) ? 'bad' : 'ok' },
-      { label: 'Blast Radius', value: String(K.blastRadius ?? 0), sub: (K.blastRadius ?? 0) ? 'Dependents mapped' : 'No dependents mapped', tone: 'muted' },
-      { label: 'Control Coverage', value: `${Math.round(K.controlCoverage ?? 0)}%`, sub: (K.controlCoverage ?? 0) ? 'Controls mapped' : 'No controls mapped', tone: (K.controlCoverage ?? 0) >= 50 ? 'ok' : 'warn', bar: Math.round(K.controlCoverage ?? 0) },
-      { label: 'Refresh Due', value: dash(K.refreshDue), sub: K.refreshDue ? 'Scheduled' : 'Not scheduled', tone: 'muted' },
     ],
     machine,
     manual: [
       {
-        title: 'Identity & Ownership', note: 'Manual entry', onEdit: o.onEdit,
+        title: 'Identity & Ownership', note: 'Manual entry', onEdit: o.onEdit && (() => o.onEdit!('identity')),
         fields: [
           { label: 'Category', value: dash(asset?.asset_type) },
           { label: 'Assigned User', value: dash(asset?.assigned_user) },
@@ -921,7 +959,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
         ],
       },
       {
-        title: 'Procurement & Cost', note: 'Manual · finance / CMDB', onEdit: o.onEdit,
+        title: 'Procurement & Cost', note: 'Manual · finance / CMDB', onEdit: o.onEdit && (() => o.onEdit!('procurement')),
         fields: [
           { label: 'Vendor', value: dash(asset?.vendor) },
           { label: 'Purchase Cost', value: dash(asset?.purchase_cost) },
@@ -938,7 +976,7 @@ export function buildOverviewData(asset: any, o: OverviewOpts = {}): any {
       // false alarm (it reads as a finding). Show the honest state in a neutral tone.
       signals: outside ? extSignals : [
         { label: 'Antivirus', value: posture?.has_antivirus ? (posture.antivirus_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_antivirus ? 'ok' : 'bad' },
-        { label: 'EDR', value: posture?.has_edr ? (posture.edr_products?.join(', ') || 'Present') : 'None detected', tone: posture?.has_edr ? 'ok' : 'bad' },
+        { label: 'EDR', value: posture?.has_edr ? (posture.edr_products?.join(', ') || 'Present') : (posture?.edr_stopped?.length ? `${posture.edr_stopped.join(', ')} (stopped)` : 'None detected'), tone: posture?.has_edr ? 'ok' : 'bad' },
         { label: 'Endpoint Protected', value: posture?.endpoint_protected ? 'Yes' : 'No', tone: posture?.endpoint_protected ? 'ok' : 'bad' },
         { label: 'Packages Found', value: String(posture?.software_total ?? software.length), tone: 'muted' },
       ],

@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Crosshair, ArrowRight, Cloud, Building2 } from 'lucide-react';
+import { Crosshair, ArrowRight, KeyRound, Globe, Plug } from 'lucide-react';
 
-// Landing for vulnerability scanning: pick one of the two flows, then its own
-// form opens. Flow 1 = we host the scanner. Flow 2 = the client's own Nessus.
+// Landing for vulnerability scanning. The top-level choice is the scan DEPTH:
+// credential-based (deep, authenticated) vs surface (no credentials). Both run
+// from the managed-scan launcher; credentials (or the lack of them) realise the
+// choice there. Connecting the client's own scanner stays available below.
+// ponytail: the ?mode= hint is inert until hosted/page.tsx reads it to preselect.
 export default function ScanFlowsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -13,61 +16,83 @@ export default function ScanFlowsPage() {
           <Crosshair size={22} className="text-primary-600" /> Vulnerability Scanning
         </h1>
         <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-          Two ways to bring vulnerabilities into Complyverse. Pick the flow that matches the client, then fill its form.
+          Choose how deep the scan goes. Credential-based scans log in and see inside each host;
+          surface scans need no credentials and only see what&apos;s exposed on the network.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Flow 1 */}
+        {/* Credential-based (deep) */}
         <Link
-          href="/cyber-assurance/scan-flows/hosted"
-          className="group block bg-white rounded-2xl border border-slate-200 p-6 hover:border-amber-300 hover:shadow-lg transition-all"
+          href="/cyber-assurance/scan-flows/hosted?mode=credentialed"
+          className="group block bg-white rounded-2xl border border-slate-200 p-6 hover:border-primary-300 hover:shadow-lg transition-all"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="inline-flex items-center gap-2 text-amber-600 font-semibold">
-              <span className="text-lg leading-none">◆</span> Flow 1
+            <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[#EFF5FA] text-primary-700">
+              <KeyRound size={20} />
             </span>
-            <Cloud size={20} className="text-amber-500" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-primary-700 bg-[#EFF5FA] rounded-full px-2.5 py-1">Deep</span>
           </div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Managed Scanning</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-1">Credential-based (deep)</h2>
           <p className="text-sm text-slate-500 mb-4">
-            For clients with <b>no scanner of their own</b>. Complyverse&apos;s scan engine scans their network — you enter the target subnet and start the scan.
+            We log in to each target (WinRM / SSH / SMB) and run an <b>authenticated</b> scan — so it
+            finds installed-software CVEs, missing patches and local misconfiguration, not just what&apos;s
+            exposed on the wire.
           </p>
           <ul className="text-xs text-slate-500 space-y-1 mb-5">
-            <li>• Complyverse&apos;s scan engine (behind our backend, private)</li>
-            <li>• Enter the client subnet → start a scan</li>
-            <li>• Findings pulled into Complyverse automatically</li>
+            <li>• Needs credentials for each target</li>
+            <li>• Collects deep host detail + authenticated findings</li>
+            <li>• Findings badged <b>Authenticated</b></li>
           </ul>
-          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 group-hover:gap-2.5 transition-all">
-            Open Flow 1 <ArrowRight size={15} />
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 group-hover:gap-2.5 transition-all">
+            Start a credentialed scan <ArrowRight size={15} />
           </span>
         </Link>
 
-        {/* Flow 2 */}
+        {/* Surface (no credentials) */}
         <Link
-          href="/cyber-assurance/scan-flows/connect"
-          className="group block bg-white rounded-2xl border border-slate-200 p-6 hover:border-blue-300 hover:shadow-lg transition-all"
+          href="/cyber-assurance/scan-flows/hosted?mode=surface"
+          className="group block bg-white rounded-2xl border border-slate-200 p-6 hover:border-slate-400 hover:shadow-lg transition-all"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="inline-flex items-center gap-2 text-blue-600 font-semibold">
-              <span className="text-lg leading-none">●</span> Flow 2
+            <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-600">
+              <Globe size={20} />
             </span>
-            <Building2 size={20} className="text-blue-500" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 bg-slate-100 rounded-full px-2.5 py-1">No credentials</span>
           </div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-1">Connect Their Scanner</h2>
+          <h2 className="text-lg font-semibold text-slate-900 mb-1">Surface (no credentials)</h2>
           <p className="text-sm text-slate-500 mb-4">
-            Client already runs their own scanner. Enter its <b>URL + API keys</b> and Complyverse pulls the findings via the API.
+            No logins required. We scan only what&apos;s visible from the network — open ports, exposed
+            service versions, missing TLS, default credentials. Best for clients who <b>won&apos;t share
+            credentials</b>.
           </p>
           <ul className="text-xs text-slate-500 space-y-1 mb-5">
-            <li>• Client&apos;s on-prem scanner (they scan)</li>
-            <li>• Paste access key + secret key</li>
-            <li>• Sync Now → findings pulled in</li>
+            <li>• No credentials needed</li>
+            <li>• Finds externally-visible issues only</li>
+            <li>• Findings badged <b>Surface / Unauthenticated</b></li>
           </ul>
-          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 group-hover:gap-2.5 transition-all">
-            Open Flow 2 <ArrowRight size={15} />
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 group-hover:gap-2.5 transition-all">
+            Start a surface scan <ArrowRight size={15} />
           </span>
         </Link>
       </div>
+
+      {/* Secondary: the client already runs their own scanner. */}
+      <Link
+        href="/cyber-assurance/scan-flows/connect"
+        className="group mt-5 flex items-center gap-3 bg-white rounded-2xl border border-slate-200 p-4 hover:border-primary-300 hover:shadow-md transition-all"
+      >
+        <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex-none">
+          <Plug size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-slate-900">Client runs their own scanner?</div>
+          <div className="text-xs text-slate-500">Connect it with a URL + API keys and pull their findings into ComplyVerse — no scanning from our side.</div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 group-hover:gap-2.5 transition-all flex-none">
+          Connect scanner <ArrowRight size={15} />
+        </span>
+      </Link>
     </div>
   );
 }

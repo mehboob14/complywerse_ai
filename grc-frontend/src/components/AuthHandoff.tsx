@@ -28,7 +28,7 @@ export default function AuthHandoff() {
     const slug = params.get('tenant_slug');
     if (slug) localStorage.setItem('tenant_slug', slug);
     const sub = params.get('tenant_subdomain');
-    if (sub) localStorage.setItem('tenant_subdomain', sub);
+    if (sub !== null) localStorage.setItem('tenant_subdomain', sub);
     const name = params.get('tenant_name');
     if (name) localStorage.setItem('tenant_name', name);
     const id = params.get('tenant_id');

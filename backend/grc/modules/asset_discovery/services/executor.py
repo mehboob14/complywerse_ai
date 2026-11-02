@@ -361,6 +361,16 @@ def _sweep_host(
     # UDP-only, or simply exposing nothing we probed).
     if not open_ports and not fp.get("udp_services") and not mac:
         return None
+    # Credential-free ("surface") enrichment — pull the identity + service detail
+    # the host exposes before login (SMB negotiate / banners / TLS cert / SNMP
+    # host-resources). Best-effort: a failure must never sink the sweep.
+    try:
+        from .surface_enrich import enrich_surface
+        se = enrich_surface(ip, open_ports, timeout_s)
+        if se:
+            fp["surface_scan"] = se
+    except Exception:  # noqa: BLE001
+        pass
     return {"ip": ip, "hostname": hostname, "open_ports": open_ports,
             "rtt_ms": rtt, "fingerprint": fp, "mac": mac}
 

@@ -358,7 +358,10 @@ def _campaign_dict(c: DiscoveryCampaign, *, scopes=False, runs=False) -> dict:
         "next_run_at": c.next_run_at.isoformat() if c.next_run_at else None,
         "blackout_windows": c.blackout_windows,
         "rate_limit_hosts_per_min": c.rate_limit_hosts_per_min,
-        "snmp_communities": c.snmp_communities,
+        # SNMP community strings are device credentials — never return them in
+        # cleartext. Show a mask when set, null when not; editing sends the mask
+        # back unchanged (handled in update_campaign).
+        "snmp_communities": ("***" if c.snmp_communities else None),
         "created_at": c.created_at.isoformat() if c.created_at else None,
         "created_by_name": c.created_by_name,
         "scope_count": len(c.scopes),
@@ -481,6 +484,11 @@ def update_campaign(
     tid = get_user_primary_tenant(current_user, db)
     c = _get_campaign_or_404(db, tid, campaign_id)
     data = body.model_dump(exclude_unset=True)
+    # The SNMP community is masked to "***" in responses (a device credential);
+    # when the edit form sends that mask back it means "unchanged" — never
+    # overwrite the stored community with the mask.
+    if data.get("snmp_communities") == "***":
+        data.pop("snmp_communities", None)
     if "method" in data and data["method"] is not None:
         _validate_method(data["method"])
     if data.get("name") and data["name"] != c.name:
@@ -764,6 +772,9 @@ def easm_scorecard(
     assets = db.query(ITAsset).filter(
         ITAsset.tenant_id == tid,
         ITAsset.internet_facing.is_(True),
+        # INVENTORY ONLY: transient AI-pentest ad-hoc targets are not inventory.
+        func.coalesce(ITAsset.status, "") != "adhoc",
+        func.coalesce(ITAsset.last_seen_source, "") != "pentest-adhoc",
     ).all()
     grade_counts: Dict[str, int] = {g: 0 for g in ("A", "B", "C", "D", "F")}
     scored: List[dict] = []
@@ -2143,6 +2154,43 @@ def resolve_observation_endpoint(
     return {"action": "ignore"}
 
 
+class BulkResolveIn(BaseModel):
+    observation_ids: List[int]
+    action: str = Field(default="adopt", pattern="^(adopt)$")  # only adopt is bulk-safe
+
+
+@router.post("/observations/bulk-resolve")
+def bulk_resolve_observations(
+    body: BulkResolveIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Adopt many inbox observations as unmanaged (evidence-only) assets in ONE
+    transaction — the surface-inventory bulk action. Firewall-echo ghosts and
+    already-resolved rows are skipped (never adopted). Returns {adopted, skipped,
+    asset_ids}."""
+    from .services import resolver
+
+    tid = get_user_primary_tenant(current_user, db)
+    rows = db.query(DiscoveryObservation).filter(
+        DiscoveryObservation.id.in_(body.observation_ids),
+        DiscoveryObservation.tenant_id == tid,
+    ).all()
+    adopted, asset_ids, skipped = 0, [], 0
+    for obs in rows:
+        raw = obs.raw if isinstance(obs.raw, dict) else {}
+        if obs.resolution in ("created", "merged", "ignored") or raw.get("device_type") == "firewall_echo":
+            skipped += 1
+            continue
+        asset = resolver.manual_adopt(db, obs)
+        adopted += 1
+        asset_ids.append(asset.id)
+    skipped += len(body.observation_ids) - len(rows)  # ids not found in this tenant
+    db.commit()
+    return {"adopted": adopted, "skipped": skipped, "asset_ids": asset_ids}
+
+
 # ── Credential profiles (encrypted; secrets never returned) ──────────────────
 
 class CredentialIn(BaseModel):
@@ -2166,9 +2214,10 @@ _CRED_CATEGORY = {
     "winrm": "host", "ssh": "host",
     "cisco": "network",
     "postgres": "database", "mysql": "database", "mssql": "database", "oracle": "database",
-    "aws": "cloud", "azure": "cloud", "digitalocean": "cloud",
+    "aws": "cloud", "azure": "cloud", "gcp": "cloud", "digitalocean": "cloud",
     "k8s": "cluster",
     "ldap": "identity",
+    "github": "repo",
 }
 
 
@@ -2264,8 +2313,9 @@ def create_credential(
         raise HTTPException(400, f"Invalid kind. One of: {', '.join(CREDENTIAL_KINDS)}")
     if body.secret_kind not in SECRET_KINDS:
         raise HTTPException(400, f"Invalid secret_kind. One of: {', '.join(SECRET_KINDS)}")
-    # SNMP (community-only) and k8s (token-only) carry no username; everything else needs one.
-    if body.kind not in ("snmp", "k8s") and not (body.username or "").strip():
+    # SNMP (community-only), k8s (token-only), github (PAT-only) and gcp (service-account
+    # JSON) carry no username; everything else needs one.
+    if body.kind not in ("snmp", "k8s", "github", "gcp") and not (body.username or "").strip():
         raise HTTPException(400, "A username is required for this credential kind.")
     for cidr in (body.applies_to_cidrs or []):
         try:

@@ -1,0 +1,12 @@
+[
+  {
+    "code": "REL-CONTAINS",
+    "name": "Contains",
+    "inverse_name": "Contained by"
+  },
+  {
+    "code": "REL-INSTALLED",
+    "name": "Installed on",
+    "inverse_name": "Has installed"
+  }
+]

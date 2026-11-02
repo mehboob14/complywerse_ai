@@ -104,7 +104,8 @@ def _parse_results(results_path: str) -> Dict[str, str]:
 
 
 def _build_command(host: Optional[str], creds: Dict[str, Any],
-                   datastream: str, profile: str, results_path: str) -> list[str]:
+                   datastream: str, profile: str, results_path: str,
+                   remote_sudo: bool = False) -> list[str]:
     if _is_local_target(host):
         # Local scan needs root to read /etc/shadow, sysctl, etc. The backend
         # user must have passwordless sudo for oscap (see deploy runbook).
@@ -112,12 +113,35 @@ def _build_command(host: Optional[str], creds: Dict[str, Any],
     else:
         user = creds.get("ssh_username") or "root"
         port = str(creds.get("ssh_port") or 22)
-        base = ["oscap-ssh", f"{user}@{host}", port, "xccdf", "eval"]
+        # oscap-ssh --sudo runs `sudo oscap` on the target. Only passed when the
+        # user has passwordless sudo (probed by _remote_sudo_ok) — without root,
+        # checks that read the effective config (sshd -T, auditd, …) return
+        # "error" instead of a real pass/fail.
+        base = ["oscap-ssh"] + (["--sudo"] if remote_sudo else []) + [f"{user}@{host}", port, "xccdf", "eval"]
     return base + [
         "--profile", profile,
         "--results", results_path,
         datastream,
     ]
+
+
+def _remote_sudo_ok(host: str, creds: Dict[str, Any],
+                    ssh_opts: list[str], use_sshpass: bool,
+                    env: Dict[str, str]) -> bool:
+    """True if the SSH user has passwordless sudo on the target. Uses `sudo -n`
+    so a user without it fails fast (never hangs on a password prompt over the
+    non-tty ssh), in which case the scan just runs unprivileged."""
+    user = creds.get("ssh_username") or "root"
+    port = str(creds.get("ssh_port") or 22)
+    cmd = ["ssh", *ssh_opts, "-o", "ConnectTimeout=10",
+           "-p", port, f"{user}@{host}", "sudo", "-n", "true"]
+    if use_sshpass:
+        cmd = ["sshpass", "-e", *cmd]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=25, env=env).returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _run_oscap(host: Optional[str], creds: Dict[str, Any],
@@ -129,10 +153,30 @@ def _run_oscap(host: Optional[str], creds: Dict[str, Any],
     fd, results_path = tempfile.mkstemp(prefix="oscap-", suffix=".xml")
     os.close(fd)
     try:
-        cmd = _build_command(host, creds, datastream, profile, results_path)
         env = dict(os.environ)
-        # For remote password auth, oscap-ssh honours SSHPASS via sshpass; we
-        # only pass it when a password was supplied (key auth needs nothing).
+        remote_sudo = False
+        use_sshpass = False
+        if not _is_local_target(host):
+            # oscap-ssh shells out to system ssh/scp. Trust-on-first-use
+            # (accept-new) is the right model for a scanner hitting freshly
+            # registered assets: add an unseen host key, still reject a changed
+            # one. ssh_accept_unknown_hosts opts out of even that check.
+            # shortcut: TOFU not pinned keys — honour ssh_known_hosts if an
+            # asset's SSH identity must be verified up front.
+            strict = "no" if creds.get("ssh_accept_unknown_hosts") else "accept-new"
+            ssh_opts = ["-o", f"StrictHostKeyChecking={strict}"]
+            env["SSH_ADDITIONAL_OPTIONS"] = " ".join(ssh_opts)
+            # Password auth: oscap-ssh opens one -M master connection that
+            # authenticates once (then reuses the control socket), so a single
+            # sshpass -e feed covers the whole run. Skip when a key is supplied.
+            pw = creds.get("ssh_password")
+            use_sshpass = bool(pw and not creds.get("ssh_private_key"))
+            if use_sshpass:
+                env["SSHPASS"] = pw
+            remote_sudo = _remote_sudo_ok(host, creds, ssh_opts, use_sshpass, env)
+        cmd = _build_command(host, creds, datastream, profile, results_path, remote_sudo)
+        if use_sshpass:
+            cmd = ["sshpass", "-e", *cmd]
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=900, env=env,
         )

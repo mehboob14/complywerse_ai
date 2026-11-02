@@ -163,7 +163,7 @@ def record_vuln_evidence(
         if notes.startswith("ai_reused:"):
             return ["ai_reused"]
         if notes.startswith("auto:cwe:"):
-            return ["auto"]           # legacy rule-crosswalk row (no longer written)
+            return ["auto"]           # rule crosswalk row (CTEM Validate's SCF crosswalk)
         return ["manual"]
 
     written = 0

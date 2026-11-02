@@ -3,7 +3,7 @@
 /**
  * VulnsWorkspace — Vulnerability Register, redesigned to the handoff mock
  * ("Vulnerabilities.mock.html") 1:1: a contextual-priority ribbon, a triage-view
- * rail, a Register / Insights toggle, and a clean findings table.
+ * rail, an Overview / Register toggle, and a clean findings table.
  *
  * Still purely presentational — ALL data, filter state + setters, permissions
  * and handlers arrive as props from VulnerabilitiesPage. The triage rail applies
@@ -12,11 +12,18 @@
  * (0–10) ×10 — the same number the server dashboard bands at 55 / 25.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, Download, Plus, Upload, FileSpreadsheet, Crosshair, Loader2, Building2, Clock, BarChart3, Target } from 'lucide-react';
-import { shortenVulnTitle, type Vulnerability } from './lib';
+import { Search, Download, Plus, Upload, FileSpreadsheet, Loader2, Building2, Clock, Target, LayoutDashboard, ChevronDown, Server, Ticket, ScanLine, Trash2, ArrowUpDown, Check, X, List, Crosshair } from 'lucide-react';
+import { shortenVulnTitle, deBrandDomain, PriorityRawCell, PriorityContextualCell, enrichmentPriority, type Vulnerability } from './lib';
+import RowActionsMenu from '../../assets/_workspace/RowActionsMenu';
 import CtemScopesRedesign from '../ctem-scopes/CtemScopesRedesign';
+import VulnCommandCenter from './VulnCommandCenter';
+import ScanWorkspace from './ScanWorkspace';
+import { ColumnFilter, type ColSection } from './ColumnFilter';
+
+// Sentinels for the two "absence" column-filter choices (no real value collides).
+const NO_ASSET = '__none__', UNASSIGNED_OWNER = '__unassigned__';
 
 // ── mock palette (kept literal so the register reads exactly like the mock) ──
 const AC = '#005B96', ACS = '#014A81', ACSOFT = '#EFF5FA';
@@ -39,9 +46,12 @@ const hasExploit = (v: Vulnerability) => (v.public_exploit_count ?? 0) > 0 || (v
 const ctxScore = (v: Vulnerability) => Math.round((v.composite_priority ?? 0) * 10); // 0–100
 const band = (score: number) => (score >= 55 ? 'urgent' : score >= 25 ? 'moderate' : 'low');
 const BAND_META = { urgent: { c: '#C2453F', label: 'Urgent' }, moderate: { c: '#9A6410', label: 'Mod' }, low: { c: '#1F7A54', label: 'Low' } } as const;
-const isUnassigned = (v: Vulnerability) => !v.assigned_to && !(v as any).assignee_name;
+const isUnassigned = (v: Vulnerability) => !v.assigned_to && !(v as any).assignee_name && !((v as any).assigned_departments?.length);
 const isExposed = (v: Vulnerability) => !!(v as any).internet_facing || !!(v as any).internet_exposed;
-const domainOf = (v: Vulnerability) => v.plugin_family || (v as any).affected_component || 'General';
+// MUST mirror the backend domains bucket (null plugin_family => "Uncategorized"): the sidebar
+// counts come from the backend while the row filter runs here, so any divergence (e.g. the old
+// affected_component/'General' fallback) made "Uncategorized" count 1 but show 0.
+const domainOf = (v: Vulnerability) => v.plugin_family || 'Uncategorized';
 const OPEN_ISH = new Set(['open', 'in_progress', 'remediated', 'verified']);
 const dueLabel = (v: Vulnerability) => {
   if (!v.due_date) return null;
@@ -73,34 +83,118 @@ export interface VulnsWorkspaceProps {
   onView: (vuln: Vulnerability) => void; onEdit?: (vuln: Vulnerability) => void; onAssign?: (vuln: Vulnerability) => void;
   onChangeStatus?: (vuln: Vulnerability) => void; onDelete?: (vuln: Vulnerability) => void;
   onBulkAssign?: (ids: number[]) => void; onOpenFull: (id: number) => void;
+  /** Create Help Desk tickets for a set of findings (passed the currently-shown ids). Omitted → button hidden. */
+  onBulkCreateTickets?: (ids: number[]) => void;
   onTemplate: () => void; onBulkUpload: () => void; onImport: () => void; onAdd: () => void;
   bulkUploadState?: 'idle' | 'uploading' | 'done' | 'error'; bulkUploadMsg?: string | null;
 }
 
-type TriageView = 'all' | 'kev' | 'exploit' | 'cve' | 'epss' | 'exposed' | 'unassigned' | `sev-${SevKey}` | `dom-${string}`;
+type TriageView = 'all' | 'kev' | 'exploit' | 'cve' | 'epss' | 'exposed' | 'unassigned' | 'linked' | 'unlinked' | `sev-${SevKey}` | `dom-${string}`;
 
-const th: React.CSSProperties = { textAlign: 'left', fontSize: 9.5, letterSpacing: '.05em', textTransform: 'uppercase', color: FAINT, fontWeight: 600, padding: '10px 12px', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#FAFBFC', zIndex: 1 };
-const td: React.CSSProperties = { padding: '11px 12px', borderBottom: `1px solid ${BORDER2}`, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: 12.5 };
-const cap: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: FAINT, padding: '2px 6px 6px' };
-const railBtn = (active: boolean): React.CSSProperties => ({ position: 'relative', display: 'flex', alignItems: 'center', gap: 11, padding: '5px 10px', border: 0, borderRadius: 10, background: active ? ACSOFT : 'none', color: active ? '#0A5A4B' : SEC, fontSize: 12.5, fontWeight: active ? 600 : 500, textAlign: 'left', width: '100%', cursor: 'pointer' });
+// Prominent header bar — brand blue, bold white (owner ask). Sticky over the body.
+const th: React.CSSProperties = { textAlign: 'left', fontSize: 13, letterSpacing: '.03em', textTransform: 'uppercase', color: '#fff', fontWeight: 700, padding: '10px 10px', borderBottom: '1px solid #0A4C84', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#005B96', zIndex: 1 };
+const td: React.CSSProperties = { padding: '9px 10px', borderBottom: `1px solid ${BORDER2}`, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: 12 };
+const SEV_ORDER: Record<SevKey, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+// Click a header to sort by it (replaces the old Sort select). Metrics sort high→low, text A→Z.
+const HEADS: { key: string; label: string; sortable: boolean }[] = [
+  { key: 'id', label: 'ID', sortable: true }, { key: 'title', label: 'Title', sortable: true },
+  { key: 'asset', label: 'Linked asset', sortable: true }, { key: 'cve', label: 'CVE', sortable: true },
+  { key: 'sev', label: 'Severity', sortable: true }, { key: 'cvss', label: 'CVSS', sortable: true },
+  { key: 'epss', label: 'EPSS', sortable: true }, { key: 'exploit', label: 'Exploit', sortable: true },
+  { key: 'before', label: 'Priority before', sortable: true }, { key: 'after', label: 'Priority after', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'due', label: 'SLA / Due', sortable: true }, { key: 'owner', label: 'Assigned to', sortable: true },
+];
+const _ownerOf = (v: Vulnerability) => ((v as any).assignee_name || v.assigned_to || '') as string;
+const SORTERS: Record<string, (a: Vulnerability, b: Vulnerability) => number> = {
+  id: (a, b) => (a.id || 0) - (b.id || 0),
+  title: (a, b) => (a.title || '').localeCompare(b.title || ''),
+  asset: (a, b) => (a.linked_assets?.[0] || '').localeCompare(b.linked_assets?.[0] || ''),
+  cve: (a, b) => (a.cve_id || '').localeCompare(b.cve_id || ''),
+  sev: (a, b) => SEV_ORDER[normSev(a.severity)] - SEV_ORDER[normSev(b.severity)],
+  cvss: (a, b) => (a.cvss_score ?? 0) - (b.cvss_score ?? 0),
+  epss: (a, b) => (a.epss_score ?? 0) - (b.epss_score ?? 0),
+  exploit: (a, b) => (hasExploit(a) ? 1 : 0) - (hasExploit(b) ? 1 : 0),
+  before: (a, b) => enrichmentPriority(a).before - enrichmentPriority(b).before,
+  after: (a, b) => ctxScore(a) - ctxScore(b),
+  status: (a, b) => (a.status || '').localeCompare(b.status || ''),
+  due: (a, b) => new Date(a.due_date || '2999-01-01').getTime() - new Date(b.due_date || '2999-01-01').getTime(),
+  owner: (a, b) => _ownerOf(a).localeCompare(_ownerOf(b)),
+};
+const TEXT_SORTS = new Set(['title', 'asset', 'cve', 'status', 'owner']);
+// Short labels for the Sort menu button/list (HEADS labels are too long for a button).
+const SORT_LABEL: Record<string, string> = { id: 'ID', title: 'Title', asset: 'Linked asset', cve: 'CVE', sev: 'Severity', cvss: 'CVSS', epss: 'EPSS', exploit: 'Exploit', before: 'Priority (before)', after: 'Priority (after)', status: 'Status', due: 'SLA / Due', owner: 'Assigned to' };
 const btn: React.CSSProperties = { border: `1px solid #E4E8EC`, background: '#fff', color: SEC, borderRadius: 9, padding: '7px 12px', fontSize: 12, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' };
-const btnGreen: React.CSSProperties = { ...btn, background: AC, borderColor: AC, color: '#06342B', fontWeight: 600 };
+const btnGreen: React.CSSProperties = { ...btn, background: AC, borderColor: AC, color: '#fff', fontWeight: 600 };
 const pill = (c: string, bg: string): React.CSSProperties => ({ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, whiteSpace: 'nowrap', color: c, background: bg });
 
 const SevPill = ({ s }: { s?: string }) => { const m = SEV[normSev(s)]; return <span style={pill(m.pillC, m.pillBg)}>{m.label}</span>; };
 
+// One row of the "Import ▾" overflow menu — the three data-import actions live
+// here instead of as three scattered toolbar buttons.
+function ImportItem({ Icon, label, hint, onClick }: { Icon: typeof Plus; label: string; hint: string; onClick: () => void }) {
+  return (
+    <button role="menuitem" onClick={onClick} className="imp-item" style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', border: 0, background: 'none', borderRadius: 9, padding: '8px 9px', cursor: 'pointer', textAlign: 'left' }}>
+      <span style={{ width: 28, height: 28, borderRadius: 8, background: ACSOFT, color: AC, display: 'grid', placeItems: 'center', flex: 'none' }}><Icon size={15} /></span>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: INK }}>{label}</span>
+        <span style={{ display: 'block', fontSize: 10.5, color: MUTED }}>{hint}</span>
+      </span>
+    </button>
+  );
+}
+
+type Pane = 'cmd' | 'reg' | 'scan' | 'ctem';
+const PANE_META: { key: Pane; label: string; Icon?: typeof Target }[] = [
+  { key: 'cmd', label: 'Overview', Icon: LayoutDashboard },
+  { key: 'reg', label: 'Register', Icon: List },
+  { key: 'scan', label: 'Scan', Icon: ScanLine },
+  { key: 'ctem', label: 'CTEM Scopes', Icon: Target },
+];
+// The 4 panes (Overview / Register / Scan / CTEM) now live inside a single "Menu ▾"
+// dropdown in the header, so they no longer occupy a dedicated top rail row.
+
 export function VulnsWorkspace(props: VulnsWorkspaceProps) {
   const {
-    vulns, filteredVulns, dashboard, domains = [], loading = false,
+    vulns, filteredVulns, dashboard, domains = [], loading = false, scoped = false,
     registerType, setRegisterType, renderNcaRegister,
-    searchTerm, setSearchTerm, canCreate, onView, onOpenFull, onTemplate, onBulkUpload, onImport, onAdd,
-    bulkUploadState = 'idle', bulkUploadMsg,
+    searchTerm, setSearchTerm, canCreate, canDelete, onDelete, onView, onOpenFull, onTemplate, onBulkUpload, onImport, onAdd,
+    bulkUploadState = 'idle', bulkUploadMsg, onBulkCreateTickets,
+    assetItems = [],
   } = props;
 
-  const [view, setView] = useState<TriageView>('all');
-  const [pane, setPane] = useState<'reg' | 'ins' | 'ctem'>('reg');
-  const [sort, setSort] = useState<'ctx' | 'cvss' | 'epss'>('ctx');
+  // Independent filter axes, AND-combined — each surfaced as a column-header funnel
+  // (Excel / Airtable style). Every dimension lives on a column; '' means "all".
+  const [fSev, setFSev] = useState('');        // Severity column
+  const [fDom, setFDom] = useState('');        // folded into the CVE column funnel (pen-test domain)
+  const [fStatus, setFStatus] = useState('');  // Status column
+  const [fAsset, setFAsset] = useState('');    // Linked-asset column ('' | asset name | NO_ASSET)
+  const [fExposed, setFExposed] = useState(''); // folded into Linked-asset funnel ('' | 'yes')
+  const [fCve, setFCve] = useState('');        // CVE column ('' | 'has' | 'no')
+  const [fExploit, setFExploit] = useState(''); // Exploit column ('' | 'exploit' | 'kev' | 'none')
+  const [fEpss, setFEpss] = useState('');      // EPSS column ('' | 'high' | 'low')
+  const [fOwner, setFOwner] = useState('');    // Assigned-to column ('' | owner | UNASSIGNED_OWNER)
+  // Scan provenance — surface (unauthenticated) vs authenticated. Folded into the Title
+  // column funnel (where the Surface / Auth pills render). Client-side only.
+  const [scanMode, setScanMode] = useState<'all' | 'surface' | 'credentialed'>('all');
+  const [importOpen, setImportOpen] = useState(false); // "Import ▾" overflow menu
+  // Overview ("Command") is the default landing pane — the act-now worklist —
+  // with the register one click away. When scoped to a CTEM scope the register
+  // itself is the point, so land there instead (the Overview reads the whole list).
+  const [pane, setPane] = useState<Pane>(scoped ? 'reg' : 'cmd');
+  const [sort, setSort] = useState('after');
+  const [dir, setDir] = useState<1 | -1>(-1); // -1 = desc (highest priority / newest first)
+  const [sortOpen, setSortOpen] = useState(false); // sort field/direction menu
   const isNca = registerType === 'nca';
+
+  // Esc closes the sort menu (outside-click handled by its backdrop; column funnels
+  // own their own Esc / outside-click handling in ColumnFilter).
+  useEffect(() => {
+    if (!sortOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSortOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sortOpen]);
 
   const all = vulns ?? [];
   const count = (f: (v: Vulnerability) => boolean) => all.filter(f).length;
@@ -120,57 +214,140 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
     };
   }, [dashboard, all]);
 
-  // Triage rail (counts from the full list).
-  // Rail counts are the TRUE totals from the server dashboard (same source as the ribbon's
-  // "Actively exploited"), so they never under-count the fetched page; client tally is only a
-  // fallback when an aggregate is absent.
-  const dcount = (agg: number | undefined, f: (v: Vulnerability) => boolean) => (agg != null ? agg : count(f));
-  const RAIL: { key: TriageView; label: string; n: number; dot?: string; sw?: string }[] = [
-    { key: 'all', label: 'All findings', n: dashboard?.total_vulnerabilities ?? all.length },
-    { key: 'kev', label: 'Fix first · KEV', n: dcount(dashboard?.kev_count, (v) => !!v.kev_flag), dot: '#C2453F' },
-    { key: 'exploit', label: 'Public exploit', n: dcount(dashboard?.exploit_count, hasExploit), dot: '#DB7B45' },
-    { key: 'cve', label: 'With CVE', n: dcount(dashboard?.with_cve_count, (v) => !!v.cve_id), dot: '#2E63A8' },
-    { key: 'epss', label: 'High EPSS', n: dcount(dashboard?.high_epss_count, (v) => (v.epss_score ?? 0) >= 0.1), dot: '#9A6410' },
-    { key: 'exposed', label: 'Internet-exposed', n: dcount(dashboard?.internet_exposed_count, isExposed), dot: '#6A54C9' },
-    { key: 'unassigned', label: 'Unassigned', n: count(isUnassigned), dot: '#8A95A1' },
-  ];
-  const SEV_RAIL: { key: TriageView; label: string; n: number; sw: string }[] = (['critical', 'high', 'medium', 'info'] as SevKey[]).map((k) => ({ key: `sev-${k}` as TriageView, label: SEV[k].label, n: count((v) => normSev(v.severity) === k), sw: SEV[k].dot }));
-  const DOM_RAIL = (domains ?? []).slice(0, 6).map((d) => ({ key: `dom-${d.family}` as TriageView, label: d.family || 'General', n: d.total, sw: SEV[normSev(d.worst_severity)].dot }));
+  // De-brand engine/tool names → assessment type, then MERGE families that
+  // collapse to the same label (so the rail shows one "Penetration test", not five).
+  const SEV_RANK: Record<SevKey, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+  const domGroups = new Map<string, { n: number; worst: SevKey }>();
+  for (const d of domains ?? []) {
+    const label = deBrandDomain(d.family); const ws = normSev(d.worst_severity);
+    const e = domGroups.get(label) || { n: 0, worst: 'info' as SevKey };
+    e.n += d.total; if (SEV_RANK[ws] > SEV_RANK[e.worst]) e.worst = ws;
+    domGroups.set(label, e);
+  }
+  const DOM_RAIL = Array.from(domGroups.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 6)
+    .map(([label, e]) => ({ key: `dom-${label}` as TriageView, label, n: e.n, sw: SEV[e.worst].dot }));
 
-  const matches = (v: Vulnerability): boolean => {
-    if (view === 'all' || view === 'unassigned') return view === 'all' ? true : isUnassigned(v);
-    if (view === 'kev') return !!v.kev_flag;
-    if (view === 'exploit') return hasExploit(v);
-    if (view === 'cve') return !!v.cve_id;
-    if (view === 'epss') return (v.epss_score ?? 0) >= 0.1;
-    if (view === 'exposed') return isExposed(v);
-    if (view.startsWith('sev-')) return normSev(v.severity) === view.slice(4);
-    if (view.startsWith('dom-')) return domainOf(v) === view.slice(4);
-    return true;
-  };
   const rows = useMemo(() => {
-    const r = (filteredVulns ?? []).filter(matches);
-    const s = [...r];
-    if (sort === 'ctx') s.sort((a, b) => ctxScore(b) - ctxScore(a));
-    else if (sort === 'cvss') s.sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0));
-    else if (sort === 'epss') s.sort((a, b) => (b.epss_score ?? 0) - (a.epss_score ?? 0));
-    return s;
-  }, [filteredVulns, view, sort]);
+    const r = (filteredVulns ?? []).filter((v) =>
+      (!fSev || normSev(v.severity) === fSev) &&
+      (!fDom || deBrandDomain(domainOf(v)) === fDom) &&
+      (!fStatus || (v.status || 'open').toLowerCase() === fStatus) &&
+      (scanMode === 'all' || (v.scan_mode ?? null) === scanMode) &&
+      (!fAsset || (fAsset === NO_ASSET ? !((v.linked_assets?.length ?? 0) > 0) : (v.linked_assets ?? []).includes(fAsset))) &&
+      (!fExposed || isExposed(v)) &&
+      (!fCve || (fCve === 'has' ? !!v.cve_id : !v.cve_id)) &&
+      (!fExploit || (fExploit === 'exploit' ? hasExploit(v) : fExploit === 'kev' ? !!v.kev_flag : !hasExploit(v))) &&
+      (!fEpss || (fEpss === 'high' ? (v.epss_score ?? 0) >= 0.1 : (v.epss_score ?? 0) < 0.1)) &&
+      (!fOwner || (fOwner === UNASSIGNED_OWNER ? isUnassigned(v) : _ownerOf(v) === fOwner)));
+    const cmp = SORTERS[sort] || SORTERS.after;
+    return [...r].sort((a, b) => cmp(a, b) * dir);
+  }, [filteredVulns, fSev, fDom, fStatus, scanMode, fAsset, fExposed, fCve, fExploit, fEpss, fOwner, sort, dir]);
+  // Click a header: same column flips direction; a new column sorts text A→Z, metrics high→low.
+  const sortBy = (k: string) => { if (sort === k) setDir((d) => (d === 1 ? -1 : 1)); else { setSort(k); setDir(TEXT_SORTS.has(k) ? 1 : -1); } };
 
-  const railLabel: Record<string, string> = { all: 'All findings', kev: 'Fix first · KEV', exploit: 'Public exploit', cve: 'With CVE', epss: 'High EPSS', exposed: 'Internet-exposed', unassigned: 'Unassigned' };
-  const title = railLabel[view] || (view.startsWith('sev-') ? SEV[view.slice(4) as SevKey].label : view.startsWith('dom-') ? view.slice(4) : 'Findings');
+  const anyFilter = !!(fSev || fDom || fStatus || fAsset || fExposed || fCve || fExploit || fEpss || fOwner) || scanMode !== 'all';
+  const activeCount = (fSev ? 1 : 0) + (fDom ? 1 : 0) + (fStatus ? 1 : 0) + (fAsset ? 1 : 0) + (fExposed ? 1 : 0) + (fCve ? 1 : 0) + (fExploit ? 1 : 0) + (fEpss ? 1 : 0) + (fOwner ? 1 : 0) + (scanMode !== 'all' ? 1 : 0);
 
-  // ── severity donut (raw CVSS bands) for Insights ──
-  const sevCounts = (['critical', 'high', 'medium', 'low', 'info'] as SevKey[]).map((k) => ({ k, n: count((v) => normSev(v.severity) === k) }));
-  const sevTotal = sevCounts.reduce((s, x) => s + x.n, 0) || 1;
-  let acc = 0;
-  const arcs = sevCounts.filter((x) => x.n).map((x) => { const len = (x.n / sevTotal) * 100; const a = { k: x.k, len, off: -acc }; acc += len; return a; });
-  const top10 = [...all].sort((a, b) => ctxScore(b) - ctxScore(a)).slice(0, 10);
+  // Distinct column values + counts, computed once over the fetched list (`all`). Every option
+  // counts the same population, so the numbers stay internally consistent within a funnel.
+  const colOpts = useMemo(() => {
+    const list = all;
+    const sev = (['critical', 'high', 'medium', 'low', 'info'] as SevKey[])
+      .map((k) => ({ value: k as string, label: SEV[k].label, count: list.filter((v) => normSev(v.severity) === k).length }))
+      .filter((o) => o.count > 0);
+
+    const assetCounts = new Map<string, number>(); let noAsset = 0;
+    for (const v of list) {
+      const a = v.linked_assets ?? [];
+      if (!a.length) noAsset++; else for (const name of Array.from(new Set(a))) assetCounts.set(name, (assetCounts.get(name) || 0) + 1);
+    }
+    const asset = Array.from(assetCounts.entries()).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+      .map(([name, c]) => ({ value: name, label: name, count: c }));
+    if (noAsset) asset.push({ value: NO_ASSET, label: 'No linked asset', count: noAsset });
+
+    const hasCve = list.filter((v) => !!v.cve_id).length;
+    const cve = [{ value: 'has', label: 'Has CVE', count: hasCve }, { value: 'no', label: 'No CVE', count: list.length - hasCve }].filter((o) => o.count > 0);
+
+    const expPub = list.filter(hasExploit).length; const kev = list.filter((v) => !!v.kev_flag).length;
+    const exploit = [
+      { value: 'exploit', label: 'Public exploit', count: expPub },
+      { value: 'kev', label: 'KEV · actively exploited', count: kev },
+      { value: 'none', label: 'No known exploit', count: list.length - expPub },
+    ].filter((o) => o.count > 0);
+
+    const hiEpss = list.filter((v) => (v.epss_score ?? 0) >= 0.1).length;
+    const epss = [{ value: 'high', label: 'High EPSS (≥10%)', count: hiEpss }, { value: 'low', label: 'Lower EPSS', count: list.length - hiEpss }].filter((o) => o.count > 0);
+
+    const statusMap = new Map<string, number>();
+    for (const v of list) { const s = (v.status || 'open').toLowerCase(); statusMap.set(s, (statusMap.get(s) || 0) + 1); }
+    const status = Array.from(statusMap.entries()).sort((x, y) => x[0].localeCompare(y[0]))
+      .map(([s, c]) => ({ value: s, label: s.replace(/_/g, ' '), count: c }));
+
+    const ownerMap = new Map<string, number>(); let unassigned = 0;
+    for (const v of list) { if (isUnassigned(v)) unassigned++; const o = _ownerOf(v); if (o) ownerMap.set(o, (ownerMap.get(o) || 0) + 1); }
+    const owner = Array.from(ownerMap.entries()).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+      .map(([name, c]) => ({ value: name, label: name, count: c }));
+    if (unassigned) owner.push({ value: UNASSIGNED_OWNER, label: 'Unassigned', count: unassigned });
+
+    const exposed = [{ value: 'yes', label: 'Internet-exposed', count: list.filter(isExposed).length }].filter((o) => o.count > 0);
+    const provenance = [
+      { value: 'credentialed', label: 'Authenticated', count: list.filter((v) => (v.scan_mode ?? null) === 'credentialed').length },
+      { value: 'surface', label: 'Surface / Unauthenticated', count: list.filter((v) => (v.scan_mode ?? null) === 'surface').length },
+    ].filter((o) => o.count > 0);
+
+    return { sev, asset, cve, exploit, epss, status, owner, exposed, provenance };
+  }, [all]);
+
+  const domainOpts = DOM_RAIL.map((r) => ({ value: r.label, label: r.label, count: r.n }));
+
+  // Column-header funnel wiring. Each column gets zero or more independent sections;
+  // the three dimensions with no namesake column fold in as a labeled section:
+  // Scan provenance → Title, Internet-exposed → Linked asset, pen-test Domain → CVE.
+  const colFilters: Record<string, { sections: ColSection[]; align?: 'left' | 'right' }> = {
+    title: { sections: [{ key: 'prov', title: 'Scan provenance', value: scanMode === 'all' ? '' : scanMode, onChange: (v) => setScanMode((v || 'all') as 'all' | 'surface' | 'credentialed'), options: colOpts.provenance }] },
+    asset: { sections: [
+      { key: 'asset', title: 'By linked asset', value: fAsset, onChange: setFAsset, options: colOpts.asset },
+      { key: 'exposed', title: 'Exposure', value: fExposed, onChange: setFExposed, options: colOpts.exposed },
+    ] },
+    cve: { sections: [
+      { key: 'cve', title: 'CVE', value: fCve, onChange: setFCve, options: colOpts.cve },
+      { key: 'dom', title: 'Domain', value: fDom, onChange: setFDom, options: domainOpts },
+    ] },
+    sev: { sections: [{ key: 'sev', value: fSev, onChange: setFSev, options: colOpts.sev }] },
+    epss: { sections: [{ key: 'epss', value: fEpss, onChange: setFEpss, options: colOpts.epss }] },
+    exploit: { sections: [{ key: 'exploit', value: fExploit, onChange: setFExploit, options: colOpts.exploit }] },
+    status: { sections: [{ key: 'status', value: fStatus, onChange: setFStatus, options: colOpts.status }], align: 'right' },
+    owner: { sections: [{ key: 'owner', value: fOwner, onChange: setFOwner, options: colOpts.owner }], align: 'right' },
+  };
+
+  const clearAll = () => {
+    setFSev(''); setFDom(''); setFStatus(''); setScanMode('all');
+    setFAsset(''); setFExposed(''); setFCve(''); setFExploit(''); setFEpss(''); setFOwner('');
+  };
+
+  // Overview (cmd) flows at natural height so the whole page scrolls with the
+  // shell's <main> — like every other page, no contained inner scrollbar.
+  // Register/CTEM keep their own bounded-height inner table scroll.
+  const pageScroll = pane === 'cmd' && !isNca;
+
+  // Pane nav folded into one "Menu ▾" dropdown (was a full top rail row). Placed in the header's
+  // right group on cmd/reg; a slim standalone copy sits above Scan/CTEM (which carry their own
+  // headers) so those panes stay navigable. Current pane is check-marked.
+  const paneMenu = !isNca ? (
+    <RowActionsMenu label="Menu" actions={PANE_META.map((m) => ({
+      key: m.key, label: m.label, icon: (m.Icon ?? List) as React.ElementType,
+      onClick: () => setPane(m.key as Pane), active: pane === m.key,
+    }))} />
+  ) : null;
 
   return (
-    <div className="inv2" style={{ background: '#F4F6F7', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
-      {/* header — hidden on the CTEM pane (mock: CTEM carries its own header) */}
-      {pane !== 'ctem' && (
+    // zoom:0.8 is the SAME density knob the Performance page uses (page at 80%) — it scales
+    // the header AND the VulnCommandCenter dashboard (which renders inside this root) uniformly.
+    // Bounded panes (register/CTEM/NCA) are height:100%, which would only fill 80% once zoomed,
+    // so they compensate to 100%/0.8 = 125% layout height → exactly one viewport after zoom.
+    <div className="inv2" style={{ background: '#F4F6F7', zoom: 0.8, height: pageScroll ? 'auto' : 'calc(100% / 0.8)', minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: pageScroll ? 'visible' : 'auto', overflowX: pageScroll ? 'visible' : 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
+      {/* header — hidden on the CTEM/Scan panes (they carry their own) */}
+      {pane !== 'ctem' && pane !== 'scan' && (
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
         <div>
           <h1 style={{ fontSize: 19, letterSpacing: '-.025em', margin: 0 }}>{isNca ? 'NCA Vulnerability Register' : 'Vulnerability Register'}</h1>
@@ -178,34 +355,60 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: AC }} />{agg.total} findings · triage by real-world priority, not raw CVSS
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+        {/* Two clean zones: [ which register ] │ [ import ▾ ] [ + Add (primary) ].
+            Choke points removed; the three import actions collapse into one menu. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {paneMenu}
           <select value={registerType} onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')} style={{ ...btn, cursor: 'pointer' }} title="Switch register">
-            <option value="standard">Standard</option><option value="nca">NCA Template</option>
+            <option value="standard">Standard register</option><option value="nca">NCA Template</option>
           </select>
-          <Link href="/cyber-assurance/vulnerabilities/sla" style={{ ...btn, textDecoration: 'none' }}>Settings</Link>
           <Link href="/cyber-assurance/vulnerabilities/choke-points" style={{ ...btn, textDecoration: 'none' }}><Crosshair size={15} />Choke points</Link>
-          {canCreate && <button style={btn} onClick={onTemplate}><Download size={15} />Template</button>}
-          {canCreate && <button style={btn} onClick={onBulkUpload} disabled={bulkUploadState === 'uploading'}>{bulkUploadState === 'uploading' ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}Bulk Upload</button>}
-          {canCreate && <button style={btn} onClick={onImport}><FileSpreadsheet size={15} />Import</button>}
+          {canCreate && (
+            <>
+              <span aria-hidden style={{ width: 1, height: 22, background: BORDER, flex: 'none' }} />
+              <div style={{ position: 'relative' }}>
+                <button style={btn} onClick={() => setImportOpen((o) => !o)} aria-haspopup="menu" aria-expanded={importOpen} title="Import findings">
+                  {bulkUploadState === 'uploading' ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}Import<ChevronDown size={14} style={{ marginLeft: 1, opacity: 0.55 }} />
+                </button>
+                {importOpen && (
+                  <>
+                    {/* transparent backdrop = lazy, reliable click-outside-to-close */}
+                    <div onClick={() => setImportOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                    <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41, minWidth: 214, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: '0 14px 34px -10px rgba(16,24,40,.32)', padding: 5 }}>
+                      <ImportItem Icon={Download} label="Download template" hint="CSV starter file" onClick={() => { setImportOpen(false); onTemplate(); }} />
+                      <ImportItem Icon={Upload} label="Bulk upload" hint="Fill the template, upload it" onClick={() => { setImportOpen(false); onBulkUpload(); }} />
+                      <ImportItem Icon={FileSpreadsheet} label="Smart import" hint="Map any spreadsheet" onClick={() => { setImportOpen(false); onImport(); }} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
           {canCreate && <button style={btnGreen} onClick={onAdd}><Plus size={15} />{isNca ? 'Add NCA Entry' : 'Add Vulnerability'}</button>}
         </div>
       </div>
       )}
 
-      {pane !== 'ctem' && bulkUploadMsg && <div style={{ marginBottom: 12, borderRadius: 9, padding: '9px 14px', fontSize: 12.5, fontWeight: 500, background: bulkUploadState === 'error' ? '#FBEAEA' : '#E7F5EE', color: bulkUploadState === 'error' ? '#B23A3A' : '#1F7A54' }}>{bulkUploadMsg}</div>}
+      {pane !== 'ctem' && pane !== 'scan' && bulkUploadMsg && <div style={{ marginBottom: 12, borderRadius: 9, padding: '9px 14px', fontSize: 12.5, fontWeight: 500, background: bulkUploadState === 'error' ? '#FBEAEA' : '#E7F5EE', color: bulkUploadState === 'error' ? '#B23A3A' : '#1F7A54' }}>{bulkUploadMsg}</div>}
 
       {isNca ? (
         <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, flex: 1, minHeight: 0, overflow: 'auto' }}>{renderNcaRegister()}</div>
       ) : (
         <>
-          {pane === 'ctem' ? (
+          {pane === 'scan' ? (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              {/* mock: the CTEM view carries its own two-option toggle */}
-              <div style={{ display: 'inline-flex', alignSelf: 'flex-start', flexShrink: 0, background: '#EAEEF1', borderRadius: 11, padding: 3, gap: 2, margin: '2px 0 8px' }}>
-                <button onClick={() => setPane('reg')} style={{ height: 34, padding: '0 16px', border: 0, borderRadius: 9, background: 'none', color: '#6B7787', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>Vulnerability Register</button>
-                <button style={{ height: 34, padding: '0 16px', border: 0, borderRadius: 9, background: '#fff', color: ACS, fontSize: 12.5, fontWeight: 600, cursor: 'default', boxShadow: '0 1px 2px rgba(16,24,40,.06)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Target size={14} /> CTEM Scopes</button>
-              </div>
+              {/* Scan carries its own header, so a lone Menu keeps the pane nav reachable. */}
+              <div style={{ marginBottom: 8, flexShrink: 0 }}>{paneMenu}</div>
+              <div style={{ flex: 1, minHeight: 0 }}><ScanWorkspace vulns={all} assetItems={assetItems} /></div>
+            </div>
+          ) : pane === 'ctem' ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ marginBottom: 8, flexShrink: 0 }}>{paneMenu}</div>
               <div style={{ flex: 1, minHeight: 0 }}><CtemScopesRedesign /></div>
+            </div>
+          ) : pane === 'cmd' ? (
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+              <div><VulnCommandCenter vulns={all} dashboard={dashboard} onView={onView} /></div>
             </div>
           ) : (
           <>
@@ -232,98 +435,151 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
             </div>
           </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '224px minmax(0,1fr)', gap: 14, alignItems: 'stretch', position: 'sticky', top: 0, height: '100%', flexShrink: 0, overflow: 'hidden' }}>
-            {/* triage rail */}
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '9px 9px', minHeight: 0, overflowY: 'auto' }}>
-              <div style={cap}>Triage views</div>
-              {RAIL.map((r) => (
-                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
-                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
-                  {r.dot && <span style={{ width: 9, height: 9, borderRadius: '50%', background: r.dot, flex: 'none' }} />}
-                  {r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
-                </button>
-              ))}
-              <div style={{ ...cap, paddingTop: 14 }}>By severity</div>
-              {SEV_RAIL.map((r) => (
-                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
-                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.sw, flex: 'none' }} />{r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
-                </button>
-              ))}
-              {DOM_RAIL.length > 0 && <div style={{ ...cap, paddingTop: 14 }}>By domain</div>}
-              {DOM_RAIL.map((r) => (
-                <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
-                  <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: '0 3px 3px 0', background: AC, opacity: view === r.key ? 1 : 0 }} />
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: r.sw, flex: 'none' }} />{r.label}<span className="num" style={{ marginLeft: 'auto', fontSize: 11.5, color: '#9BA6B2' }}>{r.n}</span>
-                </button>
-              ))}
-              {/* Overview / Departments / SLA — the mock keeps these in the rail; they
-                  open the existing standalone management views. */}
-              <div style={{ height: 1, background: '#F0F3F5', margin: '10px 4px 6px' }} />
-              <Link href="/cyber-assurance/vulnerabilities/dashboard" style={{ ...railBtn(false), textDecoration: 'none' }}><BarChart3 size={15} color="#5B6673" />Overview</Link>
-              <Link href="/cyber-assurance/vulnerabilities/departments" style={{ ...railBtn(false), textDecoration: 'none' }}><Building2 size={15} color="#5B6673" />Departments</Link>
-              <Link href="/cyber-assurance/vulnerabilities/sla" style={{ ...railBtn(false), textDecoration: 'none' }}><Clock size={15} color="#5B6673" />SLA config</Link>
-            </aside>
-
-            {/* main */}
-            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
-                <div style={{ display: 'inline-flex', background: '#EAEEF1', borderRadius: 11, padding: 3, gap: 2 }}>
-                  {(['reg', 'ins', 'ctem'] as const).map((k) => (
-                    <button key={k} onClick={() => setPane(k)} style={{ height: 32, padding: '0 14px', border: 0, borderRadius: 9, background: pane === k ? '#fff' : 'none', color: pane === k ? ACS : '#6B7787', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: pane === k ? '0 1px 2px rgba(16,24,40,.06)' : 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{k === 'ctem' && <Target size={14} />}{k === 'reg' ? 'Register' : k === 'ins' ? 'Insights' : 'CTEM Scopes'}</button>
-                  ))}
-                </div>
+          {/* Full width — the left triage rail was cut; its Triage views / By severity / By domain
+              filters now live in the single top-bar <select> below (same `view` state). */}
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%', flexShrink: 0, overflow: 'hidden' }}>
+            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+              {/* Clean one-row toolbar: Search · [N filters · Clear] chip · Sort (menu) · Create tickets.
+                  Every filter now lives in a column-header funnel (see the table), so there's no
+                  Filters drawer or More button — only a running count + Clear-all chip here. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexShrink: 0 }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                   <Search size={16} style={{ position: 'absolute', left: 11, top: 10, color: FAINT }} />
                   <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by title, CVE ID…" style={{ width: '100%', height: 34, border: `1px solid #E4E8EC`, borderRadius: 9, padding: '0 12px 0 34px', fontSize: 12.5, color: SEC, background: '#fff' }} />
                 </div>
-                <select value={sort} onChange={(e) => setSort(e.target.value as any)} style={{ ...btn, height: 34, cursor: 'pointer' }}>
-                  <option value="ctx">Sort: Contextual priority</option><option value="cvss">Sort: CVSS</option><option value="epss">Sort: EPSS</option>
-                </select>
+                {anyFilter && (
+                  <button type="button" onClick={clearAll} title="Clear every column filter"
+                    style={{ ...btn, height: 34, cursor: 'pointer', borderColor: AC, color: AC, background: ACSOFT, fontWeight: 600 }}>
+                    <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: AC, color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'inline-grid', placeItems: 'center' }}>{activeCount}</span>
+                    {activeCount === 1 ? 'filter' : 'filters'}<X size={13} style={{ marginLeft: 1 }} />
+                  </button>
+                )}
+                <div style={{ position: 'relative' }}>
+                  <button type="button" onClick={() => setSortOpen((o) => !o)} aria-haspopup="menu" aria-expanded={sortOpen} title="Change sort field and direction"
+                    style={{ ...btn, height: 34, cursor: 'pointer' }}>
+                    <ArrowUpDown size={14} />Sort: {SORT_LABEL[sort] || 'Priority'} {dir === -1 ? '↓' : '↑'}
+                  </button>
+                  {sortOpen && (
+                    <>
+                      <div onClick={() => setSortOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                      <div role="menu" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 41, minWidth: 224, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: '0 14px 34px -10px rgba(16,24,40,.32)', padding: 6 }}>
+                        <div style={{ display: 'flex', gap: 4, padding: '2px 4px 8px' }}>
+                          {([[1, 'Ascending', '↑'], [-1, 'Descending', '↓']] as const).map(([d, lbl, ar]) => (
+                            <button key={d} type="button" onClick={() => setDir(d)}
+                              style={{ flex: 1, height: 30, border: `1px solid ${dir === d ? AC : '#E4E8EC'}`, background: dir === d ? AC : '#fff', color: dir === d ? '#fff' : SEC, borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>{ar} {lbl}</button>
+                          ))}
+                        </div>
+                        <div style={{ borderTop: `1px solid ${BORDER2}`, paddingTop: 4 }}>
+                          {HEADS.filter((h) => h.sortable).map((h) => {
+                            const on = sort === h.key;
+                            return (
+                              <button key={h.key} role="menuitemradio" aria-checked={on} type="button" onClick={() => { setSort(h.key); setSortOpen(false); }}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', border: 0, background: on ? ACSOFT : 'none', color: on ? ACS : SEC, borderRadius: 8, padding: '7px 9px', fontSize: 12, fontWeight: on ? 600 : 500, cursor: 'pointer', textAlign: 'left' }}>
+                                {SORT_LABEL[h.key] || h.label}{on && <Check size={14} />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <span aria-hidden style={{ width: 1, height: 20, background: BORDER, flex: 'none' }} />
+                <Link href="/cyber-assurance/vulnerabilities/departments" title="Manage department routing" style={{ ...btn, height: 34, color: SEC, textDecoration: 'none' }}><Building2 size={14} />Departments</Link>
+                <Link href="/cyber-assurance/vulnerabilities/sla" title="SLA policies & compliance" style={{ ...btn, height: 34, color: SEC, textDecoration: 'none' }}><Clock size={14} />SLA</Link>
+                {onBulkCreateTickets && rows.length > 0 && (
+                  <button
+                    style={{ ...btnGreen, height: 34 }}
+                    title="Open a Help Desk ticket for every finding shown in this view (idempotent — findings that already have a ticket are skipped)"
+                    onClick={() => {
+                      const ids = rows.map((v) => v.id);
+                      if (window.confirm(`Create Help Desk tickets for the ${ids.length} finding(s) shown? Findings that already have a ticket are skipped.`)) {
+                        onBulkCreateTickets(ids);
+                      }
+                    }}
+                  >
+                    <Ticket size={14} /> Create Help Desk tickets
+                  </button>
+                )}
               </div>
 
-              {pane === 'reg' ? (
+              {(
                 <div style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)', overflow: 'hidden', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 16px', borderBottom: `1px solid ${BORDER2}`, flexWrap: 'wrap' }}>
-                    <h3 style={{ fontSize: 13.5, margin: 0 }}>{title}</h3>
-                    <span style={{ fontSize: 11.5, color: MUTED }}><b className="num" style={{ color: SEC }}>{rows.length}</b> shown · {agg.total} total</span>
-                  </div>
                   <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1020 }}>
-                      <thead><tr>{['ID', 'Title', 'CVE', 'Severity', 'CVSS', 'EPSS', 'Exploit', 'Priority · Ctx', 'Status', 'SLA / Due', 'Owner'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                    {/* The dashboard shell's global `.governance-light thead th` repaints headers light/muted
+                        and overrides our inline blue, so force the brand-blue header bar with a scoped rule. */}
+                    <style dangerouslySetInnerHTML={{ __html: '.inv2 .vreg-tbl thead th{background:#005B96!important;color:#fff!important;border-bottom-color:#0A4C84!important;font-weight:700!important}' }} />
+                    <table className="vreg-tbl" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                      <thead><tr>{HEADS.map((h) => {
+                        const cf = colFilters[h.key];
+                        return (
+                        <th key={h.key} style={{ ...th, cursor: h.sortable ? 'pointer' : 'default', userSelect: 'none' }}
+                          onClick={h.sortable ? () => sortBy(h.key) : undefined}
+                          title={h.sortable ? `Sort by ${h.label}` : undefined}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <span>{h.label}{sort === h.key ? <span style={{ marginLeft: 5, fontWeight: 800 }} title={dir === -1 ? 'Descending' : 'Ascending'}>{dir === -1 ? '↓' : '↑'}</span> : null}</span>
+                            {cf && <ColumnFilter columnLabel={h.label} sections={cf.sections} align={cf.align} />}
+                          </span>
+                        </th>
+                        );
+                      })}{canDelete && <th style={th}></th>}</tr></thead>
                       <tbody>
                         {loading ? (
-                          <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>Loading…</td></tr>
+                          <tr><td colSpan={canDelete ? 14 : 13} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>Loading…</td></tr>
                         ) : rows.length === 0 ? (
-                          <tr><td colSpan={11} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>No findings match this view.</td></tr>
+                          <tr><td colSpan={canDelete ? 14 : 13} style={{ ...td, textAlign: 'center', color: '#9BA6B2', padding: 28 }}>No findings match this view.</td></tr>
                         ) : rows.map((v) => {
                           const sev = normSev(v.severity); const sm = SEV[sev];
-                          const sc = ctxScore(v); const bm = BAND_META[band(sc)];
                           const exp = hasExploit(v); const due = dueLabel(v);
                           const owner = (v as any).assignee_name as string | undefined;
+                          const depts = (v as any).assigned_departments as string[] | undefined;
+                          const assets = v.linked_assets || [];
                           return (
                             <tr key={v.id} onClick={() => onView(v)} style={{ cursor: 'pointer' }} className="vrow">
                               <td style={{ ...td, fontFamily: MONO }}>VULN-{v.id}</td>
-                              <td style={{ ...td, maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis' }} title={v.title}>{shortenVulnTitle(v.title)}{v.kev_flag && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9, marginLeft: 6 }}>KEV</span>}</td>
+                              <td style={{ ...td, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis' }} title={v.title}>{shortenVulnTitle(v.title)}{v.kev_flag && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9, marginLeft: 6 }}>KEV</span>}{v.scan_mode === 'surface' && <span style={{ ...pill(MUTED, '#EEF1F3'), fontSize: 9, marginLeft: 6 }} title="Surface / Unauthenticated scan">Surface</span>}{v.scan_mode === 'credentialed' && <span style={{ ...pill(ACS, '#EFF5FA'), fontSize: 9, marginLeft: 6 }} title="Authenticated scan">Auth</span>}</td>
+                              {/* LINKED ASSET — promoted to a prominent lead field so "this finding → this asset" reads at a glance */}
+                              <td style={{ ...td, maxWidth: 230 }}>
+                                {assets.length ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: 230 }} title={assets.join(', ')}>
+                                    <span style={{ width: 22, height: 22, borderRadius: 6, background: ACSOFT, color: AC, display: 'grid', placeItems: 'center', flex: 'none' }}><Server size={12} /></span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><b style={{ fontWeight: 600, color: INK }}>{assets[0]}</b>{assets.length > 1 && <span style={{ color: FAINT, fontWeight: 500 }}> +{assets.length - 1}</span>}</span>
+                                  </span>
+                                ) : <span style={{ color: FAINT, fontStyle: 'italic' }}>— no linked asset</span>}
+                              </td>
                               <td style={{ ...td, fontFamily: MONO, color: v.cve_id ? SEC : FAINT }}>{v.cve_id || '—'}</td>
                               <td style={td}><SevPill s={v.severity} /></td>
                               <td style={{ ...td, fontFamily: MONO, color: sm.pillC }}>{v.cvss_score ?? '—'}</td>
                               <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{v.epss_score != null ? `${(v.epss_score * 100).toFixed(1)}%` : '—'}</td>
                               <td style={{ ...td, color: exp ? '#C0682F' : FAINT }}>{exp ? 'Public' : 'None'}</td>
-                              <td style={{ ...td, fontFamily: MONO, color: bm.c, fontWeight: 600 }}>{sc} · {bm.label}</td>
+                              <td style={td}><PriorityRawCell v={v} /></td>
+                              <td style={td}><PriorityContextualCell v={v} /></td>
                               <td style={td}><span style={{ ...pill('#B23A3A', '#fff'), border: '1px solid #F3D3DA', textTransform: 'capitalize' }}>{(v.status || 'open').replace(/_/g, ' ')}</span></td>
                               <td style={td}>{due ? <b style={{ fontWeight: 600, color: due.c }}>{due.t}</b> : <span style={{ color: FAINT }}>—</span>}</td>
-                              <td style={{ ...td, color: owner ? SEC : FAINT }}>{owner || 'Unassigned'}</td>
+                              <td style={td}>
+                                {depts && depts.length ? (
+                                  <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.25 }} title={[...depts, owner].filter(Boolean).join(' · ')}>
+                                    <span style={{ color: SEC }}>{depts[0]}{depts.length > 1 && <span style={{ color: FAINT }}> +{depts.length - 1}</span>}</span>
+                                    {owner && <span style={{ fontSize: 10.5, color: FAINT }}>{owner}</span>}
+                                  </span>
+                                ) : owner ? <span style={{ color: SEC }}>{owner}</span> : <span style={{ color: FAINT }}>Unassigned</span>}
+                              </td>
+                              {canDelete && (
+                                <td style={{ ...td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                                  <button onClick={() => onDelete?.(v)} title="Delete from register"
+                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#B23A3A', padding: 4, borderRadius: 6, display: 'inline-flex' }}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
                   </div>
-                  <div style={{ padding: '7px 16px', fontSize: 11, color: MUTED }}>Row → full finding detail · <b>Priority·Contextual</b> = composite of exposure, exploit, EPSS &amp; asset criticality on top of CVSS.</div>
+                  <div style={{ padding: '7px 16px', fontSize: 11, color: MUTED }}>Row → full finding detail · click a column header or the <b>Sort</b> button to reorder · <b>Priority·Contextual</b> = composite of exposure, exploit, EPSS &amp; asset criticality on top of CVSS.</div>
                 </div>
-              ) : (
-                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}><Insights sevCounts={sevCounts} sevTotal={sevTotal} arcs={arcs} domains={domains} all={all} agg={agg} top10={top10} onView={onView} /></div>
               )}
             </div>
           </div>
@@ -331,90 +587,10 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
           )}
         </>
       )}
-      <style>{`.inv2 .vrow:hover{background:#F7FBFA}`}</style>
+      <style>{`.inv2 .vrow:hover{background:#F7FBFA}.inv2 .imp-item:hover{background:#F2F7FB}.inv2 .colf-opt:hover{background:#F2F7FB}`}</style>
     </div>
   );
 }
 
-// ── Insights pane ──
-function Insights({ sevCounts, sevTotal, arcs, domains, all, agg, top10, onView }: any) {
-  const epssBuckets = [
-    { label: '≥ 50%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.5).length, c: '#C2453F' },
-    { label: '10–50%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.1 && (v.epss_score ?? 0) < 0.5).length, c: '#E0AF33' },
-    { label: '1–10%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.01 && (v.epss_score ?? 0) < 0.1).length, c: '#005B96' },
-    { label: '< 1%', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) < 0.01).length, c: '#AEB8C2' },
-  ];
-  const epssMax = Math.max(...epssBuckets.map((b) => b.n), 1);
-  const domMax = Math.max(...(domains ?? []).map((d: any) => d.total), 1);
-  const signals = [
-    { label: 'In CISA KEV', n: agg.kev }, { label: 'Public exploit', n: all.filter(hasExploit).length },
-    { label: 'With CVE', n: all.filter((v: Vulnerability) => !!v.cve_id).length }, { label: 'High EPSS (≥10%)', n: all.filter((v: Vulnerability) => (v.epss_score ?? 0) >= 0.1).length },
-  ];
-  const card: React.CSSProperties = { background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '16px 18px' };
-  return (
-    <div>
-      <div style={{ ...card, marginBottom: 12, background: 'linear-gradient(120deg,#EAFAF4,#fff 60%)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><b style={{ fontSize: 14 }}>Raw severity ≠ real priority</b><span style={{ fontSize: 11.5, color: MUTED }}>of {agg.total} findings, only {agg.urgent} {agg.urgent === 1 ? 'is' : 'are'} truly urgent once exposure, exploit and EPSS are weighed</span></div>
-        <div style={{ display: 'flex', height: 12, borderRadius: 99, overflow: 'hidden', background: '#EAEEF1', margin: '12px 0 9px' }}>
-          {[['urgent', agg.urgent, '#C2453F'], ['moderate', agg.moderate, '#E0AF33'], ['low', agg.low, '#005B96']].map(([k, n, c]) => <i key={k as string} style={{ width: `${(Number(n) / Math.max(1, agg.total)) * 100}%`, background: c as string }} />)}
-        </div>
-      </div>
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: 12 }}>
-        <div style={card}>
-          <h3 style={{ fontSize: 13.5, margin: 0 }}>By severity <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 400 }}>raw CVSS</span></h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
-            <svg width="104" height="104" viewBox="0 0 42 42">
-              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#EEF1F3" strokeWidth="6" />
-              {arcs.map((a: any) => <circle key={a.k} cx="21" cy="21" r="15.9" fill="none" stroke={SEV[a.k as SevKey].dot} strokeWidth="6" strokeDasharray={`${a.len} ${100 - a.len}`} strokeDashoffset={a.off} />)}
-              <text x="21" y="20.5" textAnchor="middle" fontSize="8" fontWeight="800" fill={INK}>{sevTotal}</text>
-              <text x="21" y="26" textAnchor="middle" fontSize="2.8" letterSpacing=".08em" fill={FAINT}>TOTAL</text>
-            </svg>
-            <div style={{ flex: 1, fontSize: 12 }}>
-              {sevCounts.map((s: any) => <div key={s.k} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #F4F6F7' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: SEV[s.k as SevKey].dot, flex: 'none' }} />{SEV[s.k as SevKey].label}<b className="num" style={{ marginLeft: 'auto' }}>{s.n}</b></div>)}
-            </div>
-          </div>
-        </div>
-        <div style={card}>
-          <h3 style={{ fontSize: 13.5, margin: 0 }}>By domain</h3>
-          <div style={{ marginTop: 12, fontSize: 12 }}>
-            {(domains ?? []).length === 0 ? <p style={{ color: FAINT, fontSize: 11 }}>No domain data yet.</p> : (domains ?? []).slice(0, 8).map((d: any) => (
-              <div key={d.family} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}><span style={{ width: 120, color: SEC, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.family}>{d.family || 'General'}</span><span style={{ flex: 1, height: 8, background: '#F0F3F5', borderRadius: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${(d.total / domMax) * 100}%`, background: SEV[normSev(d.worst_severity)].dot }} /></span><b className="num" style={{ width: 30, textAlign: 'right' }}>{d.total}</b></div>
-            ))}
-          </div>
-        </div>
-        <div style={card}>
-          <h3 style={{ fontSize: 13.5, margin: 0 }}>Exploit likelihood <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 400 }}>EPSS</span></h3>
-          <div style={{ marginTop: 14, fontSize: 11 }}>
-            {epssBuckets.map((b) => <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}><span style={{ width: 60, color: SEC }}>{b.label}</span><span style={{ flex: 1, height: 8, background: '#F0F3F5', borderRadius: 4, overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${(b.n / epssMax) * 100}%`, background: b.c }} /></span><b className="num" style={{ width: 30, textAlign: 'right' }}>{b.n}</b></div>)}
-          </div>
-        </div>
-      </section>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: FAINT, margin: '18px 2px 8px' }}>Threat signals</div>
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(118px,1fr))', gap: 10 }}>
-        {signals.map((s) => <div key={s.label} style={{ background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 12, padding: '12px', textAlign: 'center' }}><div className="num" style={{ fontSize: 20, fontWeight: 700, color: s.n > 0 ? INK : '#1F7A54' }}>{s.n}</div><div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{s.label}</div></div>)}
-      </section>
-      <div style={{ ...card, marginTop: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}><h3 style={{ fontSize: 13.5, margin: 0 }}>Top 10 — fix these first</h3><span style={{ fontSize: 11, color: MUTED }}>ranked by composite priority · KEV = actively exploited</span></div>
-        <div style={{ overflowX: 'auto', marginTop: 10 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 420 }}>
-            <thead><tr>{['#', 'Vuln', 'CVE', 'Priority', 'CVSS', 'EPSS'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {top10.map((v: Vulnerability, i: number) => { const sc = ctxScore(v); const bm = BAND_META[band(sc)]; return (
-                <tr key={v.id} onClick={() => onView(v)} style={{ cursor: 'pointer' }} className="vrow">
-                  <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{i + 1}</td>
-                  <td style={{ ...td, whiteSpace: 'normal', maxWidth: 240 }}>{v.title}{v.kev_flag && <span style={{ ...pill('#C2453F', '#FBEAEA'), fontSize: 9, marginLeft: 6 }}>KEV</span>}</td>
-                  <td style={{ ...td, fontFamily: MONO, color: v.cve_id ? SEC : FAINT }}>{v.cve_id || '—'}</td>
-                  <td style={{ ...td, fontFamily: MONO, color: bm.c, fontWeight: 600 }}>{sc} · {bm.label}</td>
-                  <td style={{ ...td, fontFamily: MONO }}>{v.cvss_score ?? '—'}</td>
-                  <td style={{ ...td, fontFamily: MONO, color: FAINT }}>{v.epss_score != null ? `${(v.epss_score * 100).toFixed(1)}%` : '—'}</td>
-                </tr>
-              ); })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default VulnsWorkspace;
