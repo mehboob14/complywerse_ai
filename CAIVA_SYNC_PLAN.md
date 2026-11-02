@@ -185,6 +185,17 @@ configuration, §13) through `itsm_seed.run_boot_heal()` on startup. Advisories 
   `PUT /admin/password-policy` and `GET /admin/roles/{id}/members` already check
   `admin:settings:edit` / `admin:roles:view` in the handler (admin router not touched).
 - Audit redaction gained the product's SNMP-community / passwd / access_key substrings.
+- **Pentest tenant isolation** (the product's `3d84296`, here `4d14b1bd`): background scan /
+  exploit jobs take the authenticated request tenant (`_slug(request)`), not the env default,
+  so a run is never executed against another tenant's DB. Scan resume-on-startup loops every
+  active registry tenant and now lives in `backend/main.py` (grc/main.py's startup never fires
+  under the mount); the hosted-scan resume is wired in too. Unauthenticated `X-Tenant-Slug`-only
+  calls no longer write pentest event-log rows.
+- **Endpoint-agent Windows recon** (the product's `6052466`, here `68da3767`): agent-reported
+  Windows surface becomes config findings + KB->CVE candidates; guarded on recon presence.
+  Pentest test results identical before and after (4 failures pre-exist on this branch:
+  `test_ai_registry` pentest-calls + 3 `test_module_access` pentest reads; the nmap-parser
+  assert in `pentest/service.py`'s self-check also pre-exists).
 
 ## 8. Verification (all local, nothing deployed)
 
