@@ -88,7 +88,7 @@ const KEYS = {
   inv: [...SCORECARD_QUERY_KEYS.assets], // shared with the register scorecard + Performance
   devices: ['disc-discovered-devices', 'all'],
 };
-const REG = '/assets?tab=inventory';
+const REG = '/cyber-assurance/assets?tab=inventory';
 /** /assets reads ?tab= only when it mounts, so a client-side push to another tab of THIS
     page would change the URL but leave the Overview showing — same-page links navigate for
     real; every other route keeps Next's client-side Link. */

@@ -86,7 +86,7 @@ def _resume_inflight_scans_all_tenants():
             m.close()
     except Exception:  # noqa: BLE001
         log.warning("tenant enumeration for scan resume failed; using DEFAULT_TENANT_SLUG only", exc_info=True)
-        slugs = [os.getenv("DEFAULT_TENANT_SLUG", "ava")]
+        slugs = [s for s in [os.getenv("DEFAULT_TENANT_SLUG", "").strip()] if s]
     for slug in slugs:
         try:
             from grc.modules.integrations.services.hosted_scan import resume_inflight_hosted_scans

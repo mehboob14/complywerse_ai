@@ -29,7 +29,7 @@ const SLA_TONE: Record<SlaBand, Tone> = {
   breaching: { ...SEV.critical, label: 'Breaching' },
 };
 
-const HD_HREF = '/helpdesk/dashboard';
+const HD_HREF = '/cyber-assurance/helpdesk/dashboard';
 
 export function HelpDeskKpisLens({ q, hideIfNoAccess = false, className = 'xl:col-span-6' }: {
   q: LensQuery<HdResult>;

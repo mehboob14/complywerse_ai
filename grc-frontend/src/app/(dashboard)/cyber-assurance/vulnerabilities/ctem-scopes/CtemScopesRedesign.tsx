@@ -412,7 +412,7 @@ export default function CtemScopesRedesign() {
     );
   }
 
-  const findingsHref = `/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
+  const findingsHref = `/cyber-assurance/vulnerabilities?ctem_scope_id=${s.id}&ctem_scope_name=${encodeURIComponent(s.name)}`;
 
   // ── Gated loop ────────────────────────────────────────────────────────────
   const sp = s.stageProgress ?? null;

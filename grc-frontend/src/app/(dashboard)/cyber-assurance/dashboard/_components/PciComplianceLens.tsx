@@ -22,7 +22,7 @@ import { BAND, Card, Eyebrow, Empty, Figure, Loading, SEV, T, Unavailable, nfmt,
 import { LensBoundary } from './LensBoundary';
 import { PCI_REASONS, type LensQuery, type PciAssetState, type PciReason, type PciSummary } from '@/cyber-assurance/lib/dashboardExtrasApi';
 
-const PCI_HREF = '/assets?tab=inventory&pci=1';
+const PCI_HREF = '/cyber-assurance/assets?tab=inventory&pci=1';
 const MAX_ROWS = 5;
 
 const th: CSSProperties = { padding: '6px 8px', fontSize: 10.5, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: T.muted, background: T.subtle, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' };
