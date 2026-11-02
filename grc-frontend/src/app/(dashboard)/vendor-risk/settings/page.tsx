@@ -18,14 +18,13 @@ import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
-import { alertRulesApi, alertRulesKey } from '../_lib/alertRulesApi';
 import { FieldsEditor, ListsEditor, liveFields, useModuleSettings } from '@/components/settings/CustomFields';
 import ExposureSection, { exposureProblems, exposureSummary, type Quant } from './_Exposure';
 import { EvidenceEditor, FactorsEditor, activeEvidence, type EvidenceDraft, type Named } from './_Lists';
 import QuestionsEditor, {
   questionsProblems, questionsSummary, type BuiltinSection, type CustomQuestion, type QuestionsDraft,
 } from './_Questions';
-import { Help, Row, Section, TargetsPicker, TIERS, TIER_LABEL, Unit, fieldCls, inputCls, type Directory } from './_ui';
+import { Help, Row, Section, TargetsPicker, TIERS, TIER_LABEL, Unit, inputCls, type Directory } from './_ui';
 
 interface ReminderPolicy {
   enabled: boolean; remind_before_days: number; repeat_every_days: number; escalate_after_days: number;
@@ -119,6 +118,16 @@ interface SectionDef {
   id: string; keys: DraftKey[]; title: string; icon: LucideIcon; keywords: string; summary: string; body: () => React.ReactNode;
 }
 
+/** A setting that moved to the Policy page: one line, with the way there. */
+function MovedToPolicy({ where, label, what }: { where: string; label: string; what?: string }) {
+  return (
+    <p className="text-sm text-slate-600">
+      {what ? `${what}: moved to ` : 'Moved to '}
+      <Link href={`/vendor-risk/policy#${where}`} className="font-medium text-primary-700 hover:underline">Policy → {label}</Link>.
+    </p>
+  );
+}
+
 export default function VendorRiskSettingsPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -146,11 +155,6 @@ export default function VendorRiskSettingsPage() {
   const { data: emails } = useQuery({
     queryKey: ['tprm-email-templates'],
     queryFn: async () => ((await vendorEmailsApi.list()).data?.items || []) as Array<{ key: string; label: string; changed: boolean }>,
-    ...TPRM_QUERY_OPTS,
-  });
-  const { data: alertRules } = useQuery({
-    queryKey: alertRulesKey,
-    queryFn: async () => (await alertRulesApi.list()).data,
     ...TPRM_QUERY_OPTS,
   });
 
@@ -194,6 +198,8 @@ export default function VendorRiskSettingsPage() {
         else if (k === 'custom_evidence') Object.assign(custom, draft!.custom_evidence);
         else if (k === 'scan_scoring') body.monitoring_policy = { ...(body.monitoring_policy as object || {}), ...draft!.scan_scoring };
         else if (k === 'monitoring_policy') body.monitoring_policy = { ...(body.monitoring_policy as object || {}), ...draft!.monitoring_policy };
+        // the approver role and the reopen threshold are the Policy page's: send only what this page edits, so a stale copy cannot overwrite them
+        else if (k === 'tier_policy') body.tier_policy = Object.fromEntries(Object.entries(draft!.tier_policy).map(([tier, rules]) => [tier, { template_ids: rules.template_ids, evidence: rules.evidence }]));
         else body[k] = draft![k];
       });
       if (Object.keys(custom).length) body.customisation = custom;
@@ -254,7 +260,6 @@ export default function VendorRiskSettingsPage() {
   };
 
   const problems = [
-    ...(t.critical >= t.high && t.high >= t.medium ? [] : ['Tier thresholds must go Critical ≥ High ≥ Medium']),
     ...(weightTotal > 0 ? [] : ['At least one risk factor needs a weight']),
     ...(r.repeat_every_days >= 1 ? [] : ['Overdue reminders must repeat at least every day']),
     ...exposureProblems(draft.quantification).map((p) => `Exposure model: ${p}`),
@@ -303,24 +308,10 @@ export default function VendorRiskSettingsPage() {
         ),
       },
       {
-        id: 'thresholds', keys: ['thresholds'], icon: Gauge, title: 'Where each tier starts',
-        keywords: 'tier threshold score critical high medium low',
+        id: 'thresholds', keys: [], icon: Gauge, title: 'Where each tier starts',
+        keywords: 'tier threshold score critical high medium low policy',
         summary: `Critical from ${t.critical} · High from ${t.high} · Medium from ${t.medium} · Low below ${t.medium}`,
-        body: () => (
-          <>
-            <Help>An inherent risk score at or above a threshold gets that tier. Below Medium is Low.</Help>
-            {(['critical', 'high', 'medium'] as const).map((k) => (
-              <Row key={k} label={`${TIER_LABEL[k]} from a score of`} htmlFor={`t-${k}`}>
-                <input id={`t-${k}`} type="number" min={0} max={100} className={inputCls} disabled={!canEdit} value={t[k] ?? 0}
-                  onChange={(e) => set('thresholds', { ...t, [k]: Number(e.target.value) })} />
-                <Unit>/ 100</Unit>
-              </Row>
-            ))}
-            {!(t.critical >= t.high && t.high >= t.medium) && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-rose-600"><AlertCircle className="h-3.5 w-3.5" /> Critical must be at least High, and High at least Medium.</p>
-            )}
-          </>
-        ),
+        body: () => <MovedToPolicy where="bands" label="Bands and cadence" />,
       },
       {
         id: 'evidence-types', keys: ['custom_evidence'], icon: FileCheck2, title: 'Evidence types',
@@ -342,10 +333,10 @@ export default function VendorRiskSettingsPage() {
           return (
             <>
               <Help>
-                A supplier’s tier decides the questionnaires it answers, the evidence it must supply, who may approve it, and how
-                serious a monitoring alert must be to reopen its assessment. Questionnaires left unchosen fall back to the
-                built-in ones suggested for the tier.
+                A supplier’s tier decides the questionnaires it answers and the evidence it must supply. Questionnaires left
+                unchosen fall back to the built-in ones suggested for the tier.
               </Help>
+              <div className="mb-3"><MovedToPolicy what="Who approves, and when an alert reopens" where="approvals" label="Approver and reopen" /></div>
               <div role="tablist" aria-label="Tier" className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                 {TIERS.map((k) => (
                   <button key={k} type="button" role="tab" aria-selected={tierTab === k} onClick={() => setTierTab(k)}
@@ -381,27 +372,6 @@ export default function VendorRiskSettingsPage() {
                       ))}
                     </div>
                   </div>
-                  <label className="text-xs font-medium text-slate-600">
-                    Approved only by someone with the role
-                    <select value={rules.approver_role || ''} onChange={(e) => setTierRule(tierTab, { approver_role: e.target.value || null })}
-                      className={clsx(fieldCls, 'mt-1 font-normal')}>
-                      <option value="">Anyone who may approve suppliers</option>
-                      {rules.approver_role && !(directory?.roles || []).includes(rules.approver_role) && (
-                        <option value={rules.approver_role}>{rules.approver_role} (no such role now)</option>
-                      )}
-                      {(directory?.roles || []).map((role) => <option key={role} value={role}>{role}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-xs font-medium text-slate-600">
-                    A monitoring alert reopens the assessment from
-                    <select value={rules.reassess_on} onChange={(e) => setTierRule(tierTab, { reassess_on: e.target.value })}
-                      className={clsx(fieldCls, 'mt-1 font-normal')}>
-                      {(data.meta.severities || ['low', 'medium', 'high', 'critical']).map((sv) => (
-                        <option key={sv} value={sv}>{sv.charAt(0).toUpperCase() + sv.slice(1)} severity and above</option>
-                      ))}
-                    </select>
-                    <span className="mt-0.5 block font-normal text-slate-400">A reported breach always does.</span>
-                  </label>
                 </fieldset>
               )}
             </>
@@ -411,21 +381,10 @@ export default function VendorRiskSettingsPage() {
     ] },
     { group: 'Reviews, reminders and emails', items: [
       {
-        id: 'cadence', keys: ['cadence_days'], icon: CalendarClock, title: 'How often each tier is reassessed',
-        keywords: 'reassessment cadence days review frequency',
+        id: 'cadence', keys: [], icon: CalendarClock, title: 'How often each tier is reassessed',
+        keywords: 'reassessment cadence days review frequency policy',
         summary: TIERS.map((k) => `${TIER_LABEL[k]} ${days(draft.cadence_days[k])}`).join(' · '),
-        body: () => (
-          <>
-            <Help>The time from one approved assessment to the next, by tier.</Help>
-            {TIERS.map((k) => (
-              <Row key={k} label={TIER_LABEL[k]} htmlFor={`c-${k}`} help={days(draft.cadence_days[k])}>
-                <input id={`c-${k}`} type="number" min={1} className={inputCls} disabled={!canEdit} value={draft.cadence_days[k] ?? 365}
-                  onChange={(e) => set('cadence_days', { ...draft.cadence_days, [k]: Number(e.target.value) })} />
-                <Unit>days</Unit>
-              </Row>
-            ))}
-          </>
-        ),
+        body: () => <MovedToPolicy where="bands" label="Bands and cadence" />,
       },
       {
         id: 'reminders', keys: ['reminder_policy'], icon: BellRing, title: 'Reminders and escalation',
@@ -611,35 +570,15 @@ export default function VendorRiskSettingsPage() {
                   </span>
                 </span>
               </label>
-              <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
-                <input type="checkbox" className="mt-1" disabled={!canEdit} checked={!!m.grip_daily}
-                  onChange={(e) => set('monitoring_policy', { ...m, grip_daily: e.target.checked })} />
-                <span>
-                  Sync shadow SaaS from Grip Security every day
-                  <span className="mt-0.5 block text-[11px] text-slate-500">
-                    New apps and who uses each arrive on their own each day, once Grip is connected under Admin → Connectors.
-                    A sync can still be run by hand from the Shadow SaaS page.
-                  </span>
-                </span>
-              </label>
             </>
           );
         },
       },
       {
         id: 'alert-rules', keys: [], icon: Siren, title: 'Alert rules',
-        keywords: 'alert rule signal notify tell task to-do reassessment bring forward reopen breach order',
-        summary: alertRules
-          ? `The two built in${alertRules.items.length ? ` · ${alertRules.items.filter((x) => x.enabled).length} of your own on` : ''}`
-          : 'What a monitoring alert sets off',
-        body: () => (
-          <>
-            <Help>Every verified alert is emailed and can reopen an assessment. Your own rules add to that.</Help>
-            <Link href="/vendor-risk/settings/alert-rules" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Siren className="h-4 w-4" /> Edit the rules
-            </Link>
-          </>
-        ),
+        keywords: 'alert rule signal notify tell task to-do reassessment bring forward reopen breach order policy',
+        summary: 'What a monitoring alert sets off',
+        body: () => <MovedToPolicy where="alert-rules" label="Alert rules" />,
       },
     ] },
     { group: 'Security ratings', items: [

@@ -6,6 +6,7 @@ acting user id; callers (the API layer) own the commit boundary unless noted.
 """
 from __future__ import annotations
 
+import copy
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -22,15 +23,15 @@ from ....models import (
     TPRAMonitoringSignal, TPRAAuditLog, TPRAEvidenceLink, TPRAEngagement, CriticalTask, GRCUser,
 )
 from .stages import (
-    TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, is_gate,
-    stages_at_or_after, can_skip, cadence_days_for, required_reviewers_for,
-    TIER_SKIPPABLE_STAGES, TIER_REQUIRED_REVIEWERS, TIER_RANK,
+    TPRA_STAGES, STAGE_BY_KEY, STAGE_ORDER, STAGE_KEYS, STAGE_CONTENT, is_gate,
+    stages_at_or_after, can_skip, cadence_days_for, stage_label, TIER_RANK,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity, is_answered,
 )
-from . import intake as intake_answers, rbac, tier_policy, versions
+from . import intake as intake_answers, policy as vendor_policy, rbac, roster as workspace_roster, tier_policy, versions
+from .policy import POLICY_KEYS
 from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
@@ -186,22 +187,41 @@ def acceptance_holds(db: Session, finding: TPRAFinding, now: Optional[datetime] 
     return finding.status == "accepted" and not rows
 
 
+def reopened_status(finding: TPRAFinding) -> str:
+    """Where a finding goes back to: in remediation when a task is tracking its fix, else open."""
+    return "in_remediation" if finding.task_id else "open"
+
+
 def reopen_finding(db: Session, finding: TPRAFinding, actor_id: Optional[int], reason: str) -> None:
     """A finding its acceptance no longer covers (revoked, or expired) is open
     again and counts in every gate and count: on the audit trail (no actor = the
     system), given an issue if it has none, and an onboarded vendor is suspended
     if a critical is left unmitigated (TPRM-002). Caller owns commit."""
     if finding.status == "accepted":
-        finding.status = "open"
+        finding.status = reopened_status(finding)
         finding.row_version = (finding.row_version or 1) + 1
         write_audit(db, finding.tenant_id, entity="finding", action="reopen", vendor_id=finding.vendor_id,
                     assessment_id=finding.assessment_id, entity_id=finding.id, actor_id=actor_id,
-                    from_value="accepted", to_value="open", reason=reason)
+                    from_value="accepted", to_value=finding.status, reason=reason)
     ensure_finding_issue(db, finding, actor_id)
     vendor = db.query(Vendor).filter(Vendor.id == finding.vendor_id).first()
     assessment = db.query(VendorAssessment).filter(VendorAssessment.id == finding.assessment_id).first()
     if vendor and assessment:
         enforce_critical_invariant(db, vendor, assessment, actor_id)
+
+
+def _unmitigated(db: Session, f: TPRAFinding, now: datetime) -> bool:
+    """Whether a finding still stands: neither closed, nor covered by an acceptance
+    in force, nor by a completed remediation."""
+    # A past-expiry acceptance re-surfaces the finding for re-review: it is no
+    # longer a standing mitigation, so it does not clear the approval gate.
+    if f.status == "closed" or acceptance_holds(db, f, now):
+        return False
+    return not db.query(TPRARemediation.id).filter(
+        TPRARemediation.finding_id == f.id,
+        TPRARemediation.deleted_at.is_(None),
+        TPRARemediation.status == "completed",
+    ).first()
 
 
 def count_open_critical(db: Session, assessment_id: int) -> int:
@@ -217,24 +237,49 @@ def count_open_critical(db: Session, assessment_id: int) -> int:
         .all()
     )
     now = datetime.utcnow()
-    open_count = 0
-    for f in crit:
-        # A past-expiry acceptance re-surfaces the critical for re-review: it is no
-        # longer a standing mitigation, so it does not clear the approval gate.
-        if f.status == "closed" or acceptance_holds(db, f, now):
-            continue
-        has_done_remediation = (
-            db.query(TPRARemediation.id)
-            .filter(
-                TPRARemediation.finding_id == f.id,
-                TPRARemediation.deleted_at.is_(None),
-                TPRARemediation.status == "completed",
-            ).first()
-        )
-        if has_done_remediation:
-            continue
-        open_count += 1
-    return open_count
+    return sum(1 for f in crit if _unmitigated(db, f, now))
+
+
+def gate_findings(db: Session, vendor: Vendor) -> List[Tuple[TPRAFinding, Optional[int]]]:
+    """The findings that hold an approval, wherever on the supplier they sit (General, any engagement, any review of
+    either): critical or marked blocking (the flag findings gain in B5a; a finding without it is not blocking), and still
+    standing (_unmitigated). Each comes with the engagement of the assessment it was raised on (None: General)."""
+    now = datetime.utcnow()
+    rows = (db.query(TPRAFinding, VendorAssessment.engagement_id)
+            .outerjoin(VendorAssessment, VendorAssessment.id == TPRAFinding.assessment_id)
+            .filter(TPRAFinding.vendor_id == vendor.id, TPRAFinding.deleted_at.is_(None))
+            .order_by(TPRAFinding.id).all())
+    return [(f, engagement_id) for f, engagement_id in rows
+            if (f.severity == "critical" or getattr(f, "is_blocking", False)) and _unmitigated(db, f, now)]
+
+
+def gate_summary(db: Session, vendor: Vendor, assessment: VendorAssessment) -> dict:
+    """What the findings gate counts for this assessment: {count, detail}. `detail` says where they are when that is more
+    than 'critical findings on this scope' (the old, plainer sentence): on other engagements, or blocking without being
+    critical; None otherwise."""
+    held = gate_findings(db, vendor)
+    scope = assessment.engagement_id
+    elsewhere: Dict[Optional[int], int] = {}
+    for _, engagement_id in held:
+        if engagement_id != scope:
+            elsewhere[engagement_id] = elsewhere.get(engagement_id, 0) + 1
+    blocking = sum(1 for f, _ in held if f.severity != "critical")
+    parts: List[str] = []
+    if elsewhere or blocking:
+        names = {e.id: e.name for e in db.query(TPRAEngagement).filter(TPRAEngagement.vendor_id == vendor.id)}
+        here = len(held) - sum(elsewhere.values())
+        if here:
+            parts.append(f"{here} here")
+        parts += [f"{n} on {names.get(eid) or 'General'}" for eid, n in sorted(elsewhere.items(), key=lambda kv: kv[0] or 0)]
+        if blocking:
+            parts.append(f"{blocking} marked blocking")
+    return {"count": len(held), "detail": ", ".join(parts) or None}
+
+
+def gate_count(db: Session, assessment: VendorAssessment) -> int:
+    """How many findings hold this assessment's approval (the advisory recommendation reads it too)."""
+    vendor = db.get(Vendor, assessment.vendor_id)
+    return gate_summary(db, vendor, assessment)["count"] if vendor is not None else count_open_critical(db, assessment.id)
 
 
 # ── TPRM-003: mirror findings into the shared Issue/Action module ────────────
@@ -383,20 +428,19 @@ def enforce_critical_invariant(
                        getattr(vendor, "id", "?"), exc_info=True)
 
 
-# The team-roster seats that review an assessment: the disciplines a tier asks
-# for. The business owner, the TPRM lead and analyst running it, procurement, IT
-# and the approver are not its reviewers.
-REVIEWER_SEATS = {seat for seats in TIER_REQUIRED_REVIEWERS.values() for seat in seats}
-
-
 def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
     """How many different people are named to review this assessment: the plan's
     reviewer, whoever holds a reviewing seat in Assign duties (the roster), and
-    whoever is assigned a part of its questionnaires (tpra/reviews.py)."""
+    whoever is assigned a part of its questionnaires (tpra/reviews.py). The
+    reviewing seats are the disciplines the policy asks of some tier (the business
+    owner, the TPRM lead and analyst running it, procurement, IT and the approver
+    are not its reviewers); a seat the supplier left empty is the workspace
+    roster's first person for the role."""
     from ....models import TPRAReviewAssignment
 
-    roster = assessment.team_roster or {}
-    people = {assessment.reviewed_by, *(roster.get(seat) for seat in REVIEWER_SEATS)}
+    team = workspace_roster.effective_team(db, assessment.tenant_id, assessment.team_roster)
+    seats = vendor_policy.reviewer_seats(config_for(db, assessment))
+    people = {assessment.reviewed_by, *(team.get(seat) for seat in seats)}
     people.update(uid for (uid,) in db.query(TPRAReviewAssignment.reviewer_id).filter(
         TPRAReviewAssignment.assessment_id == assessment.id))
     return len({p for p in people if p})
@@ -407,11 +451,12 @@ def reviewers_assigned(db: Session, assessment: VendorAssessment) -> int:
 # set (computed, set by hand, or carried into a reassessment), so a change to the
 # settings never moves the goalposts of an assessment under way: its gates,
 # approval rules and scoring read them. A re-tier takes the settings as they stand.
-POLICY_KEYS = ("weights", "thresholds", "cadence_days", "tier_policy")
+# POLICY_KEYS (tpra/policy.py) names them: the bands, cadence, tier policy, fix windows,
+# skipped stages and required reviewers.
 
 
 def policy_snapshot(cfg: dict) -> dict:
-    snap = {k: dict(cfg.get(k) or {}) for k in POLICY_KEYS}     # copies: a later edit stays out
+    snap = {k: copy.deepcopy(cfg.get(k) or {}) for k in POLICY_KEYS}     # copies: a later edit stays out
     snap["tier_policy"] = tier_policy.merged(cfg.get("tier_policy"))
     snap["at"] = datetime.utcnow().isoformat()
     return snap
@@ -420,8 +465,7 @@ def policy_snapshot(cfg: dict) -> dict:
 def config_for(db: Session, assessment: VendorAssessment) -> dict:
     """The tenant's config, with the assessment's own snapshot over it when it has one."""
     cfg = get_tiering_config(db, assessment.tenant_id)
-    snap = getattr(assessment, "policy_snapshot", None) or {}
-    return {**cfg, **{k: snap[k] for k in POLICY_KEYS if snap.get(k)}}
+    return vendor_policy.held_to(cfg, getattr(assessment, "policy_snapshot", None))
 
 
 def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> dict:
@@ -433,10 +477,12 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     ctx: dict = {"tier": tier}
 
     if stage_key == "intake":
+        # The supplier's own classification (the Add / Edit dialog's Data box) counts as much as its data access level.
+        classified = bool(scope.data_access_level and scope.data_access_level != "none")
         ctx.update(
             has_name=bool(scope.name),
             has_owner=bool(scope.owner_id),
-            has_data_classification=bool(scope.data_access_level and scope.data_access_level != "none"),
+            has_data_classification=classified or (engagement is None and bool(vendor.data_classification)),
         )
     elif stage_key == "tiering":
         ctx["inherent_tier"] = assessment.inherent_tier
@@ -444,10 +490,11 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         ctx["templates_selected"] = 1 if assessment.template_id else (
             db.query(TPRAQuestionResponse.id).filter(TPRAQuestionResponse.assessment_id == assessment.id).first() and 1 or 0
         )
-        ctx["reviewer_roles"] = required_reviewers_for(tier)
+        cfg = config_for(db, assessment)
+        ctx["reviewer_roles"] = vendor_policy.required_reviewers(cfg, tier)
         ctx["required_reviewers"] = len(ctx["reviewer_roles"])
         ctx["reviewers_assigned"] = reviewers_assigned(db, assessment)
-        wanted = tier_policy.requirements(db, vendor, assessment, config_for(db, assessment))
+        wanted = tier_policy.requirements(db, vendor, assessment, cfg)
         ctx["tier_templates_unsent"] = [q["name"] for q in wanted["questionnaires"] if q["status"] == "unsent"]
     elif stage_key == "questionnaire":
         # Completeness from what the supplier answered, question by question
@@ -463,7 +510,8 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     elif stage_key == "scoring":
         ctx["residual_computed"] = assessment.residual_score is not None
     elif stage_key == "findings":
-        ctx["open_critical_unmitigated"] = count_open_critical(db, assessment.id)
+        held = gate_summary(db, vendor, assessment)
+        ctx["open_critical_unmitigated"], ctx["open_gate_detail"] = held["count"], held["detail"]
     elif stage_key == "contracting":
         # A contract for the whole supplier covers every engagement; one made for
         # an engagement covers only that one.
@@ -480,9 +528,20 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
     elif stage_key == "approval":
         decided = approval_in_force(db, assessment)
         ctx["approval_decision"] = decided.decision if decided else None
-        ctx["open_critical_unmitigated"] = count_open_critical(db, assessment.id)
+        held = gate_summary(db, vendor, assessment)
+        ctx["open_critical_unmitigated"], ctx["open_gate_detail"] = held["count"], held["detail"]
+        # The tier's reviewers are asked for again here: Medium skips planning, so planning never asks for its reviewer.
+        ctx["reviewer_roles"] = vendor_policy.required_reviewers(config_for(db, assessment), tier)
+        ctx["required_reviewers"] = len(ctx["reviewer_roles"])
+        ctx["reviewers_assigned"] = reviewers_assigned(db, assessment)
     elif stage_key == "onboarding":
-        ctx["access_provisioned"] = True  # tracked via the onboarding checklist UI
+        # Done when the stage's checklist is; one never saved is the stage's own activities, none of them done.
+        row = _stage_row(db, assessment.id, "onboarding")
+        items = (row.checklist if row is not None else None) or [{} for _ in STAGE_CONTENT["onboarding"]["activities"]]
+        ctx["checklist_total"] = len(items)
+        ctx["checklist_done"] = sum(1 for i in items if isinstance(i, dict) and i.get("done"))
+    elif stage_key == "reassessment":
+        ctx["cycle_settled"] = cycle_settled(db, vendor, assessment)
     return ctx
 
 
@@ -499,6 +558,71 @@ def _stage_row(db: Session, assessment_id: int, stage_key: str) -> Optional[TPRA
         .filter(TPRAStageInstance.assessment_id == assessment_id, TPRAStageInstance.stage_key == stage_key)
         .first()
     )
+
+
+def cycle_settled(db: Session, vendor: Vendor, assessment: VendorAssessment) -> bool:
+    """The last stage's own exit: a new review cycle has opened (this assessment is superseded), or the exit is complete
+    (the supplier is archived, or the engagement has ended)."""
+    engagement = engagement_of(db, assessment)
+    return (assessment.lifecycle_status != "active" or vendor.deleted_at is not None
+            or (engagement is not None and engagement.status == "ended"))
+
+
+def settle_final_stage(db: Session, assessment: VendorAssessment) -> bool:
+    """Stage 11 is settled when a new review cycle opens: an assessment that had come to it has it completed, so its history
+    reads 11 of 11. One still at an earlier stage (a signal opened the next review in the middle of it) is left as it was."""
+    row = _stage_row(db, assessment.id, "reassessment")
+    if row is None or row.status in ("complete", "skipped") or assessment.current_stage != "reassessment":
+        return False
+    row.status, row.completed_at = "complete", datetime.utcnow()
+    row.exit_criteria_result = {"passed": True, "blockers": []}
+    row.row_version = (row.row_version or 1) + 1
+    return True
+
+
+HISTORY_ACTIONS = ("transition", "send_back", "skip", "reopen")
+
+
+def stage_history(db: Session, vendor: Vendor, engagement: Optional[TPRAEngagement], limit: int = 100) -> List[dict]:
+    """What moved one scope's work, newest first, across every review of it: stages completed, sent back, skipped and
+    reopened, with who and why. Read from the audit trail, so nothing is kept twice."""
+    reviews = {a.id: a.version_no for a in _in_scope(db.query(VendorAssessment).filter(
+        VendorAssessment.vendor_id == vendor.id, VendorAssessment.deleted_at.is_(None)), _scope(engagement))}
+    if not reviews:
+        return []
+    rows = (db.query(TPRAAuditLog)
+            .filter(TPRAAuditLog.vendor_id == vendor.id, TPRAAuditLog.entity == "stage",
+                    TPRAAuditLog.action.in_(HISTORY_ACTIONS), TPRAAuditLog.assessment_id.in_(list(reviews)))
+            .order_by(TPRAAuditLog.id.desc()).limit(limit).all())
+    who = {u.id: u.display_name or u.username or u.email for u in db.query(GRCUser).filter(
+        GRCUser.id.in_({r.actor_id for r in rows if r.actor_id} or {-1}))}
+    stage_of = {s.id: s.stage_key for s in db.query(TPRAStageInstance).filter(
+        TPRAStageInstance.id.in_({r.entity_id for r in rows if r.action == "skip" and r.entity_id} or {-1}))}
+    out = []
+    for r in rows:
+        if r.action == "skip":      # older rows name the stage only through the row they skipped
+            key = next((v for v in (r.from_value, r.to_value) if v in STAGE_BY_KEY), stage_of.get(r.entity_id))
+            frm, to = key, None
+        elif r.action == "reopen":
+            frm, to = None, r.to_value
+        else:
+            frm, to = r.from_value, r.to_value
+        out.append({"id": r.id, "action": r.action, "from": frm, "to": to, "reason": r.reason,
+                    "actor": who.get(r.actor_id), "at": r.created_at, "review": reviews.get(r.assessment_id)})
+    return out
+
+
+def _next_actionable(db: Session, assessment_id: int, order: int) -> Tuple[Optional[str], Optional[TPRAStageInstance]]:
+    """The first stage after position `order` still to be done: skipped and completed ones are stepped over, so the current
+    pointer never lands on a stage that is already settled."""
+    while order < len(STAGE_KEYS):
+        key = STAGE_KEYS[order]
+        row = _stage_row(db, assessment_id, key)
+        if row and row.status in ("skipped", "complete"):
+            order += 1
+            continue
+        return key, row
+    return None, None
 
 
 def _set_stage(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> None:
@@ -525,19 +649,8 @@ def advance_stage(
         cur.row_version = (cur.row_version or 1) + 1
 
     # Advance to the next ACTIONABLE stage, stepping over any that were skipped
-    # (e.g. right-sized away by tier) or already complete, so the current pointer
-    # never lands on a terminal (skipped/complete) stage.
-    order = STAGE_ORDER.get(current_key, 1)
-    nxt_key = None
-    nxt = None
-    while order < len(STAGE_KEYS):
-        candidate = STAGE_KEYS[order]
-        row = _stage_row(db, assessment.id, candidate)
-        if row and row.status in ("skipped", "complete"):
-            order += 1
-            continue
-        nxt_key, nxt = candidate, row
-        break
+    # (e.g. right-sized away by tier) or already complete.
+    nxt_key, nxt = _next_actionable(db, assessment.id, STAGE_ORDER.get(current_key, 1))
     if nxt_key:
         if nxt and nxt.status == "not_started":
             nxt.status = "in_progress"
@@ -588,10 +701,11 @@ def send_back(
         raise ValueError("send-back target must be an earlier stage")
 
     invalidated = stages_at_or_after(target_stage)
+    now = datetime.utcnow()
     for s in get_stage_instances(db, assessment.id):
         if s.stage_key == target_stage:
             s.status = "in_progress"
-            s.started_at = datetime.utcnow()
+            s.started_at = now
             s.completed_at = None
             s.exit_criteria_result = {}
         elif s.stage_key in invalidated:
@@ -599,6 +713,10 @@ def send_back(
             s.completed_at = None
             s.exit_criteria_result = {}
             s.gate_decision = {}
+            if s.stage_key == "approval":
+                # The freshness boundary of a decision (approval_in_force) moves now, not when the stage is entered again:
+                # an approval given before this send-back stops counting at once.
+                s.started_at = now
         s.row_version = (s.row_version or 1) + 1
 
     assessment.current_stage = target_stage
@@ -616,7 +734,7 @@ def skip_stage(
 ) -> dict:
     """Skip a non-gate stage where tier rules permit; record who & why."""
     tier = assessment.inherent_tier or (engagement_of(db, assessment) or vendor).tier or "medium"
-    if not can_skip(tier, stage_key):
+    if not can_skip(tier, stage_key, vendor_policy.skip_matrix(config_for(db, assessment))):
         raise ValueError(f"stage '{stage_key}' is not skippable for tier '{tier}'")
     row = _stage_row(db, assessment.id, stage_key)
     if not row:
@@ -626,11 +744,10 @@ def skip_stage(
     row.skipped_by = actor_id
     row.completed_at = datetime.utcnow()
     row.row_version = (row.row_version or 1) + 1
-    # Move current pointer forward if we skipped the active stage.
+    # Move current pointer forward if we skipped the active stage (past any stage already settled).
     if assessment.current_stage == stage_key:
-        order = STAGE_ORDER.get(stage_key, 1)
-        nxt = STAGE_KEYS[order] if order < len(STAGE_KEYS) else stage_key
-        nxt_row = _stage_row(db, assessment.id, nxt)
+        nxt, nxt_row = _next_actionable(db, assessment.id, STAGE_ORDER.get(stage_key, 1))
+        nxt = nxt or stage_key
         if nxt_row and nxt_row.status == "not_started":
             nxt_row.status = "in_progress"
             nxt_row.started_at = datetime.utcnow()
@@ -638,18 +755,93 @@ def skip_stage(
         _set_stage(db, vendor, assessment, nxt)
     write_audit(db, assessment.tenant_id, entity="stage", action="skip",
                 vendor_id=vendor.id, assessment_id=assessment.id, entity_id=row.id,
-                actor_id=actor_id, to_value="skipped", reason=reason)
+                actor_id=actor_id, from_value=stage_key, to_value="skipped", reason=reason)
     return {"skipped": stage_key, "reason": reason}
 
 
 # ── Engine runs (tiering / scoring) ──────────────────────────────────────────
 
+class RetierRefused(ValueError):
+    """A tier cannot change now (an exit is under way); the message is the sentence to show."""
+
+
+AUTO_SKIP = "Auto-skipped — right-sized by inherent tier"
+
+
+def retier_problem(db: Session, vendor: Vendor, assessment: VendorAssessment) -> Optional[str]:
+    """Why this scope's tier cannot change now, or None. Once an exit has started the work ahead is being wrapped up, not
+    planned again."""
+    if (vendor.status or "").lower() == "offboarded":
+        return f"{vendor.name} is being offboarded, so its tier stays as it is."
+    engagement = engagement_of(db, assessment)
+    if engagement is not None and (engagement.status == "ended" or (
+            isinstance(engagement.offboarding, dict) and not engagement.offboarding.get("completed_at"))):
+        return f"{engagement.name} is being offboarded, so its tier stays as it is."
+    return None
+
+
+def _follow_tier(db: Session, vendor: Vendor, assessment: VendorAssessment, old_tier: Optional[str], tier: str,
+                 old_cfg: dict, cfg: dict, actor_id: Optional[int]) -> dict:
+    """Make the work say what the new tier asks. One place, whichever way the tier was set (computed, or by hand).
+
+    A stage the tier skips and nobody has started is skipped, on the audit trail. A stage skipped earlier that the tier now
+    needs is reopened; when the work is already past it, the assessment goes back to the first stage still open, with the
+    reason in the transition, and an approval given before stops counting (send_back). A stage in progress stays. Once the
+    Approval gate is passed nothing is rewound: that review stays as it was decided, and the next one starts from the new
+    tier. The next review moves by the difference of the two cadences. The caller has already set the tier."""
+    tier = (tier or "medium").lower()
+    wanted = set(vendor_policy.skip_matrix(cfg).get(tier, []))
+    rows = {s.stage_key: s for s in get_stage_instances(db, assessment.id)}
+    reopened: List[str] = []
+    if not _past_approval(db, assessment):
+        for key in STAGE_KEYS:
+            row = rows.get(key)
+            if row is not None and row.status == "skipped" and key not in wanted:
+                row.status, row.skipped_reason, row.skipped_by, row.completed_at = "not_started", None, None, None
+                row.row_version = (row.row_version or 1) + 1
+                reopened.append(key)
+                write_audit(db, assessment.tenant_id, entity="stage", action="reopen", vendor_id=vendor.id,
+                            assessment_id=assessment.id, entity_id=row.id, actor_id=actor_id, from_value="skipped",
+                            to_value=key, reason=f"The {tier} tier needs {stage_label(key)}")
+    sent_back = None
+    first_open = next((k for k in STAGE_KEYS if k in rows and rows[k].status not in ("complete", "skipped")), None)
+    if reopened and first_open and STAGE_ORDER[first_open] < STAGE_ORDER.get(assessment.current_stage or "intake", 1):
+        labels = ", ".join(stage_label(k).lower() for k in reopened)
+        send_back(db, vendor, assessment, first_open, actor_id, f"Re-tiered to {tier}, so {labels} now apply.")
+        sent_back = first_open
+    # After any send-back, which makes every stage behind it not started again: the ones this tier skips are skipped anew.
+    skipped: List[str] = []
+    for key in STAGE_KEYS:
+        row = _stage_row(db, assessment.id, key) if key in wanted else None
+        if row is not None and row.status == "not_started":
+            row.status, row.skipped_reason, row.skipped_by = "skipped", AUTO_SKIP, None
+            row.row_version = (row.row_version or 1) + 1
+            skipped.append(key)
+            write_audit(db, assessment.tenant_id, entity="stage", action="skip", vendor_id=vendor.id,
+                        assessment_id=assessment.id, entity_id=row.id, actor_id=actor_id, from_value=key, to_value=key,
+                        reason=AUTO_SKIP)
+    holder = engagement_of(db, assessment) or vendor
+    if old_tier and holder.next_reassessment_date:
+        before, after = cadence_days_for(old_tier, old_cfg.get("cadence_days")), cadence_days_for(tier, cfg.get("cadence_days"))
+        # a review date someone set by hand (a cadence of its own) is theirs: only one that followed the tier follows it
+        if before != after and holder.reassessment_cadence_days in (None, before):
+            holder.next_reassessment_date = holder.next_reassessment_date + timedelta(days=after - before)
+            holder.reassessment_cadence_days = after
+    return {"from": old_tier, "to": tier, "reopened": reopened, "sent_back_to": sent_back, "skipped": skipped}
+
+
 def run_tiering(
     db: Session, vendor: Vendor, assessment: VendorAssessment, actor_id: Optional[int],
-    factors: Optional[Dict[str, float]] = None,
+    factors: Optional[Dict[str, float]] = None, override: Optional[Dict[str, str]] = None,
 ) -> dict:
     """Compute the inherent tier and persist it on the assessment + vendor (or, for
-    an engagement's assessment, on the engagement, from the engagement's facts)."""
+    an engagement's assessment, on the engagement, from the engagement's facts).
+    `override` ({tier, justification}) sets the tier by hand over the computed one, in the same step: the work follows the
+    tier that stands, once. Raises RetierRefused while an exit is under way."""
+    problem = retier_problem(db, vendor, assessment)
+    if problem:
+        raise RetierRefused(problem)
+    old_tier, old_cfg = assessment.inherent_tier, config_for(db, assessment)
     cfg = get_tiering_config(db, assessment.tenant_id)
     engagement = engagement_of(db, assessment)
     facts = tier_policy.facts(vendor, engagement)
@@ -667,7 +859,9 @@ def run_tiering(
             # last tier here, as it always has (a loop: the tier feeds itself).
             "business_criticality": engagement.criticality if engagement is not None else row.tier,
         })
-    result = compute_inherent_tier(factors, cfg)
+    # The answers can also hold the tier at a minimum (engine_tiering.minimum_tier).
+    answered = intake_answers.has_answers(getattr(facts, "intake", None))
+    result = compute_inherent_tier(factors, cfg, facts.intake if answered else None)       # whoever gave the factors
     if reasons:
         result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons),
@@ -677,25 +871,26 @@ def run_tiering(
     assessment.tier_override = None
     assessment.inherent_tier = result["tier"]
     assessment.inherent_score = result["score"]
+    computed = result["tier"]
+    if override:
+        assessment.tier_override = _override_record(old_tier or row.tier, override["tier"], computed,
+                                                    override["justification"], actor_id)
+        assessment.inherent_tier = result["tier"] = override["tier"]
+        result["computed_tier"], result["override"] = computed, assessment.tier_override
     set_scores(db, vendor, row, inherent_risk_score=result["score"], tier=result["tier"],
                risk_rating=row.risk_rating or result["tier"])
     assessment.row_version = (assessment.row_version or 1) + 1
-    # Right-size the path by tier: auto-skip the stages this tier is allowed to skip
-    # (a Low vendor bypasses deep diligence) so the path visibly collapses instead of
-    # relying on an analyst to remember to skip each one. advance_stage steps over
-    # these skipped stages.
-    for _sk in TIER_SKIPPABLE_STAGES.get((result["tier"] or "medium").lower(), []):
-        _st = _stage_row(db, assessment.id, _sk)
-        if _st and _st.status == "not_started":
-            _st.status = "skipped"
-            _st.row_version = (_st.row_version or 1) + 1
-            write_audit(db, assessment.tenant_id, entity="stage", action="skip",
-                        vendor_id=vendor.id, assessment_id=assessment.id, entity_id=_st.id,
-                        actor_id=actor_id, to_value=_sk,
-                        reason="Auto-skipped — right-sized by inherent tier")
+    # Right-size the path by tier: skip the stages this tier is allowed to skip (a Low vendor bypasses deep diligence), and
+    # reopen the ones it needs again, so the path follows the tier instead of relying on an analyst to remember.
+    # advance_stage steps over skipped stages.
+    result["retier"] = _follow_tier(db, vendor, assessment, old_tier, result["tier"], old_cfg, cfg, actor_id)
     write_audit(db, assessment.tenant_id, entity="tiering", action="update",
                 vendor_id=vendor.id, assessment_id=assessment.id, actor_id=actor_id,
-                to_value=result["tier"], extra={"score": result["score"]})
+                from_value=old_tier, to_value=result["tier"], extra={"score": result["score"]})
+    if override:
+        write_audit(db, assessment.tenant_id, entity="tiering", action="override", vendor_id=vendor.id,
+                    assessment_id=assessment.id, actor_id=actor_id, from_value=computed, to_value=override["tier"],
+                    reason=override["justification"], extra={"computed": computed})
     return result
 
 
@@ -869,24 +1064,34 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
     return _collect_from_questionnaire(db, assessment) if assessment else []
 
 
+def _override_record(previous: Optional[str], tier: str, computed: Optional[str], justification: str,
+                     actor_id: Optional[int]) -> dict:
+    return {"from": previous, "to": tier, "computed": computed, "justification": justification,
+            "by": actor_id, "at": datetime.utcnow().isoformat()}
+
+
 def record_tier_override(db: Session, vendor: Vendor, assessment: VendorAssessment, tier: str,
-                         justification: str, actor_id: Optional[int]) -> None:
+                         justification: str, actor_id: Optional[int]) -> dict:
     """A tier set by hand instead of computed: kept with who set it, why, and what
-    the engine had computed, and written to the vendor's audit trail."""
+    the engine had computed, and written to the vendor's audit trail. The work follows the new tier as it does a computed
+    one (_follow_tier); returns what changed. Raises RetierRefused while an exit is under way."""
+    problem = retier_problem(db, vendor, assessment)
+    if problem:
+        raise RetierRefused(problem)
     row = scope_row(db, vendor, engagement_of(db, assessment))
-    previous = assessment.inherent_tier or row.tier
+    old_tier = assessment.inherent_tier                 # None: never tiered (the supplier's own tier may be a seed)
+    previous = old_tier or row.tier
     computed = (assessment.tier_override or {}).get("computed") or assessment.inherent_tier
-    assessment.tier_override = {
-        "from": previous, "to": tier, "computed": computed, "justification": justification,
-        "by": actor_id, "at": datetime.utcnow().isoformat(),
-    }
+    old_cfg, cfg = config_for(db, assessment), get_tiering_config(db, assessment.tenant_id)
+    assessment.tier_override = _override_record(previous, tier, computed, justification, actor_id)
     assessment.inherent_tier = tier
-    assessment.policy_snapshot = policy_snapshot(get_tiering_config(db, assessment.tenant_id))
+    assessment.policy_snapshot = policy_snapshot(cfg)
     assessment.row_version = (assessment.row_version or 1) + 1
     set_scores(db, vendor, row, tier=tier)
     write_audit(db, assessment.tenant_id, entity="tiering", action="override", vendor_id=vendor.id,
                 assessment_id=assessment.id, actor_id=actor_id, from_value=previous, to_value=tier,
                 reason=justification, extra={"computed": computed})
+    return _follow_tier(db, vendor, assessment, old_tier, tier, old_cfg, cfg, actor_id)
 
 
 def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessment,
@@ -922,7 +1127,7 @@ def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessm
             source_response_id=r.get("response_id"), is_critical_control_fail=failed_critical,
             template_version_id=r.get("template_version_id"), question_key=str(key)[:100],
             answer_value=None if answered is None else str(answered)[:255],
-            status="open", created_by=actor_id,
+            status="open", created_by=actor_id, source="assessment", is_blocking=failed_critical,
         ))
         existing.add(str(key))
         created += 1
@@ -975,7 +1180,7 @@ def residual_from_inherent(db: Session, assessment: VendorAssessment, actor_id: 
     engagement = engagement_of(db, assessment)
     tier = assessment.inherent_tier or ((engagement or vendor).tier if vendor else None)
     if (vendor is None or assessment.inherent_score is None or scoring is None or scoring.status != "skipped"
-            or not can_skip(tier, "scoring")):
+            or not can_skip(tier, "scoring", vendor_policy.skip_matrix(config_for(db, assessment)))):
         return False
     assessment.residual_score = assessment.inherent_score
     assessment.residual_rating = tier
@@ -1017,11 +1222,16 @@ def conflicts(db: Session, assessment: VendorAssessment) -> Dict[int, str]:
     Assign duties); its business owner (the supplier's, or the engagement's, and
     the Business Owner seat); and whoever last moved it into approval. One reason
     each, the first that applies."""
-    roster = assessment.team_roster or {}
+    roster = workspace_roster.effective_team(db, assessment.tenant_id, assessment.team_roster)
+    seats = sorted(vendor_policy.reviewer_seats(config_for(db, assessment)))
     scope = engagement_of(db, assessment) or db.get(Vendor, assessment.vendor_id)
+    own = {k: v for k, v in (assessment.team_roster or {}).items() if v}
+    reviewers = [assessment.reviewed_by]
+    for seat in seats:             # the supplier's own seat, else everyone the roster names for the role
+        reviewers += [own[seat]] if own.get(seat) else [m["user_id"] for m in workspace_roster.members_for(db, assessment.tenant_id, seat)]
     named = (
         ("assessor", [assessment.assessed_by]),
-        ("reviewer", [assessment.reviewed_by, *(roster.get(seat) for seat in sorted(REVIEWER_SEATS))]),
+        ("reviewer", reviewers),
         ("business_owner", [getattr(scope, "owner_id", None), roster.get("business_owner")]),
         ("moved_to_approval", [moved_to_approval_by(db, assessment)]),
     )
@@ -1052,10 +1262,15 @@ def approval_problem(db: Session, user, assessment: VendorAssessment) -> Optiona
     problem = tier_policy.approver_problem(db, user, tier, policy, is_admin=rbac._is_admin_or_primary(db, user))
     if problem:
         return 403, problem
-    open_crit = count_open_critical(db, assessment.id)
-    if open_crit > 0:
-        return 400, (f"Cannot approve while {open_crit} unmitigated critical finding(s) remain — "
-                     "remediate or formally accept them first.")
+    vendor = db.get(Vendor, assessment.vendor_id)
+    held = (gate_summary(db, vendor, assessment) if vendor is not None
+            else {"count": count_open_critical(db, assessment.id), "detail": None})
+    if held["count"] > 0:
+        if held["detail"] is None:
+            return 400, (f"Cannot approve while {held['count']} unmitigated critical finding(s) remain — "
+                         "remediate or formally accept them first.")
+        return 400, (f"Cannot approve while {held['count']} critical or blocking finding(s) remain open "
+                     f"({held['detail']}) — fix, accept or close them first.")
     return None
 
 
@@ -1066,6 +1281,8 @@ def approvers(db: Session, assessment: VendorAssessment) -> List[dict]:
     held = conflicts(db, assessment)
     tier, policy = _tier_rules(db, assessment)
     role = policy[tier_policy._tier(tier)].get("approver_role")
+    # named on the workspace roster as Executive approver (tpra/roster.py): the people the decision is meant for
+    designated = {m["user_id"] for m in workspace_roster.members_for(db, assessment.tenant_id, "exec_approver")}
     out = []
     # ponytail: a permission lookup per active user; a SQL query of the holders if a tenant has thousands.
     for u in (db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
@@ -1077,7 +1294,7 @@ def approvers(db: Session, assessment: VendorAssessment) -> List[dict]:
                                                            is_admin=rbac._is_admin_or_primary(db, u)):
             reason = f"No {role} role"
         out.append({"user_id": u.id, "name": u.display_name or u.username or u.email,
-                    "eligible": reason is None, "reason": reason})
+                    "eligible": reason is None, "reason": reason, "designated": u.id in designated})
     return out
 
 
@@ -1184,10 +1401,15 @@ def mirror_conditions(db: Session, approval: TPRAApproval, user_id: Optional[int
 
 
 def sync_condition_from_task(db: Session, critical_task_id: int, user_id: Optional[int] = None) -> None:
-    """Task Management changed a twin: its condition follows (status, owner, due date). No-op for any other task."""
+    """Task Management changed a twin: its condition follows (status, owner, due date); a finding's fix is another kind of
+    twin (tpra/findings.py). No-op for any other task."""
+    from . import findings                     # late: findings reads this module
     from ...governance.regulatory_tasks import _ids
     ct = db.get(CriticalTask, critical_task_id)
-    if ct is None or ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
+    if ct is None:
+        return
+    findings.sync_from_task(db, ct, user_id)
+    if ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
         return
     approval = db.get(TPRAApproval, ct.source_entity_id)
     if approval is None:
@@ -1201,6 +1423,9 @@ def sync_condition_from_task(db: Session, critical_task_id: int, user_id: Option
             if c.get("status") != status:
                 c["status"] = status
                 c["resolved_at"] = (ct.completed_at or datetime.utcnow()).isoformat() if status == "closed" else None
+                if status == "open":                      # a waived condition whose task is reopened is owed again
+                    c.pop("waived", None)
+                    c.pop("waived_reason", None)
                 moved.append("status")
             if c.get("owner_id") != owner:
                 c["owner_id"] = owner
@@ -1217,7 +1442,10 @@ def sync_condition_from_task(db: Session, critical_task_id: int, user_id: Option
 
 
 def on_condition_task_deleted(db: Session, ct: CriticalTask, user_id: Optional[int] = None) -> None:
-    """Task Management is deleting a twin: its condition stays on the approval as it was, without a twin."""
+    """Task Management is deleting a twin: its condition stays on the approval as it was, without a twin (a finding's
+    remediation, likewise: tpra/findings.py)."""
+    from . import findings                     # late: findings reads this module
+    findings.on_task_deleted(db, ct, user_id)
     if ct.source_module != CONDITION_MODULE or ct.source_entity_type != CONDITION_TYPE:
         return
     approval = db.get(TPRAApproval, ct.source_entity_id)
@@ -1429,6 +1657,7 @@ def create_reassessment_version(
     )
     prior_version = prior.version_no if prior and prior.version_no else 0
     if prior:
+        settle_final_stage(db, prior)             # the review that has run its course is settled by the next one
         prior.lifecycle_status = "superseded"
         prior.row_version = (prior.row_version or 1) + 1
 

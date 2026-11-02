@@ -8,7 +8,7 @@ and append an audit row. History-bearing records soft-delete + restore.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
@@ -25,7 +25,10 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services import evidence_review
 from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
-from .stages import stages_payload, is_valid_stage
+from . import findings
+from . import policy as vendor_policy
+from .bootstrap import DEFAULT_TIERING_CONFIG
+from .stages import stages_payload, is_valid_stage, cadence_days_for
 from .schema_migrations import ensure_tpra_columns
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Lifecycle"])
@@ -105,7 +108,7 @@ def s_stage(s: TPRAStageInstance) -> dict:
         "is_gate": s.is_gate, "status": s.status,
         "started_at": s.started_at, "completed_at": s.completed_at,
         "assigned_roles": s.assigned_roles or [], "exit_criteria_result": s.exit_criteria_result or {},
-        "gate_decision": s.gate_decision or {}, "skipped_reason": s.skipped_reason,
+        "gate_decision": s.gate_decision or {}, "skipped_reason": s.skipped_reason, "skipped_by": s.skipped_by,
         "checklist": getattr(s, "checklist", None) or [],
         "row_version": s.row_version,
     }
@@ -119,9 +122,17 @@ def s_finding(f: TPRAFinding) -> dict:
         "source_response_id": f.source_response_id, "row_version": f.row_version,
         "linked_risk_id": getattr(f, "linked_risk_id", None),
         "linked_issue_id": getattr(f, "linked_issue_id", None),
+        "owner_id": f.owner_id, "is_blocking": bool(f.is_blocking), "source": findings.source_of(f), "task_id": f.task_id,
         "deleted_at": f.deleted_at,
         "created_at": f.created_at, "updated_at": f.updated_at,
     }
+
+
+def s_findings(db: Session, rows: List[TPRAFinding]) -> List[dict]:
+    """Findings with what a list says beyond the rows: the owner, the engagement, when the fix is due, the acceptance in
+    force and the task (tpra/findings.py extras)."""
+    more = findings.extras(db, rows)
+    return [{**s_finding(f), **more[f.id]} for f in rows]
 
 
 def s_remediation(r: TPRARemediation) -> dict:
@@ -197,6 +208,7 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         "triggered_assessment_id": s.triggered_assessment_id, "acknowledged": s.acknowledged,
         "acknowledged_by": getattr(s, "acknowledged_by", None),
         "acknowledged_at": getattr(s, "acknowledged_at", None),
+        "status": monitoring.status_of(s),                   # new | acknowledged | dismissed
         # fetched by a connector: its sources and whether it survived verification
         "sources": s.sources or [], "verification": s.verification,
         "verified": s.verified is not False, "finding_id": s.finding_id,
@@ -238,13 +250,14 @@ class GateDecisionIn(BaseModel):
     decision: str
     rationale: Optional[str] = None
 
-class TieringIn(BaseModel):
-    factors: Optional[dict] = None
-
-
 class TierOverrideIn(BaseModel):
     tier: Literal["critical", "high", "medium", "low"]
     justification: str
+
+
+class TieringIn(BaseModel):
+    factors: Optional[dict] = None
+    override: Optional[TierOverrideIn] = None       # set the tier by hand over the computed one, in the same step
 
 
 class EvidenceRequirementIn(BaseModel):
@@ -270,6 +283,11 @@ class FindingIn(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: _FINDING_STATUS = "open"
+    owner_id: Optional[int] = None          # who sees it through
+    is_blocking: bool = False               # holds the approval gate whatever its severity
+
+class VendorFindingIn(FindingIn):
+    engagement_id: Optional[int] = None     # the engagement it is about; omitted: General, the supplier itself
 
 class FindingUpdate(BaseModel):
     domain: Optional[str] = None
@@ -278,6 +296,20 @@ class FindingUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[_FINDING_STATUS] = None
     row_version: Optional[int] = None
+    owner_id: Optional[int] = None          # sent as null: no owner
+    is_blocking: Optional[bool] = None
+    note: Optional[str] = None              # how it was resolved, with status closed
+    reason: Optional[str] = None            # why, when a closed or accepted finding goes back to open or in_remediation
+
+class StartRemediationIn(BaseModel):
+    owner_id: Optional[int] = None          # omitted: the finding's owner
+    due_date: Optional[datetime] = None     # omitted: the policy's window for the severity
+
+class CloseIn(BaseModel):
+    note: Optional[str] = None              # required for a critical or blocking finding
+
+class ReopenIn(BaseModel):
+    reason: str
 
 class RemediationIn(BaseModel):
     title: Optional[str] = None
@@ -288,6 +320,10 @@ class RemediationIn(BaseModel):
     status: Optional[str] = "open"
 
 class RemediationUpdate(RemediationIn):
+    # Only the fields a request names are written: a PUT naming just the owner used to read "open" and "remediate"
+    # into the status and the treatment, reopening a finished fix (and, now, its task).
+    treatment_type: Optional[str] = None
+    status: Optional[str] = None
     row_version: Optional[int] = None
 
 class AcceptanceIn(BaseModel):
@@ -349,6 +385,8 @@ class ConditionUpdate(BaseModel):
     status: Optional[Literal["open", "closed"]] = None
     owner_id: Optional[int] = None
     due_date: Optional[datetime] = None
+    waived: Optional[bool] = None     # closed without being met: needs a reason
+    reason: Optional[str] = None
 
 class PublishShareIn(BaseModel):
     expires_days: Optional[int] = 180
@@ -364,6 +402,7 @@ class SignalIn(BaseModel):
     title: Optional[str] = None
     detail: Optional[str] = None
     occurred_at: Optional[datetime] = None
+    raise_finding: bool = False             # also raise it as a finding on the supplier, at its severity
 
 class SignalRejectIn(BaseModel):
     reason: Optional[str] = None
@@ -511,13 +550,31 @@ def get_lifecycle(vendor_id: int, engagement_id: Optional[int] = None,
     a = service.get_active_assessment(db, v, e)
     scope = {"vendor_id": v.id, "engagement_id": e.id if e is not None else None}
     if not a:
-        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None}
+        return {**scope, "assessment": None, "stages": [], "current": None, "gate": None, "policy": None,
+                "history": service.stage_history(db, v, e), "retier_blocked": None}
     stages = service.get_stage_instances(db, a.id)
     cur = a.current_stage
     gate = service.evaluate_current(db, v, a, cur) if cur else None
     return {
         **scope, "assessment": s_assessment(a),
         "stages": [s_stage(s) for s in stages], "current": cur, "gate": gate,
+        # what the assessment is held to (the stages its tier skips, the bands its score sits on), what moved the work, and
+        # why its tier cannot change now (an exit under way), if so
+        "policy": _held_policy(db, a),
+        "history": service.stage_history(db, v, e),
+        "retier_blocked": service.retier_problem(db, v, a),
+    }
+
+
+def _held_policy(db: Session, a: VendorAssessment) -> dict:
+    cfg = service.config_for(db, a)
+    tier = (a.inherent_tier or "").lower()
+    return {
+        "tier": a.inherent_tier,
+        "skips": vendor_policy.skip_matrix(cfg).get(tier, []) if tier else [],
+        "thresholds": {**DEFAULT_TIERING_CONFIG["thresholds"], **(cfg.get("thresholds") or {})},
+        "cadence_days": cadence_days_for(tier, cfg.get("cadence_days")) if tier else None,
+        "reviewers": vendor_policy.required_reviewers(cfg, tier) if tier else [],
     }
 
 
@@ -610,7 +667,16 @@ def run_tiering(assessment_id: int, body: TieringIn, db: Session = Depends(get_d
     a = _assessment(db, assessment_id, tids)
     v = _vendor(db, a.vendor_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
-    result = service.run_tiering(db, v, a, actor_id=user.id, factors=body.factors)
+    override = None
+    if body.override is not None:
+        reason = " ".join((body.override.justification or "").split())
+        if len(reason) < 10:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
+        override = {"tier": body.override.tier, "justification": reason}
+    try:
+        result = service.run_tiering(db, v, a, actor_id=user.id, factors=body.factors, override=override)
+    except service.RetierRefused as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
     db.commit()
     return result
 
@@ -675,16 +741,24 @@ def list_findings(
         q = q.filter(TPRAFinding.severity == severity)
     total = q.count()
     col = getattr(TPRAFinding, sort, TPRAFinding.created_at)
-    q = q.order_by(desc(col) if order == "desc" else asc(col))
+    q = q.order_by(desc(col) if order == "desc" else asc(col), desc(TPRAFinding.id))
     items = q.offset(skip).limit(limit).all()
-    return {"items": [s_finding(f) for f in items], "total": total, "skip": skip, "limit": limit}
+    return {"items": s_findings(db, items), "total": total, "skip": skip, "limit": limit}
 
 
-@router.post("/assessments/{assessment_id}/findings", status_code=status.HTTP_201_CREATED)
-def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    tids = _tids(user, db)
-    a = _assessment(db, assessment_id, tids)
-    rbac.require_write(db, user, "findings", "create")
+def _owner(db: Session, owner_id: Optional[int], kept: Optional[int] = None) -> Optional[int]:
+    """A finding's owner: an active person of this platform, never an account an access review imported. The one it
+    already has may be sent back as it is."""
+    if owner_id is None or owner_id == kept:
+        return owner_id
+    refuse_imported_accounts(db, [owner_id])
+    if not db.query(GRCUser.id).filter(GRCUser.id == owner_id, GRCUser.is_active.is_(True)).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose an active user of this platform")
+    return owner_id
+
+
+def _raise(db: Session, user: GRCUser, a: VendorAssessment, body: FindingIn) -> TPRAFinding:
+    """A finding raised by hand on an assessment. Caller owns the commit."""
     # A new finding is open: 'accepted' needs a signed acceptance and 'closed' a
     # completed remediation, as update_finding holds them to.
     if body.status in ("accepted", "closed"):
@@ -698,6 +772,7 @@ def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(ge
         domain=body.domain, severity=body.severity, title=body.title,
         description=body.description, status=body.status or "open", created_by=user.id,
         is_critical_control_fail=(body.severity == "critical"),
+        owner_id=_owner(db, body.owner_id), is_blocking=body.is_blocking, source="manual",
     )
     db.add(f)
     db.flush()
@@ -711,17 +786,67 @@ def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(ge
         v = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
         if v:
             service.enforce_critical_invariant(db, v, a, user.id)
+    return f
+
+
+@router.post("/assessments/{assessment_id}/findings", status_code=status.HTTP_201_CREATED)
+def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    rbac.require_write(db, user, "findings", "create")
+    f = _raise(db, user, a, body)
     db.commit()
     return s_finding(f)
+
+
+@router.get("/vendors/{vendor_id}/findings")
+def list_vendor_findings(
+    vendor_id: int, scope: str = Query("all", pattern="^(open|accepted|closed|all)$"),
+    engagement_id: Optional[int] = None, include_deleted: bool = False,
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    """Every finding of one supplier, all its engagements and General's together: the open ones first, the worst first,
+    the earliest fix due first. `scope` narrows by status, `engagement_id` to one engagement (General's own id: General)."""
+    tids = _tids(user, db)
+    v = _vendor(db, vendor_id, tids)
+    base = db.query(TPRAFinding).filter(TPRAFinding.vendor_id == v.id, TPRAFinding.tenant_id.in_(tids))
+    blocking_total = base.filter(TPRAFinding.deleted_at.is_(None), TPRAFinding.status.in_(findings.OPEN),
+                                 TPRAFinding.is_blocking.is_(True)).count()          # a removed one blocks nothing
+    q = base if include_deleted else base.filter(TPRAFinding.deleted_at.is_(None))
+    if scope != "all":
+        q = q.filter(TPRAFinding.status.in_(findings.OPEN if scope == "open" else (scope,)))
+    if engagement_id:
+        e = _engagement(db, v, engagement_id)
+        q = q.join(VendorAssessment, VendorAssessment.id == TPRAFinding.assessment_id).filter(
+            VendorAssessment.engagement_id == e.id if e is not None else VendorAssessment.engagement_id.is_(None))
+    rows = q.order_by(desc(TPRAFinding.id)).all()
+    items = s_findings(db, rows)
+    group = {"open": 0, "in_remediation": 0, "accepted": 1, "closed": 2}
+    items.sort(key=lambda i: (group.get(i["status"], 3), findings.SEVERITY_RANK.get(i["severity"], 9),
+                              i["due_date"] or i["sla_due"] or "9999", -i["id"]))
+    return {"items": items, "total": len(items), "blocking_total": blocking_total}
+
+
+@router.post("/vendors/{vendor_id}/findings", status_code=status.HTTP_201_CREATED)
+def create_vendor_finding(vendor_id: int, body: VendorFindingIn, db: Session = Depends(get_db),
+                          user: GRCUser = Depends(require_auth)):
+    """Raise a finding on the supplier or on one of its engagements, whichever assessment that scope has now."""
+    tids = _tids(user, db)
+    v = _vendor(db, vendor_id, tids)
+    rbac.require_write(db, user, "findings", "create")
+    e = _open_engagement(db, v, body.engagement_id)
+    f = _raise(db, user, service.ensure_active_assessment(db, v, user.id, e), body)
+    db.commit()
+    return s_findings(db, [f])[0]
 
 
 @router.get("/findings/{finding_id}")
 def get_finding(finding_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
-    rems = db.query(TPRARemediation).filter(TPRARemediation.finding_id == f.id, TPRARemediation.deleted_at.is_(None)).all()
-    accs = db.query(TPRARiskAcceptance).filter(TPRARiskAcceptance.finding_id == f.id, TPRARiskAcceptance.deleted_at.is_(None)).all()
-    return {"finding": s_finding(f), "remediations": [s_remediation(r) for r in rems],
+    rems = db.query(TPRARemediation).filter(TPRARemediation.finding_id == f.id, TPRARemediation.deleted_at.is_(None)).order_by(TPRARemediation.id).all()
+    accs = db.query(TPRARiskAcceptance).filter(TPRARiskAcceptance.finding_id == f.id, TPRARiskAcceptance.deleted_at.is_(None)).order_by(TPRARiskAcceptance.id).all()
+    return {"finding": s_findings(db, [f])[0], "remediations": [s_remediation(r) for r in rems],
             "acceptances": [s_acceptance(x) for x in accs]}
 
 
@@ -732,58 +857,99 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
     rbac.require_write(db, user, "findings", "edit")
     _check_concurrency(f, body.row_version)
     prev_status = f.status
+    changing = bool(body.status) and body.status != prev_status
+    owner = _owner(db, body.owner_id, kept=f.owner_id) if "owner_id" in body.model_fields_set else None
     # State-machine guard — 'accepted' and 'closed' are NOT free status flips:
     #  • 'accepted' must go through the acceptance workflow (POST .../acceptances)
     #    so an accountable owner signs off and a TPRARiskAcceptance record exists;
-    #  • 'closed' requires evidence of fix — at least one completed remediation.
+    #  • 'closed' requires evidence of fix — a completed remediation, or a note saying what
+    #    was done (always, for a critical or blocking finding);
+    #  • leaving closed or accepted for open work is a reopen, and says why.
     # Without this, a critical finding could clear the approval gate and auto-
     # reactivate a suspended vendor simply by picking a status from a dropdown.
-    if body.status and body.status != prev_status:
-        if body.status == "accepted":
-            raise HTTPException(
-                status_code=400,
-                detail="Use 'Accept risk' to record an accountable sign-off — a finding cannot be set to 'accepted' directly.",
-            )
-        if body.status == "closed":
-            _completed_rem = (
-                db.query(TPRARemediation.id)
-                .filter(
-                    TPRARemediation.finding_id == f.id,
-                    TPRARemediation.deleted_at.is_(None),
-                    TPRARemediation.status == "completed",
-                ).first()
-            )
-            if not _completed_rem:
-                raise HTTPException(
-                    status_code=400,
-                    detail="A finding can only be closed after a remediation is completed (evidence of fix) — or record a risk acceptance instead.",
-                )
-    for field in ("domain", "severity", "title", "description", "status"):
+    if changing and body.status == "accepted":
+        raise HTTPException(
+            status_code=400,
+            detail="Use 'Accept risk' to record an accountable sign-off — a finding cannot be set to 'accepted' directly.",
+        )
+    try:
+        if changing and body.status == "closed":
+            findings.close(db, f, user.id, body.note)
+        elif changing and prev_status in ("closed", "accepted"):
+            findings.reopen(db, f, user.id, body.reason, status=body.status)
+        elif changing:
+            f.status = body.status
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    gate_before = (f.severity, bool(f.is_blocking))
+    for field in ("domain", "severity", "title", "description"):
         val = getattr(body, field)
         if val is not None:
             setattr(f, field, val)
+    if body.is_blocking is not None:
+        f.is_blocking = body.is_blocking
+    if "owner_id" in body.model_fields_set:
+        findings.set_owner(db, f, owner, user.id)
     _bump(f)
+    gate_after = (f.severity, bool(f.is_blocking))
+    word = lambda g: f"{g[0]}{', blocking' if g[1] else ''}"
     service.write_audit(db, f.tenant_id, entity="finding", action="update",
-                        vendor_id=f.vendor_id, assessment_id=f.assessment_id, entity_id=f.id, actor_id=user.id)
-    # On close/accept, snapshot the vendor so the trend reflects risk removed.
-    _closed = ("closed", "accepted")
-    if f.status in _closed and prev_status not in _closed:
-        db.flush()
-        service.snapshot_after_finding_change(db, f)
-    # TPRM-003: keep the linked Issue in sync — close it when the finding closes/
-    # accepts; (re)create or reopen it when the finding is (re)opened.
-    if f.status in _closed:
-        service.close_finding_issue(db, f, user.id)
-    elif f.status in ("open", "in_remediation"):
-        service.ensure_finding_issue(db, f, user.id)
-    # TPRM-002: re-evaluate the critical invariant on any status change (reopen →
-    # suspend the onboarded vendor; resolve → auto-reactivate).
-    v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
-    a = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
-    if v and a:
-        service.enforce_critical_invariant(db, v, a, user.id)
+                        vendor_id=f.vendor_id, assessment_id=f.assessment_id, entity_id=f.id, actor_id=user.id,
+                        from_value=word(gate_before) if gate_before != gate_after else None,
+                        to_value=word(gate_after) if gate_before != gate_after else None)
+    # Snapshot on close/accept, keep the linked Issue in step, re-evaluate the critical invariant (TPRM-002/003).
+    findings.after_status_change(db, f, prev_status, user.id)
     db.commit()
     return s_finding(f)
+
+
+@router.post("/findings/{finding_id}/start-remediation", status_code=status.HTTP_201_CREATED)
+def start_remediation(finding_id: int, body: StartRemediationIn = StartRemediationIn(), db: Session = Depends(get_db),
+                      user: GRCUser = Depends(require_auth)):
+    """Begin fixing a finding: a remediation due when the policy says for its severity, and its task in Task Management."""
+    tids = _tids(user, db)
+    f = _get(db, TPRAFinding, finding_id, tids)
+    rbac.require_write(db, user, "findings", "edit")
+    owner = _owner(db, body.owner_id, kept=f.owner_id)
+    try:
+        findings.start_remediation(db, f, user.id, owner, body.due_date)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    db.commit()
+    return s_findings(db, [f])[0]
+
+
+@router.post("/findings/{finding_id}/close")
+def close_finding(finding_id: int, body: CloseIn = CloseIn(), db: Session = Depends(get_db),
+                  user: GRCUser = Depends(require_auth)):
+    """Close a finding, saying how it was resolved (required for a critical or blocking one)."""
+    tids = _tids(user, db)
+    f = _get(db, TPRAFinding, finding_id, tids)
+    rbac.require_write(db, user, "findings", "edit")
+    was = f.status
+    try:
+        findings.close(db, f, user.id, body.note)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    findings.after_status_change(db, f, was, user.id)
+    db.commit()
+    return s_findings(db, [f])[0]
+
+
+@router.post("/findings/{finding_id}/reopen")
+def reopen_finding(finding_id: int, body: ReopenIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Put a closed or accepted finding back on the open list, saying why; it counts again."""
+    tids = _tids(user, db)
+    f = _get(db, TPRAFinding, finding_id, tids)
+    rbac.require_write(db, user, "findings", "edit")
+    was = f.status
+    try:
+        findings.reopen(db, f, user.id, body.reason)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    findings.after_status_change(db, f, was, user.id)
+    db.commit()
+    return s_findings(db, [f])[0]
 
 
 @router.delete("/findings/{finding_id}")
@@ -1003,9 +1169,12 @@ def override_tier(assessment_id: int, body: TierOverrideIn, db: Session = Depend
     reason = " ".join((body.justification or "").split())
     if len(reason) < 10:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
-    service.record_tier_override(db, v, a, body.tier, reason, user.id)
+    try:
+        moved = service.record_tier_override(db, v, a, body.tier, reason, user.id)
+    except service.RetierRefused as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
     db.commit()
-    return tier_policy.requirements(db, v, a, service.config_for(db, a))
+    return {**tier_policy.requirements(db, v, a, service.config_for(db, a)), "retier": moved}
 
 
 @router.delete("/evidence-links/{link_id}")
@@ -1039,8 +1208,8 @@ def create_remediation(finding_id: int, body: RemediationIn, db: Session = Depen
     # Auto-populate a due date from the finding's severity SLA when the analyst
     # didn't set one, so every remediation carries an aging clock (a critical must
     # be fixed in days, not "whenever") and can actually surface as overdue.
-    from .stages import remediation_sla_days_for
-    _due = body.due_date or (datetime.utcnow() + timedelta(days=remediation_sla_days_for(f.severity)))
+    # The window it was tiered under (findings.fix_due).
+    _due = body.due_date or findings.fix_due(db, f)
     r = TPRARemediation(
         tenant_id=f.tenant_id, finding_id=f.id, title=body.title, plan=body.plan,
         treatment_type=body.treatment_type or "remediate", owner_id=body.owner_id,
@@ -1072,6 +1241,7 @@ def update_remediation(rem_id: int, body: RemediationUpdate, db: Session = Depen
     _bump(r)
     service.write_audit(db, r.tenant_id, entity="remediation", action="update",
                         entity_id=r.id, actor_id=user.id)
+    findings.mirror(db, r, user.id)                   # its Task Management task, if it has one, follows
     db.commit()
     return s_remediation(r)
 
@@ -1083,6 +1253,7 @@ def delete_remediation(rem_id: int, db: Session = Depends(get_db), user: GRCUser
     rbac.require_write(db, user, "findings", "delete")
     r.deleted_at = datetime.utcnow()
     _bump(r)
+    findings.drop_twin(db, r)                         # and its task goes with it
     service.write_audit(db, r.tenant_id, entity="remediation", action="delete", entity_id=r.id, actor_id=user.id)
     db.commit()
     return {"deleted": True, "id": r.id}
@@ -1297,7 +1468,7 @@ def list_approvals(assessment_id: int, db: Session = Depends(get_db), user: GRCU
     rec = None
     a = _assessment(db, assessment_id, tids)
     if a.residual_rating is not None:
-        rec = service.recommend_decision(a.residual_rating, service.count_open_critical(db, a.id))
+        rec = service.recommend_decision(a.residual_rating, service.gate_count(db, a))
     # The one decision the Approval gate goes by, if any (service.approval_in_force).
     in_force = getattr(service.approval_in_force(db, a), "id", None)
     return {"items": [{**s_approval(x), "in_force": x.id == in_force} for x in rows], "total": len(rows),
@@ -1332,7 +1503,7 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                 status_code=400,
                 detail="Score the assessment before recording an approval decision.",
             )
-    rec = service.recommend_decision(a.residual_rating or "medium", service.count_open_critical(db, a.id))
+    rec = service.recommend_decision(a.residual_rating or "medium", service.gate_count(db, a))
     # Conditions are TRACKED items chased to closure, not write-once text: each
     # carries a stable id + status + owner + due date, so open/overdue conditions
     # can be surfaced instead of captured-and-forgotten. Accepts plain strings
@@ -1388,12 +1559,22 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
     rbac.require_write(db, user, "approvals", "edit")
     new_conditions = []
     found = False
+    waive_reason = " ".join((body.reason or "").split())
+    if body.waived and len(waive_reason) < 3:
+        raise HTTPException(status_code=400, detail="Say why the condition is waived")
     for c in (ap.conditions or []):
         c = dict(c) if isinstance(c, dict) else {"id": None, "text": str(c), "status": "open"}
         if str(c.get("id")) == str(condition_id):
-            if body.status is not None:
+            if body.waived:
+                # Closed, so every reader of the conditions counts it done; kept as waived, with who and why
+                c.update(status="closed", resolved_at=datetime.utcnow().isoformat(), waived=True,
+                         waived_reason=waive_reason[:1000], waived_by=user.id)
+            elif body.status is not None:
                 c["status"] = body.status
                 c["resolved_at"] = datetime.utcnow().isoformat() if body.status == "closed" else None
+                if body.status == "open":
+                    c.pop("waived", None)
+                    c.pop("waived_reason", None)
             if body.owner_id is not None:
                 refuse_imported_accounts(db, [body.owner_id], kept=[c.get("owner_id")])
                 c["owner_id"] = body.owner_id
@@ -1407,7 +1588,8 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
     service.mirror_conditions(db, ap, user.id)        # and its Task Management task follows
     service.write_audit(db, ap.tenant_id, entity="approval", action="update",
                         vendor_id=ap.vendor_id, assessment_id=ap.assessment_id, entity_id=ap.id,
-                        actor_id=user.id, extra={"condition": condition_id, "status": body.status})
+                        actor_id=user.id, extra={"condition": condition_id, "status": body.status,
+                                                 **({"waived": True, "reason": waive_reason} if body.waived else {})})
     db.commit()
     return s_approval(ap)
 
@@ -1542,11 +1724,15 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "monitoring", "create")
+    if body.raise_finding:
+        rbac.require_write(db, user, "findings", "create")
     sig, triggered, _ = monitoring.record_signal(
         db, v, signal_type=body.signal_type, severity=body.severity or "medium", source=body.source,
         title=body.title, detail=body.detail, occurred_at=body.occurred_at, actor_id=user.id)
+    # After the signal has had its say: a finding goes on the assessment that is live now, a reassessment's if it opened one.
+    finding = monitoring.raise_finding(db, sig, v, user.id) if body.raise_finding else None
     db.commit()
-    return {"signal": s_signal(sig), "triggered_reassessment_id": triggered}
+    return {"signal": s_signal(sig), "triggered_reassessment_id": triggered, "finding_id": finding.id if finding else None}
 
 
 @router.put("/signals/{signal_id}")
@@ -1580,6 +1766,17 @@ def raise_finding_from_signal(signal_id: int, db: Session = Depends(get_db), use
     finding = monitoring.raise_finding(db, s, _vendor(db, s.vendor_id, tids), user.id)
     db.commit()
     return {"signal": s_signal(s), "finding_id": finding.id, "assessment_id": finding.assessment_id}
+
+
+@router.post("/signals/{signal_id}/dismiss")
+def dismiss_signal(signal_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Nothing to act on: kept on the list, marked dismissed, and out of the queue. (Acknowledging is PUT /signals/{id}.)"""
+    tids = _tids(user, db)
+    s = _get(db, TPRAMonitoringSignal, signal_id, tids)
+    rbac.require_write(db, user, "monitoring", "edit")
+    monitoring.dismiss(db, s, user.id)
+    db.commit()
+    return s_signal(s)
 
 
 @router.post("/signals/{signal_id}/reject")

@@ -69,6 +69,15 @@ export interface IntakePayload {
   can_review: boolean;
   next: RequestStatus[];
   updated_at: string | null;
+  /** what the request says about itself beside its answers; the first engagement is made when it is picked up */
+  request: { department: string | null; urgency: 'low' | 'normal' | 'high'; engagement: string | null };
+  /** set while the request is open: it may already be on record (never itself) */
+  screening: 'flagged' | 'screened' | null;
+  duplicates: Array<{
+    id: number; name: string; reason: string; match: 'name' | 'website' | 'both'; archived: boolean; status: string | null;
+    intake_status: RequestStatus | null;
+  }>;
+  duplicate_of: number | null;
 }
 
 export type RequestStatus = 'draft' | 'submitted' | 'in_review' | 'approved' | 'rejected';
@@ -84,7 +93,7 @@ export const FACTOR_LABELS: Record<FactorKey, string> = {
 };
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
-  draft: 'Draft', submitted: 'Waiting for review', in_review: 'In review', approved: 'Approved', rejected: 'Turned down',
+  draft: 'Draft', submitted: 'Waiting for review', in_review: 'In review', approved: 'Approved', rejected: 'Declined',
 };
 
 export const STATUS_CLS: Record<RequestStatus, string> = {

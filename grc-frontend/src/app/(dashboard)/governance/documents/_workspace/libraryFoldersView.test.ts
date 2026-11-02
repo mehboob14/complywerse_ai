@@ -35,7 +35,9 @@ test('Move to… is in the row menu and the bulk bar of the working list only, f
   assert.ok(table.includes('canMove={!!onMove && !!canMoveRow?.(doc)}'));
   assert.ok(workspace.includes('canMoveRow={mayChange}'));
   assert.ok(/const mayChange = \(d: GovDoc\) => \(canEdit \|\| mine\(d\)\) && d\.status !== 'archived'/.test(workspace));   // the server's can_edit and ensure_not_archived
-  assert.ok(workspace.includes('moveAll(ids, to.id') && workspace.includes('toast(moveMessage('));   // one request each, ONE toast
+  // one request each, ONE message about how it went, said by its kind (a success goes by itself; a failure stays until it is read: useNotify)
+  assert.ok(workspace.includes('moveAll(ids, to.id') && workspace.split('moveMessage(').length - 1 === 1);
+  assert.ok(workspace.includes("said.type === 'error'") && workspace.includes('notify.error(') && workspace.includes('notify.warning(') && workspace.includes('notify.success('));
 });
 
 test('what is moved leaves the selection; what could not be moved stays ticked, also when the refresh reorders the list under it', () => {
@@ -49,13 +51,14 @@ test('the layout is in the address, the switch is in the toolbar, and the choice
   assert.ok(workspace.includes('withLibraryParams(new URLSearchParams(window.location.search), state, openId, viewParam)'));
   assert.ok(workspace.includes('[state, openId, viewParam]'));
   assert.ok(workspace.includes('saveFolderPrefs(browserStore(), foldersKey(currentUserId), next)'));
-  assert.ok(filters.includes('aria-label="Library layout"') && filters.includes("['table', Table2, 'Table'], ['folders', Folder, 'Folders']"));
-  assert.ok(filters.includes('aria-pressed={on}'));
+  // the switch is the kit's SegmentedControl (a native radio group named "Library layout"): the same two choices, and a choice calls the page's onView
+  assert.ok(filters.includes('label="Library layout"') && filters.includes("{ value: 'table', label: 'Table' }, { value: 'folders', label: 'Folders' }"));
+  assert.ok(filters.includes('<SegmentedControl') && filters.includes('onChange={onView}'));
 });
 
 test('the Folders view says why it has nothing to show instead of an empty table: no departments yet (a way to make them), or none could be read', () => {
   assert.ok(rows.includes('No departments yet') && rows.includes('href="/governance/settings"'));
-  assert.ok(rows.includes('Could not load departments') && rows.includes('Try again'));
+  assert.ok(rows.includes('Could not load departments') && rows.includes('onRetry={onRetry}'));          // the kit's error state offers its own Retry
   assert.ok(workspace.includes('departmentsQ.isError ? <DepartmentsFailed') && workspace.includes('<NoDepartments />'));
 });
 

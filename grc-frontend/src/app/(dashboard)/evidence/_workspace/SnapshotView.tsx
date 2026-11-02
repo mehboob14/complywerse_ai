@@ -1,458 +1,183 @@
 'use client';
 
 /**
- * SnapshotView — L2 Board / Committee snapshot for the Evidence workspace.
- *
- * A minimalist, on-brand board readout composed from the summary payload and
- * the expiring-soon list. Ports the exact fragments the SME built on the
- * evidence library page (KPI-style tiles, "Coverage by type" mini-tile,
- * "Status split" segmented bar, and the TrendSparkline for 6-month
- * Added-vs-Approved) and frames them as a board snapshot: a headline approval
- * rate with a donut, action items, and an expiring-soon watchlist.
- *
- * Charter: single teal brand (primary-*), category tints only as status
- * markers, no gradients, hairline borders, dense.
+ * SnapshotView: the board / committee readout of the evidence library, from the server's summary and the expiring-soon list: the approval rate with its split, the
+ * six-month trend, three action figures, what expires next, coverage by type, the status split. Every figure is the server's and says what it counts (the old
+ * "Approved this quarter" was the six-month sum; the "+51" beside the rate had no words). The two cards that promised data "after the next backend update" are gone.
+ * Each chart is a picture with its numbers as a table for a screen reader (ChartFrame); colours are the platform's tone colours, with the words beside them.
  */
+import Link from 'next/link';
+import { ChartFrame, ErrorState, ProgressBar, SectionCard, SkeletonLines, StatTile } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { formatCount } from '@/lib/format';
+import { TONE } from '@/lib/status';
+import { evidenceStatus } from '@/lib/statuses/evidence';
+import { approvalRate, monthName, statusSplit, topTypes, trendReading, typeLabel, type EvidenceItem, type EvidenceSummary } from './evidenceModel';
+import { ExpiryText, LetterTile } from './lib';
 
-import {
-  CheckCircle2,
-  Clock,
-  CalendarClock,
-  Layers,
-  FileText,
-  TrendingUp,
-  Users,
-  Building2,
-} from 'lucide-react';
-import type { EvidenceItem, EvidenceSummary } from './lib';
-import { ExpiryStatus, EvidenceLetterTile } from './lib';
+const WATCHLIST = 6;
+const MUTED = 'text-ds-fg-muted';
+/** the colour of each part of the split: the platform's tone colours (the words are beside every colour) */
+const SPLIT_COLOUR: Record<string, string> = {
+  approved: TONE.success.dot, pending_review: TONE.pending.dot, draft: TONE.neutral.dot, rejected: TONE.danger.dot, expired: TONE.warning.dot,
+  archived: TONE.neutral.border, other: TONE.neutral.border,
+};
+const splitWord = (key: string): string => (key === 'other' ? 'Other' : evidenceStatus.label(key));
 
-export interface SnapshotViewProps {
-  summary?: EvidenceSummary;
-  expiringSoon: EvidenceItem[];
-}
-
-// ─── local helpers ───────────────────────────────────────────────────────────
-function formatMonth(ym: string): string {
-  const [y, m] = ym.split('-').map(Number);
-  if (!y || !m) return ym;
-  return new Date(y, m - 1, 1).toLocaleString(undefined, { month: 'short' });
-}
-
-// Section label — matches the charter's uppercase muted label spec.
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{children}</p>
-  );
-}
-
-export function SnapshotView({ summary, expiringSoon }: SnapshotViewProps) {
-  const total = summary?.total_count ?? 0;
-  const byStatus = summary?.by_status ?? {};
-  const byType = summary?.by_type ?? {};
-  const trend = summary?.by_month ?? [];
-
-  const approvedCount = byStatus.approved ?? 0;
-  const pendingCount = byStatus.pending_review ?? summary?.pending_review_count ?? 0;
-  const draftCount = byStatus.draft ?? 0;
-  const expiredCount = byStatus.expired ?? 0;
-  const rejectedCount = byStatus.rejected ?? 0;
-
-  const approvalRate = total > 0 ? Math.round((approvedCount / total) * 100) : null;
-
-  // Approval-rate delta: first vs last month's approved from by_month (if present).
-  const approvalDelta =
-    trend.length >= 2 ? (trend[trend.length - 1].approved - trend[0].approved) : null;
-
-  // Action items.
-  const approvedThisQuarter = trend.reduce((s, m) => s + (m.approved ?? 0), 0);
-  const overdueExpiring = summary?.expiring_soon_count ?? 0;
-
-  // ── Donut of by_status (Approved/Pending/Draft/Expired/Rejected) ──
-  const donutSegments = [
-    { key: 'approved', label: 'Approved', count: approvedCount, color: '#1ed4b0' },
-    { key: 'pending', label: 'Pending', count: pendingCount, color: '#f59e0b' },
-    { key: 'draft', label: 'Draft', count: draftCount, color: '#cbd5e1' },
-    { key: 'expired', label: 'Expired', count: expiredCount, color: '#fb923c' },
-    { key: 'rejected', label: 'Rejected', count: rejectedCount, color: '#f43f5e' },
-  ];
-  const donutTotal = donutSegments.reduce((s, seg) => s + seg.count, 0);
-
-  // Build stroke-dasharray arcs on a single circle (r = 42, C = 2πr ≈ 263.9).
+function Donut({ parts, rate }: { parts: Array<{ key: string; count: number }>; rate: number | null }) {
   const R = 42;
   const C = 2 * Math.PI * R;
+  const total = parts.reduce((s, p) => s + p.count, 0);
   let acc = 0;
-  const arcs = donutSegments
-    .filter((seg) => seg.count > 0)
-    .map((seg) => {
-      const frac = donutTotal > 0 ? seg.count / donutTotal : 0;
-      const len = frac * C;
-      const arc = { ...seg, dash: `${len} ${C - len}`, offset: -acc };
-      acc += len;
-      return arc;
-    });
-
-  // ── Status split segmented bar (ported fragment) ──
-  const statusSegments: Array<{ key: string; label: string; count: number; tint: string }> = [
-    { key: 'draft', label: 'Draft', count: draftCount, tint: 'bg-slate-300' },
-    { key: 'pending_review', label: 'Pending', count: pendingCount, tint: 'bg-amber-400' },
-    { key: 'approved', label: 'Approved', count: approvedCount, tint: 'bg-emerald-500' },
-    { key: 'rejected', label: 'Rejected', count: rejectedCount, tint: 'bg-rose-400' },
-    { key: 'expired', label: 'Expired', count: expiredCount, tint: 'bg-orange-400' },
-  ];
-  const statusTotal = statusSegments.reduce((s, seg) => s + seg.count, 0);
-
-  // ── Coverage by type mini-tile (ported fragment) — top 5 ──
-  const topTypes = Object.entries(byType)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-  const topTypeMax = topTypes.length ? Math.max(...topTypes.map(([, n]) => n)) : 0;
-
-  const watchlist = (expiringSoon ?? []).slice(0, 6);
-
+  const arcs = parts.filter((p) => p.count > 0).map((p) => {
+    const len = (p.count / total) * C;
+    const arc = { key: p.key, dash: `${len} ${C - len}`, offset: -acc };
+    acc += len;
+    return arc;
+  });
   return (
-    <div className="space-y-3">
-      {/* Row 1 — headline approval rate + donut, and the trend sparkline. */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* Approval rate + donut */}
-        <div className="card p-4 lg:col-span-2">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <SectionLabel>Approval rate</SectionLabel>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-4xl font-semibold tracking-tight text-slate-900">
-                  {approvalRate === null ? '–' : `${approvalRate}%`}
-                </span>
-                {approvalDelta !== null && approvalDelta !== 0 && (
-                  <span
-                    className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
-                      approvalDelta > 0 ? 'text-emerald-700' : 'text-rose-600'
-                    }`}
-                  >
-                    <TrendingUp
-                      className={`h-3.5 w-3.5 ${approvalDelta > 0 ? '' : 'rotate-180'}`}
-                      strokeWidth={1.75}
-                    />
-                    {approvalDelta > 0 ? '+' : ''}
-                    {approvalDelta}
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-slate-500">
-                {approvedCount} of {total} evidence items approved
-              </p>
-            </div>
-
-            {/* Donut */}
-            <div className="flex items-center gap-4">
-              <div className="relative h-28 w-28 shrink-0">
-                <svg viewBox="0 0 100 100" className="h-28 w-28 -rotate-90">
-                  <circle cx="50" cy="50" r={R} fill="none" stroke="#f1f5f9" strokeWidth={10} />
-                  {arcs.map((arc) => (
-                    <circle
-                      key={arc.key}
-                      cx="50"
-                      cy="50"
-                      r={R}
-                      fill="none"
-                      stroke={arc.color}
-                      strokeWidth={10}
-                      strokeDasharray={arc.dash}
-                      strokeDashoffset={arc.offset}
-                      strokeLinecap="butt"
-                    />
-                  ))}
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-semibold text-slate-900">
-                    {approvalRate === null ? '–' : `${approvalRate}%`}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wide text-slate-400">approved</span>
-                </div>
-              </div>
-
-              {/* Legend */}
-              <div className="space-y-1">
-                {donutSegments.map((seg) => (
-                  <div key={seg.key} className="flex items-center gap-1.5 text-xs text-slate-600">
-                    <span
-                      className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: seg.color }}
-                    />
-                    <span className="w-16 truncate">{seg.label}</span>
-                    <span className="font-semibold text-slate-800">{seg.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 6-month trend — ported TrendSparkline; renders only with by_month */}
-        {trend.length > 0 ? (
-          <TrendSparkline data={trend} formatMonth={formatMonth} />
-        ) : (
-          <div className="card flex flex-col justify-center p-4">
-            <SectionLabel>Added vs approved · 6 mo</SectionLabel>
-            <p className="mt-2 text-xs text-slate-400">Trend available after the next backend update.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Row 2 — action items (3 stat tiles). */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <ActionTile
-          icon={CheckCircle2}
-          tint="bg-emerald-50 text-emerald-600"
-          value={approvedThisQuarter}
-          label="Approved this quarter"
-          hint={trend.length > 0 ? undefined : 'Awaiting trend data'}
-        />
-        <ActionTile
-          icon={Clock}
-          tint="bg-amber-50 text-amber-600"
-          value={pendingCount}
-          label="Pending review"
-        />
-        <ActionTile
-          icon={CalendarClock}
-          tint="bg-orange-50 text-orange-600"
-          value={overdueExpiring}
-          label="Expiring soon"
-        />
-      </div>
-
-      {/* Row 3 — expiring watchlist + coverage by type. */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {/* Expiring soon watchlist */}
-        <div className="card p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <SectionLabel>Expiring soon</SectionLabel>
-            <span className="text-xs text-slate-400">{overdueExpiring} total</span>
-          </div>
-          {watchlist.length === 0 ? (
-            <p className="py-2 text-xs text-slate-400">Nothing expiring in the near term.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {watchlist.map((item) => (
-                <li key={item.id} className="flex items-center gap-3 py-2">
-                  <EvidenceLetterTile name={item.name} evidenceType={item.evidence_type} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{item.name}</span>
-                  <ExpiryStatus expiry={item.expiry_date} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Coverage by type — ported mini-tile */}
-        <div className="card p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex rounded-lg bg-primary-50 p-1.5 text-primary-600">
-              <Layers className="h-4 w-4" strokeWidth={1.75} />
-            </span>
-            <SectionLabel>Coverage by type</SectionLabel>
-          </div>
-          {topTypes.length === 0 ? (
-            <p className="py-2 text-xs text-slate-400">No evidence yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {topTypes.map(([type, count]) => (
-                <div key={type} className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 truncate text-xs capitalize text-slate-700">
-                    {type.replace(/_/g, ' ')}
-                  </span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-primary-500"
-                      style={{ width: `${topTypeMax > 0 ? Math.round((count / topTypeMax) * 100) : 0}%` }}
-                    />
-                  </div>
-                  <span className="w-6 shrink-0 text-right text-xs font-medium text-slate-800">{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Row 4 — status split segmented bar (ported fragment) full width. */}
-      <div className="card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="inline-flex rounded-lg bg-primary-50 p-1.5 text-primary-600">
-            <FileText className="h-4 w-4" strokeWidth={1.75} />
-          </span>
-          <SectionLabel>Status split</SectionLabel>
-        </div>
-        {statusTotal === 0 ? (
-          <p className="py-2 text-xs text-slate-400">No evidence yet.</p>
-        ) : (
-          <>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-              {statusSegments
-                .filter((seg) => seg.count > 0)
-                .map((seg) => (
-                  <div
-                    key={seg.key}
-                    className={`h-full ${seg.tint}`}
-                    style={{ width: `${(seg.count / statusTotal) * 100}%` }}
-                    title={`${seg.label}: ${seg.count}`}
-                  />
-                ))}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              {statusSegments.map((seg) => (
-                <span key={seg.key} className="inline-flex items-center gap-1 text-xs text-slate-600">
-                  <span className={`h-2 w-2 rounded-full ${seg.tint}`} />
-                  {seg.label} {seg.count}
-                </span>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Row 5 — placeholder cards, clearly labeled, no fake data. */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <PlaceholderCard
-          icon={Users}
-          label="Top performers"
-          note="Available after the next backend update."
-        />
-        <PlaceholderCard
-          icon={Building2}
-          label="Coverage by committee"
-          note="Available after the next backend update."
-        />
+    <div className="relative h-[112px] w-[112px] shrink-0">
+      <svg viewBox="0 0 100 100" className="h-[112px] w-[112px] -rotate-90">
+        <circle cx="50" cy="50" r={R} fill="none" stroke="#E1E6EB" strokeWidth={10} />
+        {arcs.map((a) => <circle key={a.key} cx="50" cy="50" r={R} fill="none" stroke={SPLIT_COLOUR[a.key]} strokeWidth={10} strokeDasharray={a.dash} strokeDashoffset={a.offset} />)}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-ds-section font-[600] tabular-nums text-ds-fg">{rate === null ? '—' : `${rate}%`}</span>
+        <span className={`text-ds-label ${MUTED}`}>approved</span>
       </div>
     </div>
   );
 }
 
-// ─── Action stat tile ────────────────────────────────────────────────────────
-function ActionTile({
-  icon: Icon,
-  tint,
-  value,
-  label,
-  hint,
-}: {
-  icon: typeof CheckCircle2;
-  tint: string;
-  value: number;
-  label: string;
-  hint?: string;
-}) {
-  return (
-    <div className="card p-4">
-      <div className={`mb-2 inline-flex rounded-lg p-2 ${tint}`}>
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
-      </div>
-      <p className="text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500">{label}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-400">{hint}</p>}
-    </div>
-  );
-}
-
-// ─── Placeholder card (labeled, not fake data) ───────────────────────────────
-function PlaceholderCard({
-  icon: Icon,
-  label,
-  note,
-}: {
-  icon: typeof Users;
-  label: string;
-  note: string;
-}) {
-  return (
-    <div className="card p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="inline-flex rounded-lg bg-slate-100 p-1.5 text-slate-400">
-          <Icon className="h-4 w-4" strokeWidth={1.75} />
-        </span>
-        <SectionLabel>{label}</SectionLabel>
-      </div>
-      <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-slate-200">
-        <p className="text-xs text-slate-400">{note}</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Ported TrendSparkline (verbatim from evidence/page.tsx, `card` shell) ────
-// Compact two-line SVG sparkline for the "Added vs Approved" 6-month trend.
-// Pure inline SVG (no chart lib): uploaded in brand teal, approved in muted
-// slate. Thin strokes, no fill, no gradient — on-brand per the design charter.
-function TrendSparkline({
-  data,
-  formatMonth,
-}: {
-  data: Array<{ month: string; uploaded: number; approved: number }>;
-  formatMonth: (ym: string) => string;
-}) {
+function Trend({ months }: { months: NonNullable<EvidenceSummary['by_month']> }) {
   const W = 260;
   const H = 72;
   const padX = 6;
   const padY = 8;
-  const maxVal = Math.max(1, ...data.map((d) => Math.max(d.uploaded, d.approved)));
-  const stepX = data.length > 1 ? (W - padX * 2) / (data.length - 1) : 0;
-  const pointsFor = (key: 'uploaded' | 'approved') =>
-    data
-      .map((d, i) => {
-        const x = padX + i * stepX;
-        const y = padY + (1 - d[key] / maxVal) * (H - padY * 2);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(' ');
+  const maxVal = Math.max(1, ...months.map((d) => Math.max(d.uploaded, d.approved)));
+  const stepX = months.length > 1 ? (W - padX * 2) / (months.length - 1) : 0;
+  const points = (key: 'uploaded' | 'approved') => months.map((d, i) => `${(padX + i * stepX).toFixed(1)},${(padY + (1 - d[key] / maxVal) * (H - padY * 2)).toFixed(1)}`).join(' ');
+  return (
+    <ChartFrame
+      title="Last 6 months"
+      height={80}
+      data={{ columns: ['Month', 'Added', 'Approved'], rows: months.map((m) => [monthName(m.month), m.uploaded, m.approved]) }}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none">
+        <polyline points={points('uploaded')} fill="none" stroke="#0F766E" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <polyline points={points('approved')} fill="none" stroke="#64748B" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </ChartFrame>
+  );
+}
+
+export function SnapshotView({ summary, summaryState, expiringSoon, expiringState }: {
+  summary: EvidenceSummary | undefined;
+  summaryState: { loading: boolean; error: unknown; onRetry: () => void };
+  expiringSoon: EvidenceItem[];
+  expiringState: { loading: boolean; error: unknown; onRetry: () => void };
+}) {
+  if (summaryState.loading) return <SkeletonLines lines={8} label="Loading the snapshot" />;
+  if (!summary) {
+    return <ErrorState title="Couldn't load the snapshot" message={errorMessage(summaryState.error)} onRetry={canRetry(summaryState.error) ? summaryState.onRetry : undefined} />;
+  }
+
+  const total = summary.total_count ?? 0;
+  const rate = approvalRate(summary);
+  const parts = statusSplit(summary);
+  const trend = trendReading(summary);
+  const types = topTypes(summary);
+  const typeCount = Object.keys(summary.by_type ?? {}).length;
+  const pending = summary.by_status?.pending_review ?? summary.pending_review_count ?? 0;
+  const approved = summary.by_status?.approved ?? 0;
+  const expiring = summary.expiring_soon_count ?? 0;
+  const watchlist = expiringSoon.slice(0, WATCHLIST);
 
   return (
-    <div className="card p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-800">Added vs Approved · last 6 months</p>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-            <span className="h-0.5 w-3 rounded-full bg-primary-500" />
-            Added
-          </span>
-          <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-            <span className="h-0.5 w-3 rounded-full" style={{ backgroundColor: '#64748b' }} />
-            Approved
-          </span>
+    <div className="flex flex-col gap-[16px]">
+      <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <SectionCard id="approval-rate" title="Approval rate" info="The share of all evidence items that are approved.">
+            <div className="flex flex-col gap-[16px] sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[32px] font-[600] leading-[40px] tabular-nums text-ds-fg">{rate === null ? 'Not recorded' : `${rate}%`}</p>
+                <p className="text-ds-body text-ds-fg-body">{formatCount(approved)} of {formatCount(total)} evidence items approved</p>
+                {trend && trend.delta !== null && trend.delta !== 0 && (
+                  <p className={`mt-[4px] text-ds-label ${MUTED}`}>{trend.delta > 0 ? `${formatCount(trend.delta)} more` : `${formatCount(-trend.delta)} fewer`} approvals in the latest month than in the earliest of the last six.</p>
+                )}
+              </div>
+              {total > 0 && (
+                <div className="flex items-center gap-[16px]">
+                  <ChartFrame title="Items by status" height={112} data={{ columns: ['Status', 'Items'], rows: parts.map((p) => [splitWord(p.key), p.count]) }} className="w-[112px]">
+                    <Donut parts={parts} rate={rate} />
+                  </ChartFrame>
+                  <ul className="flex flex-col gap-[4px]">
+                    {parts.map((p) => (
+                      <li key={p.key} className="flex items-center gap-[8px] text-ds-label text-ds-fg-body">
+                        <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-full" style={{ background: SPLIT_COLOUR[p.key] }} />
+                        <span className="w-[112px] truncate">{splitWord(p.key)}</span>
+                        <span className="font-[600] tabular-nums text-ds-fg">{formatCount(p.count)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </SectionCard>
         </div>
+        <SectionCard id="trend" title="Added and approved" info="Evidence added (by upload date) and approved (by approval date) in each of the last six months.">
+          {trend ? <Trend months={trend.months} /> : <p className={`text-ds-body ${MUTED}`}>Not recorded: the server sent no monthly figures.</p>}
+          {trend && (
+            <div className="mt-[4px] flex justify-between">{trend.months.map((m) => <span key={m.month} className={`text-ds-label ${MUTED}`}>{monthName(m.month)}</span>)}</div>
+          )}
+          {trend && (
+            <div className="mt-[8px] flex flex-wrap items-center gap-x-[16px] gap-y-[4px] text-ds-label text-ds-fg-body">
+              <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[2px] w-[12px] rounded-full" style={{ background: '#0F766E' }} />Added</span>
+              <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[2px] w-[12px] rounded-full" style={{ background: '#64748B' }} />Approved</span>
+            </div>
+          )}
+        </SectionCard>
       </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="h-[72px] w-full"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="Evidence added versus approved over the last six months"
-      >
-        <polyline
-          points={pointsFor('uploaded')}
-          fill="none"
-          stroke="#1ed4b0"
-          strokeWidth={1.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
+
+      <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
+        <StatTile label="Approved in the last 6 months" value={trend ? formatCount(trend.approvedInWindow) : null} info={trend ? undefined : 'The server sent no monthly figures.'} tone="success" />
+        <StatTile
+          label="Pending review" value={formatCount(pending)}
+          link={pending > 0 ? { href: '/evidence?status=pending_review', label: `${formatCount(pending)} pending review. Open the pending files` } : undefined}
         />
-        <polyline
-          points={pointsFor('approved')}
-          fill="none"
-          stroke="#64748b"
-          strokeWidth={1.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      <div className="mt-1 flex justify-between">
-        {data.map((d) => (
-          <span key={d.month} className="text-[10px] text-slate-500">
-            {formatMonth(d.month)}
-          </span>
-        ))}
+        <StatTile label="Expiring soon" value={formatCount(expiring)} note="Within the next 30 days" tone={expiring > 0 ? 'warning' : 'default'} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-2">
+        <SectionCard id="expiring" title="Expiring soon" meta={`${formatCount(expiring)} in total`}>
+          {expiringState.loading ? <SkeletonLines lines={3} label="Loading what expires next" /> : expiringState.error ? (
+            <ErrorState compact title="Couldn't load what expires next" message={errorMessage(expiringState.error)} onRetry={canRetry(expiringState.error) ? expiringState.onRetry : undefined} />
+          ) : watchlist.length === 0 ? (
+            <p className={`text-ds-body ${MUTED}`}>Nothing expires in the next 30 days.</p>
+          ) : (
+            <ul className="divide-y divide-ds-border">
+              {watchlist.map((item) => (
+                <li key={item.id} className="flex items-center gap-[12px] py-[8px]">
+                  <LetterTile name={item.name} size={24} />
+                  <Link href={`/evidence/${item.id}`} title={item.name} className="min-w-0 flex-1 truncate rounded-ds-control text-ds-body text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{item.name}</Link>
+                  <ExpiryText expiry={item.expiry_date} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+        <SectionCard id="by-type" title="Coverage by type" meta={typeCount > types.length ? `Top ${types.length} of ${formatCount(typeCount)} types` : undefined}>
+          {types.length === 0 ? <p className={`text-ds-body ${MUTED}`}>No evidence yet.</p> : (
+            <ul className="flex flex-col gap-[8px]">
+              {types.map((t) => (
+                <li key={t.type} className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] items-center gap-[12px]">
+                  <span className="truncate text-ds-body text-ds-fg-body" title={typeLabel(t.type)}>{typeLabel(t.type)}</span>
+                  <ProgressBar value={t.pctOfMax} valueText={formatCount(t.count)} label={`${typeLabel(t.type)}: ${t.count} items`} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
     </div>
   );

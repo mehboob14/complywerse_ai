@@ -3,11 +3,11 @@
 // Stage 01 — Intake & Scoping: the intake questions (shared with onboarding
 // requests; their answers tier the vendor) plus the free-form profile fields.
 // A business owner + a data access level satisfy the intake exit gate
-// (has_owner + has_data_classification), so this directly unblocks Advance.
+// (has_owner + has_data_classification): the stage's checks say which is missing.
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Save, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { vendorRiskApi, adminApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -32,12 +32,6 @@ const fromList = (v: unknown): string => (Array.isArray(v) ? v.join(', ') : '');
 
 export default function IntakePanel({ vendorId, onChanged }: { vendorId: number; onChanged?: () => void }) {
   const qc = useQueryClient();
-  const { data: vendor } = useQuery({
-    queryKey: ['vendor-intake', vendorId],
-    queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, unknown>,
-  });
-  const ownerSet = vendor?.owner_id != null;
-  const classSet = !!vendor?.data_access_level && vendor.data_access_level !== 'none';
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['vendor-intake', vendorId] });
     qc.invalidateQueries({ queryKey: ['tpra-lifecycle'] });
@@ -45,20 +39,6 @@ export default function IntakePanel({ vendorId, onChanged }: { vendorId: number;
   };
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
-        <div>
-          <p>Answer the intake questions — they set the tiering factors. A named <span className="font-medium">business owner</span> and a <span className="font-medium">data access level</span> above &ldquo;None&rdquo; satisfy this stage&apos;s exit gate.</p>
-          <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
-            <span className={`inline-flex items-center gap-1 ${ownerSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Business owner {ownerSet ? 'set' : 'needed'}
-            </span>
-            <span className={`inline-flex items-center gap-1 ${classSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Data classification {classSet ? 'set' : 'needed'}
-            </span>
-          </div>
-        </div>
-      </div>
       <IntakeForm vendorId={vendorId} layout="panel" onSaved={refresh} />
       <details className="rounded-lg border border-gray-200 p-3">
         <summary className="cursor-pointer text-xs font-medium text-gray-700">Profile fields (data access, services, locations)</summary>

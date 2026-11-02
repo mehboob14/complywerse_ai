@@ -529,6 +529,14 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     # Policy Exceptions: /revoke path is not in trigger_hints so POST action defaults
     # to "create", producing "Create Revoke Exception" — override to correct label.
     ("governance", "policy_exceptions", "revoke_exception"): "Revoke Exception",
+    # Committees: POST /{id}/deactivate and /reactivate are not trigger hints either (the audit row would read "Create Deactivate Committee")
+    ("governance", "committees", "deactivate_committee"): "Deactivate Committee",
+    ("governance", "committees", "reactivate_committee"): "Reactivate Committee",
+    # Committees: a meeting's life cycle (POST .../start is a trigger hint, .../end is not; the two PUTs would read "Edit Record ...")
+    ("governance", "committees", "start_meeting"): "Start Meeting",
+    ("governance", "committees", "end_meeting"): "End Meeting",
+    ("governance", "committees", "record_roll_call"): "Record Roll Call",
+    ("governance", "committees", "record_agenda_outcome"): "Record Agenda Outcome",
 
     # ── Duplicate label fixes ─────────────────────────────────────────────────
     # Risk Management > RCSA vs Vendor Risk (same fn names, different domains)
@@ -1380,11 +1388,11 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
     ("tpra_gate_decided", "Vendor assessment gate decision", "Third-Party Risk",
      ("vendor_risk.tpra.api.gate_decision",), None),
     ("tpra_finding_raised", "Vendor assessment finding raised", "Third-Party Risk",
-     ("vendor_risk.tpra.api.create_finding",), None),
+     ("vendor_risk.tpra.api.create_finding", "vendor_risk.tpra.api.create_vendor_finding"), None),
     ("tpra_finding_promoted", "Vendor finding promoted to the risk register", "Third-Party Risk",
      ("vendor_risk.tpra.api.promote_finding",), None),
     ("tpra_remediation_created", "Vendor finding remediation created", "Third-Party Risk",
-     ("vendor_risk.tpra.api.create_remediation",), None),
+     ("vendor_risk.tpra.api.create_remediation", "vendor_risk.tpra.api.start_remediation"), None),
     ("tpra_risk_accepted", "Vendor risk accepted", "Third-Party Risk",
      ("vendor_risk.tpra.api.create_acceptance",), None),
     ("tpra_approval_recorded", "Vendor assessment approval recorded", "Third-Party Risk",

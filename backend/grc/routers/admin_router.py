@@ -133,10 +133,10 @@ def _generate_audit_description(
             return "Ran gap analysis: " + " against ".join(parts)
         return "Ran gap analysis"
 
-    # Assessment start
-    if last_seg in ("start", "begin", "initiate") or (
+    # Assessment start (a committee meeting's /start is not one: it falls through to its own label, "Start Meeting")
+    if "/committees/" not in path_lower and (last_seg in ("start", "begin", "initiate") or (
         "start" in last_seg and "assessment" in path_lower
-    ):
+    )):
         return f"Started assessment{id_part}"
 
     # Status update via dedicated /status endpoint

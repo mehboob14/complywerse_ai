@@ -6,7 +6,8 @@
  * accepting the AI's changes would do.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Undo2 } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
+import { Button } from '@/components/ui/ds';
 import { shapeOf, type ChainHunk } from '@/lib/documentChain';
 import type { RedlineRow, Segment, Stats } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
@@ -157,20 +158,17 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
   const shape = shapeOf(hunk);
   return (
     <div className="mt-4 overflow-hidden rounded-t-xl border border-b-0 border-[#dbe3ea] bg-[#f8fafc]" data-change={hunk.id}>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[12px]">
         <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${look.node}`} aria-hidden><Icon className="h-3 w-3" /></span>
         <span className="min-w-0 truncate text-xs font-semibold text-[#1f2933]" title={hunk.section}>{hunk.section || 'Top of the document'}</span>
-        {shape ? <span className="rounded-full bg-[#fff8e6] px-2 py-0.5 text-[11px] font-semibold text-[#8a6100] ring-1 ring-inset ring-[#f0d9a0]">{shape}</span> : (
+        {shape ? <span className="rounded-full bg-[#fff8e6] px-2 py-0.5 text-[12px] font-semibold text-[#8a6100] ring-1 ring-inset ring-[#f0d9a0]">{shape}</span> : (
           <>
             <span className="font-mono font-semibold text-[#0a7a43]">+{hunk.words_added}</span>
             <span className="font-mono font-semibold text-[#b42318]">−{hunk.words_removed}</span>
           </>
         )}
-        {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
-        {!changes.readOnly && <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c3ccd5] bg-[#fff] px-2.5 py-1 font-semibold text-[#3f4b58] hover:border-[#d97706] hover:bg-[#fffbeb] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50">
-          {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Undo2 className="h-3 w-3" aria-hidden />} Take back
-        </button>}
+        {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[12px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
+        {!changes.readOnly && <Button size="sm" className="ml-auto" leftIcon={<Undo2 aria-hidden />} loading={busy} disabled={blocked} title={why} onClick={() => changes.onRevert(hunk)}>Take back</Button>}
       </div>
       {hunk.by
         ? <div className="border-t border-[#e1e6eb] bg-[#fff] px-3 py-2"><Attribution by={hunk.by} onShowSource={changes.onShowSource} /></div>
@@ -235,9 +233,7 @@ export default function RedlineView({ rows, empty = 'No changes', changes, focus
   return (
     <div className="space-y-1" ref={box}>
       <div className="flex justify-end">
-        <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-[#0f766e] hover:underline">
-          {all ? 'Show changes only' : 'Show whole document'}
-        </button>
+        <Button variant="link" size="sm" onClick={() => setAll((v) => !v)}>{all ? 'Show changes only' : 'Show whole document'}</Button>
       </div>
       {sides && (
         <div className="sticky top-0 z-[2] hidden grid-cols-2 gap-x-3 border-b border-[#d5dbe1] bg-white pb-1.5 pt-1 sm:grid">

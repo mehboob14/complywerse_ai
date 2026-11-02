@@ -10,6 +10,7 @@ import { AlertCircle, Check, CheckCircle2, Loader2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { vendorOnboardingApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../tprmQuery';
+import { intakeApi, type RequestFields, type Urgency } from '../intakeApi';
 import {
   Catalogue, FACTOR_LABELS, Factor, FactorKey, IntakePayload, IntakeVendor, Person, Preview, Question, TIER_CLS, errText,
 } from './types';
@@ -18,9 +19,13 @@ const SUPPLIER = 'supplier';
 const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50 disabled:text-slate-500';
 const LEVEL_TONE = ['bg-slate-600', 'bg-emerald-600', 'bg-amber-500', 'bg-orange-600', 'bg-red-600'];
 
-type Patch = { answers: Record<string, unknown>; justifications: Record<string, string>; vendor: Partial<IntakeVendor> };
-const empty = (): Patch => ({ answers: {}, justifications: {}, vendor: {} });
-const isEmpty = (p: Patch) => !Object.keys(p.answers).length && !Object.keys(p.justifications).length && !Object.keys(p.vendor).length;
+type Patch = {
+  answers: Record<string, unknown>; justifications: Record<string, string>; vendor: Partial<IntakeVendor>;
+  request: Partial<RequestFields>;
+};
+const empty = (): Patch => ({ answers: {}, justifications: {}, vendor: {}, request: {} });
+const isEmpty = (p: Patch) => !Object.keys(p.answers).length && !Object.keys(p.justifications).length
+  && !Object.keys(p.vendor).length && !Object.keys(p.request).length;
 
 export function useIntake(vendorId: number) {
   return useQuery<IntakePayload>({
@@ -63,6 +68,7 @@ export default function IntakeForm({
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [vendor, setVendor] = useState<IntakeVendor | null>(null);
+  const [request, setRequest] = useState<RequestFields | null>(null);
   const [section, setSection] = useState(SUPPLIER);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -80,6 +86,7 @@ export default function IntakeForm({
     setAnswers(data.intake.answers || {});
     setReasons(data.intake.justifications || {});
     setVendor(data.vendor);
+    setRequest(data.request ?? { department: null, urgency: 'normal', engagement: null });
   }, [data, vendorId]);
 
   const flush = useCallback(async () => {
@@ -89,9 +96,10 @@ export default function IntakeForm({
     pending.current = empty();
     setSaveState('saving');
     try {
-      const res = await vendorOnboardingApi.saveIntake(vendorId, {
+      const res = await intakeApi.save(vendorId, {
         answers: body.answers, justifications: body.justifications,
         vendor: Object.keys(body.vendor).length ? body.vendor : undefined,
+        request: Object.keys(body.request).length ? body.request : undefined,
       });
       qc.setQueryData(['tprm-intake', vendorId], res.data);
       setSaveState('saved');
@@ -103,7 +111,7 @@ export default function IntakeForm({
       if (!code || code >= 500) {
         const p = pending.current;
         pending.current = { answers: { ...body.answers, ...p.answers }, justifications: { ...body.justifications, ...p.justifications },
-                            vendor: { ...body.vendor, ...p.vendor } };
+                            vendor: { ...body.vendor, ...p.vendor }, request: { ...body.request, ...p.request } };
       }
       setSaveState('error');
       setSaveError(errText(e, 'Could not save — check your connection'));
@@ -132,6 +140,11 @@ export default function IntakeForm({
     (pending.current.vendor as Record<string, unknown>)[key] = value;
     schedule();
   };
+  const setAsked = <K extends keyof RequestFields>(key: K, value: RequestFields[K]) => {
+    setRequest((r) => (r ? { ...r, [key]: value } : r));
+    (pending.current.request as Record<string, unknown>)[key] = value;
+    schedule();
+  };
 
   const sectionOf = useMemo(() => {
     const map: Record<string, string> = { name: SUPPLIER, owner_id: SUPPLIER };
@@ -139,7 +152,7 @@ export default function IntakeForm({
     return map;
   }, [catalogue]);
 
-  if (isLoading || !catalogue || !vendor) {
+  if (isLoading || !catalogue || !vendor || !request) {
     return <div className="flex items-center gap-2 py-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading the request…</div>;
   }
   if (isError || !data) return <p className="text-sm text-rose-700">Could not load this request.</p>;
@@ -189,7 +202,8 @@ export default function IntakeForm({
   const body = (
     <div className="min-w-0 space-y-5">
       {section === SUPPLIER ? (
-        <SupplierSection vendor={vendor} people={people} editable={editable} setField={setField} problems={problems} />
+        <SupplierSection vendor={vendor} people={people} editable={editable} setField={setField} problems={problems}
+          request={request} setAsked={setAsked} canReview={data.can_review} />
       ) : current ? (
         <div className="space-y-4">
           {current.can_answer === false && (
@@ -260,7 +274,7 @@ export default function IntakeForm({
 
 // ── one question ─────────────────────────────────────────────────────────────
 
-function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer, onReason }: {
+export function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer, onReason }: {
   q: Question; value: unknown; reason: string; editable: boolean; minReason: number; problem?: string;
   onAnswer: (v: unknown) => void; onReason: (v: string) => void;
 }) {
@@ -360,9 +374,12 @@ function Segmented({ value, options, disabled, onChange }: {
 
 // ── the supplier and the people around it ────────────────────────────────────
 
-function SupplierSection({ vendor, people, editable, setField, problems }: {
+function SupplierSection({ vendor, people, editable, setField, problems, request, setAsked, canReview }: {
   vendor: IntakeVendor; people: Person[]; editable: boolean; problems: Array<{ key: string; message: string }>;
   setField: <K extends keyof IntakeVendor>(key: K, value: IntakeVendor[K]) => void;
+  request: RequestFields; setAsked: <K extends keyof RequestFields>(key: K, value: RequestFields[K]) => void;
+  /** the review team may name the first engagement, which is made when the request is approved */
+  canReview: boolean;
 }) {
   const nameOf = (id: number) => people.find((p) => p.id === id)?.name || `User ${id}`;
   const flag = (key: string) => problems.some((p) => p.key === key);
@@ -389,6 +406,18 @@ function SupplierSection({ vendor, people, editable, setField, problems }: {
         ), 'owner_id', true)}
         {field('Industry', <input className={input} value={vendor.industry || ''} disabled={!editable}
           onChange={(e) => setField('industry', e.target.value || null)} />)}
+        {field('Department', <input className={input} maxLength={120} value={request.department || ''} disabled={!editable}
+          placeholder="Who needs it" onChange={(e) => setAsked('department', e.target.value || null)} />)}
+        {field('Urgency', (
+          <select className={input} value={request.urgency} disabled={!editable}
+            onChange={(e) => setAsked('urgency', e.target.value as Urgency)}>
+            <option value="low">Low: no fixed date</option>
+            <option value="normal">Normal</option>
+            <option value="high">High: blocked without it</option>
+          </select>
+        ))}
+        {canReview && field('First engagement', <input className={input} maxLength={255} value={request.engagement || ''} disabled={!editable}
+          placeholder="Optional: what we use them for" onChange={(e) => setAsked('engagement', e.target.value || null)} />)}
       </div>
       <div>
         <span className="mb-1 block text-xs font-medium text-slate-600">Also looking after it</span>

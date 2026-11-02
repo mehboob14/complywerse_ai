@@ -4,5 +4,5 @@ import { redirect } from "next/navigation";
 // Kept as a redirect so any existing /helpdesk/home link lands on the dashboard
 // instead of 404ing.
 export default function HelpDeskHomeRedirect() {
-  redirect("/helpdesk/dashboard");
+  redirect("/cyber-assurance/helpdesk/dashboard");
 }

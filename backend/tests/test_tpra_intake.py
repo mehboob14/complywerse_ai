@@ -121,7 +121,8 @@ def test_a_request_goes_from_draft_to_review_and_is_tiered_from_its_answers(db, 
     made = requester.post("/intake/requests", json={"name": "Payroll Co", "website": "https://www.payroll.example/"})
     assert made.status_code == 201, made.text
     vid = made.json()["id"]
-    assert requester.post("/intake/requests", json={"name": "Other", "website": "payroll.example"}).status_code == 409
+    twin = requester.post("/intake/requests", json={"name": "Other", "website": "payroll.example"})
+    assert twin.status_code == 201 and [d["id"] for d in twin.json()["duplicates"]] == [vid]   # filed, and says what it may be
 
     saved = requester.put(f"/vendors/{vid}/intake", json={"answers": {"engagement_type": "saas", "personal_data": "yes"}})
     assert saved.status_code == 200 and saved.json()["intake_status"] == "draft"

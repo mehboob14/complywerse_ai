@@ -81,6 +81,8 @@ def _send_questionnaire(db: Session, item: TPRAActionItem, vendor: Vendor, now: 
         VendorQuestionnaireTemplate.tenant_id == item.tenant_id).first()
     if template is None:
         raise ActionProblem("the questionnaire chosen no longer exists")
+    if template.archived_at is not None:
+        raise ActionProblem("the questionnaire chosen has been archived")
     engagement = _engagement(db, item)
     assessment = service.get_active_assessment(db, vendor, engagement)
     if engagement is not None and assessment is None:
@@ -272,6 +274,8 @@ def _template(db: Session, tenant_id: int, template_id: Optional[int]) -> Vendor
                                                      VendorQuestionnaireTemplate.tenant_id == tenant_id).first()
     if t is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Choose the questionnaire to send")
+    if t.archived_at is not None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That questionnaire is archived. Choose another, or restore it")
     return t
 
 

@@ -62,6 +62,8 @@ BY_PREFIX: Dict[str, Place] = {
     "/erm": ("Risk Management", "Overview"),
     "/advanced-erm": ("Risk Management", "Overview"),
     "/erm/risks": ("Risk Management", "Risk Register"),
+    "/erm/risk-library": ("Risk Management", "Risk Library"),
+    "/erm/framework-requirements": ("Risk Management", "Risk Register"),
     "/risks": ("Risk Management", "Risk Register"),
     "/erm/risk-assessments": ("Risk Management", "Risk Assessments"),
     "/erm/framework-risk-assessments": ("Risk Management", "Risk Assessments"),
@@ -88,6 +90,8 @@ BY_PREFIX: Dict[str, Place] = {
     "/vendor-risk/questionnaires": ("Third-Party Vendor Risk", "Questionnaires"),
     "/vendor-risk/questionnaire-templates": ("Third-Party Vendor Risk", "Questionnaires"),
     "/vendor-risk/questionnaire-responses": ("Third-Party Vendor Risk", "Questionnaires"),
+    "/vendor-risk/roster": ("Third-Party Vendor Risk", "Roster"),
+    "/vendor-risk/policy": ("Third-Party Vendor Risk", "Policy"),
     # Compliance Management
     "/compliance": ("Compliance Management", "Overview"),
     "/compliance/policies": ("Compliance Management", "Policy Statements"),

@@ -11,6 +11,8 @@ import apiClient from '@/lib/api';
 import { problemOf, studioApi } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, RightSlidePanel, PageLoader } from '@/components/ui';
+import { ErrorState } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import {
   FileText,
   Loader2,
@@ -188,7 +190,7 @@ export default function GovernanceDocumentsPage() {
   // Kept solely so its `error` can drive the load-failure banner below.
   // The list/hierarchy body that consumed `data` was replaced by
   // <DocumentsWorkspace/>, so we no longer thread sort/pagination here.
-  const { error } = useQuery({
+  const { error, refetch: refetchProbe } = useQuery({
     queryKey: ['governance-documents-probe', typeFilter, statusFilter, searchTerm],
     queryFn: async () => {
       const params: Record<string, string | number> = {};
@@ -317,11 +319,13 @@ export default function GovernanceDocumentsPage() {
   };
 
   if (error) {
+    // not a dead end: what failed, in the server's words, and a way to ask again (the library's own list is asked again with it)
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-[var(--color-danger)]">
-        <AlertCircle className="h-12 w-12" />
-        <p>Failed to load documents</p>
-      </div>
+      <ErrorState
+        title="Couldn't load the documents"
+        message={errorMessage(error)}
+        onRetry={canRetry(error) ? () => { void refetchProbe(); void queryClient.invalidateQueries({ queryKey: ['gov-docs-workspace'] }); } : undefined}
+      />
     );
   }
 

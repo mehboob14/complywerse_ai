@@ -1,4 +1,5 @@
 /** Small text helpers shared by the studio screens. */
+import { formatDate } from '../format.ts';
 import type { Segment } from './api';
 
 /** The placeholders that must be filled in before a document is used (the same patterns the server checks). */
@@ -150,5 +151,5 @@ export function ago(iso: string | null | undefined): string {
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   if (s < 7 * 86400) return `${Math.floor(s / 86400)} d ago`;
-  return new Date(t).toLocaleDateString();
+  return formatDate(iso);                                        // "12 Nov 2026", as everywhere else (it was the browser's locale: 8/2/2026)
 }

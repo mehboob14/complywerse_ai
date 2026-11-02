@@ -169,6 +169,14 @@ class TPRAFinding(Base):
     template_version_id = Column(Integer, nullable=True)
     question_key = Column(String(100), nullable=True)
     answer_value = Column(String(255), nullable=True)
+    # Who sees it through (a platform user), whether it holds the approval gate whatever its
+    # severity, where it came from (assessment | manual | sla_breach | signal | document_review |
+    # offboarding; NULL on a row from before: tpra/findings.py source_of reads it) and the
+    # Task Management twin "Start remediation" opens.
+    owner_id = Column(Integer, nullable=True)
+    is_blocking = Column(Boolean, default=False)
+    source = Column(String(30), nullable=True)
+    task_id = Column(Integer, nullable=True)
     created_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
@@ -439,6 +447,12 @@ class TPRATieringConfig(Base):
     # The tenant's own onboarding questions, tiering factors and evidence types
     # (tpra/customisation.py).
     customisation = Column(JSON, default=dict)
+    # The vendor policy beyond bands and cadence (tpra/policy.py; its defaults fill any gap):
+    # days to fix a finding by severity {critical: days, …}, the stages each tier skips
+    # {tier: [stage keys]}, and the roster roles each tier needs as reviewers {tier: [role keys]}.
+    remediation_days = Column(JSON, default=dict)
+    skip_matrix = Column(JSON, default=dict)
+    required_reviewers = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -10,11 +10,10 @@
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { Check, GitPullRequest, Loader2, RotateCcw, Send, Undo2, X } from 'lucide-react';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { Check, GitPullRequest, RotateCcw, Send, Undo2, X } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
-import { problemOf } from '@/lib/studio/api';
-import { dateTime, day } from '@/lib/documentLifecycle';
+import { dateTime, day } from '../_view/docDates';
 import type { RouteHold } from '@/lib/approvalRoutes';
 import {
   acceptLine, compareTitles, deciderName, fieldRows, holdLine, isMine, mayProposeAgain, pageBanner,
@@ -24,7 +23,9 @@ import {
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
+import { Button, ErrorState, SkeletonLines, StatusPill as Pill, Textarea, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import type { Tone } from '@/lib/status';
 import WordView from '@/components/governance/WordView';
 import { useMyUserId } from '@/components/governance/DocumentTaskActions';
 import RedlineView, { StatsLine } from '../studio/_components/RedlineView';
@@ -32,17 +33,11 @@ import { InitialsAvatar } from '../_workspace/lib';
 import { useSignoff } from '../_SignoffControl';
 import { retryUnlessRefused } from '../_view/docRoute';
 
-// (the buttons are the Documents area's shared ones, components/governance/docUi: BTN, PRIMARY = BTN_PRIMARY)
-const DANGER = `${PRIMARY} !bg-[#b42318] hover:!bg-[#912018]`;
-const REJECT = `${BTN} !border-rose-300 !text-[#9b1c1c] hover:!bg-rose-50`;
-const FIELD = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]';
 const MUTED = 'text-[#586472]';
 const NONE: Proposal[] = [];
 
-const PILL: Record<ProposalStatus, string> = {
-  pending: 'border-amber-300 bg-amber-50 text-amber-900', accepted: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-  rejected: 'border-rose-300 bg-rose-50 text-rose-800', withdrawn: 'border-[#c3ccd5] bg-[#eef1f4] text-[#3f4b58]',
-};
+// a proposal's status as the kit's pill: waiting for the owner, accepted, not accepted, withdrawn
+const PILL_TONE: Record<ProposalStatus, Tone> = { pending: 'pending', accepted: 'success', rejected: 'danger', withdrawn: 'neutral' };
 const PILL_LABEL: Record<ProposalStatus, string> = { pending: 'Waiting', accepted: 'Accepted', rejected: 'Not accepted', withdrawn: 'Withdrawn' };
 // after an Accept, a Reject or a Withdraw: the document, its versions, statements, review and tasks may all have moved
 const AFTER_DECISION = ['document-proposals', 'document-proposal-compare', 'governance-document', 'document-access', 'doc-signoff', 'document-lifecycle',
@@ -86,6 +81,19 @@ export function useProposedAnswer() {
   };
 }
 
+/** The same two halves, apart, for a writer that reports through useReportedMutation (its `success` says the words, its `onSuccess` reads the lists):
+ *  the words of a {proposed: true} answer ("Change proposed" and the server's sentence), or null when it is the writer's usual answer. */
+export function proposedWords(data: unknown, decider?: string): { title: string; message: string } | null {
+  const answer = proposedOf(data);
+  return answer ? proposedToast(answer, decider) : null;
+}
+
+/** What is read again after a change became a proposal: the document is as it was, the list, the hold, the requests and the Change log are not. */
+export function useRefreshAfterProposal(): () => void {
+  const qc = useQueryClient();
+  return () => { for (const key of AFTER_PROPOSING) qc.invalidateQueries({ queryKey: [key] }); };
+}
+
 // ── the proposer's note in a writer's dialog ─────────────────────────────────
 /** "Goes to <owner> to accept or reject" and the required message the owner reads. */
 export function ProposeNote({ id, decider, value, onChange, placeholder, autoFocus }: {
@@ -101,19 +109,15 @@ export function ProposeNote({ id, decider, value, onChange, placeholder, autoFoc
       <label htmlFor={id} className="block text-xs font-semibold text-[#26323d]">
         What changed and why <span className="font-normal text-[#586472]">(required)</span>
       </label>
-      <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} maxLength={2000} required aria-required="true" autoFocus={autoFocus}
-        placeholder={placeholder ?? 'e.g. Section 2 now names who approves exceptions, as Legal asked'} className={FIELD} />
+      <Textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} maxLength={2000} required aria-required="true" autoFocus={autoFocus}
+        placeholder={placeholder ?? 'e.g. Section 2 now names who approves exceptions, as Legal asked'} />
     </div>
   );
 }
 
 // ── small parts ──────────────────────────────────────────────────────────────
 function StatusPill({ status, stale }: { status: ProposalStatus; stale?: boolean }) {
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${PILL[status] ?? PILL.withdrawn}`}>
-      {PILL_LABEL[status] ?? status}{stale && status === 'pending' ? ' · out of date' : ''}
-    </span>
-  );
+  return <Pill tone={PILL_TONE[status] ?? 'neutral'} size="sm" label={`${PILL_LABEL[status] ?? status}${stale && status === 'pending' ? ' · out of date' : ''}`} />;
 }
 
 function Layout({ value, onChange }: { value: 'sides' | 'redline'; onChange: (v: 'sides' | 'redline') => void }) {
@@ -134,7 +138,6 @@ type Decision = 'accept' | 'reject' | 'withdraw';
 
 /** Accept (what it makes, an optional note), Reject (a note, required) or Withdraw (the proposer), asked first. */
 function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; p: Proposal; mode: Decision; onClose: () => void }) {
-  const { toast } = useToast();
   const qc = useQueryClient();
   const doc = useDocument(documentId).data;
   const route = useSignoff(documentId).data?.route;
@@ -143,20 +146,27 @@ function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; 
   const proposer = p.proposed_by?.name || 'The proposer';
   const at = route?.hold?.stage_position ?? route?.current;
   const stage = route?.stages.find((s) => s.position === at)?.name ?? null;
-  const run = useMutation({
+  // a decision on a change: reported after the server answered; a proposal that moved on since (409) says so here, inside the dialog, and offers only Reject;
+  // no Retry, because a second try could decide twice
+  const run = useReportedMutation({
     mutationFn: async () => (mode === 'accept' ? proposalsApi.accept(documentId, p.id, note)
       : mode === 'reject' ? proposalsApi.reject(documentId, p.id, note) : proposalsApi.withdraw(documentId, p.id)),
-    onSuccess: (r) => {
+    success: (r) => {
       const version = mode === 'accept' ? (r as { version?: { number: string } | null }).version : null;
-      toast(mode === 'accept' ? { type: 'success', title: 'Change accepted', message: `${version ? `It is version ${version.number} now. ` : ''}${proposer} is told.` }
-        : mode === 'reject' ? { type: 'success', title: 'Change not accepted', message: `${proposer} is told, with your note.` }
-        : { type: 'success', title: 'Change withdrawn', message: 'It no longer waits for a decision; the document stays as it is.' });
+      return mode === 'accept' ? { title: 'Change accepted', message: `${version ? `It is version ${version.number} now. ` : ''}${proposer} is told.` }
+        : mode === 'reject' ? { title: 'Change not accepted', message: `${proposer} is told, with your note.` }
+        : { title: 'Change withdrawn', message: 'It no longer waits for a decision; the document stays as it is.' };
+    },
+    failure: mode === 'accept' ? 'Not accepted' : mode === 'reject' ? 'Not rejected' : 'Not withdrawn',
+    fallback: 'The decision could not be saved.',
+    retryable: false,
+    onSuccess: () => {
       for (const key of AFTER_DECISION) qc.invalidateQueries({ queryKey: [key] });
       onClose();
     },
     onError: (e) => {
       const stale = staleOf(e);
-      setProblem(stale ?? problemOf(e));
+      setProblem(stale);
       if (stale) qc.invalidateQueries({ queryKey: proposalsKey(documentId) });        // it now says so, and offers only Reject
     },
   });
@@ -164,16 +174,15 @@ function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; 
   const needsNote = mode === 'reject';
   const title = mode === 'accept' ? `Accept ${proposer}'s change?` : mode === 'reject' ? `Reject ${proposer}'s change?` : 'Withdraw your change?';
   return (
-    <AnimatedModal isOpen onClose={onClose} size="md" title={title} subtitle={whatLine(p)}
+    <AnimatedModal isOpen onClose={onClose} size="md" title={title} subtitle={whatLine(p)} dirty={note.trim() !== ''}
       footer={(
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={BTN}>Cancel</button>
-          <button type="button" onClick={() => { setProblem(null); run.mutate(); }} disabled={run.isPending || (needsNote && !note.trim()) || (mode === 'accept' && !!staleOf(run.error))}
-            className={mode === 'accept' ? PRIMARY : DANGER}>
-            {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : mode === 'accept' ? <Check className="h-4 w-4" aria-hidden />
-              : mode === 'reject' ? <X className="h-4 w-4" aria-hidden /> : <Undo2 className="h-4 w-4" aria-hidden />}
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant={mode === 'accept' ? 'primary' : 'danger'} loading={run.isPending} disabled={(needsNote && !note.trim()) || (mode === 'accept' && !!staleOf(run.error))}
+            leftIcon={mode === 'accept' ? <Check aria-hidden /> : mode === 'reject' ? <X aria-hidden /> : <Undo2 aria-hidden />}
+            onClick={() => { setProblem(null); run.mutate(); }}>
             {mode === 'accept' ? 'Accept' : mode === 'reject' ? 'Reject' : 'Withdraw'}
-          </button>
+          </Button>
         </div>
       )}>
       <div className="space-y-3 px-5 py-4">
@@ -188,8 +197,8 @@ function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; 
               {mode === 'reject' ? 'Reason' : `Note for ${proposer}`}{' '}
               <span className="font-normal text-[#586472]">({mode === 'reject' ? 'required' : 'optional'})</span>
             </span>
-            <textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} autoFocus
-              required={needsNote} aria-required={needsNote} className={`${FIELD} mt-1`}
+            <Textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} autoFocus
+              required={needsNote} aria-required={needsNote} className="mt-1"
               placeholder={mode === 'reject' ? 'e.g. Keep the current wording of section 2: Legal agreed it last year.' : ''} />
           </label>
         )}
@@ -211,13 +220,13 @@ export function ProposalActions({ documentId, p, onProposeAgain, small = false }
   const again = !!onProposeAgain && mayProposeAgain(p, meId);
   const withdraw = p.may_withdraw && (p.status === 'pending' || p.status === 'rejected');
   if (!accept && !reject && !again && !withdraw) return null;
-  const size = small ? ' !h-7 !px-2.5 !text-xs' : '';
+  const size = small ? 'sm' : 'md';
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {accept && <button type="button" onClick={() => setMode('accept')} className={PRIMARY + size}><Check className="h-4 w-4" aria-hidden /> Accept</button>}
-      {reject && <button type="button" onClick={() => setMode('reject')} className={REJECT + size}><X className="h-4 w-4" aria-hidden /> Reject</button>}
-      {again && <button type="button" onClick={() => onProposeAgain?.(p)} className={(accept || reject ? BTN : PRIMARY) + size}><RotateCcw className="h-4 w-4" aria-hidden /> Propose again</button>}
-      {withdraw && <button type="button" onClick={() => setMode('withdraw')} className={BTN + size}><Undo2 className="h-4 w-4" aria-hidden /> Withdraw</button>}
+      {accept && <Button variant="primary" size={size} leftIcon={<Check aria-hidden />} onClick={() => setMode('accept')}>Accept</Button>}
+      {reject && <Button variant="dangerOutline" size={size} leftIcon={<X aria-hidden />} onClick={() => setMode('reject')}>Reject</Button>}
+      {again && <Button variant={accept || reject ? 'secondary' : 'primary'} size={size} leftIcon={<RotateCcw aria-hidden />} onClick={() => onProposeAgain?.(p)}>Propose again</Button>}
+      {withdraw && <Button size={size} leftIcon={<Undo2 aria-hidden />} onClick={() => setMode('withdraw')}>Withdraw</Button>}
       {mode && <DecisionDialog documentId={documentId} p={p} mode={mode} onClose={() => setMode(null)} />}
     </div>
   );
@@ -236,7 +245,7 @@ export function ProposalsBanner({ documentId, doc, onOpen }: { documentId: numbe
     <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2 ${rose ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'}`} role="status">
       <GitPullRequest className={`h-4 w-4 shrink-0 ${rose ? 'text-[#9b1c1c]' : 'text-amber-700'}`} aria-hidden />
       <span className={`min-w-0 flex-1 text-[13px] font-medium ${rose ? 'text-[#7a1616]' : 'text-amber-950'}`}>{b.text}</span>
-      <button type="button" onClick={() => onOpen(b.proposalId)} className={b.kind === 'decide' ? PRIMARY : BTN}>{b.action}</button>
+      <Button variant={b.kind === 'decide' ? 'primary' : 'secondary'} onClick={() => onOpen(b.proposalId)}>{b.action}</Button>
     </div>
   );
 }
@@ -273,12 +282,12 @@ export function ProposalHold({ documentId, hold, stage, onProposeAgain }: {
       </div>
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
         <InfoTip align="end" label="About this hold" text={waitsFor} />
-        {me === 'decider' && !rejected && <Link href={href} className={PRIMARY}>Review it</Link>}
-        {me === 'proposer' && rejected && signoff?.my_step?.may_sign_as_is && <Link href={`/governance/documents/${documentId}?act=sign`} className={PRIMARY}>Sign it as it is</Link>}
+        {me === 'decider' && !rejected && <Button href={href} variant="primary">Review it</Button>}
+        {me === 'proposer' && rejected && signoff?.my_step?.may_sign_as_is && <Button href={`/governance/documents/${documentId}?act=sign`} variant="primary">Sign it as it is</Button>}
         {me === 'proposer' && rejected && (onProposeAgain && p
-          ? <button type="button" onClick={() => onProposeAgain(p)} className={BTN}><RotateCcw className="h-4 w-4" aria-hidden /> Propose again</button>
-          : <Link href={href} className={BTN}>Propose again</Link>)}
-        {me !== 'decider' && !rejected && <Link href={href} className={BTN}>See it</Link>}
+          ? <Button leftIcon={<RotateCcw aria-hidden />} onClick={() => onProposeAgain(p)}>Propose again</Button>
+          : <Button href={href}>Propose again</Button>)}
+        {me !== 'decider' && !rejected && <Button href={href}>See it</Button>}
       </div>
     </section>
   );
@@ -295,16 +304,16 @@ function StatementChange({ p }: { p: Proposal }) {
       <table className="mt-2 w-full table-fixed border-collapse">
         <thead>
           <tr className="border-b border-[#d5dbe1]">
-            <th scope="col" className="w-24 px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#586472] sm:w-32">Field</th>
-            <th scope="col" className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#586472]">Now</th>
-            <th scope="col" className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[#586472]">Proposed</th>
+            <th scope="col" className="w-24 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472] sm:w-32">Field</th>
+            <th scope="col" className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472]">Now</th>
+            <th scope="col" className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472]">Proposed</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.key} className={`border-b border-[#eef1f4] ${r.changed ? 'bg-[#fffbeb]' : ''}`}>
               <th scope="row" className="px-2 py-1.5 text-left align-top text-[12px] font-semibold text-[#3f4b58]">
-                {r.label}{r.changed && <span className="block text-[10px] font-medium text-[#8a6100]">changed</span>}
+                {r.label}{r.changed && <span className="block text-xs font-medium text-[#8a6100]">changed</span>}
               </th>
               <td className="break-words px-2 py-1.5 align-top text-[13px] leading-relaxed text-[#26323d]">{r.before}</td>
               <td className={`break-words px-2 py-1.5 align-top text-[13px] leading-relaxed ${r.changed ? 'font-medium text-[#1f2933]' : 'text-[#26323d]'}`}>{r.after}</td>
@@ -325,26 +334,26 @@ function ChangeList({ q, className = '' }: { q: UseQueryResult<DocumentCompare, 
     <section className={`min-w-0 rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 ${className}`} aria-label="What changed">
       <h4 className="text-sm font-semibold text-[#1f2933]">What changed</h4>
       {q.data && <p className={`text-xs ${MUTED}`}><StatsLine stats={q.data.stats} /></p>}
-      {q.isLoading && <div className="mt-2 flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
-      {q.isError && <p className="mt-2 text-sm text-[#7a1616]" role="alert">{problemOf(q.error, 'Could not compare the files.')}</p>}
+      {q.isLoading && <SkeletonLines className="mt-2" lines={3} label="Comparing" />}
+      {q.isError && <div className="mt-2"><ErrorState compact title="Couldn't compare the files" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} /></div>}
       {q.data && !changes.length && <p className={`mt-2 text-sm ${MUTED}`}>No text changes</p>}
       {changes.length > 0 && (
         <ol className="mt-2 space-y-2 2xl:max-h-[70vh] 2xl:overflow-y-auto">
           {changes.map((h) => (
             <li key={h.id} className="rounded-lg border border-[#e3e8ec] p-2">
-              <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-[#26323d]">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#26323d]">
                 <span className="min-w-0 break-words">{h.section || 'Top of the document'}</span>
-                <span className="rounded-full bg-[#eef1f4] px-1.5 py-px text-[10px] text-[#3f4b58]">{CHANGE_KIND[h.status] ?? 'Changed'}</span>
+                <span className="rounded-full bg-[#eef1f4] px-1.5 py-px text-xs text-[#3f4b58]">{CHANGE_KIND[h.status] ?? 'Changed'}</span>
               </p>
               {h.status !== 'inserted' && h.before_text && (
                 <div className="mt-1 rounded border-l-[3px] border-l-rose-500 bg-rose-50/60 px-2 py-1">
-                  <p className="text-[11px] font-semibold text-[#7a1616]">Now</p>
+                  <p className="text-xs font-semibold text-[#7a1616]">Now</p>
                   <p className="whitespace-pre-wrap break-words text-[12px] text-rose-950">{h.before_text}</p>
                 </div>
               )}
               {h.status !== 'deleted' && h.after_text && (
                 <div className="mt-1 rounded border-l-[3px] border-l-emerald-500 bg-emerald-50/60 px-2 py-1">
-                  <p className="text-[11px] font-semibold text-emerald-800">Proposed</p>
+                  <p className="text-xs font-semibold text-emerald-800">Proposed</p>
                   <p className="whitespace-pre-wrap break-words text-[12px] text-emerald-950">{h.after_text}</p>
                 </div>
               )}
@@ -371,10 +380,10 @@ function FilePane({ label, q, name }: { label: string; q: UseQueryResult<Blob, u
     <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]" aria-label={label}>
       <h4 className="border-b border-[#e3e8ec] px-3 py-2 text-xs font-semibold text-[#1f2933]">{label}</h4>
       <div className="h-[70vh] min-h-[320px] overflow-y-auto bg-[#e8ecf0]">
-        {q.isError ? <p className="p-4 text-sm text-[#7a1616]" role="alert">Could not read this file.</p>
+        {q.isError ? <div className="p-3"><ErrorState compact title="Couldn't read this file" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} /></div>
           : pdf ? (url ? <iframe src={url} title={label} className="h-full w-full" /> : null)
           : <WordView file={blob} label={label} />}
-        {q.isLoading && <div className="flex justify-center p-4" role="status" aria-label="Reading the file"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
+        {q.isLoading && <div className="p-4"><SkeletonLines lines={6} label="Reading the file" /></div>}
       </div>
     </section>
   );
@@ -410,8 +419,8 @@ function DocumentChange({ documentId, doc, p }: { documentId: number; doc: any; 
         </p>
         <Layout value={layout} onChange={setLayout} />
       </div>
-      {compareQ.isLoading && <div className="flex justify-center py-2" role="status" aria-label="Comparing"><Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" aria-hidden /></div>}
-      {compareQ.isError && <p className="text-sm text-[#7a1616]" role="alert">{problemOf(compareQ.error, 'Could not compare with the library.')}</p>}
+      {compareQ.isLoading && <SkeletonLines lines={3} label="Comparing" />}
+      {compareQ.isError && <ErrorState compact title="Couldn't compare with the library" message={errorMessage(compareQ.error)} onRetry={() => { void compareQ.refetch(); }} />}
       {compareQ.data && (
         <RedlineView rows={compareQ.data.rows} empty="No text changes" sides={layout === 'sides' ? titles : undefined} />
       )}
@@ -430,7 +439,7 @@ function ProposalCard({ p, on, onPick, mine }: { p: Proposal; on: boolean; onPic
         {on && <Check className="h-4 w-4 shrink-0 text-[#0f766e]" aria-hidden />}
       </span>
       <span className="mt-1 block text-xs text-[#26323d]">{whatLine(p)}</span>
-      <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[#586472]"><StatusPill status={p.status} stale={p.stale} /> {dateTime(p.proposed_at)}</span>
+      <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#586472]"><StatusPill status={p.status} stale={p.stale} /> {dateTime(p.proposed_at)}</span>
       {p.message && <span className="mt-1 line-clamp-2 block text-xs italic text-[#3f4b58]">“{p.message}”</span>}
     </button>
   );
@@ -496,8 +505,8 @@ export default function ProposalsView({ documentId, doc, asked, onPick, onPropos
   const items = listQ.data?.items ?? NONE;
   const chosen = pick(items, asked);
   const decider = deciderName(doc);
-  if (listQ.isLoading) return <div className="flex h-40 items-center justify-center" role="status" aria-label="Reading the proposed changes"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>;
-  if (listQ.isError) return <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-[#7a1616]" role="alert">{problemOf(listQ.error, 'Could not load the proposed changes.')}</p>;
+  if (listQ.isLoading) return <SkeletonLines lines={6} label="Reading the proposed changes" />;
+  if (listQ.isError) return <ErrorState title="Couldn't load the proposed changes" message={errorMessage(listQ.error)} onRetry={() => { void listQ.refetch(); }} />;
   const canDecide = !!listQ.data?.can_decide;
   return (
     <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">

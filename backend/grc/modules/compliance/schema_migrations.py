@@ -1226,6 +1226,37 @@ _COLUMN_ADDS = [
     # ── TPRM hardening (F): add columns below this line ──
     # The tiering config and tier policy an assessment is held to (tpra/service.policy_snapshot).
     ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
+
+    # ── TPRM parity foundations: vendor fields, finding fields, policy (P0): add columns below this line ──
+    # What the register slices a supplier by; owners are plain ids (routers/vendors.py).
+    ("grc_vendors", "holds_personal_data", "BOOLEAN", None),
+    ("grc_vendors", "data_classification", "VARCHAR(20)", None),
+    ("grc_vendors", "data_location", "VARCHAR(255)", None),
+    ("grc_vendors", "systems_in_scope", "JSON", None),
+    ("grc_vendors", "tags", "JSON", None),
+    ("grc_vendors", "security_owner_id", "INTEGER", None),
+    ("grc_vendors", "relationship_owner_id", "INTEGER", None),
+    # The vendor policy beyond bands and cadence (tpra/policy.py).
+    ("grc_tpra_tiering_config", "remediation_days", "JSON", None),
+    ("grc_tpra_tiering_config", "skip_matrix", "JSON", None),
+    ("grc_tpra_tiering_config", "required_reviewers", "JSON", None),
+
+    # ── TPRM parity lifecycle rules (B3): add columns below this line ──
+
+    # ── TPRM parity questionnaires (B4): add columns below this line ──
+    # A questionnaire retired instead of deleted, and who changed it last (routers/questionnaires.py).
+    ("grc_vendor_questionnaire_templates", "archived_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_templates", "updated_by", "INTEGER", None),
+
+    # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
+    # One engagement's own exit checklist (tpra/engagements.py, B5b).
+    ("grc_tpra_engagements", "offboarding", "JSON", None),
+    # A finding's owner, whether it holds the approval gate, where it came from and its Task Management twin
+    # (tpra/findings.py, B5a). A row from before reads NULL: no owner, not blocking, source worked out from the row.
+    ("grc_tpra_findings", "owner_id", "INTEGER", None),
+    ("grc_tpra_findings", "is_blocking", "BOOLEAN", None),
+    ("grc_tpra_findings", "source", "VARCHAR(30)", None),
+    ("grc_tpra_findings", "task_id", "INTEGER", None),
 ]
 
 

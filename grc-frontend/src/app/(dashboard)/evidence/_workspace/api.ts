@@ -1,9 +1,11 @@
 /**
  * Data layer for the Evidence workspace. Wraps the shared axios `apiClient`.
- * The by-owner endpoint is additive; callers tolerate a 404 until the backend ships it.
+ * A 404 is an answer ("this file has no assessment yet", "this server has no by-owner route") and reads as nothing; any other failure is thrown, so a page can say
+ * it failed and offer Retry: a failed request is never drawn as an empty answer.
  */
 import apiClient from '@/lib/api';
-import type { EvidenceItem, EvidenceSummary } from './lib';
+import type { EvidenceItem, EvidenceSummary, OwnerPerf } from './evidenceModel';
+export type { OwnerPerf };
 
 export interface ItemsParams {
   status?: string;
@@ -14,6 +16,8 @@ export interface ItemsParams {
   limit?: number;
 }
 export interface ItemsResponse { items: EvidenceItem[]; total: number; skip?: number; limit?: number; }
+
+const notFound = (error: unknown): boolean => (error as { response?: { status?: number } } | null)?.response?.status === 404;
 
 export async function fetchSummary(): Promise<EvidenceSummary> {
   return (await apiClient.get('/evidence-mgmt/items/dashboard/summary')).data as EvidenceSummary;
@@ -33,17 +37,17 @@ export async function fetchExpiringSoon(days = 30): Promise<EvidenceItem[]> {
   return ((data as { items?: EvidenceItem[] })?.items) ?? [];
 }
 
-// ── per-selected-row detail loaders (used by Workbench preview + Register expand) ──
+// ── per-selected-row detail loaders (used by the Workbench preview and the Register's panel) ──
 export async function fetchDetail(id: number): Promise<Record<string, unknown>> {
   return (await apiClient.get(`/evidence-mgmt/items/${id}`)).data as Record<string, unknown>;
 }
 export async function fetchAssessment(id: number): Promise<Record<string, unknown> | null> {
   try { return (await apiClient.get(`/evidence-mgmt/ai/${id}/latest-assessment`)).data as Record<string, unknown>; }
-  catch { return null; }
+  catch (e) { if (notFound(e)) return null; throw e; }                    // 404 "No assessments found" is the answer for a file nobody has rated yet
 }
 export async function fetchClauseMappings(id: number): Promise<Array<Record<string, unknown>>> {
   try { return (await apiClient.get(`/evidence-mgmt/ai/${id}/clause-mappings`)).data as Array<Record<string, unknown>>; }
-  catch { return []; }
+  catch (e) { if (notFound(e)) return []; throw e; }
 }
 export async function fetchAllLinks(id: number): Promise<Record<string, unknown>> {
   return (await apiClient.get(`/evidence-mgmt/cross-links/${id}/all-links`)).data as Record<string, unknown>;
@@ -67,11 +71,10 @@ export const submitForReview = (id: number) => apiClient.post(`/evidence-mgmt/li
 export const reviewEvidence = (id: number, action: 'approve' | 'reject', comments?: string) =>
   apiClient.post(`/evidence-mgmt/lifecycle/${id}/review`, { action, comments });
 
-// ── additive analytics (L5) — tolerate 404 until backend ships it ──
-export interface OwnerPerf { owner_id: number | null; owner_name: string | null; total: number; pending: number; approved: number; expired: number; }
+// ── owner analytics (the Performance view): the route exists on this server; an older one answers 404, which reads as no owners ──
 export async function fetchByOwner(): Promise<OwnerPerf[]> {
   try {
     const data = (await apiClient.get('/evidence-mgmt/items/dashboard/by-owner')).data as { owners?: OwnerPerf[] } | OwnerPerf[];
     return Array.isArray(data) ? data : (data.owners ?? []);
-  } catch { return []; }
+  } catch (e) { if (notFound(e)) return []; throw e; }
 }

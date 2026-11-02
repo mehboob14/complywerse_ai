@@ -6,6 +6,14 @@
  * The note is drawn on top of the page (a portal, fixed to the (i)), so it is never clipped by a card, a table or a modal body, and
  * it keeps itself on screen: under the (i) or above it when there is more room there. The words are always in the page for a
  * screen reader (`aria-describedby`), shown or not.
+ *
+ * The glyph is 20px; the button around it is the press area: 24px with a mouse, 44px on a touch screen (`pointer: coarse`). It is padded
+ * out and pulled back by the same negative margin, so nothing on the page moves. The ring is drawn on the glyph and the note is placed
+ * from the glyph, so both stay exactly where they were. An (i) trails the words it explains, so on touch the extra reach goes up, down
+ * and to the right, and only 2px to the left: the label before it (a FormField label focuses its field) keeps every press on its text.
+ * The wrapper is deliberately not positioned (only the hidden words are, see below): a positioned box paints over its unpositioned siblings,
+ * so the extra area would take presses from the controls around it. Unpositioned, whatever comes after it in the page (a button, a count)
+ * and every positioned box (a FormField's label, a TextInput) is drawn over it, and the extra area only takes presses nothing else wants.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -27,11 +35,12 @@ export function InfoTip({ text, label = 'More information', align = 'start', cla
 }) {
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
+  const glyph = useRef<HTMLSpanElement>(null);        // the visible 20px (i): the note is placed from it, not from the larger press area
   const pinned = useRef(false);                       // opened by a click or tap: stays until it is closed
   const [spot, setSpot] = useState<Spot | null>(null);
 
   const show = useCallback(() => {
-    const r = button.current?.getBoundingClientRect();
+    const r = glyph.current?.getBoundingClientRect();
     if (!r) return;
     const width = Math.min(WIDTH, window.innerWidth - 2 * MARGIN);
     const left = Math.max(MARGIN, Math.min(align === 'end' ? r.right - width : r.left, window.innerWidth - width - MARGIN));
@@ -59,7 +68,7 @@ export function InfoTip({ text, label = 'More information', align = 'start', cla
   }, [spot, hide]);
 
   return (
-    <span className={`relative inline-flex align-middle ${className}`}>
+    <span className={`inline-flex align-middle ${className}`}>
       <button
         ref={button}
         type="button"
@@ -74,11 +83,17 @@ export function InfoTip({ text, label = 'More information', align = 'start', cla
           if (spot && pinned.current) hide();
           else { pinned.current = true; show(); }
         }}
-        className="grid h-5 w-5 place-items-center rounded-full text-[#7b8794] hover:text-[#26323d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+        className="group/tip -m-[2px] grid place-items-center p-[2px] focus-visible:outline-none [@media(pointer:coarse)]:[margin:-12px_-22px_-12px_-2px] [@media(pointer:coarse)]:[padding:12px_22px_12px_2px]"
       >
-        <Info className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+        <span
+          ref={glyph}
+          className="grid h-5 w-5 place-items-center rounded-full text-[#7b8794] group-hover/tip:text-[#26323d] group-focus-visible/tip:ring-2 group-focus-visible/tip:ring-[#0f766e]"
+        >
+          <Info className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+        </span>
       </button>
-      <span id={id} className="sr-only">{text}</span>
+      {/* its own small positioned box, so the hidden words stay beside the (i) (an unpositioned sr-only span lands wherever the page's nearest positioned box is, and a long page gets a scrollbar of its own) */}
+      <span className="relative"><span id={id} className="sr-only">{text}</span></span>
       {spot && typeof document !== 'undefined' && createPortal(
         <span
           role="tooltip"

@@ -20,6 +20,7 @@ from grc.models import (
     VendorQuestionnaireEvidence, VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from grc.models import TPRAEngagement  # where a scope keeps its own tier and scores
+from grc.models import TPRAActionItem  # a planned send points at a template, so deleting it looks here
 from grc.modules.vendor_risk.routers import questionnaires as questionnaire_routes
 from grc.modules.vendor_risk.tpra import rbac, service, versions
 from grc.modules.vendor_risk.tpra.engine_scoring import answer_score, score_assessment
@@ -27,7 +28,8 @@ from grc.routers.auth_router import require_auth
 
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
-           TPRATieringConfig, TPRARiskSnapshot, TPRAAuditLog, Risk, TPRAVendorContact, TPRAPortalToken, TPRAEngagement]
+           TPRATieringConfig, TPRARiskSnapshot, TPRAAuditLog, Risk, TPRAVendorContact, TPRAPortalToken, TPRAEngagement,
+           TPRAActionItem]
 
 QUESTIONS = [
     {"id": "mfa", "text": "Is MFA enforced for administrators?", "domain": "cybersecurity", "weight": 1.5,

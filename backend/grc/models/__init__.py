@@ -75,3 +75,5 @@ from ._62_helpdesk_itsm_models import *  # noqa: F401,F403 - ComplyVerse-native 
 # Advisory module tables live in their own feature folder (modules/advisories)
 # to stay isolated from other work; register them here so create_all builds them.
 from ..modules.advisories.models import *  # noqa: F401,F403 - Advisory ingestion/applicability tables
+from ._90_tpra_roster import *  # noqa: F401,F403 - TPRM: who the workflow asks at each review stage
+from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework (Risk Library)

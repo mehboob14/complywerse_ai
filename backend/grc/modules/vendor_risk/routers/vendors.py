@@ -4,13 +4,13 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_, or_
+from sqlalchemy.orm import Session, joinedload, object_session
+from sqlalchemy import case, false, func, and_, or_
 
 from ....models import (
     Vendor, VendorAssessment, VendorSLARecord, VendorIncident,
     GRCUser, Tenant, get_db,
-    Evidence, TPRAEngagement, TPRAEvidenceLink, VendorQuestionnaireResponse,
+    BusinessUnit, Evidence, TPRAEngagement, TPRAEvidenceLink, VendorQuestionnaireResponse,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services.module_settings import clean_record_values
@@ -45,6 +45,15 @@ class VendorCreate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # What the register slices by (see clean_register_fields): personal data, classification, where the data
+    # lives, the systems touched, tags, and who else looks after the supplier.
+    holds_personal_data: Optional[bool] = None
+    data_classification: Optional[str] = None
+    data_location: Optional[str] = None
+    systems_in_scope: Optional[list] = None
+    tags: Optional[list] = None
+    security_owner_id: Optional[int] = None
+    relationship_owner_id: Optional[int] = None
     # The tenant's own fields (services/module_settings.py, module "vendors").
     custom_values: Optional[dict] = None
     # Intake duplicate-relationship check: set True to create despite a name/website match.
@@ -80,13 +89,33 @@ class VendorUpdate(BaseModel):
     # TPRA additive fields (lifecycle_stage / trackers managed via dedicated endpoints)
     reassessment_cadence_days: Optional[int] = None
     contract_document_id: Optional[int] = None
+    # The register fields, as on create; sent as null, one is cleared.
+    holds_personal_data: Optional[bool] = None
+    data_classification: Optional[str] = None
+    data_location: Optional[str] = None
+    systems_in_scope: Optional[list] = None
+    tags: Optional[list] = None
+    security_owner_id: Optional[int] = None
+    relationship_owner_id: Optional[int] = None
     # Only the fields sent change; a field sent as null is cleared.
     custom_values: Optional[dict] = None
 
 
 # ── Serializers ───────────────────────────────────────────────────
 
-def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
+def _person(v: Vendor, user_id: Optional[int], people: Optional[dict] = None) -> Optional[dict]:
+    """{id, full_name, email} of the person a plain-id field names, as `owner` is given; None when none is named.
+    `people` is {id: user} already loaded (a page of the register); else the supplier's session is asked."""
+    if not user_id:
+        return None
+    user = (people or {}).get(user_id)
+    session = object_session(v)
+    if user is None and session is not None:
+        user = session.get(GRCUser, user_id)
+    return {"id": user.id, "full_name": user.display_name or user.username, "email": user.email} if user else None
+
+
+def serialize_vendor(v: Vendor, include_counts: bool = False, people: Optional[dict] = None) -> dict:
     data = {
         "id": v.id,
         "tenant_id": v.tenant_id,
@@ -128,6 +157,17 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "intake_status": getattr(v, "intake_status", None),
         "custom_values": getattr(v, "custom_values", None) or {},
         "vat_number": getattr(v, "vat_number", None), "vat_check": getattr(v, "vat_check", None),
+        # What the register slices by; null is "not recorded".
+        "holds_personal_data": v.holds_personal_data,
+        "data_classification": v.data_classification,
+        "data_location": v.data_location,
+        "systems_in_scope": v.systems_in_scope or [],
+        "tags": v.tags or [],
+        "security_owner_id": v.security_owner_id,
+        "relationship_owner_id": v.relationship_owner_id,
+        "security_owner": _person(v, v.security_owner_id, people),
+        "relationship_owner": _person(v, v.relationship_owner_id, people),
+        "business_unit": {"id": v.business_unit.id, "name": v.business_unit.name} if v.business_unit else None,
         # Set while the supplier is archived (DELETE /vendors/{id}); POST /vendors/{id}/restore clears it.
         "archived_at": v.deleted_at.isoformat() if getattr(v, "deleted_at", None) else None,
         "created_at": v.created_at.isoformat() if v.created_at else None,
@@ -212,9 +252,17 @@ def next_action(v: Vendor, today, engagements: list, active: list, to_review: se
     return None
 
 
+def _grade(rows: list) -> dict:
+    """A supplier's grade: the worst (A best, F worst) of its active assessments, with that one's residual score."""
+    worst = max((a for a in rows if a.rating_grade), key=lambda a: (a.rating_grade, a.residual_score or 0.0),
+                default=None)
+    return {"grade": worst.rating_grade if worst else None,
+            "grade_score": round(worst.residual_score, 1) if worst and worst.residual_score is not None else None}
+
+
 def register_notes(db: Session, vendors: List[Vendor], today=None) -> dict:
-    """{supplier id: {open_engagements, next_action}} for one page of the register,
-    from five queries however long the page."""
+    """{supplier id: {open_engagements, next_action, grade, grade_score}} for suppliers of the register,
+    from five queries however many."""
     from ..tpra.paperwork import _RETIRED, ends_on
 
     today = today or datetime.utcnow().date()
@@ -246,7 +294,8 @@ def register_notes(db: Session, vendors: List[Vendor], today=None) -> dict:
             expired.add(link.vendor_id)
     return {v.id: {"open_engagements": len(engagements.get(v.id, [])),
                    "next_action": next_action(v, today, engagements.get(v.id, []), active.get(v.id, []),
-                                              to_review, expired)}
+                                              to_review, expired),
+                   **_grade(active.get(v.id, []))}
             for v in vendors}
 
 
@@ -262,18 +311,111 @@ def get_vendor_or_404(vendor_id: int, tenant_ids: List[int], db: Session) -> Ven
     return vendor
 
 
+# ── The register: its order, and the fields it slices by ───────────
+
+SORTS = "risk|name|tier|status|grade|owner|next_reassessment|annual_value"
+CLASSIFICATIONS = ("public", "internal", "confidential", "restricted")
+# Worst first, as for tiers: what needs a person before what is simply running.
+_STATUS_RANK = {"suspended": 0, "offboarded": 1, "terminated": 2, "requested": 3, "onboarding": 4, "active": 5,
+                "inactive": 6, "retired": 7, "rejected": 8}
+# Worst tier first. A supplier with no inherent score has had no tier decision: it ranks right after critical, an
+# unanswered question rather than the least urgent row.
+# ponytail: "no inherent score" stands for next_action's not_tiered, which also reads the active assessments' tiers.
+_TIER_RANK = case((Vendor.tier == "critical", 0), (Vendor.inherent_risk_score.is_(None), 1), (Vendor.tier == "high", 2),
+                  (Vendor.tier == "medium", 3), (Vendor.tier == "low", 4), else_=5)
+
+
+def _order(sort: Optional[str], descending: bool) -> list:
+    """The register's ORDER BY. Without a sort it is newest first, as it always was. Absent values sort last whichever
+    way; the name and then the id end every order, so pages never overlap or skip a supplier (an import creates many
+    at once)."""
+    def by(column):
+        return column.desc().nullslast() if descending else column.asc().nullslast()
+
+    name = func.lower(Vendor.name)
+    if sort is None:
+        return [Vendor.created_at.desc(), Vendor.id.desc()]
+    if sort == "risk":                    # worst tier first, and within a tier the ones nobody owns
+        return [by(_TIER_RANK), by(case((Vendor.owner_id.is_(None), 0), else_=1)), by(name), by(Vendor.id)]
+    column = {"name": name, "tier": _TIER_RANK, "status": case(_STATUS_RANK, value=Vendor.status, else_=9),
+              "owner": func.lower(func.coalesce(GRCUser.display_name, GRCUser.username)),
+              "next_reassessment": Vendor.next_reassessment_date, "annual_value": Vendor.contract_value}[sort]
+    return [by(column), name.asc(), Vendor.id.asc()]
+
+
+def _many(values: Optional[List[str]]) -> List[str]:
+    """Repeated query values, or comma-separated ones, once each."""
+    return list(dict.fromkeys(p.strip() for v in values or [] for p in v.split(",") if p.strip()))
+
+
+def _words(values, what: str, most: int, longest: int) -> Optional[list]:
+    """A list of short names, tidied and once each; None clears."""
+    if values is None:
+        return None
+    if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+        raise HTTPException(status_code=400, detail=f"{what} must be a list of names")
+    out = list(dict.fromkeys(" ".join(v.split()) for v in values if v.strip()))
+    if len(out) > most or any(len(v) > longest for v in out):
+        raise HTTPException(status_code=400, detail=f"{what}: at most {most}, each up to {longest} characters")
+    return out
+
+
+def clean_register_fields(db: Session, data: dict, current: Optional[Vendor] = None) -> dict:
+    """The register fields present in a create or update payload, checked and tidied (HTTP 400 when one is not
+    valid); only those are returned. An owner has to be an active user who signs in here, as the business owner does;
+    the one already on the record may be sent back as it is."""
+    out = {}
+    if "holds_personal_data" in data:
+        out["holds_personal_data"] = data["holds_personal_data"]
+    if "data_classification" in data:
+        value = " ".join(str(data["data_classification"] or "").split()).lower()
+        if value and value not in CLASSIFICATIONS:
+            raise HTTPException(status_code=400,
+                                detail=f"Data classification has to be one of: {', '.join(CLASSIFICATIONS)}")
+        out["data_classification"] = value or None
+    if "data_location" in data:
+        value = " ".join(str(data["data_location"] or "").split())
+        if len(value) > 255:
+            raise HTTPException(status_code=400, detail="Data location can be at most 255 characters")
+        out["data_location"] = value or None
+    for key, what, most, longest in (("systems_in_scope", "Systems in scope", 50, 100), ("tags", "Tags", 30, 40)):
+        if key in data:
+            out[key] = _words(data[key], what, most, longest)
+    owners = {k: data[k] for k in ("security_owner_id", "relationship_owner_id") if k in data}
+    if owners:
+        kept = [getattr(current, k, None) for k in owners]
+        named = [i for i in owners.values() if i]
+        refuse_imported_accounts(db, named, kept=kept)
+        active = {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.id.in_(named or [-1]),
+                                                                  GRCUser.is_active.is_(True))}
+        if any(i not in active and i not in kept for i in named):
+            raise HTTPException(status_code=400, detail="Choose an active user of this platform")
+        out.update(owners)
+    return out
+
+
 # ── Endpoints ─────────────────────────────────────────────────────
 
 @router.get("/vendors")
 def list_vendors(
-    tier: Optional[str] = Query(None, description="Filter by tier: critical, high, medium, low"),
-    vendor_status: Optional[str] = Query(None, alias="status", description="Filter by status"),
+    tier: Optional[List[str]] = Query(None, description="Tier: critical, high, medium, low; repeat for several"),
+    vendor_status: Optional[List[str]] = Query(None, alias="status", description="Status; repeat for several"),
     search: Optional[str] = Query(None, description="Search by name"),
     vendor_type: Optional[str] = Query(None),
     data_access_level: Optional[str] = Query(None),
+    attention: Optional[List[str]] = Query(
+        None, description="The next action a supplier waits on (NEXT_ACTIONS codes), or none; repeat for several"),
+    owner: Optional[str] = Query(None, description="Business owner: me, unassigned, or a user id"),
+    holds_personal_data: Optional[bool] = Query(None),
+    business_unit_id: Optional[List[int]] = Query(None),
+    sort: Optional[str] = Query(None, pattern=f"^({SORTS})$",
+                                description="Order by: risk, name, tier, status, grade, owner, next_reassessment, "
+                                            "annual_value. Without it: newest first"),
+    direction: str = Query("asc", alias="dir", pattern="^(asc|desc)$"),
     # Archived suppliers, and onboarding requests not yet picked up (or turned down), are not suppliers in use: left
     # out unless asked for. A request in review is a supplier being onboarded and is listed.
     include_archived: bool = Query(False, description="Also list archived suppliers"),
+    archived_only: bool = Query(False, description="List only the archived suppliers (the register's Archived view)"),
     include_requests: bool = Query(False, description="Also list requests not yet in review, and turned-down ones"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, description="Page size; page with skip until `total` is reached"),
@@ -285,31 +427,66 @@ def list_vendors(
         return {"items": [], "total": 0, "skip": skip, "limit": limit}
 
     query = db.query(Vendor).options(
-        joinedload(Vendor.owner),
+        joinedload(Vendor.owner), joinedload(Vendor.business_unit),
     ).filter(Vendor.tenant_id.in_(tenant_ids))
 
-    if not include_archived:
+    if archived_only:
+        query = query.filter(Vendor.deleted_at.isnot(None))
+    elif not include_archived:
         query = query.filter(Vendor.deleted_at.is_(None))
     if not include_requests:
         query = query.filter(or_(Vendor.intake_status.is_(None), Vendor.intake_status.in_(("in_review", "approved"))))
-    if tier:
-        query = query.filter(Vendor.tier == tier)
-    if vendor_status:
-        query = query.filter(Vendor.status == vendor_status)
+    tiers, statuses = _many(tier), _many(vendor_status)
+    if tiers:
+        # A tier counts once someone has tiered the supplier (an inherent score): until then the column holds the default
+        # "medium", and the register shows "Not tiered".
+        query = query.filter(Vendor.tier.in_(tiers), Vendor.inherent_risk_score.isnot(None))
+    if statuses:
+        query = query.filter(Vendor.status.in_(statuses))
     if vendor_type:
         query = query.filter(Vendor.vendor_type == vendor_type)
     if data_access_level:
         query = query.filter(Vendor.data_access_level == data_access_level)
     if search:
         query = query.filter(Vendor.name.ilike(f"%{search}%"))
+    if owner:
+        if owner == "unassigned":
+            query = query.filter(Vendor.owner_id.is_(None))
+        elif owner == "me":
+            query = query.filter(Vendor.owner_id == current_user.id)
+        elif owner.isdecimal():
+            query = query.filter(Vendor.owner_id == int(owner))
+        else:                              # a link edited by hand names nobody: an empty register is the honest answer
+            query = query.filter(false())
+    if holds_personal_data is not None:
+        query = query.filter(Vendor.holds_personal_data.is_(holds_personal_data))
+    if business_unit_id:
+        query = query.filter(Vendor.business_unit_id.in_(business_unit_id))
+    if sort == "owner":
+        query = query.outerjoin(GRCUser, GRCUser.id == Vendor.owner_id)
 
-    total = query.count()
-    # The id breaks ties (an import creates many at once), so pages never overlap or skip a supplier.
-    vendors = query.order_by(Vendor.created_at.desc(), Vendor.id.desc()).offset(skip).limit(limit).all()
-    notes = register_notes(db, vendors)
+    codes, descending = _many(attention), direction == "desc"
+    if not codes and sort != "grade":
+        total = query.count()
+        vendors = query.order_by(*_order(sort, descending)).offset(skip).limit(limit).all()
+        notes = register_notes(db, vendors)
+    else:
+        # ponytail: next action and grade are worked out in Python over the whole filtered set; move into SQL past a few thousand suppliers.
+        vendors = query.order_by(*(_order("name", False) if sort == "grade" else _order(sort, descending))).all()
+        notes = register_notes(db, vendors)
+        if codes:
+            vendors = [v for v in vendors if ((notes[v.id]["next_action"] or {}).get("code") or "none") in codes]
+        if sort == "grade":                # A best to F worst; ungraded last either way, ties stay by name
+            graded = sorted((v for v in vendors if notes[v.id]["grade"]), key=lambda v: notes[v.id]["grade"],
+                            reverse=descending)
+            vendors = graded + [v for v in vendors if not notes[v.id]["grade"]]
+        total = len(vendors)
+        vendors = vendors[skip:skip + limit]
 
+    named = {i for v in vendors for i in (v.security_owner_id, v.relationship_owner_id) if i}
+    people = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(named))} if named else {}
     return {
-        "items": [{**serialize_vendor(v), **notes[v.id]} for v in vendors],
+        "items": [{**serialize_vendor(v, people=people), **notes[v.id]} for v in vendors],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -349,9 +526,11 @@ def create_vendor(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     refuse_imported_accounts(db, [payload.owner_id])
+    register = clean_register_fields(db, payload.model_dump(exclude_unset=True))
     vendor = Vendor(
         tenant_id=tenant_id,
         custom_values=custom_values,
+        **register,
         name=payload.name,
         description=payload.description,
         tier=payload.tier,
@@ -377,6 +556,33 @@ def create_vendor(
     db.commit()
     db.refresh(vendor)
     return serialize_vendor(vendor)
+
+
+@router.get("/vendors/duplicates")
+def vendor_duplicates(
+    name: str = Query(..., min_length=1, max_length=255, description="The name to check"),
+    website: Optional[str] = Query(None, max_length=500),
+    exclude_id: Optional[int] = Query(None, description="A supplier to leave out: the one the check is for"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What a name or website may already be on record, as POST /vendors checks it before it refuses with 409 (archived
+    suppliers and requests too): [{id, name, reason, match, archived, status, intake_status}], those in use first.
+    Read-only: the Add vendor dialog asks as the name is typed, and a supplier's page asks about itself with exclude_id."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        return {"items": []}
+    return {"items": intake.duplicates(db, tenant_ids[0], name, website, exclude_id=exclude_id)}
+
+
+@router.get("/vendors/units")
+def vendor_units(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The business units a supplier can sit under, by name: what the Add / Edit vendor dialog offers. Read-only (the
+    tenant's own business-units list seeds demo units when there are none)."""
+    tenant_ids = get_user_tenants(current_user, db)
+    rows = (db.query(BusinessUnit).filter(BusinessUnit.tenant_id.in_(tenant_ids or [-1]))
+            .order_by(func.lower(BusinessUnit.name), BusinessUnit.id))
+    return {"items": [{"id": u.id, "name": u.name} for u in rows]}
 
 
 @router.get("/vendors/dashboard")
@@ -541,6 +747,7 @@ def update_vendor(
 
     update_data = payload.model_dump(exclude_unset=True)
     refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[vendor.owner_id])
+    update_data.update(clean_register_fields(db, update_data, vendor))
     if "custom_values" in update_data:
         try:
             vendor.custom_values = clean_record_values(db, vendor.tenant_id, "vendors", update_data.pop("custom_values"),
@@ -558,7 +765,10 @@ def update_vendor(
             if len(justification) < 10:
                 raise HTTPException(status_code=400,
                                     detail="This vendor's tier was computed. Explain why it should change.")
-            tpra_service.record_tier_override(db, vendor, active, new_tier, justification, current_user.id)
+            try:
+                tpra_service.record_tier_override(db, vendor, active, new_tier, justification, current_user.id)
+            except tpra_service.RetierRefused as exc:
+                raise HTTPException(status_code=409, detail=str(exc))
             update_data.pop("tier")
     if update_data.get("status") == "offboarded" and (vendor.status or "").lower() != "offboarded":
         from .lifecycle import start_offboarding       # offboarding closes the supplier's side, however it starts

@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import TPRARiskDomain, TPRATieringConfig
 from ....models._41_tpra_lifecycle_models import TPRA_RISK_DOMAINS
-from .stages import DEFAULT_CADENCE_DAYS
+from .stages import DEFAULT_CADENCE_DAYS, DEFAULT_REMEDIATION_SLA_DAYS, reviewers_by_tier_for, skip_matrix_for
 
 # Canonical, configurable inputs to the inherent-risk tiering engine. Factors are
 # each scored 0..4; the weighted sum is normalized to 0..100 and bucketed by the
@@ -32,6 +33,11 @@ DEFAULT_TIERING_CONFIG = {
         "medium": 25.0,
     },
     "cadence_days": dict(DEFAULT_CADENCE_DAYS),
+    # Days to fix a finding by severity, the stages each tier skips and the roster roles each tier needs as
+    # reviewers (tpra/policy.py). Assessments keep what they were tiered under (service.policy_snapshot).
+    "remediation_days": dict(DEFAULT_REMEDIATION_SLA_DAYS),
+    "skip_matrix": skip_matrix_for(),
+    "required_reviewers": reviewers_by_tier_for(),
     # When the reminder sweep tells people about a date, and whom it escalates to.
     # One notice when the window opens, then one every repeat period once overdue:
     # a weekly rhythm, not daily nagging.
@@ -103,7 +109,11 @@ def ensure_tpra_tenant_defaults(db: Session, tenant_id: int) -> dict:
         config_created = True
 
     if created_domains or config_created:
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:        # a request running at the same moment (a page asks for several things at once) seeded them first
+            db.rollback()
+            return {"domains_created": 0, "config_created": False}
     return {"domains_created": created_domains, "config_created": config_created}
 
 
@@ -124,6 +134,9 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "weights": row.weights or DEFAULT_TIERING_CONFIG["weights"],
         "thresholds": row.thresholds or DEFAULT_TIERING_CONFIG["thresholds"],
         "cadence_days": row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"],
+        "remediation_days": {**DEFAULT_REMEDIATION_SLA_DAYS, **(getattr(row, "remediation_days", None) or {})},
+        "skip_matrix": skip_matrix_for(getattr(row, "skip_matrix", None)),
+        "required_reviewers": reviewers_by_tier_for(getattr(row, "required_reviewers", None)),
         "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"],
                             **(getattr(row, "reminder_policy", None) or {})},
         "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"],

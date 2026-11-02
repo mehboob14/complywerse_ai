@@ -153,6 +153,35 @@ def note_needed(q: dict, answer) -> Optional[str]:
     return "note" if option and option.get("comment_required") else None
 
 
+def answer_problem(q: dict, value: str, comment: str) -> Optional[str]:
+    """Why this answer cannot be stored as given, or None: it is not one of the question's
+    options, or it is a not-applicable answer (or one that asks for a note) without its words."""
+    if q.get("options") and _type(q) not in ("text", "file") and _option(q, value) is None:
+        return "That is not one of the answers to this question"
+    need = note_needed(q, value)
+    if need and not comment:
+        return "Say why this does not apply to you" if need == "reason" else "Explain your answer"
+    return None
+
+
+# What a supplier is shown of a question. Anything not listed stays on our side.
+_SHOWN_QUESTION = ("id", "text", "required", "help", "help_text", "show_if", "section", "category", "domain",
+                   "evidence", "evidence_on", "evidence_required", "locked")
+_SHOWN_OPTION = ("value", "label", "na", "not_applicable", "comment_required")
+
+
+def vendor_questions(questions: List[dict]) -> List[dict]:
+    """The questions as the supplier may see them: what is asked and how it is answered, never
+    how an answer scores. Weights, option scores, the finding an answer raises and critical or
+    blocking marks are left out, and so is any field added later until it is listed above."""
+    return [{
+        **{k: q[k] for k in _SHOWN_QUESTION if k in q},
+        "type": _type(q),
+        "options": [{k: o[k] for k in _SHOWN_OPTION if k in o} if isinstance(o, dict) else o
+                    for o in q.get("options") or []],
+    } for q in questions or []]
+
+
 def problems(questions: List[dict], answers: dict, comments: dict, evidence: Iterable[str],
              only: Optional[Set[str]] = None) -> Dict[str, List[str]]:
     """What stops a submission, by kind, over the questions that apply (or only those
@@ -280,4 +309,5 @@ class Throttle:
             return True
 
 
-throttle = Throttle()
+# Every answer is a request now (saved as it is given), so a link allows 600 in five minutes, not 120.
+throttle = Throttle(limit=600)

@@ -1,9 +1,10 @@
 """Questionnaire template management + external vendor questionnaire access."""
 
+import copy
 import logging
 import os
 import uuid
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, Request
@@ -15,11 +16,13 @@ from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate, TPRATemplateVersion,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
     Evidence, TPRAEvidenceLink, TPRAReviewAssignment, Tenant,
+    TPRAActionItem, TPRAQuestion, TPRATieringConfig,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import contacts, emails, portal, rbac, versions
+from ..tpra import contacts, customisation, emails, portal, rbac, tier_policy, versions
 from ..tpra import questionnaire_evidence as qevidence
 from ..tpra import follow_ups, questionnaire_pdf, workbook
+from ..tpra.bootstrap import DEFAULT_TIERING_CONFIG, get_tiering_config
 from ..tpra.service import write_audit
 
 logger = logging.getLogger(__name__)
@@ -56,6 +59,8 @@ class TemplateUpdate(BaseModel):
     description: Optional[str] = None
     questions: Optional[list] = None
     is_default: Optional[bool] = None
+    # The tiers it is sent to by default: the tier policy's own list, the one Settings edits.
+    default_tiers: Optional[List[str]] = None
 
 
 class SendQuestionnaireRequest(BaseModel):
@@ -106,7 +111,7 @@ class ResendRequest(BaseModel):
 
 # ── Serializers ───────────────────────────────────────────────────
 
-def serialize_template(t: VendorQuestionnaireTemplate, latest_version: Optional[int] = None) -> dict:
+def serialize_template(t: VendorQuestionnaireTemplate, latest_version: Optional[int] = None, **more) -> dict:
     return {
         "id": t.id,
         "tenant_id": t.tenant_id,
@@ -121,7 +126,50 @@ def serialize_template(t: VendorQuestionnaireTemplate, latest_version: Optional[
         "created_by": t.created_by,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        "archived_at": t.archived_at.isoformat() if t.archived_at else None,
+        **more,
     }
+
+
+_BY_SEVERITY = ["critical", "high", "medium", "low"]       # how a card lists tiers (stages.TIERS runs the other way)
+
+
+def _default_tiers(db: Session, tenant_id: int) -> Dict[int, List[str]]:
+    """Template id -> the tiers whose list of questionnaires calls for it: what Settings
+    edits, with the built-in suggestion for a tier that has none chosen."""
+    policy = tier_policy.merged(get_tiering_config(db, tenant_id).get("tier_policy"))
+    out: Dict[int, List[str]] = {}
+    for tier in _BY_SEVERITY:
+        for t in tier_policy.templates_for(db, tenant_id, tier, policy):
+            out.setdefault(t.id, []).append(tier)
+    return out
+
+
+def _present(db: Session, templates: List[VendorQuestionnaireTemplate]) -> List[dict]:
+    """The templates as the pages show them: the version last sent, whether it ever
+    was, how many sections, the tiers it is the default of and who changed it last."""
+    from ..tpra import reviews              # here: that module imports this one
+
+    if not templates:
+        return []
+    ids = [t.id for t in templates]
+    published = dict(db.query(TPRATemplateVersion.template_id, func.max(TPRATemplateVersion.version_no))
+                     .filter(TPRATemplateVersion.template_id.in_(ids)).group_by(TPRATemplateVersion.template_id).all())
+    answered = {i for (i,) in db.query(VendorQuestionnaireResponse.template_id)
+                .filter(VendorQuestionnaireResponse.template_id.in_(ids)).distinct()}
+    tiers = _default_tiers(db, templates[0].tenant_id)
+
+    def last_hand(t):               # an edit made before we kept the name is not guessed at: only a template never edited names its author
+        untouched = t.created_at and t.updated_at and (t.updated_at - t.created_at).total_seconds() < 5
+        return t.updated_by or (t.created_by if untouched else None)
+
+    hands = {t.id: last_hand(t) for t in templates}
+    names = {u.id: u.display_name or u.username or u.email
+             for u in db.query(GRCUser).filter(GRCUser.id.in_({h for h in hands.values() if h} or {-1}))}
+    return [serialize_template(
+        t, published.get(t.id), used=t.id in published or t.id in answered, default_tiers=tiers.get(t.id, []),
+        section_count=len({reviews.section_of(q) for q in t.questions or [] if isinstance(q, dict)}),
+        updated_by_name=names.get(hands[t.id])) for t in templates]
 
 
 def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
@@ -163,6 +211,7 @@ def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
 def list_templates(
     category: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    include_archived: bool = Query(False),      # archived ones are hidden unless asked for
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -175,23 +224,42 @@ def list_templates(
     query = db.query(VendorQuestionnaireTemplate).filter(
         VendorQuestionnaireTemplate.tenant_id.in_(tenant_ids)
     )
+    if not include_archived:
+        query = query.filter(VendorQuestionnaireTemplate.archived_at.is_(None))
     if category:
         query = query.filter(VendorQuestionnaireTemplate.category == category)
     if search:
         query = query.filter(VendorQuestionnaireTemplate.name.ilike(f"%{search}%"))
 
     total = query.count()
-    templates = query.order_by(VendorQuestionnaireTemplate.created_at.desc()).offset(skip).limit(limit).all()
-    published = dict(db.query(TPRATemplateVersion.template_id, func.max(TPRATemplateVersion.version_no))
-                     .filter(TPRATemplateVersion.template_id.in_([t.id for t in templates] or [-1]))
-                     .group_by(TPRATemplateVersion.template_id).all())
+    templates = (query.order_by(VendorQuestionnaireTemplate.created_at.desc(), VendorQuestionnaireTemplate.id.desc())
+                 .offset(skip).limit(limit).all())
 
     return {
-        "items": [serialize_template(t, published.get(t.id)) for t in templates],
+        "items": _present(db, templates),
         "total": total,
         "skip": skip,
         "limit": limit,
     }
+
+
+def _template_or_404(db: Session, user: GRCUser, template_id: int) -> VendorQuestionnaireTemplate:
+    template = db.query(VendorQuestionnaireTemplate).filter(
+        VendorQuestionnaireTemplate.id == template_id,
+        VendorQuestionnaireTemplate.tenant_id.in_(get_user_tenants(user, db) or [-1]),
+    ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
+
+
+@router.get("/questionnaire-templates/{template_id}")
+def get_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    return _present(db, [_template_or_404(db, current_user, template_id)])[0]
 
 
 @router.post("/questionnaire-templates", status_code=status.HTTP_201_CREATED)
@@ -219,7 +287,10 @@ def create_template(
     db.add(template)
     db.commit()
     db.refresh(template)
-    return serialize_template(template)
+    return _present(db, [template])[0]
+
+
+_CONTENT = {"name", "category", "description", "questions"}          # what an archived questionnaire cannot be given
 
 
 @router.put("/questionnaire-templates/{template_id}")
@@ -230,25 +301,150 @@ def update_template(
     current_user: GRCUser = Depends(require_auth),
 ):
     rbac.require_write(db, current_user, "templates", "edit")
-    tenant_ids = get_user_tenants(current_user, db)
-    if not tenant_ids:
-        raise HTTPException(status_code=403, detail="User not associated with any tenant")
-
-    template = db.query(VendorQuestionnaireTemplate).filter(
-        VendorQuestionnaireTemplate.id == template_id,
-        VendorQuestionnaireTemplate.tenant_id.in_(tenant_ids),
-    ).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+    template = _template_or_404(db, current_user, template_id)
 
     update_data = payload.model_dump(exclude_unset=True)
+    tiers = update_data.pop("default_tiers", None)
+    if template.archived_at is not None and _CONTENT & set(update_data):
+        raise HTTPException(status_code=409, detail="This questionnaire is archived. Restore it to change it.")
+    if tiers is not None:
+        _set_default_tiers(db, current_user, template, tiers)
     for key, value in update_data.items():
         setattr(template, key, value)
 
-    template.updated_at = datetime.utcnow()
+    if _CONTENT & set(update_data):
+        template.updated_by = current_user.id
+        template.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(template)
-    return serialize_template(template)
+    return _present(db, [template])[0]
+
+
+def _config_row(db: Session, tenant_id: int) -> Optional[TPRATieringConfig]:
+    return db.query(TPRATieringConfig).filter(
+        TPRATieringConfig.tenant_id == tenant_id, TPRATieringConfig.config_key == "default").first()
+
+
+def _write_tier_policy(db: Session, row: TPRATieringConfig, patch: dict, user: GRCUser) -> None:
+    """Change the tier policy the way Settings does (tier_policy.clean), and leave the same audit row."""
+    try:
+        row.tier_policy = tier_policy.clean(patch, tier_policy.merged(row.tier_policy),
+                                            customisation.evidence_kinds(getattr(row, "customisation", None)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    row.row_version = (row.row_version or 1) + 1
+    write_audit(db, row.tenant_id, entity="config", action="update", actor_id=user.id,
+                reason="TPRM program config updated")
+
+
+def _set_default_tiers(db: Session, user: GRCUser, template: VendorQuestionnaireTemplate, wanted: List[str]) -> None:
+    """Make this the questionnaire its tiers call for, and no other tier's. Each tier keeps its other
+    questionnaires: a list is written out in full, so a tier on the built-in suggestion keeps it."""
+    unknown = sorted(set(wanted) - set(_BY_SEVERITY))
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"'{unknown[0]}' is not a tier")
+    have = _default_tiers(db, template.tenant_id).get(template.id, [])
+    if set(wanted) == set(have):
+        return
+    if template.archived_at is not None and set(wanted) - set(have):
+        raise HTTPException(status_code=409, detail="This questionnaire is archived. Restore it to make it a default.")
+    rbac.require_write(db, user, "config", "edit")          # the tier policy is a setting
+    row = _config_row(db, template.tenant_id)
+    if row is None:
+        row = TPRATieringConfig(
+            tenant_id=template.tenant_id, config_key="default", is_active=True,
+            weights=dict(DEFAULT_TIERING_CONFIG["weights"]), thresholds=dict(DEFAULT_TIERING_CONFIG["thresholds"]),
+            cadence_days=dict(DEFAULT_TIERING_CONFIG["cadence_days"]))
+        db.add(row)
+        db.flush()
+    policy, patch = tier_policy.merged(row.tier_policy), {}
+    for tier in _BY_SEVERITY:
+        calls_for = [t.id for t in tier_policy.templates_for(db, template.tenant_id, tier, policy)]
+        if tier in wanted and template.id not in calls_for:
+            patch[tier] = {"template_ids": calls_for + [template.id]}
+        elif tier not in wanted and template.id in calls_for:
+            patch[tier] = {"template_ids": [i for i in calls_for if i != template.id]}
+    _write_tier_policy(db, row, patch, user)
+    write_audit(db, template.tenant_id, entity="questionnaire_template", action="default_tiers", entity_id=template.id,
+                actor_id=user.id, to_value=", ".join(t for t in _BY_SEVERITY if t in wanted) or "none")
+
+
+def _forget_default(db: Session, user: GRCUser, template: VendorQuestionnaireTemplate) -> None:
+    """Take it out of every tier's list (it is retired or gone). Only the lists written out are touched."""
+    row = _config_row(db, template.tenant_id)
+    stored = (row.tier_policy if row else None) or {}
+    patch = {tier: {"template_ids": [i for i in rules["template_ids"] if i != template.id]}
+             for tier, rules in stored.items()
+             if isinstance(rules, dict) and template.id in (rules.get("template_ids") or [])}
+    if patch:
+        _write_tier_policy(db, row, patch, user)
+
+
+@router.post("/questionnaire-templates/{template_id}/archive")
+def archive_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Retire it: hidden, not sendable, not editable, out of the tiers it was the default of. Questionnaires already
+    sent keep working. Restoring does not give the tiers back."""
+    rbac.require_write(db, current_user, "templates", "edit")
+    template = _template_or_404(db, current_user, template_id)
+    if template.archived_at is None:
+        template.archived_at = template.updated_at = datetime.utcnow()
+        template.updated_by = current_user.id
+        _forget_default(db, current_user, template)
+        write_audit(db, template.tenant_id, entity="questionnaire_template", action="archive", entity_id=template.id,
+                    actor_id=current_user.id, to_value=template.name)
+        db.commit()
+    return _present(db, [template])[0]
+
+
+@router.post("/questionnaire-templates/{template_id}/restore")
+def restore_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "templates", "edit")
+    template = _template_or_404(db, current_user, template_id)
+    if template.archived_at is not None:
+        template.archived_at = None
+        template.updated_by = current_user.id
+        template.updated_at = datetime.utcnow()
+        write_audit(db, template.tenant_id, entity="questionnaire_template", action="restore", entity_id=template.id,
+                    actor_id=current_user.id, to_value=template.name)
+        db.commit()
+    return _present(db, [template])[0]
+
+
+@router.post("/questionnaire-templates/{template_id}/duplicate", status_code=status.HTTP_201_CREATED)
+def duplicate_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """An editable copy of its own: not archived, in no tier's list, and not the questionnaires sent from the original."""
+    rbac.require_write(db, current_user, "templates", "create")
+    source = _template_or_404(db, current_user, template_id)
+    twin = VendorQuestionnaireTemplate(
+        tenant_id=source.tenant_id, name=f"{source.name} (copy)"[:255], category=source.category,
+        description=source.description, questions=copy.deepcopy(source.questions or []), is_default=False,
+        created_by=current_user.id)
+    db.add(twin)
+    db.flush()
+    write_audit(db, twin.tenant_id, entity="questionnaire_template", action="duplicate", entity_id=twin.id,
+                actor_id=current_user.id, to_value=twin.name, extra={"from": source.id})
+    db.commit()
+    db.refresh(twin)
+    return _present(db, [twin])[0]
+
+
+def _in_use(db: Session, template: VendorQuestionnaireTemplate) -> bool:
+    """Whether anything is recorded against it: sent, chosen for an assessment or a planned send, or scored."""
+    return any(db.query(column).filter(column == template.id).first() is not None for column in (
+        TPRATemplateVersion.template_id, VendorQuestionnaireResponse.template_id, VendorAssessment.template_id,
+        TPRAQuestion.template_id, TPRAActionItem.template_id))
 
 
 @router.delete("/questionnaire-templates/{template_id}")
@@ -258,22 +454,13 @@ def delete_template(
     current_user: GRCUser = Depends(require_auth),
 ):
     rbac.require_write(db, current_user, "templates", "delete")
-    tenant_ids = get_user_tenants(current_user, db)
-    if not tenant_ids:
-        raise HTTPException(status_code=403, detail="User not associated with any tenant")
-
-    template = db.query(VendorQuestionnaireTemplate).filter(
-        VendorQuestionnaireTemplate.id == template_id,
-        VendorQuestionnaireTemplate.tenant_id.in_(tenant_ids),
-    ).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    if versions.latest(db, template.id) is not None or db.query(VendorQuestionnaireResponse.id).filter(
-            VendorQuestionnaireResponse.template_id == template.id).first():
+    template = _template_or_404(db, current_user, template_id)
+    if _in_use(db, template):
         raise HTTPException(status_code=409, detail=(
-            "This template has been sent to vendors, and their answers are kept against it. "
-            "Edit it instead: questionnaires already sent keep the version they were sent on."))
+            "This questionnaire has been sent or chosen, and records are kept against it. Archive it instead: "
+            "questionnaires already sent keep the version they were sent on."))
 
+    _forget_default(db, current_user, template)
     db.delete(template)
     db.commit()
     return {"message": f"Template '{template.name}' deleted successfully"}
@@ -435,6 +622,8 @@ def send_questionnaire(
         ).first()
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
+        if template.archived_at is not None:
+            raise HTTPException(status_code=409, detail="This questionnaire is archived. Restore it to send it.")
         version = versions.publish(db, template, current_user.id)
 
     certificate = None
@@ -728,13 +917,15 @@ def vendor_view(db: Session, qr: VendorQuestionnaireResponse, contact=None) -> d
     shown = {
         "questionnaire_id": qr.id,
         "title": version.name if version else None,
+        "organisation": db.query(Tenant.name).filter(Tenant.id == qr.tenant_id).scalar(),
         "vendor_name": vendor.name if vendor else None,
         "respondent_name": qr.respondent_name,
         "respondent_email": qr.respondent_email,
         "status": qr.status,
         "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
         "due_date": qr.due_date.isoformat() if qr.due_date else None,
-        "questions": questions,
+        "submitted_at": qr.submitted_at.isoformat() if qr.submitted_at else None,
+        "questions": portal.vendor_questions(questions),       # what is asked, never how an answer scores
         "existing_responses": qr.responses or {},
         "comments": qr.vendor_comments or {},
         # While returned, only these can change: {question key: what the reviewer asked}.
@@ -788,7 +979,13 @@ def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: Externa
     returned, only the questions the reviewer asked about can change. Submitting
     takes a named person attesting to the answers. Through a personal link the
     contact is the respondent and attester unless the answers name someone, and
-    the questionnaire's links go to them from now on."""
+    the questionnaire's links go to them from now on. A request with no `responses` at
+    all (a send after answers saved one by one) leaves the stored answers as they are."""
+    if payload.submit:                        # a send waits for an answer being saved, and checks what is stored now
+        db.refresh(qr, with_for_update=True)
+        open_for_vendor(qr)
+    if "responses" not in payload.model_fields_set:
+        payload = payload.model_copy(update={"responses": dict(qr.responses or {})})
     if contact is not None:
         qr.contact_id = contact.id
         given = {k: v for k, v in (payload.attestation or {}).items() if v not in (None, "")}

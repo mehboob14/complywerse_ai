@@ -98,9 +98,11 @@ def _config(db, **values):
 
 
 def _at_approval(db, v, mover):
-    """A scored medium assessment that `mover` has just advanced into its Approval stage."""
+    """A scored medium assessment that `mover` has just advanced into its Approval stage. Medium asks for one reviewer, and
+    the Approval gate asks for it too (planning is skipped at Medium), so the plan names one."""
     a = service.ensure_active_assessment(db, v, actor_id=OWNER)
     a.inherent_tier, a.inherent_score, a.residual_score, a.residual_rating = "medium", 40.0, 20.0, "low"
+    a.reviewed_by = REVIEWER
     for s in service.get_stage_instances(db, a.id):
         s.status = "complete" if s.stage_order < 7 else "not_started"
     _stage(db, a, "contracting").status = "in_progress"
@@ -378,7 +380,7 @@ def test_a_reopened_finding_reopens_the_issue_its_acceptance_closed(db):
     api.update_finding(f["id"], api.FindingUpdate(status="closed"), db=db, user=admin)
     db.refresh(issue)
     assert issue.workflow_state == "closed"
-    api.update_finding(f["id"], api.FindingUpdate(status="in_remediation"), db=db, user=admin)
+    api.update_finding(f["id"], api.FindingUpdate(status="in_remediation", reason="The fix was rolled back"), db=db, user=admin)
     db.refresh(issue)
     assert issue.workflow_state == "in_progress"
     assert db.query(IssueActivity).filter(IssueActivity.issue_id == issue.id, IssueActivity.type == "reopened").count() == 2

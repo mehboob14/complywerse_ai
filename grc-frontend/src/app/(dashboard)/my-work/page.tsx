@@ -1,375 +1,233 @@
 'use client';
 
-import { useMemo } from 'react';
+// My Work: what is assigned to the signed-in person in the control plane and in their framework journeys: the SCF controls they own or are assigned (GET scf/my-work: controls, N/A reviews waiting,
+// overdue re-attestations, artifacts to write or review, failing checks), the journey requirements assigned to them (one read of each framework's controls), the frameworks they work in with their
+// progress, and "This week". The page's rules are in workModel.ts (moved unchanged, tested against the old code). Who sees it is what it has always been: an administrator, or a person with framework,
+// control-library or evidence access; everyone else is told it is not available for their role. What changed is that nothing is passed off as empty: a read that fails says so with Retry (the SCF
+// block used to read "No SCF controls assigned to you" and "Nothing overdue"), and a framework whose controls could not be read is named instead of counting as "nothing assigned". Built on the kit.
 import Link from 'next/link';
+import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronRight, Plus } from 'lucide-react';
 import { certificationsApi, scfApi, type ScfMyWorkItem } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { ChevronRight, Loader2, Lock, Plus } from 'lucide-react';
+import { formatCount, formatDate } from '@/lib/format';
+import { PageHeader } from '@/components/ui';
+import { Button, EmptyState, ErrorState, NoAccessState, Notice, ProgressBar, SectionCard, SkeletonRows, StatusPill, type ProgressTone } from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { routeFor } from '@/lib/navRegistry';
+import { useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { retryRead } from '../tasks/_queries';
+import {
+  STATUS_LABELS, failedNames, frameworksOf, mineOf, scfCode, scfOverdue, scfTitle, weekOf, workItems,
+  type Ctrl, type Journey, type Per,
+} from './workModel';
 
-interface Journey { id: number; framework_name?: string; name?: string; target_date?: string | null; current_phase?: number; status?: string; progress?: Record<string, unknown>; }
-interface Ctrl {
-  id: number; control_code?: string; control_name?: string; title?: string; status?: string;
-  is_critical?: boolean; assigned_user_ids?: number[]; assigned_to_user_id?: number | null;
-  approved_evidence_count?: number; required_evidence_count?: number; evidence_count?: number; verified_date?: string | null;
-}
+const TITLE = routeFor('/my-work')?.label ?? 'My work';
+const ROW = 'flex items-center gap-[12px] rounded-ds-control px-[12px] py-[10px] hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring';
+const plural = (n: number, one: string, many: string) => `${formatCount(n)} ${n === 1 ? one : many}`;
 
-const STATUS_LABELS: Record<string, string> = {
-  not_started: 'Not started', in_progress: 'In progress', in_review: 'In review',
-  implemented: 'Implemented', verified: 'Verified', not_applicable: 'N/A',
-};
-const DONE = new Set(['verified', 'implemented', 'not_applicable']);
-const DAY = 86400000;
-
-function greeting() {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-function fmtDate(ms: number) {
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-function fmtDue(iso?: string | null) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-function scfCode(item: ScfMyWorkItem) {
-  return String(item.scf_id || item.control_id || '');
-}
-function scfTitle(item: ScfMyWorkItem) {
-  return String(item.title || item.name || scfCode(item) || '(untitled)');
-}
-
-function ScfSection({
-  title,
-  hint,
-  items,
-  empty,
-  hrefFor,
-  badgeFor,
-}: {
-  title: string;
-  hint?: string;
-  items: ScfMyWorkItem[];
-  empty: string;
-  hrefFor: (item: ScfMyWorkItem) => string | null;
-  badgeFor?: (item: ScfMyWorkItem) => { label: string; cls: string } | null;
+/** A line of a list: the code and the title, what it is, and when it is due; the whole line opens the control when there is somewhere to go. */
+function Row({ href, code, title, pills, status, due, overdue, mark }: {
+  href: string | null; code: string; title: string; pills?: ReactNode; status?: string; due?: string | null; overdue?: boolean; mark?: ReactNode;
 }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-baseline gap-2 border-b border-slate-100 px-5 py-3.5">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-        <span className="text-xs tabular-nums text-slate-400">{items.length}</span>
-        {hint && <span className="text-xs text-slate-400">{hint}</span>}
+  const body = (
+    <>
+      {mark}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+          {code && <span className="font-mono text-ds-body text-ds-primary-text">{code}</span>}
+          <span className="text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]">{title}</span>
+          {pills}
+        </div>
+        {status && <p className="mt-[2px] text-ds-label text-ds-fg-muted">{status}</p>}
       </div>
-      {items.length === 0 ? (
-        <div className="px-5 py-8 text-center text-sm text-slate-400">{empty}</div>
-      ) : (
-        <div className="divide-y divide-slate-100">
+      {overdue ? <StatusPill size="sm" tone="danger" label={due ? `Overdue · ${due}` : 'Overdue'} /> : due ? <span className="shrink-0 text-ds-label text-ds-fg-muted">{due}</span> : null}
+      {href && <ChevronRight aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />}
+    </>
+  );
+  return <li>{href ? <Link href={href} className={ROW}>{body}</Link> : <div className={ROW}>{body}</div>}</li>;
+}
+
+const List = ({ children }: { children: ReactNode }) => <ul className="m-0 flex list-none flex-col p-0">{children}</ul>;
+
+function ScfSection({ id, title, hint, items, empty, hrefFor, badge }: {
+  id: string; title: string; hint?: string; items: ScfMyWorkItem[]; empty: string; hrefFor: (item: ScfMyWorkItem) => string | null; badge?: (item: ScfMyWorkItem) => { tone: 'warning' | 'danger' | 'neutral'; label: string } | null;
+}) {
+  const now = Date.now();
+  return (
+    <SectionCard id={id} title={title} meta={`${formatCount(items.length)}${hint ? ` · ${hint}` : ''}`}>
+      {items.length === 0 ? <p className="py-[8px] text-center text-ds-body text-ds-fg-muted">{empty}</p> : (
+        <List>
           {items.map((item, i) => {
-            const code = scfCode(item);
-            const href = hrefFor(item);
-            const badge = badgeFor?.(item);
-            const due = fmtDue(item.next_due_at as string | null | undefined);
-            const overdue = item.next_due_at ? new Date(String(item.next_due_at)).getTime() < Date.now() : false;
-            const inner = (
-              <>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {code && <span className="font-mono text-sm text-primary-600">{code}</span>}
-                    <span className="text-sm font-semibold text-slate-900">{scfTitle(item)}</span>
-                    {badge && (
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
-                    )}
-                  </div>
-                  {(item.status || item.overall_status) && (
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {STATUS_LABELS[String(item.status || item.overall_status)] || String(item.status || item.overall_status)}
-                    </p>
-                  )}
-                </div>
-                {due && (
-                  <span className={`hidden flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-block ${overdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {due}{overdue ? ' · overdue' : ''}
-                  </span>
-                )}
-                {href && <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />}
-              </>
-            );
-            return href ? (
-              <Link
-                key={`${code}-${i}`}
-                href={href}
-                className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-slate-50 ${overdue ? 'bg-rose-50/40' : ''}`}
-              >
-                {inner}
-              </Link>
-            ) : (
-              <div key={`${code}-${i}`} className={`flex items-center gap-3 px-5 py-3 ${overdue ? 'bg-rose-50/40' : ''}`}>
-                {inner}
-              </div>
+            const b = badge?.(item);
+            const st = item.status || item.overall_status;
+            return (
+              <Row
+                key={`${scfCode(item)}-${i}`}
+                href={hrefFor(item)}
+                code={scfCode(item)}
+                title={scfTitle(item)}
+                pills={b ? <StatusPill size="sm" tone={b.tone} label={b.label} /> : null}
+                status={st ? STATUS_LABELS[String(st)] || String(st) : undefined}
+                due={item.next_due_at ? formatDate(item.next_due_at as string) : null}
+                overdue={scfOverdue(item, now)}
+              />
             );
           })}
-        </div>
+        </List>
       )}
-    </div>
+    </SectionCard>
   );
 }
+
+const barTone = (pct: number): ProgressTone => (pct >= 70 ? 'success' : pct >= 40 ? 'warning' : 'danger');
+const controlHref = (item: ScfMyWorkItem) => { const code = scfCode(item); return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null; };
 
 export default function MyWorkPage() {
   const { hasAnyPermission, isAdmin, isLoading: permLoading } = usePermissions();
   const canView = isAdmin || hasAnyPermission(['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*']);
+  const userId = useMyUserId();
+  const enabled = userId != null && canView;
 
-  const { data: me } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const { authedFetch } = await import('@/lib/auth-fetch');
-      const r = await authedFetch('/api/auth/me');
-      const d = await r.json();
-      return (d?.authenticated && d.user) ? d.user : null;
-    },
-  });
-  const userId = me?.id != null ? Number(me.id) : null;
-  const userName = (me?.display_name || me?.first_name || me?.username || '').toString().split(' ')[0] || 'there';
-
-  const { data, isLoading } = useQuery({
+  const journeys = useQuery({
     queryKey: ['my-work', userId],
     queryFn: async () => {
-      const journeys = ((await certificationsApi.getAll()).data as Journey[]) || [];
-      const per = await Promise.all(journeys.map(async (j) => {
+      const list = ((await certificationsApi.getAll()).data as Journey[]) || [];
+      const per: Per[] = await Promise.all(list.map(async (journey) => {
         try {
-          const controls = ((await certificationsApi.getControls(j.id)).data as Ctrl[]) || [];
-          const mine = controls.filter((c) => (c.assigned_user_ids || []).includes(userId as number) || c.assigned_to_user_id === userId);
-          return { journey: j, mine, total: controls.length };
-        } catch { return { journey: j, mine: [] as Ctrl[], total: 0 }; }
+          const controls = ((await certificationsApi.getControls(journey.id)).data as Ctrl[]) || [];
+          return { journey, mine: mineOf(controls, userId as number), total: controls.length };
+        } catch { return { journey, mine: [] as Ctrl[], total: 0, failed: true }; }          // named in a notice below: it is not "nothing assigned"
       }));
       return { per };
     },
-    enabled: userId != null && canView,
+    enabled,
+    retry: retryRead,
   });
-
   const scfQ = useQuery({
     queryKey: ['scf-my-work', userId],
     queryFn: async () => (await scfApi.myWork()).data,
-    enabled: userId != null && canView,
+    enabled,
+    retry: retryRead,
   });
 
   const now = Date.now();
-  const items = useMemo(() => {
-    const out: Array<{ journeyId: number; frameworkName: string; controlId: number; code: string; title: string; status: string; isCritical: boolean; approved: number; required: number; due: number | null; overdue: boolean; done: boolean; active: boolean; }> = [];
-    (data?.per || []).forEach(({ journey, mine }) => {
-      const due = journey.target_date ? new Date(journey.target_date).getTime() : null;
-      mine.forEach((c) => {
-        const done = DONE.has(c.status || '');
-        out.push({
-          journeyId: journey.id,
-          frameworkName: journey.framework_name || journey.name || 'Framework',
-          controlId: c.id,
-          code: c.control_code || '',
-          title: c.control_name || c.title || '(untitled)',
-          status: c.status || 'not_started',
-          isCritical: !!c.is_critical,
-          approved: c.approved_evidence_count || 0,
-          required: c.required_evidence_count || c.evidence_count || 0,
-          due, done,
-          overdue: !!due && due < now && !done,
-          active: c.status === 'in_review' || c.status === 'in_progress',
-        });
-      });
-    });
-    const rank = (i: typeof out[number]) => (i.done ? 4000 : 0) + (i.overdue ? 0 : 1000) + (i.isCritical ? 0 : 100) + (i.active ? 0 : 10);
-    out.sort((a, b) => rank(a) - rank(b) || (a.due || Infinity) - (b.due || Infinity));
-    return out;
-  }, [data, now]);
-
-  const openItems = items.filter((i) => !i.done);
-  const overdueCount = items.filter((i) => i.overdue).length;
-
-  const frameworks = useMemo(() => (data?.per || []).map(({ journey, mine }) => {
-    const prog = (journey.progress || {}) as Record<string, number>;
-    const pct = Math.round(
-      (prog.compliance_percentage ?? prog.readiness_percentage ?? prog.percentage ??
-        (mine.length ? (100 * mine.filter((m) => DONE.has(m.status || '')).length) / mine.length : 0)) as number,
-    );
-    return { id: journey.id, name: journey.framework_name || journey.name || 'Framework', pct, myCount: mine.length, phase: journey.current_phase, status: journey.status };
-  }).filter((f) => f.myCount > 0), [data]);
-
-  const week = useMemo(() => {
-    const all = (data?.per || []).flatMap((p) => p.mine);
-    return {
-      completed: all.filter((c) => c.verified_date && (now - new Date(c.verified_date).getTime()) < 7 * DAY).length,
-      evidenceApproved: all.reduce((s, c) => s + (c.approved_evidence_count || 0), 0),
-      awaitingReviewer: all.filter((c) => c.status === 'in_review').length,
-      dueNext7: items.filter((i) => !i.done && i.due != null && i.due - now < 7 * DAY && i.due - now > -DAY).length,
-    };
-  }, [data, items, now]);
+  const per = useMemo(() => journeys.data?.per ?? [], [journeys.data]);
+  const items = useMemo(() => workItems(per, now), [per, now]);
+  const frameworks = useMemo(() => frameworksOf(per), [per]);
+  const week = useMemo(() => weekOf(per, items, now), [per, items, now]);
+  const failed = failedNames(per);
 
   const scf = scfQ.data;
   const scfControls = scf?.controls || [];
   const scfNa = scf?.na_reviews || [];
-  const scfOverdue = scf?.overdue || [];
-  const scfArtifacts = scf?.artifacts || [];
+  const scfOver = scf?.overdue || [];
+  const scfArtifacts = (scf?.artifacts || []) as ScfMyWorkItem[];
   const scfFailing = scf?.failing || [];
-  const scfOpenCount = scfControls.length + scfNa.length + scfOverdue.length + scfArtifacts.length + scfFailing.length;
+  const scfOpenCount = scfControls.length + scfNa.length + scfOver.length + scfArtifacts.length + scfFailing.length;
+  const openItems = items.filter((i) => !i.done);
+  const overdueCount = items.filter((i) => i.overdue).length;
 
-  if (permLoading || (canView && (isLoading || userId == null))) {
-    return <div className="flex items-center justify-center py-32 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (permLoading || (canView && (journeys.isPending || userId == null))) {
+    return <div role="status" aria-label="Loading your work" className="flex flex-col gap-[16px]"><PageHeader variant="page" title={TITLE} /><SkeletonRows rows={6} columns={3} /></div>;
   }
   if (!canView) {
     return (
-      <div className="mx-auto max-w-md py-32 text-center text-slate-500">
-        <Lock className="mx-auto mb-3 h-8 w-8 text-slate-300" strokeWidth={1.5} />
-        <p className="text-sm font-medium text-slate-700">My Work isn’t available for your role</p>
-        <p className="mt-1 text-xs">You need framework or evidence access to see assigned work.</p>
+      <div className="flex flex-col gap-[16px]">
+        <PageHeader variant="page" title={TITLE} />
+        <NoAccessState title="My Work isn’t available for your role" reason="You need framework or evidence access to see assigned work." action={<Button href="/dashboard">Back to Performance Overview</Button>} />
       </div>
     );
   }
 
-  const barTone = (pct: number) => pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-rose-500';
-  const controlHref = (item: ScfMyWorkItem) => {
-    const code = scfCode(item);
-    return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null;
-  };
+  const facts = journeys.isError ? null : `${plural(openItems.length, 'journey item', 'journey items')}${scfQ.data ? ` · ${plural(scfOpenCount, 'control-plane item', 'control-plane items')}` : ''} across ${plural(frameworks.length, 'framework', 'frameworks')}`;
+  const overdue = overdueCount + scfOver.length;
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{greeting()}, {userName}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {openItems.length} journey item{openItems.length === 1 ? '' : 's'}
-            {scfOpenCount > 0 && <> · {scfOpenCount} control-plane item{scfOpenCount === 1 ? '' : 's'}</>}
-            {' '}across {frameworks.length} framework{frameworks.length === 1 ? '' : 's'}
-            {(overdueCount > 0 || scfOverdue.length > 0) && (
-              <span className="font-semibold text-rose-600">
-                {' '}· {overdueCount + scfOverdue.length} overdue
-              </span>
-            )}
-          </p>
-        </div>
-        <Link href="/compliance" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-[#0a0a0a] hover:bg-primary-600">
-          <Plus className="h-4 w-4" strokeWidth={2} /> Start a journey
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* My queue */}
-        <div className="space-y-5 lg:col-span-2">
-          <ScfSection
-            title="Controls you own / assigned"
-            items={scfControls}
-            empty={scfQ.isLoading ? 'Loading…' : 'No SCF controls assigned to you.'}
-            hrefFor={controlHref}
-          />
-          <ScfSection
-            title="N/A reviews waiting"
-            items={scfNa}
-            empty="No applicability reviews waiting on you."
-            hrefFor={controlHref}
-            badgeFor={() => ({ label: 'N/A review', cls: 'bg-amber-50 text-amber-700' })}
-          />
-          <ScfSection
-            title="Overdue re-attestations"
-            items={scfOverdue}
-            empty="Nothing overdue."
-            hrefFor={controlHref}
-            badgeFor={() => ({ label: 'Overdue', cls: 'bg-rose-50 text-rose-700' })}
-          />
-          <ScfSection
-            title="Artifacts to write / review"
-            items={scfArtifacts as ScfMyWorkItem[]}
-            empty="No artifacts in your queue."
-            hrefFor={(item) => {
-              const code = String(item.scf_id || item.control_ref || item.control_id || '');
-              return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null;
-            }}
-            badgeFor={(item) => item.status
-              ? { label: String(item.status).replace(/_/g, ' '), cls: 'bg-slate-100 text-slate-600' }
-              : null}
-          />
-          {scfFailing.length > 0 && (
-            <ScfSection
-              title="Failing checks"
-              items={scfFailing}
-              empty="No failing checks."
-              hrefFor={controlHref}
-              badgeFor={() => ({ label: 'Failing', cls: 'bg-rose-50 text-rose-700' })}
-            />
+    <div className="flex flex-col gap-[16px]">
+      <PageHeader
+        variant="page"
+        title={TITLE}
+        meta={facts ? <>{facts}{overdue > 0 && <span className="font-[600] text-ds-danger"> · {formatCount(overdue)} overdue</span>}</> : undefined}
+        actions={<Button variant="primary" href="/compliance" leftIcon={<Plus aria-hidden />}>Start a journey</Button>}
+      />
+      <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-[16px] lg:col-span-2">
+          {scfQ.isError ? (
+            <ErrorState title="Couldn't load your control-plane work" message={errorMessage(scfQ.error)} onRetry={canRetry(scfQ.error) ? () => { void scfQ.refetch(); } : undefined} />
+          ) : scfQ.isPending ? (
+            <SkeletonRows rows={4} columns={3} label="Loading your control-plane work" />
+          ) : (
+            <>
+              <ScfSection id="scf-controls" title="Controls you own or are assigned" items={scfControls} empty="No SCF controls assigned to you." hrefFor={controlHref} />
+              <ScfSection id="scf-na" title="N/A reviews waiting" items={scfNa} empty="No applicability reviews waiting on you." hrefFor={controlHref} badge={() => ({ tone: 'warning', label: 'N/A review' })} />
+              <ScfSection id="scf-overdue" title="Overdue re-attestations" items={scfOver} empty="Nothing overdue." hrefFor={controlHref} badge={() => ({ tone: 'danger', label: 'Overdue' })} />
+              <ScfSection
+                id="scf-artifacts"
+                title="Artifacts to write or review"
+                items={scfArtifacts}
+                empty="No artifacts in your queue."
+                hrefFor={(item) => { const code = String(item.scf_id || item.control_ref || item.control_id || ''); return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null; }}
+                badge={(item) => (item.status ? { tone: 'neutral', label: String(item.status).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) } : null)}
+              />
+              {scfFailing.length > 0 && <ScfSection id="scf-failing" title="Failing checks" items={scfFailing} empty="No failing checks." hrefFor={controlHref} badge={() => ({ tone: 'danger', label: 'Failing' })} />}
+            </>
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-baseline gap-2 border-b border-slate-100 px-5 py-4">
-              <h2 className="text-sm font-semibold text-slate-900">Journey-assigned requirements</h2>
-              <span className="text-xs text-slate-400">sorted by urgency</span>
-            </div>
-            {items.length === 0 ? (
-              <div className="px-5 py-16 text-center text-sm text-slate-400">Nothing is assigned to you right now.</div>
+          <SectionCard id="journey-items" title="Journey requirements assigned to you" meta="most urgent first">
+            {failed.length > 0 && (
+              <Notice tone="warning" title={`${plural(failed.length, 'framework', 'frameworks')} could not be read`} className="mb-[12px]">
+                {failed.join(', ')}: anything assigned to you there is not listed. Reload the page to try again.
+              </Notice>
+            )}
+            {journeys.isError ? (
+              <ErrorState compact title="Couldn't load your frameworks" message={errorMessage(journeys.error)} onRetry={canRetry(journeys.error) ? () => { void journeys.refetch(); } : undefined} />
+            ) : items.length === 0 ? (
+              <EmptyState bare kind="firstUse" title="Nothing is assigned to you right now" info="Requirements of a framework journey that are assigned to you appear here." />
             ) : (
-              <div className="divide-y divide-slate-100">
+              <List>
                 {items.map((i) => (
-                  <Link
+                  <Row
                     key={`${i.journeyId}-${i.controlId}`}
                     href={`/frameworks/${i.journeyId}?tab=controls&req=${i.controlId}`}
-                    className={`flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50 ${i.overdue ? 'bg-rose-50/40' : ''}`}
-                  >
-                    <span className={`mt-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full border ${i.active ? 'border-orange-500 bg-orange-500' : i.done ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {i.code && <span className="font-mono text-sm text-primary-600">{i.code}</span>}
-                        <span className="text-sm font-semibold text-slate-900">{i.title}</span>
-                        {i.isCritical && <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-600">Critical</span>}
-                      </div>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {i.frameworkName} · {STATUS_LABELS[i.status] || i.status}
-                        {i.required > 0 && ` · ${i.approved}/${i.required} evidence approved`}
-                      </p>
-                    </div>
-                    {i.due != null && (
-                      <span className={`hidden flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-block ${i.overdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {fmtDate(i.due)}{i.overdue ? ' · overdue' : ''}
-                      </span>
-                    )}
-                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
-                  </Link>
+                    code={i.code}
+                    title={i.title}
+                    pills={i.isCritical ? <StatusPill size="sm" tone="danger" label="Critical" /> : null}
+                    status={`${i.frameworkName} · ${STATUS_LABELS[i.status] || i.status}${i.required > 0 ? ` · ${i.approved}/${i.required} evidence approved` : ''}`}
+                    due={i.due != null ? formatDate(i.due, { calendar: true }) : null}
+                    overdue={i.overdue}
+                    mark={<span aria-hidden className={`h-[10px] w-[10px] shrink-0 rounded-full border ${i.active ? 'border-ds-warning bg-ds-warning' : i.done ? 'border-ds-success bg-ds-success' : 'border-ds-border-strong'}`} />}
+                  />
                 ))}
-              </div>
+              </List>
             )}
-          </div>
+          </SectionCard>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Your frameworks</h3>
-            {frameworks.length === 0 ? (
-              <p className="text-xs text-slate-400">No assigned frameworks yet.</p>
-            ) : (
-              <div className="space-y-4">
+        <div className="flex min-w-0 flex-col gap-[16px]">
+          <SectionCard id="your-frameworks" title="Your frameworks">
+            {frameworks.length === 0 ? <p className="text-ds-body text-ds-fg-muted">No assigned frameworks yet.</p> : (
+              <ul className="m-0 flex list-none flex-col gap-[16px] p-0">
                 {frameworks.map((f) => (
-                  <Link key={f.id} href={`/frameworks/${f.id}?tab=controls`} className="block">
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-slate-900">{f.name}</span>
-                      <span className="text-xs font-semibold text-slate-500">{f.pct}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className={`h-full rounded-full ${barTone(f.pct)}`} style={{ width: `${Math.min(100, Math.max(0, f.pct))}%` }} />
-                    </div>
-                    <p className="mt-1.5 text-[11px] text-slate-400">{f.myCount} of your item{f.myCount === 1 ? '' : 's'}{f.phase ? ` · Phase ${f.phase}` : ''}</p>
-                  </Link>
+                  <li key={f.id}>
+                    <Link href={`/frameworks/${f.id}?tab=controls`} className="block rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring">
+                      <div className="mb-[4px] flex items-baseline justify-between gap-[8px]"><span className="min-w-0 truncate text-ds-body font-[600] text-ds-fg">{f.name}</span><span className="text-ds-label tabular-nums text-ds-fg-muted">{f.pct}%</span></div>
+                      <ProgressBar value={Math.min(100, Math.max(0, f.pct))} label={`${f.name}: progress`} showValue={false} tone={barTone(f.pct)} />
+                      <p className="mt-[4px] text-ds-label text-ds-fg-muted">{formatCount(f.myCount)} of your {f.myCount === 1 ? 'item' : 'items'}{f.phase ? ` · Phase ${f.phase}` : ''}</p>
+                    </Link>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">This week</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between"><span className="text-slate-600">Items completed</span><span className="font-semibold text-emerald-600">{week.completed}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Evidence approved</span><span className="font-semibold text-slate-700">{week.evidenceApproved}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Awaiting reviewer</span><span className="font-semibold text-amber-600">{week.awaitingReviewer}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">Due next 7 days</span><span className="font-semibold text-slate-700">{week.dueNext7}</span></div>
-              <div className="flex items-center justify-between"><span className="text-slate-600">SCF overdue</span><span className="font-semibold text-rose-600">{scfOverdue.length}</span></div>
-            </div>
-          </div>
+          </SectionCard>
+          <SectionCard id="this-week" title="This week">
+            <dl className="m-0 flex flex-col gap-[8px]">
+              {([['Items completed', week.completed, 'text-ds-success'], ['Evidence approved', week.evidenceApproved, 'text-ds-fg'], ['Awaiting reviewer', week.awaitingReviewer, 'text-ds-warning'], ['Due next 7 days', week.dueNext7, 'text-ds-fg'], ['SCF overdue', scfOver.length, 'text-ds-danger']] as Array<[string, number, string]>).map(([label, value, tone]) => (
+                <div key={label} className="flex items-center justify-between gap-[12px]"><dt className="text-ds-body text-ds-fg-muted">{label}</dt><dd className={`m-0 text-ds-body font-[600] tabular-nums ${tone}`}>{formatCount(value)}</dd></div>
+              ))}
+            </dl>
+          </SectionCard>
         </div>
       </div>
     </div>

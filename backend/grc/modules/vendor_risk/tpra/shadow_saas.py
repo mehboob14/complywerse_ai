@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -38,7 +38,7 @@ ROSTER_MAX = 1000          # people kept per app
 DAILY_AFTER = timedelta(hours=20)   # a daily sync that ran this recently is not run again
 _DOMAIN = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 
-STATUSES = ("pending", "onboarded", "denied", "dismissed")
+STATUSES = ("pending", "onboarded", "linked", "denied", "dismissed")
 MAX_FILE = 5 * 1024 * 1024
 MAX_ROWS = 5000
 TEMPLATE = ["name", "domain", "category", "users", "business owner", "owner email", "risk score", "mfa",
@@ -187,7 +187,8 @@ def level(risk: Optional[int]) -> str:
 
 def _known(db: Session, tenant_id: int) -> Tuple[Dict[str, Vendor], Dict[str, Vendor]]:
     by_host, by_name = {}, {}
-    for v in db.query(Vendor).filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None)):
+    for v in (db.query(Vendor.id, Vendor.name, Vendor.website, Vendor.domains)
+              .filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None))):
         by_name[v.name.strip().lower()] = v
         for d in [v.website, *(v.domains or [])]:
             host = _host(d)
@@ -288,12 +289,15 @@ def _app(db: Session, app_id: int, tids: List[int]) -> TPRAShadowApp:
     return app
 
 
-def _row(a: TPRAShadowApp, names: Dict[int, str]) -> dict:
+def _row(a: TPRAShadowApp, names: Dict[int, str], vendors: Optional[Dict[int, str]] = None,
+         supplier: Optional[dict] = None) -> dict:
+    """`vendors` names the suppliers an app is linked to; `supplier` is the one a pending app already is, if any."""
     risk, why = score(a.users, a.facts or {})
     return {"id": a.id, "name": a.name, "domain": a.domain, "category": a.category, "description": a.description,
             "users": a.users, "owner_name": a.owner_name, "owner_email": a.owner_email, "source": a.source,
             "source_risk": a.source_risk, "risk": risk, "level": level(risk), "why": why, "facts": a.facts or {},
-            "status": a.status, "vendor_id": a.vendor_id, "blocked": bool(a.blocked), "decided_by": names.get(a.decided_by),
+            "status": a.status, "vendor_id": a.vendor_id, "vendor_name": (vendors or {}).get(a.vendor_id),
+            "supplier": supplier, "blocked": bool(a.blocked), "decided_by": names.get(a.decided_by),
             "decided_at": a.decided_at, "decision_note": a.decision_note, "first_seen": a.first_seen, "last_seen": a.last_seen,
             "people_count": len(a.people or [])}
 
@@ -315,7 +319,16 @@ def board(status_: Optional[str] = Query(None, alias="status"), db: Session = De
         counts[a.status] = counts.get(a.status, 0) + 1
     kept = [a for a in apps if not status_ or a.status == status_]
     names = _names(db, [a.decided_by for a in kept])
-    rows = sorted((_row(a, names) for a in kept), key=lambda r: (-r["risk"], -(r["users"] or 0), r["name"].lower()))
+    linked = {a.vendor_id for a in kept if a.vendor_id}
+    vendors = {i: n for i, n in db.query(Vendor.id, Vendor.name).filter(Vendor.id.in_(linked))} if linked else {}
+    by_host, by_name = _known(db, tid) if any(a.status == "pending" for a in kept) else ({}, {})
+
+    def already(a: TPRAShadowApp) -> Optional[dict]:
+        v = by_host.get(a.domain or "") or by_name.get(a.name.strip().lower()) if a.status == "pending" else None
+        return {"id": v.id, "name": v.name} if v is not None else None
+
+    rows = sorted((_row(a, names, vendors, already(a)) for a in kept),
+                  key=lambda r: (-r["risk"], -(r["users"] or 0), r["name"].lower()))
     pending = [r for r in rows if r["status"] == "pending"] if not status_ or status_ == "pending" else []
     listed = {a.name.lower() for a in apps}
     return {
@@ -490,6 +503,43 @@ def gateway_history(db: Session = Depends(get_db), user: GRCUser = Depends(requi
             "connected": connection(db, tid, "web_gateway", "zscaler") is not None}
 
 
+class ManualIn(BaseModel):
+    name: str = Field(..., max_length=255)
+    users: Optional[int] = Field(None, ge=0, le=10_000_000)      # people using it
+    domain: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def _named(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if not value:
+            raise ValueError("Name the app")
+        return value
+
+
+@router.post("/shadow-saas", status_code=status.HTTP_201_CREATED)
+def record(body: ManualIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """An app someone knows is in use, recorded by hand: it joins the board to be decided like any other."""
+    tid = _tids(user, db)[0]
+    rbac.require_write(db, user, "vendors", "edit")
+    domain = None
+    if body.domain and body.domain.strip():
+        domain = _host(body.domain)
+        if not domain or not _DOMAIN.match(domain):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Give a domain such as files.example.com")
+    for a in db.query(TPRAShadowApp.name, TPRAShadowApp.domain).filter(TPRAShadowApp.tenant_id == tid):
+        if a.name.strip().lower() == body.name.lower() or (domain and a.domain == domain):
+            raise HTTPException(status.HTTP_409_CONFLICT, f"{a.name} is already on the list")
+    app = TPRAShadowApp(tenant_id=tid, name=body.name, domain=domain, users=body.users, source="manual",
+                        status="pending", facts={}, risk=score(body.users, {})[0])
+    db.add(app)
+    db.flush()
+    service.write_audit(db, tid, entity="shadow_app", action="create", entity_id=app.id, actor_id=user.id,
+                        to_value=app.name, reason="Entered by hand")
+    db.commit()
+    return _row(app, {})
+
+
 class FromRecordsIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
 
@@ -555,7 +605,8 @@ def onboard(app_id: int, body: DecisionIn = DecisionIn(), db: Session = Depends(
     by_host, by_name = _known(db, app.tenant_id)
     existing = by_host.get(app.domain or "") or by_name.get(app.name.lower())
     if existing is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"{existing.name} is already on record (ID {existing.id})")
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"{existing.name} is already on record (ID {existing.id}). Link the app to it instead.")
     owner = None
     if app.owner_email:
         from ....routers.auth_router import platform_account
@@ -575,6 +626,28 @@ def onboard(app_id: int, body: DecisionIn = DecisionIn(), db: Session = Depends(
     _decide(db, app, user, "onboarded", " ".join((body.note or "").split()))
     db.commit()
     return {**_row(app, _names(db, [user.id])), "request_id": v.id}
+
+
+class LinkIn(BaseModel):
+    vendor_id: int
+    note: Optional[str] = Field(None, max_length=2000)
+
+
+@router.post("/shadow-saas/{app_id}/link")
+def link(app_id: int, body: LinkIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The app is a supplier we already have: say which one. It is settled as "Already ours" and nothing is raised."""
+    tids = _tids(user, db)
+    app = _app(db, app_id, tids)
+    rbac.require_write(db, user, "vendors", "edit")
+    if app.status != "pending":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"This app was already {app.status}")
+    v = db.query(Vendor).filter(Vendor.id == body.vendor_id, Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None)).first()
+    if v is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That supplier is not on the register")
+    app.vendor_id = v.id
+    _decide(db, app, user, "linked", " ".join((body.note or "").split()))
+    db.commit()
+    return _row(app, _names(db, [user.id]), {v.id: v.name})
 
 
 @router.post("/shadow-saas/{app_id}/deny")
@@ -631,7 +704,7 @@ def reopen(app_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(r
     app = _app(db, app_id, tids)
     rbac.require_write(db, user, "vendors", "edit")
     if app.status in ("pending", "onboarded"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a denied or dismissed app can be reopened")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only a denied, dismissed or linked app can be reopened")
     if app.blocked:
         gateway = _gateway(db, app.tenant_id)
         if gateway is None:
@@ -646,6 +719,8 @@ def reopen(app_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(r
                             actor_id=user.id, from_value=app.domain)
     before = app.status
     app.status, app.decided_by, app.decided_at, app.decision_note = "pending", None, None, None
+    if before == "linked":
+        app.vendor_id = None                       # the link is undone with the decision
     service.write_audit(db, app.tenant_id, entity="shadow_app", action="reopen", entity_id=app.id, actor_id=user.id,
                         from_value=before, to_value="pending")
     db.commit()

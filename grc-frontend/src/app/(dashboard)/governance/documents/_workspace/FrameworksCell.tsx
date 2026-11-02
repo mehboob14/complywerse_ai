@@ -4,16 +4,17 @@
  * The Frameworks cell of the library table. A document can be mapped to a dozen frameworks and more, and a row must never grow for
  * them: the first two sit on ONE line as chips (the frameworks the library is filtered by come first, so a row shows why it matched),
  * and the rest are behind a "+N" button that opens the whole list, A to Z, with a search once it is long (FrameworkList, the same list
- * as the drawer's Frameworks tab). Chips are one fixed height and never wrap, the line is clipped, and "+N" sits outside the clipped
- * part, so 0, 1, 2 or 40 frameworks make the same row height.
+ * as the details panel's Frameworks tab). Chips are one fixed height and never wrap, the line is clipped, and "+N" sits outside the clipped
+ * part, so 0, 1, 2 or 40 frameworks make the same row height. (The rule that cuts the list is libraryModel.frameworkDisplay; this only draws it.)
  *
  * The list is portaled to the body and fixed to the button (never clipped by the table's scroll), opens below it or above when
  * there is more room there, takes focus when it opens, and closes on Escape, a click outside, a scroll of the page or the table, a
- * resize, or Tab out of it. A click on a chip, on "+N" or inside the list stops here (the row behind it opens the drawer); a click on
+ * resize, or Tab out of it. A click on a chip, on "+N" or inside the list stops here (the row behind it opens the details panel); a click on
  * the blank part of the cell is a click on the row.
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { EMPTY } from '@/lib/format';
 import { FrameworkChip } from './atoms';
 import { FrameworkList } from './FrameworkList';
 import { shownFrameworkIds } from './library';
@@ -84,7 +85,7 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
     };
   }, [open, close]);
 
-  // Escape here is the list's own (it must not also close a drawer behind it); Tab past either end leaves the list for the button
+  // Escape here is the list's own (it must not also close the details panel behind it); Tab past either end leaves the list for the button
   const onPopKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') { e.stopPropagation(); close(true); return; }
     if (e.key !== 'Tab') return;
@@ -94,8 +95,8 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
 
   if (total === 0) {
     return (
-      <span className="text-[13px] leading-5 text-[#586472]" title="No framework is mapped">
-        <span aria-hidden>—</span>
+      <span className="text-ds-body text-ds-fg-muted" title="No framework is mapped">
+        <span aria-hidden>{EMPTY}</span>
         <span className="sr-only">No framework is mapped</span>
       </span>
     );
@@ -121,7 +122,7 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
             if (open) close();
             else setPlace(placeBeside(e.currentTarget.getBoundingClientRect()));
           }}
-          className="inline-flex h-5 shrink-0 items-center rounded-md border border-[#b8c4c8] bg-[#fff] px-1.5 text-[11px] font-semibold leading-none text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+          className="inline-flex h-[24px] min-w-[28px] shrink-0 items-center justify-center rounded-ds-control border border-ds-border-strong bg-ds-surface px-[6px] text-ds-label font-[600] leading-none text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
         >
           +{hidden.length}
         </button>
@@ -137,9 +138,9 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
             onClick={(e) => e.stopPropagation()}
             onKeyDown={onPopKey}
             style={{ left: place.left, top: place.top, bottom: place.bottom, maxHeight: place.maxHeight, width: WIDTH }}
-            className="fixed z-[70] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border border-[#d5dbe1] bg-[#fff] p-3 text-left shadow-elevated focus:outline-none"
+            className="fixed z-[70] max-w-[calc(100vw-16px)] overflow-y-auto rounded-ds-card border border-ds-border bg-ds-surface p-[12px] text-left shadow-ds-pop focus-visible:outline-none"
           >
-            <p className="mb-2 text-[13px] font-semibold text-[#1f2933]">Frameworks · {total}</p>
+            <p className="mb-2 text-ds-body font-[600] text-ds-fg">Frameworks · {total}</p>
             <FrameworkList
               ids={ids}
               info={info}

@@ -9,6 +9,14 @@ export const TOAST_TEXT = {
   close: 'text-[#586472] hover:text-[#1f2933]',
 };
 
+// The button a toast can carry ("Retry"): dark teal words and outline on the card, filled with white words on hover. Pairs checked in toastTheme.test.ts.
+export const TOAST_ACTION = 'border border-[#115e59] text-[#115e59] hover:bg-[#115e59] hover:text-[#fff]';
+
+/** A failure interrupts a screen reader; everything else waits its turn. */
+export function toastRole(type: ToastType): 'alert' | 'status' {
+  return type === 'error' ? 'alert' : 'status';
+}
+
 // bg = the type colour at 10% over white (the tint the card was designed with).
 export const TOAST_TONES: Record<ToastType, { bg: string; border: string; iconColor: string }> = {
   success: { bg: 'bg-[#e9f9ef]', border: 'border-success-500/30', iconColor: 'text-[#15803d]' },

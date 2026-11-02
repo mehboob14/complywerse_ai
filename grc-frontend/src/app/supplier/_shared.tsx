@@ -9,6 +9,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { Loader2, Lock, Mail, Send } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
+import { PortalFrame } from '@/components/vendor-risk/supplier/PortalFrame';
 
 export interface PortalQuestionnaire {
   id: number; title: string; status: string; due_date: string | null; sent_at: string | null;
@@ -137,11 +138,7 @@ export function Conversation({ token, requestId, initial }: { token: string; req
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 sm:px-6">
-      <div className="mx-auto max-w-3xl space-y-6">{children}</div>
-    </main>
-  );
+  return <PortalFrame><div className="space-y-6">{children}</div></PortalFrame>;
 }
 
 export function Loading() {

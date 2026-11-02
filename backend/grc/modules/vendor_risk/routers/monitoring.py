@@ -1,7 +1,7 @@
 """SLA tracking + vendor incident management endpoints."""
 
 import logging
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Tuple
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -13,6 +13,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import monitoring as tpra_monitoring, rbac, service as tpra_service
+from ..tpra import findings as tpra_findings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Monitoring"])
@@ -150,11 +151,14 @@ def _amount(value: float, unit: Optional[str]) -> str:
     return f"{value:g}{unit}" if unit == "%" else f"{value:g} {unit}" if unit else f"{value:g}"
 
 
-def _breach_signal(db: Session, vendor: Vendor, record: VendorSLARecord, actor_id: Optional[int]) -> Optional[int]:
+def _breach_signal(db: Session, vendor: Vendor, record: VendorSLARecord,
+                   actor_id: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
     """A missed level becomes a monitoring signal, once per record: it shows in the attention
-    queue, and reopens the assessment when the supplier's tier says a medium signal should."""
+    queue, and reopens the assessment when the supplier's tier says a medium signal should. It is
+    also a high finding on the supplier, once per service level (tpra/findings.py). Returns the
+    ids of the signal and of the finding it raised."""
     if record.is_compliant:
-        return None
+        return None, None
     if record.target_value is not None and record.actual_value is not None:
         detail = (f"Measured {_amount(record.actual_value, record.unit)} against a target of "
                   f"{_amount(record.target_value, record.unit)}"
@@ -166,7 +170,10 @@ def _breach_signal(db: Session, vendor: Vendor, record: VendorSLARecord, actor_i
         title=f"{vendor.name} missed a service level: {record.sla_metric}", detail=detail + (
             f"\n\n{record.notes}" if record.notes else ""),
         source="SLA tracking", occurred_at=record.recorded_at, external_id=f"sla:{record.id}", actor_id=actor_id)
-    return signal.id if created else None
+    if not created:
+        return None, None
+    finding = tpra_findings.raise_sla_breach(db, vendor, record, signal.detail or detail, actor_id)
+    return signal.id, finding.id if finding else None
 
 
 # ── SLA endpoints ─────────────────────────────────────────────────
@@ -255,10 +262,10 @@ def create_sla_record(
     tpra_service.write_audit(db, vendor.tenant_id, entity="sla", action="create", vendor_id=vendor.id,
                              entity_id=record.id, actor_id=current_user.id, to_value=record.sla_metric,
                              extra={"met": record.is_compliant})
-    signal_id = _breach_signal(db, vendor, record, current_user.id)
+    signal_id, finding_id = _breach_signal(db, vendor, record, current_user.id)
     db.commit()
     db.refresh(record)
-    return {**serialize_sla_record(record), "signal_id": signal_id}
+    return {**serialize_sla_record(record), "signal_id": signal_id, "finding_id": finding_id}
 
 
 @router.put("/vendors/{vendor_id}/sla/{record_id}")
@@ -298,10 +305,10 @@ def update_sla_record(
         tpra_service.write_audit(db, vendor.tenant_id, entity="sla", action="update", vendor_id=vendor.id,
                                  entity_id=record.id, actor_id=current_user.id, to_value=record.sla_metric,
                                  extra={"changes": changes, "met": record.is_compliant})
-    signal_id = _breach_signal(db, vendor, record, current_user.id)
+    signal_id, finding_id = _breach_signal(db, vendor, record, current_user.id)
     db.commit()
     db.refresh(record)
-    return {**serialize_sla_record(record), "signal_id": signal_id}
+    return {**serialize_sla_record(record), "signal_id": signal_id, "finding_id": finding_id}
 
 
 # ── Incident endpoints ───────────────────────────────────────────

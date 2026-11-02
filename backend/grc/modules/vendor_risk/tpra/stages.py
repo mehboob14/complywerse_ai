@@ -84,11 +84,32 @@ def stages_at_or_after(key: str) -> List[str]:
     return [s for s in STAGE_KEYS if STAGE_ORDER[s] >= order]
 
 
-def can_skip(tier: str, stage_key: str) -> bool:
-    """A stage may be skipped only when the tier rules allow AND it is not a gate."""
-    if is_gate(stage_key):
+# Stages no policy may skip, whatever a tenant sets: every supplier is scoped, tiered and decided on, and the
+# in-life stages are where a supplier lives (skipping them would end its lifecycle on the spot). Gates too.
+NEVER_SKIP = ("intake", "tiering", "approval", "monitoring", "reassessment")
+
+
+def skippable(stage_key: str) -> bool:
+    """Whether a policy may name this stage in a tier's skip list."""
+    return stage_key in STAGE_BY_KEY and stage_key not in NEVER_SKIP and not is_gate(stage_key)
+
+
+def skip_matrix_for(override: Optional[dict] = None) -> Dict[str, List[str]]:
+    """The stages each tier skips: the defaults, with a tenant's tiers over them. A stage that may never be
+    skipped is dropped here too, so a hand-edited row cannot skip a gate."""
+    table = {t: list(stages) for t, stages in TIER_SKIPPABLE_STAGES.items()}
+    for tier, stages in (override or {}).items():
+        if tier in table and isinstance(stages, (list, tuple)):
+            table[tier] = [s for s in stages if skippable(s)]
+    return table
+
+
+def can_skip(tier: str, stage_key: str, matrix: Optional[dict] = None) -> bool:
+    """A stage may be skipped only when the tier rules allow AND it is not a gate. `matrix` is the tenant's
+    (policy.skip_matrix); none means the defaults."""
+    if not skippable(stage_key):
         return False
-    return stage_key in TIER_SKIPPABLE_STAGES.get((tier or "medium").lower(), [])
+    return stage_key in (matrix if matrix is not None else TIER_SKIPPABLE_STAGES).get((tier or "medium").lower(), [])
 
 
 def cadence_days_for(tier: str, override: Optional[dict] = None) -> int:
@@ -108,8 +129,47 @@ def remediation_sla_days_for(severity: str, override: Optional[dict] = None) -> 
     return int(table.get((severity or "medium").lower(), DEFAULT_REMEDIATION_SLA_DAYS["medium"]))
 
 
-def required_reviewers_for(tier: str) -> List[str]:
-    return TIER_REQUIRED_REVIEWERS.get((tier or "medium").lower(), [])
+def reviewers_by_tier_for(override: Optional[dict] = None) -> Dict[str, List[str]]:
+    """The roster roles each tier needs as reviewers: the defaults, with a tenant's tiers over them."""
+    table = {t: list(roles) for t, roles in TIER_REQUIRED_REVIEWERS.items()}
+    for tier, roles in (override or {}).items():
+        if tier in table and isinstance(roles, (list, tuple)):
+            table[tier] = list(roles)
+    return table
+
+
+def required_reviewers_for(tier: str, override: Optional[dict] = None) -> List[str]:
+    return reviewers_by_tier_for(override).get((tier or "medium").lower(), [])
+
+
+# ── The workspace roster ─────────────────────────────────────────────────────
+# The review roles a workspace names people for (tpra/roster.py): the keys of a supplier's own team seats
+# except the Business Owner, who is the supplier's owner, not a workspace role.
+ROSTER_ROLES: List[dict] = [
+    {"key": "tprm_lead", "label": "TPRM Lead", "hint": "Accountable for the assessment"},
+    {"key": "tprm_analyst", "label": "TPRM Analyst", "hint": "Runs tiering, DD & scoring"},
+    {"key": "security", "label": "Security", "hint": "Cyber control review"},
+    {"key": "privacy", "label": "Privacy", "hint": "Data-protection review"},
+    {"key": "legal", "label": "Legal", "hint": "Contract, DPA & clauses"},
+    {"key": "procurement", "label": "Procurement", "hint": "Sourcing & commercial"},
+    {"key": "exec_approver", "label": "Executive / Risk Committee", "hint": "Go / no-go approver"},
+    {"key": "it", "label": "IT / Operations", "hint": "Access provisioning & onboarding"},
+]
+ROSTER_ROLE_KEYS: List[str] = [r["key"] for r in ROSTER_ROLES]
+
+# Whom a stage waits on, by roster role. Due-diligence planning waits on the tier's required reviewers, which
+# are policy (policy.required_reviewers), so it is not listed.
+STAGE_ROLES: Dict[str, List[str]] = {
+    "tiering": ["tprm_lead", "tprm_analyst"],
+    "questionnaire": ["tprm_analyst"],
+    "scoring": ["tprm_analyst"],
+    "findings": ["security", "tprm_analyst"],
+    "contracting": ["legal", "procurement"],
+    "approval": ["exec_approver", "tprm_lead"],
+    "onboarding": ["it", "procurement"],
+    "monitoring": ["tprm_lead"],
+    "reassessment": ["tprm_lead"],
+}
 
 
 # ── Rich stage content catalog ───────────────────────────────────────────────

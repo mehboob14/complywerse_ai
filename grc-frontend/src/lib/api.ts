@@ -267,6 +267,13 @@ export const risksApi = {
   updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
   linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
+  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab and the Risk Library link to these.
+  requirementFrameworks: () => apiClient.get<{ items: Array<{ id: number; name: string; slug: string | null; version: string | null; controls: number }> }>('/erm/framework-requirements/frameworks'),
+  searchRequirements: (params: { framework_id: number; q?: string; skip?: number; limit?: number }) =>
+    apiClient.get<{ items: Array<{ id: number; code: string; title: string; domain: string | null; category: string | null; priority_level: string | null; is_mandatory: boolean }>; total: number }>('/erm/framework-requirements', { params }),
+  linkRequirements: (id: number, data: { framework_id: number; control_ids: number[]; mitigation_effectiveness: string; notes?: string }) =>
+    apiClient.post(`/erm/risks/${id}/framework-requirements`, data),
+  unlinkRequirement: (id: number, linkId: number) => apiClient.delete(`/erm/risks/${id}/framework-requirements/${linkId}`),
   linkGovernance: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-governance`, data),
   unlinkGovernance: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-governance/${linkId}`),
   linkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/controls`, data),
@@ -485,7 +492,7 @@ export const governanceApi = {
     apiClient.delete(`/governance/workflows/templates/${id}`),
   createWorkflowStep: (templateId: number, data: { name: string; description?: string; sequence: number; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
     apiClient.post(`/governance/workflows/templates/${templateId}/steps`, data),
-  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number | null }) =>
     apiClient.put(`/governance/workflows/templates/${templateId}/steps/${stepId}`, data),
   deleteWorkflowStep: (templateId: number, stepId: number) =>
     apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}`),
@@ -2699,27 +2706,6 @@ export const vendorLeaksApi = {
     apiClient.post(`/vendor-risk/vendors/${vendorId}/vat`, { vat_number: vatNumber }, { timeout: 30000 }),
 };
 
-export const vendorShadowApi = {
-  board: (params?: { status?: string }) => apiClient.get('/vendor-risk/shadow-saas', { params: params || {} }),
-  template: () => apiClient.get('/vendor-risk/shadow-saas/import/template', { responseType: 'blob' }),
-  importFile: (file: File, dryRun: boolean) => {
-    const form = new FormData();
-    form.append('file', file);
-    return apiClient.post('/vendor-risk/shadow-saas/import', form, {
-      params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-  syncGrip: () => apiClient.post('/vendor-risk/shadow-saas/sync', {}, { timeout: 180000 }),
-  fromRecords: (name: string) => apiClient.post('/vendor-risk/shadow-saas/from-records', { name }),
-  onboard: (id: number, note?: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/onboard`, { note }),
-  deny: (id: number, note: string, block: boolean) => apiClient.post(`/vendor-risk/shadow-saas/${id}/deny`, { note, block }),
-  dismiss: (id: number, note: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/dismiss`, { note }),
-  reopen: (id: number) => apiClient.post(`/vendor-risk/shadow-saas/${id}/reopen`),
-  people: (id: number, search?: string) => apiClient.get(`/vendor-risk/shadow-saas/${id}/people`, { params: search ? { search } : {} }),
-  gateway: (data: { domain: string; action: 'block' | 'allow'; reason: string }) => apiClient.post('/vendor-risk/shadow-saas/gateway', data),
-  gatewayHistory: () => apiClient.get('/vendor-risk/shadow-saas/gateway'),
-};
-
 // FAIR analyses of supplier loss scenarios (tpra/fair.py).
 export const vendorFairApi = {
   list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/fair', { params: params || {} }),
@@ -4064,10 +4050,15 @@ export const attestationApi = {
 };
 
 export const committeeApi = {
-  getCommittees: () => apiClient.get('/governance/committees'),
+  // With no argument: the active committees, as ever. `is_active: 'all'` also lists the deactivated ones (the Oversight Actions filter).
+  getCommittees: (params?: { is_active?: 'true' | 'false' | 'all' }) => apiClient.get('/governance/committees', { params }),
   getCommittee: (id: number) => apiClient.get(`/governance/committees/${id}`),
   createCommittee: (data: any) => apiClient.post('/governance/committees', data),
   updateCommittee: (id: number, data: any) => apiClient.put(`/governance/committees/${id}`, data),
+  // Deactivate / reactivate: the way the screens retire a committee (nothing it holds is removed). Both need governance:committees:delete, on the server too.
+  deactivateCommittee: (id: number) => apiClient.post(`/governance/committees/${id}/deactivate`),
+  reactivateCommittee: (id: number) => apiClient.post(`/governance/committees/${id}/reactivate`),
+  // An administrator's HARD delete, for scripts: no page calls it (it answers 409 when a vote or an audit-register request points at the committee).
   deleteCommittee: (id: number) => apiClient.delete(`/governance/committees/${id}`),
   getMembers: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/members`),
   addMember: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/members`, data),
@@ -4098,13 +4089,29 @@ export const committeeApi = {
   aiGenerateCharter: (committeeId: number, frameworkIds?: number[]) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`, { framework_ids: frameworkIds || [] }),
   aiCompareCharter: (committeeId: number, data: { charter_id?: number; charter_text?: string }) =>
     apiClient.post(`/governance/committees/${committeeId}/ai-compare-charter`, data),
-  getMeetings: (committeeId: number) => apiClient.get(`/governance/committees/${committeeId}/meetings`),
+  // Each row also says how ready the meeting is (agenda_item_count, papers_count, invitees_count) and whether its quorum was met (quorum_met: true / false,
+  // null when there is no threshold or no roll).
+  getMeetings: (committeeId: number, params?: { status?: string; from_date?: string; limit?: number }) =>
+    apiClient.get(`/governance/committees/${committeeId}/meetings`, { params }),
   createMeeting: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/meetings`, data),
   getMeeting: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}`),
   updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
+  // The meeting life cycle: scheduled -> in_progress -> completed. Both answer with the meeting (agenda and minutes included, as getMeeting does) and are
+  // idempotent; a conflict (409) says why in `detail`. Cancelling or editing a meeting is still updateMeeting.
+  startMeeting: (meetingId: number) => apiClient.post(`/governance/committees/meetings/${meetingId}/start`),
+  endMeeting: (meetingId: number) => apiClient.post(`/governance/committees/meetings/${meetingId}/end`),
+  // The roll: every member of the committee with present / late / absent (null: not marked yet) and the quorum figures. Saving takes one entry or
+  // many; the first marks on a meeting also record the other members absent. It answers with the roll.
+  getAttendance: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/attendance`),
+  saveAttendance: (meetingId: number, members: Array<{ user_id: number; status: 'present' | 'late' | 'absent' }>) =>
+    apiClient.put(`/governance/committees/meetings/${meetingId}/attendance`, { members }),
   getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
   addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
   updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/meetings/agenda/${itemId}`, data),
+  // What the committee decided about an item (the meeting must be in progress, or ended and being corrected). The outcome is one of four words, any
+  // case; the item's status follows (deferred, otherwise discussed). `decision_made` left out keeps the text there is.
+  recordAgendaOutcome: (itemId: number, data: { outcome: 'Approved' | 'Rejected' | 'Deferred' | 'Noted'; decision_made?: string | null }) =>
+    apiClient.put(`/governance/committees/meetings/agenda/${itemId}/outcome`, data),
   // Upload PDF / DOCX / TXT agenda doc → backend extracts text +
   // heuristic-parses + AI fallback when needed → inserts MeetingAgendaItem rows.
   uploadAgendaForParse: (meetingId: number, file: File) => {
@@ -4138,7 +4145,8 @@ export const committeeApi = {
   deleteMeetingAttachment: (attachmentId: number) =>
     apiClient.delete(`/governance/committees/meetings/attachments/${attachmentId}`),
   createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
-  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
+  // The router serves minutes under /meetings/minutes/{id}; this used to point at /committees/minutes/{id}, which does not exist.
+  updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/meetings/minutes/${minutesId}`, data),
   // Upload a PDF / DOCX / TXT minutes document — backend extracts the
   // text and stores it as the minutes content, dropping any previously
   // approved status back to draft so reviewers see the change.
@@ -4151,7 +4159,15 @@ export const committeeApi = {
   },
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
   createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
-  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
+  // status may list several words ("open,in_progress"); assigned_to is a user id or 'me'; due_after / due_before take a bare date, which is the whole UTC
+  // day (so "this week" is due_after=<monday>&due_before=<sunday>), or a date and time, which is that instant, included at both ends ("not overdue yet"
+  // is due_after=<now>). An action with no due date never matches a range.
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean; assigned_to?: number | 'me'; due_after?: string; due_before?: string; skip?: number; limit?: number }) =>
+    apiClient.get('/governance/committees/actions', { params }),
+  // What the committees decided (agenda items with an outcome or a decision), newest meeting first, with the true `total`. `q` finds every word in the
+  // title or decision text, ignoring case and accents; from/to are meeting days (to includes its whole day); is_active is 'true' | 'false' | 'all'.
+  listDecisions: (params?: { q?: string; committee_id?: number; from?: string; to?: string; outcome?: string; is_active?: 'true' | 'false' | 'all'; limit?: number; offset?: number }) =>
+    apiClient.get('/governance/committees/decisions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
   aiRewordActionText: (formData: FormData) =>
     apiClient.post('/governance/committees/actions/ai/reword', formData, {

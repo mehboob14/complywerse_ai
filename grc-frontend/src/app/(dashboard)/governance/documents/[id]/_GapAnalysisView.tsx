@@ -10,23 +10,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowUpDown, BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
+  BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
   RotateCcw, Search, ShieldAlert, ShieldCheck, Sparkles, User, X,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
-import { parseUtc } from '@/lib/serverTime';
-import { MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { formatCount } from '@/lib/format';
+import { MultiSelectDropdown } from '@/components/ui';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { useToast } from '@/components/ui/ToastProvider';
-import { BTN, BTN_ICON, BTN_PRIMARY as PRIMARY } from '@/components/governance/docUi';
+import {
+  Button, EmptyState, ErrorState, FormField, IconButton, Select, SkeletonLines, StatusPill, Table, TableFrame, TBody, Td, Textarea, TextInput, THead, Th, Tr,
+  useNotify, useReportedMutation, type SortState,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { priority, type Tone } from '@/lib/status';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { useLibraryDocuments } from '../_DetailsFields';
 import { versionLabel } from '../_view/versionLabel';
-import { formatDate } from './_DocumentViewer';
+import { calendarDay, day } from '../_view/docDates';
 import { frameworkTypeLabel, lastFailedRuns, outdatedRuns } from './_gapAnalysis';
 import { gapJustification, sendLabel } from '@/lib/proposals';
-import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
+import { ProposeNote, proposedWords, useProposalRole, useRefreshAfterProposal } from './_ProposalsView';
+import { proposedOf } from '@/lib/proposals';
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   fully_compliant: { bg: 'bg-emerald-50', text: 'text-emerald-800', label: 'Fully compliant' },
@@ -48,11 +54,9 @@ const REMEDIATION_STATUS_STYLES: Record<string, { bg: string; text: string; labe
 };
 const UNKNOWN = (label: string) => ({ bg: 'bg-slate-100', text: 'text-slate-700', label });
 
-const FIELD = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]';
-// (the buttons BTN and PRIMARY are the Documents area's shared ones, components/governance/docUi)
-// the table head: the fill is forced on the <th> and the words sit in a <span>, as the platform's `thead th` rule would beat any class on the text
-const TH = 'whitespace-nowrap border-b border-[#d5dbe1] px-3 py-2.5 text-left !bg-[#f3f6f8]';
-const HEAD = 'text-[11px] font-semibold uppercase tracking-wide';
+// a finding's coverage, risk and remediation as the kit's pill: the words are the page's own (the tables above), the tones the registry's (risk = the priority scale)
+const COVERAGE_TONE: Record<string, Tone> = { fully_compliant: 'success', partially_compliant: 'warning', not_addressed: 'danger', not_applicable: 'neutral' };
+const REMEDIATION_TONE: Record<string, Tone> = { open: 'danger', in_progress: 'warning', closed: 'success', accepted_risk: 'progress' };
 
 const dedupeFrameworkOptions = (items: any[] = []) => {
   const statusRank: Record<string, number> = { published: 4, completed: 3, classified: 2, parsed: 1 };
@@ -72,20 +76,10 @@ const dedupeFrameworkOptions = (items: any[] = []) => {
   return Array.from(deduped.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
 };
 
-function SortHeader({ field, current, order, onSort, children }: { field: string; current: string; order: string; onSort: (f: string) => void; children: React.ReactNode }) {
-  const on = current === field;
-  return (
-    <th className={TH} aria-sort={on ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" onClick={() => onSort(field)} className={`inline-flex items-center gap-1 rounded hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${on ? 'text-[#1f2933]' : 'text-[#586472]'}`}>
-        <span className={HEAD}>{children}</span>
-        <ArrowUpDown className={`h-3 w-3 ${on ? 'text-[#0f766e]' : 'text-[#7b8794]'}`} aria-hidden />
-      </button>
-    </th>
-  );
-}
-
-function ComplianceSummarySection({ summary, loading }: { summary: any; loading: boolean }) {
-  if (loading) return <PageLoader size="sm" className="h-32" />;
+function ComplianceSummarySection({ summary, loading, failed, onRetry }: { summary: any; loading: boolean; failed?: string | null; onRetry?: () => void }) {
+  if (loading) return <SkeletonLines lines={3} label="Loading the coverage" />;
+  // a failed read is not "no coverage yet"
+  if (failed && !summary) return <ErrorState compact title="Couldn't load the coverage per framework" message={failed} onRetry={onRetry} />;
   const frameworks = summary?.frameworks || summary?.framework_summaries || [];
   if (!Array.isArray(frameworks) || frameworks.length === 0) return null;
   return (
@@ -104,9 +98,9 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
               <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-[#586472]">
-              {fw.total_clauses != null && <span>{fw.total_clauses} clauses</span>}
-              {fw.compliant_count != null && <span className="text-emerald-800">{fw.compliant_count} covered</span>}
-              {fw.gaps_count != null && <span className="text-rose-800">{fw.gaps_count} gaps</span>}
+              {fw.total_clauses != null && <span>{formatCount(fw.total_clauses)} clauses</span>}
+              {fw.compliant_count != null && <span className="text-emerald-800">{formatCount(fw.compliant_count)} covered</span>}
+              {fw.gaps_count != null && <span className="text-rose-800">{formatCount(fw.gaps_count)} gaps</span>}
             </div>
           </div>
         );
@@ -117,11 +111,11 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
 
 export default function GapAnalysisView({ documentId, tenantId, canEdit }: { documentId: number; tenantId?: number; canEdit: boolean }) {
   const id = documentId;
-  const { toast } = useToast();
+  const notify = useNotify();
   const queryClient = useQueryClient();
   // not the owner or author: a fix (or taking one back out) goes to the owner to accept, with its justification (lib/proposals.ts)
   const { proposes, decider } = useProposalRole(documentId);
-  const handledAsProposal = useProposedAnswer();
+  const refreshAfterProposal = useRefreshAfterProposal();
 
   const [showGapModal, setShowGapModal] = useState(false);
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
@@ -177,7 +171,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   })();
   const hasRunningAnalysis = runs.some((r: any) => r.status === 'running');
 
-  const { data: complianceSummary, isLoading: summaryLoading } = useQuery({
+  const { data: complianceSummary, isLoading: summaryLoading, isError: summaryFailed, error: summaryError, refetch: refetchSummary } = useQuery({
     queryKey: ['compliance-summary', id],
     queryFn: async () => (await governanceApi.getComplianceSummary(id)).data as any,
     enabled: !!id,
@@ -194,7 +188,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
     prevHasRunningRef.current = hasRunningAnalysis;
   }, [hasRunningAnalysis, id, queryClient]);
 
-  const { data: gapFindings, isLoading: findingsLoading, isError: findingsError } = useQuery({
+  const { data: gapFindings, isLoading: findingsLoading, isError: findingsError, error: findingsErr, refetch: refetchFindings } = useQuery({
     queryKey: ['document-gap-findings', id, gapFilters],
     queryFn: async () => {
       const params: Record<string, any> = { skip: gapFilters.skip, limit: gapFilters.limit, sort_by: gapFilters.sort_by, sort_order: gapFilters.sort_order };
@@ -235,10 +229,15 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       'document-chain', 'document-chain-redline', 'document-policy-statements', 'gap-analysis-runs']) queryClient.invalidateQueries({ queryKey: [key] });
   };
 
-  const runGapAnalysisMutation = useMutation({
+  // starting a run makes run records (and costs a model call per clause): no Retry; a failure is also said in the Run dialog where it was asked for. The runs are asked
+  // for again after a failure, as the server marks them failed when it could not start them (a 503)
+  const runGapAnalysisMutation = useReportedMutation({
     mutationFn: (data: { document_id: number; framework_ids?: number[]; run_all?: boolean }) => governanceApi.runGapAnalysis(data),
+    success: { title: 'Gap analysis started', message: 'The findings appear here as each framework is done; you can leave this page.' },
+    failure: 'Not started',
+    fallback: 'The gap analysis could not be started.',
+    retryable: false,
     onSuccess: () => {
-      toast({ type: 'success', title: 'Gap analysis started', message: 'The findings appear here as each framework is done; you can leave this page.' });
       queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['compliance-summary', id], refetchType: 'all' });
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings'], refetchType: 'all' });
@@ -248,51 +247,60 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       setGapFrameworkSearch('');
       setRunError('');
     },
-    // a failure is told where the run was asked for: in the Run dialog, or as a toast for Run again (each call says); the runs are
-    // asked for again, as the server marks them failed when it could not start them (a 503)
     onError: () => queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] }),
   });
   const notStarted = (error: unknown) => apiErrorText(error, 'The gap analysis could not be started.');
-  const updateFindingMutation = useMutation({
+  const updateFindingMutation = useReportedMutation({
     mutationFn: ({ findingId, data }: { findingId: number; data: Record<string, any> }) => governanceApi.updateGapFinding(findingId, data),
+    success: 'Finding saved',
+    failure: 'Not saved',
+    fallback: 'The finding could not be saved.',
     onSuccess: () => {
-      toast({ type: 'success', title: 'Finding saved' });
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
       setEditingRow(null);
       setEditAction(null);
     },
-    onError: (error: any) => toast({ type: 'error', title: 'Not saved', message: error?.response?.data?.detail || 'The finding could not be saved.' }),
   });
-  const overrideMutation = useMutation({
+  const overrideMutation = useReportedMutation({
     mutationFn: ({ findingId, data }: { findingId: number; data: { override_status: string; override_justification: string; message?: string } }) =>
       governanceApi.overrideGapFinding(findingId, data),
+    // the override is saved; taking its fix back out of the document waits for the owner (the server's sentence says so)
+    success: (response: any) => {
+      const said = proposedWords(response?.data, decider);
+      if (said) return said;
+      const back = response?.data?.taken_back_version as string | undefined;
+      const left = !!response?.data?.fix_left_in_document;
+      const note = back ? `The fix was taken back out of the document (version ${back}); every other change stays.`
+        : left ? 'Its clause was changed in the document since, so the document was left as it is. Change it there if it should go.' : undefined;
+      return note ? { title: 'Override saved', message: note } : 'Override saved';
+    },
+    failure: 'Not overridden',
+    fallback: 'The override could not be saved.',
+    retryable: false,
     onSuccess: (response: any) => {
       setEditingRow(null);
       setEditAction(null);
       setOverrideForm({ status: 'fully_compliant', justification: '' });
-      // the override is saved; taking its fix back out of the document waits for the owner
-      if (handledAsProposal(response?.data, decider)) { refreshFindings(); return; }
-      const back = response?.data?.taken_back_version as string | undefined;
-      const left = !!response?.data?.fix_left_in_document;
-      toast({ type: 'success', title: 'Override saved', message: back ? `The fix was taken back out of the document (version ${back}); every other change stays.`
-        : left ? 'Its clause was changed in the document since, so the document was left as it is. Change it there if it should go.' : undefined });
-      if (back) refreshDocument();
+      if (proposedOf(response?.data)) { refreshAfterProposal(); refreshFindings(); return; }
+      if (response?.data?.taken_back_version) refreshDocument();
       else refreshFindings();
     },
-    onError: (error: any) => toast({ type: 'error', title: 'Not overridden', message: error?.response?.data?.detail || 'The override could not be saved.' }),
   });
-  const acceptRiskMutation = useMutation({
+  const acceptRiskMutation = useReportedMutation({
     mutationFn: ({ findingId, data }: { findingId: number; data: { justification: string; expiry_date?: string } }) => governanceApi.acceptGapRisk(findingId, data),
+    success: 'Risk accepted',
+    failure: 'Not accepted',
+    fallback: 'The risk could not be accepted.',
+    retryable: false,
     onSuccess: () => {
-      toast({ type: 'success', title: 'Risk accepted' });
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
       setEditingRow(null);
       setEditAction(null);
       setAcceptRiskForm({ justification: '', expiry_date: '' });
     },
-    onError: (error: any) => toast({ type: 'error', title: 'Not accepted', message: error?.response?.data?.detail || 'The risk could not be accepted.' }),
   });
-  // two steps: Comply Agent drafts the clause (kept on the finding), the person edits and applies it
+  // two steps: Comply Agent drafts the clause (kept on the finding), the person edits and applies it. The draft is a button the person presses (opt-in): it fills the
+  // dialog and says nothing on success; a failure says why and offers Retry (nothing was written)
   const generateGapFixMutation = useMutation({
     mutationFn: (findingId: number) => governanceApi.generateGapFix(findingId),
     onSuccess: (response: any) => {
@@ -302,15 +310,16 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       setAddressGapDraft(data.proposed_text || data.suggested_clause_text || '');
       queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
     },
-    onError: (error: any) => toast({ type: 'error', title: 'No draft', message: error?.response?.data?.detail || 'Comply Agent could not draft a clause. Try again.' }),
+    onError: (error, findingId) => { notify.error(error, { title: 'No draft', fallback: 'Comply Agent could not draft a clause. Try again.', retry: () => generateGapFixMutation.mutate(findingId) }); },
   });
-  const applyGapFixMutation = useMutation({
+  const applyGapFixMutation = useReportedMutation({
     mutationFn: ({ findingId, data }: {
       findingId: number;
       data: { mode: 'replace' | 'append'; proposed_text: string; current_text?: string | null; section_heading?: string; change_reason?: string; message?: string };
     }) => governanceApi.applyGapFix(findingId, data),
-    onSuccess: (response: any) => {
-      if (handledAsProposal(response?.data, decider)) { refreshFindings(); closeAddressGap(); return; }     // waits for the owner
+    success: (response: any) => {
+      const said = proposedWords(response?.data, decider);
+      if (said) return said;
       const r = response?.data || {};
       const v = r.applied_version_number as string | undefined;
       const st = r.document_status as string | undefined;
@@ -319,11 +328,16 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
         : st === 'draft' ? ' Send it for review when it is ready.' : '';
       const saved = v ? `Saved as version ${v}; the version before is kept.` : 'Saved to the document.';
       const notes = Array.isArray(r.notes) && r.notes.length ? ` ${r.notes.join(' ')}` : '';
-      toast({ type: 'success', title: 'Fix applied', message: `${saved}${where}${notes}` });
+      return { title: 'Fix applied', message: `${saved}${where}${notes}` };
+    },
+    failure: 'Not applied',
+    fallback: 'The fix could not be written into the document.',
+    retryable: false,
+    onSuccess: (response: any) => {
+      if (proposedOf(response?.data)) { refreshAfterProposal(); refreshFindings(); closeAddressGap(); return; }     // waits for the owner
       refreshDocument();
       closeAddressGap();
     },
-    onError: (error: any) => toast({ type: 'error', title: 'Not applied', message: error?.response?.data?.detail || 'The fix could not be written into the document.' }),
   });
 
   const handleExportCSV = async () => {
@@ -338,7 +352,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       window.URL.revokeObjectURL(url);
       window.document.body.removeChild(a);
     } catch {
-      toast({ type: 'error', title: 'Not exported', message: 'The findings could not be downloaded.' });
+      notify.error('The findings could not be downloaded.', { title: 'Not exported', retry: () => { void handleExportCSV(); } });
     }
   };
   const handleRunAnalysis = () => {
@@ -357,6 +371,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const handleGapSort = (field: string) => setGapFilters((prev) => ({
     ...prev, sort_by: field, sort_order: prev.sort_by === field && prev.sort_order === 'asc' ? 'desc' : 'asc', skip: 0,
   }));
+  // the kit's header buttons: the server sorts, so the state is the filters' own sort and a click asks for the next order of that column (ascending, then descending)
+  const gapSort: SortState = { key: gapFilters.sort_by, dir: gapFilters.sort_order };
+  const onGapSort = (next: SortState) => { if (next) handleGapSort(next.key); };
 
   const findings = useMemo(() => {
     const data = gapFindings;
@@ -376,7 +393,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
     const ids = Array.from(new Set(again.map((r: any) => r.uploaded_framework_id).filter((v: any) => v != null))) as number[];
     if (!ids.length) { setShowGapModal(true); return; }
     runGapAnalysisMutation.mutate({ document_id: id, framework_ids: ids },
-      { onError: (e) => toast({ type: 'error', title: 'Not started', message: notStarted(e) }) });
+      { onError: () => undefined });
   };
 
   return (
@@ -390,11 +407,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               text="Checks this document against frameworks, clause by clause; each clause it does not cover is a finding. Compare puts another document of the library, or a reference template, side by side with Comply Agent's gap analysis." />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setShowNcaCompareModal(true)} className={BTN} title="Compare with another document"><GitCompare className="h-4 w-4" /> Compare</button>
+            <Button leftIcon={<GitCompare aria-hidden />} title="Compare with another document" onClick={() => setShowNcaCompareModal(true)}>Compare</Button>
             {canEdit && (
-              <button type="button" onClick={() => setShowGapModal(true)} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>
-                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run gap analysis
-              </button>
+              <Button variant="primary" leftIcon={<Play aria-hidden />} loading={runGapAnalysisMutation.isPending} onClick={() => setShowGapModal(true)}>Run gap analysis</Button>
             )}
           </div>
         </div>
@@ -413,7 +428,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                 <div key={r.id} className="rounded-lg border border-[#d5dbe1] bg-[#f7f9fa] px-3 py-2">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-medium text-[#1f2933]" title={r.framework_name || 'Framework'}>{r.framework_name || `Run ${r.id}`}</span>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#effaf8] px-1.5 py-0.5 text-[11px] font-medium text-[#0b4f46]">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#effaf8] px-1.5 py-0.5 text-xs font-medium text-[#0b4f46]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" /> {r.status === 'queued' ? 'Waiting' : total > 0 ? `${pct}%` : 'Running'}
                     </span>
                   </div>
@@ -422,7 +437,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                       ? <div className="h-full rounded-full bg-[#0f766e] transition-all duration-300" style={{ width: `${Math.max(2, pct)}%` }} />
                       : <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-[#0f766e]" />}
                   </div>
-                  {total > 0 && <div className="mt-1 text-xs text-[#586472]">{done}/{total} clauses</div>}
+                  {total > 0 && <div className="mt-1 text-xs text-[#586472]">{formatCount(done)}/{formatCount(total)} clauses</div>}
                 </div>
               );
             })}
@@ -434,15 +449,13 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               {failed.map((r: any) => (
                 <li key={r.id} className="text-xs text-[#7a1616]">
                   <span className="font-semibold">{r.framework_name || `Run ${r.id}`}</span>
-                  {r.started_at && <span className="text-[#8a2c2c]"> · {parseUtc(r.started_at)?.toLocaleDateString()}</span>}
+                  {r.started_at && <span className="text-[#8a2c2c]"> · {day(r.started_at)}</span>}
                   : {r.error_message || 'The gap analysis did not finish.'}
                 </li>
               ))}
             </ul>
             {canEdit && (
-              <button type="button" onClick={() => runAgain(failed)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
-                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Run again
-              </button>
+              <Button leftIcon={<RotateCcw aria-hidden />} loading={runGapAnalysisMutation.isPending} onClick={() => runAgain(failed)}>Run again</Button>
             )}
           </div>
         )}
@@ -454,14 +467,12 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             Based on {versionLabel(outdated[0].document_version)} · the document is now {versionLabel(currentVersion)}
           </p>
           {canEdit && (
-            <button type="button" onClick={() => runAgain(outdated)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
-              {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Run again
-            </button>
+            <Button leftIcon={<RotateCcw aria-hidden />} loading={runGapAnalysisMutation.isPending} onClick={() => runAgain(outdated)}>Run again</Button>
           )}
         </div>
       )}
 
-      <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
+      <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} failed={summaryFailed ? errorMessage(summaryError) : null} onRetry={() => { void refetchSummary(); }} />
 
       {/* findings */}
       <section className="overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]">
@@ -483,49 +494,46 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             items={Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
             selectedValues={gapFilters.remediation_status ? [gapFilters.remediation_status] : []}
             onApply={(v) => setGapFilters((prev) => ({ ...prev, remediation_status: v[0] || '', skip: 0 }))} />
-          <button type="button" onClick={handleExportCSV} className={`${BTN} ml-auto`}><Download className="h-4 w-4" /> Export CSV</button>
+          <Button className="ml-auto" leftIcon={<Download aria-hidden />} onClick={handleExportCSV}>Export CSV</Button>
         </div>
 
         {findingsLoading ? (
-          <div className="flex h-48 items-center justify-center" role="status" aria-label="Loading the findings"><Loader2 className="h-7 w-7 animate-spin text-[#0f766e]" /></div>
+          <div className="p-4"><SkeletonLines lines={6} label="Loading the findings" /></div>
         ) : findingsError ? (
-          <p className="m-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Could not load the findings.</p>
+          // a failed read is not "no findings"
+          <div className="p-4"><ErrorState title="Couldn't load the findings" message={errorMessage(findingsErr)} onRetry={() => { void refetchFindings(); }} /></div>
         ) : findings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
-            <BarChart3 className="h-8 w-8 text-[#7b8794]" strokeWidth={1.5} aria-hidden />
-            {gapFilters.framework_name || gapFilters.compliance_status || gapFilters.risk_severity || gapFilters.remediation_status ? (
-              <p className="text-[13px] font-medium text-[#1f2933]">No findings match</p>
-            ) : (
-              <>
-                <p className="text-[13px] font-medium text-[#1f2933]">No findings yet</p>
-                {failed.length > 0 && <p className="text-xs text-[#586472]">The last run did not finish: see above</p>}
-                {canEdit && (
-                  <button type="button" onClick={() => setShowGapModal(true)} disabled={runGapAnalysisMutation.isPending} className={BTN}><Play className="h-4 w-4" /> Run gap analysis</button>
-                )}
-              </>
-            )}
-          </div>
+          gapFilters.framework_name || gapFilters.compliance_status || gapFilters.risk_severity || gapFilters.remediation_status ? (
+            <EmptyState bare kind="noMatches" icon={BarChart3} title="No findings match"
+              onClearFilters={() => setGapFilters((prev) => ({ ...prev, framework_name: '', compliance_status: '', risk_severity: '', remediation_status: '', skip: 0 }))} />
+          ) : (
+            <EmptyState bare kind="firstUse" icon={BarChart3} title="No findings yet"
+              description={failed.length > 0 ? 'The last run did not finish: see above' : undefined}
+              action={canEdit ? <Button leftIcon={<Play aria-hidden />} loading={runGapAnalysisMutation.isPending} onClick={() => setShowGapModal(true)}>Run gap analysis</Button> : undefined} />
+          )
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
+            {/* its own scroll frame (a tab stop, named): the header stays in view while the rows scroll, and no column is dropped on a narrower window;
+                the wrapper gives an opened row the frame's width to lay itself out in (100cqw) */}
+            <div className="[container-type:inline-size]"><TableFrame aria-label="The gap findings" maxHeight="max-h-[70vh]" className="rounded-none border-x-0 border-b-0">
+              <Table caption="The gap findings of this document, one row per clause. The Clause, In the document, Coverage, Risk, Target date, Status and Updated columns can be sorted.">
+                <THead>
                   <tr>
-                    <th className={`${TH} w-8 !px-2`}><span className="sr-only">Details</span></th>
-                    <SortHeader field="clause_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Clause</SortHeader>
-                    <SortHeader field="policy_section_reference" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>In the document</SortHeader>
-                    <SortHeader field="compliance_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Coverage</SortHeader>
-                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Gap</span></th>
-                    <SortHeader field="risk_severity" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Risk</SortHeader>
-                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Recommendation</span></th>
-                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Owner</span></th>
-                    <SortHeader field="target_remediation_date" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Target date</SortHeader>
-                    <SortHeader field="remediation_status" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Status</SortHeader>
-                    <th className={TH}><span className={`${HEAD} text-[#586472]`}>Evidence</span></th>
-                    <SortHeader field="updated_at" current={gapFilters.sort_by} order={gapFilters.sort_order} onSort={handleGapSort}>Updated</SortHeader>
+                    <Th sticky className="w-[44px]"><span className="sr-only">Details</span></Th>
+                    <Th sticky sortKey="clause_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Clause</Th>
+                    <Th sticky sortKey="policy_section_reference" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">In the document</Th>
+                    <Th sticky sortKey="compliance_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Coverage</Th>
+                    <Th sticky>Gap</Th>
+                    <Th sticky sortKey="risk_severity" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Risk</Th>
+                    <Th sticky>Recommendation</Th>
+                    <Th sticky>Owner</Th>
+                    <Th sticky sortKey="target_remediation_date" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Target date</Th>
+                    <Th sticky sortKey="remediation_status" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Status</Th>
+                    <Th sticky>Evidence</Th>
+                    <Th sticky sortKey="updated_at" sort={gapSort} onSortChange={onGapSort} sortCycle="asc-desc">Updated</Th>
                   </tr>
-                </thead>
-                <tbody>
+                </THead>
+                <TBody>
                   {findings.map((finding: any) => (
                     <GapFindingRow
                       key={finding.id}
@@ -562,21 +570,17 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                       isPending={updateFindingMutation.isPending || overrideMutation.isPending || acceptRiskMutation.isPending}
                     />
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableFrame></div>
             {totalPages > 1 && (
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e1e6eb] px-4 py-2.5">
-                <span className="text-[13px] tabular-nums text-[#586472]">{gapFilters.skip + 1}–{Math.min(gapFilters.skip + gapFilters.limit, totalFindings)} of {totalFindings}</span>
+                <span className="text-[13px] tabular-nums text-[#586472]">{formatCount(gapFilters.skip + 1)}–{formatCount(Math.min(gapFilters.skip + gapFilters.limit, totalFindings))} of {formatCount(totalFindings)}</span>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setGapFilters((prev) => ({ ...prev, skip: Math.max(0, prev.skip - prev.limit) }))} disabled={currentPage === 0}
-                    className={BTN_ICON} aria-label="Previous page" title={`Previous page (${currentPage + 1} of ${totalPages})`}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => setGapFilters((prev) => ({ ...prev, skip: prev.skip + prev.limit }))} disabled={currentPage >= totalPages - 1}
-                    className={BTN_ICON} aria-label="Next page" title={`Next page (${currentPage + 1} of ${totalPages})`}>
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
+                  <IconButton label={`Previous page (${currentPage + 1} of ${totalPages})`} variant="secondary" disabled={currentPage === 0}
+                    onClick={() => setGapFilters((prev) => ({ ...prev, skip: Math.max(0, prev.skip - prev.limit) }))}><ChevronLeft aria-hidden /></IconButton>
+                  <IconButton label={`Next page (${currentPage + 1} of ${totalPages})`} variant="secondary" disabled={currentPage >= totalPages - 1}
+                    onClick={() => setGapFilters((prev) => ({ ...prev, skip: prev.skip + prev.limit }))}><ChevronRight aria-hidden /></IconButton>
                 </div>
               </div>
             )}
@@ -584,202 +588,167 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
         )}
       </section>
 
-      {/* address a gap: review or edit Comply Agent's clause, then apply it to the document */}
-      {addressGapFinding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Address the gap"
-          onKeyDown={(e) => { if (e.key === 'Escape') closeAddressGap(); }}>
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl border border-[#d5dbe1] bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-[#e3e8ec] px-5 py-4">
-              <div className="min-w-0">
-                <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold text-[#1f2933]">
-                  <Sparkles className="h-4 w-4 text-[#0f766e]" aria-hidden /> Address the gap
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${addressGapMode === 'replace' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
-                    {addressGapMode === 'replace' ? 'Replaces a clause' : 'Adds a clause'}
-                  </span>
-                  <InfoTip label="About this fix"
-                    text={addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.'
-                      : 'A new clause, added at the end of the document under its own heading.'} />
-                </h3>
-                <p className="mt-0.5 truncate text-xs text-[#586472]">
-                  {addressGapFinding.framework_name && <span className="font-medium">{addressGapFinding.framework_name} · </span>}
-                  <span className="font-mono text-[#26323d]">{addressGapFinding.clause_reference || '—'}</span>
-                  {addressGapFinding.clause_title && <> · {addressGapFinding.clause_title}</>}
-                </p>
-              </div>
-              <button type="button" autoFocus onClick={closeAddressGap} className="shrink-0 rounded-lg p-2 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" aria-label="Close"><X className="h-5 w-5" /></button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-              {addressGapFinding.gap_description && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <span className="mb-1 block text-xs font-semibold text-amber-900">Gap</span>
-                  <p className="text-sm text-amber-950">{addressGapFinding.gap_description}</p>
-                </div>
-              )}
-              {addressGapFinding.remediation_recommendation && (
-                <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
-                  <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">Recommendation</span>
-                  <p className="text-sm text-[#1f2933]">{addressGapFinding.remediation_recommendation}</p>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <button type="button" onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)} disabled={generateGapFixMutation.isPending} className={BTN}>
-                  {generateGapFixMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#0f766e]" />}
-                  {generateGapFixMutation.isPending ? 'Drafting…' : addressGapDraft ? 'Draft again' : 'Draft with Comply Agent'}
-                </button>
-              </div>
-
-              {addressGapMode === 'replace' ? (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">In the document now</span>
-                    <textarea value={addressGapOriginal} readOnly rows={14} className={`${FIELD} resize-y bg-[#f7f9fa] font-mono`} />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New wording</span>
-                    <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={14} className={`${FIELD} resize-y`}
-                      placeholder="Draft it with Comply Agent, or write it yourself." />
-                  </label>
-                </div>
-              ) : (
-                <>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">New clause</span>
-                    <textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={12} className={`${FIELD} resize-y`}
-                      placeholder="Draft it with Comply Agent, or write a clause that closes this gap yourself." />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Heading <span className="text-xs font-normal text-[#586472]">(optional)</span></span>
-                    <input type="text" value={addressGapHeading} onChange={(e) => setAddressGapHeading(e.target.value)} className={FIELD} />
-                  </label>
-                </>
-              )}
-
-              {proposes ? (
-                <ProposeNote id={`gap-why-${addressGapFinding.id}`} decider={decider} value={addressGapReason} onChange={setAddressGapReason}
-                  placeholder="e.g. Closing the gap before the audit" />
-              ) : (
-                <>
-                  <div>
-                    {/* the (i) is a button: outside the <label>, which would otherwise label it instead of the field */}
-                    <div className="mb-1.5 flex items-center gap-1">
-                      <label htmlFor={`gap-fix-why-${addressGapFinding.id}`} className="text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional)</span></label>
-                      <InfoTip label="About the reason" text="Kept in the version history." />
-                    </div>
-                    <input id={`gap-fix-why-${addressGapFinding.id}`} type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
-                  </div>
-                  <p className="text-xs text-[#586472]">
-                    Saved as the document&apos;s next version; earlier versions are kept.
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-[#e3e8ec] px-5 py-3">
-              <button type="button" onClick={closeAddressGap} className={BTN}>Cancel</button>
-              <button type="button"
-                onClick={() => applyGapFixMutation.mutate({
-                  findingId: addressGapFinding.id,
-                  data: {
-                    mode: addressGapMode,
-                    proposed_text: addressGapDraft,
-                    current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
-                    section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
-                    change_reason: addressGapReason || undefined,
-                    message: addressGapReason.trim() || undefined,
-                  },
-                })}
-                disabled={!addressGapDraft.trim() || applyGapFixMutation.isPending || (addressGapMode === 'replace' && !addressGapOriginal.trim()) || (proposes && !addressGapReason.trim())}
-                className={PRIMARY}>
-                {applyGapFixMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> {proposes ? 'Sending…' : 'Applying…'}</>
-                  : <><Check className="h-4 w-4" /> {proposes ? sendLabel(decider) : addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}</>}
-              </button>
-            </div>
+      {/* address a gap: review or edit Comply Agent's clause, then apply it to the document (a kit dialog: focus in, Tab wraps, Escape, focus back; a clause edited or a reason typed asks before it is thrown away) */}
+      <AnimatedModal isOpen={!!addressGapFinding} onClose={closeAddressGap} size="3xl" title="Address the gap"
+        dirty={!!addressGapFinding && (addressGapDraft !== (addressGapFinding.suggested_clause_text || '') || addressGapReason.trim() !== '')}
+        subtitle={addressGapFinding ? [addressGapFinding.framework_name, addressGapFinding.clause_reference || '—', addressGapFinding.clause_title].filter(Boolean).join(' · ') : undefined}
+        headerAccessory={(
+          <span className="flex items-center gap-1">
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${addressGapMode === 'replace' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-50 text-emerald-800'}`}>
+              {addressGapMode === 'replace' ? 'Replaces a clause' : 'Adds a clause'}
+            </span>
+            <InfoTip label="About this fix"
+              text={addressGapMode === 'replace' ? 'Comply Agent found a clause of the document to replace; check the new wording on the right.'
+                : 'A new clause, added at the end of the document under its own heading.'} />
+          </span>
+        )}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <Button onClick={closeAddressGap}>Cancel</Button>
+            <Button variant="primary" loading={applyGapFixMutation.isPending}
+              leftIcon={applyGapFixMutation.isPending ? undefined : <Check aria-hidden />}
+              onClick={() => applyGapFixMutation.mutate({
+                findingId: addressGapFinding.id,
+                data: {
+                  mode: addressGapMode,
+                  proposed_text: addressGapDraft,
+                  current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
+                  section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
+                  change_reason: addressGapReason || undefined,
+                  message: addressGapReason.trim() || undefined,
+                },
+              })}
+              disabled={!addressGapDraft.trim() || (addressGapMode === 'replace' && !addressGapOriginal.trim()) || (proposes && !addressGapReason.trim())}>
+              {applyGapFixMutation.isPending ? (proposes ? 'Sending…' : 'Applying…') : proposes ? sendLabel(decider) : addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}
+            </Button>
           </div>
-        </div>
-      )}
-
-      {/* the frameworks to run against */}
-      {showGapModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label="Run gap analysis"
-          onKeyDown={(e) => { if (e.key === 'Escape') closeGapModal(); }}>
-          <div className="w-full max-w-lg rounded-xl border border-[#d5dbe1] bg-white p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-1">
-                <h3 className="text-base font-semibold text-[#1f2933]">Run gap analysis</h3>
-                <InfoTip label="About running the analysis" text="Choose the frameworks to check; with none chosen, all of them run." />
-              </div>
-              <button type="button" autoFocus onClick={closeGapModal} className="rounded-lg p-2 text-[#586472] hover:bg-[#f3f6f8] hover:text-[#1f2933]" aria-label="Close"><X className="h-5 w-5" /></button>
-            </div>
-            {uploadedFrameworks && uploadedFrameworks.length > 0 && (
-              <div className="relative mb-3">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8794]" aria-hidden />
-                <input type="text" value={gapFrameworkSearch} onChange={(e) => setGapFrameworkSearch(e.target.value)} aria-label="Search frameworks"
-                  placeholder="Search by name, code or regulator…" className={`${FIELD} pl-9 pr-9`} />
-                {gapFrameworkSearch && (
-                  <button type="button" onClick={() => setGapFrameworkSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[#7b8794] hover:text-[#26323d]" aria-label="Clear the search">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
+        )}>
+        {addressGapFinding && (
+          <div className="space-y-4 px-5 py-4">
+            {addressGapFinding.gap_description && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <span className="mb-1 block text-xs font-semibold text-amber-900">Gap</span>
+                <p className="text-sm text-amber-950">{addressGapFinding.gap_description}</p>
               </div>
             )}
-            <div className="mb-5 max-h-64 space-y-2 overflow-y-auto">
-              {!uploadedFrameworks ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>
-              ) : uploadedFrameworks.length === 0 ? (
-                <p className="py-4 text-center text-sm text-[#586472]">No frameworks in the library yet.</p>
-              ) : (() => {
-                const term = gapFrameworkSearch.trim().toLowerCase();
-                const visible = term
-                  ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, frameworkTypeLabel(fw.framework_type), fw.regulator, fw.source_organization, fw.version]
-                    .filter(Boolean).join(' ').toLowerCase().includes(term))
-                  : (uploadedFrameworks as any[]);
-                if (visible.length === 0) return <p className="py-4 text-center text-sm text-[#586472]">No framework matches &ldquo;{gapFrameworkSearch}&rdquo;.</p>;
-                const visibleIds = visible.map((fw: any) => fw.id);
-                const allVisibleSelected = visibleIds.every((vid: number) => selectedFrameworkIds.includes(vid));
-                const toggleVisible = () => setSelectedFrameworkIds((prev) => (allVisibleSelected
-                  ? prev.filter((pid) => !visibleIds.includes(pid))                  // the ones outside the search stay chosen
-                  : Array.from(new Set([...prev, ...visibleIds]))));
-                return (
-                  <>
-                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d5dbe1] bg-white p-3 hover:bg-[#f7f9fa]">
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
-                      <span className="text-sm font-medium text-[#1f2933]">{term ? `All that match (${visible.length})` : `All (${uploadedFrameworks.length})`}</span>
-                    </label>
-                    {visible.map((fw: any) => (
-                      <label key={fw.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e3e8ec] bg-white p-3 hover:bg-[#f7f9fa]">
-                        <input type="checkbox" checked={selectedFrameworkIds.includes(fw.id)} onChange={() => toggleFramework(fw.id)} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-[#1f2933]">{fw.name || `Framework ${fw.id}`}</span>
-                            {(fw.short_code || fw.framework_type) && (
-                              <span className={`rounded bg-[#eef1f4] px-1.5 py-0.5 text-xs text-[#3f4b58] ${fw.short_code ? 'font-mono' : ''}`}>{fw.short_code || frameworkTypeLabel(fw.framework_type)}</span>
-                            )}
-                          </span>
-                          <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
-                            {fw.version && <span>{versionLabel(fw.version)}</span>}
-                            {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
-                            {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </>
-                );
-              })()}
+            {addressGapFinding.remediation_recommendation && (
+              <div className="rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3">
+                <span className="mb-1 block text-xs font-semibold text-[#0b4f46]">Recommendation</span>
+                <p className="text-sm text-[#1f2933]">{addressGapFinding.remediation_recommendation}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button leftIcon={<Sparkles aria-hidden />} loading={generateGapFixMutation.isPending} onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)}>
+                {generateGapFixMutation.isPending ? 'Drafting…' : addressGapDraft ? 'Draft again' : 'Draft with Comply Agent'}
+              </Button>
             </div>
-            {runError && <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">{runError}</p>}
-            <div className="flex justify-end gap-2 border-t border-[#e3e8ec] pt-4">
-              <button type="button" onClick={closeGapModal} className={BTN}>Cancel</button>
-              <button type="button" onClick={handleRunAnalysis} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>
-                {runGapAnalysisMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {selectedFrameworkIds.length === 0 ? 'Run all' : `Run (${selectedFrameworkIds.length})`}
-              </button>
-            </div>
+
+            {addressGapMode === 'replace' ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <FormField label="In the document now">
+                  <Textarea value={addressGapOriginal} readOnly rows={14} className="font-mono" />
+                </FormField>
+                <FormField label="New wording">
+                  <Textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={14} placeholder="Draft it with Comply Agent, or write it yourself." />
+                </FormField>
+              </div>
+            ) : (
+              <>
+                <FormField label="New clause">
+                  <Textarea value={addressGapDraft} onChange={(e) => setAddressGapDraft(e.target.value)} rows={12} placeholder="Draft it with Comply Agent, or write a clause that closes this gap yourself." />
+                </FormField>
+                <FormField label="Heading" optional>
+                  <TextInput type="text" value={addressGapHeading} onChange={(e) => setAddressGapHeading(e.target.value)} />
+                </FormField>
+              </>
+            )}
+
+            {proposes ? (
+              <ProposeNote id={`gap-why-${addressGapFinding.id}`} decider={decider} value={addressGapReason} onChange={setAddressGapReason}
+                placeholder="e.g. Closing the gap before the audit" />
+            ) : (
+              <>
+                <FormField label="Why" optional info="Kept in the version history.">
+                  <TextInput type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" />
+                </FormField>
+                <p className="text-xs text-[#586472]">
+                  Saved as the document&apos;s next version; earlier versions are kept.
+                </p>
+              </>
+            )}
           </div>
+        )}
+      </AnimatedModal>
+
+      {/* the frameworks to run against (a kit dialog: focus in, Tab wraps, Escape, focus back) */}
+      <AnimatedModal isOpen={showGapModal} onClose={closeGapModal} size="md" title="Run gap analysis"
+        headerAccessory={<InfoTip label="About running the analysis" text="Choose the frameworks to check; with none chosen, all of them run." />}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button onClick={closeGapModal}>Cancel</Button>
+            <Button variant="primary" loading={runGapAnalysisMutation.isPending} leftIcon={<Play aria-hidden />} onClick={handleRunAnalysis}>
+              {selectedFrameworkIds.length === 0 ? 'Run all' : `Run (${selectedFrameworkIds.length})`}
+            </Button>
+          </div>
+        )}>
+        <div className="space-y-3 px-5 py-4">
+          {uploadedFrameworks && uploadedFrameworks.length > 0 && (
+            <TextInput type="text" value={gapFrameworkSearch} onChange={(e) => setGapFrameworkSearch(e.target.value)} aria-label="Search frameworks"
+              placeholder="Search by name, code or regulator…" leftAdornment={<Search aria-hidden />}
+              rightAdornment={gapFrameworkSearch ? (
+                <button type="button" onClick={() => setGapFrameworkSearch('')} aria-label="Clear the search"
+                  className="grid h-[24px] w-[24px] place-items-center rounded-full text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring"><X className="h-[14px] w-[14px]" aria-hidden /></button>
+              ) : undefined} />
+          )}
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {!uploadedFrameworks ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" /></div>
+            ) : uploadedFrameworks.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[#586472]">No frameworks in the library yet.</p>
+            ) : (() => {
+              const term = gapFrameworkSearch.trim().toLowerCase();
+              const visible = term
+                ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, frameworkTypeLabel(fw.framework_type), fw.regulator, fw.source_organization, fw.version]
+                  .filter(Boolean).join(' ').toLowerCase().includes(term))
+                : (uploadedFrameworks as any[]);
+              if (visible.length === 0) return <p className="py-4 text-center text-sm text-[#586472]">No framework matches &ldquo;{gapFrameworkSearch}&rdquo;.</p>;
+              const visibleIds = visible.map((fw: any) => fw.id);
+              const allVisibleSelected = visibleIds.every((vid: number) => selectedFrameworkIds.includes(vid));
+              const toggleVisible = () => setSelectedFrameworkIds((prev) => (allVisibleSelected
+                ? prev.filter((pid) => !visibleIds.includes(pid))                  // the ones outside the search stay chosen
+                : Array.from(new Set([...prev, ...visibleIds]))));
+              return (
+                <>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#d5dbe1] bg-white p-3 hover:bg-[#f7f9fa]">
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
+                    <span className="text-sm font-medium text-[#1f2933]">{term ? `All that match (${visible.length})` : `All (${uploadedFrameworks.length})`}</span>
+                  </label>
+                  {visible.map((fw: any) => (
+                    <label key={fw.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e3e8ec] bg-white p-3 hover:bg-[#f7f9fa]">
+                      <input type="checkbox" checked={selectedFrameworkIds.includes(fw.id)} onChange={() => toggleFramework(fw.id)} className="h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-[#1f2933]">{fw.name || `Framework ${fw.id}`}</span>
+                          {(fw.short_code || fw.framework_type) && (
+                            <span className={`rounded bg-[#eef1f4] px-1.5 py-0.5 text-xs text-[#3f4b58] ${fw.short_code ? 'font-mono' : ''}`}>{fw.short_code || frameworkTypeLabel(fw.framework_type)}</span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
+                          {fw.version && <span>{versionLabel(fw.version)}</span>}
+                          {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
+                          {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+          {runError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">{runError}</p>}
         </div>
-      )}
+      </AnimatedModal>
 
       <NcaCompareModal isOpen={showNcaCompareModal} onClose={() => setShowNcaCompareModal(false)}
         documents={allDocumentsForCompare.map((d) => ({ id: d.id, title: d.title, doc_type: d.doc_type }))} initialDocumentId={id} />
@@ -787,8 +756,6 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   );
 }
 
-const ACTION = 'inline-flex items-center gap-1.5 rounded-lg border border-[#c3ccd5] bg-[#fff] px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8]';
-const SAVE = 'rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
 const DETAIL_LABEL = 'mb-1 block text-xs font-semibold text-[#586472]';
 
 function GapFindingRow({
@@ -799,40 +766,46 @@ function GapFindingRow({
   statusUpdateForm, setStatusUpdateForm,
   onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending, proposeTo,
 }: any) {
-  const pill = (s: { bg: string; text: string; label: string }) => <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}>{s.label}</span>;
+  // the words are the page's own (cs/rs/rms.label); the tone of each is the registry's reading
+  const pill = (tone: Tone, label: string) => <StatusPill tone={tone} size="sm" label={label} />;
   const toggle = (action: string) => (e: React.MouseEvent) => { e.stopPropagation(); onSetEditAction(editAction === action && isEditing ? null : action); };
   const owner = finding.assigned_owner_name || finding.assigned_owner?.display_name;
+  const open = isExpanded ? 'Hide the details' : 'Show the details';
   return (
     <>
-      <tr className="cursor-pointer border-b border-[#e1e6eb] bg-[#fff] hover:bg-[#f7f9fa]" onClick={onToggleExpand}>
-        <td className="px-2 py-2">
-          <button type="button" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }} aria-expanded={isExpanded} aria-label={isExpanded ? 'Hide the details' : 'Show the details'}
-            className="rounded p-0.5 text-[#586472] hover:bg-[#eef1f4]">
-            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-        </td>
-        <td className="px-3 py-2">
+      {/* a click on any cell opens the details (as before: the row is not a tab stop of its own); the keyboard and the screen reader have the button in the first cell */}
+      <Tr className="cursor-pointer">
+        <Td onClick={onToggleExpand}>
+          <IconButton label={open} aria-expanded={isExpanded} onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
+            {isExpanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+          </IconButton>
+        </Td>
+        <Td onClick={onToggleExpand}>
           <div className="font-mono text-xs text-[#26323d]">{finding.clause_reference || '-'}</div>
-          {finding.clause_title && <div className="mt-0.5 max-w-[180px] truncate text-xs text-[#586472]">{finding.clause_title}</div>}
-        </td>
-        <td className="px-3 py-2"><div className="max-w-[140px] truncate text-xs text-[#26323d]">{finding.policy_section_reference || '-'}</div></td>
-        <td className="px-3 py-2">
-          {pill(cs)}
-          {finding.is_overridden && <span className="ml-1 text-xs text-[#586472]" title="Overridden">✓</span>}
-        </td>
-        <td className="max-w-[160px] truncate px-3 py-2 text-xs text-[#26323d]">{finding.gap_description || '-'}</td>
-        <td className="px-3 py-2">{pill(rs)}</td>
-        <td className="max-w-[140px] truncate px-3 py-2 text-xs text-[#26323d]">{finding.remediation_recommendation || '-'}</td>
-        <td className="px-3 py-2 text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="text-[#586472]" title="No owner">—<span className="sr-only">No owner</span></span>}</td>
-        <td className="px-3 py-2 text-xs text-[#26323d]">{formatDate(finding.target_remediation_date)}</td>
-        <td className="px-3 py-2">{pill(rms)}</td>
-        <td className="px-3 py-2"><span className="inline-flex items-center justify-center rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#26323d]">{finding.evidence_count || finding.evidence?.length || 0}</span></td>
-        <td className="px-3 py-2 text-xs text-[#586472]">{formatDate(finding.updated_at)}</td>
-      </tr>
+          {finding.clause_title && <div className="mt-0.5 max-w-[180px] truncate text-xs text-[#586472]" title={finding.clause_title}>{finding.clause_title}</div>}
+        </Td>
+        <Td onClick={onToggleExpand}><div className="max-w-[140px] truncate text-xs text-[#26323d]" title={finding.policy_section_reference || undefined}>{finding.policy_section_reference || '-'}</div></Td>
+        <Td onClick={onToggleExpand}>
+          {pill(COVERAGE_TONE[finding.compliance_status] ?? 'neutral', cs.label)}
+          {finding.is_overridden && <span className="ml-1 text-xs text-[#586472]" title="Overridden">✓<span className="sr-only"> Overridden</span></span>}
+        </Td>
+        <Td onClick={onToggleExpand}><div className="max-w-[160px] truncate text-xs text-[#26323d]" title={finding.gap_description || undefined}>{finding.gap_description || '-'}</div></Td>
+        <Td onClick={onToggleExpand}>{pill(priority.tone(finding.risk_severity), rs.label)}</Td>
+        <Td onClick={onToggleExpand}><div className="max-w-[140px] truncate text-xs text-[#26323d]" title={finding.remediation_recommendation || undefined}>{finding.remediation_recommendation || '-'}</div></Td>
+        {/* a name and a date stay on one line (the frame scrolls sideways instead of breaking them letter by letter) */}
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs">{owner ? <span className="text-[#26323d]">{owner}</span> : <span className="text-[#586472]" title="No owner">—<span className="sr-only">No owner</span></span>}</Td>
+        {/* the target date is a day (what <input type=date> sends), the update a moment */}
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs text-[#26323d]">{calendarDay(finding.target_remediation_date)}</Td>
+        <Td onClick={onToggleExpand}>{pill(REMEDIATION_TONE[finding.remediation_status] ?? 'neutral', rms.label)}</Td>
+        <Td onClick={onToggleExpand}><span className="inline-flex items-center justify-center rounded-full bg-[#eef1f4] px-2 py-0.5 text-xs text-[#26323d]">{formatCount(finding.evidence_count || finding.evidence?.length || 0)}</span></Td>
+        <Td onClick={onToggleExpand} className="whitespace-nowrap text-xs text-[#586472]">{day(finding.updated_at)}</Td>
+      </Tr>
 
       {isExpanded && (
-        <tr className="border-b border-[#e3e8ec] bg-[#f7f9fa]">
-          <td colSpan={12} className="px-4 py-4 sm:px-6">
+        <Tr>
+          <Td colSpan={12} className="!bg-[#f7f9fa] !p-0">
+            {/* as wide as the visible frame, held at its left edge while the table scrolls sideways: the details and their actions never sit half outside the window */}
+            <div className="sticky left-0 w-[calc(100cqw-1rem)] max-w-full px-4 py-4 sm:px-6">
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="space-y-4">
                 {finding.clause_requirement_text && (
@@ -894,59 +867,50 @@ function GapFindingRow({
                   <>
                     <div className="flex flex-wrap gap-2">
                       {(finding.compliance_status === 'not_addressed' || finding.compliance_status === 'partially_compliant') && finding.remediation_status !== 'closed' && !finding.applied_at && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onAddressGap(finding); }} title="Comply Agent drafts a clause; you check it and apply it to the document"
-                          className={PRIMARY}>
-                          <Sparkles className="h-4 w-4" aria-hidden /> Address the gap
-                        </button>
+                        <Button variant="primary" leftIcon={<Sparkles aria-hidden />} title="Comply Agent drafts a clause; you check it and apply it to the document"
+                          onClick={(e) => { e.stopPropagation(); onAddressGap(finding); }}>
+                          Address the gap
+                        </Button>
                       )}
-                      <button type="button" onClick={toggle('assign-owner')} aria-expanded={isEditing && editAction === 'assign-owner'} className={ACTION}><User className="h-3.5 w-3.5" aria-hidden /> Owner</button>
-                      <button type="button" onClick={toggle('set-date')} aria-expanded={isEditing && editAction === 'set-date'} className={ACTION}><Calendar className="h-3.5 w-3.5" aria-hidden /> Target date</button>
-                      <button type="button" onClick={toggle('update-status')} aria-expanded={isEditing && editAction === 'update-status'} className={ACTION}><Edit3 className="h-3.5 w-3.5" aria-hidden /> Status</button>
-                      <button type="button" onClick={toggle('override')} aria-expanded={isEditing && editAction === 'override'} className={ACTION}><ShieldCheck className="h-3.5 w-3.5 text-[#0f766e]" aria-hidden /> Override</button>
+                      <Button leftIcon={<User aria-hidden />} aria-expanded={isEditing && editAction === 'assign-owner'} onClick={toggle('assign-owner')}>Owner</Button>
+                      <Button leftIcon={<Calendar aria-hidden />} aria-expanded={isEditing && editAction === 'set-date'} onClick={toggle('set-date')}>Target date</Button>
+                      <Button leftIcon={<Edit3 aria-hidden />} aria-expanded={isEditing && editAction === 'update-status'} onClick={toggle('update-status')}>Status</Button>
+                      <Button leftIcon={<ShieldCheck aria-hidden />} aria-expanded={isEditing && editAction === 'override'} onClick={toggle('override')}>Override</Button>
                       {finding.compliance_status !== 'fully_compliant' && finding.compliance_status !== 'not_applicable' && (
-                        <button type="button" onClick={toggle('accept-risk')} aria-expanded={isEditing && editAction === 'accept-risk'} className={ACTION}><ShieldAlert className="h-3.5 w-3.5 text-amber-700" aria-hidden /> Accept the risk</button>
+                        <Button leftIcon={<ShieldAlert aria-hidden />} aria-expanded={isEditing && editAction === 'accept-risk'} onClick={toggle('accept-risk')}>Accept the risk</Button>
                       )}
                     </div>
 
                     {isEditing && editAction === 'assign-owner' && (
                       <div className="space-y-3 rounded-lg border border-[#d5dbe1] bg-white p-3" onClick={(e) => e.stopPropagation()}>
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Owner</span>
-                          <select value={assignOwnerForm || ''} onChange={(e) => setAssignOwnerForm(e.target.value ? Number(e.target.value) : null)} className={FIELD}>
+                        <FormField label="Owner">
+                          <Select value={assignOwnerForm || ''} onChange={(e) => setAssignOwnerForm(e.target.value ? Number(e.target.value) : null)}>
                             <option value="">Choose a person…</option>
                             {tenantUsers?.map((u: any) => (
                               <option key={u.user_id || u.id} value={u.user_id || u.id}>{u.user?.display_name || u.display_name || u.user?.email || u.email}</option>
                             ))}
-                          </select>
-                        </label>
-                        <button type="button" onClick={() => onUpdateFinding(finding.id, { assigned_owner_id: assignOwnerForm })} disabled={!assignOwnerForm || isPending} className={SAVE}>
-                          {isPending ? 'Saving…' : 'Save'}
-                        </button>
+                          </Select>
+                        </FormField>
+                        <Button variant="primary" loading={isPending} disabled={!assignOwnerForm} onClick={() => onUpdateFinding(finding.id, { assigned_owner_id: assignOwnerForm })}>Save</Button>
                       </div>
                     )}
                     {isEditing && editAction === 'set-date' && (
                       <div className="space-y-3 rounded-lg border border-[#d5dbe1] bg-white p-3" onClick={(e) => e.stopPropagation()}>
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Target date</span>
-                          <input type="date" value={targetDateForm} onChange={(e) => setTargetDateForm(e.target.value)} className={FIELD} />
-                        </label>
-                        <button type="button" onClick={() => onUpdateFinding(finding.id, { target_remediation_date: targetDateForm })} disabled={!targetDateForm || isPending} className={SAVE}>
-                          {isPending ? 'Saving…' : 'Save'}
-                        </button>
+                        <FormField label="Target date">
+                          <TextInput type="date" value={targetDateForm} onChange={(e) => setTargetDateForm(e.target.value)} />
+                        </FormField>
+                        <Button variant="primary" loading={isPending} disabled={!targetDateForm} onClick={() => onUpdateFinding(finding.id, { target_remediation_date: targetDateForm })}>Save</Button>
                       </div>
                     )}
                     {isEditing && editAction === 'update-status' && (
                       <div className="space-y-3 rounded-lg border border-[#d5dbe1] bg-white p-3" onClick={(e) => e.stopPropagation()}>
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Status</span>
-                          <select value={statusUpdateForm} onChange={(e) => setStatusUpdateForm(e.target.value)} className={FIELD}>
+                        <FormField label="Status">
+                          <Select value={statusUpdateForm} onChange={(e) => setStatusUpdateForm(e.target.value)}>
                             <option value="">Choose…</option>
-                            {Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => <option key={val} value={val}>{s.label}</option>)}
-                          </select>
-                        </label>
-                        <button type="button" onClick={() => onUpdateFinding(finding.id, { remediation_status: statusUpdateForm })} disabled={!statusUpdateForm || isPending} className={SAVE}>
-                          {isPending ? 'Saving…' : 'Save'}
-                        </button>
+                            {Object.entries(REMEDIATION_STATUS_STYLES).map(([val, st]) => <option key={val} value={val}>{st.label}</option>)}
+                          </Select>
+                        </FormField>
+                        <Button variant="primary" loading={isPending} disabled={!statusUpdateForm} onClick={() => onUpdateFinding(finding.id, { remediation_status: statusUpdateForm })}>Save</Button>
                       </div>
                     )}
                     {isEditing && editAction === 'override' && (
@@ -957,49 +921,45 @@ function GapFindingRow({
                             {proposeTo ? ` This goes to ${proposeTo} to accept or reject, with your “Why”; the document does not change until then.` : ''}
                           </p>
                         )}
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Coverage</span>
-                          <select value={overrideForm.status} onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, status: e.target.value }))} className={FIELD}>
-                            {Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => <option key={val} value={val}>{s.label}</option>)}
-                          </select>
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Why <span className="font-normal text-[#586472]">(required)</span></span>
-                          <textarea value={overrideForm.justification} onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, justification: e.target.value }))} rows={3} className={`${FIELD} resize-none`} />
-                        </label>
-                        <button type="button" onClick={() => onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification })}
-                          disabled={!overrideForm.justification.trim() || isPending} className={SAVE}>
-                          {isPending ? 'Saving…' : finding.applied_at ? (proposeTo ? `Override and send the take back to ${proposeTo}` : 'Override and take the fix back') : 'Override'}
-                        </button>
+                        <FormField label="Coverage">
+                          <Select value={overrideForm.status} onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, status: e.target.value }))}>
+                            {Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, st]) => <option key={val} value={val}>{st.label}</option>)}
+                          </Select>
+                        </FormField>
+                        <FormField label="Why" required>
+                          <Textarea value={overrideForm.justification} onChange={(e) => setOverrideForm((prev: any) => ({ ...prev, justification: e.target.value }))} rows={3} />
+                        </FormField>
+                        <Button variant="primary" loading={isPending} disabled={!overrideForm.justification.trim()}
+                          onClick={() => onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification })}>
+                          {finding.applied_at ? (proposeTo ? `Override and send the take back to ${proposeTo}` : 'Override and take the fix back') : 'Override'}
+                        </Button>
                       </div>
                     )}
                     {isEditing && editAction === 'accept-risk' && (
                       <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3" onClick={(e) => e.stopPropagation()}>
-                        <label className="block">
-                          <span className="mb-1 block text-sm font-medium text-[#26323d]">Why the risk is accepted <span className="font-normal text-[#586472]">(required)</span></span>
-                          <textarea value={acceptRiskForm.justification} onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, justification: e.target.value }))} rows={3} className={`${FIELD} resize-none`} />
-                        </label>
-                        <label className="block">
-                          <span className="mb-1 block text-xs text-[#3f4b58]">Until <span className="text-[#586472]">(optional)</span></span>
-                          <input type="date" value={acceptRiskForm.expiry_date} onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, expiry_date: e.target.value }))} className={FIELD} />
-                        </label>
-                        <button type="button" disabled={!acceptRiskForm.justification.trim() || isPending}
+                        <FormField label="Why the risk is accepted" required>
+                          <Textarea value={acceptRiskForm.justification} onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, justification: e.target.value }))} rows={3} />
+                        </FormField>
+                        <FormField label="Until" optional>
+                          <TextInput type="date" value={acceptRiskForm.expiry_date} onChange={(e) => setAcceptRiskForm((prev: any) => ({ ...prev, expiry_date: e.target.value }))} />
+                        </FormField>
+                        <Button variant="primary" loading={isPending} disabled={!acceptRiskForm.justification.trim()}
                           onClick={() => {
                             const data: any = { justification: acceptRiskForm.justification };
                             if (acceptRiskForm.expiry_date) data.expiry_date = acceptRiskForm.expiry_date;
                             onAcceptRisk(finding.id, data);
-                          }}
-                          className="rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50">
-                          {isPending ? 'Saving…' : 'Accept the risk'}
-                        </button>
+                          }}>
+                          Accept the risk
+                        </Button>
                       </div>
                     )}
                   </>
                 )}
               </div>
             </div>
-          </td>
-        </tr>
+            </div>
+          </Td>
+        </Tr>
       )}
     </>
   );

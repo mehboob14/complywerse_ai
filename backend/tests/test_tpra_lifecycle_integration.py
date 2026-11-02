@@ -24,6 +24,7 @@ from grc.models import (
 )
 from grc.models import TPRAEngagement  # where a scope keeps its own tier and scores
 from grc.models import TPRAAlertRule  # what else a recorded signal sets off
+from grc.models import TPRARoster  # who the workspace names for each review role
 from grc.modules.vendor_risk.tpra import service, rbac
 from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapshot
 
@@ -33,7 +34,7 @@ _TABLES = [
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion, TPRAEngagement, TPRAAlertRule,
+    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion, TPRAEngagement, TPRAAlertRule, TPRARoster,
 ]
 
 
@@ -416,10 +417,13 @@ def test_finding_cannot_be_closed_without_completed_remediation(db):
     with pytest.raises(HTTPException) as ei:
         api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
     assert ei.value.status_code == 400
-    # After a completed remediation (evidence of fix), closing is allowed.
+    # After a completed remediation (evidence of fix), closing is allowed; a critical finding is closed with a note too.
     db.add(TPRARemediation(tenant_id=1, finding_id=f.id, title="Rolled out MFA", status="completed"))
     db.commit()
-    res = api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    with pytest.raises(HTTPException) as no_note:
+        api.update_finding(f.id, api.FindingUpdate(status="closed"), db=db, user=u)
+    assert no_note.value.status_code == 400 and "note" in no_note.value.detail
+    res = api.update_finding(f.id, api.FindingUpdate(status="closed", note="MFA rolled out and verified"), db=db, user=u)
     assert res["status"] == "closed"
 
 

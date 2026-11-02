@@ -2,10 +2,10 @@
 // An entry is shown to an administrator, or to someone who holds one of its requiredPermissions, inside the modules and the
 // client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone.
 import {
-  Activity, AlertCircle, AlertTriangle, BarChart3, BookOpen, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
-  Contact, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, KeyRound, Landmark, Layers, LayoutDashboard, LifeBuoy,
-  ListTodo, MessageSquareText, Radar, Rss, ScrollText, Server, Settings, Shield, ShieldAlert, ShieldCheck, Target, Ticket,
-  Users, Workflow, Zap,
+  Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, BookMarked, BookOpen, Bot, Bug, Building2, CalendarClock,
+  ClipboardCheck, ClipboardList, Contact, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, KeyRound,
+  Landmark, Layers, LayoutDashboard, LifeBuoy, ListTodo, MessageSquareText, Radar, Rss, ScrollText, Server, Settings, Shield,
+  ShieldAlert, ShieldCheck, Target, Ticket, Users, Workflow, Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -15,8 +15,10 @@ export interface NavItem {
   icon: LucideIcon;
   requiredPermissions?: string[];
   requiredModules?: string[];
-  /** Path prefix for active-highlighting when it differs from href. */
-  activeMatch?: string;
+  /** Path prefix (or prefixes) that light this entry besides its href: pages that have no entry of their own (navActive.ts). */
+  activeMatch?: string | string[];
+  /** Lights on its own page only, not on the pages under it (an Overview: those belong to the entries beside it). */
+  exact?: boolean;
   /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
   requiredFeature?: string;
 }
@@ -37,6 +39,9 @@ export const navigation: NavEntry[] = [
     name: 'Performance Overview',
     href: '/dashboard',
     icon: LayoutDashboard,
+    exact: true,
+    // the cyber product's Performance dashboard (not listed) and its pages no leaf below claims hang under this one
+    activeMatch: ['/cyber-assurance', '/compliance-overview', '/my-runs'],
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
   },
@@ -44,6 +49,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Task Management',
     href: '/tasks',
+    activeMatch: '/my-work',
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
@@ -53,8 +59,9 @@ export const navigation: NavEntry[] = [
     icon: Landmark,
     requiredModules: ['governance'],
     items: [
-      { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Documents', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
+      // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
+      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations', '/documents'], icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
@@ -67,7 +74,9 @@ export const navigation: NavEntry[] = [
     icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
     items: [
-      { name: 'Overview', href: '/erm', icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
+      { name: 'Overview', href: '/erm', exact: true, activeMatch: ['/erm/ai-risk-assessment', '/erm/appetite', '/erm/dependencies', '/erm/framework-controls', '/erm/internal-controls', '/erm/mitigation-actions', '/erm/reports', '/erm/reviews'], icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Risk Library', href: '/erm/risk-library', icon: BookMarked, requiredPermissions: ['erm:risks:*'] },
       {
         name: 'Operational Risk',
         icon: Layers,
@@ -95,9 +104,9 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
-      { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
+      { name: 'Evidence Management', href: '/evidence', activeMatch: '/evidence-requirements', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
@@ -122,7 +131,7 @@ export const navigation: NavEntry[] = [
         icon: LifeBuoy,
         requiredModules: ['bcm'],
         items: [
-          { name: 'Overview', href: '/bcm', icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
+          { name: 'Overview', href: '/bcm', exact: true, icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
           { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
           { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
         ],
@@ -136,8 +145,8 @@ export const navigation: NavEntry[] = [
     icon: Zap,
     requiredModules: ['controls'],
     items: [
-      { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/assurance', '/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Common Controls', href: '/automation/soc2-controls', activeMatch: '/automation/scope', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },
   {
@@ -157,10 +166,11 @@ export const navigation: NavEntry[] = [
     name: 'IT Asset',
     icon: Server,
     items: [
-      { name: 'IT Asset Discovery',  href: '/cyber-assurance/asset-discovery', icon: Radar,    requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'IT Asset Inventory',  href: '/cyber-assurance/assets',          icon: Server,   requiredPermissions: ['assets:asset_inventory:*'] },
+      // activeMatch: the older native copies (and the CIS plugins an asset opens) light the entry they copy
+      { name: 'IT Asset Discovery',  href: '/cyber-assurance/asset-discovery', activeMatch: '/asset-discovery', icon: Radar, requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'IT Asset Inventory',  href: '/cyber-assurance/assets', activeMatch: ['/assets', '/compliance-plugins', '/cyber-assurance/compliance-plugins'], icon: Server, requiredPermissions: ['assets:asset_inventory:*'] },
       { name: 'Licenses',            href: '/cyber-assurance/licenses',        icon: KeyRound, requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'Assets Risk Posture', href: '/cyber-assurance/risk-posture',    icon: Activity, requiredPermissions: ['erm:risks:*'] },
+      { name: 'Assets Risk Posture', href: '/cyber-assurance/risk-posture', activeMatch: '/risk-posture', icon: Activity, requiredPermissions: ['erm:risks:*'] },
     ],
   },
   {
@@ -168,7 +178,7 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     items: [
       // Scanning lives inside Vulnerabilities (/cyber-assurance/scan-flows still resolves)
-      { name: 'Vulnerabilities', href: '/cyber-assurance/vulnerabilities', icon: Bug,         requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Vulnerabilities', href: '/cyber-assurance/vulnerabilities', activeMatch: ['/vulnerabilities', '/cyber-assurance/scan-flows', '/cyber-assurance/integrations', '/integrations'], icon: Bug, requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       { name: 'Advisories',      href: '/cyber-assurance/advisories',      icon: AlertCircle, requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       // the right every /pentest call checks (backend modules/pentest/router.py)
       { name: 'AI Pentest',      href: '/cyber-assurance/pentest',         icon: Bot,         requiredPermissions: ['pentest:workspace:view'], activeMatch: '/cyber-assurance/pentest' },
@@ -184,12 +194,13 @@ export const navigation: NavEntry[] = [
         icon: LayoutDashboard,
         items: [
           { name: 'Dashboard',        href: '/cyber-assurance/helpdesk/dashboard',        icon: LayoutDashboard,   requiredPermissions: ['helpdesk:tickets:view'] },
-          { name: 'Tickets',          href: '/cyber-assurance/helpdesk/tickets',          icon: Ticket,            requiredPermissions: ['helpdesk:tickets:view'] },
+          // the ticket list (/helpdesk) and a ticket (/helpdesk/:id) light Tickets
+          { name: 'Tickets',          href: '/cyber-assurance/helpdesk/tickets', activeMatch: '/cyber-assurance/helpdesk', icon: Ticket, requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Incidents',        href: '/cyber-assurance/helpdesk/incidents',        icon: AlertCircle,       requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Problems',         href: '/cyber-assurance/helpdesk/problems',         icon: Bug,               requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Changes',          href: '/cyber-assurance/helpdesk/changes',          icon: GitPullRequest,    requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Service Requests', href: '/cyber-assurance/helpdesk/service-requests', icon: ClipboardList,     requiredPermissions: ['helpdesk:tickets:view'] },
-          { name: 'Agents',           href: '/cyber-assurance/helpdesk/agents',           icon: Users,             requiredPermissions: ['helpdesk:tickets:view'] },
+          { name: 'Agents',           href: '/cyber-assurance/helpdesk/agents', activeMatch: '/cyber-assurance/helpdesk/teams', icon: Users, requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Customers',        href: '/cyber-assurance/helpdesk/customers',        icon: Building2,         requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Contacts',         href: '/cyber-assurance/helpdesk/contacts',         icon: Contact,           requiredPermissions: ['helpdesk:tickets:view'] },
           { name: 'Knowledge Base',   href: '/cyber-assurance/helpdesk/kb',               icon: BookOpen,          requiredPermissions: ['helpdesk:tickets:view'] },

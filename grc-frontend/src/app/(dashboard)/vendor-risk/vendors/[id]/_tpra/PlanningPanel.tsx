@@ -2,10 +2,11 @@
 
 // Stage 03 — Due Diligence Planning. Persists the assessment plan (questionnaire
 // template + assigned reviewer + due date) so the dd_planning exit gate can pass,
-// lets you issue the questionnaire to the vendor, and manages the evidence request
-// list (reused EvidencePanel).
+// and manages the evidence request list (reused EvidencePanel). Sending the questionnaires
+// is the Assessments tab's: this links to it rather than doing it twice.
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Send, CheckCircle2, ClipboardList } from 'lucide-react';
 import { tpraApi, vendorRiskApi } from '@/lib/api';
@@ -24,8 +25,8 @@ function errMsg(e: unknown, fallback: string): string {
 }
 
 export default function PlanningPanel({
-  vendorId, assessmentId, assessment,
-}: { vendorId: number; assessmentId: number; assessment: TpraAssessment }) {
+  vendorId, assessmentId, assessment, engagementId = null,
+}: { vendorId: number; assessmentId: number; assessment: TpraAssessment; engagementId?: number | null }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -69,15 +70,6 @@ export default function PlanningPanel({
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-lifecycle'] }); toast({ type: 'success', title: 'Plan saved' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
-  });
-
-  const sendQ = useMutation({
-    mutationFn: () => vendorRiskApi.sendQuestionnaire({
-      vendor_id: vendorId, assessment_id: assessmentId,
-      template_id: templateId === '' ? null : Number(templateId),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-lifecycle'] }); toast({ type: 'success', title: 'Questionnaire issued', message: 'Sent to the vendor for completion.' }); },
-    onError: (e) => toast({ type: 'error', title: 'Could not send', message: errMsg(e, 'Try again.') }),
   });
 
   // The gate's own count of different reviewers (the plan's, Assign duties, section reviewers). Under the
@@ -134,11 +126,10 @@ export default function PlanningPanel({
           </div>
           {canEdit && (
             <div className="flex items-center gap-2">
-              <button onClick={() => sendQ.mutate()} disabled={sendQ.isPending || !templateSet}
-                title={!templateSet ? 'Select a template first' : 'Issue the questionnaire to the vendor'}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                {sendQ.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send questionnaire
-              </button>
+              <Link href={`/vendor-risk/vendors/${vendorId}?tab=assessments${engagementId ? `&engagement=${engagementId}` : ''}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                <Send className="h-3.5 w-3.5" /> Send questionnaires
+              </Link>
               <button onClick={() => savePlan.mutate()} disabled={savePlan.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">
                 {savePlan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save plan

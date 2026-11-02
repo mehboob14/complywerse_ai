@@ -1,305 +1,129 @@
 ﻿'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { vendorRiskApi, tenantApi, tpraApi } from '@/lib/api';
+// The Register: every vendor in use, sliced by the pills in its toolbar and sorted by the server. The filters, the sort and the page
+// live in the address (a link or a reload lands where you were); the columns you choose are kept in this browser. A row opens the
+// vendor; the ⋯ menu copies its link, starts its tiering, goes to what blocks it, visits its website, archives or restores it.
+// The title and "Add vendor" are the module header's (layout); this page keeps Import, Settings and the Archived view the old one had.
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Archive, ArchiveRestore, Building2, ExternalLink, Gauge, Link2, Settings as SettingsIcon, Upload, Workflow } from 'lucide-react';
+import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/components/ui/ToastProvider';
+import { listOptions, statusChoices, useModuleSettings } from '@/components/settings/CustomFields';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
+import type { RowAction } from '@/app/(dashboard)/governance/documents/_workspace/RowActionsMenu';
+import { BTN, BTN_PRIMARY, Dialog, EmptyState, ErrorState, Skeleton, fmt, useUrlParams } from '../_ui';
+import AddVendorDialog from '../_lib/AddVendorDialog';
+import Pager from '../_lib/Pager';
+import { errText } from '../_lib/intake/types';
+import { countsKey, portfolioApi, registerKey, unitsKey, usePeople, type RegisterVendor } from '../_lib/portfolioApi';
 import {
-  Loader2,
-  AlertCircle,
-  Plus,
-  Eye,
-  Archive,
-  ArchiveRestore,
-  Upload,
-} from 'lucide-react';
-import Link from 'next/link';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, AnimatedModal } from '@/components/ui';
-import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
+  CLEAR_FILTERS, COLUMNS_KEY, PAGE_SIZE, defaultColumns, hasFilters, isTiered, lifecycleHref, listParams, nextActionCell, parseColumns, readState,
+  recordHref, sortPatch, tierHref, websiteHref, type ColumnId,
+} from '../_lib/registerModel';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import ImportVendors from './_ImportVendors';
-import VendorLogo from '../_lib/VendorLogo';
-import {
-  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave, type CustomValues,
-} from '@/components/settings/CustomFields';
-import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
+import ColumnChooser from './_register/ColumnChooser';
+import RegisterTable from './_register/RegisterTable';
+import Toolbar from './_register/Toolbar';
 
-interface Vendor {
-  id: number;
-  name: string;
-  tier: string;
-  status: string;
-  inherent_risk_score: number | null;
-  residual_risk_score: number | null;
-  risk_rating: string | null;
-  data_access_level: string;
-  contract_end_date: string | null;
-  owner: { id: number; full_name: string; email: string } | null;
-  owner_id: number | null;
-  primary_contact_name: string | null;
-  primary_contact_email: string | null;
-  primary_contact_phone: string | null;
-  description: string | null;
-  services_provided: string[] | null;
-  lifecycle_stage?: string | null;
-  archived_at?: string | null;
-  created_at: string;
-  /** Engagements still in use, General left out. */
-  open_engagements?: number;
-  /** The one thing to do next, worked out on the server; null when nothing waits. */
-  next_action?: { code: string; label: string; link: string } | null;
-}
+// Statuses a vendor has before the tenant names its own (Settings, vendor statuses).
+const STATUSES = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'].map((value) => ({ value, label: fmt.status(value) }));
 
-// Next actions that are already late, shown in red.
-const LATE_ACTIONS = new Set(['suspended', 'reassessment_overdue', 'documents_expired']);
-
-// The register fetches every supplier, this many at a time.
-const PAGE_SIZE = 500;
-
-interface UserOption {
-  id: number;
-  username: string;
-  display_name: string | null;
-  email: string;
-}
-
-const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
-const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
-const DATA_ACCESS_OPTIONS = ['confidential', 'restricted', 'internal', 'public', 'none'];
-
-const titleCase = (s: string) =>
-  (s ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
-const getTierBadge = (tier: string) => {
-  const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border border-red-200',
-    high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    low: 'bg-green-50 text-green-700 border border-green-200',
-  };
-  return styles[tier?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
-};
-
-const getStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    active: 'bg-green-50 text-green-700 border border-green-200',
-    under_review: 'bg-slate-50 text-slate-700 border border-slate-200',
-    onboarding: 'bg-slate-50 text-slate-700 border border-slate-200',
-    offboarded: 'bg-slate-50 text-slate-500 border border-slate-200',
-    suspended: 'bg-red-50 text-red-700 border border-red-200',
-  };
-  return styles[status?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
-};
-
-const getRatingBadge = (rating: string) => {
-  const styles: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border border-red-200',
-    high: 'bg-orange-50 text-orange-700 border border-orange-200',
-    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-    low: 'bg-green-50 text-green-700 border border-green-200',
-  };
-  return styles[rating?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
-};
-
-// Shared field styling for the intake form.
-const INPUT_CLS =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
-const LABEL_CLS = 'block text-sm font-medium text-slate-800 mb-1';
-
-// A labelled group of intake fields — turns the flat grid into scannable sections.
-function FormSection({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <fieldset className="space-y-3">
-      <legend className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</legend>
-      {hint && <p className="-mt-1 text-xs text-slate-500">{hint}</p>}
-      <div className="grid gap-4 md:grid-cols-2">{children}</div>
-    </fieldset>
-  );
-}
-
-export default function VendorListPage() {
-  const queryClient = useQueryClient();
+export default function VendorRegisterPage() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const params = useUrlParams();
+  const state = useMemo(() => readState(params), [params]);
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('vendor_risk:vendors:create');
+  const erm = hasPermission('erm:risks:edit');                          // the server accepts it for every write in the module
+  const canCreate = hasPermission('vendor_risk:vendors:create') || erm;
   // Archive and restore: what the server checks (vendors:delete, or its erm:risks:edit fallback).
-  const canArchive =
-    hasPermission('vendor_risk:vendors:delete') ||
-    hasPermission('erm:risks:edit');
-  const [showModal, setShowModal] = useState(false);
+  const canArchive = hasPermission('vendor_risk:vendors:delete') || erm;
+
   const [showSettings, setShowSettings] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [tierFilter, setTierFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [showArchived, setShowArchived] = useState(false);
-  const [busyVendorId, setBusyVendorId] = useState<number | null>(null);
-  const [pendingArchive, setPendingArchive] = useState<Vendor | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    tier: 'medium',
-    status: 'active',
-    data_access_level: 'internal',
-    data_types_accessed: '',
-    contract_value: '',
-    primary_contact_email: '',
-    primary_contact_name: '',
-    primary_contact_phone: '',
-    contract_start_date: '',
-    contract_end_date: '',
-    owner_id: '',
-    services_provided: '',
-    vendor_type: '',
-    industry: '',
-    website: '',
-  });
-  // Intake (Stage 01) — start the TPRA lifecycle as soon as the vendor record exists.
-  const [startLifecycle, setStartLifecycle] = useState(true);
-  // The organisation's own fields and dropdown lists (Settings, or "Customise form" on the tab).
-  const [tab, setTab] = useState<'details' | 'custom'>('details');
-  const [customValues, setCustomValues] = useState<CustomValues>({});
-  const { data: fieldSettings } = useModuleSettings('vendors');
+  const [adding, setAdding] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<RegisterVendor | null>(null);
+  const [columns, setColumns] = useState<ColumnId[]>(defaultColumns);
+  useEffect(() => {
+    try { setColumns(parseColumns(window.localStorage.getItem(COLUMNS_KEY))); } catch { /* storage can be blocked: the default columns */ }
+  }, []);
+  const chooseColumns = (next: ColumnId[]) => {
+    setColumns(next);
+    try { window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(next)); } catch { /* not kept this time */ }
+  };
 
-  // Every supplier, archived ones included (the Archived view shows them), a page at a time.
-  const { data: vendors, isLoading, error, refetch } = useQuery({
-    queryKey: ['vendors'],
-    queryFn: async () => {
-      const all: Vendor[] = [];
-      for (;;) {
-        const { data } = await vendorRiskApi.getVendors({ include_archived: true, skip: all.length, limit: PAGE_SIZE });
-        const page = (Array.isArray(data) ? data : data.items ?? []) as Vendor[];
-        all.push(...page);
-        if (Array.isArray(data) || page.length === 0 || all.length >= (data.total ?? 0)) return all;
-      }
-    },
+  const query = listParams(state);
+  const { data, isLoading, isError, error, refetch, isPlaceholderData } = useQuery({
+    queryKey: [...registerKey, query],
+    queryFn: async () => (await portfolioApi.vendors(query)).data,
     placeholderData: keepPreviousData,
     ...TPRM_QUERY_OPTS,
   });
+  const people = usePeople();
+  const { data: units } = useQuery({ queryKey: unitsKey, queryFn: async () => (await portfolioApi.units()).data.items, ...TPRM_QUERY_OPTS });
+  const { data: fields } = useModuleSettings('vendors');
 
-  const { data: users } = useQuery({
-    queryKey: ['tenant-users'],
-    queryFn: async () => {
-      const res = await tenantApi.getTenantUsers();
-      return (res.data ?? []) as UserOption[];
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: Record<string, unknown>) => {
-      const res = await vendorRiskApi.createVendor(data);
-      return res.data as { id: number; name: string };
-    },
-    onSuccess: async (created) => {
-      // Stage 01 intake complete → optionally start the lifecycle so the vendor
-      // enters the 11-stage TPRA flow immediately. Best-effort; never blocks create.
-      if (startLifecycle && created?.id) {
-        try { await tpraApi.initLifecycle(created.id); } catch { /* lifecycle can be started later from the vendor page */ }
-      }
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
-      queryClient.invalidateQueries({ queryKey: ['vendors-select'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
-      setShowModal(false);
-      resetForm();
-    },
-    onError: (error: unknown, variables) => {
-      // 409 = a possible duplicate relationship. Confirm and re-submit with override.
-      const resp = (error as { response?: { status?: number; data?: { detail?: string } } })?.response;
-      if (resp?.status === 409 && !(variables as { allow_duplicate?: boolean })?.allow_duplicate) {
-        const detail = resp.data?.detail || 'A similar vendor may already exist.';
-        if (window.confirm(`${detail}\n\nCreate this vendor anyway?`)) {
-          createMutation.mutate({ ...(variables as Record<string, unknown>), allow_duplicate: true });
-        }
-      }
-    },
-  });
-
-  // Archive (DELETE, nothing is removed) or restore.
-  const archiveMutation = useMutation({
-    mutationFn: async ({ vendorId, restore }: { vendorId: number; restore?: boolean }) => {
-      await (restore ? vendorRiskApi.restoreVendor(vendorId) : vendorRiskApi.deleteVendor(vendorId));
-    },
-    onMutate: ({ vendorId }) => {
-      setBusyVendorId(vendorId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
-      queryClient.invalidateQueries({ queryKey: ['vendors-select'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
-    },
-    onSettled: () => {
-      setBusyVendorId(null);
-    },
-  });
-
-  const resetForm = () => {
-    setFormData({
-      name: '', description: '', tier: 'medium', status: 'active',
-      data_access_level: 'internal', data_types_accessed: '', contract_value: '',
-      primary_contact_email: '', primary_contact_name: '',
-      primary_contact_phone: '', contract_start_date: '', contract_end_date: '',
-      owner_id: '', services_provided: '', vendor_type: '', industry: '', website: '',
-    });
-    setStartLifecycle(true);
-    setCustomValues({});
-    setTab('details');
+  const options = {
+    statuses: statusChoices(fields, STATUSES),
+    types: listOptions(fields, 'vendor_type', state.type).map((o) => ({ value: o.value, label: o.label })),
+    owners: [{ value: 'me', label: 'Mine' }, { value: 'unassigned', label: 'Unassigned' }, ...people.map((p) => ({ value: String(p.id), label: p.name }))],
+    units: (units ?? []).map((u) => ({ value: String(u.id), label: u.name })),
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload: Record<string, unknown> = {
-      name: formData.name,
-      tier: formData.tier,
-      status: formData.status,
-      data_access_level: formData.data_access_level,
-      services_provided: formData.services_provided ? formData.services_provided.split(',').map((s) => s.trim()).filter(Boolean) : [],
-      data_types_accessed: formData.data_types_accessed ? formData.data_types_accessed.split(',').map((s) => s.trim()).filter(Boolean) : [],
-    };
-    if (formData.description) payload.description = formData.description;
-    if (formData.primary_contact_name) payload.primary_contact_name = formData.primary_contact_name;
-    if (formData.primary_contact_email) payload.primary_contact_email = formData.primary_contact_email;
-    if (formData.primary_contact_phone) payload.primary_contact_phone = formData.primary_contact_phone;
-    if (formData.vendor_type) payload.vendor_type = formData.vendor_type;
-    if (formData.industry) payload.industry = formData.industry;
-    if (formData.website) payload.website = formData.website;
-    if (formData.contract_start_date) payload.contract_start_date = formData.contract_start_date;
-    if (formData.contract_end_date) payload.contract_end_date = formData.contract_end_date;
-    if (formData.contract_value !== '' && !Number.isNaN(Number(formData.contract_value))) payload.contract_value = Number(formData.contract_value);
-    if (formData.owner_id) payload.owner_id = Number(formData.owner_id);
-    const custom = valuesToSave(fieldSettings, customValues);
-    if (custom) payload.custom_values = custom;
+  const total = data?.total ?? 0;
+  const rows = data?.items ?? [];
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // a link to a page the list no longer reaches (a filter has since shrunk it) lands on the last one
+  useEffect(() => {
+    if (data && !isPlaceholderData && state.page > pages) params.set({ page: pages > 1 ? String(pages) : null });
+  }, [data, isPlaceholderData, state.page, pages, params]);
 
-    createMutation.mutate(payload);
+  const archive = useMutation({
+    // Archives the vendor (nothing is deleted) or brings it back.
+    mutationFn: async ({ vendor, restore }: { vendor: RegisterVendor; restore: boolean }) => {
+      await (restore ? vendorRiskApi.restoreVendor(vendor.id) : vendorRiskApi.deleteVendor(vendor.id));
+      return { vendor, restore };
+    },
+    onSuccess: ({ vendor, restore }) => {
+      ['vendors', 'vendors-select', 'vendor-dashboard', 'vendor-assessments-all', 'tprm-dashboard'].forEach((key) => qc.invalidateQueries({ queryKey: [key] }));
+      qc.invalidateQueries({ queryKey: countsKey });
+      setPendingArchive(null);
+      toast({ type: 'success', title: restore ? `${vendor.name} restored` : `${vendor.name} archived` });
+    },
+    onError: (e) => toast({ type: 'error', title: 'That did not work', message: errText(e, 'Try again.') }),
+  });
+
+  const copyLink = async (id: number) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${recordHref(id)}`);
+      toast({ type: 'success', title: 'Link copied' });
+    } catch {
+      toast({ type: 'error', title: 'Could not copy the link' });
+    }
   };
 
-  const archivedCount = vendors?.filter((v) => v.archived_at).length ?? 0;
-  const filtered = useMemo(() => {
-    if (!vendors) return [];
-    return vendors.filter((v) => {
-      const matchArchived = !!v.archived_at === showArchived;
-      const matchSearch = !searchTerm || v.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchTier = tierFilter === 'all' || v.tier?.toLowerCase() === tierFilter;
-      const matchStatus = statusFilter === 'all' || v.status?.toLowerCase() === statusFilter;
-      return matchArchived && matchSearch && matchTier && matchStatus;
-    });
-  }, [vendors, searchTerm, tierFilter, statusFilter, showArchived]);
-
-  const confirmArchiveVendor = () => {
-    if (!pendingArchive) return;
-    archiveMutation.mutate({ vendorId: pendingArchive.id }, {
-      onSuccess: () => setPendingArchive(null),
-    });
+  const menuFor = (v: RegisterVendor): RowAction[] => {
+    const blocker = nextActionCell(v);
+    const site = websiteHref(v.website);
+    return [
+      { key: 'copy', label: 'Copy link', icon: Link2, onClick: () => { void copyLink(v.id); } },
+      { key: 'tier', label: 'Tier engagement', icon: Gauge, hidden: isTiered(v) || !!v.archived_at, onClick: () => router.push(tierHref(v.id)) },
+      blocker.kind === 'action'
+        ? { key: 'blocker', label: 'View blocker', icon: AlertCircle, onClick: () => router.push(blocker.href ?? recordHref(v.id)) }
+        : { key: 'lifecycle', label: 'Open lifecycle', icon: Workflow, hidden: !!v.archived_at, onClick: () => router.push(lifecycleHref(v.id)) },
+      { key: 'site', label: 'Visit website', icon: ExternalLink, hidden: !site, onClick: () => { if (site) window.open(site, '_blank', 'noopener,noreferrer'); } },
+      {
+        key: 'archive', label: v.archived_at ? 'Restore' : 'Archive', icon: v.archived_at ? ArchiveRestore : Archive, hidden: !canArchive,
+        onClick: () => (v.archived_at ? archive.mutate({ vendor: v, restore: true }) : setPendingArchive(v)),
+      },
+    ];
   };
-
-  const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
-  const statusItems = statusChoices(fieldSettings, STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) })));
-  const dataAccessItems = DATA_ACCESS_OPTIONS.map((d) => ({ value: d, label: titleCase(d) }));
-  const userItems = (users ?? []).map((u) => ({
-    value: String(u.id),
-    label: u.display_name || u.username,
-    subLabel: u.email,
-  }));
 
   if (showSettings) {
     return (
@@ -310,523 +134,90 @@ export default function VendorListPage() {
     );
   }
 
-  if (isLoading && !vendors) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <PageLoader size="md" label="Loading vendors…" />
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-500">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p className="text-sm">Failed to load vendors.</p>
-        <button onClick={() => refetch()} className="mt-2 text-xs font-medium text-primary-600 hover:underline">Retry</button>
-      </div>
-    );
-  }
+  const filtered = hasFilters(state);
+  const empty = state.archived && !hasFilters({ ...state, archived: false })
+    ? { title: 'No archived vendors', hint: undefined }
+    : filtered
+      ? { title: 'No vendors match these filters', hint: 'Adjust or clear the filters.' }
+      : { title: 'No vendors yet', hint: 'Add the third parties you share data or systems with.' };
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      {/* Header — page title + the single primary CTA; module-level nav lives in the top tabs */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendors</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage your third-party vendor inventory</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Settings
-          </button>
-        {canCreate && (
+    <div className="space-y-4">
+      {importing && <ImportVendors onClose={() => setImporting(false)} onDone={() => qc.invalidateQueries({ queryKey: ['vendors'] })} />}
+
+      <Toolbar
+        state={state}
+        options={options}
+        onChange={(patch) => params.set(patch)}
+        right={(
           <>
-            <button
-              onClick={() => setImporting(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Upload className="h-4 w-4" />
-              Import
+            <button type="button" onClick={() => setShowSettings(true)} className={BTN} title="Statuses, SLA, fields and dropdown lists">
+              <SettingsIcon aria-hidden className="h-4 w-4" strokeWidth={1.75} />
+              Settings
             </button>
-            <button
-              onClick={() => setShowModal(true)}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              Add Vendor
+            {canCreate && (
+              <button type="button" onClick={() => setImporting(true)} className={BTN}>
+                <Upload aria-hidden className="h-4 w-4" strokeWidth={1.75} />
+                Import
+              </button>
+            )}
+          </>
+        )}
+      />
+
+      {isLoading ? (
+        <div className="space-y-2" aria-busy="true" aria-label="Loading vendors">
+          {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <ErrorState title="Couldn't load the vendors" message={errText(error, 'Try again in a moment.')} onRetry={() => refetch()} />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title={empty.title}
+          hint={empty.hint}
+          action={filtered
+            ? <button type="button" onClick={() => params.set(CLEAR_FILTERS)} className={BTN}>Clear filters</button>
+            : canCreate ? <button type="button" onClick={() => setAdding(true)} className={BTN_PRIMARY}>Add vendor</button> : undefined}
+        />
+      ) : (
+        <section aria-label="Vendors" className="rounded-xl border border-[#d5dbe1] bg-[#fff]">
+          <div className="flex items-center justify-end border-b border-[#e1e6eb] px-3 py-2">
+            <ColumnChooser visible={columns} onChange={chooseColumns} />
+          </div>
+          <RegisterTable
+            rows={rows}
+            visible={columns}
+            sort={state.sort}
+            onSort={(next) => params.set(sortPatch(next))}
+            onOpen={(id) => router.push(recordHref(id))}
+            menuFor={menuFor}
+            dim={isPlaceholderData}
+          />
+          <Pager page={state.page} pageSize={PAGE_SIZE} total={total} noun="vendors" onPage={(page) => params.set({ page: page > 1 ? String(page) : null })} />
+        </section>
+      )}
+
+      <Dialog
+        open={pendingArchive !== null}
+        onClose={() => { if (!archive.isPending) setPendingArchive(null); }}
+        title="Archive vendor"
+        footer={(
+          <>
+            <button type="button" className={BTN} disabled={archive.isPending} onClick={() => setPendingArchive(null)}>Cancel</button>
+            <button type="button" className={BTN_PRIMARY} disabled={archive.isPending}
+              onClick={() => pendingArchive && archive.mutate({ vendor: pendingArchive, restore: false })}>
+              {archive.isPending ? 'Archiving…' : 'Archive'}
             </button>
           </>
         )}
-        </div>
-      </div>
-      {importing && (
-        <ImportVendors onClose={() => setImporting(false)} onDone={() => queryClient.invalidateQueries({ queryKey: ['vendors'] })} />
-      )}
-
-      {/* Filters / Search row */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder="Search vendors..."
-            />
-          </div>
-          <MultiSelectDropdown
-            title="Tier"
-            items={tierItems}
-            selectedValues={tierFilter !== 'all' ? [tierFilter] : []}
-            onApply={(v) => setTierFilter(v[0] || 'all')}
-            multiSelect={false}
-          />
-          <MultiSelectDropdown
-            title="Status"
-            items={statusItems}
-            selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
-            onApply={(v) => setStatusFilter(v[0] || 'all')}
-            multiSelect={false}
-          />
-          <button
-            type="button"
-            aria-pressed={showArchived}
-            onClick={() => setShowArchived((on) => !on)}
-            className={`inline-flex h-10 items-center gap-2 rounded-full border bg-white px-3 text-sm text-slate-900 transition-colors ${
-              showArchived ? 'border-primary-500 shadow-[0_0_0_1px_rgba(34,197,94,0.18)]' : 'border-slate-300 hover:border-slate-400'
-            }`}
-          >
-            <Archive className="h-4 w-4 text-slate-600" />
-            Archived{archivedCount ? ` (${archivedCount})` : ''}
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden p-3 sm:p-4">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Tier</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Risk Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Lifecycle</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Next action</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Data Access</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contract End</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Owner</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-slate-500">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                    {showArchived ? 'No archived vendors' : 'No vendors found'}
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((vendor) => (
-                  <tr key={vendor.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700">
-                        <VendorLogo vendorId={vendor.id} name={vendor.name} size={22} cachedOnly />
-                        {vendor.name}
-                      </Link>
-                      {!!vendor.open_engagements && (
-                        <Link href={`/vendor-risk/vendors/${vendor.id}?tab=engagements`} className="ml-[30px] block text-[11px] text-slate-500 hover:text-slate-700">
-                          {vendor.open_engagements} engagement{vendor.open_engagements === 1 ? '' : 's'}
-                        </Link>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
-                        {vendor.tier}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(vendor.status)}`}>
-                        {vendor.status?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {vendor.risk_rating ? (
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getRatingBadge(vendor.risk_rating)}`}>
-                          {vendor.risk_rating}
-                        </span>
-                      ) : vendor.inherent_risk_score != null ? (
-                        <span className="text-sm font-medium text-slate-900">{vendor.inherent_risk_score.toFixed(1)}</span>
-                      ) : (
-                        <span className="text-sm text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <StageProgress currentKey={vendor.lifecycle_stage} size="sm" />
-                        <span className="text-[11px] text-slate-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {vendor.next_action ? (
-                        <Link href={vendor.next_action.link}
-                          className={`text-xs font-medium hover:underline ${LATE_ACTIONS.has(vendor.next_action.code) ? 'text-rose-700' : 'text-primary-700'}`}>
-                          {vendor.next_action.label}
-                        </Link>
-                      ) : (
-                        <span className="text-sm text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500">
-                      {vendor.contract_end_date ? new Date(vendor.contract_end_date).toLocaleDateString() : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {vendor.owner ? (typeof vendor.owner === 'object' ? vendor.owner.full_name : String(vendor.owner)) : '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/vendor-risk/vendors/${vendor.id}`}
-                          className="rounded p-1 text-primary-600 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                          aria-label={`View vendor ${vendor.name}`}
-                          title="View vendor"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Link>
-                        {canArchive && (
-                          <button
-                            onClick={() => (vendor.archived_at
-                              ? archiveMutation.mutate({ vendorId: vendor.id, restore: true })
-                              : setPendingArchive(vendor))}
-                            disabled={archiveMutation.isPending && busyVendorId === vendor.id}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                            aria-label={`${vendor.archived_at ? 'Restore' : 'Archive'} vendor ${vendor.name}`}
-                            title={vendor.archived_at ? 'Restore' : 'Archive'}
-                          >
-                            {archiveMutation.isPending && busyVendorId === vendor.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : vendor.archived_at ? (
-                              <ArchiveRestore className="h-4 w-4" />
-                            ) : (
-                              <Archive className="h-4 w-4" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Create Modal (RightSlidePanel) */}
-      <RightSlidePanel
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        title="Add Vendor · Intake & Scoping"
-        width="w-full max-w-2xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="vendor-form"
-              disabled={createMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {createMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Add Vendor'
-              )}
-            </button>
-          </div>
-        }
       >
-        <form id="vendor-form" onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="space-y-4">
-          <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
-          <div data-tab="details" className={tab === 'details' ? 'space-y-4' : 'hidden'}>
-          <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-700">Stage 01 · Intake &amp; Scoping</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Capture the business need and the basic facts about the third party and the service before any work is committed.
-              Exit criteria: a vendor record with a named owner, a defined service &amp; data scope, and a draft data classification.
-            </p>
-          </div>
-          {/* Business context */}
-          <FormSection title="Business context">
-            <div className="md:col-span-2">
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'name', 'Vendor Name')} *</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>
-            {showBuiltin(fieldSettings, 'description') && <div className="md:col-span-2">
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'description', 'Description')}</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className={INPUT_CLS}
-                rows={2}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'vendor_type') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'vendor_type', 'Vendor Type')}</label>
-              <input
-                type="text"
-                list="vendor-type-options"
-                placeholder="Choose or type"
-                value={formData.vendor_type}
-                onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
-                className={INPUT_CLS}
-              />
-              <datalist id="vendor-type-options">
-                {listOptions(fieldSettings, 'vendor_type').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </datalist>
-            </div>}
-            {showBuiltin(fieldSettings, 'industry') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'industry', 'Industry')}</label>
-              <input
-                type="text"
-                list="vendor-industry-options"
-                placeholder="Choose or type"
-                value={formData.industry}
-                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                className={INPUT_CLS}
-              />
-              <datalist id="vendor-industry-options">
-                {listOptions(fieldSettings, 'industry').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </datalist>
-            </div>}
-            {showBuiltin(fieldSettings, 'website') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'website', 'Website')}</label>
-              <input
-                type="text"
-                placeholder="https://..."
-                value={formData.website}
-                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'business_owner') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'business_owner', 'Business Owner')}</label>
-              <MultiSelectDropdown
-                title="Business Owner"
-                items={userItems}
-                selectedValues={formData.owner_id ? [String(formData.owner_id)] : []}
-                onApply={(v) => setFormData({ ...formData, owner_id: v[0] || '' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select owner"
-                size="md"
-                forceSearch
-              />
-              <p className="mt-1 text-[11px] text-slate-500">Needed to pass the Intake gate.</p>
-            </div>}
-          </FormSection>
-
-          {/* Data & scope */}
-          <FormSection title="Data & scope">
-            {showBuiltin(fieldSettings, 'tier') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'tier', 'Tier')}</label>
-              <MultiSelectDropdown
-                title="Tier"
-                items={tierItems}
-                selectedValues={formData.tier ? [formData.tier] : []}
-                onApply={(v) => setFormData({ ...formData, tier: v[0] || 'medium' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select tier"
-                size="md"
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'data_classification') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'data_classification', 'Draft data classification')}</label>
-              <MultiSelectDropdown
-                title="Draft data classification"
-                items={dataAccessItems}
-                selectedValues={formData.data_access_level ? [formData.data_access_level] : []}
-                onApply={(v) => setFormData({ ...formData, data_access_level: v[0] || 'internal' })}
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder="Select classification"
-                size="md"
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'data_types') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'data_types', 'Data types in scope')}</label>
-              <input
-                type="text"
-                placeholder="Comma-separated, e.g., PII, PHI, Financial"
-                value={formData.data_types_accessed}
-                onChange={(e) => setFormData({ ...formData, data_types_accessed: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'services') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'services', 'Systems & services in scope')}</label>
-              <input
-                type="text"
-                placeholder="Comma-separated, e.g., Cloud Hosting, CRM"
-                value={formData.services_provided}
-                onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-          </FormSection>
-
-          {/* Contacts */}
-          <FormSection title="Contacts">
-            {showBuiltin(fieldSettings, 'contact_name') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_name', 'Contact Name')}</label>
-              <input
-                type="text"
-                value={formData.primary_contact_name}
-                onChange={(e) => setFormData({ ...formData, primary_contact_name: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'contact_email') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_email', 'Contact Email')}</label>
-              <input
-                type="email"
-                value={formData.primary_contact_email}
-                onChange={(e) => setFormData({ ...formData, primary_contact_email: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'contact_phone') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_phone', 'Contact Phone')}</label>
-              <input
-                type="text"
-                value={formData.primary_contact_phone}
-                onChange={(e) => setFormData({ ...formData, primary_contact_phone: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-          </FormSection>
-
-          {/* Commercials */}
-          <FormSection title="Commercials">
-            {showBuiltin(fieldSettings, 'contract_start') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contract_start', 'Contract Start')}</label>
-              <input
-                type="date"
-                value={formData.contract_start_date}
-                onChange={(e) => setFormData({ ...formData, contract_start_date: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'contract_end') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contract_end', 'Contract End')}</label>
-              <input
-                type="date"
-                value={formData.contract_end_date}
-                onChange={(e) => setFormData({ ...formData, contract_end_date: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-            {showBuiltin(fieldSettings, 'annual_spend') && <div>
-              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'annual_spend', 'Annual spend / contract value')}</label>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                placeholder="Estimated annual spend"
-                value={formData.contract_value}
-                onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
-                className={INPUT_CLS}
-              />
-            </div>}
-          </FormSection>
-          <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={startLifecycle}
-              onChange={(e) => setStartLifecycle(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span className="text-xs text-slate-600">
-              <span className="font-medium text-slate-800">Start the TPRA lifecycle now</span> — opens a versioned assessment at
-              Stage 01 so the vendor enters the 11-stage flow immediately. You can also start it later from the vendor page.
-            </span>
-          </label>
-          </div>
-          <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
-            <CustomFieldsTab moduleKey="vendors" values={customValues} onChange={setCustomValues} />
-          </div>
-          {createMutation.isError && !((createMutation.error as { response?: { status?: number } })?.response?.status === 409) && (
-            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-              {errorText(createMutation.error, 'Failed to create vendor. Please check the form and try again.')}
-            </div>
-          )}
-        </form>
-      </RightSlidePanel>
-
-      {/* Accessible archive confirmation — replaces window.confirm */}
-      <AnimatedModal
-        isOpen={pendingArchive !== null}
-        onClose={() => { if (!archiveMutation.isPending) setPendingArchive(null); }}
-        title="Archive vendor"
-        subtitle={pendingArchive ? pendingArchive.name : undefined}
-        size="md"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setPendingArchive(null)}
-              disabled={archiveMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={confirmArchiveVendor}
-              disabled={archiveMutation.isPending}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-            >
-              {archiveMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Archiving…
-                </>
-              ) : (
-                'Archive'
-              )}
-            </button>
-          </div>
-        }
-      >
-        <div className="p-5">
-          <p className="text-sm text-slate-700">
-            <span className="font-semibold text-slate-900">{pendingArchive?.name}</span> leaves the register, dashboards
-            and reminders. Its records stay; restore it from Archived.
-          </p>
-        </div>
-      </AnimatedModal>
+        <p className="text-[14px] leading-5 text-[#26323d]">
+          <span className="font-semibold text-[#1f2933]">{pendingArchive?.name}</span> leaves the register, dashboards and reminders.
+          Its records stay; restore it from Archived.
+        </p>
+      </Dialog>
+      <AddVendorDialog open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }

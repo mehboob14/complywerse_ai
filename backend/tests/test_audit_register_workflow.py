@@ -191,6 +191,34 @@ def test_a_rejected_extension_leaves_the_date_alone(db):
     assert request.status == "rejected"
 
 
+def test_an_extension_never_goes_to_a_deactivated_committee(db):
+    """Governance > Committees > Deactivate: the meeting list skips the committee (and falls back, on purpose, to any ACTIVE one when none is
+    audit-typed), and a meeting named directly is refused. Deactivate itself is refused while a request waits (test_committee_deactivate.py)."""
+    _committee(db)                                                      # the Audit Committee (3) with its meeting 11
+    db.add(m.GovernanceCommittee(id=4, tenant_id=1, name="Risk Committee", committee_type="risk_committee"))
+    db.add(m.CommitteeMeeting(id=12, tenant_id=1, committee_id=4, title="Q4 Risk Committee",
+                              scheduled_date=datetime(2026, 10, 20), status="scheduled"))
+    db.commit()
+    issue, profile = _finding(db, "MRA-2")
+    owner = db.get(m.GRCUser, 7)
+    assert [x["committee"] for x in workflow.audit_committee_meetings(db, 1, TODAY)] == ["Audit Committee"]
+
+    db.get(m.GovernanceCommittee, 3).is_active = False
+    db.commit()
+    assert [x["committee"] for x in workflow.audit_committee_meetings(db, 1, TODAY)] == ["Risk Committee"]
+    with pytest.raises(ValueError, match="committee that is inactive"):
+        workflow.request_extension(db, issue, profile, owner, date(2026, 12, 31), "x", meeting_id=11, today=TODAY)
+    assert db.query(m.AuditExtensionRequest).count() == 0
+    request = workflow.request_extension(db, issue, profile, owner, date(2026, 12, 31), "x", today=TODAY)
+    assert request.meeting_id == 12                                     # no meeting named: the fallback
+
+    db.get(m.GovernanceCommittee, 3).is_active = True                   # reactivated: its meeting can be named again
+    db.commit()
+    other_issue, other_profile = _finding(db, "MRA-1")
+    assert workflow.request_extension(db, other_issue, other_profile, owner, date(2026, 12, 31), "y",
+                                      meeting_id=11, today=TODAY).meeting_id == 11
+
+
 def test_reminders_reach_each_owner_once_and_escalate_the_long_overdue(db):
     preview = workflow.send_reminders(db, 1, today=TODAY, dry_run=True)
     assert (preview["due_soon"], preview["past_due"], preview["escalated"]) == (1, 1, 1)
