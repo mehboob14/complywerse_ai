@@ -42,7 +42,7 @@ STALE_AFTER = timedelta(minutes=10)
 # The agent version currently shipped in agent-dist. Returned on heartbeat so a
 # running agent self-updates when it differs (bump this AND the Go agentVersion
 # together, and rebuild the binaries, to roll a new version to the fleet).
-AGENT_VERSION = "1.3.1"
+AGENT_VERSION = "1.3.2"
 ENROLLMENT_TTL = timedelta(hours=24)
 
 
@@ -941,6 +941,7 @@ Wants=network-online.target
 Environment=COMPLYVERSE_URL=$COMPLYVERSE_URL
 Environment=COMPLYVERSE_ENROLL=$COMPLYVERSE_ENROLL
 Environment=COMPLYVERSE_TENANT=$COMPLYVERSE_TENANT
+Environment=HTTPS_PROXY=${{HTTPS_PROXY:-}}
 ExecStart=/opt/complyverse-agent/complyverse-agent
 Restart=always
 RestartSec=10
@@ -985,7 +986,8 @@ Invoke-WebRequest "$CvUrl/api/endpoint-agents/installer/windows/bin" -OutFile "$
 # Config the service reads at startup. A Windows service does NOT reliably inherit
 # Machine env vars set in this same session, so the file — not the registry — is
 # the dependable source; Machine env is kept only for an interactive/debug run.
-$cfg = @{{ URL = $CvUrl; Tenant = $CvTenant; Enroll = $CvEnroll }} | ConvertTo-Json -Compress
+# Optional corporate proxy: set $env:HTTPS_PROXY before running this installer.
+$cfg = @{{ URL = $CvUrl; Tenant = $CvTenant; Enroll = $CvEnroll; Proxy = $env:HTTPS_PROXY }} | ConvertTo-Json -Compress
 Set-Content -Path "$dir\\config.json" -Value $cfg -Encoding UTF8
 [Environment]::SetEnvironmentVariable('COMPLYVERSE_URL', $CvUrl, 'Machine')
 [Environment]::SetEnvironmentVariable('COMPLYVERSE_ENROLL', $CvEnroll, 'Machine')
@@ -1036,6 +1038,7 @@ cat > /Library/LaunchDaemons/io.complyverse.agent.plist <<PLIST
     <key>COMPLYVERSE_URL</key><string>$COMPLYVERSE_URL</string>
     <key>COMPLYVERSE_ENROLL</key><string>$COMPLYVERSE_ENROLL</string>
     <key>COMPLYVERSE_TENANT</key><string>$COMPLYVERSE_TENANT</string>
+    <key>HTTPS_PROXY</key><string>${{HTTPS_PROXY:-}}</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

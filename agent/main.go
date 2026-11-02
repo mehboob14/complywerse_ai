@@ -40,7 +40,7 @@ import (
 	"time"
 )
 
-const agentVersion = "1.3.1"
+const agentVersion = "1.3.2"
 
 type state struct {
 	APIToken string `json:"api_token"`
@@ -85,13 +85,15 @@ func loadConfig() {
 	if err != nil {
 		return
 	}
-	var c struct{ URL, Tenant, Enroll string }
+	// Proxy (optional): a corporate outbound proxy, e.g. "http://proxy.bank.local:8080".
+	var c struct{ URL, Tenant, Enroll, Proxy string }
 	if json.Unmarshal(b, &c) != nil {
 		return
 	}
 	setenvIfEmpty("COMPLYVERSE_URL", c.URL)
 	setenvIfEmpty("COMPLYVERSE_TENANT", c.Tenant)
 	setenvIfEmpty("COMPLYVERSE_ENROLL", c.Enroll)
+	setenvIfEmpty("HTTPS_PROXY", c.Proxy)
 }
 
 func setenvIfEmpty(k, v string) {
@@ -105,7 +107,9 @@ func setenvIfEmpty(k, v string) {
 // so the agent never negotiates a weak protocol — a bank-grade requirement.
 var httpc = &http.Client{
 	Timeout:   180 * time.Second, // generous for multi-MB datastream downloads
-	Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
+	// Banks often force outbound traffic through a web proxy: honour HTTPS_PROXY / NO_PROXY
+	// (env, or "Proxy" in config.json). Read at first request, after loadConfig has run.
+	Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}},
 }
 
 func post(url, bearer string, payload any) ([]byte, int, error) {
