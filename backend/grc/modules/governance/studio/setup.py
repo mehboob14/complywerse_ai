@@ -45,10 +45,13 @@ DOMAINS = ["Governance and oversight", "Risk management", "Asset management", "A
            "Compliance, audit and assurance", "Fraud prevention", "Anti-money laundering and counter-terrorist financing",
            "Operational resilience", "Records management and retention", "Exceptions and waivers"]
 
-LENGTHS = [{"value": "short", "label": "Short", "detail": "The essentials, about 1 to 3 pages"},
-           {"value": "standard", "label": "Standard", "detail": "Complete, about 5 to 10 pages"},
-           {"value": "comprehensive", "label": "Comprehensive", "detail": "Regulator-grade detail, 15 pages or more"}]
-LENGTH_FACTOR = {"short": 0.4, "standard": 0.7, "comprehensive": 1.0}        # of the words and areas a whole document is written with
+LENGTHS = [{"value": "short", "label": "Short", "detail": "The essentials, about 2 to 4 pages"},
+           {"value": "standard", "label": "Standard", "detail": "Complete, about 4 to 8 pages"},
+           {"value": "comprehensive", "label": "Comprehensive", "detail": "Regulator-grade detail, 10 pages or more"}]
+# of the words and areas a whole document is written with. Estimated from the scaffolds' word targets (about 480 words a page), not measured with
+# the model: Standard gives a policy about 7 pages and a standard, procedure, guideline or charter about 4 to 5 (the first scale, 0.7, gave a policy
+# 9 to 15); Short gives about 2.5 to 4, Comprehensive about 10 to 19.
+LENGTH_FACTOR = {"short": 0.3, "standard": 0.46, "comprehensive": 1.0}
 CLASSIFICATIONS = ["Public", "Internal", "Confidential", "Restricted"]
 REVIEW_CYCLES = {"Every 6 months": 6, "Every year": 12, "Every two years": 24, "Every three years": 36}
 AUDIENCES = ["All staff", "Board and senior management", "Managers and process owners", "IT and information security teams",

@@ -17,7 +17,7 @@ from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
 from ..permissions import can_edit, edit_filter, is_admin as _is_admin, visible_filter
 from . import blocks as B
-from . import assets, checks, exporters, gate, jobs, service, templates
+from . import assets, checks, exporters, gate, jobs, service, suggestion, templates
 from . import references as refs
 
 router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
@@ -97,6 +97,18 @@ class MessageIn(BaseModel):
 class DraftIn(BaseModel):
     brief: Optional[str] = None                    # what the person wants, in their words (optional)
     rewrite: bool = False                          # write it again even though the document has been started
+
+
+class SuggestionIn(BaseModel):
+    """A document suggested for a framework (POST /governance/documents/ai-suggest-policies), as the person confirmed it."""
+    title: str
+    doc_type: str = "policy"
+    description: str = ""                          # what the suggestion says it covers, as the person left it
+    framework_ids: List[int] = []                  # the frameworks it was suggested for: attached as references
+    controls: List[str] = []                       # the framework's control references the suggestion answers
+    details: Optional[Dict[str, Any]] = None       # the library document's: owner_id, department_id, classification, review_cycle_months, effective_date, next_review_date
+    signoff: Optional[Dict[str, Any]] = None       # reviewers and approvers ([{target_type, target_id, display}]): chosen now, asked at submit
+    parent_document_id: Optional[int] = None       # the library document it sits under (read as context, kept as its parent by Move to library)
 
 
 class OpsIn(BaseModel):
@@ -310,6 +322,23 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
     except service.StudioError as exc:
         raise _problem(exc)
     return service.session_view(db, s, user=user)          # a new document waits for the person's request: nothing is written on its own
+
+
+@router.post("/sessions/from-suggestion", dependencies=[Depends(require_studio)])
+def create_from_suggestion(body: SuggestionIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A suggested document made and started: the studio session from the suggestion (its brief, the frameworks as references, the organisation's
+    profile as the setup, the person's details kept for Move to library), and the whole document, about 4 to 8 pages, written as the first draft
+    (a message to poll, like `/sessions/{id}/draft`). The answer is the session, the message and what could not be attached."""
+    if not claude_client.configured():
+        raise HTTPException(status_code=503, detail=str(claude_client.ClaudeNotConfigured()))
+    try:
+        s, warnings = suggestion.create(db, user, title=body.title, doc_type=body.doc_type, description=body.description, framework_ids=body.framework_ids,
+                                        controls=body.controls, details=body.details, signoff=body.signoff, parent_document_id=body.parent_document_id)
+        msg = service.start_turn(db, s, user, f"Write the complete {s.doc_type}.")           # what it covers is in the setup's focus areas, not said twice
+    except service.StudioError as exc:
+        raise _problem(exc)
+    jobs.launch(_slug(db), "draft", s.id, msg.id, user)
+    return {"session": service.session_view(db, s, user=user), "message": service.message_view(db.get(StudioMessage, msg.id)), "warnings": warnings}
 
 
 @router.post("/sessions/upload", dependencies=[Depends(require_studio)])

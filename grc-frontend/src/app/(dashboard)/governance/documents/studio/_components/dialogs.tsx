@@ -18,6 +18,7 @@ import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioA
 import { ARCHIVED_NOTE, maySaveToLibrary, nextVersion, saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
 import { RadioCards } from './RadioCards';
+import { detailsOfSession } from './suggestModel';
 import { StudioBar } from './StudioBar';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../../_SignoffControl';
@@ -163,12 +164,19 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   // what the setup chose, so the library document starts as the person set it up (the parent chosen when it was started, too);
   // the owner starts as the person
   const chosen = String(session.instructions.classification ?? '').toLowerCase();
+  // a document made from a suggested one (New document → From a framework) carries the owner, department, dates and description typed then
+  const typed = detailsOfSession(session.instructions);
   const details = useDocumentDetails({
     title: session.title,
     doc_type: session.doc_type === 'other' ? 'policy' : session.doc_type,
     classification: (CLASSIFICATIONS as readonly string[]).includes(chosen) ? chosen : 'internal',
     review_cycle_months: REVIEW_MONTHS[String(session.instructions.review_cycle ?? '')] ?? 12,
     parent_document_id: session.references.find((r) => r.kind === 'parent_document')?.source_id ?? null,
+    ...(typed.owner_id != null ? { owner_id: typed.owner_id } : {}),
+    ...(typed.department_id != null ? { department_id: typed.department_id } : {}),
+    ...(typed.effective_date ? { effective_date: typed.effective_date } : {}),
+    ...(typed.next_review_date ? { next_review_date: typed.next_review_date } : {}),
+    ...(typed.description ? { description: typed.description } : {}),
   });
   // a field the person changed (the owner the form fills in by itself, and what a file's details fill in, do not count)
   const [touched, setTouched] = useState(false);
@@ -177,7 +185,12 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   const initialFrameworks = Array.from(new Set(session.references.flatMap((r) => (r.kind === 'framework' && r.source_id != null ? [r.source_id] : []))));
   const [frameworks, setFrameworks] = useState<number[]>(() => initialFrameworks);
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
-  const [signoff, setSignoff] = useState<SignoffChoice>(NO_SIGNOFF);
+  // the reviewers and approvers chosen when the document was made from a suggested one start chosen (the baseline for "changed" too)
+  const [startSignoff] = useState<SignoffChoice>(() => {
+    const kept = (session.instructions.signoff ?? {}) as Partial<SignoffChoice>;
+    return kept.reviewers?.length || kept.approvers?.length ? { reviewers: kept.reviewers ?? [], approvers: kept.approvers ?? [] } : NO_SIGNOFF;
+  });
+  const [signoff, setSignoff] = useState<SignoffChoice>(startSignoff);
   // an uploaded file changed here moves as two versions: the file as it states, then the person's minor or major one
   const original = session.original_version ?? null;
   const [change, setChange] = useState<Change | null>(null);
@@ -206,7 +219,7 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   const blocked = original && !change ? 'Choose a minor or a major change first' : undefined;
   return (
     <AnimatedModal isOpen onClose={onClose} title="Move to library" size="lg" subtitle={becomes}
-      dirty={touched || !!change || signoff !== NO_SIGNOFF || !same(frameworks, initialFrameworks)}
+      dirty={touched || !!change || signoff !== startSignoff || !same(frameworks, initialFrameworks)}
       headerAccessory={<InfoTip align="end" label="About moving to the library" text={becomesNote} />}
       footer={<div className={FOOTER}><Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" leftIcon={<FileText aria-hidden />} loading={move.isPending} disabled={!details.form.title.trim() || !!blocked} title={blocked} onClick={() => move.mutate()}>Move to library</Button></div>}>
