@@ -44,6 +44,8 @@ router.include_router(gap_analysis_router, tags=["Policy Gap Analysis"])
 router.include_router(applicability_router, tags=["Applicability Management"])
 router.include_router(reports_router, tags=["Reports & Export"])
 router.include_router(policy_exception_router.router, tags=["Policy Exceptions"])
+from .routers.exception_rules import router as exception_rules_router  # noqa: E402 - who reviews and approves an exception (D58)
+router.include_router(exception_rules_router, tags=["Policy Exceptions"])
 
 
 @router.get("")

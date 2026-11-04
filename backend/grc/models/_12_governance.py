@@ -79,6 +79,9 @@ class PolicyException(Base):
     # When this exception's "potential risks" were promoted into the ERM risk
     # register, the created risk's id (so we link out instead of re-promoting).
     promoted_risk_id = Column(Integer, nullable=True)
+    # The department / sub-department / unit it is raised for (the approval rules of Governance > Settings match on it; unset: the
+    # policy's own department, else only the rules for the whole organisation).
+    department_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})
