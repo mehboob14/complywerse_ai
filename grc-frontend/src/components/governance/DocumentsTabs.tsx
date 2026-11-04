@@ -2,10 +2,11 @@
 
 /**
  * The Documents area's tabs (Documents · Overview · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
- * of their own so the page below gets the height. From xl up every tab is an icon and a label (Settings is just the gear); below that
- * only the open tab keeps its label. With the Studio and the Settings gear there were six tabs, 629px of them against the 576px the top bar leaves at 1280:
- * from 1280 to 1359 the tabs' side padding is 4px, which made the six fit with their labels; the Overview tab (a seventh, ~90px) is not measured yet:
- * where the seven do not fit the strip scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
+ * of their own so the page below gets the height. Every tab is an icon and a label (Settings is just the gear) while the strip fits; when it does not,
+ * only the open tab keeps its label (the others have it as their tooltip and for a screen reader). The strip is measured with every label showing, once the tabs are
+ * known, and again whenever its width changes (the window, the menu opening): with the Studio and the Settings gear it needs 648px at 1280, where the top bar leaves
+ * 577px, so there the labels go; from about 1360 the whole strip fits. (The Overview tab made them seven: the six fitted at 1280 only by taking their side padding
+ * down to 4px.) Past that the strip still scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
  * "Exceptions" and "Document Reviews" is "Reviews" here, their full names staying as the tooltip and as what a screen reader says.
  * Which tabs there are, their names and order, who sees them and which page lights which come from the navigation registry
  * (lib/navRegistry.ts); this file is how a tab looks. Colours are explicit hex on purpose: the platform CSS repaints the accent
@@ -13,7 +14,7 @@
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, LayoutDashboard, Settings, Sparkles, type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -33,6 +34,9 @@ const LOOK: Record<string, { icon: LucideIcon; iconOnly?: boolean }> = {
   settings: { icon: Settings, iconOnly: true },
 };
 
+// measured before the browser paints (no flash of the wrong strip); on the server there is nothing to measure
+const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 /** Whether a page belongs to the Documents area (the pages these tabs lead to). */
 export const inDocumentsArea = (pathname: string | null) => isInArea('documents', pathname);
 
@@ -46,6 +50,26 @@ export default function DocumentsTabs() {
   const open = activeTab('documents', pathname, { studio: studioOn });
   // the strip scrolls sideways on a narrow screen: the tab that is open is brought into view (sideways only), so a page far along the strip says where it is
   const strip = useRef<HTMLElement>(null);
+  // the strip does not fit with every label: only the open tab keeps its (see the comment at the top)
+  const [tight, setTight] = useState(false);
+  const full = useRef(0);                                             // the strip's width with every label showing
+  useBeforePaint(() => { setTight(false); }, [tabs.length]);          // other tabs: measure the whole strip again
+  useBeforePaint(() => {
+    const box = strip.current;
+    if (!box) return undefined;
+    if (!tight) full.current = box.scrollWidth;
+    // the room is what the top bar gives the strip (its own width is only as wide as its tabs, so it cannot say)
+    const room = box.parentElement;
+    const decide = () => setTight(full.current > (room ? room.clientWidth - 8 : box.clientWidth) + 1);
+    decide();
+    if (typeof ResizeObserver === 'undefined' || !room) {
+      window.addEventListener('resize', decide);
+      return () => window.removeEventListener('resize', decide);
+    }
+    const watch = new ResizeObserver(decide);                         // the window, and the menu opening or closing
+    watch.observe(room);
+    return () => watch.disconnect();
+  }, [tight, tabs.length]);
   useEffect(() => {
     const fit = () => {
       const box = strip.current;
@@ -71,7 +95,7 @@ export default function DocumentsTabs() {
             className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 xl:max-[1359px]:px-1 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]',
               active ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:border-[#c3ccd5] hover:text-[#1f2933]')}>
             <Icon size={16} strokeWidth={1.75} aria-hidden />
-            <span className={iconOnly ? 'sr-only' : active ? undefined : 'hidden xl:inline'}>{t.shortLabel ?? t.label}</span>
+            <span className={iconOnly ? 'sr-only' : active || !tight ? undefined : 'hidden'}>{t.shortLabel ?? t.label}</span>
           </Link>
         );
       })}
