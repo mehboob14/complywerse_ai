@@ -25,6 +25,13 @@ Definitions (every figure counts the documents of the scope that the viewer may 
 * on hold = an unresolved row of ``grc_document_route_holds`` of its current round (``routes.open_hold``).
 * late approvals = an overdue review or approval request; late acknowledgements = an overdue acknowledgement on a document with a
   version in force (published, or a newer version on its way over a published one).
+* ``issues.documents`` = the documents with at least one of the issues (no owner, expired, exception, stuck, on hold, late approvals,
+  late acknowledgements), each counted once. Request counts are people asked, not documents.
+
+Every figure has its address in ``links`` (the library's own parameters, ``dept`` first): the fixed ones by their path in the answer
+("totals.in_force", "reviews.overdue", "issues.stuck", "requests.review.overdue"), the rows of a list by their ``key`` ("type:policy",
+"status:draft", "stage:review:Review"). A figure the library cannot filter on exactly (a request due soon, a pending acknowledgement)
+has none. A stage has no library filter: its address opens the documents with the status of the documents counted at it.
 
 Nothing here writes. Every figure comes from a fixed number of queries however many documents and departments there are.
 """
