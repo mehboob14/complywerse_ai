@@ -3849,9 +3849,21 @@ export interface Department {
   team_id: number | null;
   /** its non-archived documents the signed-in person may read (Governance → Settings shows it) */
   document_count?: number;
+  /** the same for it and everything under it (the department tree, D57) */
+  document_count_total?: number;
+  /** 1 = a top department, 2 = under one, 3 = the deepest the tree goes */
+  level?: number;
+  /** what the organisation calls that level ("Department", "Sub-department", "Unit" until it says otherwise) */
+  level_label?: string;
+  /** the names from the top department down to this one */
+  path?: string[];
+  /** departments directly under it, switched off ones included */
+  child_count?: number;
   created_at: string;
   updated_at: string;
 }
+/** What the organisation calls the levels of its department tree, top first. */
+export interface DepartmentLevels { labels: string[]; defaults: string[]; max_depth: number }
 export type DepartmentMemberRole = 'lead' | 'member' | 'viewer';
 export interface DepartmentMember {
   user_id: number;
@@ -3880,6 +3892,10 @@ export const departmentsApi = {
   setRoles: (id: number, roleIds: number[]) =>
     apiClient.put<DepartmentDetail>(`/admin/departments/${id}/roles`, { role_ids: roleIds }),
   roleOptions: () => apiClient.get<DepartmentRoleOption[]>('/admin/departments/role-options'),
+  /** the names of the three levels (anyone signed in reads them) */
+  levels: () => apiClient.get<DepartmentLevels>('/admin/departments/levels'),
+  /** name the levels, top first; a blank name is its default (needs admin:organization:edit) */
+  setLevels: (labels: string[]) => apiClient.put<DepartmentLevels>('/admin/departments/levels', { labels }),
   addMember: (id: number, data: { user_id: number; role: DepartmentMemberRole }) =>
     apiClient.post<DepartmentMember>(`/admin/departments/${id}/members`, data),
   updateMember: (id: number, userId: number, data: { role: DepartmentMemberRole }) =>

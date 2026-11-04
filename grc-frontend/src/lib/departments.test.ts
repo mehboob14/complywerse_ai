@@ -6,9 +6,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 import { apiErrorText } from './apiError.ts';
 import {
-  DEACTIVATE_NOTE, DEPARTMENT_QUERY_KEYS, activatedText, deactivatedText, departmentCreateBody, departmentFormDirty, departmentPatch, departmentPlaceholder,
-  departmentRows, departmentsSummary, documentsLabel, howChips, memberSummary, parentChoices, refreshDepartments, removeBlock,
-  roleChips, roleItems, roleLabel, userItems, type DepartmentForm,
+  DEACTIVATE_NOTE, DEFAULT_LEVEL_LABELS, DEPARTMENT_QUERY_KEYS, MAX_DEPTH, activatedText, deactivatedText, departmentCreateBody, departmentFormDirty, departmentPatch,
+  departmentPickItems, departmentPlaceholder, departmentRows, departmentTree, departmentsSummary, descendantIds, documentsLabel, howChips, levelLabel, memberSummary,
+  parentChoices, refreshDepartments, removeBlock, roleChips, roleItems, roleLabel, userItems, type DepartmentForm,
 } from './departments.ts';
 
 test('how a person belongs: the lead, added by hand with the role they were given, and one chip for each role they hold', () => {
@@ -80,8 +80,8 @@ test('a department can sit under any other except itself and what is under it, a
     { id: 5, name: 'Old unit', parent_department_id: null, is_active: false },
   ];
   const names = (rows: { name: string }[]) => rows.map((r) => r.name);
-  assert.deepEqual(names(parentChoices(all, null, null)), ['Audit', 'Compliance', 'Internal audit', 'IT']);        // a new one: any active department
-  assert.deepEqual(names(parentChoices(all, 1, null)), ['IT']);                                                    // Compliance: not itself, not Audit or what is under it
+  assert.deepEqual(names(parentChoices(all, null, null)), ['Audit', 'Compliance', 'IT']);                          // a new one: any active department that is not the deepest level
+  assert.deepEqual(names(parentChoices(all, 1, null)), []);                                                        // Compliance: not itself, not what is under it, and under IT its two levels would make four
   assert.deepEqual(names(parentChoices(all, 3, 2)), ['Audit', 'Compliance', 'IT']);
   assert.deepEqual(names(parentChoices(all, 3, 5)), ['Audit', 'Compliance', 'IT', 'Old unit']);                    // the one it sits under now stays, even switched off
 });
@@ -245,4 +245,71 @@ test('the Departments card comes first on Governance → Settings, and is there 
   const page = source('../app/(dashboard)/governance/settings/page.tsx');
   assert.match(page, /<DepartmentsSection \/>\s*<SectionCard id="due"/);                          // before the first lifecycle card
   assert.equal(page.match(/<WithDepartments>/g)?.length, 2);                                      // the load error and "not switched on"
+});
+
+
+// ── the tree (D57) ───────────────────────────────────────────────────────────
+
+const ops = [
+  { id: 1, name: 'Operations', parent_department_id: null },
+  { id: 2, name: 'Support', parent_department_id: 1 },
+  { id: 3, name: 'Helpdesk', parent_department_id: 2 },
+  { id: 4, name: 'Finance', parent_department_id: null },
+  { id: 5, name: 'Treasury', parent_department_id: 4, is_active: false },
+];
+
+test("the tree knows each department's level, path, subtree and height", () => {
+  const tree = departmentTree(ops);
+  assert.equal(MAX_DEPTH, 3);
+  assert.deepEqual([1, 2, 3, 4, 5].map((id) => tree.level(id)), [1, 2, 3, 1, 2]);
+  assert.deepEqual(tree.path(3).map((d) => d.name), ['Operations', 'Support', 'Helpdesk']);
+  assert.deepEqual([...tree.subtree(1)].sort(), [1, 2, 3]);
+  assert.deepEqual([...tree.subtree(4)].sort(), [4, 5]);
+  assert.deepEqual([1, 2, 3, 4].map((id) => tree.height(id)), [2, 1, 0, 1]);
+  assert.deepEqual(tree.childrenOf(1).map((d) => d.name), ['Support']);
+  assert.equal(tree.parentOf(1), null);
+  assert.deepEqual([...descendantIds(ops, 2)].sort(), [2, 3]);
+});
+
+test('the tree reads a loop, a self-parent and a missing parent as top departments and loses none', () => {
+  const old = [
+    { id: 10, name: 'A', parent_department_id: 11 }, { id: 11, name: 'B', parent_department_id: 10 },    // a loop
+    { id: 12, name: 'C', parent_department_id: 12 },                                                       // its own parent
+    { id: 13, name: 'D', parent_department_id: 99 },                                                       // the parent is gone
+    { id: 14, name: 'E', parent_department_id: 10 },                                                       // hangs off the loop
+  ];
+  const tree = departmentTree(old);
+  assert.deepEqual(old.map((d) => tree.level(d.id)), [1, 1, 1, 1, 2]);
+  assert.deepEqual(tree.path(14).map((d) => d.name), ['A', 'E']);
+  assert.deepEqual([...tree.subtree(10)].sort(), [10, 14]);
+  assert.deepEqual(departmentTree([]).path(1), []);
+});
+
+test('a chain deeper than three (older than the limit) offers nothing to sit under it and can still be moved up', () => {
+  const deep = [
+    { id: 1, name: 'L1', parent_department_id: null }, { id: 2, name: 'L2', parent_department_id: 1 },
+    { id: 3, name: 'L3', parent_department_id: 2 }, { id: 4, name: 'L4', parent_department_id: 3 },
+  ];
+  assert.deepEqual(parentChoices(deep, null, null).map((d) => d.name), ['L1', 'L2']);       // a new one fits only under the first two levels
+  assert.deepEqual(parentChoices(deep, 3, 2).map((d) => d.name), ['L1', 'L2']);             // L3 with L4 under it: only places that keep both within three
+});
+
+test('the level names default, and a level past the third is called as the third', () => {
+  assert.deepEqual([...DEFAULT_LEVEL_LABELS], ['Department', 'Sub-department', 'Unit']);
+  assert.deepEqual([1, 2, 3, 4].map((n) => levelLabel(n)), ['Department', 'Sub-department', 'Unit', 'Unit']);
+  assert.deepEqual([1, 2, 3].map((n) => levelLabel(n, ['Division', 'Branch', 'Team'])), ['Division', 'Branch', 'Team']);
+  assert.equal(levelLabel(2, []), 'Sub-department');                                         // no names sent: the defaults
+});
+
+test('a picker lists the departments by path in tree order with the level under the name', () => {
+  assert.deepEqual(departmentPickItems(ops), [
+    { value: '4', label: 'Finance', subLabel: 'Department' },                                // Treasury is switched off: left out
+    { value: '1', label: 'Operations', subLabel: 'Department' },
+    { value: '2', label: 'Operations › Support', subLabel: 'Sub-department' },
+    { value: '3', label: 'Operations › Support › Helpdesk', subLabel: 'Unit' },
+  ]);
+  const kept = departmentPickItems(ops, { keep: [5, null], labels: ['Division', 'Branch', 'Team'] });
+  assert.deepEqual(kept.find((i) => i.value === '5'), { value: '5', label: 'Finance › Treasury (inactive)', subLabel: 'Branch' });   // a document still sits in it
+  assert.equal(departmentPickItems(ops, { withInactive: true }).length, 5);
+  assert.deepEqual(departmentPickItems([]), []);
 });
