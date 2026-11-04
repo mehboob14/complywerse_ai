@@ -374,10 +374,10 @@ def summary(db: Session, user: GRCUser, department: Optional[str] = None, now: O
 
 def ids(db: Session, user: GRCUser, kind: str, department: Optional[str] = None, now: Optional[datetime] = None) -> dict:
     """The documents behind one of ``KINDS`` in the scope, the ones the summary counts, by id."""
+    who = access(db, user)                                  # (first: someone who may not ask is refused before they are told what to ask)
     if kind not in KINDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"kind must be one of {', '.join(KINDS)}.")
     now = now or datetime.utcnow()
-    who = access(db, user)
     data = _load(db, user, who, scope_of(who, department))
     found = sorted(_attention(data, now, doc_lifecycle.settings(db, who.tenant_id)["admin_after_days"])[kind])
     return {"ids": found, "total": len(found)}

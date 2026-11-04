@@ -157,6 +157,7 @@ def test_who_may_ask_and_what_they_may_pick(w):
         assert [get(w, uid, d).status_code for d in (999, 900, 0)] == [404, 404, 404]
         assert [get(w, uid, d).status_code for d in ("abc", "-1", "1.5", "1,2")] == [400] * 4
     assert get(w, ADMIN, path=URL + "/ids", kind="nonsense").status_code == 400
+    assert get(w, PLAIN, path=URL + "/ids", kind="nonsense").status_code == 403     # refused before being told what to ask
     assert get(w, ADMIN, path=URL + "/ids").status_code == 422                      # kind is required
 
 
