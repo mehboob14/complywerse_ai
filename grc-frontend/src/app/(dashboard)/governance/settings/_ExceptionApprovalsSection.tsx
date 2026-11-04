@@ -127,7 +127,7 @@ export function ExceptionApprovalsSection() {
             getRowId={(r) => r.id}
             loading={answer.isLoading}
             loadingRows={3}
-            error={failed ? { message: errorMessage(answer.error), onRetry: canRetry(answer.error) ? () => { void answer.refetch(); } : undefined } : null}
+            error={failed ? { message: errorMessage(answer.error), onRetry: () => { void answer.refetch(); } } : null}
             cardTitle={(r) => (
               <div className="flex items-start justify-between gap-[8px]">
                 <span className={clsx('min-w-0 flex-1 font-[600]', r.is_active ? 'text-ds-fg' : 'text-ds-fg-muted')}>{r.name}</span>

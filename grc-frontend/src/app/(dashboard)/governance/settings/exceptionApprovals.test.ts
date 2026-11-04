@@ -48,9 +48,9 @@ test('who may change the rules is the server\'s answer (`can_edit`): a reader ge
   assert.match(section, /\{canEdit && rules\.length > 0 && <RuleTester/);
 });
 
-test('every state is said: loading rows, a failure with its sentence (and Retry only where trying again can help), and "No rules" with the Add button and a note', () => {
+test('every state is said: loading rows, a failure with the sentence the server gave and a Retry, and "No rules" with the Add button and a note', () => {
   assert.match(section, /loading=\{answer\.isLoading\}/);
-  assert.match(section, /error=\{failed \? \{ message: errorMessage\(answer\.error\), onRetry: canRetry\(answer\.error\)/);
+  assert.match(section, /error=\{failed \? \{ message: errorMessage\(answer\.error\), onRetry: \(\) => \{ void answer\.refetch\(\); \} \} : null\}/);       // Retry with every failure, a refusal included
   assert.match(section, /retry: \(n, e\) => n < 2 && canRetry\(e\)/);
   assert.match(section, /title="No rules" info=\{RULE_NOTES\.none\} action=\{canEdit \? add : undefined\}/);
 });
