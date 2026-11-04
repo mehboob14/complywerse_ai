@@ -1,7 +1,7 @@
 'use client';
 
 // Administration → Departments: the one list of departments that documents, sign-off, assets, assessments, stage owners and risks
-// pick from. A department's people are those added by hand, its lead, and everyone who holds one of its roles (they join and leave
+// pick from. A department's people are those added by hand, its owner, and everyone who holds one of its roles (they join and leave
 // with the role). The rules that can be tested without a screen are in lib/departments.ts.
 
 import { useMemo, useState } from 'react';
@@ -21,7 +21,7 @@ import {
 } from '@/components/admin/DepartmentForm';
 
 const SMALL = `inline-flex items-center gap-1 rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
-// teal tints for the lead and for people added by hand, grey for those who come through a role (never blue or purple)
+// teal tints for the owner and for people added by hand, grey for those who come through a role (never blue or purple)
 const CHIP: Record<'lead' | 'hand' | 'role', string> = {
   lead: 'border-primary-300 bg-primary-100 text-[#0b5f58]',
   hand: 'border-primary-200 bg-primary-50 text-[#0f766e]',
@@ -121,7 +121,7 @@ export default function DepartmentsAdminPage() {
                 <thead className="border-b border-slate-200 text-xs text-slate-500">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">Name</th>
-                    <th scope="col" className="px-3 py-2 text-left">Lead</th>
+                    <th scope="col" className="px-3 py-2 text-left">Owner</th>
                     <th scope="col" className="px-3 py-2 text-left">Roles</th>
                     <th scope="col" className="px-3 py-2 text-left">Members</th>
                     <th scope="col" className="px-3 py-2 text-left">Status</th>
