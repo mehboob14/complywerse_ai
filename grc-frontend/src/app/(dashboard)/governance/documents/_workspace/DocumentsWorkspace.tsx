@@ -31,15 +31,15 @@ import { problemOf, studioApi } from '@/lib/studio/api';
 import type { GovDoc } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel, useDepartmentNames, useFrameworkInfo } from './lib';
 import {
-  fetchDocuments, fetchCoverage,
+  fetchDocuments, fetchCoverage, fetchAttention,
   bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, moveDocument, restoreDocument,
 } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
 import { creation, departmentFilterOptions } from './library';
 import { buildFolders, chooseView, displayOrder, moveAll, moveMessage, moveTargets, type MoveTarget } from './libraryFolders';
 import {
-  BUILT_IN_VIEWS, NO_FILTERS, NO_OWNER,
-  classificationOptions, compareDocs, exportColumnsFor, frameworkOptions, fromParams, isFiltering, kpis, matchesFilters, openFromParams,
+  ATTENTION_LABEL, BUILT_IN_VIEWS, NO_FILTERS, NO_OWNER,
+  attentionDepartment, classificationOptions, compareDocs, exportColumnsFor, frameworkOptions, fromParams, isFiltering, kpis, matchesFilters, openFromParams,
   toCsv, viewFromParams, viewMatching, withLibraryParams,
   type Filters, type LibraryState, type LibraryViewId, type Lookups, type MatchContext, type Option, type SavedView, type Sort,
 } from './libraryModel';
@@ -176,6 +176,18 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     retry: (failures, e) => failures < 3 && canRetry(e),                  // a refusal (403) is said at once; a network or server failure is tried a few times, as it always was
   });
   const { data: coverage } = useQuery({ queryKey: ['gov-docs-coverage'], queryFn: fetchCoverage });
+  // `?attn=` (what the Documents Overview opens: stuck, late approvals ...): the server names the documents. Until it has answered the table waits, and a failure is said
+  // (never a table of everything under a chip that says otherwise); the chip can still be taken off.
+  const attnKind = filters.attention;
+  const attn = useQuery({
+    queryKey: ['gov-docs-attention', attnKind, attentionDepartment(filters)],
+    queryFn: () => fetchAttention(attnKind as string, attentionDepartment(filters)),
+    enabled: attnKind != null,
+    retry: (failures, e) => failures < 3 && canRetry(e),
+  });
+  const attnIds = useMemo(() => (attn.data ? new Set(attn.data.ids) : null), [attn.data]);
+  const attnWaiting = attnKind != null && attn.isPending;
+  const attnFailed = attnKind != null && attn.isError && !attn.data;
   const { data: users = [] } = useQuery({
     queryKey: ['tenant-users-gov'],
     queryFn: async () => (await assetsApi.getTenantUsers()).data as Array<{ id: number; display_name: string; email?: string }>,
@@ -199,7 +211,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // the same instant for every rule until the list is read again
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => new Date(), [listData]);
-  const ctx: MatchContext = useMemo(() => ({ ...lookups, now }), [lookups, now]);
+  const ctx: MatchContext = useMemo(() => ({ ...lookups, now, attention: attnIds }), [lookups, now, attnIds]);
 
   // ── the options the filters offer ──
   const departmentsQ = useOrgDepartments();
@@ -212,7 +224,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const view: LibraryViewId = chooseView({ address: viewParam, remembered: folderPrefs?.view ?? null, departments });
   const deciding = viewParam == null && (folderPrefs == null || (folderPrefs.view == null && departmentsQ.isLoading));
   const inFolders = view === 'folders';
-  const waiting = docsLoading || deciding || (inFolders && departmentsQ.isLoading);
+  const waiting = docsLoading || deciding || (inFolders && departmentsQ.isLoading) || attnWaiting;
   // Folders chosen but there is nothing to group by (no department in use), or the departments could not be read (the folders cannot be
   // told from "No department" without them): the body says so instead of drawing folders
   const foldersBlocked = inFolders && !waiting && (departmentsQ.isError || noDepartments);
@@ -518,6 +530,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             canExport={filteredDocs.length > 0}
             view={view}
             onView={changeView}
+            attentionTotal={attn.data?.total ?? null}
           />
 
           <div className={peeking ? 'flex items-start gap-[16px]' : undefined}>
@@ -526,6 +539,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
                 <div className="rounded-ds-card border border-ds-border bg-ds-surface">
                   {departmentsQ.isError ? <DepartmentsFailed onRetry={() => departmentsQ.refetch()} /> : <NoDepartments />}
                 </div>
+              ) : attnFailed && attnKind ? (
+                <ErrorState title={`Couldn't load “${ATTENTION_LABEL[attnKind]}”`} message={errorMessage(attn.error)} onRetry={canRetry(attn.error) ? () => { void attn.refetch(); } : undefined} />
               ) : (
                 <LibraryTable
                   // the documents above a match come from the same archived-aware scope as the list: no archived parent in the working list
