@@ -28,6 +28,7 @@ import {
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
 import { DepartmentsSection } from './_DepartmentsSection';
+import { ExceptionApprovalsSection } from './_ExceptionApprovalsSection';
 
 const SETTINGS_KEY = ['document-lifecycle-settings'];       // shared with the document page's summary card
 const SETTINGS_URL = '/governance/documents/lifecycle/settings';
@@ -46,6 +47,7 @@ function WithDepartments({ children }: { children: ReactNode }) {
     <div className={PAGE}>
       <PageHeader variant="page" title="Governance settings" />
       <DepartmentsSection />
+      <ExceptionApprovalsSection />
       {children}
     </div>
   );
@@ -190,6 +192,7 @@ export default function GovernanceSettingsPage() {
       />
 
       <DepartmentsSection />
+      <ExceptionApprovalsSection />
 
       <SectionCard id="due" title="Due dates" info="How many days each person has, counted from the day they are asked.">
         <div className={FIELDS}>

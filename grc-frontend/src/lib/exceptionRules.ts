@@ -49,6 +49,8 @@ export interface PreviewAnswer { rule: { id: number; name: string; department_id
 
 // ─── Words ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** The query key of the rules; their editor and the tester refresh with it (the tester's keys start with it). */
+export const RULES_KEY = ['exception-approval-rules'];
 export const MAX_STEPS = 8;
 export const NAME_MAX = 120;
 export const WHOLE_ORGANISATION = 'Whole organisation';
@@ -84,6 +86,15 @@ export function scopeOf(
 
 /** The priorities and kinds of policy a rule is limited to, as words ("High", "Policy"); none: it applies to any. */
 export const conditionChips = (rule: Pick<ExceptionRule, 'priorities' | 'doc_types'>): string[] => [...rule.priorities, ...rule.doc_types].map((w) => statusLabel(w));
+
+/** The same in a sentence, for a screen reader and a tooltip: "Priority: High, Critical. Policy kind: Policy", or "Any priority and kind of policy". */
+export function conditionsLong(rule: Pick<ExceptionRule, 'priorities' | 'doc_types'>): string {
+  const parts = [
+    rule.priorities.length ? `Priority: ${rule.priorities.map((w) => statusLabel(w)).join(', ')}` : '',
+    rule.doc_types.length ? `Policy kind: ${rule.doc_types.map((w) => statusLabel(w)).join(', ')}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join('. ') : 'Any priority and kind of policy';
+}
 
 /** "3 rules · 1 off" */
 export function rulesSummary(rules: readonly { is_active: boolean }[]): string {
@@ -290,3 +301,18 @@ export function ruleErrors(form: RuleForm): RuleErrors {
 }
 
 export const hasRuleErrors = (e: RuleErrors): boolean => Boolean(e.name || e.steps || Object.keys(e.byStep).length);
+
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+/** The first thing wrong, as the server would say it ("Step 1 (Approval): choose who is asked."), for the line above the Save button; '' when nothing is. */
+export function ruleProblem(form: RuleForm): string {
+  const e = ruleErrors(form);
+  if (e.name) return e.name;
+  if (e.steps) return e.steps;
+  for (let i = 0; i < form.steps.length; i += 1) {
+    const s = form.steps[i];
+    const first = e.byStep[s.key]?.people ?? e.byStep[s.key]?.min_count ?? e.byStep[s.key]?.due_days;
+    if (first) return `Step ${i + 1} (${s.name.trim() || kindName(s.kind)}): ${lowerFirst(first)}`;
+  }
+  return '';
+}
