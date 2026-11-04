@@ -28,7 +28,7 @@ import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { ListNotice } from '@/components/governance/ListNotice';
 import {
   DATA_COLS, DEFAULT_PAGE_SIZE, PAGE_SIZES, countLabel, csvDone, cutNotice, dayText, emptyForm, formForPolicy, formFrom, itemsOf, momentDay, openIdOf, pagerOf,
-  requesterOf, rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, waitingLabel, waitingRows, withoutOpen,
+  longRefusal, requesterOf, rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, waitingLabel, waitingRows, withoutOpen,
   type DataCol, type ExceptionForm, type Filters, type RowActionKey,
 } from './_logic';
 import { statusDetail } from './_approval';
@@ -166,11 +166,15 @@ export default function PolicyExceptionsPage() {
   const notice = failed || view.isLoading ? null : cutNotice(loaded.length, server, settled.current);
 
   // ── writes made from the register ──
+  // a rule that cannot start names every step nobody can act at: when the server's sentence is longer than a toast keeps, it is said in full under the header
+  const [refusal, setRefusal] = useState<string | null>(null);
   const submit = useReportedMutation({
     mutationFn: (e: ExceptionItem) => policyExceptionApi.submit(e.id),
     success: 'Submitted for approval',
     failure: 'Not submitted',
     invalidate: LIST_KEYS,
+    onSuccess: () => setRefusal(null),
+    onError: (error) => setRefusal(longRefusal(error)),
   });
   const remove = useReportedMutation({
     mutationFn: (e: ExceptionItem) => policyExceptionApi.delete(e.id),
@@ -185,7 +189,7 @@ export default function PolicyExceptionsPage() {
     mutationFn: (e: ExceptionItem) => policyExceptionApi.withdraw(e.id),
     success: 'Withdrawn: it is a draft again',
     failure: 'Not withdrawn',
-    invalidate: LIST_KEYS,
+    invalidate: [...LIST_KEYS, ['exception-comments']],
   });
   const askWithdraw = async (e: ExceptionItem) => {
     if (await confirm({ title: 'Withdraw this exception?', message: 'It goes back to a draft. When it is submitted again its rule starts from the first step.', confirmLabel: 'Withdraw' })) withdraw.mutate(e);
@@ -266,6 +270,8 @@ export default function PolicyExceptionsPage() {
       />
 
       {notice && <ListNotice title={notice.title}>{notice.detail}</ListNotice>}
+
+      {refusal && <Notice tone="danger" title="Not submitted" action={<Button onClick={() => setRefusal(null)}>Dismiss</Button>}>{refusal}</Notice>}
 
       {linkFailed && (
         <Notice tone="danger" title={`Couldn't open exception ${wanted}`}

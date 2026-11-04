@@ -3,6 +3,7 @@
 // Since the page moved onto the design-system kit (UX revamp, Phase 1, group D) this file also holds what only THIS page knows: what the server
 // holds against what was loaded (the list is cut), which actions a row offers, what the form sends and how its dates are read, and what the charts
 // are made of. How a header sorts, where the pages are drawn and how a date is written are the kit's (RegisterTable, Pager, lib/format).
+import { apiErrorText, safeDetail } from '../../../../lib/apiError.ts';
 import { parseUtc } from '../../../../lib/serverTime.ts';
 import { NOT_SET, formatCount, formatDate as formatDay, formatDateTime as formatMoment } from '../../../../lib/format.ts';
 import { exceptionStatus, type Tone } from '../../../../lib/status.ts';
@@ -274,6 +275,15 @@ export function departmentOf(e: { department_path?: string[]; department_inherit
  */
 export function waitingRows<T extends { status: string; priority: string }>(rows: readonly T[], filters: Filters): T[] {
   return rows.filter((e) => (!filters.status || e.status === filters.status) && (!filters.priority || e.priority === filters.priority));
+}
+
+/**
+ * What the server said when it refused, in full, when a toast would cut it: a rule that cannot start names every step nobody can act at (409 on Submit), and the
+ * sentence can run past what a toast keeps (240 characters). Null when the toast says it all.
+ */
+export function longRefusal(error: unknown, kept = 240): string | null {
+  const full = safeDetail(apiErrorText(error, ''), 1000);
+  return full.length > kept ? full : null;
 }
 
 /** The quick filter's label: "Waiting for me · 3". */

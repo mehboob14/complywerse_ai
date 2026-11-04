@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   SERVER_LIMIT, agingBars, chartAlt, closedOnTimeTone, countLabel, csvDone, cutNotice, emptyForm, formErrors, formForPolicy, formFrom, itemsOf, payloadOf,
-  departmentOf, openIdOf, requesterOf, rowActionKeys, sameForm, searchExceptions, serverList, sortLoaded, statusSlices, toDateInput, waitingLabel, waitingRows,
+  departmentOf, longRefusal, openIdOf, requesterOf, rowActionKeys, sameForm, searchExceptions, serverList, sortLoaded, statusSlices, toDateInput, waitingLabel, waitingRows,
   withoutOpen, type ExceptionCounts, type ExceptionFields, type Filters,
 } from './_logic.ts';
 
@@ -203,6 +203,15 @@ test('a link is used up once taken: the address keeps everything but its open', 
   assert.equal(withoutOpen('?status=draft'), '?status=draft');
   assert.equal(withoutOpen(''), '');
   assert.equal(withoutOpen(null), '');
+});
+
+test('what the server said when it refused is said in full only when a toast would cut it (a rule that cannot start names every step nobody can act at)', () => {
+  const short = { response: { data: { detail: "This exception follows the rule 'Support', which cannot start: Step 1 (Approval) has nobody who can decide: Owner of Helpdesk (none set) for Helpdesk. Ask an administrator to change the rule or to set the owners." } } };
+  assert.equal(longRefusal(short), null);
+  const detail = `${short.response.data.detail} Step 2 (Approval) has nobody who can decide: Role: Nobody for Helpdesk.`;
+  assert.equal(longRefusal({ response: { data: { detail } } }), detail);
+  assert.equal(longRefusal(new Error('network')), null);
+  assert.equal(longRefusal({ response: { data: { detail: 'x'.repeat(2000) } } })?.length, 1000);                         // never a wall of text
 });
 
 test('an exception\'s department is its path, and says when it comes from its policy', () => {
