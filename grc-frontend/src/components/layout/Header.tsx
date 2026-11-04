@@ -37,7 +37,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/vulnerabilities/departments': { title: 'Department Management' },
   '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
   '/dashboard': { title: 'Performance Overview' },
-  '/cyber-security': { title: 'Cyber Security', subtitle: 'Application security and security-operations maturity assessments' },
+  '/cyber-security': { title: 'Cyber Security', section: 'Compliance Management' },
   '/nca': { title: 'NCA', subtitle: 'National Cybersecurity Authority — DCC, registers and audit plan' },
   '/evidence': { title: 'Evidence Management' },
   '/frameworks': { title: 'Frameworks' },

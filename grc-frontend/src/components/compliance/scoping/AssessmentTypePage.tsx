@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The page of one Cyber Security assessment type (OWASP ASVS, CSIR maturity, …), before any questions: what you need to start one, the questionnaire it
+ * The page of one Cyber Security assessment type (OWASP ASVS, CSIR maturity, …), a tab of the hub, before any questions: what you need to start one, the questionnaire it
  * starts from, and the assessments already made from it. A new assessment is made for ONE application (chosen from the asset library) or ONE function or
  * process, as a draft that is scoped first (`AssessmentWorkspace`); the questionnaire itself, with its upload, stays as it was, one click away.
  */
@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Plus, Search, Upload } from 'lucide-react';
-import { PageHeading } from '@/components/ui/ds/PageHeading';
+import { InfoTip } from '@/components/ui/InfoTip';
 import {
   Button, EmptyState, PersonChip, ProgressBar, RegisterTable, SectionCard, SegmentedControl, StatusPill, TextInput,
   rowCountText, sortRows, type RegisterColumn, type SortState,
@@ -64,12 +64,14 @@ export default function AssessmentTypePage({ format }: { format: string }) {
   const counts = tpl ? ([tpl.in_progress > 0 && `${tpl.in_progress} in progress`, tpl.scoping > 0 && `${tpl.scoping} ${tpl.scoping === 1 ? 'draft' : 'drafts'}`].filter(Boolean).join(' · ') || undefined) : undefined;
   return (
     <div className="flex flex-col gap-[16px]">
-      <PageHeading
-        title={info.label}
-        info={`${info.about} ${info.how}`}
-        meta={counts}
-        actions={<Button variant="primary" leftIcon={<Plus aria-hidden />} disabled={!questionnaire} onClick={() => setStarting(true)}>Start assessment</Button>}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+          <h2 className="min-w-0 break-words !text-ds-section !text-ds-fg">{info.label}</h2>
+          <InfoTip text={`${info.about} ${info.how}`} label={`About ${info.label}`} />
+          {counts && <span className="text-ds-body text-ds-fg-muted">{counts}</span>}
+        </div>
+        <Button variant="primary" leftIcon={<Plus aria-hidden />} disabled={!questionnaire} onClick={() => setStarting(true)}>Start assessment</Button>
+      </div>
       <div className="grid gap-[16px] lg:grid-cols-2">
         <SectionCard id="needs" title="Before you start" info="What to have ready. Anything not known yet can be filled in later, by the person who knows it; the questions open only when the required parts are done.">
           <ul className="space-y-[6px]">
