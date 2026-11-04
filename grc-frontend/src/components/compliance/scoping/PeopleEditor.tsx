@@ -22,11 +22,13 @@ export function usePeople() {
   return { people, teams, personOptions, teamOptions };
 }
 
-export default function PeopleEditor({ value, onChange, model, domains, missingRoles = [], disabled = false }: {
+export default function PeopleEditor({ value, onChange, model, format, domains, missingRoles = [], disabled = false }: {
   value: Participant[];
   /** the participants that can be saved (the rest stay here until they are complete) */
   onChange: (next: Participant[]) => void;
   model: ScopeModel;
+  /** the assessment type: it names the roles (a system owner, a profile owner) */
+  format?: string;
   domains: Domain[];
   /** roles the scope still needs: offered first when adding */
   missingRoles?: readonly ParticipantRole[];
@@ -52,7 +54,7 @@ export default function PeopleEditor({ value, onChange, model, domains, missingR
         <div key={i} className={ROW}>
           <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-[12rem_minmax(0,1fr)_auto]">
             <Select aria-label="Role" value={p.role} disabled={disabled} onChange={(e) => edit(i, { role: e.target.value as ParticipantRole })}>
-              {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL(r, model)}</option>)}
+              {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL(r, model, format)}</option>)}
             </Select>
             {p.kind === 'user' && (
               <Combobox label="Person" options={personOptions} value={p.user_id ? String(p.user_id) : null} onChange={(v) => edit(i, { user_id: v ? Number(v) : null })} placeholder={people.isLoading ? 'Loading…' : 'Choose a person'} disabled={disabled} />
@@ -73,7 +75,7 @@ export default function PeopleEditor({ value, onChange, model, domains, missingR
               <MultiSelect label={p.kind === 'external' ? 'Covers' : 'Answers'} options={domainOptions} value={p.domains} onChange={(v) => edit(i, { domains: v })} placeholder={p.kind === 'external' ? 'Every domain' : 'Takes part in every domain'} disabled={disabled} className="min-w-[14rem]" />
             )}
             {['assessor', 'reviewer'].includes(p.role) && (
-              <Checkbox label={model === 'process' ? 'From outside the function assessed' : "Independent of the application's team"} checked={p.independent} disabled={disabled} onChange={(e) => edit(i, { independent: e.target.checked })} />
+              <Checkbox label={model === 'process' ? 'From outside the function assessed' : model === 'system' ? "Independent of the system's team" : "Independent of the application's team"} checked={p.independent} disabled={disabled} onChange={(e) => edit(i, { independent: e.target.checked })} />
             )}
             {p.kind === 'external' && <span className="text-ds-label text-ds-fg-muted">Named as theirs: their capability is not counted as the organisation's own.</span>}
           </div>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ASSET_ROLES_OF, countedForOverview, fieldErrors, inFlight, inRegister, isQuestionnaire, registerSortValue, newParticipant, participantComplete, participantLabel, progressOf, ROLE_LABEL, ROLES_OF, splitList, stageOfCheck, stageState, subjectOf, toDateValue, fromDateValue, TYPE_INFO, typeOfTab, unmet } from './scopingModel.ts';
+import { ASSET_ROLES_OF, countedForOverview, fieldErrors, infoOf, inFlight, inRegister, isNistFormat, isQuestionnaire, registerSortValue, newParticipant, participantComplete, participantLabel, progressOf, NIST_INFO, ROLE_LABEL, ROLES_OF, splitList, stageOfCheck, stageState, subjectOf, toDateValue, fromDateValue, TYPE_INFO, typeHref, typeOfTab, unmet } from './scopingModel.ts';
 
 const checks = [
   { key: 'subject', label: 'Application chosen', ok: true, required: true, hint: '' },
@@ -19,6 +19,37 @@ test('every cyber type has its words, a hub tab that finds it again, and a kind 
   }
   assert.deepEqual(Object.values(TYPE_INFO).map((t) => t.model), ['asset', 'asset', 'asset', 'process', 'process', 'process', 'process']);
   assert.equal(typeOfTab('nist_library'), undefined);
+});
+
+test('the NIST assessments have their words too, live in the NIST library tab, and are told apart from the seven', () => {
+  assert.deepEqual(Object.keys(NIST_INFO), ['nist_800_53a', 'nist_csf2']);
+  for (const [format, info] of Object.entries(NIST_INFO)) {
+    assert.equal(info.tab, 'nist_library');
+    assert.equal(info.model, 'system');
+    assert.equal(info.needs.length, 4, format);
+    assert.ok(info.about.length > 60 && info.how.length > 20 && info.method.length > 20 && info.publication);
+    assert.equal(isNistFormat(format), true);
+    assert.equal(infoOf(format), info);
+    assert.equal(typeHref(format), `/cyber-security?tab=nist_library&assessment=${format}`);               // named, so a link and a reload land on it
+    assert.equal(typeOfTab(info.tab), undefined);                                                          // the tab is not one assessment's page
+  }
+  assert.equal(isNistFormat('asvs_checklist'), false);
+  assert.equal(infoOf('asvs_checklist'), TYPE_INFO.asvs_checklist);
+  assert.equal(infoOf('nothing'), undefined);
+  assert.equal(typeHref('asvs_checklist'), '/cyber-security?tab=asvs');
+  assert.equal(typeHref('nothing'), '/cyber-security?tab=overview');
+});
+
+test('a NIST assessment is of a system: its checks, roles and register words follow', () => {
+  assert.deepEqual(['system', 'baseline', 'functions', 'system_owner', 'as_of', 'independence'].map(stageOfCheck), ['scope', 'scope', 'scope', 'people', 'plan', 'people']);
+  assert.equal(ROLE_LABEL('owner', 'system', 'nist_800_53a'), 'System owner');
+  assert.equal(ROLE_LABEL('owner', 'system', 'nist_csf2'), 'Profile owner');
+  assert.equal(ROLE_LABEL('approver', 'system'), 'Authorizing official');
+  assert.equal(ROLE_LABEL('approver', 'asset'), 'Approver');
+  assert.ok(ROLES_OF.system.includes('approver') && ROLES_OF.system.includes('assessor'));
+  assert.ok(!ASSET_ROLES_OF.system.includes('component'));
+  const nist = { name: 'NIST SP 800-53A - Core Banking Platform', primary_asset_name: null, scope_model: 'system' as const, assessment_format: 'nist_800_53a' };
+  assert.equal(subjectOf(nist), 'Core Banking Platform');                                                   // read out of the name, like a function
 });
 
 test('a check belongs to the stage where it is filled, and the stage says how many required ones are missing', () => {

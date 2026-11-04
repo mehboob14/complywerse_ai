@@ -7,6 +7,7 @@
  * and only who takes part, the notes and the evidence plan can change.
  */
 import { useState } from 'react';
+import { formatCount } from '@/lib/format';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Button, Checkbox, Combobox, FormField, IconButton, Notice, SectionCard, SegmentedControl, Select, Textarea, TextInput, type ListOption } from '@/components/ui/ds';
 import { AssetPicker } from './AssetPicker';
@@ -28,6 +29,8 @@ export interface StageProps {
 }
 
 const GRID = 'grid grid-cols-1 gap-x-[16px] gap-y-[12px] sm:grid-cols-2';
+const BASELINES = [['low', 'Low', 'Limited adverse effect if the system is compromised.'], ['moderate', 'Moderate', 'Serious adverse effect.'], ['high', 'High', 'Severe or catastrophic adverse effect.']] as const;
+const CSF_FUNCTIONS = [['GV', 'Govern'], ['ID', 'Identify'], ['PR', 'Protect'], ['DE', 'Detect'], ['RS', 'Respond'], ['RC', 'Recover']] as const;
 const FACT = 'text-ds-body text-ds-fg-body';
 const word = (s: string | null | undefined) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ') : '—');
 
@@ -42,14 +45,14 @@ function ListField({ label, hint, value, onChange, disabled, placeholder }: { la
 }
 
 /** What is left out and why: a report must say what the assessment did not cover. */
-function Exclusions({ value, onChange, disabled }: { value: Exclusion[]; onChange: (v: Exclusion[]) => void; disabled?: boolean }) {
+function Exclusions({ value, onChange, disabled, what = 'What is left out' }: { value: Exclusion[]; onChange: (v: Exclusion[]) => void; disabled?: boolean; what?: string }) {
   const [rows, setRows] = useState<Exclusion[]>(value);
   const commit = (next: Exclusion[]) => { setRows(next); onChange(next.filter((r) => r.what.trim())); };
   return (
     <div className="space-y-[8px]">
       {rows.map((r, i) => (
         <div key={i} className="grid grid-cols-1 gap-[8px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <TextInput aria-label="What is left out" placeholder="What is left out" value={r.what} maxLength={200} disabled={disabled} onChange={(e) => commit(rows.map((x, j) => (j === i ? { ...x, what: e.target.value } : x)))} />
+          <TextInput aria-label={what} placeholder={what} value={r.what} maxLength={200} disabled={disabled} onChange={(e) => commit(rows.map((x, j) => (j === i ? { ...x, what: e.target.value } : x)))} />
           <TextInput aria-label="Why" placeholder="Why" value={r.reason} maxLength={300} disabled={disabled} onChange={(e) => commit(rows.map((x, j) => (j === i ? { ...x, reason: e.target.value } : x)))} />
           <IconButton label="Remove" disabled={disabled} onClick={() => commit(rows.filter((_, j) => j !== i))}><Trash2 aria-hidden /></IconButton>
         </div>
@@ -71,6 +74,71 @@ export function ScopeStage(p: StageProps) {
     const rest = refs.filter((r) => r.asset_id !== assetId);
     onScope({ assets: role ? [...rest, { asset_id: assetId, role, reason: refs.find((r) => r.asset_id === assetId)?.reason ?? '' }] : rest });
   };
+
+  const supporting = refs.filter((r) => r.role !== 'primary');
+  const supportingCard = (id: string, title: string, info: string) => (
+    <SectionCard id={id} title={title} meta={supporting.length ? `${supporting.length} listed` : undefined} info={info}>
+      {supporting.length > 0 && (
+        <ul className="mb-[12px] space-y-[8px]">
+          {supporting.map((r) => (
+            <li key={r.asset_id} className="flex flex-wrap items-center gap-[8px]">
+              <span className="min-w-0 flex-1 text-ds-body text-ds-fg">{view.facts[String(r.asset_id)]?.name ?? `Asset ${r.asset_id}`}<span className="text-ds-fg-muted"> · {word(view.facts[String(r.asset_id)]?.asset_type)}</span></span>
+              <Select aria-label="Its part in this assessment" value={r.role} disabled={fixed} onChange={(e) => setRole(r.asset_id, e.target.value as AssetRole)} className="w-[13rem]">
+                {ASSET_ROLES_OF.process.map((role) => <option key={role} value={role}>{ASSET_ROLE_LABEL[role]}</option>)}
+              </Select>
+              <IconButton label="Remove" disabled={fixed} onClick={() => setRole(r.asset_id, '')}><X aria-hidden /></IconButton>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!fixed && <AssetPicker exclude={refs.map((r) => r.asset_id)} label="Search the asset library" onPick={(a) => onScope({ assets: [...refs, { asset_id: a.id, role: 'supporting', reason: '' } as AssetRef] })} />}
+      {fixed && supporting.length === 0 && <p className="text-ds-body text-ds-fg-muted">No asset was listed.</p>}
+    </SectionCard>
+  );
+
+  if (view.scope_model === 'system') {
+    const control = view.assessment_format === 'nist_800_53a';
+    const questions = view.domains.reduce((n, d) => n + d.count, 0);
+    const toggle = (code: string, on: boolean) => onScope({ functions: on ? [...(scope.functions ?? []), code] : (scope.functions ?? []).filter((c) => c !== code) });
+    return (
+      <div className="space-y-[16px]">
+        <SectionCard id="system" title={control ? 'System' : 'Organisation or unit'} info={control ? 'The system whose controls are assessed. Say where it ends: what is inside the boundary is assessed, what is outside is not.' : 'The organisation or unit the profile is of, and what it covers.'}>
+          <div className={GRID}>
+            <FormField label={control ? 'System' : 'Organisation or unit'} required error={errors.system} className="sm:col-span-2"><TextInput value={scope.system ?? ''} disabled={fixed} maxLength={200} onChange={(e) => onScope({ system: e.target.value })} /></FormField>
+            <FormField label="Organisation" required error={errors.organisation} hint="This or the business unit."><TextInput value={scope.organisation ?? ''} disabled={fixed} maxLength={200} onChange={(e) => onScope({ organisation: e.target.value })} /></FormField>
+            <FormField label="Business unit" optional><TextInput value={scope.business_unit ?? ''} disabled={fixed} maxLength={200} onChange={(e) => onScope({ business_unit: e.target.value })} /></FormField>
+            <FormField label="Boundary" optional className="sm:col-span-2" hint={control ? 'Its components, interfaces and locations.' : 'The parts of the organisation the profile covers.'}>
+              <Textarea rows={3} value={scope.boundary ?? ''} disabled={fixed} maxLength={1000} onChange={(e) => onScope({ boundary: e.target.value })} />
+            </FormField>
+          </div>
+        </SectionCard>
+        <SectionCard id="choice" title={control ? 'Baseline' : 'Functions'} meta={questions > 0 && (!control || scope.baseline) ? `${formatCount(questions)} ${control ? 'controls' : 'subcategories'} · ${view.domains.length} ${control ? 'families' : 'functions'}` : undefined}
+          info={control ? 'SP 800-53B: the baseline follows from the system\'s impact level (FIPS 199, SP 800-60) and decides which controls are assessed. Add the privacy baseline when the system handles personal information.' : 'The Cybersecurity Framework has six functions. Choose the ones the profile covers: its subcategories are what is rated.'}>
+          {control ? (
+            <div className="space-y-[12px]">
+              <FormField label="Control baseline" required error={errors.baseline} hint={BASELINES.find(([v]) => v === scope.baseline)?.[2] ?? "Choose by the system's impact level."}>
+                <SegmentedControl label="Control baseline" name="nist-baseline" value={scope.baseline ?? ''} disabled={fixed} onChange={(v) => onScope({ baseline: (v || null) as Scope['baseline'] })}
+                  options={BASELINES.map(([value, label]) => ({ value, label }))} />
+              </FormField>
+              <Checkbox label="Add the privacy baseline" checked={!!scope.privacy_overlay} disabled={fixed} onChange={(e) => onScope({ privacy_overlay: e.target.checked })} />
+            </div>
+          ) : (
+            <FormField label="Functions in scope" required error={errors.functions}>
+              <div className="flex flex-wrap gap-[16px]">
+                {CSF_FUNCTIONS.map(([code, name]) => <Checkbox key={code} label={name} disabled={fixed} checked={(scope.functions ?? []).includes(code)} onChange={(e) => toggle(code, e.target.checked)} />)}
+              </div>
+            </FormField>
+          )}
+        </SectionCard>
+        {control && (
+          <SectionCard id="tailoring" title="Tailoring" info="Controls of the baseline that do not apply to this system (a scoping consideration), each with the reason. Start with the control, for example PE-03: it is created as not applicable and the reason is kept.">
+            <Exclusions value={scope.exclusions ?? []} disabled={fixed} what="Control, for example PE-03" onChange={(v) => onScope({ exclusions: v })} />
+          </SectionCard>
+        )}
+        {supportingCard('components', 'Components', 'The assets that make up the system. They give the evidence its context; they are not assessed or scored.')}
+      </div>
+    );
+  }
 
   if (asset) {
     const a = view.primary_asset;
@@ -147,7 +215,6 @@ export function ScopeStage(p: StageProps) {
     );
   }
 
-  const supporting = refs.filter((r) => r.role !== 'primary');
   return (
     <div className="space-y-[16px]">
       <SectionCard id="function" title="Function or process" info="What is evaluated is the way the function works, not a server. The scope is fixed before the questions open because it decides who has to take part.">
@@ -167,24 +234,7 @@ export function ScopeStage(p: StageProps) {
         </div>
       </SectionCard>
 
-      <SectionCard id="supporting" title="Supporting assets" meta={supporting.length ? `${supporting.length} listed` : undefined}
-        info="The tools and services the function relies on. They give the evidence its context; they are not assessed or scored.">
-        {supporting.length > 0 && (
-          <ul className="mb-[12px] space-y-[8px]">
-            {supporting.map((r) => (
-              <li key={r.asset_id} className="flex flex-wrap items-center gap-[8px]">
-                <span className="min-w-0 flex-1 text-ds-body text-ds-fg">{view.facts[String(r.asset_id)]?.name ?? `Asset ${r.asset_id}`}<span className="text-ds-fg-muted"> · {word(view.facts[String(r.asset_id)]?.asset_type)}</span></span>
-                <Select aria-label="Its part in this assessment" value={r.role} disabled={fixed} onChange={(e) => setRole(r.asset_id, e.target.value as AssetRole)} className="w-[13rem]">
-                  {ASSET_ROLES_OF.process.map((role) => <option key={role} value={role}>{ASSET_ROLE_LABEL[role]}</option>)}
-                </Select>
-                <IconButton label="Remove" disabled={fixed} onClick={() => setRole(r.asset_id, '')}><X aria-hidden /></IconButton>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!fixed && <AssetPicker exclude={refs.map((r) => r.asset_id)} label="Search the asset library" onPick={(a) => onScope({ assets: [...refs, { asset_id: a.id, role: 'supporting', reason: '' } as AssetRef] })} />}
-        {fixed && supporting.length === 0 && <p className="text-ds-body text-ds-fg-muted">No supporting asset was listed.</p>}
-      </SectionCard>
+      {supportingCard('supporting', 'Supporting assets', 'The tools and services the function relies on. They give the evidence its context; they are not assessed or scored.')}
     </div>
   );
 }
@@ -195,12 +245,12 @@ export function PeopleStage(p: StageProps) {
   const { personOptions } = usePeople();
   const model = view.scope_model ?? 'asset';
   const { required, advice } = unmet(view.readiness);
-  const roleOfCheck: Record<string, ParticipantRole> = { application_owner: 'owner', process_owner: 'owner', assessor: 'assessor', reviewer: 'reviewer', sponsor: 'sponsor', contributors: 'contributor' };
+  const roleOfCheck: Record<string, ParticipantRole> = { application_owner: 'owner', process_owner: 'owner', system_owner: 'owner', assessor: 'assessor', reviewer: 'reviewer', sponsor: 'sponsor', contributors: 'contributor' };
   const missing = [...required, ...advice].map((c) => roleOfCheck[c.key]).filter(Boolean) as ParticipantRole[];
   const options: ListOption[] = personOptions;
   return (
     <div className="space-y-[16px]">
-      <SectionCard id="owner" title="Who runs it" info="The assessment owner is accountable for running the assessment, not for the application or the function that is assessed.">
+      <SectionCard id="owner" title="Who runs it" info={`The assessment owner is accountable for running the assessment, not for the ${model === 'system' ? 'system or organisation' : 'application or the function'} that is assessed.`}>
         <div className={GRID}>
           <FormField label="Assessment owner" required error={errors.owner_id}>
             <Combobox label="Assessment owner" options={options} value={p.ownerId ? String(p.ownerId) : null} onChange={(v) => { if (v) onOwner(Number(v)); }} placeholder="Choose a person" />
@@ -209,8 +259,10 @@ export function PeopleStage(p: StageProps) {
         </div>
       </SectionCard>
       <SectionCard id="participants" title="Who takes part" meta={`${(scope.participants ?? []).length} named`}
-        info={model === 'process' ? 'A function is answered by several people: its owner, the teams and providers that operate it, and a reviewer from outside who challenges the scores. Give someone domains to assign them those questions.' : 'The owner of the application, who verifies it, and who reviews the conclusions. Assessors should be independent of the application\'s team.'}>
-        <PeopleEditor key={view.id} value={scope.participants ?? []} model={model} domains={view.domains} missingRoles={missing} onChange={(v) => onScope({ participants: v })} />
+        info={model === 'process' ? 'A function is answered by several people: its owner, the teams and providers that operate it, and a reviewer from outside who challenges the scores. Give someone domains to assign them those questions.'
+          : model === 'system' ? 'The owner of the system, the assessor who performs the assessment procedures (ideally independent of the team that runs it), and the authorizing official who accepts the result. Give someone families or functions to assign them those questions.'
+          : 'The owner of the application, who verifies it, and who reviews the conclusions. Assessors should be independent of the application\'s team.'}>
+        <PeopleEditor key={view.id} value={scope.participants ?? []} model={model} format={view.assessment_format} domains={view.domains} missingRoles={missing} onChange={(v) => onScope({ participants: v })} />
         {errors.participants && <p className="mt-[8px] text-ds-body text-ds-danger" role="alert">{errors.participants}</p>}
       </SectionCard>
     </div>
@@ -246,7 +298,15 @@ export function PlanStage(p: StageProps) {
           </SectionCard>
         </>
       ) : (
-        <SectionCard id="evidence" title="Evidence" info="Statements are rated on evidence: documents, records and what people say. Decide now what will be asked for and how it will be sampled.">
+        <>
+        {view.scope_model === 'system' && (
+          <SectionCard id="when" title="When" info="The date the assessment is of: what is found is true as of this day.">
+            <div className={GRID}>
+              <FormField label="Assessment date" optional><TextInput type="date" value={date(scope.as_of)} disabled={fixed} onChange={(e) => onScope({ as_of: fromDateValue(e.target.value) })} /></FormField>
+            </div>
+          </SectionCard>
+        )}
+        <SectionCard id="evidence" title="Evidence" info={view.scope_model === 'system' ? 'Decide now what will be asked for: NIST names the objects to examine, the people to interview and the things to test for each control.' : 'Statements are rated on evidence: documents, records and what people say. Decide now what will be asked for and how it will be sampled.'}>
           <div className={GRID}>
             <FormField label="Evidence due by" optional><TextInput type="date" value={date(plan.deadline)} onChange={(e) => onScope({ evidence_plan: { ...plan, deadline: fromDateValue(e.target.value) } })} /></FormField>
             <div />
@@ -255,6 +315,7 @@ export function PlanStage(p: StageProps) {
             <FormField label="How they are sampled" optional className="sm:col-span-2"><Textarea rows={2} value={plan.sampling} maxLength={500} onChange={(e) => onScope({ evidence_plan: { ...plan, sampling: e.target.value } })} /></FormField>
           </div>
         </SectionCard>
+        </>
       )}
       <SectionCard id="why" title="Why now">
         <div className={GRID}>

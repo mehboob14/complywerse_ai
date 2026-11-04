@@ -9,16 +9,16 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Plus, Search, Upload } from 'lucide-react';
+import { ArrowRight, ExternalLink, Plus, Search, Upload } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
 import {
   Button, EmptyState, PersonChip, ProgressBar, RegisterTable, SectionCard, SegmentedControl, StatusPill, TextInput,
   rowCountText, sortRows, type RegisterColumn, type SortState,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { formatDate, formatRelative } from '@/lib/format';
+import { formatCount, formatDate, formatRelative } from '@/lib/format';
 import StartDialog, { assessmentHref } from './StartDialog';
-import { inRegister, PHASE_LABEL, PHASE_TONE, progressOf, registerSortValue, subjectOf, TYPE_INFO, type PhaseFilter } from './scopingModel';
+import { infoOf, inRegister, isNistFormat, NIST_INFO, PHASE_LABEL, PHASE_TONE, progressOf, registerSortValue, subjectOf, type PhaseFilter } from './scopingModel';
 import { scopingApi, type AssessmentRow } from './scopingApi';
 
 export const questionnaireHref = (format: string): string => `/cyber-security/questionnaires/${format}`;
@@ -30,7 +30,8 @@ const PHASES = [
 ] as const;
 
 export default function AssessmentTypePage({ format }: { format: string }) {
-  const info = TYPE_INFO[format];
+  const info = infoOf(format);
+  const library = isNistFormat(format);                                                 // made from the NIST library: no workbook, no upload
   const router = useRouter();
   const [starting, setStarting] = useState(false);
   const [phase, setPhase] = useState<PhaseFilter>('all');
@@ -40,6 +41,7 @@ export default function AssessmentTypePage({ format }: { format: string }) {
   const list = useQuery({ queryKey: ['scoping-list', format], queryFn: () => scopingApi.list({ assessment_format: format, limit: 200 }) });
 
   const tpl = templates.data?.find((t) => t.assessment_format === format);
+  const lib = tpl?.library;
   const questionnaire = tpl?.questionnaire ?? null;
   const all = useMemo(() => inRegister(list.data ?? [], 'all', ''), [list.data]);
   const rows = useMemo(() => sortRows(inRegister(list.data ?? [], phase, text), sort, registerSortValue), [list.data, phase, text, sort]);
@@ -48,7 +50,7 @@ export default function AssessmentTypePage({ format }: { format: string }) {
 
   const columns: RegisterColumn<AssessmentRow>[] = [
     {
-      key: 'subject', header: info.model === 'asset' ? 'Application' : 'Function', sortable: true, isRowHeader: true,
+      key: 'subject', header: info.model === 'asset' ? 'Application' : info.model === 'system' ? info.subject.replace(/^./, (c) => c.toUpperCase()) : 'Function', sortable: true, isRowHeader: true,
       cell: (r) => <Link href={assessmentHref(r.id)} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{subjectOf(r)}</Link>,
     },
     { key: 'phase', header: 'Phase', sortable: true, card: 'meta', cell: (r) => <StatusPill tone={PHASE_TONE[r.phase ?? 'scoping']} label={PHASE_LABEL[r.phase ?? 'scoping']} size="sm" /> },
@@ -80,6 +82,21 @@ export default function AssessmentTypePage({ format }: { format: string }) {
             ))}
           </ul>
         </SectionCard>
+        {library ? (
+          <SectionCard
+            id="method" title="Method"
+            info={`${lib?.source.publication ?? NIST_INFO[format].label}${lib?.source.version ? ` (${lib.source.version})` : ''}. NIST publications are public domain; the questions are copied from NIST's own data.`}
+            meta={tpl?.questionnaire ? `${formatCount(tpl.questionnaire.items)} ${format === 'nist_csf2' ? 'subcategories' : 'controls at Moderate'}` : undefined}
+            actions={lib ? <Button size="sm" href={lib.url} target="_blank" rel="noreferrer noopener" rightIcon={<ExternalLink aria-hidden />}>Publication</Button> : undefined}
+          >
+            <p className="text-ds-body text-ds-fg-body">{NIST_INFO[format].method}</p>
+            {lib?.baselines && (
+              <ul className="mt-[8px] space-y-[2px] text-ds-body text-ds-fg-muted">
+                {Object.entries(lib.baselines).map(([name, n]) => <li key={name}>{`${name.charAt(0).toUpperCase() + name.slice(1)}: ${formatCount(n.controls)} controls, ${formatCount(n.objectives)} objectives`}</li>)}
+              </ul>
+            )}
+          </SectionCard>
+        ) : (
         <SectionCard
           id="questionnaire" title="Questionnaire"
           info="The questions as uploaded. Each assessment starts from a copy of them without their answers; uploading a new workbook changes the questions of assessments started afterwards, not those already started."
@@ -91,6 +108,7 @@ export default function AssessmentTypePage({ format }: { format: string }) {
             : questionnaire ? <span className="break-words text-ds-body text-ds-fg-body">{questionnaire.name}</span>
             : <span className="text-ds-body text-ds-fg-muted">No questionnaire uploaded yet: upload the workbook to start an assessment.</span>}
         </SectionCard>
+        )}
       </div>
       <SectionCard
         id="assessments" title="Assessments"

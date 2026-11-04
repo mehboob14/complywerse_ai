@@ -1,6 +1,6 @@
 'use client';
 
-// Cyber Security > Overview: how the assessments stand, across the seven types. Four tiles (how many assessments, coverage, compliant, open gaps), what is
+// Cyber Security > Overview: how the assessments stand, across the nine types (the seven with a tab, and the two NIST ones made from the library). Four tiles (how many assessments, coverage, compliant, open gaps), what is
 // in flight (drafts being scoped and assessments with questions left), each type with its own numbers (a table; a card each below 768px) and the status mix.
 // On the design-system kit like the Governance Overview. The numbers keep the hub's own definitions (overviewModel.ts); each says what it rests on from an (i),
 // and a request that failed is said where its numbers would be, never drawn as 0.
@@ -33,7 +33,7 @@ export default function Overview({ rows, loading, error }: OverviewFeed) {
   const columns: RegisterColumn<TypeRow>[] = [
     {
       key: 'type', header: 'Type', sortable: true, isRowHeader: true,
-      cell: (r) => <Link href={`/cyber-security?tab=${r.tab}`} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>,
+      cell: (r) => <Link href={r.href} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>,
     },
     {
       key: 'assessments', header: 'Assessments', sortable: true, align: 'right', card: 'meta',
@@ -90,7 +90,7 @@ export default function Overview({ rows, loading, error }: OverviewFeed) {
               onSortChange={setSort}
               loading={loading}
               error={error ? { message: error.message ?? error.title, onRetry: error.onRetry } : null}
-              cardTitle={(r) => <Link href={`/cyber-security?tab=${r.tab}`} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>}
+              cardTitle={(r) => <Link href={r.href} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{r.label}</Link>}
             />
           </SectionCard>
           {mix.length > 0 && (

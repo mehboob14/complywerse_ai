@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inFlightByTab, statusMix, totalsOf, typeRow, typeRows, TYPE_FORMATS } from './overviewModel.ts';
+import { ALL_FORMATS, inFlightByTab, statusMix, totalsOf, typeRow, typeRows, TYPE_FORMATS } from './overviewModel.ts';
 
 const row = (over: Record<string, unknown> = {}) => ({
   id: 1, name: 'OWASP ASVS - Web', assessment_format: 'asvs_checklist', status: 'in_progress', due_date: null, overall_score: null, total_items: 10,
@@ -8,9 +8,19 @@ const row = (over: Record<string, unknown> = {}) => ({
   template_id: 3, owner_id: 7, owner_name: 'Amina Khan', primary_asset_id: 5, primary_asset_name: 'Web', started_at: null, created_at: '2026-11-01T10:00:00', updated_at: null, ...over,
 }) as never;
 
-test('the types are in the order of the hub tabs', () => {
+test('the types are in the order of the hub tabs, then the NIST ones made from the library', () => {
   assert.deepEqual(TYPE_FORMATS, ['asvs_checklist', 'owasp_v4_testing_checklist', 'mobile_app_security', 'csir_maturity', 'cti_maturity', 'incident_maturity', 'itsecops_maturity']);
-  assert.deepEqual(typeRows([]).map((r) => r.tab), ['asvs', 'owasp_testing', 'cs_mobile', 'cs_csir', 'cs_cti', 'cs_incident', 'cs_itsecops']);
+  assert.deepEqual(ALL_FORMATS, [...TYPE_FORMATS, 'nist_800_53a', 'nist_csf2']);
+  assert.deepEqual(typeRows([]).map((r) => r.tab), ['asvs', 'owasp_testing', 'cs_mobile', 'cs_csir', 'cs_cti', 'cs_incident', 'cs_itsecops', 'nist_library', 'nist_library']);
+  assert.deepEqual(typeRows([]).slice(6).map((r) => r.href), ['/cyber-security?tab=cs_itsecops', '/cyber-security?tab=nist_library&assessment=nist_800_53a', '/cyber-security?tab=nist_library&assessment=nist_csf2']);
+});
+
+test('a NIST assessment is added up like the others, under its own type', () => {
+  const nist = row({ id: 8, name: 'NIST SP 800-53A - Core Banking Platform', assessment_format: 'nist_800_53a', scope_model: 'system', primary_asset_id: null, primary_asset_name: null, total_items: 149, complied_count: 40, partially_complied_count: 0, not_complied_count: 9, na_count: 0, in_progress_count: 100 });
+  const r = typeRow('nist_800_53a', [nist, row({ id: 9 })]);                                                  // the ASVS one is not its
+  assert.deepEqual([r.label, r.assessments, r.total, r.complied, r.notComplied, r.gaps], ['NIST SP 800-53A', 1, 149, 40, 9, 109]);
+  assert.equal(totalsOf(typeRows([nist])).typesStarted, 1);
+  assert.equal(typeRow('nist_csf2', [nist]).assessments, 0);
 });
 
 test('a type adds up the assessments that count, with the hub\'s own definitions of coverage, compliant and gaps', () => {
@@ -55,4 +65,9 @@ test('the status bar has a segment for each status that has something in it, and
 test('the tab strip gets a number only for a type with something in flight', () => {
   const list = [row({ id: 1 }), row({ id: 2, phase: 'scoping' }), row({ id: 3, assessment_format: 'cti_maturity', total_items: 2, complied_count: 2, in_progress_count: 0 })];
   assert.deepEqual(inFlightByTab(list), { asvs: 2 });
+});
+
+test('the NIST library tab carries the in-flight count of both NIST types', () => {
+  const draft = (id: number, assessment_format: string) => row({ id, assessment_format, scope_model: 'system', phase: 'scoping', total_items: 0, in_progress_count: 0, primary_asset_id: null, primary_asset_name: null });
+  assert.deepEqual(inFlightByTab([draft(1, 'nist_800_53a'), draft(2, 'nist_csf2'), draft(3, 'nist_csf2')]), { nist_library: 3 });
 });

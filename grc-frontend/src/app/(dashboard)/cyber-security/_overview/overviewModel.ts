@@ -7,11 +7,13 @@
  * Which assessments count (the started ones; the questionnaire only until one starts, or when someone answered it; never a draft) is the rule the server's
  * board applies too (`countedForOverview`).
  */
-import { countedForOverview, inFlight, TYPE_INFO } from '../../../../components/compliance/scoping/scopingModel.ts';
+import { countedForOverview, infoOf, inFlight, NIST_INFO, TYPE_INFO, typeHref } from '../../../../components/compliance/scoping/scopingModel.ts';
 import type { AssessmentRow } from '../../../../components/compliance/scoping/scopingApi.ts';
 
-/** The types, in the order of their tabs. */
+/** The types that have a tab of their own, in the order of their tabs. */
 export const TYPE_FORMATS: readonly string[] = Object.keys(TYPE_INFO);
+/** Every type the Overview adds up: those, then the NIST assessments made from the library (their tab is the NIST library). */
+export const ALL_FORMATS: readonly string[] = [...TYPE_FORMATS, ...Object.keys(NIST_INFO)];
 
 export interface Counts { total: number; complied: number; partial: number; notComplied: number; inProgress: number; na: number }
 
@@ -19,6 +21,8 @@ export interface TypeRow extends Counts {
   format: string;
   /** the hub tab that opens this type */
   tab: string;
+  /** where this type's page is (a NIST type is the NIST library tab with the assessment named) */
+  href: string;
   label: string;
   /** assessments that count (started ones, or the questionnaire while it is the only one) */
   assessments: number;
@@ -48,12 +52,12 @@ export function countsOf(rows: readonly AssessmentRow[]): Counts {
 }
 
 export function typeRow(format: string, list: readonly AssessmentRow[]): TypeRow {
-  const info = TYPE_INFO[format];
+  const info = infoOf(format);
   const mine = list.filter((a) => a.assessment_format === format);
   const c = countsOf(countedForOverview(mine));
   const assessed = c.complied + c.partial + c.notComplied + c.na;
   return {
-    ...c, format, tab: info.tab, label: info.label,
+    ...c, format, tab: info?.tab ?? 'overview', href: typeHref(format), label: info?.label ?? format,
     assessments: countedForOverview(mine).length,
     drafts: mine.filter((a) => !!a.scope_model && a.phase === 'scoping').length,
     inFlight: mine.filter(inFlight).length,
@@ -61,7 +65,7 @@ export function typeRow(format: string, list: readonly AssessmentRow[]): TypeRow
   };
 }
 
-export const typeRows = (list: readonly AssessmentRow[]): TypeRow[] => TYPE_FORMATS.map((f) => typeRow(f, list));
+export const typeRows = (list: readonly AssessmentRow[]): TypeRow[] => ALL_FORMATS.map((f) => typeRow(f, list));
 
 export interface Totals extends Counts {
   assessments: number;
@@ -101,12 +105,13 @@ export function statusMix(c: Counts): Array<{ key: MixKey; label: string; fill: 
   return MIX.filter((m) => c[m.key] > 0).map((m) => ({ ...m, n: c[m.key], percent: all > 0 ? (c[m.key] / all) * 100 : 0 }));
 }
 
-/** The in-flight count of each hub tab, for the badges on the tab strip (a type with nothing in flight has none). */
+/** The in-flight count of each hub tab, for the badges on the tab strip (a type with nothing in flight has none; the NIST library tab adds its two types). */
 export function inFlightByTab(list: readonly AssessmentRow[]): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const f of TYPE_FORMATS) {
+  for (const f of ALL_FORMATS) {
     const n = list.filter((a) => a.assessment_format === f && inFlight(a)).length;
-    if (n > 0) out[TYPE_INFO[f].tab] = n;
+    const tab = infoOf(f)?.tab;
+    if (n > 0 && tab) out[tab] = (out[tab] ?? 0) + n;
   }
   return out;
 }
