@@ -12,7 +12,9 @@ import { useAutoGrow } from '@/lib/useAutoGrow';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { Button, ErrorState, FormField, Select, Textarea, TextInput, useReportedMutation, type TextareaProps } from '@/components/ui/ds';
+import { Button, ErrorState, FormField, Notice, Select, Textarea, TextInput, useReportedMutation, type TextareaProps } from '@/components/ui/ds';
+import { DepartmentSelect } from '@/components/governance/DepartmentSelect';
+import { isRuled } from './_approval';
 import { formErrors, payloadOf, sameForm, type ExceptionForm } from './_logic';
 import { toEditableText } from './_text';
 import { LIST_KEYS, type AssetOption, type ExceptionItem, type PolicyOption } from './_types';
@@ -99,6 +101,8 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
     else create.mutate(payloadOf(form, false));
   };
   const policyId = form.document_id ? Number(form.document_id) : 0;
+  const locked = exception !== null && isRuled(exception);                  // it waits under an approval rule: what chose the rule stays as it is
+  const inherited = exception?.department_inherited ? exception.department_path?.join(' › ') : '';
 
   return (
     <RightSlidePanel
@@ -115,6 +119,7 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
       )}
     >
       <div className="flex flex-col gap-[16px]">
+        {locked && <Notice>Priority, department and policy are locked while it waits for approval. Withdraw it to change them.</Notice>}
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <FormField label="Title" required error={errors.title}>
             <TextInput value={form.title} maxLength={500} onChange={(e) => set({ title: e.target.value })} />
@@ -132,6 +137,7 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
                 size="sm"
                 placeholder={policies.isLoading ? 'Loading policies…' : 'Select a policy…'}
                 forceSearch
+                disabled={locked}
               />
             )}
           </PickerField>
@@ -175,12 +181,18 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
           )}
         </PickerField>
 
-        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
+          <FormField label="Department" optional info="Defaults to the policy's department. Approval rules follow it.">
+            <DepartmentSelect label="Department" value={String(form.department_id)} onChange={(v) => set({ department_id: v })} disabled={locked}
+              placeholder={inherited ? `${inherited} (from the policy)` : "Policy's department"} keep={form.department_id ? [Number(form.department_id)] : []} />
+          </FormField>
           <FormField label="Priority">
-            <Select value={form.priority} onChange={(e) => set({ priority: e.target.value })}>
+            <Select value={form.priority} onChange={(e) => set({ priority: e.target.value })} disabled={locked}>
               {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </Select>
           </FormField>
+        </div>
+        <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <FormField label="Effective date">
             <TextInput type="date" value={form.effective_date} onChange={(e) => set({ effective_date: e.target.value })} />
           </FormField>

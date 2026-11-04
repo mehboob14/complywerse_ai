@@ -2,6 +2,7 @@
 // What the Policy exceptions page promises and a screenshot cannot hold for long (source-text tests, like settingsPage.test.ts): it is on the design-system
 // kit, every write is reported by useReportedMutation and goes to the same endpoint it always did, a failed request is never replaced by another table's
 // rows, the permission gates and the server's flags are still what decides, a reason is still required to reject, and AI still runs only when asked.
+// Since approval rules (Governance > Settings > Exception approvals): what the page adds for an exception under a rule, and that one without is untouched.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -17,7 +18,7 @@ const all = files.map((f) => src[f]).join('\n');
 const page = src['page.tsx'];
 
 test('the page is made of the files this test knows about', () => {
-  assert.deepEqual(files.sort(), ['_ColumnsMenu.tsx', '_Decision.tsx', '_ExceptionDetails.tsx', '_ExceptionForm.tsx', '_Suggest.tsx', '_Summary.tsx', 'page.tsx']);
+  assert.deepEqual(files.sort(), ['_ApprovalPanel.tsx', '_ColumnsMenu.tsx', '_Decision.tsx', '_ExceptionDetails.tsx', '_ExceptionForm.tsx', '_Suggest.tsx', '_Summary.tsx', 'page.tsx']);
 });
 
 test('the head is the kit\'s PageHeader with the registry\'s name for the page, and nothing of the legacy scope or head is left', () => {
@@ -43,11 +44,11 @@ test('no native dialog: confirm(), alert() and prompt() are gone, and delete ask
   assert.match(page, /confirm\(\{ title: 'Delete this exception\?'[^}]*tone: 'danger'/);
 });
 
-test('all ten writes are reported by useReportedMutation: nothing is a bare useMutation any more', () => {
+test('all the writes are reported by useReportedMutation: nothing is a bare useMutation any more', () => {
   assert.doesNotMatch(all, /\buseMutation\(/);
   const hooks = (all.match(/useReportedMutation\(\{/g) ?? []).length;
-  assert.equal(hooks, 8);                                                               // submit, delete | create, update, draft | comment, promote | one decision hook for approve, reject, revoke
-  for (const call of ['create', 'update', 'submit', 'approve', 'reject', 'revoke', 'delete', 'addComment', 'promoteToRisk', 'suggestContent']) {
+  assert.equal(hooks, 9);                                                               // submit, delete, withdraw | create, update, draft | comment, promote | one decision hook for approve, ask for changes, reject, revoke
+  for (const call of ['create', 'update', 'submit', 'approve', 'requestChanges', 'reject', 'revoke', 'withdraw', 'delete', 'addComment', 'promoteToRisk', 'suggestContent']) {
     assert.match(all, new RegExp(`policyExceptionApi\\.${call}\\(`), call);
   }
   assert.match(all, /failure: /);
@@ -121,4 +122,80 @@ test('the summary cards read the analytics, never the loaded rows, and each char
   assert.match(s, /agingBars\(a\.aging_buckets\)/);
   assert.equal((s.match(/role="img" aria-label=\{chartAlt\(/g) ?? []).length, 2);
   assert.doesNotMatch(s, /fontSize: 1[01]\b|fontSize: [0-9]\b/);                          // labels are at least 12px
+});
+
+// ── an exception under an approval rule ────────────────────────────────────────────────────────────────────────────────────
+
+test('what a row and the details offer under a rule is the server\'s: rowActionKeys for the menu, my_step for the buttons, can_withdraw for Withdraw', () => {
+  assert.match(page, /\{ key: 'changes', label: 'Ask for changes'[^}]*setDeciding\(\{ kind: 'changes'/);
+  assert.match(page, /\{ key: 'withdraw', label: 'Withdraw'/);
+  const panel = src['_ApprovalPanel.tsx'];
+  assert.match(panel, /decisionOptions\(a\.my_step\)/);
+  assert.match(panel, /live && e\.can_decide \? decisionOptions/);
+  for (const option of ['approve', 'changes', 'reject']) assert.match(panel, new RegExp(`options\\.includes\\('${option}'\\)`), option);
+  assert.match(panel, /live && e\.can_withdraw/);
+  assert.doesNotMatch(panel, /hasPermission|usePermissions/);                           // the server says who may; the panel never guesses from a role
+});
+
+test('Withdraw asks first, goes to the server\'s withdraw and refreshes what a change refreshes; the decision dialog for asking for changes needs its comment', () => {
+  assert.match(page, /confirm\(\{ title: 'Withdraw this exception\?'/);
+  assert.match(page, /mutationFn: \(e: ExceptionItem\) => policyExceptionApi\.withdraw\(e\.id\),[\s\S]*?invalidate: LIST_KEYS/);
+  const d = src['_Decision.tsx'];
+  assert.match(d, /changes: \{[^}]*required: true/);
+  assert.match(d, /policyExceptionApi\.requestChanges\(id, \{ comment: text \}\)/);
+  assert.match(d, /reject: \{[^}]*required: true/);
+});
+
+test('the status says the step and who it waits for from the server\'s approval, never from the loaded rows', () => {
+  assert.match(page, /function StatusCell/);
+  assert.match(page, /statusDetail\(e\)/);
+  assert.match(page, /cell: \(e\) => <StatusCell exception=\{e\} \/>/);
+  assert.match(src['_ApprovalPanel.tsx'], /aria-live="polite"/);                       // who it waits for is a live region: a decision is heard
+});
+
+test('"Waiting for me" is the server\'s list (never cut), shown only when something waits, narrowed by the status and priority filters, and cleared with the others', () => {
+  assert.match(page, /queryKey: \['policy-exceptions', 'waiting-for-me'\]/);              // it starts with 'policy-exceptions': every change that refreshes the list refreshes it
+  assert.match(page, /policyExceptionApi\.waitingForMe\(\)/);
+  assert.match(page, /waitingOnly \? waitingRows\(waiting\.data \?\? \[\], filters\) : list\.data \?\? \[\]/);
+  assert.match(page, /\(waiting\.data\?\.length \|\| waitingOnly\)/);                      // an organisation with no rules never sees it
+  assert.match(page, /<SegmentedControl label="Show"/);
+  assert.match(page, /setWaitingOnly\(false\)/);
+  assert.match(page, /!priorityFilter && !waitingOnly/);                                 // none waiting is not "no exceptions yet"
+});
+
+test('an alert\'s link opens the exception it names, fetched by its id when its row is not loaded, and an id that cannot be had says the server\'s sentence', () => {
+  assert.match(page, /openIdOf\(useSearchParams\(\)\?\.toString\(\)\)/);
+  assert.match(page, /window\.history\.replaceState\(null, '', window\.location\.pathname \+ withoutOpen\(window\.location\.search\) \+ window\.location\.hash\)/);
+  assert.match(page, /policyExceptionApi\.getById\(shownId as number\)/);
+  assert.match(page, /enabled: shownId !== null,\s*initialData: viewing \?\? undefined/);
+  assert.match(page, /const linkFailed = wanted !== null && viewing === null && shown === null && one\.isError/);
+  assert.match(page, /Couldn't open exception \$\{wanted\}/);
+  assert.match(page, /\{errorMessage\(one\.error\)\}/);                                    // the server's own sentence, never a blank screen
+  assert.match(page, /<Notice tone="danger"/);
+  assert.match(page, /onClose=\{closeDetails\}/);
+});
+
+test('the form has a Department that is optional, says it defaults to the policy\'s, and is locked with the priority and the policy while it waits under a rule', () => {
+  const f = src['_ExceptionForm.tsx'];
+  assert.match(f, /<FormField label="Department" optional info="Defaults to the policy's department\./);
+  assert.match(f, /<DepartmentSelect label="Department"/);
+  assert.match(f, /const locked = exception !== null && isRuled\(exception\)/);
+  assert.equal((f.match(/disabled=\{locked\}/g) ?? []).length, 3);                      // the policy, the department, the priority
+  assert.match(f, /<Notice>Priority, department and policy are locked while it waits for approval\./);
+});
+
+test('the details show the department path (and that it comes from the policy) and draw the approval only when the server sent one', () => {
+  const d = src['_ExceptionDetails.tsx'];
+  assert.match(d, /<Fact label="Department">/);
+  assert.match(d, /\{e\.approval && \(\s*<ApprovalPanel exception=\{e\} approval=\{e\.approval\}/);
+});
+
+test('the approval panel is on the kit: no bare form control, no named colour or size, steps and decisions are lists, earlier rounds open on request', () => {
+  const panel = src['_ApprovalPanel.tsx'];
+  assert.doesNotMatch(panel, /<(select|textarea|input|button)\b/);
+  assert.match(panel, /<ol aria-label="Approval steps"/);
+  assert.match(panel, /aria-current=\{live && s\.state === 'active' \? 'step' : undefined\}/);
+  assert.match(panel, /enabled: open,/);                                                // the earlier rounds are asked of the server only when they are opened
+  assert.match(panel, /aria-expanded=\{open\}/);
+  assert.doesNotMatch(panel, /new Date\(|toLocale/);
 });

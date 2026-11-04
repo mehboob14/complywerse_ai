@@ -46,6 +46,7 @@ import {
   GovernanceDashboard,
   AssetType,
 } from '@/types';
+import type { ExceptionRule, PreviewAnswer, RulePayload, RulesAnswer } from './exceptionRules';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
@@ -700,6 +701,14 @@ export const policyExceptionApi = {
     apiClient.post(`/governance/policy-exceptions/${id}/reject`, data),
   revoke: (id: number, data?: { reason?: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/revoke`, data || {}),
+  // Under an approval rule (Governance > Settings > Exception approvals; exceptionRulesApi below): the person asked at the open step sends it back to
+  // its requester with what has to change; its requester (or someone who may edit exceptions) takes it back to a draft; the ones waiting for me now;
+  // every round of its approval (who decided what at which step).
+  requestChanges: (id: number, data: { comment: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/request-changes`, data),
+  withdraw: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/withdraw`),
+  waitingForMe: () => apiClient.get('/governance/policy-exceptions/waiting-for-me'),
+  getApproval: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/approval`),
   getComments: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/comments`),
   addComment: (id: number, data: { comment: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/comments`, data),
@@ -711,6 +720,18 @@ export const policyExceptionApi = {
   // Real posture-over-time trend from the snapshot history layer.
   getTrend: (metric = 'exception_risk_posture', days = 180) =>
     apiClient.get('/enriched-dashboard/metric-trend', { params: { metric, days } }),
+};
+
+// Governance > Settings > Exception approvals: who reviews and approves a policy exception, per department. Anyone with a governance right reads the
+// rules; writing (and the tester) needs governance:settings:edit. The server's 400 sentences are said as they are. Shapes: lib/exceptionRules.ts.
+export const exceptionRulesApi = {
+  list: () => apiClient.get<RulesAnswer>('/governance/exception-approval-rules'),
+  create: (data: RulePayload) => apiClient.post<ExceptionRule>('/governance/exception-approval-rules', data),
+  update: (id: number, data: RulePayload) => apiClient.put<ExceptionRule>(`/governance/exception-approval-rules/${id}`, data),
+  remove: (id: number) => apiClient.delete<{ message: string; id: number }>(`/governance/exception-approval-rules/${id}`),
+  /** which rule an exception like this would follow, and who each step would ask */
+  preview: (data: { department_id: number | null; priority: string | null; doc_type: string | null }) =>
+    apiClient.post<PreviewAnswer>('/governance/exception-approval-rules/preview', data),
 };
 
 export const documentsApi = {

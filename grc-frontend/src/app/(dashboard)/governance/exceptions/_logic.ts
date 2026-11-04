@@ -226,23 +226,74 @@ export function sortLoaded<T extends ExceptionFields>(rows: T[], sort: SortState
 
 // ─── What a row offers ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type RowActionKey = 'view' | 'edit' | 'submit' | 'approve' | 'reject' | 'revoke' | 'delete';
+export type RowActionKey = 'view' | 'edit' | 'submit' | 'approve' | 'changes' | 'reject' | 'withdraw' | 'revoke' | 'delete';
 
-/** What the server says the person may do with a row (`can_*`, it refuses the rest) and the row's status. */
-export interface RowRights { status: string; can_edit?: boolean; can_delete?: boolean; can_decide?: boolean }
+/** What the server says the person may do with a row (`can_*`, it refuses the rest), the row's status and, under an approval rule, what the open step lets them do. */
+export interface RowRights {
+  status: string;
+  can_edit?: boolean;
+  can_delete?: boolean;
+  can_decide?: boolean;
+  can_withdraw?: boolean;
+  approval?: { status: string; my_step?: { can_reject?: boolean; can_ask_changes?: boolean } | null } | null;
+}
 
 /**
  * The actions in a row's ⋯ menu, in order: its details for everybody; change it, or send a draft for approval, for whom the server lets; approve or reject
- * what is pending, and revoke what is approved, for someone who may decide it (never its requester); delete a draft for whom the server lets.
+ * what is pending, and revoke what is approved, for someone who may decide it (never its requester); delete a draft for whom the server lets. Under an
+ * approval rule (a run that is open) the person asked decides at the open step: approve, and ask for changes or reject only where that step allows it; and
+ * whoever the server lets takes it back to a draft (withdraw).
  */
 export function rowActionKeys(e: RowRights): RowActionKey[] {
   const out: RowActionKey[] = ['view'];
   if (e.can_edit) out.push('edit');
   if (e.status === 'draft' && e.can_edit) out.push('submit');
-  if (e.status === 'pending_approval' && e.can_decide) out.push('approve', 'reject');
+  if (e.status === 'pending_approval' && e.can_decide) {
+    const ruled = e.approval?.status === 'open';
+    const mine = ruled ? e.approval?.my_step : null;
+    out.push('approve');
+    if (mine?.can_ask_changes) out.push('changes');
+    if (ruled ? mine?.can_reject : true) out.push('reject');
+  }
+  if (e.status === 'pending_approval' && e.can_withdraw) out.push('withdraw');
   if (e.status === 'approved' && e.can_decide) out.push('revoke');
   if (e.can_delete) out.push('delete');
   return out;
+}
+
+/** The department an exception is raised for, "Operations › Support", and whether it comes from its policy (none was chosen for it); null when it has none. */
+export function departmentOf(e: { department_path?: string[]; department_inherited?: boolean }): { text: string; inherited: boolean } | null {
+  return e.department_path?.length ? { text: e.department_path.join(' › '), inherited: Boolean(e.department_inherited) } : null;
+}
+
+// ─── Waiting for me, and an alert's link ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The exceptions waiting for the person's decision now (GET /waiting-for-me: the ones under an approval rule they are asked about), narrowed by the status
+ * and priority the page also offers: those filters are the server's for the list, and cannot reach this one.
+ */
+export function waitingRows<T extends { status: string; priority: string }>(rows: readonly T[], filters: Filters): T[] {
+  return rows.filter((e) => (!filters.status || e.status === filters.status) && (!filters.priority || e.priority === filters.priority));
+}
+
+/** The quick filter's label: "Waiting for me · 3". */
+export const waitingLabel = (count: number): string => `Waiting for me${count > 0 ? ` · ${formatCount(count)}` : ''}`;
+
+/**
+ * The exception an alert's link asks for: `?open=12` (what the alerts of an approval carry: exception_approvals.LINK). A whole number from 1; anything else
+ * (nothing, text, 0, -3, 12abc, 1.5) is no request. `search` is the address's query, with or without the `?`.
+ */
+export function openIdOf(search: string | null | undefined): number | null {
+  const raw = new URLSearchParams(String(search ?? '')).get('open')?.trim();
+  return raw && /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
+
+/** The address's query without its `open`, with its `?` ('' when nothing is left): a link is used up once it has opened what it asked for. */
+export function withoutOpen(search: string | null | undefined): string {
+  const params = new URLSearchParams(String(search ?? ''));
+  params.delete('open');
+  const rest = params.toString();
+  return rest ? `?${rest}` : '';
 }
 
 // ─── The form ────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -254,6 +305,8 @@ export interface ExceptionForm {
   risk_assessment: string;
   compensating_controls: string;
   priority: string;
+  /** the department it is raised for; '' leaves it to its policy's (the approval rules read it) */
+  department_id: string | number;
   /** "YYYY-MM-DD" (a date field's value) or '' */
   effective_date: string;
   expiry_date: string;
@@ -261,7 +314,7 @@ export interface ExceptionForm {
 }
 
 export const emptyForm = (): ExceptionForm => ({
-  title: '', document_id: '', justification: '', risk_assessment: '', compensating_controls: '', priority: 'medium', effective_date: '', expiry_date: '', asset_ids: [],
+  title: '', document_id: '', justification: '', risk_assessment: '', compensating_controls: '', priority: 'medium', department_id: '', effective_date: '', expiry_date: '', asset_ids: [],
 });
 
 /** A date field's value from what the server stored ("2026-11-15T08:22:49"): the day as written, "YYYY-MM-DD"; '' for none. A date field shows nothing for a value with a time. */
@@ -270,7 +323,7 @@ export const toDateInput = (value: string | null | undefined): string => /^\d{4}
 /** What Edit starts with: the exception's own values, its long texts as tidy numbered lines, its dates as the day they are. */
 export function formFrom(e: {
   title: string; document_id: number | null; justification?: unknown; risk_assessment?: unknown; compensating_controls?: unknown;
-  priority?: string; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
+  priority?: string; department_id?: number | null; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
 }): ExceptionForm {
   return {
     title: e.title,
@@ -279,6 +332,7 @@ export function formFrom(e: {
     risk_assessment: toEditableText(e.risk_assessment),
     compensating_controls: toEditableText(e.compensating_controls),
     priority: e.priority || 'medium',
+    department_id: e.department_id || '',                             // its own: one it takes from its policy is not written into the form
     effective_date: toDateInput(e.effective_date),
     expiry_date: toDateInput(e.expiry_date),
     asset_ids: e.linked_asset_ids || [],
@@ -294,8 +348,8 @@ export function formForPolicy(documentId: number, opts?: { title?: string; justi
 export function sameForm(a: ExceptionForm, b: ExceptionForm): boolean {
   const ids = (f: ExceptionForm) => [...f.asset_ids].sort((x, y) => x - y).join(',');
   return a.title === b.title && String(a.document_id) === String(b.document_id) && a.justification === b.justification && a.risk_assessment === b.risk_assessment
-    && a.compensating_controls === b.compensating_controls && a.priority === b.priority && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date
-    && ids(a) === ids(b);
+    && a.compensating_controls === b.compensating_controls && a.priority === b.priority && String(a.department_id) === String(b.department_id)
+    && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date && ids(a) === ids(b);
 }
 
 /** What is missing before it can be saved: the title and the justification (blank or only spaces is missing). Only the missing ones are keys. */
@@ -308,7 +362,8 @@ export function formErrors(form: ExceptionForm): { title?: string; justification
 
 /**
  * What is sent. A new exception sends a date only when one is set, the policy only when one is chosen, as it always did. An edit also sends a date that
- * was emptied as null (the server clears it): the form now shows the dates the exception has, so emptying one has to mean something.
+ * was emptied as null (the server clears it): the form now shows the dates the exception has, so emptying one has to mean something. The department is
+ * its id, or null for none (it then follows its policy's); the server takes the same value for an unchanged one as no change.
  */
 export function payloadOf(form: ExceptionForm, editing: boolean): Record<string, unknown> {
   const payload: Record<string, unknown> = {
@@ -319,6 +374,7 @@ export function payloadOf(form: ExceptionForm, editing: boolean): Record<string,
     priority: form.priority,
   };
   if (form.document_id) payload.document_id = Number(form.document_id);
+  payload.department_id = form.department_id ? Number(form.department_id) : null;
   if (form.effective_date) payload.effective_date = form.effective_date;
   else if (editing) payload.effective_date = null;
   if (form.expiry_date) payload.expiry_date = form.expiry_date;

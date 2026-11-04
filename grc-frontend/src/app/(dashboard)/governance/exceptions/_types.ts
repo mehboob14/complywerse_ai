@@ -26,7 +26,41 @@ export interface ExceptionItem extends ExceptionFields {
   linked_asset_ids?: number[];
   linked_assets?: LinkedAsset[];
   promoted_risk_id?: number | null;
+  /** its own department, and the names from the top department down to the one it is raised for (its own, else its policy's) */
+  department_id?: number | null;
+  department_path?: string[];
+  /** the department comes from its policy: none was chosen for the exception itself */
+  department_inherited?: boolean;
+  /** the latest run of the approval rule it was submitted under (any status); null when no rule applied: the older flow, anyone allowed to approve decides */
+  approval?: ExceptionApproval | null;
+  /** it waits under a rule and the person may take it back to a draft */
+  can_withdraw?: boolean;
 }
+
+// What the server sends of an approval (modules/governance/exception_approvals.py: _run_view, history). Said in words by _approval.ts.
+export type RunStatus = 'open' | 'approved' | 'rejected' | 'changes_requested' | 'withdrawn';
+export type StepState = 'waiting' | 'active' | 'done';
+export interface ApprovalSlot { label: string; answered: boolean; by: string[]; people: string[] }
+export interface ApprovalStep {
+  position: number; name: string; kind: 'review' | 'approval'; order: 'together' | 'in_turn'; rule: 'all' | 'any' | 'at_least'; min_count: number | null;
+  due_days: number | null; allow_reject: boolean; allow_changes: boolean; state: StepState; activated_at: string | null; due_at: string | null;
+  completed_at: string | null; overdue: boolean; slots: ApprovalSlot[]; progress: { required: number; answered: number };
+}
+export interface ApprovalDecision {
+  step_position: number; step_name: string; user_id?: number; user_name: string | null; decision: 'approve' | 'reject' | 'changes'; comment: string | null; decided_at: string | null;
+}
+/** What the person asking may do at the open step (null: they are not asked now). */
+export interface MyStep { position: number; name: string; kind: 'review' | 'approval'; can_reject: boolean; can_ask_changes: boolean }
+export interface ExceptionApproval {
+  run_id: number; round: number; status: RunStatus; rule: { id: number | null; name: string }; department_id: number | null; current_step: number | null;
+  steps: ApprovalStep[]; asked: { id: number; name: string }[]; stalled: boolean; my_step: MyStep | null; started_at: string | null; finished_at: string | null;
+  decisions: ApprovalDecision[];
+}
+export interface ApprovalRound {
+  round: number; status: RunStatus; rule_name: string; started_at: string | null; started_by: string | null; finished_at: string | null; decisions: ApprovalDecision[];
+}
+/** GET .../{id}/approval: every round, and the one that counts now. */
+export interface ApprovalHistory { rounds: ApprovalRound[]; current: ExceptionApproval | null }
 
 export interface ExceptionAnalytics {
   avg_posture: number | null;

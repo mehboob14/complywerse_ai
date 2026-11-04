@@ -8,8 +8,8 @@ import { spawnSync } from 'node:child_process';
 
 import {
   SERVER_LIMIT, agingBars, chartAlt, closedOnTimeTone, countLabel, csvDone, cutNotice, emptyForm, formErrors, formForPolicy, formFrom, itemsOf, payloadOf,
-  requesterOf, rowActionKeys, sameForm, searchExceptions, serverList, sortLoaded, statusSlices, toDateInput,
-  type ExceptionCounts, type ExceptionFields, type Filters,
+  departmentOf, openIdOf, requesterOf, rowActionKeys, sameForm, searchExceptions, serverList, sortLoaded, statusSlices, toDateInput, waitingLabel, waitingRows,
+  withoutOpen, type ExceptionCounts, type ExceptionFields, type Filters,
 } from './_logic.ts';
 
 const NONE: Filters = { status: '', priority: '' };
@@ -146,6 +146,72 @@ test('a decision is offered only for the status it is for: approve and reject fo
   assert.deepEqual(rowActionKeys({ status: 'expired', can_decide: true }), ['view']);
 });
 
+// An exception that waits under an approval rule (a run that is open) is decided by the people its open step asks, and only as that step allows.
+const asked = (mine: { can_reject: boolean; can_ask_changes: boolean }, over = {}) => ({
+  status: 'pending_approval', can_decide: true, approval: { status: 'open', my_step: mine }, ...over,
+});
+
+test('under an approval rule the person asked may ask for changes and reject only where the open step allows it', () => {
+  assert.deepEqual(rowActionKeys(asked({ can_reject: true, can_ask_changes: true })), ['view', 'approve', 'changes', 'reject']);
+  assert.deepEqual(rowActionKeys(asked({ can_reject: false, can_ask_changes: true })), ['view', 'approve', 'changes']);          // a review: it does not reject unless told to
+  assert.deepEqual(rowActionKeys(asked({ can_reject: true, can_ask_changes: false })), ['view', 'approve', 'reject']);
+  assert.deepEqual(rowActionKeys(asked({ can_reject: false, can_ask_changes: false })), ['view', 'approve']);
+});
+
+test('under an approval rule whoever is not asked decides nothing (can_decide is the server\'s: only the people the open step asks), and Withdraw is the server\'s flag', () => {
+  assert.deepEqual(rowActionKeys({ status: 'pending_approval', can_decide: false, approval: { status: 'open', my_step: null } }), ['view']);
+  assert.deepEqual(rowActionKeys({ status: 'pending_approval', can_edit: true, can_withdraw: true, approval: { status: 'open', my_step: null } }), ['view', 'edit', 'withdraw']);
+  assert.deepEqual(rowActionKeys(asked({ can_reject: true, can_ask_changes: true }, { can_edit: true, can_withdraw: true })), ['view', 'edit', 'approve', 'changes', 'reject', 'withdraw']);
+  assert.deepEqual(rowActionKeys({ status: 'draft', can_edit: true, can_withdraw: true }), ['view', 'edit', 'submit']);                // withdraw is for what waits
+});
+
+test('an exception whose earlier run is over (a draft sent back, an approved one) is decided as it always was: no ask for changes, no withdraw', () => {
+  assert.deepEqual(rowActionKeys({ status: 'draft', can_edit: true, approval: { status: 'changes_requested', my_step: null } }), ['view', 'edit', 'submit']);
+  assert.deepEqual(rowActionKeys({ status: 'approved', can_decide: true, approval: { status: 'approved', my_step: null } }), ['view', 'revoke']);
+  // a later submission that no rule met: the older run is closed, and the older flow decides (approve and reject, never "ask for changes": the server refuses it)
+  assert.deepEqual(rowActionKeys({ status: 'pending_approval', can_decide: true, approval: { status: 'withdrawn', my_step: null } }), ['view', 'approve', 'reject']);
+});
+
+// ── the quick filter and an alert's link ────────────────────────────────────────────────────────────────────────────────
+
+test('"Waiting for me" is narrowed by the status and priority the page also offers, and says how many wait', () => {
+  const rows = [
+    { id: 1, status: 'pending_approval', priority: 'high' }, { id: 2, status: 'pending_approval', priority: 'low' }, { id: 3, status: 'draft', priority: 'high' },
+  ];
+  assert.deepEqual(waitingRows(rows, { status: '', priority: '' }).map((r) => r.id), [1, 2, 3]);
+  assert.deepEqual(waitingRows(rows, { status: 'pending_approval', priority: 'high' }).map((r) => r.id), [1]);
+  assert.deepEqual(waitingRows(rows, { status: 'approved', priority: '' }), []);
+  assert.equal(waitingLabel(0), 'Waiting for me');
+  assert.equal(waitingLabel(3), 'Waiting for me · 3');
+  assert.equal(waitingLabel(1200), 'Waiting for me · 1,200');
+});
+
+test('an alert\'s link asks for one exception: ?open= and a whole number from 1; anything else is no request', () => {
+  assert.equal(openIdOf('open=12'), 12);
+  assert.equal(openIdOf('?open=12'), 12);
+  assert.equal(openIdOf('?foo=1&open=7&bar=2'), 7);
+  assert.equal(openIdOf('?open=%2012'), 12);                                       // spaces are not part of a number
+  for (const none of [null, undefined, '', '?', 'open=', 'open=0', 'open=-3', 'open=12abc', 'open=1.5', 'open=abc', 'open=12345678901', 'other=12']) {
+    assert.equal(openIdOf(none), null, String(none));
+  }
+});
+
+test('a link is used up once taken: the address keeps everything but its open', () => {
+  assert.equal(withoutOpen('?open=12'), '');
+  assert.equal(withoutOpen('open=12'), '');
+  assert.equal(withoutOpen('?open=12&status=draft'), '?status=draft');
+  assert.equal(withoutOpen('?status=draft'), '?status=draft');
+  assert.equal(withoutOpen(''), '');
+  assert.equal(withoutOpen(null), '');
+});
+
+test('an exception\'s department is its path, and says when it comes from its policy', () => {
+  assert.deepEqual(departmentOf({ department_path: ['Operations', 'Support'], department_inherited: true }), { text: 'Operations › Support', inherited: true });
+  assert.deepEqual(departmentOf({ department_path: ['Finance'] }), { text: 'Finance', inherited: false });
+  assert.equal(departmentOf({ department_path: [] }), null);
+  assert.equal(departmentOf({}), null);
+});
+
 // ── the form ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('a date field shows the day the server stored: a stored date has a time, which a date field turns into nothing', () => {
@@ -162,9 +228,10 @@ test('Edit starts with what the exception has: its dates as days, its long texts
   });
   assert.deepEqual(form, {
     title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', risk_assessment: '1. Exposure\n2. Audit finding', compensating_controls: '',
-    priority: 'medium', effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
+    priority: 'medium', department_id: '', effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
   });
   assert.equal(formFrom({ title: 'x', document_id: null }).document_id, '');
+  assert.equal(formFrom({ title: 'x', document_id: 4, department_id: 12 }).department_id, 12);                  // its own department; one it takes from its policy is not in the form
 });
 
 test('a new exception raised against a policy, or from a suggestion, starts with the title, the reason and the priority it came with', () => {
@@ -179,8 +246,9 @@ test('closing the form has something to lose only when it differs from where it 
   assert.ok(sameForm(start, { ...start }));
   assert.ok(sameForm(start, { ...start, asset_ids: [2, 1] }));
   assert.ok(sameForm(start, { ...start, document_id: '4' }));
+  assert.ok(sameForm({ ...start, department_id: 12 }, { ...start, department_id: '12' }));
   for (const changed of [{ title: 'T2' }, { justification: 'J2' }, { risk_assessment: 'r' }, { compensating_controls: 'c' }, { priority: 'high' }, { effective_date: '2026-01-01' },
-    { expiry_date: '2026-01-01' }, { asset_ids: [1] }, { document_id: '' }]) assert.ok(!sameForm(start, { ...start, ...changed }), JSON.stringify(changed));
+    { expiry_date: '2026-01-01' }, { asset_ids: [1] }, { document_id: '' }, { department_id: 12 }]) assert.ok(!sameForm(start, { ...start, ...changed }), JSON.stringify(changed));
   assert.ok(sameForm(emptyForm(), emptyForm()));
 });
 
@@ -191,11 +259,14 @@ test('the title and the justification are required, and spaces alone are nothing
   assert.deepEqual(formErrors({ ...emptyForm(), title: 'T', justification: 'J' }), {});
 });
 
-test('a new exception sends what it always did: a date only when set, the policy only when chosen', () => {
+test('a new exception sends what it always did: a date only when set, the policy only when chosen, and its department (none: null, its policy\'s)', () => {
   const form = { ...emptyForm(), title: 'T', justification: 'J', document_id: '44', expiry_date: '2026-12-15', asset_ids: [1, 2] };
   assert.deepEqual(payloadOf(form, false), {
-    title: 'T', justification: 'J', risk_assessment: '', compensating_controls: '', priority: 'medium', document_id: 44, expiry_date: '2026-12-15', asset_ids: [1, 2],
+    title: 'T', justification: 'J', risk_assessment: '', compensating_controls: '', priority: 'medium', document_id: 44, department_id: null, expiry_date: '2026-12-15', asset_ids: [1, 2],
   });
+  assert.equal(payloadOf({ ...form, department_id: '12' }, false).department_id, 12);
+  assert.equal(payloadOf({ ...form, department_id: 12 }, true).department_id, 12);
+  assert.equal(payloadOf({ ...form, department_id: '' }, true).department_id, null);                              // an edit that empties it: the server clears it
   const bare = payloadOf({ ...emptyForm(), title: 'T', justification: 'J' }, false);
   assert.ok(!('document_id' in bare) && !('effective_date' in bare) && !('expiry_date' in bare));
 });
