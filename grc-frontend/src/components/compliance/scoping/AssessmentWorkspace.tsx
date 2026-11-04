@@ -6,10 +6,10 @@
  * Start, which copies the questions without their answers, keeps the scope and the facts of its assets as they were, and opens the questionnaire (the
  * same tab every assessment of its type has always had) as the last stage.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleDot, Circle, Lock, Play, Trash2 } from 'lucide-react';
+import { Check, Circle, Play, Trash2 } from 'lucide-react';
 import { PageHeading } from '@/components/ui/ds/PageHeading';
 import { Button, EmptyState, ErrorState, Notice, ReadOnlyNote, SectionCard, SkeletonLines, StatusPill, useConfirm, useNotify } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -19,7 +19,8 @@ import OwaspTestingTab from '../OwaspTestingTab';
 import MobileAppSecurityTab from '../MobileAppSecurityTab';
 import MaturityAssessmentTab from '../MaturityAssessmentTab';
 import { PeopleStage, PlanStage, ScopeStage, type StageProps } from './ScopeForms';
-import { fieldErrors, PHASE_LABEL, PHASE_TONE, stageOfCheck, STAGE_LABEL, STAGES, stageState, TYPE_INFO, unmet, type Stage } from './scopingModel';
+import StageTabs, { panelId, tabId } from './StageTabs';
+import { fieldErrors, PHASE_LABEL, PHASE_TONE, stageOfCheck, STAGES, stageState, TYPE_INFO, unmet, type Stage } from './scopingModel';
 import { refreshAssessmentLists, scopingApi, type Scope, type ScopePatch, type ScopeView } from './scopingApi';
 
 const SHELL = 'mx-auto flex max-w-7xl flex-col gap-[16px]';
@@ -32,30 +33,6 @@ export function QuestionnaireTab({ format, id, allowUpload }: { format: string; 
     case 'mobile_app_security': return <MobileAppSecurityTab assessmentId={id} allowUpload={allowUpload} />;
     default: return <MaturityAssessmentTab format={format} assessmentId={id} allowUpload={allowUpload} />;
   }
-}
-
-function StageRail({ view, current, onPick }: { view: ScopeView; current: Stage; onPick: (s: Stage) => void }) {
-  const started = view.phase === 'in_progress';
-  return (
-    <nav aria-label="Stages of this assessment" className="flex gap-[4px] overflow-x-auto lg:flex-col lg:overflow-visible">
-      {STAGES.map((stage) => {
-        const state = stageState(view, stage);
-        const locked = stage === 'assessment' && !started;
-        const on = current === stage;
-        const Icon = locked ? Lock : stage === 'assessment' ? CircleDot : state.done ? Check : Circle;
-        return (
-          <button key={stage} type="button" aria-current={on ? 'step' : undefined} disabled={locked} onClick={() => onPick(stage)}
-            aria-label={stage === 'assessment' ? (locked ? `${STAGE_LABEL[stage]}, opens when started` : `${STAGE_LABEL[stage]}, ${view.total_items} questions`) : `${STAGE_LABEL[stage]}${state.missing > 0 ? `, ${state.missing} to do` : ', done'}`}
-            className={`flex min-h-ds-control shrink-0 items-center gap-[8px] rounded-ds-control px-[10px] text-left text-ds-body focus-visible:outline-none focus-visible:shadow-ds-ring ${on ? 'bg-ds-primary-soft font-[600] text-ds-primary-text' : 'text-ds-fg-body enabled:hover:bg-ds-surface-hover'} ${locked ? 'text-ds-fg-muted' : ''}`}>
-            <Icon aria-hidden className={`h-[16px] w-[16px] shrink-0 ${!locked && state.done && stage !== 'assessment' ? 'text-ds-success' : ''}`} strokeWidth={1.75} />
-            <span>{STAGE_LABEL[stage]}</span>
-            {stage !== 'assessment' && state.missing > 0 && <span className="ml-auto text-ds-label text-ds-fg-muted">{state.missing} to do</span>}
-            {stage === 'assessment' && !locked && <span className="ml-auto text-ds-label text-ds-fg-muted">{view.total_items} questions</span>}
-          </button>
-        );
-      })}
-    </nav>
-  );
 }
 
 function Readiness({ view, onJump, onStart, starting }: { view: ScopeView; onJump: (s: Stage) => void; onStart: () => void; starting: boolean }) {
@@ -89,6 +66,7 @@ export default function AssessmentWorkspace({ id }: { id: number }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const tabsBase = useId();
   const sent = useRef('');
   const failed = useRef('');                                                    // the edits the server refused: not sent again until they change (or the person says so)
   const opened = useRef<Stage | null>(null);                                    // the stage the page opened on, chosen once from the first answer
@@ -195,24 +173,22 @@ export default function AssessmentWorkspace({ id }: { id: number }) {
       )}
       {startError && <Notice tone="danger" title="Couldn't start">{startError}</Notice>}
       {v.subject_summary && started && <Notice tone="info" title="What this assessment is of">{v.subject_summary}</Notice>}
-      <div className="grid gap-[16px] lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <StageRail view={v} current={current} onPick={setStage} />
-        <div className={`grid min-w-0 gap-[16px] ${started || current === 'assessment' ? '' : 'xl:grid-cols-[minmax(0,1fr)_19rem]'}`}>
-          <div className="min-w-0">
-            {started && (current === 'scope' || current === 'plan') && (
-              <div className="mb-[12px]">
-                <ReadOnlyNote>Fixed since the start <InfoTip label="What can still change" text="The subject, level, period, exclusions and test rules were agreed before the questions opened, so they are shown as they were. Who takes part, the notes and the evidence plan can still change." /></ReadOnlyNote>
-              </div>
-            )}
-            {current === 'scope' && <ScopeStage {...props} />}
-            {current === 'people' && <PeopleStage {...props} />}
-            {current === 'plan' && <PlanStage {...props} />}
-            {current === 'assessment' && (started
-              ? <QuestionnaireTab format={v.assessment_format} id={v.id} allowUpload={false} />
-              : <EmptyState kind="firstUse" title="The questions open when you start" description="Fill the scope and the people, then press Start assessment." bare />)}
-          </div>
-          {!started && current !== 'assessment' && <aside className="min-w-0"><Readiness view={v} onJump={setStage} onStart={() => start.mutate()} starting={start.isPending} /></aside>}
+      <StageTabs base={tabsBase} view={v} current={current} onPick={setStage} />
+      <div className={`grid min-w-0 gap-[16px] ${started || current === 'assessment' ? '' : 'xl:grid-cols-[minmax(0,1fr)_19rem]'}`}>
+        <div role="tabpanel" id={panelId(tabsBase, current)} aria-labelledby={tabId(tabsBase, current)} tabIndex={0} className="min-w-0 focus-visible:outline-none focus-visible:shadow-ds-ring">
+          {started && (current === 'scope' || current === 'plan') && (
+            <div className="mb-[12px]">
+              <ReadOnlyNote>Fixed since the start <InfoTip label="What can still change" text="The subject, level, period, exclusions and test rules were agreed before the questions opened, so they are shown as they were. Who takes part, the notes and the evidence plan can still change." /></ReadOnlyNote>
+            </div>
+          )}
+          {current === 'scope' && <ScopeStage {...props} />}
+          {current === 'people' && <PeopleStage {...props} />}
+          {current === 'plan' && <PlanStage {...props} />}
+          {current === 'assessment' && (started
+            ? <QuestionnaireTab format={v.assessment_format} id={v.id} allowUpload={false} />
+            : <EmptyState kind="firstUse" title="The questions open when you start" description="Fill the scope and the people, then press Start assessment." bare />)}
         </div>
+        {!started && current !== 'assessment' && <aside className="min-w-0"><Readiness view={v} onJump={setStage} onStart={() => start.mutate()} starting={start.isPending} /></aside>}
       </div>
       {confirmDialog}
     </div>
