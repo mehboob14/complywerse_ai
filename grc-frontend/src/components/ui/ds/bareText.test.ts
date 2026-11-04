@@ -20,6 +20,7 @@ const FOLDERS = [
   `${ROOT}/governance/settings`,                  // G4-a Settings
   `${ROOT}/governance/exceptions`,                // G4-D Policy exceptions
   `${ROOT}/governance/documents/attestation`,     // G4-D Attestation (documents\ belongs to other builders in parallel: read here, not edited)
+  `${ROOT}/governance/documents/overview`,        // the Documents Overview (the library at a glance, by department)
   `${ROOT}/governance/reviews`,                   // G4-C Reviews and the Review calendar
   `${ROOT}/governance/_metrics`,                  // G4-F1 KPI Report (kpi-report/page.tsx is listed below)
   `${ROOT}/governance/committees`,                // G4-E Committees (the list, a committee, a meeting, Oversight Actions)

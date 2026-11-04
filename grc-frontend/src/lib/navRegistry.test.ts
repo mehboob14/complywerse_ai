@@ -38,7 +38,7 @@ function hasPage(at: string, segments: string[]): boolean {
 
 test('every page of the Governance folder is exactly one entry, and every Governance URL of the registry is a page', () => {
   const pages = pagesOf('(dashboard)/governance', '/governance');
-  assert.equal(pages.length, 26, 'the folder holds the 26 pages of the URL contract');
+  assert.equal(pages.length, 27, 'the folder holds the 26 pages of the URL contract and the Documents Overview');
   for (const page of pages) assert.equal(routes.filter((e) => e.path === page).length, 1, page);
   for (const e of routes.filter((r) => r.path.startsWith('/governance'))) assert.ok(pages.includes(e.path), `${e.path} has no page.tsx`);
 });
@@ -74,7 +74,7 @@ test('the rights of a page without a menu entry are none: the registry adds no g
   // the Governance pages that guard nothing today (any signed-in user opens them by URL); G3_permission_matrix lists which of their APIs are open too
   const unguarded = routes.filter((e) => e.area === 'governance' && e.permissions === null).map((e) => e.path);
   assert.deepEqual(unguarded, [
-    '/governance/documents/:id', '/governance/documents/studio', '/governance/documents/studio/:sessionId', '/governance/documents/attestation',
+    '/governance/documents/:id', '/governance/documents/overview', '/governance/documents/studio', '/governance/documents/studio/:sessionId', '/governance/documents/attestation',
     '/governance/attestations', '/governance/attestations/campaigns', '/governance/attestations/campaigns/:id', '/governance/attestations/my',
     '/governance/attestations/complete/:id', '/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/reviews/calendar',
     '/governance/mappings', '/governance/workflows', '/governance/committees/:id', '/governance/committees/meetings/:id', '/governance/committees/actions',
@@ -192,6 +192,7 @@ test('a static page beats a :param page of the same shape, a :param matches one 
   assert.equal(routeFor('/governance/documents/studio')?.path, '/governance/documents/studio');
   assert.equal(routeFor('/governance/documents/12')?.path, '/governance/documents/:id');
   assert.equal(routeFor('/governance/documents/attestation')?.path, '/governance/documents/attestation');
+  assert.equal(routeFor('/governance/documents/overview')?.path, '/governance/documents/overview');
   assert.equal(routeFor('/governance/committees/meetings/9')?.path, '/governance/committees/meetings/:id');
   assert.equal(routeFor('/governance/committees/actions')?.path, '/governance/committees/actions');
   assert.equal(routeFor('/governance/documents/12/extra'), undefined);
@@ -290,18 +291,42 @@ test('an unknown or odd path falls back (undefined, an empty trail) and never th
 
 // ---- tabs (the full pin of the Documents tab bar is documentsTabs.test.ts) ----
 
-test('the Documents strip: six tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
+test('the Documents strip: seven tabs in order; the Studio only where it is on, Settings only to those who hold its right', () => {
   assert.deepEqual(tabsFor('documents').map((t) => t.path), [
-    '/governance/documents', '/governance/documents/studio', '/governance/documents/attestation', '/governance/reviews', '/governance/exceptions', '/governance/settings',
+    '/governance/documents', '/governance/documents/overview', '/governance/documents/studio', '/governance/documents/attestation', '/governance/reviews',
+    '/governance/exceptions', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
-  assert.deepEqual(labels(false, false), ['Documents', 'Attestation', 'Document Reviews', 'Policy exceptions']);
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 6, 'the right asked for is governance:settings:*');
-  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 5);
+  assert.deepEqual(labels(true, true), ['Documents', 'Overview', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'Overview', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'Overview', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'Overview', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 7, 'the right asked for is governance:settings:*');
+  assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 6);
   assert.deepEqual(tabsFor('nowhere'), []);
+});
+
+test('the Overview is the second tab, for everyone who sees the strip with or without the Studio, and its page lights it and not Documents', () => {
+  const overview = entry('/governance/documents/overview');
+  assert.deepEqual([overview.tab?.area, overview.tab?.id, overview.tab?.order, overview.tab?.permission, overview.tab?.studio], ['documents', 'overview', 2, undefined, undefined]);
+  assert.equal(overview.label, 'Overview');
+  assert.equal(overview.shortLabel, undefined, 'the tab says what the page is called');
+  assert.equal(overview.hidden, undefined);
+  assert.equal(overview.permissions, null, 'the registry adds no right and no guard: the server answers 403 to anyone who reads no library and heads no department');
+  for (const ctx of [{ studio: true, can: () => false }, { studio: false, can: () => false }, { studio: false, can: () => true }]) {
+    assert.equal(tabsFor('documents', ctx)[1].path, '/governance/documents/overview', JSON.stringify(ctx.studio));
+  }
+  for (const url of ['/governance/documents/overview', '/governance/documents/overview?dept=12', '/governance/documents/overview/']) {
+    assert.equal(isInArea('documents', url), true, url);
+    assert.equal(activeTab('documents', url)?.path, '/governance/documents/overview', url);
+    assert.equal(activeTab('documents', url, { studio: true })?.path, '/governance/documents/overview', `${url} (Studio on)`);
+    assert.equal(titleFor(url), 'Overview', url);
+  }
+  assert.deepEqual(breadcrumbFor('/governance/documents/overview').map((c) => c.label), ['Governance', 'Documents', 'Overview']);
+  assert.equal(activeTab('documents', '/governance/documents')?.path, '/governance/documents', 'the library still lights Documents');
+  assert.equal(activeNavHref('/governance/documents/overview', navigation), '/governance/documents', 'the sidebar keeps Documents lit');
+  // Next finds the page before the document page: a static folder beats [id]
+  assert.ok(existsSync(`${APP}(dashboard)/governance/documents/overview/page.tsx`));
 });
 
 test('Reviews is a door of its own: a tab of the Documents strip for everyone who sees the strip (no right of its own), lit on both of its URLs', () => {
@@ -321,8 +346,8 @@ test('Reviews is a door of its own: a tab of the Documents strip for everyone wh
   }
   assert.deepEqual(breadcrumbFor('/governance/reviews/calendar').map((c) => c.label), ['Governance', 'Documents', 'Document Reviews']);
   // the tabs on either side keep their places
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 2, 3, 4, 5, 6]);
-  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.order), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(tabsFor('documents').map((t) => t.tab.id), ['documents', 'overview', 'studio', 'attestation', 'reviews', 'exceptions', 'settings']);
 });
 
 test('a short label is only what the tab shows; the tooltip and the accessible name are the label', () => {

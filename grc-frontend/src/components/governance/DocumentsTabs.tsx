@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * The Documents area's tabs (Documents · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
+ * The Documents area's tabs (Documents · Overview · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
  * of their own so the page below gets the height. From xl up every tab is an icon and a label (Settings is just the gear); below that
- * only the open tab keeps its label. With the Studio and the Settings gear there are six tabs, 629px of them against the 576px the top bar leaves at 1280:
- * from 1280 to 1359 the tabs' side padding is 4px, which makes the six fit with their labels. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
+ * only the open tab keeps its label. With the Studio and the Settings gear there were six tabs, 629px of them against the 576px the top bar leaves at 1280:
+ * from 1280 to 1359 the tabs' side padding is 4px, which made the six fit with their labels; the Overview tab (a seventh, ~90px) is not measured yet:
+ * where the seven do not fit the strip scrolls sideways and brings the open tab into view. The product keeps its full name, "Comply AI Studio", on every screen; "Policy exceptions" is
  * "Exceptions" and "Document Reviews" is "Reviews" here, their full names staying as the tooltip and as what a screen reader says.
  * Which tabs there are, their names and order, who sees them and which page lights which come from the navigation registry
  * (lib/navRegistry.ts); this file is how a tab looks. Colours are explicit hex on purpose: the platform CSS repaints the accent
@@ -14,7 +15,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, Settings, Sparkles, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, LayoutDashboard, Settings, Sparkles, type LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { studioApi } from '@/lib/studio/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -24,6 +25,7 @@ import { scrollDelta } from '@/lib/tabsModel';
 // the look of each tab of the registry's 'documents' strip, by its id
 const LOOK: Record<string, { icon: LucideIcon; iconOnly?: boolean }> = {
   documents: { icon: FileText },
+  overview: { icon: LayoutDashboard },
   studio: { icon: Sparkles },
   attestation: { icon: ClipboardCheck },
   reviews: { icon: CalendarClock },
