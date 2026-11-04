@@ -4,6 +4,7 @@
 // documents match is libraryModel.matchesFilters (the page passes the ids), how documents nest under each other is docTree.buildTree
 // (once per folder), when a review is overdue is libraryModel.reviewState. This file decides which folders there are, what is in
 // them and how they count.
+import { departmentPickItems } from '../../../../../lib/departments.ts';
 import { buildTree, treeEntries, type TreeDoc, type TreeEntry } from './docTree.ts';
 import { fold, reviewState, type LibDoc, type LibraryViewId } from './libraryModel.ts';
 import type { DrawnRow } from './libraryTableLogic.ts';
@@ -356,21 +357,17 @@ export function chooseView(o: {
 export interface MoveTarget {
   /** the department; null: no department */
   id: number | null;
-  /** "Operations", or "Operations › Security" for a department inside another */
+  /** "Operations", or "Operations › Security" for a department inside another (up to three levels: "Operations › Security › SOC") */
   label: string;
+  /** its level in the organisation's own word ("Sub-department"); "No department" has none */
+  subLabel?: string;
 }
 
-/** Where a document can be moved: the departments in use by their full name, A to Z, then "No department". A switched-off one is not
- *  offered (the server refuses it). */
-export function moveTargets(departments: readonly FolderDepartment[] | null | undefined): MoveTarget[] {
-  const { byId, sorted, parent } = indexDepartments(departments);
-  const label = (d: FolderDepartment): string => {
-    const names = [d.name];
-    for (let p = parent.get(d.id); p !== undefined; p = parent.get(p)) names.unshift(byId.get(p)!.name);
-    return names.join(' › ');
-  };
-  const rows = sorted.filter((d) => d.is_active !== false).map((d) => ({ id: d.id as number | null, label: label(d) }));
-  rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }));
+/** Where a document can be moved: the departments in use in tree order (the top ones A to Z, each followed by what is under it), by
+ *  their full path with their level (`labels`: the organisation's own words for the levels), then "No department". A switched-off one is
+ *  not offered (the server refuses it). The same list every other department picker shows (lib/departments.ts departmentPickItems). */
+export function moveTargets(departments: readonly FolderDepartment[] | null | undefined, labels?: readonly string[]): MoveTarget[] {
+  const rows = departmentPickItems(departments ?? [], { labels }).map((i) => ({ id: Number(i.value) as number | null, label: i.label, subLabel: i.subLabel }));
   return [...rows, { id: null, label: NO_DEPARTMENT_NAME }];
 }
 

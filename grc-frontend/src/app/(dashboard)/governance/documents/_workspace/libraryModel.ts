@@ -3,7 +3,7 @@
 // frameworks is cut for a table cell, how the page's state lives in the address (a link opens the same view), how rows sort.
 // The components only draw what this decides.
 import { parseUtc } from '../../../../../lib/serverTime.ts';
-import { NO_DEPARTMENT, matchesDepartment, shownFrameworkIds } from './library.ts';
+import { NO_DEPARTMENT, matchesDepartment, shownFrameworkIds, type DepartmentScope } from './library.ts';
 
 // ─── Words ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -66,6 +66,11 @@ export interface FrameworkInfo { short: string; name: string }
 export interface Lookups {
   /** department id -> name */
   departments: Record<string, string>;
+  /** department id -> the ids of it and of everything under it (library.ts departmentScopes): choosing a department in the Department filter
+   *  keeps the documents in any of them. Absent, a department matches only itself. */
+  departmentScope?: DepartmentScope;
+  /** department id -> its whole path ("Operations › Support", library.ts departmentPaths): the title of the Department column, which draws the name */
+  departmentPaths?: Record<string, string>;
   /** framework id -> its short label and full name (the uploaded-frameworks list) */
   frameworks: Record<string, FrameworkInfo>;
   /** document id -> attestation % (documents with no campaign are absent) */
@@ -293,7 +298,7 @@ export interface Filters {
   statuses: string[];
   /** owner ids as text, or NO_OWNER */
   owners: string[];
-  /** department ids as text, or NO_DEPARTMENT */
+  /** department ids as text, or NO_DEPARTMENT; a department takes in the ones under it (Lookups.departmentScope), "no department" is exact */
   departments: string[];
   /** framework ids as text, or NO_FRAMEWORK */
   frameworks: string[];
@@ -359,7 +364,7 @@ export function matchesFilters(d: LibDoc, f: Filters, ctx: MatchContext): boolea
   if (f.statuses.length && !f.statuses.includes(d.status)) return false;
   if (f.types.length && !f.types.includes(d.doc_type)) return false;
   if (f.owners.length && !f.owners.some((o) => (o === NO_OWNER ? d.owner_id == null : String(d.owner_id ?? '') === o))) return false;
-  if (f.departments.length && !f.departments.some((v) => matchesDepartment(d, v))) return false;
+  if (f.departments.length && !f.departments.some((v) => matchesDepartment(d, v, ctx.departmentScope))) return false;
   if (f.frameworks.length) {
     const ids = shownFrameworkIds(d);
     if (!f.frameworks.some((v) => (v === NO_FRAMEWORK ? ids.length === 0 : ids.includes(Number(v))))) return false;

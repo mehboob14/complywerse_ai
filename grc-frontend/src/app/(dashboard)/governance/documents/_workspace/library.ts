@@ -1,4 +1,5 @@
 // Small rules of the documents library page. Pure (no React), so `node --test` runs library.test.ts against it.
+import { departmentPickItems, departmentTree } from '../../../../../lib/departments.ts';
 
 /** New Document, AI Draft and Templates all open the Comply AI Studio: where it is off, one line says so instead. */
 export function creation(canCreate: boolean, studioEnabled: boolean | undefined): 'buttons' | 'studio-off' | null {
@@ -46,26 +47,56 @@ export function shownFrameworkIds(d: { applicable_framework_ids?: number[] | nul
 /** The Department filter's choice for the documents that sit in no department (a department's id is a number, so this cannot clash). */
 export const NO_DEPARTMENT = 'none';
 
-/** Whether a document passes the Department filter ('' = all; NO_DEPARTMENT = documents with none; else the department's id). */
-export function matchesDepartment(d: { department_id?: number | null }, filter: string): boolean {
+/** Department id (as text) -> the ids of that department and of every department under it, however deep. Choosing a department in the
+ *  Department filter means all of them: a document in a unit is in its sub-department and in its department too. */
+export type DepartmentScope = Record<string, readonly number[]>;
+
+type TreeDepartment = { id: number; name: string; parent_department_id?: number | null };
+
+/** Whether a document passes the Department filter ('' = all; NO_DEPARTMENT = documents with none, exactly; else the department's id).
+ *  With `scope` a department also takes in the documents of the departments under it; without it (or for an id it does not know)
+ *  the department matches only itself, as it always did. The id comes from the address (`?dept=`): it is looked up by own key only. */
+export function matchesDepartment(d: { department_id?: number | null }, filter: string, scope?: DepartmentScope | null): boolean {
   if (!filter) return true;
   if (filter === NO_DEPARTMENT) return d.department_id == null;
-  return String(d.department_id ?? '') === filter;
+  if (d.department_id == null) return false;
+  const below = scope && Object.prototype.hasOwnProperty.call(scope, filter) ? scope[filter] : null;
+  return below ? below.includes(d.department_id) : String(d.department_id) === filter;
 }
 
-/** What the Department filter offers: "No department", then the active departments by name; one switched off that a document still
- *  sits in is kept (marked), so those documents can still be found. */
+/** For each department, the ids of it and of everything under it (lib/departments.ts reads the tree the way the server does: a loop, a
+ *  self-parent or a missing parent counts as a top department). Built once per list of departments, then asked by `matchesDepartment`. */
+export function departmentScopes(departments: readonly TreeDepartment[] | null | undefined): DepartmentScope {
+  const all = departments ?? [];
+  const tree = departmentTree(all);
+  const out: DepartmentScope = {};
+  all.forEach((d) => { out[String(d.id)] = Array.from(tree.subtree(d.id)); });
+  return out;
+}
+
+/** Department id (as text) -> the names from its top department down to it ("Operations › Support"): the full path for the Department
+ *  column's title, where only the department's own name is drawn. */
+export function departmentPaths(departments: readonly TreeDepartment[] | null | undefined): Record<string, string> {
+  const all = departments ?? [];
+  const tree = departmentTree(all);
+  const out: Record<string, string> = {};
+  all.forEach((d) => { out[String(d.id)] = tree.path(d.id).map((p) => p.name).join(' › '); });
+  return out;
+}
+
+/** What the Department filter offers: "No department", then every department in tree order (the top ones A to Z, each followed by what
+ *  is under it), named by its whole path with its level under the name ("Sub-department", or the organisation's own word: `labels`).
+ *  Choosing one includes the departments under it. One switched off that a document still sits in is kept (marked), so those documents
+ *  can still be found. */
 export function departmentFilterOptions(
-  departments: readonly { id: number; name: string; is_active?: boolean }[] | null | undefined,
+  departments: readonly (TreeDepartment & { is_active?: boolean })[] | null | undefined,
   docs: readonly { department_id?: number | null }[],
-): { value: string; label: string }[] {
-  const used = new Set<number>();
-  docs.forEach((d) => { if (d.department_id != null) used.add(d.department_id); });
-  const rows = (departments ?? [])
-    .filter((d) => d.is_active !== false || used.has(d.id))
-    .map((d) => ({ value: String(d.id), label: d.is_active === false ? `${d.name} (inactive)` : d.name }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-  return [{ value: NO_DEPARTMENT, label: 'No department' }, ...rows];
+  labels?: readonly string[],
+): { value: string; label: string; subLabel?: string }[] {
+  return [
+    { value: NO_DEPARTMENT, label: 'No department' },
+    ...departmentPickItems(departments ?? [], { labels, keep: docs.map((d) => d.department_id) }),
+  ];
 }
 
 /** Department id -> name, for the register's Department column. */

@@ -69,6 +69,25 @@ test('the Move to… popover is a dialog with a search box and a list, closes on
   assert.ok(popover.includes('if (t && !busy && !isCurrent(t)) onPick(t)'));
 });
 
+test('the library reads the department tree: the filter takes in what is under a department, the lists carry the level names, the column keeps the path as its title (D57)', () => {
+  assert.ok(workspace.includes('departmentScope: departmentScopes(departments), departmentPaths: departmentPaths(departments)'));
+  assert.ok(workspace.includes('useDepartmentLevels().data?.labels'));                                       // the organisation's words for the levels, the default names until they arrive
+  assert.ok(workspace.includes('departmentFilterOptions(departmentsQ.data, allDocs, levelNames)'));
+  assert.ok(workspace.includes('moveTargets(departments, levelNames)'));
+  assert.ok(table.includes('lookups.departmentPaths?.[String(doc.department_id)]') && table.includes('<DepartmentCell name={department} path={departmentPath} />'));
+  assert.ok(cells.includes('title={path || name}'));                                                         // the name is drawn; the whole path is on hover
+  assert.ok(popover.includes('t.subLabel &&'));                                                              // the level beside each place in Move to…
+});
+
+test('the Department fields of a document (the New document form and the details popup) list the tree by path and level, not names alone', () => {
+  for (const name of ['../_DetailsFields.tsx', '../[id]/_DetailsDialog.tsx']) {
+    const src = read(name);
+    assert.ok(src.includes('departmentPickItems(') && src.includes('keep: [form.department_id]'), name);     // the one a document sits in stays listed even when switched off
+    assert.ok(src.includes('useDepartmentLevels().data?.labels'), name);
+    assert.ok(!/\.filter\(\((x|d)\) => (x|d)\.is_active !== false \|\| (x|d)\.id === form\.department_id\)/.test(src), `${name} still lists names only`);
+  }
+});
+
 test('no screen of the view names a model or a vendor', () => {
   for (const src of [rows, popover]) assert.ok(!/gpt|openai|claude|anthropic/i.test(src));
 });

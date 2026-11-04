@@ -2,7 +2,7 @@
 
 /**
  * "Move to…": the small popover that asks which department one document, or the ticked ones, go to. A search box and the departments in
- * use by their full name ("Operations › Security"), "No department" last. It is portaled to <body> and fixed to the button it came from
+ * use in tree order by their full path ("Operations › Security › SOC") with their level beside it, "No department" last. It is portaled to <body> and fixed to the button it came from
  * (never clipped by the table's scroll), opens below that button or above it when there is more room there, takes focus when it opens
  * and gives it back when it closes. ArrowUp / ArrowDown and Enter choose, Escape or a click outside closes it. What it offers and how
  * the search narrows are rules in libraryFolders.ts; the moving itself (and what is said afterwards) is the page's. Written on the
@@ -149,13 +149,16 @@ export function MovePopover({ anchor, targets, current, count, busy = false, onP
               role="option"
               aria-selected={on}
               aria-disabled={here || busy || undefined}
-              title={here ? 'Already here' : t.label}
+              title={here ? 'Already here' : t.subLabel ? `${t.label} · ${t.subLabel}` : t.label}
               onMouseEnter={() => setAt(i)}
               onClick={() => choose(t)}
               className={`flex min-h-ds-control items-center gap-2 rounded-ds-control px-2 py-1.5 ${t.id === null && i > 0 ? 'mt-1 border-t border-ds-border pt-2' : ''} ${
                 here || busy ? 'cursor-default' : 'cursor-pointer'} ${on && !here && !busy ? 'bg-ds-primary-soft' : ''} ${here ? 'text-ds-fg-muted' : 'text-ds-fg-body'}`}
             >
-              <span className={`min-w-0 flex-1 truncate ${t.id === null ? 'text-ds-fg-muted' : ''}`}>{t.label}</span>
+              <span className={`min-w-0 flex-1 truncate ${t.id === null ? 'text-ds-fg-muted' : ''}`}>
+                {t.label}
+                {t.subLabel && <span className="text-ds-label text-ds-fg-muted"> · {t.subLabel}</span>}
+              </span>
               {here && <Check aria-hidden strokeWidth={2} className="h-[16px] w-[16px] shrink-0 text-ds-primary-text" />}
             </li>
           );

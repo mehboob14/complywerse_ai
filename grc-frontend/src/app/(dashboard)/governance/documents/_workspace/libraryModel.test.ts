@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   BUILT_IN_VIEWS, DEFAULT_SORT, DEFAULT_STATE, NO_DEPARTMENT, NO_FILTERS, NO_FRAMEWORK, NO_LOOKUPS, NO_OWNER,
-  attestationBucket, classificationOptions, compareDocs, exportColumnsFor, filterCount, fold, frameworkDisplay, frameworkList, frameworkOptions,
+  attestationBucket, classificationOptions, compareDocs, exportColumnsFor, exportValue, filterCount, fold, frameworkDisplay, frameworkList, frameworkOptions,
   fromParams, haystack, health, kpis, matchesFilters, nextSort, nextStatuses, openFromParams, reviewState, reviewable, sameState, toCsv, toParams,
   versionNumber, viewMatching, withLibraryParams,
   type Filters, type LibDoc, type Lookups, type MatchContext,
 } from './libraryModel.ts';
+import { departmentScopes } from './library.ts';
 
 const NOW = new Date('2026-10-26T09:00:00Z');
 let n = 0;
@@ -145,6 +146,38 @@ test('no owner, no department and no framework are things to filter on', () => {
   assert.deepEqual(ids([a, b], f({ departments: ['10', NO_DEPARTMENT] })), [a.id, b.id]);
   assert.deepEqual(ids([a, b], f({ frameworks: [NO_FRAMEWORK] })), [a.id]);
   assert.deepEqual(ids([a, b], f({ frameworks: ['1'] })), [b.id]);
+});
+
+test('a department in the filter includes the departments under it (D57): documents in a sub-department and in a unit are in their department', () => {
+  const tree = [
+    { id: 10, name: 'Operations', parent_department_id: null }, { id: 11, name: 'Support', parent_department_id: 10 },
+    { id: 12, name: 'Helpdesk', parent_department_id: 11 }, { id: 13, name: 'Finance', parent_department_id: null },
+  ];
+  const scoped: MatchContext = { ...ctx, departmentScope: departmentScopes(tree) };
+  const [top, sub, unit, other, none] = [10, 11, 12, 13, null].map((department_id) => doc({ department_id }));
+  const all = [top, sub, unit, other, none];
+  const hits = (filters: Filters, c: MatchContext = scoped) => all.filter((d) => matchesFilters(d, filters, c)).map((d) => d.id);
+  assert.deepEqual(hits(f({ departments: ['10'] })), [top.id, sub.id, unit.id]);             // Operations: itself, Support and Helpdesk
+  assert.deepEqual(hits(f({ departments: ['11'] })), [sub.id, unit.id]);
+  assert.deepEqual(hits(f({ departments: ['12'] })), [unit.id]);
+  assert.deepEqual(hits(f({ departments: ['13'] })), [other.id]);                            // a department with nothing under it: only itself
+  assert.deepEqual(hits(f({ departments: ['11', '13'] })), [sub.id, unit.id, other.id]);     // any of several
+  assert.deepEqual(hits(f({ departments: [NO_DEPARTMENT] })), [none.id]);                    // "no department" is exact
+  assert.deepEqual(hits(f({ departments: ['10', NO_DEPARTMENT] })), [top.id, sub.id, unit.id, none.id]);
+  // the other filters still apply with it, and a saved view or a link (the ids in `?dept=`) means the same thing
+  assert.deepEqual(hits(f({ departments: ['10'], statuses: ['draft'] })), []);
+  assert.deepEqual(fromParams(toParams({ filters: f({ departments: ['10', NO_DEPARTMENT] }), sort: DEFAULT_SORT })).filters.departments, ['10', NO_DEPARTMENT]);
+  // without the lookup (the departments have not arrived) a department is only itself
+  assert.deepEqual(hits(f({ departments: ['10'] }), ctx), [top.id]);
+  assert.deepEqual(hits(f({ departments: ['10'] }), { ...ctx, departmentScope: {} }), [top.id]);
+});
+
+test('the departments are searched by name as before; their paths are for the title, not the search', () => {
+  const d = doc({ department_id: 12 });
+  const withPath: Lookups = { ...LK, departments: { ...LK.departments, '12': 'Helpdesk' }, departmentPaths: { '12': 'Operations › Support › Helpdesk' } };
+  assert.ok(haystack(d, withPath).includes('helpdesk'));
+  assert.equal(haystack(d, withPath).includes('operations'), false);
+  assert.equal(exportValue(d, 'department', withPath), 'Helpdesk');                            // the CSV says the department's own name
 });
 
 test('archived documents show only when asked for, and then on their own', () => {

@@ -186,8 +186,8 @@ export function LifecycleCell({ doc }: { doc: GovDoc }) {
 
 // ─── People ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The owner, and under the name the department (comfortable only). A document in force with no owner is a governance gap: amber. */
-export function OwnerCell({ doc, department, compact }: { doc: GovDoc; department?: string; compact: boolean }) {
+/** The owner, and under the name the department (comfortable only; `departmentPath`: its whole path, on hover). A document in force with no owner is a governance gap: amber. */
+export function OwnerCell({ doc, department, departmentPath, compact }: { doc: GovDoc; department?: string; departmentPath?: string; compact: boolean }) {
   const name = doc.owner_name?.trim() || null;
   const gap = !name && reviewable(doc);
   return (
@@ -198,13 +198,14 @@ export function OwnerCell({ doc, department, compact }: { doc: GovDoc; departmen
           Unassigned
         </span>
       ) : <PersonChip name={null} />}
-      {!compact && department && <span className="mt-[2px] block truncate text-ds-label text-ds-fg-muted" title={department}>{department}</span>}
+      {!compact && department && <span className="mt-[2px] block truncate text-ds-label text-ds-fg-muted" title={departmentPath || department}>{department}</span>}
     </div>
   );
 }
 
-export function DepartmentCell({ name }: { name?: string }) {
-  return name ? <span className="block truncate text-ds-body text-ds-fg-body" title={name}>{name}</span> : <Dash label="No department" />;
+/** The department's own name; its whole path ("Operations › Support") is the title, for a department inside another. */
+export function DepartmentCell({ name, path }: { name?: string; path?: string }) {
+  return name ? <span className="block truncate text-ds-body text-ds-fg-body" title={path || name}>{name}</span> : <Dash label="No department" />;
 }
 
 // ─── Attestation, review, version, updated ──────────────────────────────────────────────────────────────────────────────
