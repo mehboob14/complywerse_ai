@@ -480,6 +480,8 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_documents", "scope_snapshot", "JSON", None),
     ("grc_compliance_assessment_documents", "subject_summary", "TEXT", None),
     ("grc_compliance_assessment_documents", "started_at", "TIMESTAMP", None),
+    # What NIST's own assessment method adds to an item (objectives and their determinations, methods and objects, the CSF rating); NULL elsewhere.
+    ("grc_compliance_assessment_document_items", "assessment_data", "JSON", None),
     # Point-score weights on the tenant SLA policy (grc_compliance_sla_policy is
     # a new table via create_all; these ALTERs cover tenants whose table was
     # created before the weight columns existed).

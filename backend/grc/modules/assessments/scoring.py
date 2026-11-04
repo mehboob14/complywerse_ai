@@ -867,6 +867,7 @@ def score_audit(doc, items, policy, now, weights=None):
 FAMILY = {
     "asvs_checklist": "asvs",
     "mobile_app_security": "checklist", "owasp_v4_testing_checklist": "checklist", "nca_dcc_tool": "checklist",
+    "nist_800_53a": "checklist", "nist_csf2": "checklist",      # NIST assessments (modules/assessments/nist.py): the controls of a baseline, the subcategories of a profile
     "csir_maturity": "maturity", "cti_maturity": "maturity", "itsecops_maturity": "maturity",
     "incident_maturity": "maturity", "digital_ops_maturity": "maturity", "xlsx_maturity": "maturity",
     "pdpl_assessment_toolkit": "maturity",
@@ -886,7 +887,7 @@ CATEGORY = {
     "asvs_checklist": "Cyber Security", "mobile_app_security": "Cyber Security",
     "owasp_v4_testing_checklist": "Cyber Security", "csir_maturity": "Cyber Security",
     "cti_maturity": "Cyber Security", "incident_maturity": "Cyber Security",
-    "itsecops_maturity": "Cyber Security",
+    "itsecops_maturity": "Cyber Security", "nist_800_53a": "Cyber Security", "nist_csf2": "Cyber Security",
     "nca_dcc_tool": "NCA", "nca_vuln_register": "NCA", "nca_audit_register": "NCA", "nca_risk_register": "NCA",
     "nca_cloud_cybersecurity_controls_pdf": "NCA", "nca_data_cybersecurity_controls_pdf": "NCA",
     "cis_windows_server_2012_r2_pdf": "Cyber Security",

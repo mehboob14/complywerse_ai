@@ -88,7 +88,8 @@ def ready_asvs(http, aid, **more):
 
 def test_the_templates_list_each_type_with_its_questionnaire_its_domains_and_how_many_are_open(http):
     out = http.get(f"{BASE}/templates").json()["templates"]
-    assert [t["assessment_format"] for t in out] == ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity"]
+    assert [t["assessment_format"] for t in out] == ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity",
+                                                     "nist_800_53a", "nist_csf2"]      # the seven the hub has always had, then the NIST ones made from the library (tests/test_nist_assessments.py)
     asvs, owasp, incident = out[0], out[1], out[5]
     assert (asvs["label"], asvs["scope_model"], asvs["family"]) == ("OWASP ASVS", "asset", "technical") and incident["family"] == "process"
     assert asvs["questionnaire"]["items"] == 3 and asvs["questionnaire"]["domains"] == [{"name": "Authentication", "count": 2}, {"name": "Session Management", "count": 1}]

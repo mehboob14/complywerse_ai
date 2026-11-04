@@ -5103,7 +5103,7 @@ def get_assessments_overview(
 
     policy = db.query(_Policy).filter(_Policy.tenant_id.in_(tids)).first()
     docs = db.query(_Doc).filter(_Doc.tenant_id.in_(tids)).all()
-    EV_FORMATS = {"asvs_checklist", "mobile_app_security", "owasp_v4_testing_checklist", "nca_dcc_tool"}
+    EV_FORMATS = {"asvs_checklist", "mobile_app_security", "owasp_v4_testing_checklist", "nca_dcc_tool", "nist_800_53a", "nist_csf2"}
 
     cats: dict = {}
     sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
@@ -5370,6 +5370,8 @@ def get_assessment(
                 "remarks": item.remarks,
                 "remediation_status": item.remediation_status,
                 "asset_status": getattr(item, "asset_status", None) or {},
+                "subdomain_name": item.subdomain_name,
+                "assessment_data": getattr(item, "assessment_data", None),
                 "ai_evidence_recommendation": item.ai_evidence_recommendation,
                 "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
                 "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
