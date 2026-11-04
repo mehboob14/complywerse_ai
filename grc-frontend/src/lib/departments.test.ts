@@ -243,7 +243,7 @@ test('Settings changes departments only for those the server lets, and links to 
 
 test('the Departments card comes first on Governance → Settings, and is there even when the approval settings are not', () => {
   const page = source('../app/(dashboard)/governance/settings/page.tsx');
-  assert.match(page, /<DepartmentsSection \/>\s*<SectionCard id="due"/);                          // before the first lifecycle card
+  assert.match(page, /<DepartmentsSection \/>\s*(?:<ExceptionApprovalsSection \/>\s*)?<SectionCard id="due"/);   // before the first lifecycle card (the exception approvals sit right after it)
   assert.equal(page.match(/<WithDepartments>/g)?.length, 2);                                      // the load error and "not switched on"
 });
 

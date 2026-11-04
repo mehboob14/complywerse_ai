@@ -44,7 +44,7 @@ export function DecisionDialog({ kind, exception, onClose }: { kind: DecisionKin
     mutationFn: (reason: string) => d.send(exception.id, reason),
     success: d.success,
     failure: d.failure,
-    invalidate: LIST_KEYS,
+    invalidate: [...LIST_KEYS, ['exception-comments']],                 // a decision under an approval rule is also written into the comments (its history), which the open details show
     onSuccess: onClose,
   });
   const missing = d.required && !text.trim();

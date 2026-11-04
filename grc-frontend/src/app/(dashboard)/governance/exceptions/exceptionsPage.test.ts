@@ -139,11 +139,17 @@ test('what a row and the details offer under a rule is the server\'s: rowActionK
 
 test('Withdraw asks first, goes to the server\'s withdraw and refreshes what a change refreshes; the decision dialog for asking for changes needs its comment', () => {
   assert.match(page, /confirm\(\{ title: 'Withdraw this exception\?'/);
-  assert.match(page, /mutationFn: \(e: ExceptionItem\) => policyExceptionApi\.withdraw\(e\.id\),[\s\S]*?invalidate: LIST_KEYS/);
+  assert.match(page, /mutationFn: \(e: ExceptionItem\) => policyExceptionApi\.withdraw\(e\.id\),[\s\S]*?invalidate: \[\.\.\.LIST_KEYS, \['exception-comments'\]\]/);
   const d = src['_Decision.tsx'];
   assert.match(d, /changes: \{[^}]*required: true/);
+  assert.match(d, /invalidate: \[\.\.\.LIST_KEYS, \['exception-comments'\]\]/);                  // the open details show the line a decision adds to the comments
   assert.match(d, /policyExceptionApi\.requestChanges\(id, \{ comment: text \}\)/);
   assert.match(d, /reject: \{[^}]*required: true/);
+});
+
+test('a refusal to submit stays a toast, and is said in full under the header when the server\'s sentence is longer than a toast keeps; the exception stays a draft', () => {
+  assert.match(page, /failure: 'Not submitted',[\s\S]*?onSuccess: \(\) => setRefusal\(null\),\s*onError: \(error\) => setRefusal\(longRefusal\(error\)\)/);
+  assert.match(page, /\{refusal && <Notice tone="danger" title="Not submitted"/);
 });
 
 test('the status says the step and who it waits for from the server\'s approval, never from the loaded rows', () => {

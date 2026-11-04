@@ -60,7 +60,7 @@ export function RuleTester({ rules, options, levelLabels }: { rules: ExceptionRu
 
       <div aria-live="polite" className="mt-[12px]">
         {!asked ? (
-          <p className="text-ds-body text-ds-fg-muted">Pick a department, a priority or a kind of policy.</p>
+          <p className="text-ds-body text-ds-fg-muted">Pick what the exception is like.</p>
         ) : answer.isLoading ? (
           <SkeletonLines lines={2} label="Finding the rule" />
         ) : answer.isError ? (

@@ -92,7 +92,11 @@ export function ExceptionApprovalsSection() {
         );
       },
     },
-    { key: 'steps', header: 'Steps', card: 'meta', cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps)}>{stepsLine(r.steps)}</span> },
+    {
+      key: 'steps', header: 'Steps', card: 'meta',
+      cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps)}>{stepsLine(r.steps)}</span>,
+      cardCell: (r) => <span className="block whitespace-pre-line [overflow-wrap:anywhere]">{stepsLong(r.steps)}</span>,       // a phone has no tooltip: every step in full, one to a line
+    },
     { key: 'status', header: 'Status', width: 'w-[88px]', card: 'meta', cell: (r) => <StatusPill size="sm" tone={r.is_active ? 'success' : 'neutral'} label={r.is_active ? 'Active' : 'Off'} /> },
     ...(canEdit ? [{ key: 'actions', header: 'Actions', align: 'right' as const, width: 'w-[56px]', cell: actionsOf }] : []),
   ];

@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULE_NOTES, askOptions, blankStep, conditionChips, emptyRuleForm, formFromRule, hasRuleErrors, payloadOf, payloadOfRule,
-  personFromKey, personKey, personLabel, previewSteps, ruleErrors, rulesSummary, sameRuleForm, scopeOf, slotLine, slotText, stepHow, stepText, stepsLine, stepsLong, turnLine,
+  KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, askOptions, blankStep, conditionChips, conditionsLong, emptyRuleForm, formFromRule, hasRuleErrors, payloadOf,
+  payloadOfRule, personFromKey, personKey, personLabel, previewSteps, ruleErrors, ruleProblem, rulesSummary, sameRuleForm, scopeOf, slotLine, slotText, stepHow, stepText, stepsLine,
+  stepsLong, turnLine,
   type ExceptionRule, type PreviewAnswer, type RuleForm, type RuleOptions, type RuleStep,
 } from './exceptionRules.ts';
 
@@ -45,6 +46,13 @@ test('where a rule applies: the whole organisation, or the department path with 
 test('the conditions are words, in the order given; none means any', () => {
   assert.deepEqual(conditionChips(rule()), ['High', 'Critical', 'Policy']);
   assert.deepEqual(conditionChips(rule({ priorities: [], doc_types: [] })), []);
+});
+
+test('the conditions in a sentence for a screen reader: the priorities, the kinds of policy, or "any"', () => {
+  assert.equal(conditionsLong(rule()), 'Priority: High, Critical. Policy kind: Policy');
+  assert.equal(conditionsLong(rule({ doc_types: [] })), 'Priority: High, Critical');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: ['policy', 'standard'] })), 'Policy kind: Policy, Standard');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority and kind of policy');
 });
 
 test('the card says how many rules there are and how many are off', () => {
@@ -247,6 +255,28 @@ test('the days to act are empty (none) or a number from 1 to 365', () => {
   for (const ok of ['', ' ', '1', '365']) assert.equal(err(ok), undefined, ok);
   for (const bad of ['0', '366', '-2', '2.5']) assert.equal(err(bad), 'The days to act must be from 1 to 365.', bad);
   assert.equal(err('soon'), 'The days to act must be a number.');
+});
+
+test('the first thing wrong is one sentence in the server\'s own format, for the line above Save; nothing when nothing is', () => {
+  assert.equal(ruleProblem(filled()), '');
+  assert.equal(ruleProblem(filled({ name: ' ' })), 'A rule needs a name.');
+  assert.equal(ruleProblem(filled({ steps: [] })), 'A rule needs at least one step.');
+  const f = filled();
+  f.steps[0].people = [];
+  assert.equal(ruleProblem(f), 'Step 1 (Approval): choose who is asked.');
+  f.steps[0].name = 'CISO sign-off';
+  assert.equal(ruleProblem(f), 'Step 1 (CISO sign-off): choose who is asked.');
+  const g = filled();
+  g.steps[0].people = ['user:1', 'user:2'];
+  Object.assign(g.steps[0], { rule: 'at_least', min_count: '5' });
+  assert.equal(ruleProblem(g), 'Step 1 (Approval): at least how many have to decide? A number from 1 to 2.');
+  Object.assign(g.steps[0], { rule: 'any', due_days: '400' });
+  assert.equal(ruleProblem(g), 'Step 1 (Approval): the days to act must be from 1 to 365.');
+  const h = filled();
+  h.steps.unshift({ ...blankStep('review'), people: ['user:1'] });
+  h.steps[1].kind = 'review';
+  assert.equal(ruleProblem(h), 'The last step has to be an approval: somebody decides.');
+  assert.deepEqual(RULES_KEY, ['exception-approval-rules']);                          // the card, its editor and its tester refresh together
 });
 
 test('the notes say what the card used to say: which rule wins, when a rule applies, who decides', () => {
