@@ -33,7 +33,7 @@ def test_a_library_document_shows_its_own_facts_and_frameworks(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
     out = world.http.get(world.api(f"/sessions/{s['id']}/setup")).json()
     assert out["document"] == {"classification": "Confidential", "review_cycle": "Every two years", "owner": "Olivia Owner", "department": "IT Operations"}
-    assert out["frameworks"] == [{"id": 1, "label": "ISO/IEC 27001 (2022)", "attached": False, "of_document": True}]   # marked, not attached
+    assert out["frameworks"] == [{"id": 1, "name": "ISO/IEC 27001", "label": "ISO/IEC 27001 (2022)", "attached": False, "of_document": True}]   # marked, not attached
     assert setup.from_document(db, doc) == {"classification": "Confidential", "review_cycle": "Every two years", "departments": ["IT Operations"],
                                             "regulations": ["BPRD Circular No. 05 of 2017"]}
     doc.review_cycle_months = 18                                                     # no list entry: left unset rather than guessed

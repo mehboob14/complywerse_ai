@@ -49,14 +49,49 @@ export interface Instructions {
 
 /** What a new document can be set up with: the organisation's own data first (its departments, the regulators it follows, its
  * regulatory register, the platform's frameworks), then the usual choices. */
+export interface CountryRow {
+  code: string;
+  name: string;
+  region: string;
+  /** "Main markets" for the platform's own markets, else the region: the picker's headings */
+  group: string;
+  /** a path under /flags/ */
+  flag: string;
+  /** other names a search also matches ("Turkey", "UAE") */
+  aliases: string[];
+  blocs: string[];
+}
+
+/** One regulator or law offered for a country, and where it comes from: the country itself, its bloc (EU, EEA) or the international bodies. */
+export interface CountryItem {
+  label: string;
+  area: string;
+  kind?: string;
+  scope: 'country' | 'bloc' | 'international';
+  bloc?: string;
+}
+
+/** What choosing a country offers (`GET /setup/country`). `frameworks` hold the catalog's names of the installed frameworks. */
+export interface CountryDetail {
+  code: string;
+  name: string;
+  region: string;
+  flag: string;
+  regulators: CountryItem[];
+  laws: CountryItem[];
+  frameworks: { applies: string[]; widely_used: string[] };
+}
+
 export interface SetupOptions {
   entity_types: string[];
   countries: string[];
+  country_list?: CountryRow[];
+  international?: { regulators: CountryItem[]; laws: CountryItem[] };
   country_from_profile: string;
   regulators: Record<string, string[]>;
   regulators_followed: { label: string; country: string }[];
   regulations: { label: string; detail: string }[];
-  frameworks: { id: number; label: string; attached: boolean }[];
+  frameworks: { id: number; label: string; attached: boolean; name?: string }[];
   domains: string[];
   departments: string[];
   audiences: string[];
@@ -364,6 +399,13 @@ export interface FrameworkItem {
   domains: string[];
 }
 
+/** What the logo gateway did to an uploaded picture, or could not fix (`warn`): said once, in the answer to the upload. */
+export interface GatewayNote {
+  level: 'info' | 'warn';
+  code: string;
+  text: string;
+}
+
 export interface Asset {
   id: number;
   kind: string;
@@ -374,6 +416,7 @@ export interface Asset {
   height: number | null;
   is_default: boolean;
   created_at: string | null;
+  notes?: GatewayNote[];
 }
 
 export interface ExportNote {
@@ -469,6 +512,7 @@ export const studioApi = {
   deleteSession: (id: number) => del<{ deleted: boolean }>(`/sessions/${id}`),
   /** the choices a document can be set up with (saved as instructions) */
   setupOptions: (id: number) => get<SetupOptions>(`/sessions/${id}/setup`),
+  setupCountry: (name: string) => get<CountryDetail>('/setup/country', { name }),
   saveContent: (id: number, content: string, baseRevision?: number, summary?: string) =>
     put<{ revision: number; saved: boolean; words: number }>(`/sessions/${id}/content`, { content, base_revision: baseRevision, summary }),
 
@@ -528,10 +572,12 @@ export const studioApi = {
     post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),
-  uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {
+  /** `process` false keeps the picture as it is: no trimming, no background change ("use the original"). */
+  uploadAsset: async (file: File, makeDefault = false, process = true): Promise<Asset> => {
     const form = new FormData();
     form.append('file', file);
     form.append('make_default', String(makeDefault));
+    if (!process) form.append('process', 'false');
     return (await apiClient.post(`${base}/assets`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
   },
   updateAsset: (id: number, body: { name?: string; is_default?: boolean }) => put<Asset>(`/assets/${id}`, body),

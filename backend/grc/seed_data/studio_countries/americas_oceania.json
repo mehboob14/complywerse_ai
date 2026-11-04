@@ -1,0 +1,870 @@
+{"countries": [
+ {"code": "AG", "name": "Antigua and Barbuda", "region": "Americas", "aliases": ["Antigua", "Barbuda", "Antigua & Barbuda"],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Financial Services Regulatory Commission", "abbr": "FSRC", "area": "Financial supervision"},
+   {"name": "Office of National Drug and Money Laundering Control Policy", "abbr": "ONDCP", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering (Prevention) Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Data Protection Act 2013", "kind": "Law", "area": "Privacy"},
+   {"name": "Electronic Crimes Act 2013", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "AR", "name": "Argentina", "region": "Americas", "aliases": ["Argentine Republic", "República Argentina"],
+  "regulators": [
+   {"name": "Central Bank of Argentina", "abbr": "BCRA", "area": "Banking"},
+   {"name": "National Securities Commission", "abbr": "CNV", "area": "Securities"},
+   {"name": "Superintendency of Insurance of the Nation", "abbr": "SSN", "area": "Insurance"},
+   {"name": "Agency for Access to Public Information", "abbr": "AAIP", "area": "Data protection"},
+   {"name": "Financial Information Unit", "abbr": "UIF", "area": "AML/CFT"},
+   {"name": "National Communications Agency", "abbr": "ENACOM", "area": "Telecom"},
+   {"name": "National Cybersecurity Center", "abbr": "CNC", "area": "Cybersecurity"},
+   {"name": "National Administration of Drugs, Food and Medical Technology", "abbr": "ANMAT", "area": "Health"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law No. 25,326", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 26,388 (computer crimes, amendments to the Criminal Code)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Digital Signature Law No. 25,506", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Anti-Money Laundering Law No. 25,246", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Institutions Law No. 21,526", "kind": "Law", "area": "Banking"},
+   {"name": "BCRA minimum requirements for the management and control of technology and information security risks", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "Consumer Protection Law No. 24,240", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Capital Markets Law No. 26,831", "kind": "Law", "area": "Securities"},
+   {"name": "Insurance Entities Law No. 20,091", "kind": "Law", "area": "Insurance"},
+   {"name": "Argentina Digital Law No. 27,078", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "BS", "name": "Bahamas", "region": "Americas", "aliases": ["The Bahamas", "Commonwealth of The Bahamas"],
+  "regulators": [
+   {"name": "Central Bank of The Bahamas", "abbr": "CBOB", "area": "Banking"},
+   {"name": "Securities Commission of The Bahamas", "abbr": "SCB", "area": "Securities"},
+   {"name": "Insurance Commission of The Bahamas", "abbr": "ICB", "area": "Insurance"},
+   {"name": "Compliance Commission of The Bahamas", "abbr": "", "area": "AML/CFT"},
+   {"name": "Financial Intelligence Unit of The Bahamas", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Office of the Data Protection Commissioner", "abbr": "ODPC", "area": "Data protection"},
+   {"name": "Utilities Regulation and Competition Authority", "abbr": "URCA", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Central Bank of The Bahamas Act 2020", "kind": "Law", "area": "Banking"},
+   {"name": "Banks and Trust Companies Regulation Act 2020", "kind": "Law", "area": "Banking"},
+   {"name": "Securities Industry Act 2011", "kind": "Law", "area": "Securities"},
+   {"name": "Insurance Act 2005", "kind": "Law", "area": "Insurance"},
+   {"name": "Digital Assets and Registered Exchanges Act 2024 (DARE Act)", "kind": "Law", "area": "Capital markets"},
+   {"name": "Financial Transactions Reporting Act 2018", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Proceeds of Crime Act 2018", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Data Protection (Privacy of Personal Information) Act 2003", "kind": "Law", "area": "Privacy"},
+   {"name": "Computer Misuse Act 2003", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Communications and Transactions Act 2003", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "BB", "name": "Barbados", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Barbados", "abbr": "CBB", "area": "Banking"},
+   {"name": "Financial Services Commission", "abbr": "FSC", "area": "Financial supervision"},
+   {"name": "Anti-Money Laundering Authority", "abbr": "AMLA", "area": "AML/CFT"},
+   {"name": "Fair Trading Commission", "abbr": "FTC", "area": "Competition"}
+  ],
+  "laws": [
+   {"name": "Central Bank of Barbados Act", "kind": "Law", "area": "Banking"},
+   {"name": "Financial Institutions Act", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering and Financing of Terrorism (Prevention and Control) Act (MLFTA)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Data Protection Act 2019", "kind": "Law", "area": "Privacy"},
+   {"name": "Computer Misuse Act 2005", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Transactions Act 2001", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "BZ", "name": "Belize", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Belize", "abbr": "CBB", "area": "Banking"},
+   {"name": "Financial Intelligence Unit of Belize", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Financial Services Commission", "abbr": "FSC", "area": "Financial supervision"},
+   {"name": "Public Utilities Commission", "abbr": "PUC", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Money Laundering and Terrorism (Prevention) Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Intelligence Unit Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Cybercrime Act 2020", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Data Protection Act 2021", "kind": "Law", "area": "Privacy"}
+  ]},
+ {"code": "BO", "name": "Bolivia", "region": "Americas", "aliases": ["Plurinational State of Bolivia", "Estado Plurinacional de Bolivia"],
+  "regulators": [
+   {"name": "Central Bank of Bolivia", "abbr": "BCB", "area": "Banking"},
+   {"name": "Financial System Supervisory Authority", "abbr": "ASFI", "area": "Financial supervision"},
+   {"name": "Authority for the Supervision and Control of Pensions and Insurance", "abbr": "APS", "area": "Insurance"},
+   {"name": "Financial Investigations Unit", "abbr": "UIF", "area": "AML/CFT"},
+   {"name": "Authority for the Regulation and Supervision of Telecommunications and Transport", "abbr": "ATT", "area": "Telecom"},
+   {"name": "Electronic Government and Information and Communication Technologies Agency", "abbr": "AGETIC", "area": "Government ICT"}
+  ],
+  "laws": [
+   {"name": "Financial Services Law No. 393", "kind": "Law", "area": "Banking"},
+   {"name": "General Telecommunications, Information and Communication Technologies Law No. 164", "kind": "Law", "area": "Telecom"},
+   {"name": "Digital Citizenship Law No. 1080", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Criminal Code (computer crimes, Articles 363 bis and 363 ter)", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "BR", "name": "Brazil", "region": "Americas", "aliases": ["Brasil", "Federative Republic of Brazil"],
+  "regulators": [
+   {"name": "Central Bank of Brazil", "abbr": "BCB", "area": "Banking"},
+   {"name": "National Monetary Council", "abbr": "CMN", "area": "Banking"},
+   {"name": "Brazilian Securities and Exchange Commission", "abbr": "CVM", "area": "Securities"},
+   {"name": "Superintendence of Private Insurance", "abbr": "SUSEP", "area": "Insurance"},
+   {"name": "National Superintendence of Complementary Pensions", "abbr": "PREVIC", "area": "Pensions"},
+   {"name": "National Data Protection Authority", "abbr": "ANPD", "area": "Data protection"},
+   {"name": "Council for Financial Activities Control", "abbr": "COAF", "area": "AML/CFT"},
+   {"name": "National Telecommunications Agency", "abbr": "Anatel", "area": "Telecom"},
+   {"name": "Institutional Security Cabinet of the Presidency", "abbr": "GSI/PR", "area": "Cybersecurity"},
+   {"name": "Brazilian National Computer Emergency Response Team", "abbr": "CERT.br", "area": "Cybersecurity"},
+   {"name": "Brazilian Health Regulatory Agency", "abbr": "Anvisa", "area": "Health"}
+  ],
+  "laws": [
+   {"name": "General Data Protection Law (LGPD), Law No. 13,709/2018", "kind": "Law", "area": "Privacy"},
+   {"name": "Brazilian Civil Rights Framework for the Internet (Marco Civil da Internet), Law No. 12,965/2014", "kind": "Law", "area": "Records and e-commerce"},
+   {"name": "Law No. 12,737/2012 (Carolina Dieckmann Law, computer crimes)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "CMN Resolution No. 4,893/2021 (cybersecurity policy and cloud services for financial institutions)", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "BCB Resolution No. 85/2021 (cybersecurity policy and cloud services for payment institutions)", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "CMN Resolution No. 4,557/2017 (integrated risk and capital management framework)", "kind": "Regulation", "area": "Governance"},
+   {"name": "BCB Circular No. 3,978/2020 (AML/CFT policy, procedures and internal controls)", "kind": "Circular", "area": "AML/CFT"},
+   {"name": "Law No. 9,613/1998 (Anti-Money Laundering Law)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Law No. 13,810/2019 (compliance with United Nations Security Council sanctions)", "kind": "Law", "area": "Sanctions"},
+   {"name": "Complementary Law No. 105/2001 (Bank Secrecy Law)", "kind": "Law", "area": "Banking"},
+   {"name": "Law No. 4,595/1964 (National Financial System Law)", "kind": "Law", "area": "Banking"},
+   {"name": "Law No. 6,385/1976 (Securities Market Law)", "kind": "Law", "area": "Securities"},
+   {"name": "SUSEP Circular No. 638/2021 (cybersecurity requirements for insurers)", "kind": "Circular", "area": "Cybersecurity"},
+   {"name": "ANPD Resolution CD/ANPD No. 15/2024 (security incident notification)", "kind": "Regulation", "area": "Data protection"},
+   {"name": "BCB Resolution No. 1/2020 (Pix Regulation)", "kind": "Regulation", "area": "Payments"},
+   {"name": "Law No. 12,846/2013 (Clean Company Act, anti-corruption)", "kind": "Law", "area": "Governance"},
+   {"name": "Provisional Measure No. 2,200-2/2001 (ICP-Brasil digital certificates)", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "CA", "name": "Canada", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Office of the Superintendent of Financial Institutions", "abbr": "OSFI", "area": "Financial supervision"},
+   {"name": "Bank of Canada", "abbr": "BoC", "area": "Banking"},
+   {"name": "Financial Transactions and Reports Analysis Centre of Canada", "abbr": "FINTRAC", "area": "AML/CFT"},
+   {"name": "Office of the Privacy Commissioner of Canada", "abbr": "OPC", "area": "Data protection"},
+   {"name": "Canadian Centre for Cyber Security", "abbr": "CCCS", "area": "Cybersecurity"},
+   {"name": "Canadian Securities Administrators", "abbr": "CSA", "area": "Securities"},
+   {"name": "Canadian Investment Regulatory Organization", "abbr": "CIRO", "area": "Securities"},
+   {"name": "Ontario Securities Commission", "abbr": "OSC", "area": "Securities"},
+   {"name": "Quebec Autorité des marchés financiers", "abbr": "AMF", "area": "Financial supervision"},
+   {"name": "British Columbia Securities Commission", "abbr": "BCSC", "area": "Securities"},
+   {"name": "Alberta Securities Commission", "abbr": "ASC", "area": "Securities"},
+   {"name": "Financial Services Regulatory Authority of Ontario", "abbr": "FSRA", "area": "Financial supervision"},
+   {"name": "Canada Deposit Insurance Corporation", "abbr": "CDIC", "area": "Banking"},
+   {"name": "Financial Consumer Agency of Canada", "abbr": "FCAC", "area": "Consumer protection"},
+   {"name": "Canadian Radio-television and Telecommunications Commission", "abbr": "CRTC", "area": "Telecom"},
+   {"name": "Commission d'accès à l'information du Québec", "abbr": "CAI", "area": "Data protection"},
+   {"name": "Office of the Information and Privacy Commissioner for British Columbia", "abbr": "OIPC BC", "area": "Data protection"},
+   {"name": "Office of the Information and Privacy Commissioner of Alberta", "abbr": "OIPC Alberta", "area": "Data protection"},
+   {"name": "Treasury Board of Canada Secretariat", "abbr": "TBS", "area": "Government ICT"}
+  ],
+  "laws": [
+   {"name": "Personal Information Protection and Electronic Documents Act (PIPEDA)", "kind": "Law", "area": "Privacy"},
+   {"name": "OSFI Guideline B-13: Technology and Cyber Risk Management", "kind": "Guideline", "area": "Cybersecurity"},
+   {"name": "OSFI Guideline B-10: Third-Party Risk Management", "kind": "Guideline", "area": "Outsourcing and cloud"},
+   {"name": "OSFI Guideline E-21: Operational Risk Management and Resilience", "kind": "Guideline", "area": "Operational resilience"},
+   {"name": "OSFI Integrity and Security Guideline", "kind": "Guideline", "area": "Governance"},
+   {"name": "OSFI Technology and Cyber Security Incident Reporting Advisory", "kind": "Circular", "area": "Cybersecurity"},
+   {"name": "Bank Act", "kind": "Law", "area": "Banking"},
+   {"name": "Insurance Companies Act", "kind": "Law", "area": "Insurance"},
+   {"name": "Proceeds of Crime (Money Laundering) and Terrorist Financing Act (PCMLTFA)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Proceeds of Crime (Money Laundering) and Terrorist Financing Regulations", "kind": "Regulation", "area": "AML/CFT"},
+   {"name": "Special Economic Measures Act", "kind": "Law", "area": "Sanctions"},
+   {"name": "Retail Payment Activities Act (RPAA)", "kind": "Law", "area": "Payments"},
+   {"name": "Critical Cyber Systems Protection Act (CCSPA)", "kind": "Law", "area": "Critical infrastructure"},
+   {"name": "Criminal Code (computer offences, sections 342.1 and 430(1.1))", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Canada's Anti-Spam Legislation (CASL)", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Quebec Act respecting the protection of personal information in the private sector (as amended by Law 25)", "kind": "Law", "area": "Privacy"},
+   {"name": "Personal Information Protection Act (Alberta)", "kind": "Law", "area": "Privacy"},
+   {"name": "Personal Information Protection Act (British Columbia)", "kind": "Law", "area": "Privacy"},
+   {"name": "Securities Act (Ontario)", "kind": "Law", "area": "Securities"},
+   {"name": "Baseline Cyber Security Controls for Small and Medium Organizations (Canadian Centre for Cyber Security)", "kind": "Guideline", "area": "Cybersecurity"},
+   {"name": "Policy on Government Security (Treasury Board of Canada)", "kind": "Framework", "area": "Government ICT"}
+  ]},
+ {"code": "CL", "name": "Chile", "region": "Americas", "aliases": ["Republic of Chile"],
+  "regulators": [
+   {"name": "Central Bank of Chile", "abbr": "BCCh", "area": "Banking"},
+   {"name": "Financial Market Commission", "abbr": "CMF", "area": "Financial supervision"},
+   {"name": "Financial Analysis Unit", "abbr": "UAF", "area": "AML/CFT"},
+   {"name": "National Consumer Service", "abbr": "SERNAC", "area": "Consumer protection"},
+   {"name": "Personal Data Protection Agency", "abbr": "", "area": "Data protection"},
+   {"name": "National Cybersecurity Agency", "abbr": "ANCI", "area": "Cybersecurity"},
+   {"name": "Undersecretariat of Telecommunications", "abbr": "SUBTEL", "area": "Telecom"},
+   {"name": "Superintendency of Pensions", "abbr": "", "area": "Pensions"}
+  ],
+  "laws": [
+   {"name": "Law No. 19,628 on the Protection of Private Life", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 21,719 on the Protection and Processing of Personal Data", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 21,663, Cybersecurity Framework Law (Ley Marco de Ciberseguridad)", "kind": "Law", "area": "Cybersecurity"},
+   {"name": "Law No. 21,459 on Computer Crimes", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Law No. 19,913 (Financial Analysis Unit and anti-money laundering)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "General Banking Act (Ley General de Bancos)", "kind": "Law", "area": "Banking"},
+   {"name": "Law No. 21,521 (Fintech Law)", "kind": "Law", "area": "Financial supervision"},
+   {"name": "Securities Market Law No. 18,045", "kind": "Law", "area": "Securities"},
+   {"name": "CMF Updated Compilation of Rules (RAN), Chapter 20-7: Outsourcing of services", "kind": "Regulation", "area": "Outsourcing and cloud"},
+   {"name": "CMF Updated Compilation of Rules (RAN), Chapter 20-8: Operational incident reporting", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "CMF Updated Compilation of Rules (RAN), Chapter 20-9: Business continuity management", "kind": "Regulation", "area": "Operational resilience"},
+   {"name": "CMF Updated Compilation of Rules (RAN), Chapter 20-10: Information security and cybersecurity management", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "Law No. 19,799 on Electronic Documents, Electronic Signature and Certification Services", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Law No. 19,496 on Consumer Protection", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Law No. 20,393 on Criminal Liability of Legal Entities", "kind": "Law", "area": "Governance"},
+   {"name": "Law No. 21,595 on Economic Crimes", "kind": "Law", "area": "Governance"}
+  ]},
+ {"code": "CO", "name": "Colombia", "region": "Americas", "aliases": ["Republic of Colombia"],
+  "regulators": [
+   {"name": "Banco de la República", "abbr": "BanRep", "area": "Banking"},
+   {"name": "Financial Superintendence of Colombia", "abbr": "SFC", "area": "Financial supervision"},
+   {"name": "Superintendence of Industry and Commerce", "abbr": "SIC", "area": "Data protection"},
+   {"name": "Financial Information and Analysis Unit", "abbr": "UIAF", "area": "AML/CFT"},
+   {"name": "Communications Regulation Commission", "abbr": "CRC", "area": "Telecom"},
+   {"name": "Ministry of Information and Communications Technologies", "abbr": "MinTIC", "area": "Government ICT"},
+   {"name": "Colombian Cyber Emergency Response Group", "abbr": "colCERT", "area": "Cybersecurity"}
+  ],
+  "laws": [
+   {"name": "Law 1581 of 2012 (Personal Data Protection Law)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law 1266 of 2008 (Habeas Data, financial and credit information)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law 1273 of 2009 (computer crimes: protection of information and data)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Law 527 of 1999 (electronic commerce, data messages and digital signatures)", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Law 1328 of 2009 (financial consumer protection)", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Law 1341 of 2009 (Information and Communications Technologies Law)", "kind": "Law", "area": "Telecom"},
+   {"name": "Organic Statute of the Financial System (Decree 663 of 1993)", "kind": "Law", "area": "Banking"},
+   {"name": "SFC Circular Básica Jurídica (Circular Externa 029 of 2014)", "kind": "Circular", "area": "Financial supervision"},
+   {"name": "SFC Circular Externa 007 of 2018 (cybersecurity risk management requirements)", "kind": "Circular", "area": "Cybersecurity"},
+   {"name": "SARLAFT (money laundering and terrorism financing risk management system) of the SFC", "kind": "Circular", "area": "AML/CFT"},
+   {"name": "CONPES 3995 National Digital Trust and Security Policy", "kind": "Framework", "area": "Cybersecurity"}
+  ]},
+ {"code": "CR", "name": "Costa Rica", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Costa Rica", "abbr": "BCCR", "area": "Banking"},
+   {"name": "National Council for the Supervision of the Financial System", "abbr": "CONASSIF", "area": "Financial supervision"},
+   {"name": "General Superintendency of Financial Entities", "abbr": "SUGEF", "area": "Banking"},
+   {"name": "General Superintendency of Securities", "abbr": "SUGEVAL", "area": "Securities"},
+   {"name": "General Superintendency of Insurance", "abbr": "SUGESE", "area": "Insurance"},
+   {"name": "Superintendency of Pensions", "abbr": "SUPEN", "area": "Pensions"},
+   {"name": "Agencia de Protección de Datos de los Habitantes", "abbr": "PRODHAB", "area": "Data protection"},
+   {"name": "Superintendency of Telecommunications", "abbr": "SUTEL", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Law No. 8968 on the Protection of Individuals in the Processing of Personal Data", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 9048 (computer crimes, reform of the Penal Code)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Law No. 8454 on Digital Certificates, Digital Signatures and Electronic Documents", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Law No. 8204 (narcotics, money laundering and terrorism financing)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Organic Law of the Central Bank of Costa Rica (Law No. 7558)", "kind": "Law", "area": "Banking"},
+   {"name": "Securities Market Regulatory Law (Law No. 7732)", "kind": "Law", "area": "Securities"},
+   {"name": "General Telecommunications Law (Law No. 8642)", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "CU", "name": "Cuba", "region": "Americas", "aliases": ["Republic of Cuba"],
+  "regulators": [
+   {"name": "Central Bank of Cuba", "abbr": "BCC", "area": "Banking"},
+   {"name": "Ministry of Communications", "abbr": "MINCOM", "area": "Telecom"},
+   {"name": "Ministry of Justice", "abbr": "MINJUS", "area": "Data protection"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law (Law 149 of 2022)", "kind": "Law", "area": "Privacy"},
+   {"name": "Decree-Law 370 of 2018 on the Informatization of Society in Cuba", "kind": "Law", "area": "Government ICT"}
+  ]},
+ {"code": "DM", "name": "Dominica", "region": "Americas", "aliases": ["Commonwealth of Dominica"],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Financial Services Unit", "abbr": "FSU", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Unit of Dominica", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering (Prevention) Act 2011", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Electronic Transactions Act 2013", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "DO", "name": "Dominican Republic", "region": "Americas", "aliases": ["Dominican Rep.", "República Dominicana"],
+  "regulators": [
+   {"name": "Central Bank of the Dominican Republic", "abbr": "BCRD", "area": "Banking"},
+   {"name": "Superintendence of Banks", "abbr": "SIB", "area": "Financial supervision"},
+   {"name": "Superintendence of the Securities Market", "abbr": "SIMV", "area": "Securities"},
+   {"name": "Superintendence of Insurance", "abbr": "SIS", "area": "Insurance"},
+   {"name": "Superintendence of Pensions", "abbr": "SIPEN", "area": "Pensions"},
+   {"name": "Financial Analysis Unit", "abbr": "UAF", "area": "AML/CFT"},
+   {"name": "Dominican Institute of Telecommunications", "abbr": "INDOTEL", "area": "Telecom"},
+   {"name": "National Cybersecurity Center", "abbr": "CNCS", "area": "Cybersecurity"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law No. 172-13", "kind": "Law", "area": "Privacy"},
+   {"name": "High-Tech Crimes and Offences Law No. 53-07", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Anti-Money Laundering and Counter-Terrorist Financing Law No. 155-17", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Monetary and Financial Law No. 183-02", "kind": "Law", "area": "Banking"},
+   {"name": "Securities Market Law No. 249-17", "kind": "Law", "area": "Securities"},
+   {"name": "Insurance and Surety Law No. 146-02", "kind": "Law", "area": "Insurance"},
+   {"name": "General Telecommunications Law No. 153-98", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "EC", "name": "Ecuador", "region": "Americas", "aliases": ["Republic of Ecuador"],
+  "regulators": [
+   {"name": "Central Bank of Ecuador", "abbr": "BCE", "area": "Banking"},
+   {"name": "Superintendency of Banks", "abbr": "", "area": "Financial supervision"},
+   {"name": "Superintendency of Companies, Securities and Insurance", "abbr": "SCVS", "area": "Securities"},
+   {"name": "Superintendency of Popular and Solidarity Economy", "abbr": "SEPS", "area": "Financial supervision"},
+   {"name": "Financial and Economic Analysis Unit", "abbr": "UAFE", "area": "AML/CFT"},
+   {"name": "Superintendency of Personal Data Protection", "abbr": "SPDP", "area": "Data protection"},
+   {"name": "Agency for the Regulation and Control of Telecommunications", "abbr": "ARCOTEL", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Organic Law on Personal Data Protection (LOPDP)", "kind": "Law", "area": "Privacy"},
+   {"name": "Organic Law for the Strengthening of Cybersecurity", "kind": "Law", "area": "Cybersecurity"},
+   {"name": "Organic Monetary and Financial Code (COMYF)", "kind": "Law", "area": "Banking"},
+   {"name": "Organic Comprehensive Criminal Code (COIP, computer crime provisions)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Commerce, Electronic Signatures and Data Messages Law", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Organic Law on the Prevention, Detection and Eradication of the Crime of Money Laundering and the Financing of Crimes", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Organic Telecommunications Law", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "SV", "name": "El Salvador", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Reserve Bank of El Salvador", "abbr": "BCR", "area": "Banking"},
+   {"name": "Superintendency of the Financial System", "abbr": "SSF", "area": "Financial supervision"},
+   {"name": "Financial Investigation Unit", "abbr": "UIF", "area": "AML/CFT"},
+   {"name": "General Superintendency of Electricity and Telecommunications", "abbr": "SIGET", "area": "Telecom"},
+   {"name": "State Cybersecurity Agency", "abbr": "ACE", "area": "Cybersecurity"}
+  ],
+  "laws": [
+   {"name": "Cybersecurity and Information Security Law (Legislative Decree 143 of 2024)", "kind": "Law", "area": "Cybersecurity"},
+   {"name": "Personal Data Protection Law (Legislative Decree 144 of 2024)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law on Supervision and Regulation of the Financial System", "kind": "Law", "area": "Financial supervision"},
+   {"name": "Organic Law of the Central Reserve Bank of El Salvador", "kind": "Law", "area": "Banking"},
+   {"name": "Law Against Money and Asset Laundering", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Special Law Against Computer and Related Crimes", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Signature Law", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "GD", "name": "Grenada", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Grenada Authority for the Regulation of Financial Institutions", "abbr": "GARFIN", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Unit of Grenada", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act 2012", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Intelligence Unit Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Electronic Crimes Act 2013", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "GT", "name": "Guatemala", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Bank of Guatemala", "abbr": "BANGUAT", "area": "Banking"},
+   {"name": "Monetary Board", "abbr": "", "area": "Banking"},
+   {"name": "Superintendency of Banks", "abbr": "SIB", "area": "Financial supervision"},
+   {"name": "Special Verification Intendency", "abbr": "IVE", "area": "AML/CFT"},
+   {"name": "Superintendency of Telecommunications", "abbr": "SIT", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Law of Banks and Financial Groups (Decree 19-2002)", "kind": "Law", "area": "Banking"},
+   {"name": "Organic Law of the Bank of Guatemala (Decree 16-2002)", "kind": "Law", "area": "Banking"},
+   {"name": "Law Against Money and Other Assets Laundering (Decree 67-2001)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Law to Prevent and Suppress the Financing of Terrorism (Decree 58-2005)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Law for the Recognition of Electronic Communications and Signatures (Decree 47-2008)", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "General Telecommunications Law (Decree 94-96)", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "GY", "name": "Guyana", "region": "Americas", "aliases": ["Co-operative Republic of Guyana"],
+  "regulators": [
+   {"name": "Bank of Guyana", "abbr": "BoG", "area": "Banking"},
+   {"name": "Financial Intelligence Unit of Guyana", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Guyana Securities Council", "abbr": "", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Anti-Money Laundering and Countering the Financing of Terrorism Act 2009", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Institutions Act 1995", "kind": "Law", "area": "Banking"},
+   {"name": "Cybercrime Act 2018", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Securities Industry Act 1998", "kind": "Law", "area": "Securities"}
+  ]},
+ {"code": "HT", "name": "Haiti", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Bank of the Republic of Haiti", "abbr": "BRH", "area": "Banking"},
+   {"name": "Central Financial Intelligence Unit", "abbr": "UCREF", "area": "AML/CFT"},
+   {"name": "National Telecommunications Council", "abbr": "CONATEL", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Law on Banks and Other Financial Institutions", "kind": "Law", "area": "Banking"},
+   {"name": "Law on the Prevention and Repression of Money Laundering and the Financing of Terrorism", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "HN", "name": "Honduras", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Honduras", "abbr": "BCH", "area": "Banking"},
+   {"name": "National Banking and Insurance Commission", "abbr": "CNBS", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Unit", "abbr": "UIF", "area": "AML/CFT"},
+   {"name": "National Telecommunications Commission", "abbr": "CONATEL", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Financial System Law (Ley del Sistema Financiero)", "kind": "Law", "area": "Banking"},
+   {"name": "Special Law Against Money Laundering (Decree 144-2014)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Framework Law of the Telecommunications Sector (Decree 185-95)", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "JM", "name": "Jamaica", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Bank of Jamaica", "abbr": "BOJ", "area": "Banking"},
+   {"name": "Financial Services Commission", "abbr": "FSC", "area": "Financial supervision"},
+   {"name": "Financial Investigations Division", "abbr": "FID", "area": "AML/CFT"},
+   {"name": "Office of the Information Commissioner", "abbr": "OIC", "area": "Data protection"},
+   {"name": "Jamaica Deposit Insurance Corporation", "abbr": "JDIC", "area": "Banking"},
+   {"name": "Office of Utilities Regulation", "abbr": "OUR", "area": "Telecom"},
+   {"name": "Spectrum Management Authority", "abbr": "SMA", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Data Protection Act 2020", "kind": "Law", "area": "Privacy"},
+   {"name": "Cybercrimes Act 2015", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Banking Services Act 2014", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Terrorism Prevention Act 2005", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Electronic Transactions Act 2006", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Payment, Clearing and Settlement Act 2010", "kind": "Law", "area": "Payments"},
+   {"name": "Financial Services Commission Act 2001", "kind": "Law", "area": "Financial supervision"}
+  ]},
+ {"code": "MX", "name": "Mexico", "region": "Americas", "aliases": ["México", "United Mexican States", "Estados Unidos Mexicanos"],
+  "regulators": [
+   {"name": "Bank of Mexico", "abbr": "Banxico", "area": "Banking"},
+   {"name": "National Banking and Securities Commission", "abbr": "CNBV", "area": "Financial supervision"},
+   {"name": "National Insurance and Surety Commission", "abbr": "CNSF", "area": "Insurance"},
+   {"name": "National Commission of the Retirement Savings System", "abbr": "CONSAR", "area": "Pensions"},
+   {"name": "National Commission for the Protection and Defense of Users of Financial Services", "abbr": "CONDUSEF", "area": "Consumer protection"},
+   {"name": "Financial Intelligence Unit", "abbr": "UIF", "area": "AML/CFT"},
+   {"name": "Ministry of Finance and Public Credit", "abbr": "SHCP", "area": "Financial supervision"},
+   {"name": "Institute for the Protection of Bank Savings", "abbr": "IPAB", "area": "Banking"},
+   {"name": "Secretaría Anticorrupción y Buen Gobierno", "abbr": "SABG", "area": "Data protection"},
+   {"name": "Comisión Reguladora de Telecomunicaciones", "abbr": "CRT", "area": "Telecom"},
+   {"name": "Federal Commission for the Protection against Sanitary Risk", "abbr": "COFEPRIS", "area": "Health"}
+  ],
+  "laws": [
+   {"name": "Federal Law on Protection of Personal Data Held by Private Parties (LFPDPPP)", "kind": "Law", "area": "Privacy"},
+   {"name": "General Law on Protection of Personal Data Held by Obligated Subjects (LGPDPPSO)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law to Regulate Financial Technology Institutions (Fintech Law)", "kind": "Law", "area": "Financial supervision"},
+   {"name": "Law of Credit Institutions (Ley de Instituciones de Crédito)", "kind": "Law", "area": "Banking"},
+   {"name": "General Provisions Applicable to Credit Institutions (Circular Única de Bancos)", "kind": "Regulation", "area": "Banking"},
+   {"name": "Securities Market Law (Ley del Mercado de Valores)", "kind": "Law", "area": "Securities"},
+   {"name": "Law of Insurance and Surety Institutions (LISF)", "kind": "Law", "area": "Insurance"},
+   {"name": "Law of the Retirement Savings Systems (Ley de los Sistemas de Ahorro para el Retiro)", "kind": "Law", "area": "Pensions"},
+   {"name": "Federal Law for the Prevention and Identification of Operations with Resources of Illicit Origin (LFPIORPI)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "General Provisions under Article 115 of the Law of Credit Institutions (AML/CFT)", "kind": "Regulation", "area": "AML/CFT"},
+   {"name": "Federal Criminal Code (unauthorized access to computer systems, Articles 211 bis 1 to 211 bis 7)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Advanced Electronic Signature Law (Ley de Firma Electrónica Avanzada)", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "NOM-151-SCFI-2016 (retention of data messages and digitization of documents)", "kind": "Standard", "area": "Records and e-commerce"},
+   {"name": "Law of the Bank of Mexico (Ley del Banco de México)", "kind": "Law", "area": "Banking"},
+   {"name": "Payment Systems Law (Ley de Sistemas de Pagos)", "kind": "Law", "area": "Payments"}
+  ]},
+ {"code": "NI", "name": "Nicaragua", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Nicaragua", "abbr": "BCN", "area": "Banking"},
+   {"name": "Superintendency of Banks and Other Financial Institutions", "abbr": "SIBOIF", "area": "Financial supervision"},
+   {"name": "Financial Analysis Unit", "abbr": "UAF", "area": "AML/CFT"},
+   {"name": "Nicaraguan Institute of Telecommunications and Postal Services", "abbr": "TELCOR", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "General Law of Banks, Non-Bank Financial Institutions and Financial Groups (Law No. 561)", "kind": "Law", "area": "Banking"},
+   {"name": "Personal Data Protection Law (Law No. 787)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 977 against Money Laundering, Terrorism Financing and Financing of the Proliferation of Weapons of Mass Destruction", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Special Law on Cybercrimes (Law No. 1042)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Signature Law (Law No. 729)", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "PA", "name": "Panama", "region": "Americas", "aliases": ["Panamá"],
+  "regulators": [
+   {"name": "Superintendency of Banks of Panama", "abbr": "SBP", "area": "Banking"},
+   {"name": "Superintendency of the Securities Market", "abbr": "SMV", "area": "Securities"},
+   {"name": "Superintendency of Insurance and Reinsurance of Panama", "abbr": "SSRP", "area": "Insurance"},
+   {"name": "Financial Analysis Unit for the Prevention of Money Laundering and Terrorist Financing", "abbr": "UAF", "area": "AML/CFT"},
+   {"name": "National Authority for Transparency and Access to Information", "abbr": "ANTAI", "area": "Data protection"},
+   {"name": "National Authority for Government Innovation", "abbr": "AIG", "area": "Government ICT"},
+   {"name": "National Authority of Public Services", "abbr": "ASEP", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law (Law 81 of 2019)", "kind": "Law", "area": "Privacy"},
+   {"name": "Banking Law (Executive Decree 52 of 2008, consolidated text)", "kind": "Law", "area": "Banking"},
+   {"name": "Law 23 of 2015 on prevention of money laundering, terrorist financing and financing of the proliferation of weapons of mass destruction", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Securities Law (Decree Law 1 of 1999, consolidated text)", "kind": "Law", "area": "Securities"},
+   {"name": "Insurance Law (Law 12 of 2012)", "kind": "Law", "area": "Insurance"},
+   {"name": "Law 51 of 2008 on electronic documents and electronic signatures", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "PY", "name": "Paraguay", "region": "Americas", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Paraguay", "abbr": "BCP", "area": "Banking"},
+   {"name": "Secretariat for the Prevention of Money or Asset Laundering", "abbr": "SEPRELAD", "area": "AML/CFT"},
+   {"name": "National Securities Commission", "abbr": "CNV", "area": "Securities"},
+   {"name": "National Telecommunications Commission", "abbr": "CONATEL", "area": "Telecom"},
+   {"name": "Ministry of Information and Communication Technologies", "abbr": "MITIC", "area": "Government ICT"}
+  ],
+  "laws": [
+   {"name": "General Law of Banks, Finance Companies and Other Credit Entities (Law No. 861/96)", "kind": "Law", "area": "Banking"},
+   {"name": "Securities Market Law (Law No. 5810/2017)", "kind": "Law", "area": "Securities"},
+   {"name": "Law No. 6534/2020 on the Protection of Credit Personal Data", "kind": "Law", "area": "Privacy"},
+   {"name": "Personal Data Protection Law (Law No. 7593/2025, in force from November 2027)", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 4017/2010 on the legal validity of electronic signatures", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Telecommunications Law (Law No. 642/95)", "kind": "Law", "area": "Telecom"},
+   {"name": "Law No. 1015/97 on the prevention of money laundering", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "PE", "name": "Peru", "region": "Americas", "aliases": ["Perú", "Republic of Peru"],
+  "regulators": [
+   {"name": "Central Reserve Bank of Peru", "abbr": "BCRP", "area": "Banking"},
+   {"name": "Superintendency of Banking, Insurance and Private Pension Funds", "abbr": "SBS", "area": "Financial supervision"},
+   {"name": "Superintendency of the Securities Market", "abbr": "SMV", "area": "Securities"},
+   {"name": "Financial Intelligence Unit of Peru", "abbr": "UIF-Peru", "area": "AML/CFT"},
+   {"name": "National Authority for Personal Data Protection", "abbr": "ANPD", "area": "Data protection"},
+   {"name": "Supervisory Agency for Private Investment in Telecommunications", "abbr": "OSIPTEL", "area": "Telecom"},
+   {"name": "National Institute for the Defense of Competition and Protection of Intellectual Property", "abbr": "INDECOPI", "area": "Consumer protection"},
+   {"name": "Presidency of the Council of Ministers", "abbr": "PCM", "area": "Government ICT"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law No. 29733", "kind": "Law", "area": "Privacy"},
+   {"name": "Regulation of the Personal Data Protection Law (Supreme Decree No. 016-2024-JUS)", "kind": "Regulation", "area": "Privacy"},
+   {"name": "Computer Crimes Law No. 30096 (as amended by Law No. 30171)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Digital Government Law (Legislative Decree No. 1412)", "kind": "Law", "area": "Government ICT"},
+   {"name": "Digital Trust Framework (Emergency Decree No. 007-2020)", "kind": "Law", "area": "Cybersecurity"},
+   {"name": "Law No. 27693 (creation of the Financial Intelligence Unit of Peru)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "General Law of the Financial and Insurance System and Organic Law of the SBS (Law No. 26702)", "kind": "Law", "area": "Banking"},
+   {"name": "SBS Regulation for Information Security and Cybersecurity Management (Resolution SBS No. 504-2021)", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "SBS Business Continuity Management Regulation", "kind": "Regulation", "area": "Operational resilience"},
+   {"name": "Digital Signatures and Certificates Law No. 27269", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Consumer Protection and Defense Code (Law No. 29571)", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Securities Market Law (Ley del Mercado de Valores)", "kind": "Law", "area": "Securities"},
+   {"name": "Law No. 30424 on the administrative liability of legal entities", "kind": "Law", "area": "Governance"}
+  ]},
+ {"code": "KN", "name": "Saint Kitts and Nevis", "region": "Americas", "aliases": ["St Kitts and Nevis", "St. Kitts and Nevis", "St Kitts", "Saint Christopher and Nevis"],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Financial Services Regulatory Commission", "abbr": "FSRC", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Unit of Saint Kitts and Nevis", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Data Protection Act 2018", "kind": "Law", "area": "Privacy"},
+   {"name": "Financial Intelligence Unit Act", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "LC", "name": "Saint Lucia", "region": "Americas", "aliases": ["St Lucia", "St. Lucia"],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Financial Services Regulatory Authority", "abbr": "FSRA", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Authority", "abbr": "FIA", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering (Prevention) Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Services Regulatory Authority Act", "kind": "Law", "area": "Financial supervision"},
+   {"name": "Data Protection Act", "kind": "Law", "area": "Privacy"}
+  ]},
+ {"code": "VC", "name": "Saint Vincent and the Grenadines", "region": "Americas", "aliases": ["St Vincent and the Grenadines", "St. Vincent and the Grenadines", "St Vincent"],
+  "regulators": [
+   {"name": "Eastern Caribbean Central Bank", "abbr": "ECCB", "area": "Banking"},
+   {"name": "Financial Services Authority", "abbr": "FSA", "area": "Financial supervision"},
+   {"name": "Financial Intelligence Unit of Saint Vincent and the Grenadines", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Eastern Caribbean Securities Regulatory Commission", "abbr": "ECSRC", "area": "Securities"}
+  ],
+  "laws": [
+   {"name": "Banking Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Intelligence Unit Act", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "SR", "name": "Suriname", "region": "Americas", "aliases": ["Republic of Suriname", "Surinam"],
+  "regulators": [
+   {"name": "Central Bank of Suriname", "abbr": "CBvS", "area": "Banking"},
+   {"name": "Financial Intelligence Unit Suriname", "abbr": "FIUS", "area": "AML/CFT"},
+   {"name": "Telecommunications Authority Suriname", "abbr": "TAS", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Prevention and Combating of Money Laundering and Financing of Terrorism Act (WWFT)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Banking and Credit System Supervision Act", "kind": "Law", "area": "Banking"}
+  ]},
+ {"code": "TT", "name": "Trinidad and Tobago", "region": "Americas", "aliases": ["Trinidad", "Tobago", "Trinidad & Tobago"],
+  "regulators": [
+   {"name": "Central Bank of Trinidad and Tobago", "abbr": "CBTT", "area": "Banking"},
+   {"name": "Trinidad and Tobago Securities and Exchange Commission", "abbr": "TTSEC", "area": "Securities"},
+   {"name": "Financial Intelligence Unit of Trinidad and Tobago", "abbr": "FIUTT", "area": "AML/CFT"},
+   {"name": "Telecommunications Authority of Trinidad and Tobago", "abbr": "TATT", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Data Protection Act 2011", "kind": "Law", "area": "Privacy"},
+   {"name": "Computer Misuse Act", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Transactions Act 2011", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Financial Institutions Act 2008", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Anti-Terrorism Act 2005", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Securities Act 2012", "kind": "Law", "area": "Securities"},
+   {"name": "Insurance Act 2018", "kind": "Law", "area": "Insurance"}
+  ]},
+ {"code": "US", "name": "United States", "region": "Americas", "aliases": ["USA", "United States of America", "U.S.", "America"],
+  "regulators": [
+   {"name": "Federal Reserve Board", "abbr": "", "area": "Banking"},
+   {"name": "Office of the Comptroller of the Currency", "abbr": "OCC", "area": "Banking"},
+   {"name": "Federal Deposit Insurance Corporation", "abbr": "FDIC", "area": "Banking"},
+   {"name": "Securities and Exchange Commission", "abbr": "SEC", "area": "Securities"},
+   {"name": "New York State Department of Financial Services", "abbr": "NYDFS", "area": "Financial supervision"},
+   {"name": "Consumer Financial Protection Bureau", "abbr": "CFPB", "area": "Consumer protection"},
+   {"name": "National Credit Union Administration", "abbr": "NCUA", "area": "Banking"},
+   {"name": "Financial Crimes Enforcement Network", "abbr": "FinCEN", "area": "AML/CFT"},
+   {"name": "Office of Foreign Assets Control", "abbr": "OFAC", "area": "AML/CFT"},
+   {"name": "Commodity Futures Trading Commission", "abbr": "CFTC", "area": "Capital markets"},
+   {"name": "Financial Industry Regulatory Authority", "abbr": "FINRA", "area": "Securities"},
+   {"name": "Federal Trade Commission", "abbr": "FTC", "area": "Consumer protection"},
+   {"name": "Cybersecurity and Infrastructure Security Agency", "abbr": "CISA", "area": "Cybersecurity"},
+   {"name": "U.S. Department of Health and Human Services, Office for Civil Rights", "abbr": "HHS OCR", "area": "Health"},
+   {"name": "Federal Communications Commission", "abbr": "FCC", "area": "Telecom"},
+   {"name": "Public Company Accounting Oversight Board", "abbr": "PCAOB", "area": "Capital markets"},
+   {"name": "Federal Financial Institutions Examination Council", "abbr": "FFIEC", "area": "Financial supervision"},
+   {"name": "National Association of Insurance Commissioners", "abbr": "NAIC", "area": "Insurance"},
+   {"name": "California Privacy Protection Agency", "abbr": "CalPrivacy", "area": "Data protection"},
+   {"name": "California Department of Financial Protection and Innovation", "abbr": "DFPI", "area": "Financial supervision"}
+  ],
+  "laws": [
+   {"name": "Gramm-Leach-Bliley Act (GLBA)", "kind": "Law", "area": "Privacy"},
+   {"name": "FTC Safeguards Rule (16 CFR Part 314)", "kind": "Regulation", "area": "Data protection"},
+   {"name": "Interagency Guidelines Establishing Information Security Standards", "kind": "Guideline", "area": "Cybersecurity"},
+   {"name": "Computer-Security Incident Notification Requirements for Banking Organizations and Their Bank Service Providers", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "Interagency Guidance on Third-Party Relationships: Risk Management", "kind": "Guideline", "area": "Outsourcing and cloud"},
+   {"name": "Interagency Paper on Sound Practices to Strengthen Operational Resilience", "kind": "Guideline", "area": "Operational resilience"},
+   {"name": "FFIEC Information Technology Examination Handbook", "kind": "Guideline", "area": "Cybersecurity"},
+   {"name": "FFIEC BSA/AML Examination Manual", "kind": "Guideline", "area": "AML/CFT"},
+   {"name": "Bank Secrecy Act (BSA)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "USA PATRIOT Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "OFAC Sanctions Regulations (31 CFR Chapter V)", "kind": "Regulation", "area": "Sanctions"},
+   {"name": "Sarbanes-Oxley Act of 2002 (SOX)", "kind": "Law", "area": "Governance"},
+   {"name": "SEC Cybersecurity Risk Management, Strategy, Governance, and Incident Disclosure Rules", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "SEC Regulation S-P", "kind": "Regulation", "area": "Privacy"},
+   {"name": "Health Insurance Portability and Accountability Act of 1996 (HIPAA)", "kind": "Law", "area": "Health"},
+   {"name": "HIPAA Privacy, Security and Breach Notification Rules (45 CFR Parts 160 and 164)", "kind": "Regulation", "area": "Health"},
+   {"name": "California Consumer Privacy Act (CCPA) as amended by the California Privacy Rights Act (CPRA)", "kind": "Law", "area": "Privacy"},
+   {"name": "NYDFS Cybersecurity Regulation (23 NYCRR Part 500)", "kind": "Regulation", "area": "Cybersecurity"},
+   {"name": "New York SHIELD Act", "kind": "Law", "area": "Privacy"},
+   {"name": "NAIC Insurance Data Security Model Law (#668)", "kind": "Guideline", "area": "Insurance"},
+   {"name": "Federal Information Security Modernization Act (FISMA)", "kind": "Law", "area": "Government ICT"},
+   {"name": "Federal Risk and Authorization Management Program (FedRAMP)", "kind": "Framework", "area": "Outsourcing and cloud"},
+   {"name": "Cyber Incident Reporting for Critical Infrastructure Act of 2022 (CIRCIA)", "kind": "Law", "area": "Critical infrastructure"},
+   {"name": "CISA Cross-Sector Cybersecurity Performance Goals", "kind": "Framework", "area": "Cybersecurity"},
+   {"name": "Computer Fraud and Abuse Act (CFAA)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Signatures in Global and National Commerce Act (E-SIGN Act)", "kind": "Law", "area": "Electronic transactions"}
+  ]},
+ {"code": "UY", "name": "Uruguay", "region": "Americas", "aliases": ["Oriental Republic of Uruguay"],
+  "regulators": [
+   {"name": "Central Bank of Uruguay", "abbr": "BCU", "area": "Banking"},
+   {"name": "Superintendency of Financial Services", "abbr": "SSF", "area": "Financial supervision"},
+   {"name": "Financial Information and Analysis Unit", "abbr": "UIAF", "area": "AML/CFT"},
+   {"name": "Regulatory and Personal Data Control Unit", "abbr": "URCDP", "area": "Data protection"},
+   {"name": "Agency for Electronic Government and Information and Knowledge Society", "abbr": "AGESIC", "area": "Government ICT"},
+   {"name": "National Computer Security Incident Response Center", "abbr": "CERTuy", "area": "Cybersecurity"},
+   {"name": "Communications Services Regulatory Unit", "abbr": "URSEC", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Personal Data Protection Law No. 18,331", "kind": "Law", "area": "Privacy"},
+   {"name": "Law No. 18,600 on electronic documents and electronic signature", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Law No. 19,574 (comprehensive anti-money laundering law)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Charter of the Central Bank of Uruguay (Law No. 16,696)", "kind": "Law", "area": "Banking"},
+   {"name": "Securities Market Law No. 18,627", "kind": "Law", "area": "Securities"},
+   {"name": "BCU Compilation of Financial System Regulation and Control Rules (RNRCSF)", "kind": "Regulation", "area": "Banking"},
+   {"name": "AGESIC Cybersecurity Framework (Marco de Ciberseguridad)", "kind": "Framework", "area": "Cybersecurity"}
+  ]},
+ {"code": "VE", "name": "Venezuela", "region": "Americas", "aliases": ["Bolivarian Republic of Venezuela"],
+  "regulators": [
+   {"name": "Central Bank of Venezuela", "abbr": "BCV", "area": "Banking"},
+   {"name": "Superintendency of Banking Sector Institutions", "abbr": "SUDEBAN", "area": "Banking"},
+   {"name": "National Superintendency of Securities", "abbr": "SUNAVAL", "area": "Securities"},
+   {"name": "Superintendency of the Insurance Activity", "abbr": "SUDEASEG", "area": "Insurance"},
+   {"name": "National Telecommunications Commission", "abbr": "CONATEL", "area": "Telecom"},
+   {"name": "National Financial Intelligence Unit", "abbr": "UNIF", "area": "AML/CFT"}
+  ],
+  "laws": [
+   {"name": "Special Law Against Computer Crimes", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Law on Data Messages and Electronic Signatures (Decree-Law 1,204)", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Decree-Law on Banking Sector Institutions", "kind": "Law", "area": "Banking"},
+   {"name": "Organic Law Against Organized Crime and Financing of Terrorism (LOCDOFT)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Organic Telecommunications Law", "kind": "Law", "area": "Telecom"},
+   {"name": "Securities Market Law", "kind": "Law", "area": "Securities"}
+  ]},
+ {"code": "AU", "name": "Australia", "region": "Oceania", "aliases": ["Commonwealth of Australia"],
+  "regulators": [
+   {"name": "Australian Prudential Regulation Authority", "abbr": "APRA", "area": "Financial supervision"},
+   {"name": "Australian Securities and Investments Commission", "abbr": "ASIC", "area": "Securities"},
+   {"name": "Reserve Bank of Australia", "abbr": "RBA", "area": "Banking"},
+   {"name": "Australian Transaction Reports and Analysis Centre", "abbr": "AUSTRAC", "area": "AML/CFT"},
+   {"name": "Office of the Australian Information Commissioner", "abbr": "OAIC", "area": "Data protection"},
+   {"name": "Australian Signals Directorate", "abbr": "ASD", "area": "Cybersecurity"},
+   {"name": "Australian Cyber Security Centre", "abbr": "ACSC", "area": "Cybersecurity"},
+   {"name": "Cyber and Infrastructure Security Centre", "abbr": "CISC", "area": "Cybersecurity"},
+   {"name": "Australian Competition and Consumer Commission", "abbr": "ACCC", "area": "Competition"},
+   {"name": "Australian Communications and Media Authority", "abbr": "ACMA", "area": "Telecom"},
+   {"name": "Australian Financial Complaints Authority", "abbr": "AFCA", "area": "Consumer protection"},
+   {"name": "Digital Transformation Agency", "abbr": "DTA", "area": "Government ICT"},
+   {"name": "Therapeutic Goods Administration", "abbr": "TGA", "area": "Health"}
+  ],
+  "laws": [
+   {"name": "Privacy Act 1988", "kind": "Law", "area": "Privacy"},
+   {"name": "APRA Prudential Standard CPS 234 Information Security", "kind": "Standard", "area": "Cybersecurity"},
+   {"name": "APRA Prudential Practice Guide CPG 234 Information Security", "kind": "Guideline", "area": "Cybersecurity"},
+   {"name": "APRA Prudential Standard CPS 230 Operational Risk Management", "kind": "Standard", "area": "Operational resilience"},
+   {"name": "APRA Prudential Standard CPS 220 Risk Management", "kind": "Standard", "area": "Governance"},
+   {"name": "Security of Critical Infrastructure Act 2018 (SOCI Act)", "kind": "Law", "area": "Critical infrastructure"},
+   {"name": "Cyber Security Act 2024", "kind": "Law", "area": "Cybersecurity"},
+   {"name": "Anti-Money Laundering and Counter-Terrorism Financing Act 2006 (AML/CTF Act)", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Anti-Money Laundering and Counter-Terrorism Financing Rules 2025", "kind": "Regulation", "area": "AML/CFT"},
+   {"name": "Corporations Act 2001", "kind": "Law", "area": "Governance"},
+   {"name": "Banking Act 1959", "kind": "Law", "area": "Banking"},
+   {"name": "Insurance Act 1973", "kind": "Law", "area": "Insurance"},
+   {"name": "Superannuation Industry (Supervision) Act 1993", "kind": "Law", "area": "Pensions"},
+   {"name": "Financial Accountability Regime Act 2023", "kind": "Law", "area": "Governance"},
+   {"name": "Competition and Consumer Act 2010 (Consumer Data Right, Part IVD)", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Scams Prevention Framework Act 2025", "kind": "Law", "area": "Consumer protection"},
+   {"name": "Criminal Code Act 1995 (computer offences, Part 10.7)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Electronic Transactions Act 1999", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Autonomous Sanctions Act 2011", "kind": "Law", "area": "Sanctions"},
+   {"name": "Payment Systems (Regulation) Act 1998", "kind": "Law", "area": "Payments"},
+   {"name": "ASD Essential Eight Maturity Model", "kind": "Framework", "area": "Cybersecurity"},
+   {"name": "Australian Government Information Security Manual (ISM)", "kind": "Framework", "area": "Cybersecurity"},
+   {"name": "Protective Security Policy Framework (PSPF)", "kind": "Framework", "area": "Government ICT"},
+   {"name": "My Health Records Act 2012", "kind": "Law", "area": "Health"}
+  ]},
+ {"code": "FJ", "name": "Fiji", "region": "Oceania", "aliases": ["Republic of Fiji", "Fiji Islands"],
+  "regulators": [
+   {"name": "Reserve Bank of Fiji", "abbr": "RBF", "area": "Banking"},
+   {"name": "Fiji Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Fijian Competition and Consumer Commission", "abbr": "FCCC", "area": "Competition"}
+  ],
+  "laws": [
+   {"name": "Banking Act 1995", "kind": "Law", "area": "Banking"},
+   {"name": "Insurance Act 1998", "kind": "Law", "area": "Insurance"},
+   {"name": "Financial Transactions Reporting Act 2004", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Cybercrime Act 2021", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "KI", "name": "Kiribati", "region": "Oceania", "aliases": ["Republic of Kiribati"],
+  "regulators": [
+   {"name": "Kiribati Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Communications Commission of Kiribati", "abbr": "CCK", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Proceeds of Crime Act 2003", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Communications Act 2013", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "MH", "name": "Marshall Islands", "region": "Oceania", "aliases": ["Republic of the Marshall Islands", "RMI"],
+  "regulators": [
+   {"name": "Marshall Islands Banking Commission", "abbr": "", "area": "Banking"},
+   {"name": "Ministry of Finance, Banking and Postal Services", "abbr": "", "area": "Other"}
+  ],
+  "laws": [
+   {"name": "Banking Act 1987", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Counter-Terrorism Act", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "FM", "name": "Micronesia", "region": "Oceania", "aliases": ["Federated States of Micronesia", "FSM"],
+  "regulators": [
+   {"name": "FSM Banking Board", "abbr": "", "area": "Banking"},
+   {"name": "FSM Department of Finance and Administration", "abbr": "", "area": "Other"}
+  ],
+  "laws": [
+   {"name": "FSM Code Title 29 (Commercial Banking)", "kind": "Law", "area": "Banking"},
+   {"name": "FSM Code Title 11, Chapter 9 (Money Laundering and Proceeds of Crime)", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "NR", "name": "Nauru", "region": "Oceania", "aliases": ["Republic of Nauru"],
+  "regulators": [
+   {"name": "Nauru Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Department of Justice and Border Control", "abbr": "", "area": "Other"}
+  ],
+  "laws": [
+   {"name": "Anti-Money Laundering and Targeted Financial Sanctions Act 2023", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Proceeds of Crime Act 2004", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Cybercrime Act 2015", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "NZ", "name": "New Zealand", "region": "Oceania", "aliases": ["Aotearoa", "Aotearoa New Zealand"],
+  "regulators": [
+   {"name": "Reserve Bank of New Zealand", "abbr": "RBNZ", "area": "Banking"},
+   {"name": "Financial Markets Authority", "abbr": "FMA", "area": "Securities"},
+   {"name": "Office of the Privacy Commissioner", "abbr": "OPC", "area": "Data protection"},
+   {"name": "Department of Internal Affairs", "abbr": "DIA", "area": "Government ICT"},
+   {"name": "National Cyber Security Centre", "abbr": "NCSC", "area": "Cybersecurity"},
+   {"name": "Government Communications Security Bureau", "abbr": "GCSB", "area": "Cybersecurity"},
+   {"name": "Commerce Commission", "abbr": "", "area": "Competition"},
+   {"name": "New Zealand Police Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"}
+  ],
+  "laws": [
+   {"name": "Privacy Act 2020", "kind": "Law", "area": "Privacy"},
+   {"name": "Financial Markets Conduct Act 2013", "kind": "Law", "area": "Securities"},
+   {"name": "Anti-Money Laundering and Countering Financing of Terrorism Act 2009", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Deposit Takers Act 2023", "kind": "Law", "area": "Banking"},
+   {"name": "Reserve Bank of New Zealand Act 2021", "kind": "Law", "area": "Banking"},
+   {"name": "Insurance (Prudential Supervision) Act 2010", "kind": "Law", "area": "Insurance"},
+   {"name": "Crimes Act 1961 (computer crimes, sections 248 to 254)", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Contract and Commercial Law Act 2017 (electronic transactions)", "kind": "Law", "area": "Electronic transactions"},
+   {"name": "Telecommunications Act 2001", "kind": "Law", "area": "Telecom"},
+   {"name": "Telecommunications (Interception Capability and Security) Act 2013 (TICSA)", "kind": "Law", "area": "Telecom"},
+   {"name": "Health Information Privacy Code 2020", "kind": "Regulation", "area": "Health"},
+   {"name": "Credit Reporting Privacy Code 2020", "kind": "Regulation", "area": "Privacy"},
+   {"name": "Protective Security Requirements (PSR)", "kind": "Framework", "area": "Government ICT"},
+   {"name": "New Zealand Information Security Manual (NZISM)", "kind": "Standard", "area": "Government ICT"},
+   {"name": "Credit Contracts and Consumer Finance Act 2003 (CCCFA)", "kind": "Law", "area": "Consumer protection"}
+  ]},
+ {"code": "PW", "name": "Palau", "region": "Oceania", "aliases": ["Republic of Palau", "Belau"],
+  "regulators": [
+   {"name": "Financial Institutions Commission", "abbr": "FIC", "area": "Financial supervision"},
+   {"name": "Palau Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"}
+  ],
+  "laws": [
+   {"name": "Money Laundering and Proceeds of Crime Act", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Financial Institutions Act", "kind": "Law", "area": "Banking"}
+  ]},
+ {"code": "PG", "name": "Papua New Guinea", "region": "Oceania", "aliases": ["PNG"],
+  "regulators": [
+   {"name": "Bank of Papua New Guinea", "abbr": "BPNG", "area": "Banking"},
+   {"name": "Securities Commission of Papua New Guinea", "abbr": "SCPNG", "area": "Securities"},
+   {"name": "Independent Consumer and Competition Commission", "abbr": "ICCC", "area": "Competition"},
+   {"name": "National Information and Communications Technology Authority", "abbr": "NICTA", "area": "Telecom"},
+   {"name": "Financial Analysis and Supervision Unit", "abbr": "FASU", "area": "AML/CFT"}
+  ],
+  "laws": [
+   {"name": "Central Banking Act 2000", "kind": "Law", "area": "Banking"},
+   {"name": "Banks and Financial Institutions Act 2000", "kind": "Law", "area": "Banking"},
+   {"name": "Anti-Money Laundering and Counter Terrorist Financing Act 2015", "kind": "Law", "area": "AML/CFT"},
+   {"name": "National Payment Systems Act 2013", "kind": "Law", "area": "Payments"},
+   {"name": "National Information and Communications Technology Act 2009", "kind": "Law", "area": "Telecom"},
+   {"name": "Cybercrime Code Act 2016", "kind": "Law", "area": "Cybercrime"}
+  ]},
+ {"code": "WS", "name": "Samoa", "region": "Oceania", "aliases": ["Independent State of Samoa", "Western Samoa"],
+  "regulators": [
+   {"name": "Central Bank of Samoa", "abbr": "CBS", "area": "Banking"},
+   {"name": "Samoa Financial Intelligence Unit", "abbr": "FIU", "area": "AML/CFT"},
+   {"name": "Office of the Regulator", "abbr": "", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Central Bank of Samoa Act 2015", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering Prevention Act 2007", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Counter Terrorism Act 2014", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "SB", "name": "Solomon Islands", "region": "Oceania", "aliases": [],
+  "regulators": [
+   {"name": "Central Bank of Solomon Islands", "abbr": "CBSI", "area": "Banking"},
+   {"name": "Solomon Islands Financial Intelligence Unit", "abbr": "SIFIU", "area": "AML/CFT"},
+   {"name": "Telecommunications Commission Solomon Islands", "abbr": "TCSI", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Central Bank of Solomon Islands Act 2012", "kind": "Law", "area": "Banking"},
+   {"name": "Financial Institutions Act 1998", "kind": "Law", "area": "Banking"},
+   {"name": "Money Laundering and Proceeds of Crime Act 2002", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Telecommunications Act 2009", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "TO", "name": "Tonga", "region": "Oceania", "aliases": ["Kingdom of Tonga"],
+  "regulators": [
+   {"name": "National Reserve Bank of Tonga", "abbr": "NRBT", "area": "Banking"},
+   {"name": "Tonga Communications Commission", "abbr": "", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Money Laundering and Proceeds of Crime Act 2000", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Communications Act 2015", "kind": "Law", "area": "Telecom"},
+   {"name": "Communications Commission Act 2015", "kind": "Law", "area": "Telecom"}
+  ]},
+ {"code": "TV", "name": "Tuvalu", "region": "Oceania", "aliases": [],
+  "regulators": [
+   {"name": "Tuvalu Banking Commission", "abbr": "", "area": "Banking"},
+   {"name": "Ministry of Finance", "abbr": "", "area": "Other"}
+  ],
+  "laws": [
+   {"name": "Banking Commission Act 2011", "kind": "Law", "area": "Banking"},
+   {"name": "Proceeds of Crime Act 2004", "kind": "Law", "area": "AML/CFT"}
+  ]},
+ {"code": "VU", "name": "Vanuatu", "region": "Oceania", "aliases": ["Republic of Vanuatu", "New Hebrides"],
+  "regulators": [
+   {"name": "Reserve Bank of Vanuatu", "abbr": "RBV", "area": "Banking"},
+   {"name": "Vanuatu Financial Services Commission", "abbr": "VFSC", "area": "Financial supervision"},
+   {"name": "Vanuatu Financial Intelligence Unit", "abbr": "VFIU", "area": "AML/CFT"},
+   {"name": "Telecommunications, Radiocommunications and Broadcasting Regulator", "abbr": "TRBR", "area": "Telecom"}
+  ],
+  "laws": [
+   {"name": "Anti-Money Laundering and Counter-Terrorism Financing Act No. 13 of 2014", "kind": "Law", "area": "AML/CFT"},
+   {"name": "Cybercrime Act No. 22 of 2021", "kind": "Law", "area": "Cybercrime"},
+   {"name": "Telecommunications and Radiocommunications Regulation Act 2009", "kind": "Law", "area": "Telecom"}
+  ]}
+]}

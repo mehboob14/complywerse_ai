@@ -367,7 +367,7 @@ export function MultiSelectDropdown({
                     )}
 
                     <span className="min-w-0 flex-1">
-                      <span className={clsx('block truncate text-sm', !multiSelect && checked ? 'font-medium text-primary-700' : 'text-slate-800')}>{item.label}</span>
+                      <span title={item.label} className={clsx('block truncate text-sm', !multiSelect && checked ? 'font-medium text-primary-700' : 'text-slate-800')}>{item.label}</span>
                       {item.subLabel && (
                         <span className="block truncate text-xs text-slate-500">{item.subLabel}</span>
                       )}

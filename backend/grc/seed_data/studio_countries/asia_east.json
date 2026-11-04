@@ -1,0 +1,532 @@
+{"countries": [
+  {
+    "code": "BN", "name": "Brunei", "region": "Asia",
+    "aliases": ["Brunei Darussalam", "Negara Brunei Darussalam"],
+    "regulators": [
+      {"name": "Brunei Darussalam Central Bank", "abbr": "BDCB", "area": "Banking"},
+      {"name": "Authority for Info-communications Technology Industry of Brunei Darussalam", "abbr": "AITI", "area": "Telecom"},
+      {"name": "Cyber Security Brunei", "abbr": "CSB", "area": "Cybersecurity"},
+      {"name": "Financial Intelligence Unit, Brunei Darussalam Central Bank", "abbr": "FIU", "area": "AML/CFT"},
+      {"name": "Ministry of Transport and Infocommunications", "abbr": "MTIC", "area": "Government ICT"}
+    ],
+    "laws": [
+      {"name": "Brunei Darussalam Central Bank Order 2010", "kind": "Law", "area": "Banking"},
+      {"name": "Banking Order 2006", "kind": "Law", "area": "Banking"},
+      {"name": "Securities Markets Order 2013", "kind": "Law", "area": "Securities"},
+      {"name": "Criminal Asset Recovery Order 2012", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Personal Data Protection Order 2025", "kind": "Law", "area": "Privacy"},
+      {"name": "Cybersecurity Act (Chapter 272)", "kind": "Law", "area": "Cybersecurity"}
+    ]
+  },
+  {
+    "code": "KH", "name": "Cambodia", "region": "Asia",
+    "aliases": ["Kingdom of Cambodia", "Kampuchea"],
+    "regulators": [
+      {"name": "National Bank of Cambodia", "abbr": "NBC", "area": "Banking"},
+      {"name": "Securities and Exchange Regulator of Cambodia", "abbr": "SERC", "area": "Securities"},
+      {"name": "Non-Bank Financial Services Authority", "abbr": "NBFSA", "area": "Financial supervision"},
+      {"name": "Cambodia Financial Intelligence Unit", "abbr": "CAFIU", "area": "AML/CFT"},
+      {"name": "Ministry of Post and Telecommunications", "abbr": "MPTC", "area": "Telecom"},
+      {"name": "Telecommunication Regulator of Cambodia", "abbr": "TRC", "area": "Telecom"},
+      {"name": "Cambodia Computer Emergency Response Team", "abbr": "CamCERT", "area": "Cybersecurity"}
+    ],
+    "laws": [
+      {"name": "Law on Banking and Financial Institutions", "kind": "Law", "area": "Banking"},
+      {"name": "Law on Anti-Money Laundering and Combating the Financing of Terrorism", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law on Electronic Commerce", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Law on Telecommunications", "kind": "Law", "area": "Telecom"},
+      {"name": "Law on the Issuance and Trading of Non-Government Securities", "kind": "Law", "area": "Securities"},
+      {"name": "Law on Insurance", "kind": "Law", "area": "Insurance"},
+      {"name": "Law on Negotiable Instruments and Payment Transactions", "kind": "Law", "area": "Payments"}
+    ]
+  },
+  {
+    "code": "CN", "name": "China", "region": "Asia",
+    "aliases": ["People's Republic of China", "PRC", "Mainland China"],
+    "regulators": [
+      {"name": "People's Bank of China", "abbr": "PBOC", "area": "Banking"},
+      {"name": "National Financial Regulatory Administration", "abbr": "NFRA", "area": "Financial supervision"},
+      {"name": "China Securities Regulatory Commission", "abbr": "CSRC", "area": "Securities"},
+      {"name": "Cyberspace Administration of China", "abbr": "CAC", "area": "Cybersecurity"},
+      {"name": "Ministry of Public Security", "abbr": "MPS", "area": "Cybersecurity"},
+      {"name": "Ministry of Industry and Information Technology", "abbr": "MIIT", "area": "Telecom"},
+      {"name": "State Administration of Foreign Exchange", "abbr": "SAFE", "area": "Financial supervision"},
+      {"name": "State Administration for Market Regulation", "abbr": "SAMR", "area": "Competition"},
+      {"name": "National Data Administration", "abbr": "NDA", "area": "Government ICT"},
+      {"name": "National Computer Network Emergency Response Technical Team/Coordination Center of China", "abbr": "CNCERT/CC", "area": "Cybersecurity"},
+      {"name": "State Cryptography Administration", "abbr": "SCA", "area": "Cybersecurity"},
+      {"name": "China Anti-Money Laundering Monitoring and Analysis Center", "abbr": "CAMLMAC", "area": "AML/CFT"},
+      {"name": "National Health Commission", "abbr": "NHC", "area": "Health"}
+    ],
+    "laws": [
+      {"name": "Cybersecurity Law of the People's Republic of China", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Data Security Law of the People's Republic of China", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Personal Information Protection Law of the People's Republic of China", "kind": "Law", "area": "Privacy"},
+      {"name": "Cryptography Law of the People's Republic of China", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Multi-Level Protection Scheme (MLPS 2.0)", "kind": "Framework", "area": "Cybersecurity"},
+      {"name": "Regulations on Security Protection of Critical Information Infrastructure", "kind": "Regulation", "area": "Critical infrastructure"},
+      {"name": "Regulations on Network Data Security Management", "kind": "Regulation", "area": "Cybersecurity"},
+      {"name": "Measures for Security Assessment of Outbound Data Transfers", "kind": "Regulation", "area": "Privacy"},
+      {"name": "Provisions on Promoting and Regulating Cross-Border Data Flows", "kind": "Regulation", "area": "Privacy"},
+      {"name": "Law of the People's Republic of China on the People's Bank of China", "kind": "Law", "area": "Banking"},
+      {"name": "Commercial Banking Law of the People's Republic of China", "kind": "Law", "area": "Banking"},
+      {"name": "Securities Law of the People's Republic of China", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Law of the People's Republic of China", "kind": "Law", "area": "Insurance"},
+      {"name": "Anti-Money Laundering Law of the People's Republic of China", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Electronic Signature Law of the People's Republic of China", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Interim Measures for the Administration of Generative Artificial Intelligence Services", "kind": "Regulation", "area": "Governance"}
+    ]
+  },
+  {
+    "code": "ID", "name": "Indonesia", "region": "Asia",
+    "aliases": ["Republic of Indonesia"],
+    "regulators": [
+      {"name": "Financial Services Authority", "abbr": "OJK", "area": "Financial supervision"},
+      {"name": "Bank Indonesia", "abbr": "BI", "area": "Banking"},
+      {"name": "Ministry of Communication and Digital Affairs", "abbr": "Komdigi", "area": "Telecom"},
+      {"name": "National Cyber and Crypto Agency", "abbr": "BSSN", "area": "Cybersecurity"},
+      {"name": "Indonesian Financial Transaction Reports and Analysis Center", "abbr": "PPATK", "area": "AML/CFT"},
+      {"name": "Indonesia Stock Exchange", "abbr": "IDX", "area": "Capital markets"},
+      {"name": "Indonesia Deposit Insurance Corporation", "abbr": "LPS", "area": "Banking"},
+      {"name": "Indonesia Competition Commission", "abbr": "KPPU", "area": "Competition"},
+      {"name": "Ministry of Health", "abbr": "Kemenkes", "area": "Health"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Law (Law No. 27 of 2022)", "kind": "Law", "area": "Privacy"},
+      {"name": "Electronic Information and Transactions Law (Law No. 11 of 2008, as amended)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Government Regulation No. 71 of 2019 on the Implementation of Electronic Systems and Transactions", "kind": "Regulation", "area": "Electronic transactions"},
+      {"name": "Presidential Regulation No. 82 of 2022 on the Protection of Vital Information Infrastructure", "kind": "Regulation", "area": "Critical infrastructure"},
+      {"name": "OJK Regulation No. 11/POJK.03/2022 on the Implementation of Information Technology by Commercial Banks", "kind": "Regulation", "area": "Cybersecurity"},
+      {"name": "Law No. 4 of 2023 on the Development and Strengthening of the Financial Sector", "kind": "Law", "area": "Financial supervision"},
+      {"name": "Law No. 21 of 2011 on the Financial Services Authority", "kind": "Law", "area": "Financial supervision"},
+      {"name": "Law No. 23 of 1999 on Bank Indonesia (as amended)", "kind": "Law", "area": "Banking"},
+      {"name": "Law No. 8 of 1995 on Capital Markets", "kind": "Law", "area": "Securities"},
+      {"name": "Law No. 40 of 2014 on Insurance", "kind": "Law", "area": "Insurance"},
+      {"name": "Law No. 3 of 2011 on Fund Transfer", "kind": "Law", "area": "Payments"},
+      {"name": "Bank Indonesia Regulation No. 23/6/PBI/2021 on Payment Service Providers", "kind": "Regulation", "area": "Payments"},
+      {"name": "Law No. 8 of 2010 on the Prevention and Eradication of Money Laundering", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law No. 9 of 2013 on the Prevention and Eradication of the Criminal Act of Terrorism Financing", "kind": "Law", "area": "AML/CFT"}
+    ]
+  },
+  {
+    "code": "JP", "name": "Japan", "region": "Asia",
+    "aliases": ["Nippon", "Nihon"],
+    "regulators": [
+      {"name": "Financial Services Agency", "abbr": "FSA", "area": "Financial supervision"},
+      {"name": "Bank of Japan", "abbr": "BOJ", "area": "Banking"},
+      {"name": "Personal Information Protection Commission", "abbr": "PPC", "area": "Data protection"},
+      {"name": "National Cybersecurity Office", "abbr": "NCO", "area": "Cybersecurity"},
+      {"name": "Japan Financial Intelligence Center", "abbr": "JAFIC", "area": "AML/CFT"},
+      {"name": "Ministry of Internal Affairs and Communications", "abbr": "MIC", "area": "Telecom"},
+      {"name": "Ministry of Economy, Trade and Industry", "abbr": "METI", "area": "Other"},
+      {"name": "Digital Agency", "abbr": "", "area": "Government ICT"},
+      {"name": "Japan Computer Emergency Response Team Coordination Center", "abbr": "JPCERT/CC", "area": "Cybersecurity"},
+      {"name": "Information-technology Promotion Agency, Japan", "abbr": "IPA", "area": "Cybersecurity"},
+      {"name": "Securities and Exchange Surveillance Commission", "abbr": "SESC", "area": "Securities"},
+      {"name": "Japan Exchange Regulation", "abbr": "JPX-R", "area": "Securities"},
+      {"name": "Deposit Insurance Corporation of Japan", "abbr": "DICJ", "area": "Banking"},
+      {"name": "Japan Fair Trade Commission", "abbr": "JFTC", "area": "Competition"}
+    ],
+    "laws": [
+      {"name": "Act on the Protection of Personal Information (APPI)", "kind": "Law", "area": "Privacy"},
+      {"name": "Banking Act", "kind": "Law", "area": "Banking"},
+      {"name": "Financial Instruments and Exchange Act", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Business Act", "kind": "Law", "area": "Insurance"},
+      {"name": "Payment Services Act", "kind": "Law", "area": "Payments"},
+      {"name": "Act on Prevention of Transfer of Criminal Proceeds", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Foreign Exchange and Foreign Trade Act", "kind": "Law", "area": "Sanctions"},
+      {"name": "Basic Act on Cybersecurity", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Act on the Prohibition of Unauthorized Computer Access", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Act on Electronic Signatures and Certification Business", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Telecommunications Business Act", "kind": "Law", "area": "Telecom"},
+      {"name": "FSA Guidelines on Cybersecurity for the Financial Sector", "kind": "Guideline", "area": "Cybersecurity"},
+      {"name": "FSA Comprehensive Guidelines for Supervision of Major Banks, etc.", "kind": "Guideline", "area": "Banking"},
+      {"name": "FISC Security Guidelines on Computer Systems for Financial Institutions", "kind": "Guideline", "area": "Cybersecurity"}
+    ]
+  },
+  {
+    "code": "LA", "name": "Laos", "region": "Asia",
+    "aliases": ["Lao PDR", "Lao People's Democratic Republic", "Lao"],
+    "regulators": [
+      {"name": "Bank of the Lao PDR", "abbr": "BOL", "area": "Banking"},
+      {"name": "Lao Securities Commission Office", "abbr": "LSCO", "area": "Securities"},
+      {"name": "Ministry of Technology and Communications", "abbr": "MTC", "area": "Telecom"},
+      {"name": "Anti-Money Laundering Intelligence Office", "abbr": "AMLIO", "area": "AML/CFT"},
+      {"name": "Lao Computer Emergency Response Team", "abbr": "LaoCERT", "area": "Cybersecurity"}
+    ],
+    "laws": [
+      {"name": "Law on Electronic Data Protection", "kind": "Law", "area": "Privacy"},
+      {"name": "Law on Prevention and Combating Cyber Crime", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Law on Electronic Transactions", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Law on Commercial Banks", "kind": "Law", "area": "Banking"},
+      {"name": "Law on the Bank of the Lao PDR", "kind": "Law", "area": "Banking"},
+      {"name": "Law on Anti-Money Laundering and Counter-Financing of Terrorism", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law on Securities", "kind": "Law", "area": "Securities"},
+      {"name": "Law on Telecommunications", "kind": "Law", "area": "Telecom"}
+    ]
+  },
+  {
+    "code": "MY", "name": "Malaysia", "region": "Asia",
+    "aliases": ["Federation of Malaysia"],
+    "regulators": [
+      {"name": "Bank Negara Malaysia", "abbr": "BNM", "area": "Banking"},
+      {"name": "Securities Commission Malaysia", "abbr": "SC", "area": "Securities"},
+      {"name": "Personal Data Protection Commissioner", "abbr": "", "area": "Data protection"},
+      {"name": "Malaysian Communications and Multimedia Commission", "abbr": "MCMC", "area": "Telecom"},
+      {"name": "National Cyber Security Agency", "abbr": "NACSA", "area": "Cybersecurity"},
+      {"name": "CyberSecurity Malaysia", "abbr": "CSM", "area": "Cybersecurity"},
+      {"name": "Labuan Financial Services Authority", "abbr": "Labuan FSA", "area": "Financial supervision"},
+      {"name": "Financial Intelligence and Enforcement Department, Bank Negara Malaysia", "abbr": "FIED", "area": "AML/CFT"},
+      {"name": "Bursa Malaysia", "abbr": "", "area": "Capital markets"},
+      {"name": "Malaysia Deposit Insurance Corporation", "abbr": "PIDM", "area": "Banking"},
+      {"name": "Malaysia Competition Commission", "abbr": "MyCC", "area": "Competition"},
+      {"name": "Ministry of Digital", "abbr": "", "area": "Government ICT"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Act 2010", "kind": "Law", "area": "Privacy"},
+      {"name": "Personal Data Protection (Amendment) Act 2024", "kind": "Law", "area": "Privacy"},
+      {"name": "Computer Crimes Act 1997", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Communications and Multimedia Act 1998", "kind": "Law", "area": "Telecom"},
+      {"name": "Cyber Security Act 2024", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Financial Services Act 2013", "kind": "Law", "area": "Banking"},
+      {"name": "Islamic Financial Services Act 2013", "kind": "Law", "area": "Banking"},
+      {"name": "Central Bank of Malaysia Act 2009", "kind": "Law", "area": "Banking"},
+      {"name": "Capital Markets and Services Act 2007", "kind": "Law", "area": "Capital markets"},
+      {"name": "Anti-Money Laundering, Anti-Terrorism Financing and Proceeds of Unlawful Activities Act 2001", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Electronic Commerce Act 2006", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "BNM Policy Document on Risk Management in Technology (RMiT)", "kind": "Regulation", "area": "Cybersecurity"},
+      {"name": "BNM Policy Document on Outsourcing", "kind": "Regulation", "area": "Outsourcing and cloud"},
+      {"name": "BNM Policy Document on Business Continuity Management", "kind": "Regulation", "area": "Operational resilience"},
+      {"name": "SC Guidelines on Technology Risk Management", "kind": "Guideline", "area": "Cybersecurity"}
+    ]
+  },
+  {
+    "code": "MN", "name": "Mongolia", "region": "Asia",
+    "aliases": ["Mongol Uls"],
+    "regulators": [
+      {"name": "Bank of Mongolia", "abbr": "BoM", "area": "Banking"},
+      {"name": "Financial Regulatory Commission", "abbr": "FRC", "area": "Financial supervision"},
+      {"name": "Communications Regulatory Commission", "abbr": "CRC", "area": "Telecom"},
+      {"name": "Financial Information Unit, Bank of Mongolia", "abbr": "FIU", "area": "AML/CFT"},
+      {"name": "Mongolian Stock Exchange", "abbr": "MSE", "area": "Capital markets"}
+    ],
+    "laws": [
+      {"name": "Law on Cyber Security", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Law on Personal Data Protection", "kind": "Law", "area": "Privacy"},
+      {"name": "Banking Law", "kind": "Law", "area": "Banking"},
+      {"name": "Law on Combating Money Laundering and Terrorism Financing", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law on Securities Market", "kind": "Law", "area": "Securities"},
+      {"name": "Law on the Legal Status of the Financial Regulatory Commission", "kind": "Law", "area": "Financial supervision"},
+      {"name": "Law on Insurance", "kind": "Law", "area": "Insurance"}
+    ]
+  },
+  {
+    "code": "MM", "name": "Myanmar", "region": "Asia",
+    "aliases": ["Burma", "Republic of the Union of Myanmar"],
+    "regulators": [
+      {"name": "Central Bank of Myanmar", "abbr": "CBM", "area": "Banking"},
+      {"name": "Financial Regulatory Department", "abbr": "FRD", "area": "Financial supervision"},
+      {"name": "Securities and Exchange Commission of Myanmar", "abbr": "SECM", "area": "Securities"},
+      {"name": "Myanmar Financial Intelligence Unit", "abbr": "MFIU", "area": "AML/CFT"},
+      {"name": "Insurance Business Regulatory Board", "abbr": "IBRB", "area": "Insurance"},
+      {"name": "Posts and Telecommunications Department", "abbr": "PTD", "area": "Telecom"}
+    ],
+    "laws": [
+      {"name": "Financial Institutions Law 2016", "kind": "Law", "area": "Banking"},
+      {"name": "Central Bank of Myanmar Law 2013", "kind": "Law", "area": "Banking"},
+      {"name": "Anti-Money Laundering Law 2014", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Telecommunications Law 2013", "kind": "Law", "area": "Telecom"},
+      {"name": "Electronic Transactions Law 2004", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Law Protecting the Privacy and Security of Citizens 2017", "kind": "Law", "area": "Privacy"},
+      {"name": "Securities Exchange Law 2013", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Business Law 2015", "kind": "Law", "area": "Insurance"},
+      {"name": "Cybersecurity Law 2025", "kind": "Law", "area": "Cybersecurity"}
+    ]
+  },
+  {
+    "code": "KP", "name": "North Korea", "region": "Asia",
+    "aliases": ["DPRK", "Democratic People's Republic of Korea", "Korea, North", "Korea (North)"],
+    "regulators": [
+      {"name": "Central Bank of the Democratic People's Republic of Korea", "abbr": "", "area": "Banking"},
+      {"name": "Ministry of Posts and Telecommunications", "abbr": "", "area": "Telecom"}
+    ],
+    "laws": [
+      {"name": "Central Bank Law of the Democratic People's Republic of Korea", "kind": "Law", "area": "Banking"},
+      {"name": "Commercial Banks Law of the Democratic People's Republic of Korea", "kind": "Law", "area": "Banking"},
+      {"name": "Law on Anti-Money Laundering and Combating the Financing of Terrorism (DPRK)", "kind": "Law", "area": "AML/CFT"}
+    ]
+  },
+  {
+    "code": "PH", "name": "Philippines", "region": "Asia",
+    "aliases": ["Republic of the Philippines", "Pilipinas"],
+    "regulators": [
+      {"name": "Bangko Sentral ng Pilipinas", "abbr": "BSP", "area": "Banking"},
+      {"name": "Securities and Exchange Commission", "abbr": "SEC", "area": "Securities"},
+      {"name": "National Privacy Commission", "abbr": "NPC", "area": "Data protection"},
+      {"name": "Department of Information and Communications Technology", "abbr": "DICT", "area": "Government ICT"},
+      {"name": "Cybercrime Investigation and Coordinating Center", "abbr": "CICC", "area": "Cybersecurity"},
+      {"name": "Anti-Money Laundering Council", "abbr": "AMLC", "area": "AML/CFT"},
+      {"name": "Insurance Commission", "abbr": "IC", "area": "Insurance"},
+      {"name": "National Telecommunications Commission", "abbr": "NTC", "area": "Telecom"},
+      {"name": "Philippine Deposit Insurance Corporation", "abbr": "PDIC", "area": "Banking"},
+      {"name": "Philippine Competition Commission", "abbr": "PCC", "area": "Competition"},
+      {"name": "Philippine Stock Exchange", "abbr": "PSE", "area": "Capital markets"}
+    ],
+    "laws": [
+      {"name": "Data Privacy Act of 2012 (Republic Act No. 10173)", "kind": "Law", "area": "Privacy"},
+      {"name": "Implementing Rules and Regulations of the Data Privacy Act of 2012", "kind": "Regulation", "area": "Privacy"},
+      {"name": "NPC Circular 16-03 on Personal Data Breach Management", "kind": "Circular", "area": "Privacy"},
+      {"name": "Cybercrime Prevention Act of 2012 (Republic Act No. 10175)", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Electronic Commerce Act of 2000 (Republic Act No. 8792)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Anti-Money Laundering Act of 2001 (Republic Act No. 9160, as amended)", "kind": "Law", "area": "AML/CFT"},
+      {"name": "New Central Bank Act (Republic Act No. 7653)", "kind": "Law", "area": "Banking"},
+      {"name": "General Banking Law of 2000 (Republic Act No. 8791)", "kind": "Law", "area": "Banking"},
+      {"name": "Securities Regulation Code (Republic Act No. 8799)", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Code (Presidential Decree No. 612, as amended by Republic Act No. 10607)", "kind": "Law", "area": "Insurance"},
+      {"name": "National Payment Systems Act (Republic Act No. 11127)", "kind": "Law", "area": "Payments"},
+      {"name": "Financial Products and Services Consumer Protection Act (Republic Act No. 11765)", "kind": "Law", "area": "Consumer protection"},
+      {"name": "BSP Circular No. 982 on Enhanced Guidelines on Information Security Management", "kind": "Circular", "area": "Cybersecurity"},
+      {"name": "BSP Circular No. 808 on Guidelines on Information Technology Risk Management", "kind": "Circular", "area": "Cybersecurity"},
+      {"name": "BSP Manual of Regulations for Banks", "kind": "Regulation", "area": "Banking"}
+    ]
+  },
+  {
+    "code": "SG", "name": "Singapore", "region": "Asia",
+    "aliases": ["Republic of Singapore"],
+    "regulators": [
+      {"name": "Monetary Authority of Singapore", "abbr": "MAS", "area": "Financial supervision"},
+      {"name": "Personal Data Protection Commission", "abbr": "PDPC", "area": "Data protection"},
+      {"name": "Cyber Security Agency of Singapore", "abbr": "CSA", "area": "Cybersecurity"},
+      {"name": "Singapore Computer Emergency Response Team", "abbr": "SingCERT", "area": "Cybersecurity"},
+      {"name": "Infocomm Media Development Authority", "abbr": "IMDA", "area": "Telecom"},
+      {"name": "Suspicious Transaction Reporting Office, Commercial Affairs Department", "abbr": "STRO", "area": "AML/CFT"},
+      {"name": "Singapore Exchange Regulation", "abbr": "SGX RegCo", "area": "Securities"},
+      {"name": "Competition and Consumer Commission of Singapore", "abbr": "CCCS", "area": "Competition"},
+      {"name": "Ministry of Health", "abbr": "MOH", "area": "Health"},
+      {"name": "Singapore Deposit Insurance Corporation", "abbr": "SDIC", "area": "Banking"},
+      {"name": "Government Technology Agency", "abbr": "GovTech", "area": "Government ICT"},
+      {"name": "Accounting and Corporate Regulatory Authority", "abbr": "ACRA", "area": "Other"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Act 2012", "kind": "Law", "area": "Privacy"},
+      {"name": "Personal Data Protection (Notification of Data Breaches) Regulations 2021", "kind": "Regulation", "area": "Privacy"},
+      {"name": "Cybersecurity Act 2018", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Cybersecurity Code of Practice for Critical Information Infrastructure", "kind": "Regulation", "area": "Critical infrastructure"},
+      {"name": "Computer Misuse Act 1993", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Banking Act 1970", "kind": "Law", "area": "Banking"},
+      {"name": "Securities and Futures Act 2001", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Act 1966", "kind": "Law", "area": "Insurance"},
+      {"name": "Payment Services Act 2019", "kind": "Law", "area": "Payments"},
+      {"name": "Financial Services and Markets Act 2022", "kind": "Law", "area": "Financial supervision"},
+      {"name": "Electronic Transactions Act 2010", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Corruption, Drug Trafficking and Other Serious Crimes (Confiscation of Benefits) Act 1992", "kind": "Law", "area": "AML/CFT"},
+      {"name": "MAS Notice 626 on Prevention of Money Laundering and Countering the Financing of Terrorism (Banks)", "kind": "Circular", "area": "AML/CFT"},
+      {"name": "MAS Technology Risk Management Guidelines", "kind": "Guideline", "area": "Cybersecurity"},
+      {"name": "MAS Notice FSM-N05 on Technology Risk Management (banks, formerly Notice 644)", "kind": "Circular", "area": "Cybersecurity"},
+      {"name": "MAS Notice FSM-N06 on Cyber Hygiene (banks, formerly Notice 655)", "kind": "Circular", "area": "Cybersecurity"},
+      {"name": "MAS Notice 658 on Management of Outsourced Relevant Services for Banks", "kind": "Circular", "area": "Outsourcing and cloud"},
+      {"name": "MAS Guidelines on Outsourcing (Banks)", "kind": "Guideline", "area": "Outsourcing and cloud"},
+      {"name": "MAS Guidelines on Outsourcing (Financial Institutions other than Banks)", "kind": "Guideline", "area": "Outsourcing and cloud"},
+      {"name": "MAS Guidelines on Business Continuity Management", "kind": "Guideline", "area": "Operational resilience"}
+    ]
+  },
+  {
+    "code": "KR", "name": "South Korea", "region": "Asia",
+    "aliases": ["Republic of Korea", "Korea, South", "Korea (South)", "ROK"],
+    "regulators": [
+      {"name": "Financial Services Commission", "abbr": "FSC", "area": "Financial supervision"},
+      {"name": "Financial Supervisory Service", "abbr": "FSS", "area": "Financial supervision"},
+      {"name": "Bank of Korea", "abbr": "BOK", "area": "Banking"},
+      {"name": "Personal Information Protection Commission", "abbr": "PIPC", "area": "Data protection"},
+      {"name": "Korea Internet & Security Agency", "abbr": "KISA", "area": "Cybersecurity"},
+      {"name": "Ministry of Science and ICT", "abbr": "MSIT", "area": "Telecom"},
+      {"name": "Korea Financial Intelligence Unit", "abbr": "KoFIU", "area": "AML/CFT"},
+      {"name": "National Intelligence Service", "abbr": "NIS", "area": "Cybersecurity"},
+      {"name": "Financial Security Institute", "abbr": "FSI", "area": "Cybersecurity"},
+      {"name": "Korea Exchange", "abbr": "KRX", "area": "Securities"},
+      {"name": "Korea Deposit Insurance Corporation", "abbr": "KDIC", "area": "Banking"},
+      {"name": "Korea Fair Trade Commission", "abbr": "KFTC", "area": "Competition"}
+    ],
+    "laws": [
+      {"name": "Personal Information Protection Act (PIPA)", "kind": "Law", "area": "Privacy"},
+      {"name": "Act on Promotion of Information and Communications Network Utilization and Information Protection (Network Act)", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Electronic Financial Transactions Act (EFTA)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Regulation on Supervision of Electronic Financial Transactions", "kind": "Regulation", "area": "Cybersecurity"},
+      {"name": "Credit Information Use and Protection Act", "kind": "Law", "area": "Privacy"},
+      {"name": "Act on Reporting and Using Specified Financial Transaction Information", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Financial Investment Services and Capital Markets Act", "kind": "Law", "area": "Capital markets"},
+      {"name": "Banking Act", "kind": "Law", "area": "Banking"},
+      {"name": "Insurance Business Act", "kind": "Law", "area": "Insurance"},
+      {"name": "Act on the Protection of Information and Communications Infrastructure", "kind": "Law", "area": "Critical infrastructure"},
+      {"name": "Act on the Development of Cloud Computing and Protection of Its Users", "kind": "Law", "area": "Outsourcing and cloud"},
+      {"name": "Telecommunications Business Act", "kind": "Law", "area": "Telecom"},
+      {"name": "Framework Act on the Development of Artificial Intelligence and Establishment of Trust (AI Basic Act)", "kind": "Law", "area": "Governance"}
+    ]
+  },
+  {
+    "code": "TH", "name": "Thailand", "region": "Asia",
+    "aliases": ["Kingdom of Thailand", "Siam"],
+    "regulators": [
+      {"name": "Bank of Thailand", "abbr": "BOT", "area": "Banking"},
+      {"name": "Securities and Exchange Commission, Thailand", "abbr": "SEC", "area": "Securities"},
+      {"name": "Personal Data Protection Committee", "abbr": "PDPC", "area": "Data protection"},
+      {"name": "National Cyber Security Agency", "abbr": "NCSA", "area": "Cybersecurity"},
+      {"name": "National Broadcasting and Telecommunications Commission", "abbr": "NBTC", "area": "Telecom"},
+      {"name": "Anti-Money Laundering Office", "abbr": "AMLO", "area": "AML/CFT"},
+      {"name": "Office of Insurance Commission", "abbr": "OIC", "area": "Insurance"},
+      {"name": "Ministry of Digital Economy and Society", "abbr": "MDES", "area": "Government ICT"},
+      {"name": "Electronic Transactions Development Agency", "abbr": "ETDA", "area": "Other"},
+      {"name": "Digital Government Development Agency", "abbr": "DGA", "area": "Government ICT"},
+      {"name": "Thailand Computer Emergency Response Team", "abbr": "ThaiCERT", "area": "Cybersecurity"},
+      {"name": "Stock Exchange of Thailand", "abbr": "SET", "area": "Capital markets"},
+      {"name": "Deposit Protection Agency", "abbr": "DPA", "area": "Banking"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Act B.E. 2562 (2019)", "kind": "Law", "area": "Privacy"},
+      {"name": "Cybersecurity Act B.E. 2562 (2019)", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Computer Crime Act B.E. 2550 (2007)", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Electronic Transactions Act B.E. 2544 (2001)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Digital Government Development Act B.E. 2562 (2019)", "kind": "Law", "area": "Government ICT"},
+      {"name": "Financial Institutions Business Act B.E. 2551 (2008)", "kind": "Law", "area": "Banking"},
+      {"name": "Bank of Thailand Act B.E. 2485 (1942)", "kind": "Law", "area": "Banking"},
+      {"name": "Securities and Exchange Act B.E. 2535 (1992)", "kind": "Law", "area": "Securities"},
+      {"name": "Anti-Money Laundering Act B.E. 2542 (1999)", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Payment Systems Act B.E. 2560 (2017)", "kind": "Law", "area": "Payments"},
+      {"name": "Life Insurance Act B.E. 2535 (1992)", "kind": "Law", "area": "Insurance"},
+      {"name": "Non-life Insurance Act B.E. 2535 (1992)", "kind": "Law", "area": "Insurance"}
+    ]
+  },
+  {
+    "code": "TL", "name": "Timor-Leste", "region": "Asia",
+    "aliases": ["East Timor", "Timor Leste", "Democratic Republic of Timor-Leste"],
+    "regulators": [
+      {"name": "Banco Central de Timor-Leste", "abbr": "BCTL", "area": "Banking"},
+      {"name": "National Communications Authority", "abbr": "ANC", "area": "Telecom"}
+    ],
+    "laws": [
+      {"name": "Organic Law of Banco Central de Timor-Leste (Law No. 5/2011)", "kind": "Law", "area": "Banking"},
+      {"name": "UNTAET Regulation No. 2000/8 on Bank Licensing and Supervision", "kind": "Regulation", "area": "Banking"},
+      {"name": "Law No. 17/2011 on the Prevention of Money Laundering and Financing of Terrorism", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Telecommunications Decree-Law No. 15/2012", "kind": "Law", "area": "Telecom"}
+    ]
+  },
+  {
+    "code": "VN", "name": "Vietnam", "region": "Asia",
+    "aliases": ["Viet Nam", "Socialist Republic of Vietnam"],
+    "regulators": [
+      {"name": "State Bank of Vietnam", "abbr": "SBV", "area": "Banking"},
+      {"name": "State Securities Commission of Vietnam", "abbr": "SSC", "area": "Securities"},
+      {"name": "Ministry of Finance", "abbr": "MOF", "area": "Financial supervision"},
+      {"name": "Ministry of Public Security", "abbr": "MPS", "area": "Cybersecurity"},
+      {"name": "Ministry of Science and Technology", "abbr": "MOST", "area": "Government ICT"},
+      {"name": "Anti-Money Laundering Department, State Bank of Vietnam", "abbr": "AMLD", "area": "AML/CFT"},
+      {"name": "Insurance Supervisory Authority", "abbr": "ISA", "area": "Insurance"}
+    ],
+    "laws": [
+      {"name": "Law on Cybersecurity (Law No. 116/2025/QH15)", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Law on Personal Data Protection (Law No. 91/2025/QH15)", "kind": "Law", "area": "Privacy"},
+      {"name": "Decree No. 356/2025/ND-CP guiding the Law on Personal Data Protection", "kind": "Regulation", "area": "Privacy"},
+      {"name": "Law on Data (Law No. 60/2024/QH15)", "kind": "Law", "area": "Governance"},
+      {"name": "Law on Electronic Transactions (Law No. 20/2023/QH15)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Law on Credit Institutions (Law No. 32/2024/QH15)", "kind": "Law", "area": "Banking"},
+      {"name": "Law on the State Bank of Vietnam", "kind": "Law", "area": "Banking"},
+      {"name": "Law on Securities (Law No. 54/2019/QH14)", "kind": "Law", "area": "Securities"},
+      {"name": "Law on Insurance Business (Law No. 08/2022/QH15)", "kind": "Law", "area": "Insurance"},
+      {"name": "Law on Anti-Money Laundering (Law No. 14/2022/QH15)", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law on Telecommunications (Law No. 24/2023/QH15)", "kind": "Law", "area": "Telecom"},
+      {"name": "Decree No. 52/2024/ND-CP on Non-Cash Payments", "kind": "Regulation", "area": "Payments"},
+      {"name": "Law on Artificial Intelligence (Law No. 134/2025/QH15)", "kind": "Law", "area": "Governance"}
+    ]
+  },
+  {
+    "code": "TW", "name": "Taiwan", "region": "Asia",
+    "aliases": ["Republic of China", "ROC", "Chinese Taipei"],
+    "regulators": [
+      {"name": "Financial Supervisory Commission", "abbr": "FSC", "area": "Financial supervision"},
+      {"name": "Central Bank of the Republic of China (Taiwan)", "abbr": "CBC", "area": "Banking"},
+      {"name": "Ministry of Digital Affairs", "abbr": "MODA", "area": "Government ICT"},
+      {"name": "Administration for Cyber Security, Ministry of Digital Affairs", "abbr": "ACS", "area": "Cybersecurity"},
+      {"name": "National Communications Commission", "abbr": "NCC", "area": "Telecom"},
+      {"name": "Anti-Money Laundering Division, Investigation Bureau, Ministry of Justice", "abbr": "AMLD", "area": "AML/CFT"},
+      {"name": "Taiwan Stock Exchange", "abbr": "TWSE", "area": "Capital markets"},
+      {"name": "Taipei Exchange", "abbr": "TPEx", "area": "Capital markets"},
+      {"name": "Central Deposit Insurance Corporation", "abbr": "CDIC", "area": "Banking"},
+      {"name": "Fair Trade Commission", "abbr": "FTC", "area": "Competition"},
+      {"name": "Taiwan Computer Emergency Response Team/Coordination Center", "abbr": "TWCERT/CC", "area": "Cybersecurity"},
+      {"name": "Ministry of Health and Welfare", "abbr": "MOHW", "area": "Health"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Act", "kind": "Law", "area": "Privacy"},
+      {"name": "Enforcement Rules of the Personal Data Protection Act", "kind": "Regulation", "area": "Privacy"},
+      {"name": "Cyber Security Management Act", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Banking Act", "kind": "Law", "area": "Banking"},
+      {"name": "Securities and Exchange Act", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Act", "kind": "Law", "area": "Insurance"},
+      {"name": "Financial Holding Company Act", "kind": "Law", "area": "Financial supervision"},
+      {"name": "Money Laundering Control Act", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Counter-Terrorism Financing Act", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Act Governing Electronic Payment Institutions", "kind": "Law", "area": "Payments"},
+      {"name": "Electronic Signatures Act", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Financial Consumer Protection Act", "kind": "Law", "area": "Consumer protection"},
+      {"name": "Regulations Governing Internal Operating Systems and Procedures for the Outsourcing of Financial Institution Operation", "kind": "Regulation", "area": "Outsourcing and cloud"},
+      {"name": "Artificial Intelligence Basic Act", "kind": "Law", "area": "Governance"}
+    ]
+  },
+  {
+    "code": "HK", "name": "Hong Kong", "region": "Asia",
+    "aliases": ["Hong Kong SAR", "HKSAR", "Hong Kong Special Administrative Region"],
+    "regulators": [
+      {"name": "Hong Kong Monetary Authority", "abbr": "HKMA", "area": "Banking"},
+      {"name": "Securities and Futures Commission", "abbr": "SFC", "area": "Securities"},
+      {"name": "Insurance Authority", "abbr": "IA", "area": "Insurance"},
+      {"name": "Office of the Privacy Commissioner for Personal Data", "abbr": "PCPD", "area": "Data protection"},
+      {"name": "Mandatory Provident Fund Schemes Authority", "abbr": "MPFA", "area": "Pensions"},
+      {"name": "Joint Financial Intelligence Unit", "abbr": "JFIU", "area": "AML/CFT"},
+      {"name": "Customs and Excise Department", "abbr": "C&ED", "area": "AML/CFT"},
+      {"name": "Office of the Communications Authority", "abbr": "OFCA", "area": "Telecom"},
+      {"name": "Digital Policy Office", "abbr": "DPO", "area": "Government ICT"},
+      {"name": "Hong Kong Computer Emergency Response Team Coordination Centre", "abbr": "HKCERT", "area": "Cybersecurity"},
+      {"name": "Cyber Security and Technology Crime Bureau", "abbr": "CSTCB", "area": "Cybersecurity"},
+      {"name": "Commissioner of Critical Infrastructure (Computer-system Security)", "abbr": "", "area": "Cybersecurity"},
+      {"name": "Hong Kong Exchanges and Clearing Limited", "abbr": "HKEX", "area": "Capital markets"},
+      {"name": "Competition Commission", "abbr": "", "area": "Competition"}
+    ],
+    "laws": [
+      {"name": "Personal Data (Privacy) Ordinance (Cap. 486)", "kind": "Law", "area": "Privacy"},
+      {"name": "Banking Ordinance (Cap. 155)", "kind": "Law", "area": "Banking"},
+      {"name": "Securities and Futures Ordinance (Cap. 571)", "kind": "Law", "area": "Securities"},
+      {"name": "Insurance Ordinance (Cap. 41)", "kind": "Law", "area": "Insurance"},
+      {"name": "Mandatory Provident Fund Schemes Ordinance (Cap. 485)", "kind": "Law", "area": "Pensions"},
+      {"name": "Anti-Money Laundering and Counter-Terrorist Financing Ordinance (Cap. 615)", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Organized and Serious Crimes Ordinance (Cap. 455)", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Payment Systems and Stored Value Facilities Ordinance (Cap. 584)", "kind": "Law", "area": "Payments"},
+      {"name": "Electronic Transactions Ordinance (Cap. 553)", "kind": "Law", "area": "Electronic transactions"},
+      {"name": "Protection of Critical Infrastructures (Computer Systems) Ordinance (Cap. 653)", "kind": "Law", "area": "Critical infrastructure"},
+      {"name": "HKMA Cyber Resilience Assessment Framework (C-RAF)", "kind": "Framework", "area": "Cybersecurity"},
+      {"name": "HKMA Supervisory Policy Manual TM-G-1: General Principles for Technology Risk Management", "kind": "Guideline", "area": "Cybersecurity"},
+      {"name": "HKMA Supervisory Policy Manual SA-2: Outsourcing", "kind": "Guideline", "area": "Outsourcing and cloud"},
+      {"name": "HKMA Supervisory Policy Manual OR-2: Operational Resilience", "kind": "Guideline", "area": "Operational resilience"},
+      {"name": "SFC Guidelines for Reducing and Mitigating Hacking Risks Associated with Internet Trading", "kind": "Guideline", "area": "Cybersecurity"},
+      {"name": "Insurance Authority Guideline on Cybersecurity (GL20)", "kind": "Guideline", "area": "Cybersecurity"}
+    ]
+  },
+  {
+    "code": "MO", "name": "Macao", "region": "Asia",
+    "aliases": ["Macau", "Macao SAR", "Macau SAR", "Macao Special Administrative Region"],
+    "regulators": [
+      {"name": "Monetary Authority of Macao", "abbr": "AMCM", "area": "Financial supervision"},
+      {"name": "Financial Intelligence Office", "abbr": "GIF", "area": "AML/CFT"},
+      {"name": "Personal Data Protection Bureau", "abbr": "", "area": "Data protection"},
+      {"name": "Bureau of Telecommunications Regulation", "abbr": "DSRT", "area": "Telecom"},
+      {"name": "Gaming Inspection and Coordination Bureau", "abbr": "DICJ", "area": "Other"}
+    ],
+    "laws": [
+      {"name": "Personal Data Protection Act (Law No. 8/2005)", "kind": "Law", "area": "Privacy"},
+      {"name": "Cybersecurity Law (Law No. 13/2019)", "kind": "Law", "area": "Cybersecurity"},
+      {"name": "Financial System Act (Decree-Law No. 32/93/M)", "kind": "Law", "area": "Banking"},
+      {"name": "Law No. 2/2006 on Prevention and Suppression of the Crime of Money Laundering", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Law No. 3/2006 on Prevention and Suppression of Terrorist Crimes", "kind": "Law", "area": "AML/CFT"},
+      {"name": "Electronic Documents and Signatures Law (Law No. 5/2005)", "kind": "Law", "area": "Electronic transactions"}
+    ]
+  }
+]}

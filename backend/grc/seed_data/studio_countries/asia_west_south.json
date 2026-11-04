@@ -1,0 +1,2860 @@
+{
+ "countries": [
+  {
+   "code": "AF",
+   "name": "Afghanistan",
+   "region": "Asia",
+   "aliases": [
+    "Islamic Emirate of Afghanistan"
+   ],
+   "regulators": [
+    {
+     "name": "Da Afghanistan Bank",
+     "abbr": "DAB",
+     "area": "Banking"
+    },
+    {
+     "name": "Afghanistan Telecom Regulatory Authority",
+     "abbr": "ATRA",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Da Afghanistan Bank",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Law of Afghanistan",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "AM",
+   "name": "Armenia",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Armenia"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Armenia",
+     "abbr": "CBA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Monitoring Center",
+     "abbr": "FMC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Public Services Regulatory Commission",
+     "abbr": "PSRC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of High-Tech Industry",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Banks and Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on the Central Bank of the Republic of Armenia",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Combating Money Laundering and Terrorism Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Electronic Document and Electronic Digital Signature",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law on Electronic Communications",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "AZ",
+   "name": "Azerbaijan",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Azerbaijan"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Republic of Azerbaijan",
+     "abbr": "CBAR",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Market Supervision Authority",
+     "abbr": "FIMSA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Monitoring Service",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Special Communication and Information Security State Service",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Ministry of Digital Development and Transport",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Banks",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on the Central Bank",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Electronic Signature and Electronic Document",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law on Prevention of the Legalization of Criminally Obtained Funds or Other Property and the Financing of Terrorism",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Telecommunications",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law on Information, Informatization and Protection of Information",
+     "kind": "Law",
+     "area": "Government ICT"
+    }
+   ]
+  },
+  {
+   "code": "BH",
+   "name": "Bahrain",
+   "region": "Asia",
+   "aliases": [
+    "Kingdom of Bahrain"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Bahrain",
+     "abbr": "CBB",
+     "area": "Banking"
+    },
+    {
+     "name": "National Cyber Security Center",
+     "abbr": "NCSC",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Personal Data Protection Authority",
+     "abbr": "PDPA",
+     "area": "Data protection"
+    },
+    {
+     "name": "Telecommunications Regulatory Authority",
+     "abbr": "TRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Health Regulatory Authority",
+     "abbr": "NHRA",
+     "area": "Health"
+    },
+    {
+     "name": "Information & eGovernment Authority",
+     "abbr": "iGA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Ministry of Industry and Commerce",
+     "abbr": "MOIC",
+     "area": "Consumer protection"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Law, Law No. 30 of 2018",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Information Technology Crimes Law, Law No. 60 of 2014",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Central Bank of Bahrain and Financial Institutions Law 2006, Law No. 64 of 2006",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "CBB Rulebook",
+     "kind": "Regulation",
+     "area": "Banking"
+    },
+    {
+     "name": "CBB Rulebook Volume 1: Conventional Bank",
+     "kind": "Regulation",
+     "area": "Banking"
+    },
+    {
+     "name": "CBB Rulebook Volume 2: Islamic Bank",
+     "kind": "Regulation",
+     "area": "Banking"
+    },
+    {
+     "name": "CBB Rulebook Volume 3: Insurance",
+     "kind": "Regulation",
+     "area": "Insurance"
+    },
+    {
+     "name": "Law on the Prohibition and Combating of Money Laundering and Financing of Terrorism, Legislative Decree No. 4 of 2001",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications Law, Legislative Decree No. 48 of 2002",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "BD",
+   "name": "Bangladesh",
+   "region": "Asia",
+   "aliases": [
+    "People's Republic of Bangladesh"
+   ],
+   "regulators": [
+    {
+     "name": "Bangladesh Bank",
+     "abbr": "BB",
+     "area": "Banking"
+    },
+    {
+     "name": "Bangladesh Securities and Exchange Commission",
+     "abbr": "BSEC",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Development and Regulatory Authority",
+     "abbr": "IDRA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Bangladesh Telecommunication Regulatory Commission",
+     "abbr": "BTRC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Bangladesh Financial Intelligence Unit",
+     "abbr": "BFIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Bangladesh e-Government Computer Incident Response Team",
+     "abbr": "BGD e-GOV CIRT",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Bangladesh Computer Council",
+     "abbr": "BCC",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Microcredit Regulatory Authority",
+     "abbr": "MRA",
+     "area": "Financial supervision"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Bank Company Act 1991",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Bangladesh Bank Order 1972",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Money Laundering Prevention Act 2012",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Anti-Terrorism Act 2009",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Information and Communication Technology Act 2006",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Bangladesh Telecommunication Act 2001",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Securities and Exchange Commission Act 1993",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Act 2010",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Bangladesh Bank Guidelines on ICT Security for Banks and Non-Bank Financial Institutions",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "BT",
+   "name": "Bhutan",
+   "region": "Asia",
+   "aliases": [
+    "Kingdom of Bhutan"
+   ],
+   "regulators": [
+    {
+     "name": "Royal Monetary Authority of Bhutan",
+     "abbr": "RMA",
+     "area": "Banking"
+    },
+    {
+     "name": "Bhutan InfoComm and Media Authority",
+     "abbr": "BICMA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Department",
+     "abbr": "FID",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Financial Services Act of Bhutan 2011",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Royal Monetary Authority Act of Bhutan 2010",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Countering of Financing of Terrorism Act of Bhutan 2018",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Information, Communications and Media Act of Bhutan 2018",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "GE",
+   "name": "Georgia",
+   "region": "Asia",
+   "aliases": [
+    "Sakartvelo",
+    "Republic of Georgia"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Georgia",
+     "abbr": "NBG",
+     "area": "Banking"
+    },
+    {
+     "name": "Personal Data Protection Service",
+     "area": "Data protection"
+    },
+    {
+     "name": "Georgian National Communications Commission",
+     "abbr": "ComCom",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Monitoring Service of Georgia",
+     "abbr": "FMS",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law of Georgia on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Organic Law of Georgia on the National Bank of Georgia",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law of Georgia on Activities of Commercial Banks",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law of Georgia on Facilitating the Prevention of Money Laundering and Terrorism Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law of Georgia on Electronic Communications",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law of Georgia on Information Security",
+     "kind": "Law",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Law of Georgia on Payment System and Payment Services",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Law of Georgia on Electronic Document and Electronic Trust Services",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    }
+   ]
+  },
+  {
+   "code": "IN",
+   "name": "India",
+   "region": "Asia",
+   "aliases": [
+    "Republic of India",
+    "Bharat"
+   ],
+   "regulators": [
+    {
+     "name": "Reserve Bank of India",
+     "abbr": "RBI",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Board of India",
+     "abbr": "SEBI",
+     "area": "Securities"
+    },
+    {
+     "name": "Indian Computer Emergency Response Team",
+     "abbr": "CERT-In",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Insurance Regulatory and Development Authority of India",
+     "abbr": "IRDAI",
+     "area": "Insurance"
+    },
+    {
+     "name": "Pension Fund Regulatory and Development Authority",
+     "abbr": "PFRDA",
+     "area": "Pensions"
+    },
+    {
+     "name": "International Financial Services Centres Authority",
+     "abbr": "IFSCA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Ministry of Electronics and Information Technology",
+     "abbr": "MeitY",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Data Protection Board of India",
+     "abbr": "DPBI",
+     "area": "Data protection"
+    },
+    {
+     "name": "National Payments Corporation of India",
+     "abbr": "NPCI",
+     "area": "Payments"
+    },
+    {
+     "name": "Financial Intelligence Unit - India",
+     "abbr": "FIU-IND",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecom Regulatory Authority of India",
+     "abbr": "TRAI",
+     "area": "Telecom"
+    },
+    {
+     "name": "Department of Telecommunications",
+     "abbr": "DoT",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Critical Information Infrastructure Protection Centre",
+     "abbr": "NCIIPC",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Indian Cyber Crime Coordination Centre",
+     "abbr": "I4C",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Competition Commission of India",
+     "abbr": "CCI",
+     "area": "Competition"
+    },
+    {
+     "name": "Unique Identification Authority of India",
+     "abbr": "UIDAI",
+     "area": "Government ICT"
+    },
+    {
+     "name": "National Health Authority",
+     "abbr": "NHA",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Digital Personal Data Protection Act 2023",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Digital Personal Data Protection Rules 2025",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Information Technology Act 2000",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules 2011",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Information Technology (The Indian Computer Emergency Response Team and Manner of Performing Functions and Duties) Rules 2013",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "CERT-In Directions of 28 April 2022 on information security practices, prevention, response and reporting of cyber incidents",
+     "kind": "Circular",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Reserve Bank of India Act 1934",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Regulation Act 1949",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Payment and Settlement Systems Act 2007",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Prevention of Money Laundering Act 2002",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "RBI Master Direction on Information Technology Governance, Risk, Controls and Assurance Practices",
+     "kind": "Regulation",
+     "area": "Governance"
+    },
+    {
+     "name": "RBI Managing Risks in Outsourcing Directions, 2025",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "RBI Know Your Customer (KYC) Directions, 2025",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "RBI Master Directions on Cyber Resilience and Digital Payment Security Controls for non-bank Payment System Operators",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "RBI circular on Storage of Payment System Data (2018)",
+     "kind": "Circular",
+     "area": "Payments"
+    },
+    {
+     "name": "NPCI UPI Procedural Guidelines",
+     "kind": "Guideline",
+     "area": "Payments"
+    },
+    {
+     "name": "Securities and Exchange Board of India Act 1992",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "SEBI Cybersecurity and Cyber Resilience Framework (CSCRF) for SEBI Regulated Entities",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "SEBI Framework for Adoption of Cloud Services by SEBI Regulated Entities",
+     "kind": "Framework",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "SEBI (Listing Obligations and Disclosure Requirements) Regulations 2015",
+     "kind": "Regulation",
+     "area": "Governance"
+    },
+    {
+     "name": "Insurance Act 1938",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Insurance Regulatory and Development Authority Act 1999",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "IRDAI Information and Cyber Security Guidelines 2023",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Pension Fund Regulatory and Development Authority Act 2013",
+     "kind": "Law",
+     "area": "Pensions"
+    },
+    {
+     "name": "International Financial Services Centres Authority Act 2019",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Telecommunications Act 2023",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Aadhaar (Targeted Delivery of Financial and Other Subsidies, Benefits and Services) Act 2016",
+     "kind": "Law",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Companies Act 2013",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "NCIIPC Guidelines for the Protection of National Critical Information Infrastructure",
+     "kind": "Guideline",
+     "area": "Critical infrastructure"
+    }
+   ]
+  },
+  {
+   "code": "IR",
+   "name": "Iran",
+   "region": "Asia",
+   "aliases": [
+    "Islamic Republic of Iran",
+    "Persia"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Islamic Republic of Iran",
+     "abbr": "CBI",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Organization",
+     "abbr": "SEO",
+     "area": "Securities"
+    },
+    {
+     "name": "Central Insurance of Iran",
+     "abbr": "CII",
+     "area": "Insurance"
+    },
+    {
+     "name": "Communications Regulatory Authority",
+     "abbr": "CRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Information and Communications Technology",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Supreme Council of Cyberspace",
+     "abbr": "SCC",
+     "area": "Cybersecurity"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Electronic Commerce Law (2003)",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Computer Crimes Law (2009)",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Anti-Money Laundering Law (2008)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Market Act (2005)",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Monetary and Banking Law (1972)",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "IQ",
+   "name": "Iraq",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Iraq"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Iraq",
+     "abbr": "CBI",
+     "area": "Banking"
+    },
+    {
+     "name": "Iraq Securities Commission",
+     "abbr": "ISC",
+     "area": "Securities"
+    },
+    {
+     "name": "Communications and Media Commission",
+     "abbr": "CMC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Communications",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Central Bank of Iraq Law No. 56 of 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Law No. 94 of 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Counter-Terrorism Financing Law No. 39 of 2015",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Electronic Signature and Electronic Transactions Law No. 78 of 2012",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Securities Law No. 74 of 2004",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Business Regulation Law No. 10 of 2005",
+     "kind": "Law",
+     "area": "Insurance"
+    }
+   ]
+  },
+  {
+   "code": "IL",
+   "name": "Israel",
+   "region": "Asia",
+   "aliases": [
+    "State of Israel"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Israel",
+     "abbr": "BoI",
+     "area": "Banking"
+    },
+    {
+     "name": "Israel Securities Authority",
+     "abbr": "ISA",
+     "area": "Securities"
+    },
+    {
+     "name": "Capital Market, Insurance and Savings Authority",
+     "abbr": "CMISA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Privacy Protection Authority",
+     "abbr": "PPA",
+     "area": "Data protection"
+    },
+    {
+     "name": "Israel National Cyber Directorate",
+     "abbr": "INCD",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Israel Money Laundering and Terror Financing Prohibition Authority",
+     "abbr": "IMPA",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Communications",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Health",
+     "area": "Health"
+    },
+    {
+     "name": "Israel Competition Authority",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Protection of Privacy Law, 5741-1981",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Protection of Privacy Regulations (Data Security), 5777-2017",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computers Law, 5755-1995",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Signature Law, 5761-2001",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Prohibition on Money Laundering Law, 5760-2000",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Banking (Licensing) Law, 5741-1981",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities Law, 5728-1968",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Supervision of Financial Services (Regulated Financial Services) Law, 5776-2016",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Bank of Israel Proper Conduct of Banking Business Directive 364: Management of IT, Information Security, and Cyber Protection Risks",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Bank of Israel Proper Conduct of Banking Business Directive 359A: Outsourcing",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    }
+   ]
+  },
+  {
+   "code": "JO",
+   "name": "Jordan",
+   "region": "Asia",
+   "aliases": [
+    "Hashemite Kingdom of Jordan"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Jordan",
+     "abbr": "CBJ",
+     "area": "Banking"
+    },
+    {
+     "name": "Jordan Securities Commission",
+     "abbr": "JSC",
+     "area": "Securities"
+    },
+    {
+     "name": "Telecommunications Regulatory Commission",
+     "abbr": "TRC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Anti-Money Laundering and Counter Terrorism Financing Unit",
+     "abbr": "AMLU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Cyber Security Center",
+     "abbr": "NCSC",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Ministry of Digital Economy and Entrepreneurship",
+     "abbr": "MoDEE",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Cybersecurity Law No. 16 of 2019",
+     "kind": "Law",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Cybercrime Law No. 17 of 2023",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Personal Data Protection Law No. 24 of 2023",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Electronic Transactions Law No. 15 of 2015",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking Law No. 28 of 2000",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Jordan Law No. 23 of 1971",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Counter Terrorism Financing Law No. 20 of 2021",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Law No. 18 of 2017",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Telecommunications Law No. 13 of 1995",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "KZ",
+   "name": "Kazakhstan",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Kazakhstan"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Kazakhstan",
+     "abbr": "NBK",
+     "area": "Banking"
+    },
+    {
+     "name": "Agency for Regulation and Development of the Financial Market",
+     "abbr": "ARDFM",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Agency for Financial Monitoring",
+     "abbr": "AFM",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Astana Financial Services Authority",
+     "abbr": "AFSA",
+     "area": "Financial supervision"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Personal Data and their Protection No. 94-V of 2013",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Informatization No. 418-V of 2015",
+     "kind": "Law",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Law on Electronic Document and Electronic Digital Signature No. 370-II of 2003",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law on Banks and Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Counteraction of Legalization (Laundering) of Proceeds from Crime and Financing of Terrorism No. 191-IV of 2009",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Payments and Payment Systems No. 11-VI of 2016",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Law on the Securities Market No. 461-II of 2003",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "AIFC Data Protection Regulations",
+     "kind": "Regulation",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "KW",
+   "name": "Kuwait",
+   "region": "Asia",
+   "aliases": [
+    "State of Kuwait"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Kuwait",
+     "abbr": "CBK",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Communication and Information Technology Regulatory Authority",
+     "abbr": "CITRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Kuwait Financial Intelligence Unit",
+     "abbr": "KwFIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Commerce and Industry",
+     "abbr": "MOCI",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Ministry of Health",
+     "abbr": "MOH",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 32 of 1968 Concerning Currency, the Central Bank of Kuwait and the Organization of Banking Business",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 7 of 2010 on the Establishment of the Capital Markets Authority and Regulating Securities Activity",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Executive Bylaws of the Capital Markets Authority Law",
+     "kind": "Regulation",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Law No. 106 of 2013 on Anti-Money Laundering and Combating the Financing of Terrorism",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law No. 63 of 2015 on Combating Information Technology Crimes",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 20 of 2014 on Electronic Transactions",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 37 of 2014 Establishing the Communication and Information Technology Regulatory Authority",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "CITRA Data Privacy Protection Regulation (Resolution No. 26 of 2024)",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "CITRA Cloud Computing Regulatory Framework",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "CBK Cyber and Operational Resilience Framework (CORF)",
+     "kind": "Framework",
+     "area": "Operational resilience"
+    },
+    {
+     "name": "Companies Law, Law No. 1 of 2016",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "KG",
+   "name": "Kyrgyzstan",
+   "region": "Asia",
+   "aliases": [
+    "Kyrgyz Republic",
+    "Kirghizia"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of the Kyrgyz Republic",
+     "abbr": "NBKR",
+     "area": "Banking"
+    },
+    {
+     "name": "State Financial Intelligence Service",
+     "abbr": "SFIS",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Digital Development",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Personal Information",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on the National Bank of the Kyrgyz Republic",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Banks and Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Combating the Financing of Terrorist Activity and the Legalization (Laundering) of Criminal Proceeds",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Electronic Signature",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law on Electronic Governance",
+     "kind": "Law",
+     "area": "Government ICT"
+    }
+   ]
+  },
+  {
+   "code": "LB",
+   "name": "Lebanon",
+   "region": "Asia",
+   "aliases": [
+    "Lebanese Republic"
+   ],
+   "regulators": [
+    {
+     "name": "Banque du Liban",
+     "abbr": "BDL",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Control Commission of Lebanon",
+     "abbr": "BCCL",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Special Investigation Commission",
+     "abbr": "SIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Insurance Control Commission",
+     "abbr": "ICC",
+     "area": "Insurance"
+    },
+    {
+     "name": "Telecommunications Regulatory Authority",
+     "abbr": "TRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Telecommunications",
+     "area": "Telecom"
+    },
+    {
+     "name": "Office of the Minister of State for Administrative Reform",
+     "abbr": "OMSAR",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 81 of 2018 on Electronic Transactions and Personal Data",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 44 of 2015 on Fighting Money Laundering and Terrorist Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Code of Money and Credit",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Secrecy Law of 1956",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Law No. 161 of 2011",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Consumer Protection Law No. 659 of 2005",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Telecommunications Law No. 431 of 2002",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "MV",
+   "name": "Maldives",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Maldives"
+   ],
+   "regulators": [
+    {
+     "name": "Maldives Monetary Authority",
+     "abbr": "MMA",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Market Development Authority",
+     "abbr": "CMDA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Communications Authority of Maldives",
+     "abbr": "CAM",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Centre for Information Technology",
+     "abbr": "NCIT",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Maldives Monetary Authority Act",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Act",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Prevention of Money Laundering and Financing of Terrorism Act",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Act",
+     "kind": "Law",
+     "area": "Securities"
+    }
+   ]
+  },
+  {
+   "code": "NP",
+   "name": "Nepal",
+   "region": "Asia",
+   "aliases": [
+    "Federal Democratic Republic of Nepal"
+   ],
+   "regulators": [
+    {
+     "name": "Nepal Rastra Bank",
+     "abbr": "NRB",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities Board of Nepal",
+     "abbr": "SEBON",
+     "area": "Securities"
+    },
+    {
+     "name": "Nepal Insurance Authority",
+     "abbr": "NIA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Nepal Telecommunications Authority",
+     "abbr": "NTA",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Nepal Rastra Bank Act 2002",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banks and Financial Institutions Act 2017",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Electronic Transactions Act 2008",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Asset (Money) Laundering Prevention Act 2008",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Individual Privacy Act 2018",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Securities Act 2007",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Act 2022",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Payment and Settlement Act 2019",
+     "kind": "Law",
+     "area": "Payments"
+    }
+   ]
+  },
+  {
+   "code": "OM",
+   "name": "Oman",
+   "region": "Asia",
+   "aliases": [
+    "Sultanate of Oman"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Oman",
+     "abbr": "CBO",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Authority",
+     "abbr": "FSA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Telecommunications Regulatory Authority",
+     "abbr": "TRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Transport, Communications and Information Technology",
+     "abbr": "MTCIT",
+     "area": "Government ICT"
+    },
+    {
+     "name": "National Center for Financial Information",
+     "abbr": "NCFI",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Health",
+     "abbr": "MOH",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Law, Royal Decree 6/2022",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Executive Regulation of the Personal Data Protection Law",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cyber Crime Law, Royal Decree 12/2011",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Transactions Law, Royal Decree 69/2008",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking Law, Royal Decree 114/2000",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Combating Money Laundering and Terrorism Financing, Royal Decree 30/2016",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications Regulatory Act, Royal Decree 30/2002",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Securities Law, Royal Decree 46/2022",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Financial Services Authority Law, Royal Decree 20/2024",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "CBO Cyber Security and Resilience Framework",
+     "kind": "Framework",
+     "area": "Operational resilience"
+    }
+   ]
+  },
+  {
+   "code": "PK",
+   "name": "Pakistan",
+   "region": "Asia",
+   "aliases": [
+    "Islamic Republic of Pakistan"
+   ],
+   "regulators": [
+    {
+     "name": "State Bank of Pakistan",
+     "abbr": "SBP",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission of Pakistan",
+     "abbr": "SECP",
+     "area": "Securities"
+    },
+    {
+     "name": "Financial Monitoring Unit",
+     "abbr": "FMU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Pakistan Telecommunication Authority",
+     "abbr": "PTA",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Cyber Crime Investigation Agency",
+     "abbr": "NCCIA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Federal Investigation Agency",
+     "abbr": "FIA",
+     "area": "Other"
+    },
+    {
+     "name": "Ministry of Information Technology and Telecommunication",
+     "abbr": "MoITT",
+     "area": "Government ICT"
+    },
+    {
+     "name": "National Information Technology Board",
+     "abbr": "NITB",
+     "area": "Government ICT"
+    },
+    {
+     "name": "National Database and Registration Authority",
+     "abbr": "NADRA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Competition Commission of Pakistan",
+     "abbr": "CCP",
+     "area": "Competition"
+    },
+    {
+     "name": "Banking Mohtasib Pakistan",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Drug Regulatory Authority of Pakistan",
+     "abbr": "DRAP",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Prevention of Electronic Crimes Act 2016",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Prevention of Electronic Crimes (Amendment) Act 2025",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "SBP Enterprise Technology Governance and Risk Management Framework",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "SBP Framework for Risk Management in Outsourcing Arrangements by Financial Institutions",
+     "kind": "Framework",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "National Cyber Security Policy 2021",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "State Bank of Pakistan Act 1956",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Companies Ordinance 1962",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Payment Systems and Electronic Fund Transfers Act 2007",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Electronic Transactions Ordinance 2002",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Anti-Money Laundering Act 2010",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Anti-Terrorism Act 1997",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "SBP AML/CFT Regulations",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities and Exchange Commission of Pakistan Act 1997",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Securities Act 2015",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Companies Act 2017",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "Insurance Ordinance 2000",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "SECP Guidelines on Cyber Security Framework for the Insurance Sector 2020",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Pakistan Telecommunication (Re-organization) Act 1996",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Competition Act 2010",
+     "kind": "Law",
+     "area": "Competition"
+    }
+   ]
+  },
+  {
+   "code": "QA",
+   "name": "Qatar",
+   "region": "Asia",
+   "aliases": [
+    "State of Qatar"
+   ],
+   "regulators": [
+    {
+     "name": "Qatar Central Bank",
+     "abbr": "QCB",
+     "area": "Banking"
+    },
+    {
+     "name": "Qatar Financial Centre Regulatory Authority",
+     "abbr": "QFCRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "National Cyber Security Agency",
+     "abbr": "NCSA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Qatar Financial Markets Authority",
+     "abbr": "QFMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Communications Regulatory Authority",
+     "abbr": "CRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Communications and Information Technology",
+     "abbr": "MCIT",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Qatar Financial Information Unit",
+     "abbr": "QFIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "QFC Data Protection Office",
+     "area": "Data protection"
+    },
+    {
+     "name": "Ministry of Public Health",
+     "abbr": "MOPH",
+     "area": "Health"
+    },
+    {
+     "name": "Ministry of Commerce and Industry",
+     "abbr": "MOCI",
+     "area": "Consumer protection"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Privacy Protection Law (PDPPL), Law No. 13 of 2016",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "QFC Data Protection Regulations 2021",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybercrime Prevention Law, Law No. 14 of 2014",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Commerce and Transactions Law, Decree-Law No. 16 of 2010",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Anti-Money Laundering and Terrorism Financing Law, Law No. 20 of 2019",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Qatar Central Bank Law, Law No. 13 of 2012",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Qatar Financial Markets Authority Law, Law No. 8 of 2012",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Telecommunications Law, Decree-Law No. 34 of 2006",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Consumer Protection Law, Law No. 8 of 2008",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "QFCRA Rulebooks",
+     "kind": "Regulation",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "National Information Assurance Standard (NIAS), NCSA",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "SA",
+   "name": "Saudi Arabia",
+   "region": "Asia",
+   "aliases": [
+    "Kingdom of Saudi Arabia",
+    "KSA",
+    "Saudi"
+   ],
+   "regulators": [
+    {
+     "name": "Saudi Central Bank",
+     "abbr": "SAMA",
+     "area": "Banking"
+    },
+    {
+     "name": "National Cybersecurity Authority",
+     "abbr": "NCA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Saudi Data and AI Authority",
+     "abbr": "SDAIA",
+     "area": "Data protection"
+    },
+    {
+     "name": "Capital Market Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Authority",
+     "abbr": "IA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Data Management Office",
+     "abbr": "NDMO",
+     "area": "Data protection"
+    },
+    {
+     "name": "Communications, Space and Technology Commission",
+     "abbr": "CST",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Communications and Information Technology",
+     "abbr": "MCIT",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Digital Government Authority",
+     "abbr": "DGA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Saudi Arabia Financial Intelligence Unit",
+     "abbr": "SAFIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Health",
+     "abbr": "MOH",
+     "area": "Health"
+    },
+    {
+     "name": "General Authority for Competition",
+     "abbr": "GAC",
+     "area": "Competition"
+    },
+    {
+     "name": "Ministry of Commerce",
+     "abbr": "MoC",
+     "area": "Consumer protection"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Law (PDPL), Royal Decree M/19 of 1443H",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Implementing Regulations of the Personal Data Protection Law",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Regulation on Personal Data Transfer outside the Kingdom",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "NDMO Data Management and Personal Data Protection Standards",
+     "kind": "Standard",
+     "area": "Data protection"
+    },
+    {
+     "name": "National Data Governance Interim Regulations",
+     "kind": "Regulation",
+     "area": "Governance"
+    },
+    {
+     "name": "Anti-Cyber Crime Law, Royal Decree M/17 of 1428H",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Transactions Law, Royal Decree M/18 of 1428H",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "E-Commerce Law, Royal Decree M/126 of 1440H",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Telecommunications and Information Technology Law, Royal Decree M/106 of 1443H",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Anti-Money Laundering Law, Royal Decree M/20 of 1439H",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Combating Crimes of Terrorism and its Financing, Royal Decree M/21 of 1439H",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Banking Control Law, Royal Decree M/5 of 1386H",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Saudi Central Bank Law",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Finance Companies Control Law, Royal Decree M/51 of 1433H",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law of Payments and Payment Services, Royal Decree M/26 of 1443H",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Capital Market Law, Royal Decree M/30 of 1424H",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "SAMA Cyber Security Framework",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "SAMA Business Continuity Management Framework",
+     "kind": "Framework",
+     "area": "Operational resilience"
+    },
+    {
+     "name": "SAMA Information Technology Governance Framework",
+     "kind": "Framework",
+     "area": "Governance"
+    },
+    {
+     "name": "SAMA Rules on Outsourcing",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "SAMA Counter-Fraud Framework",
+     "kind": "Framework",
+     "area": "Banking"
+    },
+    {
+     "name": "SAMA Open Banking Framework",
+     "kind": "Framework",
+     "area": "Banking"
+    },
+    {
+     "name": "NCA Essential Cybersecurity Controls (ECC-2:2024)",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "NCA Cloud Cybersecurity Controls (CCC-2:2024)",
+     "kind": "Standard",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "NCA Critical Systems Cybersecurity Controls (CSCC-1:2019)",
+     "kind": "Standard",
+     "area": "Critical infrastructure"
+    },
+    {
+     "name": "NCA Operational Technology Cybersecurity Controls (OTCC-1:2022)",
+     "kind": "Standard",
+     "area": "Critical infrastructure"
+    },
+    {
+     "name": "NCA Data Cybersecurity Controls (DCC-1:2022)",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "NCA Telework Cybersecurity Controls (TCC-1:2021)",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "NCA Organizations' Social Media Accounts Cybersecurity Controls (OSMACC-1:2021)",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "NCA National Cryptographic Standards (NCS-1:2020)",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "CST Cloud Computing Regulatory Framework",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    }
+   ]
+  },
+  {
+   "code": "LK",
+   "name": "Sri Lanka",
+   "region": "Asia",
+   "aliases": [
+    "Ceylon",
+    "Democratic Socialist Republic of Sri Lanka"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Sri Lanka",
+     "abbr": "CBSL",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission of Sri Lanka",
+     "abbr": "SEC",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Regulatory Commission of Sri Lanka",
+     "abbr": "IRCSL",
+     "area": "Insurance"
+    },
+    {
+     "name": "Telecommunications Regulatory Commission of Sri Lanka",
+     "abbr": "TRCSL",
+     "area": "Telecom"
+    },
+    {
+     "name": "Data Protection Authority of Sri Lanka",
+     "abbr": "DPA",
+     "area": "Data protection"
+    },
+    {
+     "name": "Financial Intelligence Unit of Sri Lanka",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Sri Lanka Computer Emergency Readiness Team",
+     "abbr": "Sri Lanka CERT",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Information and Communication Technology Agency of Sri Lanka",
+     "abbr": "ICTA",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Act, No. 9 of 2022",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computer Crimes Act, No. 24 of 2007",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Transactions Act, No. 19 of 2006",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking Act, No. 30 of 1988",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Sri Lanka Act, No. 16 of 2023",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Transactions Reporting Act, No. 6 of 2006",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Prevention of Money Laundering Act, No. 5 of 2006",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Payment and Settlement Systems Act, No. 28 of 2005",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Securities and Exchange Commission of Sri Lanka Act, No. 36 of 1987",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Regulation of Insurance Industry Act, No. 43 of 2000",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Sri Lanka Telecommunications Act, No. 25 of 1991",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "SY",
+   "name": "Syria",
+   "region": "Asia",
+   "aliases": [
+    "Syrian Arab Republic"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Syria",
+     "abbr": "CBS",
+     "area": "Banking"
+    },
+    {
+     "name": "Syrian Commission on Financial Markets and Securities",
+     "abbr": "SCFMS",
+     "area": "Securities"
+    },
+    {
+     "name": "Syrian Insurance Supervisory Commission",
+     "abbr": "SISC",
+     "area": "Insurance"
+    },
+    {
+     "name": "Telecommunications and Post Regulatory Authority",
+     "abbr": "TPRA",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Central Bank Law, Legislative Decree No. 23 of 2002",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Private Banks Law, Law No. 28 of 2001",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "TJ",
+   "name": "Tajikistan",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Tajikistan"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Tajikistan",
+     "abbr": "NBT",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Monitoring Department under the National Bank of Tajikistan",
+     "abbr": "FMD",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Communications Service under the Government of the Republic of Tajikistan",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ministry of Industry and New Technologies",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on the National Bank of Tajikistan",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Combating the Legalization (Laundering) of Proceeds from Crime, Financing of Terrorism and Financing of Proliferation of Weapons of Mass Destruction",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "TR",
+   "name": "Türkiye",
+   "region": "Asia",
+   "aliases": [
+    "Turkey",
+    "Turkiye",
+    "Republic of Türkiye"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Republic of Türkiye",
+     "abbr": "CBRT",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Regulation and Supervision Agency",
+     "abbr": "BRSA",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Board of Türkiye",
+     "abbr": "CMB",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Personal Data Protection Authority",
+     "abbr": "KVKK",
+     "area": "Data protection"
+    },
+    {
+     "name": "Information and Communication Technologies Authority",
+     "abbr": "BTK",
+     "area": "Telecom"
+    },
+    {
+     "name": "Cyber Security Presidency",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Financial Crimes Investigation Board",
+     "abbr": "MASAK",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Insurance and Private Pension Regulation and Supervision Agency",
+     "abbr": "SEDDK",
+     "area": "Insurance"
+    },
+    {
+     "name": "Turkish Competition Authority",
+     "abbr": "TCA",
+     "area": "Competition"
+    },
+    {
+     "name": "Digital Transformation Office of the Presidency",
+     "abbr": "DTO",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on the Protection of Personal Data No. 6698 (KVKK)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cyber Security Law No. 7545",
+     "kind": "Law",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Law No. 5651 on Regulation of Publications on the Internet and Combating Crimes Committed by Means of Such Publications",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Communications Law No. 5809",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Electronic Signature Law No. 5070",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 6563 on the Regulation of Electronic Commerce",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Banking Law No. 5411",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 6493 on Payment and Securities Settlement Systems, Payment Services and Electronic Money Institutions",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Law No. 5549 on Prevention of Laundering Proceeds of Crime",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Capital Markets Law No. 6362",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Law No. 5684",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Regulation on Information Systems of Banks and Electronic Banking Services",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Regulation on Banks' Procurement of Support Services",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "Presidential Circular No. 2019/12 on Information and Communication Security Measures",
+     "kind": "Circular",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "TM",
+   "name": "Turkmenistan",
+   "region": "Asia",
+   "aliases": [],
+   "regulators": [
+    {
+     "name": "Central Bank of Turkmenistan",
+     "area": "Banking"
+    },
+    {
+     "name": "Ministry of Finance and Economy",
+     "area": "Other"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on the Central Bank of Turkmenistan",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Banks and Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Information about Private Life and its Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "AE",
+   "name": "United Arab Emirates",
+   "region": "Asia",
+   "aliases": [
+    "UAE",
+    "U.A.E.",
+    "Emirates"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the UAE",
+     "abbr": "CBUAE",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Commodities Authority",
+     "abbr": "SCA",
+     "area": "Securities"
+    },
+    {
+     "name": "Dubai Financial Services Authority",
+     "abbr": "DFSA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Services Regulatory Authority, ADGM",
+     "abbr": "FSRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "UAE Cybersecurity Council",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Telecommunications and Digital Government Regulatory Authority",
+     "abbr": "TDRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "UAE Data Office",
+     "area": "Data protection"
+    },
+    {
+     "name": "Dubai Electronic Security Center",
+     "abbr": "DESC",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "DIFC Commissioner of Data Protection",
+     "area": "Data protection"
+    },
+    {
+     "name": "ADGM Office of Data Protection",
+     "area": "Data protection"
+    },
+    {
+     "name": "Virtual Assets Regulatory Authority",
+     "abbr": "VARA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "UAE Financial Intelligence Unit",
+     "abbr": "UAE FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Executive Office for Control and Non-Proliferation",
+     "abbr": "EOCN",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Department of Health, Abu Dhabi",
+     "abbr": "DoH",
+     "area": "Health"
+    },
+    {
+     "name": "Dubai Health Authority",
+     "abbr": "DHA",
+     "area": "Health"
+    },
+    {
+     "name": "Ministry of Health and Prevention",
+     "abbr": "MOHAP",
+     "area": "Health"
+    },
+    {
+     "name": "Abu Dhabi Digital Authority",
+     "abbr": "ADDA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Digital Dubai Authority",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Ministry of Economy",
+     "abbr": "MoE",
+     "area": "Consumer protection"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data (PDPL)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "DIFC Data Protection Law, DIFC Law No. 5 of 2020",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "DIFC Data Protection Regulations 2020",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "ADGM Data Protection Regulations 2021",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Federal Decree-Law No. 34 of 2021 on Combatting Rumours and Cybercrimes",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Federal Decree-Law No. 46 of 2021 on Electronic Transactions and Trust Services",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Federal Decree-Law No. 6 of 2025 regarding the Central Bank, Regulation of Financial Institutions and Activities, and Insurance Business",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Federal Decree-Law No. 10 of 2025 on Anti-Money Laundering, Combating the Financing of Terrorism and Proliferation Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CBUAE Rulebook",
+     "kind": "Regulation",
+     "area": "Banking"
+    },
+    {
+     "name": "CBUAE Outsourcing Regulation for Banks and Outsourcing Standards",
+     "kind": "Regulation",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "CBUAE Consumer Protection Regulation and Standards",
+     "kind": "Regulation",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "CBUAE Retail Payment Services and Card Schemes Regulation",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "Federal Law No. 15 of 2020 on Consumer Protection",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "UAE Information Assurance Standard",
+     "kind": "Standard",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "UAE Information Assurance Regulation",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Dubai Information Security Regulation (DESC ISR)",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Dubai Law No. 15 of 2024 Concerning the Dubai Electronic Security Centre",
+     "kind": "Law",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Abu Dhabi Healthcare Information and Cyber Security Standard (ADHICS)",
+     "kind": "Standard",
+     "area": "Health"
+    },
+    {
+     "name": "Federal Law No. 2 of 2019 on the Use of Information and Communication Technology in Health Fields",
+     "kind": "Law",
+     "area": "Health"
+    },
+    {
+     "name": "Federal Law by Decree No. 3 of 2003 regarding the Organisation of the Telecommunications Sector",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "DFSA Rulebook",
+     "kind": "Regulation",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "DIFC Regulatory Law, DIFC Law No. 1 of 2004",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "ADGM Financial Services and Markets Regulations 2015",
+     "kind": "Regulation",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "FSRA Rulebooks",
+     "kind": "Regulation",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "VARA Virtual Assets and Related Activities Regulations 2023",
+     "kind": "Regulation",
+     "area": "Financial supervision"
+    }
+   ]
+  },
+  {
+   "code": "UZ",
+   "name": "Uzbekistan",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Uzbekistan"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Republic of Uzbekistan",
+     "abbr": "CBU",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Market Development Agency",
+     "abbr": "CMDA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Ministry of Digital Technologies",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Department for Combating Economic Crimes under the Prosecutor General's Office",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law on Personal Data No. ZRU-547 of 2019",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Cybersecurity No. ZRU-764 of 2022",
+     "kind": "Law",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Law on Banks and Banking Activity",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law on Combating the Legalization of Proceeds from Crime, Financing of Terrorism and Financing of Proliferation of Weapons of Mass Destruction",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on the Securities Market",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Law on Payments and Payment Systems",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Law on Electronic Commerce",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Law on Electronic Digital Signature",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    }
+   ]
+  },
+  {
+   "code": "YE",
+   "name": "Yemen",
+   "region": "Asia",
+   "aliases": [
+    "Republic of Yemen"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Yemen",
+     "abbr": "CBY",
+     "area": "Banking"
+    },
+    {
+     "name": "Ministry of Telecommunications and Information Technology",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Banking Law No. 38 of 1998",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Yemen Law No. 14 of 2000",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Combating the Financing of Terrorism Law No. 1 of 2010",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "PS",
+   "name": "Palestine",
+   "region": "Asia",
+   "aliases": [
+    "State of Palestine",
+    "Palestinian Territories",
+    "West Bank and Gaza"
+   ],
+   "regulators": [
+    {
+     "name": "Palestine Monetary Authority",
+     "abbr": "PMA",
+     "area": "Banking"
+    },
+    {
+     "name": "Palestine Capital Market Authority",
+     "abbr": "PCMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Financial Follow-up Unit",
+     "abbr": "FFU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ministry of Telecommunications and Digital Economy",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Banking Law, Decree-Law No. 9 of 2010",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Palestine Monetary Authority Law No. 2 of 1997",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Decree-Law No. 20 of 2015 on Anti-Money Laundering and Combating Terrorism Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Electronic Transactions Law, Decree-Law No. 15 of 2017",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Cybercrime Decree-Law No. 10 of 2018",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Telecommunications Law No. 3 of 1996",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Capital Market Authority Law No. 13 of 2004",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Law No. 20 of 2005",
+     "kind": "Law",
+     "area": "Insurance"
+    }
+   ]
+  }
+ ]
+}

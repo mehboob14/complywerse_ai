@@ -367,6 +367,19 @@ def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser 
     return setup.options(db, _session(db, session_id, user))
 
 
+@router.get("/setup/country", dependencies=[Depends(require_studio)])
+def setup_country(name: str = Query(..., min_length=1, max_length=120), user: GRCUser = Depends(require_auth)):
+    """What choosing a country offers: its regulators and laws, then its bloc's (EU, EEA) and the international ones, and which installed frameworks
+    apply there. Reference data, the same for everyone; `name` may be a name, an alias or an ISO code ("Turkey", "UAE", "pk")."""
+    from . import world
+
+    found = world.lookup(name)
+    detail = world.detail(found["code"]) if found else None
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No lists for that country")
+    return detail
+
+
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def delete_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     try:
@@ -820,11 +833,13 @@ def list_assets(db: Session = Depends(get_db), user: GRCUser = Depends(require_a
 
 
 @router.post("/assets", dependencies=[Depends(require_studio)])
-async def upload_asset(file: UploadFile = File(...), name: str = Form(""), make_default: bool = Form(False),
+async def upload_asset(file: UploadFile = File(...), name: str = Form(""), make_default: bool = Form(False), process: bool = Form(True),
                        db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A logo (SVG, PNG or JPEG). `process` false keeps the picture as it is ("use the original"): no trimming, no background change.
+    The answer says what the gateway did to it in `notes`."""
     data = await file.read(assets.MAX_LOGO_BYTES + 1)
     try:
-        return assets.view(assets.add(db, user, file.filename or "", data, name=name or None, make_default=make_default))
+        return assets.view(assets.add(db, user, file.filename or "", data, name=name or None, make_default=make_default, process=process))
     except service.StudioError as exc:
         raise _problem(exc)
 

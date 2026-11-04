@@ -25,6 +25,10 @@ export interface ComboBoxOption {
   label: string;
   group?: string;
   hint?: string; // small grey suffix shown after the label (e.g. badge text)
+  /** A small picture before the label, in the list and in the closed field (a country's flag): a URL, decorative. */
+  icon?: string;
+  /** Other words a search finds this option by and an exact entry means it ("Turkey" for Türkiye, "UAE"); never shown. */
+  keywords?: string[];
 }
 
 export interface ComboBoxInputProps {
@@ -72,6 +76,8 @@ export function ComboBoxInput({
     return match ? match.label : value;
   }, [value, options, displayLabelInsteadOfValue]);
 
+  const selectedIcon = options.find((o) => o.value === value)?.icon;
+
   // What the user sees in the input: query while open, display value otherwise.
   const inputValue = open ? query : displayValue;
 
@@ -83,6 +89,7 @@ export function ComboBoxInput({
       (o) =>
         o.label.toLowerCase().includes(q) ||
         o.value.toLowerCase().includes(q) ||
+        (o.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false) ||
         (o.group?.toLowerCase().includes(q) ?? false),
     );
   }, [query, options]);
@@ -128,7 +135,8 @@ export function ComboBoxInput({
       const q = query.trim();
       if (q.length > 0) {
         const exact = options.find(
-          (o) => o.label.toLowerCase() === q.toLowerCase() || o.value.toLowerCase() === q.toLowerCase(),
+          (o) => o.label.toLowerCase() === q.toLowerCase() || o.value.toLowerCase() === q.toLowerCase()
+            || (o.keywords?.some((k) => k.toLowerCase() === q.toLowerCase()) ?? false),
         );
         if (exact) {
           onChange(exact.value);
@@ -183,6 +191,10 @@ export function ComboBoxInput({
         }}
       >
         {open && <Search className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
+        {!open && selectedIcon && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={selectedIcon} alt="" className="h-3.5 w-5 flex-shrink-0 rounded-[2px] border border-slate-200 object-cover" />
+        )}
         <input
           ref={inputRef}
           id={inputId}
@@ -268,6 +280,10 @@ export function ComboBoxInput({
                       role="option"
                       aria-selected={selected}
                     >
+                      {opt.icon && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={opt.icon} alt="" loading="lazy" className="h-3.5 w-5 flex-shrink-0 rounded-[2px] border border-slate-200 object-cover" />
+                      )}
                       <span className="flex-1 truncate">{opt.label}</span>
                       {opt.hint && (
                         <span className="text-[11px] text-slate-400">{opt.hint}</span>

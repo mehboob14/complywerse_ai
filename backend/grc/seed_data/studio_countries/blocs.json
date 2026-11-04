@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "region_order": ["Africa", "Americas", "Asia", "Europe", "Oceania"],
+  "main_markets": ["PK", "SA", "AE", "QA", "BH", "KW", "OM", "GB", "EU", "US", "SG", "IN", "CA"],
+  "blocs": {
+    "EU": {
+      "name": "European Union",
+      "region": "Europe",
+      "aliases": ["EU", "Europe", "European Union (EU)"],
+      "members": ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"],
+      "regulators": [
+        {"name": "European Banking Authority", "abbr": "EBA", "area": "Banking"},
+        {"name": "European Central Bank", "abbr": "ECB", "area": "Banking"},
+        {"name": "European Data Protection Board", "abbr": "EDPB", "area": "Data protection"},
+        {"name": "European Data Protection Supervisor", "abbr": "EDPS", "area": "Data protection"},
+        {"name": "European Securities and Markets Authority", "abbr": "ESMA", "area": "Securities"},
+        {"name": "European Insurance and Occupational Pensions Authority", "abbr": "EIOPA", "area": "Insurance"},
+        {"name": "European Union Agency for Cybersecurity", "abbr": "ENISA", "area": "Cybersecurity"},
+        {"name": "Anti-Money Laundering Authority", "abbr": "AMLA", "area": "AML/CFT"},
+        {"name": "Single Resolution Board", "abbr": "SRB", "area": "Banking"}
+      ],
+      "laws": [
+        {"name": "General Data Protection Regulation (GDPR, Regulation (EU) 2016/679)", "kind": "Regulation", "area": "Data protection"},
+        {"name": "NIS2 Directive ((EU) 2022/2555)", "kind": "Law", "area": "Cybersecurity"},
+        {"name": "Digital Operational Resilience Act (DORA, Regulation (EU) 2022/2554)", "kind": "Regulation", "area": "Operational resilience"},
+        {"name": "Critical Entities Resilience Directive ((EU) 2022/2557)", "kind": "Law", "area": "Critical infrastructure"},
+        {"name": "EU Cybersecurity Act (Regulation (EU) 2019/881)", "kind": "Regulation", "area": "Cybersecurity"},
+        {"name": "Cyber Resilience Act (Regulation (EU) 2024/2847)", "kind": "Regulation", "area": "Cybersecurity"},
+        {"name": "Artificial Intelligence Act (Regulation (EU) 2024/1689)", "kind": "Regulation", "area": "Governance"},
+        {"name": "Data Act (Regulation (EU) 2023/2854)", "kind": "Regulation", "area": "Data protection"},
+        {"name": "Payment Services Directive 2 (PSD2, (EU) 2015/2366)", "kind": "Law", "area": "Payments"},
+        {"name": "Markets in Crypto-Assets Regulation (MiCA, (EU) 2023/1114)", "kind": "Regulation", "area": "Capital markets"},
+        {"name": "EU Anti-Money Laundering Regulation ((EU) 2024/1624)", "kind": "Regulation", "area": "AML/CFT"},
+        {"name": "eIDAS Regulation ((EU) No 910/2014)", "kind": "Regulation", "area": "Electronic transactions"},
+        {"name": "ePrivacy Directive (2002/58/EC)", "kind": "Law", "area": "Privacy"},
+        {"name": "EBA Guidelines on ICT and security risk management (EBA/GL/2019/04)", "kind": "Guideline", "area": "Cybersecurity"},
+        {"name": "EBA Guidelines on outsourcing arrangements (EBA/GL/2019/02)", "kind": "Guideline", "area": "Outsourcing and cloud"}
+      ]
+    },
+    "EEA": {
+      "name": "European Economic Area",
+      "region": "Europe",
+      "aliases": [],
+      "members": ["IS", "LI", "NO"],
+      "regulators": [
+        {"name": "European Banking Authority", "abbr": "EBA", "area": "Banking"},
+        {"name": "European Data Protection Board", "abbr": "EDPB", "area": "Data protection"},
+        {"name": "European Securities and Markets Authority", "abbr": "ESMA", "area": "Securities"},
+        {"name": "European Insurance and Occupational Pensions Authority", "abbr": "EIOPA", "area": "Insurance"}
+      ],
+      "laws": [
+        {"name": "General Data Protection Regulation (GDPR, Regulation (EU) 2016/679)", "kind": "Regulation", "area": "Data protection"}
+      ]
+    }
+  },
+  "international": {
+    "regulators": [
+      {"name": "Financial Action Task Force", "abbr": "FATF", "area": "AML/CFT"},
+      {"name": "Basel Committee on Banking Supervision", "abbr": "BCBS", "area": "Banking"},
+      {"name": "International Organization of Securities Commissions", "abbr": "IOSCO", "area": "Securities"},
+      {"name": "International Association of Insurance Supervisors", "abbr": "IAIS", "area": "Insurance"},
+      {"name": "Financial Stability Board", "abbr": "FSB", "area": "Financial supervision"},
+      {"name": "Committee on Payments and Market Infrastructures", "abbr": "CPMI", "area": "Payments"},
+      {"name": "PCI Security Standards Council", "abbr": "PCI SSC", "area": "Payments"},
+      {"name": "SWIFT", "abbr": "", "area": "Payments"},
+      {"name": "International Organization for Standardization", "abbr": "ISO", "area": "Other"},
+      {"name": "National Institute of Standards and Technology", "abbr": "NIST", "area": "Cybersecurity"},
+      {"name": "Cloud Security Alliance", "abbr": "CSA", "area": "Cybersecurity"},
+      {"name": "International Telecommunication Union", "abbr": "ITU", "area": "Telecom"}
+    ],
+    "laws": [
+      {"name": "FATF Recommendations", "kind": "Standard", "area": "AML/CFT"},
+      {"name": "Basel Core Principles for Effective Banking Supervision", "kind": "Standard", "area": "Banking"},
+      {"name": "Basel Committee Principles for Operational Resilience", "kind": "Standard", "area": "Operational resilience"},
+      {"name": "Basel Committee Principles for the Sound Management of Operational Risk", "kind": "Standard", "area": "Banking"},
+      {"name": "CPMI-IOSCO Principles for Financial Market Infrastructures", "kind": "Standard", "area": "Payments"},
+      {"name": "Budapest Convention on Cybercrime", "kind": "Law", "area": "Cybercrime"},
+      {"name": "Council of Europe Convention 108+", "kind": "Law", "area": "Privacy"},
+      {"name": "OECD Privacy Guidelines", "kind": "Guideline", "area": "Privacy"},
+      {"name": "ISO/IEC 27001:2022 Information security management systems", "kind": "Standard", "area": "Cybersecurity"},
+      {"name": "ISO/IEC 27002:2022 Information security controls", "kind": "Standard", "area": "Cybersecurity"},
+      {"name": "ISO/IEC 27701:2019 Privacy information management", "kind": "Standard", "area": "Privacy"},
+      {"name": "ISO 22301:2019 Business continuity management systems", "kind": "Standard", "area": "Operational resilience"},
+      {"name": "NIST Cybersecurity Framework 2.0", "kind": "Framework", "area": "Cybersecurity"},
+      {"name": "PCI DSS v4.0.1", "kind": "Standard", "area": "Payments"},
+      {"name": "SWIFT Customer Security Controls Framework (CSCF)", "kind": "Framework", "area": "Payments"},
+      {"name": "COBIT 2019", "kind": "Framework", "area": "Governance"},
+      {"name": "CIS Critical Security Controls v8", "kind": "Framework", "area": "Cybersecurity"}
+    ]
+  },
+  "framework_scope": {
+    "ISO/IEC 27001:2022": {"global": true},
+    "ISO 22301:2019 Business Continuity Management System": {"global": true},
+    "ISO/IEC 42001:2023 AI Management System": {"global": true},
+    "ISO 45001:2018 Occupational Health and Safety Management System": {"global": true},
+    "NIST Cybersecurity Framework": {"global": true},
+    "NIST SP 800-53 Rev 5": {"global": true},
+    "NIST Artificial Intelligence Risk Management Framework (AI RMF 1.0)": {"global": true},
+    "CIS Critical Security Controls v8": {"global": true},
+    "COBIT 2019": {"global": true},
+    "CSA Cloud Controls Matrix (CCM) v4.0": {"global": true},
+    "SOC 2 Type II": {"global": true},
+    "PCI Data Security Standard": {"global": true},
+    "SWIFT Customer Security Controls Framework": {"global": true},
+    "HITRUST Common Security Framework (CSF)": {"global": true},
+    "KSA National Data Management and Personal Data Protection Standards": {"countries": ["SA"]},
+    "Regulation on Personal Data Transfer Outside the Kingdom": {"countries": ["SA"]},
+    "ARAMCO Cybersecurity Compliance Certification": {"countries": ["SA"]},
+    "SABIC CyberTrust Guidelines": {"countries": ["SA"]},
+    "SAMA Cyber Security Framework": {"countries": ["SA"]},
+    "UAE Information Assurance Standard": {"countries": ["AE"]},
+    "Abu Dhabi Healthcare Information and Cyber Security Standard": {"countries": ["AE"]},
+    "DOH Policy on the Abu Dhabi Health Information Exchange (ADHIE)": {"countries": ["AE"]},
+    "Qatar Central Bank Technology Risks Circular": {"countries": ["QA"]},
+    "MAS Technology Risk Management Guidelines": {"countries": ["SG"]},
+    "Pakistan Information Security Framework (PISF) 2026": {"countries": ["PK"]},
+    "SBP Cloud Outsourcing Framework": {"countries": ["PK"]},
+    "SBP ETGRMF": {"countries": ["PK"]},
+    "SBP Internet Banking Framework": {"countries": ["PK"]},
+    "Sri Lanka Baseline Security Standard (BSS)": {"countries": ["LK"]},
+    "General Data Protection Regulation": {"blocs": ["EU", "EEA"], "countries": ["GB", "CH"]},
+    "NIS2 Directive": {"blocs": ["EU"]},
+    "Digital Operational Resilience Act (DORA)": {"blocs": ["EU"]},
+    "HIPAA Security & Privacy Rule": {"countries": ["US"]},
+    "SOX IT General Controls": {"countries": ["US"]},
+    "NIST SP 800-171 Rev 2 (Protecting CUI)": {"countries": ["US"]}
+  }
+}

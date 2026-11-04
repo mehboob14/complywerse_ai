@@ -1,0 +1,3936 @@
+{
+ "countries": [
+  {
+   "code": "DZ",
+   "name": "Algeria",
+   "region": "Africa",
+   "aliases": [
+    "People's Democratic Republic of Algeria",
+    "Algérie"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Algeria",
+     "abbr": "",
+     "area": "Banking"
+    },
+    {
+     "name": "Stock Exchange Operations Organisation and Supervision Commission",
+     "abbr": "COSOB",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Supervision Commission",
+     "abbr": "CSA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Financial Intelligence Processing Unit",
+     "abbr": "CTRF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Post and Electronic Communications Regulatory Authority",
+     "abbr": "ARPCE",
+     "area": "Telecom"
+    },
+    {
+     "name": "Competition Council",
+     "abbr": "",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 18-07 on the Protection of Natural Persons in the Processing of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 09-04 on Special Rules for the Prevention and Combating of Offences Related to Information and Communication Technologies",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Monetary and Banking Law (Law No. 23-09)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 05-01 on the Prevention and Combating of Money Laundering and Terrorist Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law No. 15-04 on the General Rules for Electronic Signature and Certification",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 18-05 on Electronic Commerce",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Law No. 18-04 on the General Rules for Post and Electronic Communications",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Bank of Algeria Regulation No. 11-08 on the Internal Control of Banks and Financial Institutions",
+     "kind": "Regulation",
+     "area": "Banking"
+    },
+    {
+     "name": "Ordinance No. 95-07 on Insurance",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Presidential Decree No. 20-05 on the National Information Systems Security Framework",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "AO",
+   "name": "Angola",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Angola"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Angola",
+     "abbr": "BNA",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Commission",
+     "abbr": "CMC",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Angolan Insurance Regulation and Supervision Agency",
+     "abbr": "ARSEG",
+     "area": "Insurance"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "UIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Data Protection Agency",
+     "abbr": "APD",
+     "area": "Data protection"
+    },
+    {
+     "name": "Angolan Institute of Communications",
+     "abbr": "INACOM",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Law (Law No. 22/11)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "General Regime of Financial Institutions Law (Law No. 14/21)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 5/20 on the Prevention and Combating of Money Laundering, Terrorist Financing and Proliferation of Weapons of Mass Destruction",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law on Electronic Communications and Information Society Services (Law No. 23/11)",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Securities Code (Law No. 22/15)",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Law No. 7/17 on the Protection of Computer Networks and Systems",
+     "kind": "Law",
+     "area": "Cybercrime"
+    }
+   ]
+  },
+  {
+   "code": "BJ",
+   "name": "Benin",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Benin",
+    "Bénin"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Personal Data Protection Authority",
+     "abbr": "APDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Digital Code of Benin (Law No. 2017-20)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "BW",
+   "name": "Botswana",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Botswana"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Botswana",
+     "abbr": "BoB",
+     "area": "Banking"
+    },
+    {
+     "name": "Non-Bank Financial Institutions Regulatory Authority",
+     "abbr": "NBFIRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence Agency",
+     "abbr": "FIA",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Botswana Communications Regulatory Authority",
+     "abbr": "BOCRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Information and Data Protection Commission",
+     "abbr": "",
+     "area": "Data protection"
+    },
+    {
+     "name": "Competition and Consumer Authority",
+     "abbr": "CCA",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2024 (Act 18 of 2024)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybercrime and Computer Related Crimes Act 2018",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Communications and Transactions Act 2014",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking Act (Cap. 46:04)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Intelligence Act",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Non-Bank Financial Institutions Regulatory Authority Act 2016",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Communications Regulatory Authority Act 2012",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Securities Act 2014",
+     "kind": "Law",
+     "area": "Securities"
+    }
+   ]
+  },
+  {
+   "code": "BF",
+   "name": "Burkina Faso",
+   "region": "Africa",
+   "aliases": [
+    "Burkina"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    },
+    {
+     "name": "Commission for Information Technology and Liberties",
+     "abbr": "CIL",
+     "area": "Data protection"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 001-2021/AN on the Protection of Persons with regard to the Processing of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "BI",
+   "name": "Burundi",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Burundi"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of the Republic of Burundi",
+     "abbr": "BRB",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Regulatory Authority",
+     "abbr": "ARMC",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Regulatory and Control Agency",
+     "abbr": "ARCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Telecommunications Regulatory and Control Agency",
+     "abbr": "ARCT",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "East African Community Competition Act 2006",
+     "kind": "Law",
+     "area": "Competition"
+    },
+    {
+     "name": "COMESA Competition Regulations 2004",
+     "kind": "Regulation",
+     "area": "Competition"
+    }
+   ]
+  },
+  {
+   "code": "CV",
+   "name": "Cabo Verde",
+   "region": "Africa",
+   "aliases": [
+    "Cape Verde",
+    "Cap-Vert",
+    "Republic of Cabo Verde"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Cabo Verde",
+     "abbr": "BCV",
+     "area": "Banking"
+    },
+    {
+     "name": "National Commission for Data Protection",
+     "abbr": "CNPD",
+     "area": "Data protection"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "UIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Multisectoral Economic Regulatory Agency",
+     "abbr": "ARME",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 133/V/2001 on the Protection of Personal Data (as amended by Law No. 41/VIII/2013)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "ECOWAS Supplementary Act A/SA.1/01/10 on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "ECOWAS Directive C/DIR/1/08/11 on Fighting Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    }
+   ]
+  },
+  {
+   "code": "CM",
+   "name": "Cameroon",
+   "region": "Africa",
+   "aliases": [
+    "Cameroun",
+    "Republic of Cameroon"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications Regulatory Agency",
+     "abbr": "ART",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Agency for Information and Communication Technologies",
+     "abbr": "ANTIC",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2024/017 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2010/012 on Cybersecurity and Cybercriminality in Cameroon",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2010/013 Governing Electronic Communications in Cameroon",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law No. 2010/021 Governing Electronic Commerce in Cameroon",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "CF",
+   "name": "Central African Republic",
+   "region": "Africa",
+   "aliases": [
+    "CAR",
+    "Centrafrique"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 24/001 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CEMAC Regulation No. 03/16/CEMAC/UMAC/CM on Payment Systems, Means and Incidents",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Convention Harmonising Banking Regulation in the States of Central Africa",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "TD",
+   "name": "Chad",
+   "region": "Africa",
+   "aliases": [
+    "Tchad",
+    "Republic of Chad"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Agency for Computer Security and Electronic Certification",
+     "abbr": "ANSICE",
+     "area": "Data protection"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 007/PR/2015 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CEMAC Regulation No. 03/16/CEMAC/UMAC/CM on Payment Systems, Means and Incidents",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Convention Harmonising Banking Regulation in the States of Central Africa",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "KM",
+   "name": "Comoros",
+   "region": "Africa",
+   "aliases": [
+    "Union of the Comoros",
+    "Comoros Islands"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Comoros",
+     "abbr": "BCC",
+     "area": "Banking"
+    },
+    {
+     "name": "National Authority for the Regulation of Information and Communication Technologies",
+     "abbr": "ANRTIC",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "COMESA Competition Regulations 2004",
+     "kind": "Regulation",
+     "area": "Competition"
+    }
+   ]
+  },
+  {
+   "code": "CG",
+   "name": "Republic of the Congo",
+   "region": "Africa",
+   "aliases": [
+    "Congo-Brazzaville",
+    "Congo Brazzaville",
+    "Republic of Congo",
+    "Congo (Republic)"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Postal and Electronic Communications Regulatory Agency",
+     "abbr": "ARPCE",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 29-2019 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CEMAC Regulation No. 03/16/CEMAC/UMAC/CM on Payment Systems, Means and Incidents",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Convention Harmonising Banking Regulation in the States of Central Africa",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "CD",
+   "name": "Democratic Republic of the Congo",
+   "region": "Africa",
+   "aliases": [
+    "DRC",
+    "DR Congo",
+    "Congo-Kinshasa",
+    "Congo Kinshasa"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Congo",
+     "abbr": "BCC",
+     "area": "Banking"
+    },
+    {
+     "name": "Insurance Regulatory and Control Authority",
+     "abbr": "ARCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Intelligence Unit",
+     "abbr": "CENAREF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Postal and Telecommunications Regulatory Authority of the Congo",
+     "abbr": "ARPTC",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Digital Code (Ordinance-Law No. 23/010)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 20/017 on Telecommunications and Information and Communication Technologies",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law No. 003/2002 on the Activity and Supervision of Credit Institutions",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Insurance Code (Law No. 15/005)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "CI",
+   "name": "Côte d'Ivoire",
+   "region": "Africa",
+   "aliases": [
+    "Ivory Coast",
+    "Cote d'Ivoire",
+    "Republic of Côte d'Ivoire"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications/ICT Regulatory Authority of Côte d'Ivoire",
+     "abbr": "ARTCI",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2013-450 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2013-451 on the Fight against Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2013-546 on Electronic Transactions",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Ordinance No. 2012-293 on Telecommunications and Information and Communication Technologies",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Ordinance No. 2023-875 on Combating Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "DJ",
+   "name": "Djibouti",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Djibouti"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Djibouti",
+     "abbr": "BCD",
+     "area": "Banking"
+    },
+    {
+     "name": "Multi-Sector Regulatory Authority of Djibouti",
+     "abbr": "ARMD",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "National Payment System Law",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "COMESA Competition Regulations 2004",
+     "kind": "Regulation",
+     "area": "Competition"
+    }
+   ]
+  },
+  {
+   "code": "EG",
+   "name": "Egypt",
+   "region": "Africa",
+   "aliases": [
+    "Arab Republic of Egypt",
+    "Misr"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Egypt",
+     "abbr": "CBE",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Regulatory Authority",
+     "abbr": "FRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Money Laundering and Terrorist Financing Combating Unit",
+     "abbr": "MLCU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Telecom Regulatory Authority",
+     "abbr": "NTRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Information Technology Industry Development Agency",
+     "abbr": "ITIDA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Personal Data Protection Centre",
+     "abbr": "PDPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "Supreme Council for Cybersecurity",
+     "abbr": "SCC",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Egyptian Competition Authority",
+     "abbr": "ECA",
+     "area": "Competition"
+    },
+    {
+     "name": "Consumer Protection Agency",
+     "abbr": "CPA",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Egyptian Drug Authority",
+     "abbr": "EDA",
+     "area": "Health"
+    },
+    {
+     "name": "General Authority for Healthcare Accreditation and Regulation",
+     "abbr": "GAHAR",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Law (Law No. 151 of 2020)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Executive Regulations of the Personal Data Protection Law",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Central Bank and Banking Sector Law (Law No. 194 of 2020)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Cyber and Information Technology Crimes Law (Law No. 175 of 2018)",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Signature Law (Law No. 15 of 2004)",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Anti-Money Laundering Law (Law No. 80 of 2002)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications Regulation Law (Law No. 10 of 2003)",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Capital Market Law (Law No. 95 of 1992)",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Law No. 10 of 2009 Regulating Non-Banking Financial Markets and Instruments",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Technology Law (Law No. 5 of 2022)",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Law No. 18 of 2019 on the Regulation of Non-Cash Payment Means",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Consumer Protection Law (Law No. 181 of 2018)",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Central Bank of Egypt Financial Cybersecurity Framework",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "GQ",
+   "name": "Equatorial Guinea",
+   "region": "Africa",
+   "aliases": [
+    "Guinea Ecuatorial",
+    "Republic of Equatorial Guinea"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CEMAC Regulation No. 03/16/CEMAC/UMAC/CM on Payment Systems, Means and Incidents",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Convention Harmonising Banking Regulation in the States of Central Africa",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "ER",
+   "name": "Eritrea",
+   "region": "Africa",
+   "aliases": [
+    "State of Eritrea"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Eritrea",
+     "abbr": "BoE",
+     "area": "Banking"
+    },
+    {
+     "name": "Ministry of Transport and Communications",
+     "abbr": "",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Commercial Code of Eritrea",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "Penal Code of Eritrea",
+     "kind": "Law",
+     "area": "Other"
+    }
+   ]
+  },
+  {
+   "code": "SZ",
+   "name": "Eswatini",
+   "region": "Africa",
+   "aliases": [
+    "Swaziland",
+    "Kingdom of Eswatini"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Eswatini",
+     "abbr": "CBE",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Regulatory Authority",
+     "abbr": "FSRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Eswatini Communications Commission",
+     "abbr": "ESCCOM",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2022",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computer Crime and Cybercrime Act 2020",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Money Laundering and Financing of Terrorism (Prevention) Act 2011",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Financial Services Regulatory Authority Act 2010",
+     "kind": "Law",
+     "area": "Financial supervision"
+    }
+   ]
+  },
+  {
+   "code": "ET",
+   "name": "Ethiopia",
+   "region": "Africa",
+   "aliases": [
+    "Federal Democratic Republic of Ethiopia"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Ethiopia",
+     "abbr": "NBE",
+     "area": "Banking"
+    },
+    {
+     "name": "Ethiopian Capital Market Authority",
+     "abbr": "ECMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Ethiopian Communications Authority",
+     "abbr": "ECA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Information Network Security Administration",
+     "abbr": "INSA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Ethiopian Food and Drug Authority",
+     "abbr": "EFDA",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Proclamation No. 1321/2024",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computer Crime Proclamation No. 958/2016",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Banking Business Proclamation No. 1360/2025",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "National Bank of Ethiopia Proclamation No. 1359/2025",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Market Proclamation No. 1248/2021",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "National Payment System Proclamation No. 718/2011 (as amended by Proclamation No. 1282/2023)",
+     "kind": "Law",
+     "area": "Payments"
+    }
+   ]
+  },
+  {
+   "code": "GA",
+   "name": "Gabon",
+   "region": "Africa",
+   "aliases": [
+    "Gabonese Republic"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Central African States",
+     "abbr": "BEAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Banking Commission",
+     "abbr": "COBAC",
+     "area": "Banking"
+    },
+    {
+     "name": "Central African Financial Market Supervisory Commission",
+     "abbr": "COSUMAF",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Agency for Financial Investigation",
+     "abbr": "ANIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Commission for the Protection of Personal Data",
+     "abbr": "CNPDCP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 001/2011 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "CEMAC Regulation No. 02/24/CEMAC/UMAC/CM on the Prevention and Suppression of Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Regulation",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "CEMAC Regulation No. 04/18/CEMAC/UMAC/COBAC on Payment Services",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CEMAC Regulation No. 03/16/CEMAC/UMAC/CM on Payment Systems, Means and Incidents",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Convention Harmonising Banking Regulation in the States of Central Africa",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "GM",
+   "name": "Gambia",
+   "region": "Africa",
+   "aliases": [
+    "The Gambia",
+    "Republic of The Gambia"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of The Gambia",
+     "abbr": "CBG",
+     "area": "Banking"
+    },
+    {
+     "name": "Public Utilities Regulatory Authority",
+     "abbr": "PURA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Information and Communications Act 2009",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Central Bank of The Gambia Act 2018",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Combating of Terrorist Financing Act",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "ECOWAS Supplementary Act A/SA.1/01/10 on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "GH",
+   "name": "Ghana",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Ghana"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Ghana",
+     "abbr": "BoG",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission",
+     "abbr": "SEC",
+     "area": "Securities"
+    },
+    {
+     "name": "National Insurance Commission",
+     "abbr": "NIC",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Pensions Regulatory Authority",
+     "abbr": "NPRA",
+     "area": "Pensions"
+    },
+    {
+     "name": "Data Protection Commission",
+     "abbr": "DPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "Cyber Security Authority",
+     "abbr": "CSA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "National Communications Authority",
+     "abbr": "NCA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Centre",
+     "abbr": "FIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Ghana Deposit Protection Corporation",
+     "abbr": "GDPC",
+     "area": "Banking"
+    },
+    {
+     "name": "National Information Technology Agency",
+     "abbr": "NITA",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2012 (Act 843)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybersecurity Act 2020 (Act 1038)",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Transactions Act 2008 (Act 772)",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Electronic Communications Act 2008 (Act 775)",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Banks and Specialised Deposit-Taking Institutions Act 2016 (Act 930)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Payment Systems and Services Act 2019 (Act 987)",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Anti-Money Laundering Act 2020 (Act 1044)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Industry Act 2016 (Act 929)",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Act 2021 (Act 1061)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Bank of Ghana Act 2002 (Act 612)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Companies Act 2019 (Act 992)",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "Pensions Act 2008 (Act 766)",
+     "kind": "Law",
+     "area": "Pensions"
+    },
+    {
+     "name": "Bank of Ghana Cyber and Information Security Directive",
+     "kind": "Circular",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "GN",
+   "name": "Guinea",
+   "region": "Africa",
+   "aliases": [
+    "Guinea-Conakry",
+    "Guinée"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of the Republic of Guinea",
+     "abbr": "BCRG",
+     "area": "Banking"
+    },
+    {
+     "name": "Postal and Telecommunications Regulatory Authority",
+     "abbr": "ARPT",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. L/2016/037/AN on Cybersecurity and the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "GW",
+   "name": "Guinea-Bissau",
+   "region": "Africa",
+   "aliases": [
+    "Guinea Bissau",
+    "Guiné-Bissau"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    }
+   ],
+   "laws": [
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "ECOWAS Supplementary Act A/SA.1/01/10 on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "KE",
+   "name": "Kenya",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Kenya"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Kenya",
+     "abbr": "CBK",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Regulatory Authority",
+     "abbr": "IRA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Retirement Benefits Authority",
+     "abbr": "RBA",
+     "area": "Pensions"
+    },
+    {
+     "name": "Sacco Societies Regulatory Authority",
+     "abbr": "SASRA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Office of the Data Protection Commissioner",
+     "abbr": "ODPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "Communications Authority of Kenya",
+     "abbr": "CA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Reporting Centre",
+     "abbr": "FRC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Kenya Deposit Insurance Corporation",
+     "abbr": "KDIC",
+     "area": "Banking"
+    },
+    {
+     "name": "Competition Authority of Kenya",
+     "abbr": "CAK",
+     "area": "Competition"
+    },
+    {
+     "name": "National Computer and Cybercrimes Coordination Committee",
+     "abbr": "NC4",
+     "area": "Cybersecurity"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2019",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Data Protection (General) Regulations 2021",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computer Misuse and Cybercrimes Act 2018",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Banking Act (Cap. 488)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Kenya Act (Cap. 491)",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "National Payment System Act 2011",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Proceeds of Crime and Anti-Money Laundering Act 2009",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Kenya Information and Communications Act 1998",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Capital Markets Act (Cap. 485A)",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Act (Cap. 487)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Retirement Benefits Act 1997",
+     "kind": "Law",
+     "area": "Pensions"
+    },
+    {
+     "name": "Consumer Protection Act 2012",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "CBK Prudential Guidelines",
+     "kind": "Guideline",
+     "area": "Banking"
+    },
+    {
+     "name": "CBK Guidance Note on Cybersecurity",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "LS",
+   "name": "Lesotho",
+   "region": "Africa",
+   "aliases": [
+    "Kingdom of Lesotho"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Lesotho",
+     "abbr": "CBL",
+     "area": "Banking"
+    },
+    {
+     "name": "Lesotho Communications Authority",
+     "abbr": "LCA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2011 (Act No. 5 of 2012)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Financial Institutions Act 2012",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Lesotho Act 2000",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Money Laundering and Proceeds of Crime Act 2008",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Communications Act 2012",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  },
+  {
+   "code": "LR",
+   "name": "Liberia",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Liberia"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Liberia",
+     "abbr": "CBL",
+     "area": "Banking"
+    },
+    {
+     "name": "Liberia Telecommunications Authority",
+     "abbr": "LTA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "New Central Bank of Liberia Act of 1999",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Institutions Act of 1999",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Telecommunications Act of 2007",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Electronic Transactions Law",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "ECOWAS Supplementary Act A/SA.1/01/10 on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "LY",
+   "name": "Libya",
+   "region": "Africa",
+   "aliases": [
+    "State of Libya"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Libya",
+     "abbr": "CBL",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Banking Law No. 1 of 2005",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 5 of 2022 on Combating Cybercrimes",
+     "kind": "Law",
+     "area": "Cybercrime"
+    }
+   ]
+  },
+  {
+   "code": "MG",
+   "name": "Madagascar",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Madagascar"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Madagascar",
+     "abbr": "BFM",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking and Financial Supervision Commission",
+     "abbr": "CSBF",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Communication Technologies Regulatory Authority",
+     "abbr": "ARTEC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Service",
+     "abbr": "SAMIFIN",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2014-038 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2014-006 on the Fight against Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2014-024 on Electronic Transactions",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 2023-026 on Combating Money Laundering, Terrorist Financing and Proliferation Financing",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "MW",
+   "name": "Malawi",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Malawi"
+   ],
+   "regulators": [
+    {
+     "name": "Reserve Bank of Malawi",
+     "abbr": "RBM",
+     "area": "Banking"
+    },
+    {
+     "name": "Malawi Communications Regulatory Authority",
+     "abbr": "MACRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Authority",
+     "abbr": "FIA",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Competition and Fair Trading Commission",
+     "abbr": "CFTC",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2024",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Electronic Transactions and Cyber Security Act 2016",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Financial Services Act 2010",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Crimes Act 2017",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Communications Act 2016",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Payment Systems Act 2016",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Reserve Bank of Malawi Act 1989",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "ML",
+   "name": "Mali",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Mali"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Personal Data Protection Authority",
+     "abbr": "APDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Malian Regulatory Authority for Telecommunications/ICT and Posts",
+     "abbr": "AMRTP",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2013-015 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2019-056 on the Repression of Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "MR",
+   "name": "Mauritania",
+   "region": "Africa",
+   "aliases": [
+    "Islamic Republic of Mauritania"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Mauritania",
+     "abbr": "BCM",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2017-020 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2016-007 on Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    }
+   ]
+  },
+  {
+   "code": "MU",
+   "name": "Mauritius",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Mauritius"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Mauritius",
+     "abbr": "BoM",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Commission",
+     "abbr": "FSC",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Data Protection Office",
+     "abbr": "DPO",
+     "area": "Data protection"
+    },
+    {
+     "name": "Information and Communication Technologies Authority",
+     "abbr": "ICTA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Computer Emergency Response Team of Mauritius",
+     "abbr": "CERT-MU",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Financial Reporting Council",
+     "abbr": "FRC",
+     "area": "Other"
+    },
+    {
+     "name": "Competition Commission of Mauritius",
+     "abbr": "",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2017",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybersecurity and Cybercrime Act 2021",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Banking Act 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Bank of Mauritius Act 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Act 2007",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence and Anti-Money Laundering Act 2002",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Act 2005",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance Act 2005",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Electronic Transactions Act 2000",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Information and Communication Technologies Act 2001",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Virtual Asset and Initial Token Offering Services Act 2021",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Bank of Mauritius Guideline on Cyber and Technology Risk Management",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Bank of Mauritius Guideline on Outsourcing by Financial Institutions",
+     "kind": "Guideline",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "National Code of Corporate Governance for Mauritius",
+     "kind": "Guideline",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "MA",
+   "name": "Morocco",
+   "region": "Africa",
+   "aliases": [
+    "Kingdom of Morocco",
+    "Maroc",
+    "Al Maghrib"
+   ],
+   "regulators": [
+    {
+     "name": "Bank Al-Maghrib",
+     "abbr": "BAM",
+     "area": "Banking"
+    },
+    {
+     "name": "Moroccan Capital Market Authority",
+     "abbr": "AMMC",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance and Social Welfare Supervisory Authority",
+     "abbr": "ACAPS",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Commission for the Control of the Protection of Personal Data",
+     "abbr": "CNDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "National Telecommunications Regulatory Agency",
+     "abbr": "ANRT",
+     "area": "Telecom"
+    },
+    {
+     "name": "General Directorate of Information Systems Security",
+     "abbr": "DGSSI",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "National Financial Intelligence Authority",
+     "abbr": "ANRF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Competition Council",
+     "abbr": "",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 09-08 on the Protection of Individuals with regard to the Processing of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 05-20 on Cybersecurity",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 103-12 on Credit Institutions and Similar Bodies",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 43-05 on Combating Money Laundering (as amended by Law No. 12-18)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Law No. 43-20 on Trust Services for Electronic Transactions",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 53-05 on the Electronic Exchange of Legal Data",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 07-03 on Offences relating to Automated Data Processing Systems",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 24-96 on Posts and Telecommunications",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law No. 31-08 on Consumer Protection",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Insurance Code (Law No. 17-99)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Law No. 43-12 on the Moroccan Capital Market Authority",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Law No. 64-12 on the Insurance and Social Welfare Supervisory Authority",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Information Systems Security Directive (DNSSI)",
+     "kind": "Guideline",
+     "area": "Cybersecurity"
+    }
+   ]
+  },
+  {
+   "code": "MZ",
+   "name": "Mozambique",
+   "region": "Africa",
+   "aliases": [
+    "Moçambique",
+    "Republic of Mozambique"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Mozambique",
+     "abbr": "",
+     "area": "Banking"
+    },
+    {
+     "name": "Mozambique Insurance Supervision Institute",
+     "abbr": "ISSM",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Communications Institute of Mozambique",
+     "abbr": "INCM",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Information Office of Mozambique",
+     "abbr": "GIFiM",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Institute of Information and Communication Technologies",
+     "abbr": "INTIC",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Electronic Transactions Law (Law No. 3/2017)",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Telecommunications Law (Law No. 4/2016)",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Commercial Code (Decree-Law No. 2/2005)",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "NA",
+   "name": "Namibia",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Namibia"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Namibia",
+     "abbr": "BoN",
+     "area": "Banking"
+    },
+    {
+     "name": "Namibia Financial Institutions Supervisory Authority",
+     "abbr": "NAMFISA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence Centre",
+     "abbr": "FIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Communications Regulatory Authority of Namibia",
+     "abbr": "CRAN",
+     "area": "Telecom"
+    },
+    {
+     "name": "Namibia Competition Commission",
+     "abbr": "NaCC",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Financial Intelligence Act 2012",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Communications Act 2009",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Electronic Transactions Act 2019",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Namibia Financial Institutions Supervisory Authority Act 2001",
+     "kind": "Law",
+     "area": "Financial supervision"
+    }
+   ]
+  },
+  {
+   "code": "NE",
+   "name": "Niger",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Niger"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "High Authority for the Protection of Personal Data",
+     "abbr": "HAPDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2017-28 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2019-33 on the Repression of Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "NG",
+   "name": "Nigeria",
+   "region": "Africa",
+   "aliases": [
+    "Federal Republic of Nigeria"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Nigeria",
+     "abbr": "CBN",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission",
+     "abbr": "SEC",
+     "area": "Securities"
+    },
+    {
+     "name": "National Insurance Commission",
+     "abbr": "NAICOM",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Pension Commission",
+     "abbr": "PenCom",
+     "area": "Pensions"
+    },
+    {
+     "name": "Nigeria Data Protection Commission",
+     "abbr": "NDPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "National Information Technology Development Agency",
+     "abbr": "NITDA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Nigerian Communications Commission",
+     "abbr": "NCC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Nigerian Financial Intelligence Unit",
+     "abbr": "NFIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Economic and Financial Crimes Commission",
+     "abbr": "EFCC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Nigeria Deposit Insurance Corporation",
+     "abbr": "NDIC",
+     "area": "Banking"
+    },
+    {
+     "name": "Federal Competition and Consumer Protection Commission",
+     "abbr": "FCCPC",
+     "area": "Competition"
+    },
+    {
+     "name": "Corporate Affairs Commission",
+     "abbr": "CAC",
+     "area": "Other"
+    },
+    {
+     "name": "Office of the National Security Adviser",
+     "abbr": "ONSA",
+     "area": "Cybersecurity"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Nigeria Data Protection Act 2023",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Nigeria Data Protection Act General Application and Implementation Directive (GAID) 2025",
+     "kind": "Regulation",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybercrimes (Prohibition, Prevention, etc.) Act 2015",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Banks and Other Financial Institutions Act 2020",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Nigeria Act 2007",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Money Laundering (Prevention and Prohibition) Act 2022",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Investments and Securities Act 2025",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Nigerian Insurance Industry Reform Act 2025",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Companies and Allied Matters Act 2020",
+     "kind": "Law",
+     "area": "Governance"
+    },
+    {
+     "name": "Federal Competition and Consumer Protection Act 2018",
+     "kind": "Law",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Pension Reform Act 2014",
+     "kind": "Law",
+     "area": "Pensions"
+    },
+    {
+     "name": "Nigerian Communications Act 2003",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "CBN Risk-Based Cybersecurity Framework and Guidelines",
+     "kind": "Framework",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Nigerian Code of Corporate Governance 2018",
+     "kind": "Guideline",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "RW",
+   "name": "Rwanda",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Rwanda"
+   ],
+   "regulators": [
+    {
+     "name": "National Bank of Rwanda",
+     "abbr": "BNR",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Market Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Rwanda Utilities Regulatory Authority",
+     "abbr": "RURA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Centre",
+     "abbr": "FIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Cyber Security Authority",
+     "abbr": "NCSA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Rwanda Information Society Authority",
+     "abbr": "RISA",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Rwanda Inspectorate, Competition and Consumer Protection Authority",
+     "abbr": "RICA",
+     "area": "Competition"
+    },
+    {
+     "name": "Rwanda Food and Drugs Authority",
+     "abbr": "Rwanda FDA",
+     "area": "Health"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 058/2021 relating to the Protection of Personal Data and Privacy",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 60/2018 on Prevention and Punishment of Cyber Crimes",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 24/2016 Governing Information and Communication Technologies",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law No. 47/2017 Governing the Organisation of Banking",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Law No. 48/2017 Governing the National Bank of Rwanda",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "ST",
+   "name": "São Tomé and Príncipe",
+   "region": "Africa",
+   "aliases": [
+    "Sao Tome and Principe",
+    "São Tomé"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of São Tomé and Príncipe",
+     "abbr": "BCSTP",
+     "area": "Banking"
+    },
+    {
+     "name": "National Data Protection Agency",
+     "abbr": "ANPDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "General Regulatory Agency",
+     "abbr": "AGER",
+     "area": "Telecom"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 03/2016 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law on Financial Institutions",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank Organic Law",
+     "kind": "Law",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "SN",
+   "name": "Senegal",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Senegal",
+    "Sénégal"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Personal Data Commission",
+     "abbr": "CDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Telecommunications and Postal Regulatory Authority",
+     "abbr": "ARTP",
+     "area": "Telecom"
+    },
+    {
+     "name": "State IT Agency",
+     "abbr": "ADIE",
+     "area": "Government ICT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2008-12 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2008-11 on Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2008-08 on Electronic Transactions",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Law No. 2018-28 on the Electronic Communications Code",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "SC",
+   "name": "Seychelles",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Seychelles"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Seychelles",
+     "abbr": "CBS",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Authority",
+     "abbr": "FSA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Financial Institutions Act 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Central Bank of Seychelles Act 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Services Authority Act 2013",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Anti-Money Laundering and Countering the Financing of Terrorism Act 2020",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "SL",
+   "name": "Sierra Leone",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Sierra Leone"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Sierra Leone",
+     "abbr": "BSL",
+     "area": "Banking"
+    },
+    {
+     "name": "National Telecommunications Commission",
+     "abbr": "NATCOM",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Sierra Leone Insurance Commission",
+     "abbr": "SLICOM",
+     "area": "Insurance"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Bank of Sierra Leone Act 2019",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Act 2019",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Telecommunications Act 2006",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Cyber Security and Crime Act 2021",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Anti-Money Laundering and Combating of Financing of Terrorism Act 2012",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "ECOWAS Supplementary Act A/SA.1/01/10 on Personal Data Protection",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "SO",
+   "name": "Somalia",
+   "region": "Africa",
+   "aliases": [
+    "Federal Republic of Somalia"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Somalia",
+     "abbr": "CBS",
+     "area": "Banking"
+    },
+    {
+     "name": "National Communications Authority",
+     "abbr": "NCA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Reporting Centre",
+     "abbr": "FRC",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Communications Act 2017",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Anti-Money Laundering and Countering the Financing of Terrorism Act 2016",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "ZA",
+   "name": "South Africa",
+   "region": "Africa",
+   "aliases": [
+    "Republic of South Africa",
+    "RSA"
+   ],
+   "regulators": [
+    {
+     "name": "South African Reserve Bank",
+     "abbr": "SARB",
+     "area": "Banking"
+    },
+    {
+     "name": "Prudential Authority",
+     "abbr": "PA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Sector Conduct Authority",
+     "abbr": "FSCA",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Information Regulator",
+     "abbr": "",
+     "area": "Data protection"
+    },
+    {
+     "name": "Financial Intelligence Centre",
+     "abbr": "FIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Independent Communications Authority of South Africa",
+     "abbr": "ICASA",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Credit Regulator",
+     "abbr": "NCR",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "Competition Commission",
+     "abbr": "",
+     "area": "Competition"
+    },
+    {
+     "name": "National Consumer Commission",
+     "abbr": "NCC",
+     "area": "Consumer protection"
+    },
+    {
+     "name": "South African Health Products Regulatory Authority",
+     "abbr": "SAHPRA",
+     "area": "Health"
+    },
+    {
+     "name": "Council for Medical Schemes",
+     "abbr": "CMS",
+     "area": "Health"
+    },
+    {
+     "name": "Payments Association of South Africa",
+     "abbr": "PASA",
+     "area": "Payments"
+    },
+    {
+     "name": "JSE Limited",
+     "abbr": "JSE",
+     "area": "Capital markets"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Protection of Personal Information Act 4 of 2013 (POPIA)",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybercrimes Act 19 of 2020",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Communications and Transactions Act 25 of 2002",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Financial Sector Regulation Act 9 of 2017",
+     "kind": "Law",
+     "area": "Financial supervision"
+    },
+    {
+     "name": "Financial Intelligence Centre Act 38 of 2001 (FICA)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Banks Act 94 of 1990",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "National Payment System Act 78 of 1998",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Insurance Act 18 of 2017",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Financial Markets Act 19 of 2012",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Critical Infrastructure Protection Act 8 of 2019",
+     "kind": "Law",
+     "area": "Critical infrastructure"
+    },
+    {
+     "name": "Joint Standard 1 of 2023: IT Governance and Risk Management",
+     "kind": "Regulation",
+     "area": "Governance"
+    },
+    {
+     "name": "Joint Standard 2 of 2024: Cybersecurity and Cyber Resilience Requirements",
+     "kind": "Regulation",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Prudential Authority Directive 3/2018: Cloud Computing and Offshoring of Data",
+     "kind": "Circular",
+     "area": "Outsourcing and cloud"
+    },
+    {
+     "name": "King V Report on Corporate Governance for South Africa 2025",
+     "kind": "Framework",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "SS",
+   "name": "South Sudan",
+   "region": "Africa",
+   "aliases": [
+    "Republic of South Sudan"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of South Sudan",
+     "abbr": "BoSS",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Bank of South Sudan Act 2011",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering and Counter Terrorist Financing Act 2012",
+     "kind": "Law",
+     "area": "AML/CFT"
+    }
+   ]
+  },
+  {
+   "code": "SD",
+   "name": "Sudan",
+   "region": "Africa",
+   "aliases": [
+    "Republic of the Sudan"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Sudan",
+     "abbr": "CBOS",
+     "area": "Banking"
+    },
+    {
+     "name": "National Telecommunications Corporation",
+     "abbr": "NTC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Central Bank of Sudan Act 2002",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Electronic Transactions Act 2007",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    }
+   ]
+  },
+  {
+   "code": "TZ",
+   "name": "Tanzania",
+   "region": "Africa",
+   "aliases": [
+    "United Republic of Tanzania"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Tanzania",
+     "abbr": "BoT",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets and Securities Authority",
+     "abbr": "CMSA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Tanzania Insurance Regulatory Authority",
+     "abbr": "TIRA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Tanzania Communications Regulatory Authority",
+     "abbr": "TCRA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Personal Data Protection Commission",
+     "abbr": "PDPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Social Security Regulatory Authority",
+     "abbr": "SSRA",
+     "area": "Pensions"
+    },
+    {
+     "name": "Fair Competition Commission",
+     "abbr": "FCC",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Personal Data Protection Act 2022",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cybercrimes Act 2015",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic and Postal Communications Act 2010",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Electronic Transactions Act 2015",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking and Financial Institutions Act 2006",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Bank of Tanzania Act 2006",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering Act 2006",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Payment Systems Act 2015",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Capital Markets and Securities Act (Cap. 79)",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Act 2009",
+     "kind": "Law",
+     "area": "Insurance"
+    }
+   ]
+  },
+  {
+   "code": "TG",
+   "name": "Togo",
+   "region": "Africa",
+   "aliases": [
+    "Togolese Republic"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of West African States",
+     "abbr": "BCEAO",
+     "area": "Banking"
+    },
+    {
+     "name": "Banking Commission of the West African Monetary Union",
+     "abbr": "CB-UMOA",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Markets Authority of the West African Monetary Union",
+     "abbr": "AMF-UMOA",
+     "area": "Securities"
+    },
+    {
+     "name": "Regional Insurance Control Commission",
+     "abbr": "CRCA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Financial Information Processing Unit",
+     "abbr": "CENTIF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Electronic Communications and Postal Regulatory Authority",
+     "abbr": "ARCEP",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Cybersecurity Agency",
+     "abbr": "ANCy",
+     "area": "Cybersecurity"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Law No. 2019-014 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2018-026 on Cybersecurity and the Fight against Cybercrime",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2012-018 on Electronic Communications",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "WAEMU Uniform Law on Combating Money Laundering, Terrorist Financing and Proliferation Financing (2023)",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "WAEMU Regulation No. 15/2002/CM/UEMOA on Payment Systems in the WAEMU Member States",
+     "kind": "Regulation",
+     "area": "Payments"
+    },
+    {
+     "name": "CIMA Insurance Code (Inter-African Conference on Insurance Markets)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "OHADA Uniform Act on Commercial Companies and Economic Interest Groups",
+     "kind": "Law",
+     "area": "Governance"
+    }
+   ]
+  },
+  {
+   "code": "TN",
+   "name": "Tunisia",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Tunisia",
+    "Tunisie"
+   ],
+   "regulators": [
+    {
+     "name": "Central Bank of Tunisia",
+     "abbr": "BCT",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Market Council",
+     "abbr": "CMF",
+     "area": "Capital markets"
+    },
+    {
+     "name": "General Insurance Committee",
+     "abbr": "CGA",
+     "area": "Insurance"
+    },
+    {
+     "name": "National Authority for the Protection of Personal Data",
+     "abbr": "INPDP",
+     "area": "Data protection"
+    },
+    {
+     "name": "Tunisian Financial Analysis Commission",
+     "abbr": "CTAF",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Telecommunications Authority",
+     "abbr": "INT",
+     "area": "Telecom"
+    },
+    {
+     "name": "National Cybersecurity Agency",
+     "abbr": "ANCS",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Competition Council",
+     "abbr": "",
+     "area": "Competition"
+    },
+    {
+     "name": "Microfinance Supervisory Authority",
+     "abbr": "ACM",
+     "area": "Financial supervision"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Organic Law No. 2004-63 on the Protection of Personal Data",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Law No. 2000-83 on Electronic Exchanges and Commerce",
+     "kind": "Law",
+     "area": "Records and e-commerce"
+    },
+    {
+     "name": "Decree-Law No. 2023-17 on Cybersecurity",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Decree-Law No. 2022-54 on Combating Offences Related to Information and Communication Systems",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Law No. 2016-48 on Banks and Financial Institutions",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Organic Law No. 2015-26 on Combating Terrorism and Preventing Money Laundering",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Telecommunications Code (Law No. 2001-1)",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Law No. 94-117 on the Reorganisation of the Financial Market",
+     "kind": "Law",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Code (Law No. 92-24)",
+     "kind": "Law",
+     "area": "Insurance"
+    },
+    {
+     "name": "Law No. 2015-36 on the Reorganisation of Competition and Prices",
+     "kind": "Law",
+     "area": "Competition"
+    },
+    {
+     "name": "Law No. 2005-51 on the Electronic Transfer of Funds",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "BCT Circular to Banks No. 2006-19 on Internal Control",
+     "kind": "Circular",
+     "area": "Banking"
+    }
+   ]
+  },
+  {
+   "code": "UG",
+   "name": "Uganda",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Uganda"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Uganda",
+     "abbr": "BoU",
+     "area": "Banking"
+    },
+    {
+     "name": "Capital Markets Authority",
+     "abbr": "CMA",
+     "area": "Capital markets"
+    },
+    {
+     "name": "Insurance Regulatory Authority of Uganda",
+     "abbr": "IRA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Uganda Communications Commission",
+     "abbr": "UCC",
+     "area": "Telecom"
+    },
+    {
+     "name": "Personal Data Protection Office",
+     "abbr": "PDPO",
+     "area": "Data protection"
+    },
+    {
+     "name": "National Information Technology Authority, Uganda",
+     "abbr": "NITA-U",
+     "area": "Government ICT"
+    },
+    {
+     "name": "Financial Intelligence Authority",
+     "abbr": "FIA",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Uganda Retirement Benefits Regulatory Authority",
+     "abbr": "URBRA",
+     "area": "Pensions"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection and Privacy Act 2019",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Computer Misuse Act 2011",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Transactions Act 2011",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Electronic Signatures Act 2011",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Financial Institutions Act 2004",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Anti-Money Laundering Act 2013",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "National Payment Systems Act 2020",
+     "kind": "Law",
+     "area": "Payments"
+    },
+    {
+     "name": "Uganda Communications Act 2013",
+     "kind": "Law",
+     "area": "Telecom"
+    },
+    {
+     "name": "Regulation of Interception of Communications Act 2010",
+     "kind": "Law",
+     "area": "Privacy"
+    }
+   ]
+  },
+  {
+   "code": "ZM",
+   "name": "Zambia",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Zambia"
+   ],
+   "regulators": [
+    {
+     "name": "Bank of Zambia",
+     "abbr": "BoZ",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission",
+     "abbr": "SEC",
+     "area": "Securities"
+    },
+    {
+     "name": "Pensions and Insurance Authority",
+     "abbr": "PIA",
+     "area": "Insurance"
+    },
+    {
+     "name": "Zambia Information and Communications Technology Authority",
+     "abbr": "ZICTA",
+     "area": "Telecom"
+    },
+    {
+     "name": "Office of the Data Protection Commissioner",
+     "abbr": "ODPC",
+     "area": "Data protection"
+    },
+    {
+     "name": "Zambia Cyber Security Agency",
+     "abbr": "ZCSA",
+     "area": "Cybersecurity"
+    },
+    {
+     "name": "Financial Intelligence Centre",
+     "abbr": "FIC",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Competition and Consumer Protection Commission",
+     "abbr": "CCPC",
+     "area": "Competition"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Data Protection Act 2021",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Cyber Security Act 2025",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Cyber Crimes Act 2025",
+     "kind": "Law",
+     "area": "Cybercrime"
+    },
+    {
+     "name": "Electronic Communications and Transactions Act 2021",
+     "kind": "Law",
+     "area": "Electronic transactions"
+    },
+    {
+     "name": "Banking and Financial Services Act 2017",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Bank of Zambia Act 2022",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Financial Intelligence Centre Act 2010",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities Act 2016",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "National Payment Systems Act 2007",
+     "kind": "Law",
+     "area": "Payments"
+    }
+   ]
+  },
+  {
+   "code": "ZW",
+   "name": "Zimbabwe",
+   "region": "Africa",
+   "aliases": [
+    "Republic of Zimbabwe"
+   ],
+   "regulators": [
+    {
+     "name": "Reserve Bank of Zimbabwe",
+     "abbr": "RBZ",
+     "area": "Banking"
+    },
+    {
+     "name": "Securities and Exchange Commission of Zimbabwe",
+     "abbr": "SECZ",
+     "area": "Securities"
+    },
+    {
+     "name": "Insurance and Pensions Commission",
+     "abbr": "IPEC",
+     "area": "Insurance"
+    },
+    {
+     "name": "Postal and Telecommunications Regulatory Authority of Zimbabwe",
+     "abbr": "POTRAZ",
+     "area": "Telecom"
+    },
+    {
+     "name": "Financial Intelligence Unit",
+     "abbr": "FIU",
+     "area": "AML/CFT"
+    }
+   ],
+   "laws": [
+    {
+     "name": "Cyber and Data Protection Act [Chapter 12:07]",
+     "kind": "Law",
+     "area": "Privacy"
+    },
+    {
+     "name": "Banking Act [Chapter 24:20]",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Reserve Bank of Zimbabwe Act [Chapter 22:15]",
+     "kind": "Law",
+     "area": "Banking"
+    },
+    {
+     "name": "Money Laundering and Proceeds of Crime Act [Chapter 9:24]",
+     "kind": "Law",
+     "area": "AML/CFT"
+    },
+    {
+     "name": "Securities and Exchange Act [Chapter 24:25]",
+     "kind": "Law",
+     "area": "Securities"
+    },
+    {
+     "name": "Postal and Telecommunications Act [Chapter 12:05]",
+     "kind": "Law",
+     "area": "Telecom"
+    }
+   ]
+  }
+ ]
+}
