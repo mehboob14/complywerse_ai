@@ -5,26 +5,33 @@
 // ask "Discard changes?", useConfirm for deleting and useReportedMutation for every write (the server's answer is said, and a refusal in its own words).
 // The list the server sends is cut at 100 and carries no total: this page says so, shows how many there are in all (the analytics' counts) and what its
 // search, sort and CSV work on (_logic.ts: serverList, cutNotice). The ten writes are in the pieces below; what each sends is unchanged.
-//   _ExceptionForm.tsx   raise / change (drawer)       _ExceptionDetails.tsx  details, comments, move to risk register (drawer)
-//   _Decision.tsx        approve / reject / revoke      _Suggest.tsx           suggest exceptions (AI, opt-in)       _Summary.tsx  the three cards
+// An exception that goes through an approval rule (Governance > Settings > Exception approvals) says which step it is at and who it waits for, is decided
+// by the people its open step asks (approve, ask for changes, reject: what the step allows) and can be withdrawn; "Waiting for me" lists the ones that wait
+// for the person. An alert's link (?open=12) opens that exception, whether or not its row is on the loaded page. One with no rule is decided as it always was.
+//   _ExceptionForm.tsx   raise / change (drawer)       _ExceptionDetails.tsx  details, approval, comments, move to risk register (drawer)
+//   _ApprovalPanel.tsx   the approval under a rule      _Decision.tsx          approve / ask for changes / reject / revoke
+//   _Suggest.tsx         suggest exceptions (AI, opt-in)       _Summary.tsx  the three cards       _approval.ts  what is said about the approval (pure)
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Ban, Check, Download, Eye, Pencil, Plus, Search, Send, Shield, Sparkles, Trash2, X, XCircle } from 'lucide-react';
+import { Ban, Check, Download, Eye, MessageSquare, Pencil, Plus, Search, Send, Shield, Sparkles, Trash2, Undo2, X, XCircle } from 'lucide-react';
 import { assetsApi, governanceApi, policyExceptionApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { EMPTY, truncate } from '@/lib/format';
 import { exceptionStatus, priority as priorityStatus, statusPill } from '@/lib/status';
 import { PageHeader } from '@/components/ui';
 import {
-  Button, EmptyState, IconButton, Menu, Pager, PersonChip, RegisterTable, Select, StatusPill, TextInput, useConfirm, useNotify, useReportedMutation,
-  type MenuItem, type RegisterColumn, type SortState,
+  Button, EmptyState, IconButton, Menu, Notice, Pager, PersonChip, RegisterTable, SegmentedControl, Select, StatusPill, TextInput, useConfirm, useNotify,
+  useReportedMutation, type MenuItem, type RegisterColumn, type SortState,
 } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { ListNotice } from '@/components/governance/ListNotice';
 import {
-  DATA_COLS, DEFAULT_PAGE_SIZE, PAGE_SIZES, countLabel, csvDone, cutNotice, dayText, emptyForm, formForPolicy, formFrom, itemsOf, momentDay, pagerOf, requesterOf,
-  rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, type DataCol, type ExceptionForm, type Filters, type RowActionKey,
+  DATA_COLS, DEFAULT_PAGE_SIZE, PAGE_SIZES, countLabel, csvDone, cutNotice, dayText, emptyForm, formForPolicy, formFrom, itemsOf, momentDay, openIdOf, pagerOf,
+  requesterOf, rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, waitingLabel, waitingRows, withoutOpen,
+  type DataCol, type ExceptionForm, type Filters, type RowActionKey,
 } from './_logic';
+import { statusDetail } from './_approval';
 import { LIST_KEYS, type AssetOption, type ExceptionAnalytics, type ExceptionItem, type PolicyOption } from './_types';
 import { ColumnsMenu } from './_ColumnsMenu';
 import { DecisionDialog, type DecisionKind } from './_Decision';
@@ -51,6 +58,18 @@ function downloadCsv(name: string, cols: DataCol<ExceptionItem>[], rows: Excepti
 
 type FormState = { exception: ExceptionItem | null; initial: ExceptionForm; id: number };
 
+/** The status, and under an approval rule the step it is at and who it waits for (what a draft sent back says too). Nothing more for one decided as it always was. */
+function StatusCell({ exception: e }: { exception: ExceptionItem }) {
+  const detail = statusDetail(e);
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-[2px]">
+      <StatusPill size="sm" {...statusPill(exceptionStatus, e.status)} />
+      {detail?.step && <span className="text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]">{detail.step}</span>}
+      {detail?.waiting && <span className="line-clamp-2 text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]" title={detail.waiting}>{detail.waiting}</span>}
+    </div>
+  );
+}
+
 export default function PolicyExceptionsPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:policy_exceptions:create');
@@ -64,11 +83,23 @@ export default function PolicyExceptionsPage() {
   const [hiddenCols, setHiddenCols] = useState<string[]>([]);
   const [pageNo, setPageNo] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [waitingOnly, setWaitingOnly] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
-  const [viewing, setViewing] = useState<ExceptionItem | null>(null);
+  const [viewing, setViewing] = useState<ExceptionItem | null>(null);       // the row that was opened: shown at once, then read again from the server
+  const [wanted, setWanted] = useState<number | null>(null);                // an exception an alert's link asked for (?open=), whether or not its row is loaded
   const [deciding, setDeciding] = useState<{ kind: DecisionKind; exception: ExceptionItem } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
-  useEffect(() => { setPageNo(1); }, [searchTerm, statusFilter, priorityFilter, pageSize, sort]);
+  useEffect(() => { setPageNo(1); }, [searchTerm, statusFilter, priorityFilter, pageSize, sort, waitingOnly]);
+
+  // An alert's link (/governance/exceptions?open=12) opens that exception. The page keeps nothing else in its address, so the link is used up once it has
+  // been taken: the address is cleaned (and the same alert opens it again when it is pressed again).
+  const openId = openIdOf(useSearchParams()?.toString());
+  useEffect(() => {
+    if (openId === null) return;
+    setViewing(null);
+    setWanted(openId);
+    window.history.replaceState(null, '', window.location.pathname + withoutOpen(window.location.search) + window.location.hash);
+  }, [openId]);
 
   // ── what the server sends ──
   const list = useQuery({
@@ -82,6 +113,24 @@ export default function PolicyExceptionsPage() {
     placeholderData: keepPreviousData,
     retry: (n, e) => n < 2 && canRetry(e),                          // a refusal (403) is not tried again: it is said at once
   });
+  // the ones that wait for this person to decide now (under an approval rule); it shares the list's refresh: a key that starts with 'policy-exceptions'
+  const waiting = useQuery({
+    queryKey: ['policy-exceptions', 'waiting-for-me'],
+    queryFn: async () => itemsOf<ExceptionItem>((await policyExceptionApi.waitingForMe()).data),
+    retry: (n, e) => n < 2 && canRetry(e),
+  });
+  // the exception whose details are open, read from the server as it is now (what was decided a moment ago, who it waits for): the row opened shows at once
+  const shownId = viewing?.id ?? wanted;
+  const one = useQuery({
+    queryKey: ['policy-exceptions', 'one', shownId],
+    queryFn: async () => (await policyExceptionApi.getById(shownId as number)).data as ExceptionItem,
+    enabled: shownId !== null,
+    initialData: viewing ?? undefined,
+    gcTime: 0,
+    retry: (n, e) => n < 2 && canRetry(e),
+  });
+  const shown = shownId !== null ? one.data ?? null : null;
+  const linkFailed = wanted !== null && viewing === null && shown === null && one.isError;
   const analytics = useQuery({
     queryKey: ['policy-exceptions-analytics'],
     queryFn: async () => (await policyExceptionApi.getAnalytics()).data as ExceptionAnalytics,
@@ -102,18 +151,19 @@ export default function PolicyExceptionsPage() {
   });
 
   // ── what is loaded, what the server holds, what is shown ──
-  const loaded = list.data ?? [];
   const filters: Filters = { status: statusFilter, priority: priorityFilter };
+  const view = waitingOnly ? waiting : list;                          // "Waiting for me" lists what the server says waits for the person (never cut); the filters narrow it here
+  const loaded = waitingOnly ? waitingRows(waiting.data ?? [], filters) : list.data ?? [];
   const settled = useRef(filters);                                    // while the rows of the previous filters are still on screen the counts are theirs
   if (!list.isPlaceholderData) settled.current = filters;
-  const server = serverList(loaded.length, settled.current, analytics.data);
-  const failed = list.isError && !list.data;
+  const server = waitingOnly ? { cut: false, total: loaded.length } : serverList(loaded.length, settled.current, analytics.data);
+  const failed = view.isError && !view.data;
   const searching = searchTerm.trim() !== '';
   const matches = searchExceptions(loaded, searchTerm);
   const sorted = sortLoaded(matches, sort);
   const pager = pagerOf(sorted.length, pageNo, pageSize);
   const pageRows = sorted.slice(pager.start, pager.end);
-  const notice = failed || list.isLoading ? null : cutNotice(loaded.length, server, settled.current);
+  const notice = failed || view.isLoading ? null : cutNotice(loaded.length, server, settled.current);
 
   // ── writes made from the register ──
   const submit = useReportedMutation({
@@ -131,21 +181,34 @@ export default function PolicyExceptionsPage() {
   const askDelete = async (e: ExceptionItem) => {
     if (await confirm({ title: 'Delete this exception?', message: truncate(e.title, 120).text, confirmLabel: 'Delete exception', tone: 'danger' })) remove.mutate(e);
   };
+  const withdraw = useReportedMutation({
+    mutationFn: (e: ExceptionItem) => policyExceptionApi.withdraw(e.id),
+    success: 'Withdrawn: it is a draft again',
+    failure: 'Not withdrawn',
+    invalidate: LIST_KEYS,
+  });
+  const askWithdraw = async (e: ExceptionItem) => {
+    if (await confirm({ title: 'Withdraw this exception?', message: 'It goes back to a draft. When it is submitted again its rule starts from the first step.', confirmLabel: 'Withdraw' })) withdraw.mutate(e);
+  };
 
   const openNew = (initial: ExceptionForm = emptyForm()) => setForm({ exception: null, initial, id: Date.now() });
   const openEdit = (e: ExceptionItem) => setForm({ exception: e, initial: formFrom(e), id: Date.now() });
   const raiseFor = (documentId: number, opts?: { title?: string; justification?: string; priority?: string }) => { setSuggesting(false); openNew(formForPolicy(documentId, opts)); };
-  const clearAll = () => { setSearchTerm(''); setStatusFilter(''); setPriorityFilter(''); };
+  const clearAll = () => { setSearchTerm(''); setStatusFilter(''); setPriorityFilter(''); setWaitingOnly(false); };
+  const openRow = (e: ExceptionItem) => { setWanted(null); setViewing(e); };
+  const closeDetails = () => { setViewing(null); setWanted(null); };
 
   // The ⋯ menu of a row: what the server lets the person do with it (rowActionKeys), never more.
   const actionsOf = (e: ExceptionItem) => {
     const allowed = rowActionKeys(e);
     const items: Array<MenuItem & { key: RowActionKey }> = [
-      { key: 'view', label: 'Details', icon: Eye, onSelect: () => setViewing(e) },
+      { key: 'view', label: 'Details', icon: Eye, onSelect: () => openRow(e) },
       { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => openEdit(e) },
       { key: 'submit', label: 'Submit for approval', icon: Send, onSelect: () => submit.mutate(e), disabled: submit.isPending },
       { key: 'approve', label: 'Approve', icon: Check, onSelect: () => setDeciding({ kind: 'approve', exception: e }) },
+      { key: 'changes', label: 'Ask for changes', icon: MessageSquare, onSelect: () => setDeciding({ kind: 'changes', exception: e }) },
       { key: 'reject', label: 'Reject', icon: XCircle, danger: true, onSelect: () => setDeciding({ kind: 'reject', exception: e }) },
+      { key: 'withdraw', label: 'Withdraw', icon: Undo2, onSelect: () => { void askWithdraw(e); }, disabled: withdraw.isPending },
       { key: 'revoke', label: 'Revoke', icon: Ban, onSelect: () => setDeciding({ kind: 'revoke', exception: e }) },
       { key: 'delete', label: 'Delete', icon: Trash2, danger: true, onSelect: () => { void askDelete(e); } },
     ];
@@ -160,7 +223,7 @@ export default function PolicyExceptionsPage() {
       key: 'policy', header: 'Policy', priority: 3, width: 'w-[128px]', card: 'meta',
       cell: (e) => { const p = e.document_title || e.policy_name; return p ? <span className="line-clamp-2" title={p}>{p}</span> : <span className="text-ds-fg-muted">Not set</span>; },
     },
-    { key: 'status', header: 'Status', sortable: true, width: 'w-[128px]', card: 'meta', cell: (e) => <StatusPill size="sm" {...statusPill(exceptionStatus, e.status)} /> },
+    { key: 'status', header: 'Status', sortable: true, width: 'w-[152px]', card: 'meta', cell: (e) => <StatusCell exception={e} /> },
     { key: 'priority', header: 'Priority', sortable: true, width: 'w-[96px]', card: 'meta', cell: (e) => <StatusPill size="sm" {...statusPill(priorityStatus, e.priority)} /> },
     { key: 'requester', header: 'Requester', priority: 3, width: 'w-[128px]', card: 'meta', cell: (e) => <PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /> },
     { key: 'created', header: 'Created', priority: 3, sortable: true, width: 'w-[100px]', cell: (e) => <span className="whitespace-nowrap tabular-nums">{momentDay(e.created_at)}</span> },
@@ -179,7 +242,7 @@ export default function PolicyExceptionsPage() {
     notify.success(csvDone(sorted.length, loaded.length, server));
   };
 
-  const firstUse = loaded.length === 0 && !statusFilter && !priorityFilter;
+  const firstUse = loaded.length === 0 && !statusFilter && !priorityFilter && !waitingOnly;
   const empty = firstUse ? (
     <EmptyState kind="firstUse" bare icon={Shield} title="No exceptions yet"
       action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => openNew()}>New exception</Button> : undefined} />
@@ -193,7 +256,7 @@ export default function PolicyExceptionsPage() {
         variant="page"
         title="Policy exceptions"
         info="Request, review, and manage policy exceptions"
-        meta={failed || list.isLoading ? undefined : countLabel(matches.length, loaded.length, searching, server)}
+        meta={failed || view.isLoading ? undefined : countLabel(matches.length, loaded.length, searching, server)}
         actions={(
           <>
             <Button leftIcon={<Sparkles aria-hidden />} onClick={() => setSuggesting(true)} title="Pick a policy and let AI suggest exceptions to raise">Suggest exceptions</Button>
@@ -203,6 +266,18 @@ export default function PolicyExceptionsPage() {
       />
 
       {notice && <ListNotice title={notice.title}>{notice.detail}</ListNotice>}
+
+      {linkFailed && (
+        <Notice tone="danger" title={`Couldn't open exception ${wanted}`}
+          action={(
+            <span className="flex flex-wrap gap-2">
+              {canRetry(one.error) && <Button onClick={() => { void one.refetch(); }}>Retry</Button>}
+              <Button onClick={() => setWanted(null)}>Dismiss</Button>
+            </span>
+          )}>
+          {errorMessage(one.error)}
+        </Notice>
+      )}
 
       <Summary query={analytics} />
 
@@ -225,6 +300,10 @@ export default function PolicyExceptionsPage() {
             </button>
           ) : undefined}
         />
+        {(waiting.data?.length || waitingOnly) ? (
+          <SegmentedControl label="Show" name="exceptions-scope" value={waitingOnly ? 'mine' : 'all'} onChange={(v) => setWaitingOnly(v === 'mine')}
+            options={[{ value: 'all', label: 'All' }, { value: 'mine', label: waitingLabel(waiting.data?.length ?? 0) }]} />
+        ) : null}
         <Select aria-label="Status" placeholder="All statuses" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-[168px]">
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
@@ -239,7 +318,7 @@ export default function PolicyExceptionsPage() {
         </div>
       </div>
 
-      <div aria-busy={list.isPlaceholderData || undefined} className={list.isPlaceholderData ? 'opacity-60' : undefined}>
+      <div aria-busy={view.isPlaceholderData || undefined} className={view.isPlaceholderData ? 'opacity-60' : undefined}>
         <RegisterTable<ExceptionItem>
           caption="Policy exceptions"
           columns={visible}
@@ -247,10 +326,10 @@ export default function PolicyExceptionsPage() {
           getRowId={(e) => e.id}
           sort={sort}
           onSortChange={setSort}
-          onRowActivate={setViewing}
-          selectedId={viewing?.id ?? null}
-          loading={list.isLoading}
-          error={failed ? { message: `Could not load the exceptions. ${errorMessage(list.error)}`, onRetry: canRetry(list.error) ? () => { void list.refetch(); } : undefined } : null}
+          onRowActivate={openRow}
+          selectedId={shownId}
+          loading={view.isLoading}
+          error={failed ? { message: `Could not load the exceptions. ${errorMessage(view.error)}`, onRetry: canRetry(view.error) ? () => { void view.refetch(); } : undefined } : null}
           empty={empty}
           cardTitle={(e) => (
             <div className="flex items-start justify-between gap-[8px]">
@@ -267,7 +346,10 @@ export default function PolicyExceptionsPage() {
 
       {suggesting && <SuggestDialog policies={policies} canCreate={canCreate} onClose={() => setSuggesting(false)} onRaise={raiseFor} />}
       {form && <ExceptionFormDrawer key={form.id} exception={form.exception} initial={form.initial} policies={policies} assets={assets} onClose={() => setForm(null)} />}
-      {viewing && <ExceptionDetailsDrawer key={viewing.id} exception={viewing} onClose={() => setViewing(null)} />}
+      {shown && (
+        <ExceptionDetailsDrawer key={shown.id} exception={shown} onClose={closeDetails} withdrawing={withdraw.isPending}
+          onDecide={(kind) => setDeciding({ kind, exception: shown })} onWithdraw={() => { void askWithdraw(shown); }} />
+      )}
       {deciding && <DecisionDialog key={`${deciding.kind}-${deciding.exception.id}`} kind={deciding.kind} exception={deciding.exception} onClose={() => setDeciding(null)} />}
       {confirmDialog}
     </div>

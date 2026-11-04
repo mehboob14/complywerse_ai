@@ -1,8 +1,9 @@
 'use client';
 
-// The details of one exception, in a drawer: who and when, the three long texts, what was decided and why, the linked assets (the first two and +N),
-// the comments, and "Move to risk register". Decisions are not made here (they are in the row's ⋯ menu, as they always were). On the design-system kit:
-// RightSlidePanel, StatusPill, PersonChip, Button, TextInput, Skeleton / ErrorState, useReportedMutation for the two writes.
+// The details of one exception, in a drawer: who and when, its department, the three long texts, what was decided and why, the approval under its rule
+// when it has one (_ApprovalPanel.tsx: the steps, who it waits for, and what the person asked may do), the linked assets (the first two and +N), the
+// comments, and "Move to risk register". Without a rule decisions are not made here (they are in the row's ⋯ menu, as they always were). On the
+// design-system kit: RightSlidePanel, StatusPill, PersonChip, Button, TextInput, Skeleton / ErrorState, useReportedMutation for the two writes.
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -14,7 +15,9 @@ import { RightSlidePanel } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, IconButton, PersonChip, SkeletonLines, StatusPill, TextInput, useReportedMutation } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
-import { dayText, momentDay, momentText, requesterOf } from './_logic';
+import { ApprovalPanel } from './_ApprovalPanel';
+import type { DecisionKind } from './_Decision';
+import { dayText, departmentOf, momentDay, momentText, requesterOf } from './_logic';
 import { cleanText, parseListish } from './_text';
 import type { ExceptionComment, ExceptionItem, LinkedAsset } from './_types';
 
@@ -79,7 +82,14 @@ function LinkedAssets({ assets }: { assets: LinkedAsset[] }) {
   );
 }
 
-export function ExceptionDetailsDrawer({ exception: e, onClose }: { exception: ExceptionItem; onClose: () => void }) {
+export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWithdraw, withdrawing }: {
+  exception: ExceptionItem;
+  onClose: () => void;
+  /** the page's dialogs for the person asked at the open step of its approval rule, and its question before Withdraw */
+  onDecide: (kind: Exclude<DecisionKind, 'revoke'>) => void;
+  onWithdraw: () => void;
+  withdrawing: boolean;
+}) {
   const router = useRouter();
   const [newComment, setNewComment] = useState('');
   const commentsKey = ['exception-comments', e.id];
@@ -109,6 +119,7 @@ export function ExceptionDetailsDrawer({ exception: e, onClose }: { exception: E
   const send = () => { if (newComment.trim() && !addComment.isPending) addComment.mutate(newComment.trim()); };
   const policy = e.document_title || e.policy_name;
   const approver = e.approver_name || e.approved_by_name;
+  const department = departmentOf(e);
 
   return (
     <RightSlidePanel
@@ -128,6 +139,9 @@ export function ExceptionDetailsDrawer({ exception: e, onClose }: { exception: E
       <div className="flex flex-col gap-[16px]">
         <dl className="grid grid-cols-1 gap-x-[16px] gap-y-[12px] sm:grid-cols-2">
           <Fact label="Policy">{policy || <Muted>{NOT_SET}</Muted>}</Fact>
+          <Fact label="Department">
+            {department ? <>{department.text}{department.inherited && <Muted> · From the policy</Muted>}</> : <Muted>{NOT_SET}</Muted>}
+          </Fact>
           <Fact label="Requester"><PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /></Fact>
           <Fact label="Effective date">{e.effective_date ? dayText(e.effective_date) : <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Expiry date">{e.expiry_date ? dayText(e.expiry_date) : <Muted>{NOT_SET}</Muted>}</Fact>
@@ -163,6 +177,10 @@ export function ExceptionDetailsDrawer({ exception: e, onClose }: { exception: E
         {e.rejection_reason && <Note label="Rejection reason" tone="danger"><RichText value={e.rejection_reason} /></Note>}
         {e.approval_comments && <Note label="Approval comments" tone="success"><RichText value={e.approval_comments} /></Note>}
         {e.revocation_reason && <Note label="Revocation reason" tone="neutral"><RichText value={e.revocation_reason} /></Note>}
+
+        {e.approval && (
+          <ApprovalPanel exception={e} approval={e.approval} onDecide={onDecide} onWithdraw={onWithdraw} withdrawing={withdrawing} />
+        )}
 
         <section className="border-t border-ds-border pt-[16px]">
           <h3 className="mb-[12px] flex items-center gap-2 !text-ds-section !text-ds-fg">
