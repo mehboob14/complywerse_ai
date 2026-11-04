@@ -32,6 +32,42 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-04 — Department tree and exception approval rules: four new tables, one new column (auto-applied)
+
+### What
+
+- **New table `grc_department_levels`** (`id`, `tenant_id` → `grc_tenants.id` ON DELETE CASCADE, `level` 1–3, `label`, `updated_by` → `grc_users.id`
+  ON DELETE SET NULL, `updated_at`; unique `(tenant_id, level)`). What an organisation calls the levels of its department tree; a level with
+  no row has its default name (Department / Sub-department / Unit). Model: `backend/grc/models/_92_department_levels.py`.
+  Departments themselves are unchanged: `grc_departments.parent_department_id` and `department_head_user_id` already existed; the depth
+  limit (three levels) is checked in code when a department is placed or moved, and nothing existing is rewritten.
+- **New tables `grc_exception_approval_rules`, `grc_exception_approval_runs`, `grc_exception_approval_decisions`** (model
+  `backend/grc/models/_93_exception_approvals.py`): the rules a tenant writes for who reviews and approves a policy exception (a department
+  at any level or the whole organisation, optional priorities and policy kinds, the steps as JSON), one run per submission of an exception
+  (the rule's steps copied at submit, the step it is at, the people asked now), and one row per decision (who, which step, what, when). Runs
+  and decisions are deleted with their exception (ON DELETE CASCADE).
+- **New column `grc_policy_exceptions.department_id`** (INTEGER, nullable, index `ix_pol_exc_department`, no foreign key): the unit an exception is
+  raised for; empty means its policy's department. Added by `schema_migrations._COLUMN_ADDS`, and by the exceptions router's own
+  `_ensure_columns` for tenants provisioned before.
+
+### Why
+
+The user asked for sub-departments and a third level under Governance Settings, a Documents Overview scoped by department, and approval/reviewer
+rules for policy exceptions per department, sub-department or unit.
+
+### How
+
+Nothing to run: `create_all` makes the four tables at a tenant's first start and the column is added by the startup schema step. Equivalent SQL
+for a manual replay: `ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER; CREATE INDEX IF NOT EXISTS
+ix_pol_exc_department ON grc_policy_exceptions (department_id);` and the four `CREATE TABLE`s from the two model files.
+
+### Risk
+
+None for existing data: every new object is additive, an exception no rule matches follows the older flow, and a tenant that never names the
+levels sees the defaults. A tenant that already holds a chain of departments deeper than three keeps it (read-only; only new placements are limited).
+
+---
+
 ## 2026-10-23 — Departments replace teams: one new table, one new column, a one-time link of teams to departments (auto-applied)
 
 ### What
