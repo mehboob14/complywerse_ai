@@ -92,7 +92,7 @@ export function roleItems(
   return out.sort((a, b) => byName(a.label, b.label));
 }
 
-/** The people to choose from (lead, new member), by name. */
+/** The people to choose from (owner, new member), by name. */
 export function userItems(users: readonly { id: number; display_name: string; email?: string | null }[] | null | undefined): PickItem[] {
   return (users ?? [])
     .map((u) => ({ value: String(u.id), label: u.display_name || u.email || `User ${u.id}`, subLabel: u.email || undefined }))
@@ -339,7 +339,7 @@ interface DepartmentRecord {
 
 const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id) => b.includes(id));
 
-/** The PATCH body for an edit: only what the person changed (a cleared description is sent as '', a cleared lead or parent as
+/** The PATCH body for an edit: only what the person changed (a cleared description is sent as '', a cleared owner or parent as
  *  null, which is how the server clears them). Empty: nothing to save. */
 export function departmentPatch(d: DepartmentRecord, f: DepartmentForm): Record<string, unknown> {
   const out: Record<string, unknown> = {};
