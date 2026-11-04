@@ -83,6 +83,7 @@ class ApprovalActionRequest(BaseModel):
 class LinkExistingEvidenceRequest(BaseModel):
     evidence_id: int
     workflow_id: Optional[int] = None
+    artifact: Optional[str] = None                       # the NIST assessment object this evidence answers (NIST assessments); None = the item as a whole
 
 
 class AssessmentContextRequest(BaseModel):
@@ -6266,6 +6267,7 @@ def get_item_evidence(
             "approval_status": link.status,
             "submitted_at": link.submitted_at.isoformat() if link.submitted_at else None,
             "created_at": link.created_at.isoformat(),
+            "artifact": link.artifact_ref,
             "source": "assessment_upload",
         }
         for link in evidence_links
@@ -6401,7 +6403,8 @@ def link_existing_item_evidence(
         tenant_id=item.tenant_id,
         workflow_id=workflow.id if workflow else None,
         current_tier=0,
-        status="draft"
+        status="draft",
+        artifact_ref=((payload.artifact or "").strip()[:300] or None)
     )
     db.add(evidence_link)
     db.commit()
@@ -6504,6 +6507,7 @@ async def upload_item_evidence(
     description: Optional[str] = Form(None),
     file: UploadFile = File(...),
     workflow_id: Optional[int] = Form(None),
+    artifact: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -6559,7 +6563,8 @@ async def upload_item_evidence(
         tenant_id=item.tenant_id,
         workflow_id=workflow.id if workflow else None,
         current_tier=0,
-        status="draft"
+        status="draft",
+        artifact_ref=((artifact or "").strip()[:300] or None)
     )
     db.add(evidence_link)
     db.commit()
@@ -6577,6 +6582,7 @@ async def upload_item_evidence(
         "workflow_id": evidence_link.workflow_id,
         "current_tier": evidence_link.current_tier,
         "approval_status": evidence_link.status,
+        "artifact": evidence_link.artifact_ref,
         "quality_pending": True,
         "message": "Evidence uploaded successfully"
     }

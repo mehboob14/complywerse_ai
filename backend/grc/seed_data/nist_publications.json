@@ -7,7 +7,7 @@
       "url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
       "summary": "The catalog of security and privacy controls: what to put in place, control by control.",
       "status": "Release 5.2.0 (August 2025) is on NIST's CPRT site.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a", "nist_csf2"],
       "templates": [
         {"name": "Control collaboration index template", "format": "xlsx", "note": "Who carries out each control: the organisation, the system or a provider.",
          "url": "https://csrc.nist.gov/files/pubs/sp/800/53/r5/upd1/final/docs/sp800-53-collaboration-index-template.xlsx"}
@@ -19,7 +19,7 @@
       "url": "https://csrc.nist.gov/pubs/sp/800/53/a/r5/final",
       "summary": "How to assess each SP 800-53 control: examine, interview and test procedures.",
       "status": "Release 5.2.0 (August 2025) is on NIST's CPRT site.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a"],
       "templates": []
     },
     {
@@ -27,7 +27,7 @@
       "title": "NIST Cybersecurity Framework 2.0",
       "url": "https://www.nist.gov/cyberframework",
       "summary": "Cybersecurity outcomes in six functions: Govern, Identify, Protect, Detect, Respond and Recover.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_csf2"],
       "templates": [
         {"name": "Organizational profile template", "format": "xlsx", "note": "Current and target profile side by side, to find the gaps.",
          "url": "https://www.nist.gov/document/csf-20-organizational-profile-template"}
@@ -119,7 +119,7 @@
       "title": "NIST SP 800-128, Security-Focused Configuration Management",
       "url": "https://csrc.nist.gov/pubs/sp/800/128/upd1/final",
       "summary": "Secure baseline configurations, change control and configuration monitoring.",
-      "serves": ["asvs_checklist", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a"],
       "templates": []
     },
     {
@@ -143,7 +143,7 @@
       "title": "NIST SP 800-137, Information Security Continuous Monitoring",
       "url": "https://csrc.nist.gov/pubs/sp/800/137/final",
       "summary": "A continuous monitoring strategy and programme: what to watch, how often, and how to respond.",
-      "serves": ["itsecops_maturity", "cti_maturity", "digital_ops_maturity"],
+      "serves": ["itsecops_maturity", "cti_maturity", "digital_ops_maturity", "nist_800_53a", "nist_csf2"],
       "templates": []
     },
     {
@@ -151,7 +151,7 @@
       "title": "NIST SP 800-61 Rev. 3, Incident Response Recommendations and Considerations",
       "url": "https://csrc.nist.gov/pubs/sp/800/61/r3/final",
       "summary": "Incident response across the CSF 2.0 functions: preparing for, detecting, responding to and recovering from incidents.",
-      "serves": ["csir_maturity", "incident_maturity"],
+      "serves": ["csir_maturity", "incident_maturity", "nist_csf2"],
       "templates": []
     },
     {
@@ -175,7 +175,7 @@
       "title": "NIST SP 800-34 Rev. 1, Contingency Planning Guide",
       "url": "https://csrc.nist.gov/pubs/sp/800/34/r1/upd1/final",
       "summary": "Contingency planning: business impact analysis, recovery plans, testing and maintenance.",
-      "serves": ["incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a", "nist_csf2"],
       "templates": [
         {"name": "Business impact analysis template", "format": "docx",
          "url": "https://csrc.nist.gov/files/pubs/sp/800/34/r1/upd1/final/docs/sp800-34-rev1_bia_template.docx",
@@ -207,7 +207,7 @@
       "title": "NIST SP 800-30 Rev. 1, Guide for Conducting Risk Assessments",
       "url": "https://csrc.nist.gov/pubs/sp/800/30/r1/final",
       "summary": "Conducting risk assessments: threat sources and events, vulnerabilities, likelihood, impact and risk.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a", "nist_csf2"],
       "templates": [
         {"name": "Risk assessment report elements", "format": "pdf", "note": "Appendix K of the publication; NIST calls these elements examples, not a required template.",
          "url": "https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-30r1.pdf",
@@ -225,7 +225,7 @@
       "url": "https://csrc.nist.gov/pubs/sp/800/18/r2/final",
       "summary": "Developing system security, privacy and cybersecurity supply chain risk management plans.",
       "status": "Rev. 2, June 2026; replaces Rev. 1.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a"],
       "templates": [
         {"name": "System security plan outline", "format": "docx",
          "url": "https://csrc.nist.gov/files/pubs/sp/800/18/r2/final/docs/sp800-18r2_system_security_plan_outline_example.docx",
@@ -252,7 +252,7 @@
       "title": "NIST SP 800-171 Rev. 3, Protecting Controlled Unclassified Information",
       "url": "https://csrc.nist.gov/pubs/sp/800/171/r3/final",
       "summary": "Security requirements for sensitive information held outside government systems.",
-      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity", "nist_800_53a"],
       "templates": [
         {"name": "System security plan template", "format": "docx", "note": "Published with Rev. 2.",
          "url": "https://csrc.nist.gov/files/pubs/sp/800/171/r2/upd1/final/docs/cui-ssp-template-final.docx"},

@@ -227,3 +227,27 @@ def test_a_nist_assessment_is_on_the_board_scored_as_a_checklist_and_in_the_audi
     assert rows and rows[0]["family"] == "checklist" and rows[0]["format"] == "nist_800_53a" and rows[0]["n_items"] == 149
     assert assessment_place("nist_800_53a") == ("Assessments", "Cyber Security") == assessment_place("nist_csf2")
     assert scoping.model_of("nist_csf2") == "system" and scoping.label_of("nist_800_53a") == "NIST SP 800-53A"
+
+
+def test_evidence_can_name_the_nist_object_it_answers(http, db, tmp_path, monkeypatch):
+    import sys
+
+    import grc.routers.compliance_assessments_router  # noqa: F401  (loads it)
+
+    old = sys.modules["grc.routers.compliance_assessments_router"]                                # the module, not the router the package re-exports under its name
+    monkeypatch.setattr(old, "_review_evidence_against_item", lambda *a, **k: None)             # no AI review in a test
+    monkeypatch.setattr(old, "EVIDENCE_UPLOAD_DIR", str(tmp_path))
+    aid = started(http, baseline="low")
+    item = items(http, aid)[0]
+    obj = item["assessment_data"]["methods"]["EXAMINE"][0]
+    up = http.post(f"{BASE}/{aid}/items/{item['id']}/evidence/upload", data={"name": "Access control policy v3", "artifact": obj}, files={"file": ("policy.txt", b"policy", "text/plain")})
+    assert up.status_code == 200 and up.json()["artifact"] == obj
+    plain = http.post(f"{BASE}/{aid}/items/{item['id']}/evidence/upload", data={"name": "Scan"}, files={"file": ("scan.txt", b"scan", "text/plain")})
+    assert plain.status_code == 200 and plain.json()["artifact"] is None                        # evidence of the control as a whole
+    library = m.Evidence(tenant_id=1, name="Account review", file_path="r.txt", file_name="r.txt", file_type="text/plain", status="draft")
+    db.add(library)
+    db.commit()
+    linked = http.post(f"{BASE}/{aid}/items/{item['id']}/evidence/link", json={"evidence_id": library.id, "artifact": "list of active system accounts"})
+    assert linked.status_code == 200
+    listing = http.get(f"{BASE}/{aid}/items/{item['id']}/evidence").json()["evidence"]
+    assert sorted((e["evidence_name"], e["artifact"]) for e in listing) == sorted([("Access control policy v3", obj), ("Scan", None), ("Account review", "list of active system accounts")])
