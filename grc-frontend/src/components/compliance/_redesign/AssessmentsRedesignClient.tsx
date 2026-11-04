@@ -6,9 +6,7 @@ import apiClient, { assetsApi, getTenantSlug } from '@/lib/api';
 import ComplianceAssessmentsModule from './ComplianceAssessmentsModule';
 import NcaTab from '@/components/compliance/NcaTab';
 import PDPLAssessmentTab from '@/components/compliance/PDPLAssessmentTab';
-import ASVSAssessmentTab from '@/components/compliance/ASVSAssessmentTab';
-import MobileAppSecurityTab from '@/components/compliance/MobileAppSecurityTab';
-import OwaspTestingTab from '@/components/compliance/OwaspTestingTab';
+import AssessmentTypePage from '@/components/compliance/scoping/AssessmentTypePage';
 import MaturityAssessmentTab from '@/components/compliance/MaturityAssessmentTab';
 import KpiReportTab from '@/components/compliance/KpiReportTab';
 import DpiaAssessmentTab from '@/components/compliance/DpiaAssessmentTab';
@@ -321,13 +319,14 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
   };
 
   const renderTab = (tabKey: string) => {
-    if (tabKey === 'asvs') return <ASVSAssessmentTab />;
-    if (tabKey === 'cs_mobile') return <MobileAppSecurityTab />;
-    if (tabKey === 'owasp_testing') return <OwaspTestingTab />;
-    if (tabKey === 'cs_csir') return <MaturityAssessmentTab format="csir_maturity" />;
-    if (tabKey === 'cs_cti') return <MaturityAssessmentTab format="cti_maturity" />;
-    if (tabKey === 'cs_itsecops') return <MaturityAssessmentTab format="itsecops_maturity" />;
-    if (tabKey === 'cs_incident') return <MaturityAssessmentTab format="incident_maturity" />;
+    // the Cyber Security types open on their own page (what to have ready, the questionnaire, the assessments made from it, Start)
+    if (tabKey === 'asvs') return <AssessmentTypePage format="asvs_checklist" />;
+    if (tabKey === 'cs_mobile') return <AssessmentTypePage format="mobile_app_security" />;
+    if (tabKey === 'owasp_testing') return <AssessmentTypePage format="owasp_v4_testing_checklist" />;
+    if (tabKey === 'cs_csir') return <AssessmentTypePage format="csir_maturity" />;
+    if (tabKey === 'cs_cti') return <AssessmentTypePage format="cti_maturity" />;
+    if (tabKey === 'cs_itsecops') return <AssessmentTypePage format="itsecops_maturity" />;
+    if (tabKey === 'cs_incident') return <AssessmentTypePage format="incident_maturity" />;
     if (tabKey === 'digital_ops_maturity') return <MaturityAssessmentTab format="digital_ops_maturity" />;
     if (tabKey === 'cs_kpi') return <KpiReportTab />;
     if (tabKey === 'dpia') return <DpiaAssessmentTab />;

@@ -40,7 +40,7 @@ interface Item {
   asset_status?: Record<string, string>;
   assignees?: Assignee[];
 }
-interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; asset_levels?: Record<string, number>; }
+interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; asset_levels?: Record<string, number>; scope_model?: string | null; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
 
 // Pull "ASVS Level: 1 | CWE: 285 | NIST: 5.1.1.2" out of the remarks blob.
@@ -133,7 +133,8 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   );
 }
 
-export default function ASVSAssessmentTab() {
+/** `assessmentId`: the assessment to show (made for one application); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function ASVSAssessmentTab({ assessmentId, allowUpload = true }: { assessmentId?: number; allowUpload?: boolean } = {}) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -145,10 +146,11 @@ export default function ASVSAssessmentTab() {
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['asvs-assessments'],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: ASVS_FORMAT } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: ASVS_FORMAT, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['asvs-detail', activeId],
@@ -160,14 +162,17 @@ export default function ASVSAssessmentTab() {
   const linkedIds: number[] = detail?.linked_asset_ids ?? [];
   // Which in-scope asset's results we're viewing/editing. Defaults to the first.
   const [selectedAsset, setSelectedAsset] = useState<number | null>(null);
-  const activeAsset = selectedAsset ?? (linkedIds.length ? linkedIds[0] : null);
+  // An assessment made for one application (scope_model set) is that application's own: its answers are the assessment's, not a per-asset layer.
+  const scoped = !!detail?.scope_model;
+  const activeAsset = scoped ? null : (selectedAsset ?? (linkedIds.length ? linkedIds[0] : null));
   // A requirement's status FOR THE ACTIVE ASSET (falls back to the global one
   // when the assessment has no assets in scope).
   const statusOf = (it: Item): string => (activeAsset != null ? (it.asset_status?.[String(activeAsset)] ?? 'in_progress') : it.compliance_status);
 
   // Per-asset target ASVS level (AI-suggested, user-overridable) + scope filter.
   const assetLevels: Record<string, number> = detail?.asset_levels ?? {};
-  const targetLevel: number | null = activeAsset != null ? (assetLevels[String(activeAsset)] ?? null) : null;
+  const levelAsset = scoped ? (linkedIds[0] ?? null) : activeAsset;
+  const targetLevel: number | null = levelAsset != null ? (assetLevels[String(levelAsset)] ?? null) : null;
   const [scopeMode, setScopeMode] = useState<'hide' | 'show'>('hide');
   const reqLevel = (it: Item) => Number(meta(it.remarks).level || 1);
   const inScope = (it: Item) => (targetLevel == null ? true : reqLevel(it) <= targetLevel);
@@ -305,7 +310,7 @@ export default function ASVSAssessmentTab() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload ASVS Excel' : 'Upload ASVS Excel'}
           </button>
           {activeId && (
@@ -328,7 +333,8 @@ export default function ASVSAssessmentTab() {
       ) : (
         <>
           {/* Assets in scope — the application(s)/system(s) this ASVS verifies */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          {!scoped && (
+<div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="mb-2 flex items-center gap-2">
               <Server className="h-4 w-4 text-slate-400" />
               <h4 className="text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Assets in scope</h4>
@@ -363,6 +369,7 @@ export default function ASVSAssessmentTab() {
               {saveAssets.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
             </div>
           </div>
+)}
 
           {/* Per-asset target level + scope toggle */}
           {activeAsset != null && (

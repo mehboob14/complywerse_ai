@@ -125,7 +125,8 @@ function EvidencePanel({ assessmentId, itemId }: { assessmentId: number; itemId:
   );
 }
 
-export default function MaturityAssessmentTab({ format }: { format: string }) {
+/** `assessmentId`: the assessment to show (made for one function); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function MaturityAssessmentTab({ format, assessmentId, allowUpload = true }: { format: string; assessmentId?: number; allowUpload?: boolean }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -137,10 +138,11 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['maturity-assessments', format],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: format } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: format, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['maturity-detail', activeId],
@@ -226,7 +228,7 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload Excel' : 'Upload Excel'}
           </button>
           {activeId && (

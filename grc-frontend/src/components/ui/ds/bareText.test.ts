@@ -27,9 +27,13 @@ const FOLDERS = [
   `${ROOT}/is-projects`,                          // G4-F2 Projects
   `${ROOT}/governance/mappings`,                  // G4-G Policy-Control Mappings (standalone and the document's Mappings view)
   `${ROOT}/admin/ui-kit`,                         // the style guide, which documents this rule
+  'src/components/compliance/scoping',            // Cyber Security assessments: the type pages, the scoping workspace (components, not a page folder)
 ];
 /** Single files of a migrated group whose folder holds other things. */
-const FILES = [`${ROOT}/governance/page.tsx`, `${ROOT}/governance/kpi-report/page.tsx`];
+const FILES = [
+  `${ROOT}/governance/page.tsx`, `${ROOT}/governance/kpi-report/page.tsx`,
+  `${ROOT}/cyber-security/assessments/[id]/page.tsx`, `${ROOT}/cyber-security/questionnaires/[format]/page.tsx`,   // the Cyber Security assessment and questionnaire pages (the hub itself is the old look)
+];
 
 /** Every exception, with the reason. `contains` is a piece of the opening tag; an entry that matches nothing fails the test, so the list cannot go stale. */
 const ALLOWED: Array<{ file: string; contains: string; why: string }> = [];

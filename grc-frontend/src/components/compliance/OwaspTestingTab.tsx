@@ -40,7 +40,7 @@ interface Item {
   evidence_count?: number;
   assignees?: Assignee[];
 }
-interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; }
+interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; scope_model?: string | null; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
 
 // Pull "Tools: … | Note: … | Desc: …" out of the remarks blob (Desc is last and
@@ -133,7 +133,8 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   );
 }
 
-export default function OwaspTestingTab() {
+/** `assessmentId`: the assessment to show (made for one application); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function OwaspTestingTab({ assessmentId, allowUpload = true }: { assessmentId?: number; allowUpload?: boolean } = {}) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -145,10 +146,11 @@ export default function OwaspTestingTab() {
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['owasp-assessments'],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: OWASP_FORMAT } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: OWASP_FORMAT, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['owasp-detail', activeId],
@@ -166,6 +168,7 @@ export default function OwaspTestingTab() {
   // Target application under test — OWASP testing verifies a web app, which is an
   // application asset. Lightweight link (reverse view lives on the asset page).
   const linkedIds: number[] = detail?.linked_asset_ids ?? [];
+  const scoped = !!detail?.scope_model;                    // made for one application: its target is in the scope, not picked here
   const { data: assets = [] } = useQuery<Asset[]>({
     queryKey: ['it-assets-list'],
     queryFn: async () => (await assetsApi.getAll({ limit: 500 })).data as Asset[],
@@ -263,7 +266,7 @@ export default function OwaspTestingTab() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload OWASP Excel' : 'Upload OWASP Excel'}
           </button>
           {activeId && (
@@ -286,7 +289,8 @@ export default function OwaspTestingTab() {
       ) : (
         <>
           {/* Target application (asset link) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          {!scoped && (
+<div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="mb-2 flex items-center gap-2">
               <Server className="h-4 w-4 text-slate-400" />
               <h4 className="text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Target application</h4>
@@ -318,6 +322,7 @@ export default function OwaspTestingTab() {
               {saveAssets.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
             </div>
           </div>
+)}
 
           {/* KPIs */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

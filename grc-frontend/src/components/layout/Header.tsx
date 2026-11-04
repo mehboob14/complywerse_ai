@@ -278,6 +278,14 @@ export default function Header() {
               </div>
             );
           }
+          // An assessment of the Cyber Security module, or one type's questionnaire, names itself in the body: the bar says which module it belongs to.
+          if (!info && /^\/cyber-security\/(assessments|questionnaires)\/[^/]+$/.test(pathname ?? '')) {
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <Link href="/cyber-security" className="font-semibold text-[var(--color-text)]">Cyber Security</Link>
+              </div>
+            );
+          }
           if (!info) return null;
           // Pages that render their own big heading in the body (redesign kit)
           // get a breadcrumb here instead of a repeated title+subtitle, so the

@@ -43,7 +43,7 @@ interface Item {
   evidence_count?: number;
   assignees?: Assignee[];
 }
-interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; }
+interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; scope_model?: string | null; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
 
 // Pull "Platform: Android | MASVS: L1,L2 | MSTG: MSTG-ARCH-1 | Testing: …" out
@@ -145,7 +145,8 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   );
 }
 
-export default function MobileAppSecurityTab() {
+/** `assessmentId`: the assessment to show (made for one application); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function MobileAppSecurityTab({ assessmentId, allowUpload = true }: { assessmentId?: number; allowUpload?: boolean } = {}) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -158,10 +159,11 @@ export default function MobileAppSecurityTab() {
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['masvs-assessments'],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: MASVS_FORMAT } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: MASVS_FORMAT, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['masvs-detail', activeId],
@@ -189,6 +191,7 @@ export default function MobileAppSecurityTab() {
   // so the audit is traceable from the IT-asset side (reverse view). One
   // assessment = one app, so this is a tag, not a per-asset results switch.
   const linkedIds: number[] = detail?.linked_asset_ids ?? [];
+  const scoped = !!detail?.scope_model;                    // made for one application: its target is in the scope, not picked here
   const { data: assets = [] } = useQuery<Asset[]>({
     queryKey: ['it-assets-list'],
     queryFn: async () => (await assetsApi.getAll({ limit: 500 })).data as Asset[],
@@ -305,7 +308,7 @@ export default function MobileAppSecurityTab() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload MASVS Excel' : 'Upload MASVS Excel'}
           </button>
           {activeId && (
@@ -329,7 +332,8 @@ export default function MobileAppSecurityTab() {
         <>
           {/* App under test (asset link) + platform toggle */}
           <div className="flex flex-col gap-3 lg:flex-row">
-            <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
+            {!scoped && (
+<div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
                 <Server className="h-4 w-4 text-slate-400" />
                 <h4 className="text-[12.5px] font-bold uppercase tracking-wide text-slate-500">App under test</h4>
@@ -361,6 +365,7 @@ export default function MobileAppSecurityTab() {
                 {saveAssets.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
               </div>
             </div>
+)}
 
             {platforms.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-white p-4">
