@@ -3007,6 +3007,7 @@ NEW:
             match_records.append({
                 "suggested_title": suggested_title,
                 "matched_existing_id": matched_doc.get("id"),
+                "matched_session_id": matched_doc.get("session_id"),
                 "matched_existing_title": matched_doc.get("title"),
                 "matched_existing_doc_type": matched_doc.get("doc_type"),
                 "matched_existing_status": matched_doc.get("status"),
@@ -3075,6 +3076,21 @@ def _fetch_existing_documents_for_frameworks(
             "framework_ids": list(normalized),
             "is_framework_tagged": is_framework_tagged,
         })
+    # A document being written in the AI Studio (a new draft not yet moved to the library) is one the organisation is building: suggesting it
+    # again would be noise. It has no library id; the session says where to find it.
+    from ....models import StudioSession
+
+    try:
+        drafts = db.query(StudioSession).filter(StudioSession.kind == "new", StudioSession.status == "active", StudioSession.document_id.is_(None))
+        if requested_doc_type:
+            drafts = drafts.filter(StudioSession.doc_type == requested_doc_type)
+        for s in drafts.order_by(StudioSession.id).all():
+            if (s.title or "").strip() and (s.title or "").strip().lower() != "untitled document":
+                out.append({"id": None, "session_id": s.id, "title": s.title, "doc_type": s.doc_type, "status": "studio_draft",
+                            "framework_ids": [], "is_framework_tagged": False})
+    except Exception:  # noqa: BLE001  (a tenant database without the studio's tables: the library's documents are still the answer)
+        db.rollback()
+        logger.warning("[ai-suggest] the studio's drafts could not be read; suggestions are checked against the library only", exc_info=True)
     # Surface framework-tagged docs first, then everything else. Stable order
     # within each group.
     out.sort(key=lambda d: (0 if d["is_framework_tagged"] else 1, d["title"] or ""))
@@ -3163,7 +3179,7 @@ def suggest_policies_for_framework(
     doc_type_instruction = (
         f"Suggest only {requested_doc_type} documents. Do not include any other document types."
         if requested_doc_type
-        else "Cover policy, standard, procedure, and guideline needs systematically."
+        else "Cover policy, standard, procedure, and guideline needs systematically, and a charter where the framework calls for a governing body."
     )
     suggestion_count_instruction = (
         "Provide 12-20 suggestions, ordered by priority (high first)."
@@ -3278,6 +3294,7 @@ Return a compact JSON object with EXACTLY this structure:
                     skipped_matches.append({
                         "suggested_title": title,
                         "matched_existing_id": matched.get("id"),
+                        "matched_session_id": matched.get("session_id"),
                         "matched_existing_title": matched.get("title"),
                         "matched_existing_doc_type": matched.get("doc_type"),
                         "matched_existing_status": matched.get("status"),
@@ -3306,6 +3323,7 @@ Return a compact JSON object with EXACTLY this structure:
                     skipped_matches.append({
                         "suggested_title": title,
                         "matched_existing_id": matched_doc.get("id"),
+                        "matched_session_id": matched_doc.get("session_id"),
                         "matched_existing_title": matched_doc.get("title"),
                         "matched_existing_doc_type": matched_doc.get("doc_type"),
                         "matched_existing_status": matched_doc.get("status"),
@@ -3357,7 +3375,7 @@ Return a compact JSON object with EXACTLY this structure:
             # Surface the gap-awareness summary so the UI can show "12 already
             # covered" alongside "18 missing documents to create".
             result["already_covered"] = [
-                {"id": d["id"], "title": d["title"], "doc_type": d["doc_type"], "status": d["status"]}
+                {"id": d["id"], "session_id": d.get("session_id"), "title": d["title"], "doc_type": d["doc_type"], "status": d["status"]}
                 for d in existing_documents
             ]
             result["already_covered_count"] = len(existing_documents)

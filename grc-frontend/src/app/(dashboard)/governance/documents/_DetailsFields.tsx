@@ -162,7 +162,8 @@ function Field({ label, wide, note, info, children }: { label: string; wide?: bo
   );
 }
 
-export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; tenantId?: number }) {
+/** `types`: the types the Type field offers (the studio's whole-document draft writes five of the six: the library's own list is the default). */
+export function DocumentDetailsFields({ d, tenantId, types: offered }: { d: DocumentDetails; tenantId?: number; types?: [string, string][] }) {
   const { form, set, from } = d;
   const usersQ = useOrgUsers(tenantId);
   const deptQ = useOrgDepartments();
@@ -187,7 +188,7 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
     : null);
   const one = (v: number | null) => (v == null ? [] : [String(v)]);
   const toId = (vals: string[]) => (vals[0] ? Number(vals[0]) : null);
-  const types = withCurrent(DOC_TYPES, form.doc_type, titleCase);
+  const types = withCurrent(offered ?? DOC_TYPES, form.doc_type, titleCase);
   const classes = withCurrent(CLASSES, form.classification, titleCase);
   const cycles = withCurrent(CYCLES, form.review_cycle_months, (n) => `Every ${n} months`);
 

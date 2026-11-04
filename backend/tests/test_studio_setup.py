@@ -41,9 +41,9 @@ def test_the_setup_is_kept_as_instructions_and_read_by_every_call(world):
     for line in ("Type of organisation: Commercial bank", "Country: Pakistan", "Regulators it answers to: State Bank of Pakistan (SBP)",
                  "Laws, regulations and circulars it must follow: BPRD Circular No. 05 of 2017",
                  "Subject areas it must cover: Asset management; Access control and identity", "Departments and units it applies to: IT Operations",
-                 "Length: Short: the essentials, about 1 to 3 pages", "Classification: Confidential", "Review cycle: Every two years", "Audience: All staff"):
+                 "Length: Short: the essentials, about 2 to 4 pages", "Classification: Confidential", "Review cycle: Every two years", "Audience: All staff"):
         assert line in text, line
-    assert setup.length_factor(saved) == 0.4 and setup.review_months(saved) == 24 and setup.length_factor({}) == 1.0
+    assert setup.length_factor(saved) == 0.3 and setup.review_months(saved) == 24 and setup.length_factor({}) == 1.0
 
 
 def test_the_research_and_the_questions_follow_the_setup(drafts):
@@ -67,7 +67,7 @@ def test_the_length_the_type_of_organisation_and_the_review_cycle_shape_the_draf
     drafts.http.patch(drafts.api(f"/sessions/{s['id']}"), json={"instructions": dict(SETUP, entity_type="Insurance or takaful company")})
     done = finished(drafts, s["id"], drafts.http.post(drafts.api(f"/sessions/{s['id']}/draft"), json={}).json()["id"])
     plan = calls[0]
-    assert "words (target length, 120 to 260" in plan["task"]                                       # 300-650 words an area, at 0.4
+    assert "words (target length, 90 to 195" in plan["task"]                                        # 300-650 words an area, at 0.3
     purpose = next(c["task"] for c in calls if 'heading="Purpose"' in c["task"])
     assert "About " in purpose and int(purpose.split("About ")[1].split(" words")[0]) < 200           # a short document's sections are short
     assert "the Insurer" in json.dumps(plan["body"]["system"])                                       # written as an insurer, not a bank
