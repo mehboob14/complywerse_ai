@@ -168,6 +168,21 @@ export function expiringSoon(d: Pick<LibDoc, 'status' | 'version_in_force' | 'ex
   return now.getTime() <= at.getTime() && at.getTime() <= now.getTime() + EXPIRY_DAYS * DAY;
 }
 
+// ─── Attention (what the Documents Overview opens) ────────────────────────────────────────────────────────────────────────
+
+/** The documents the Documents Overview names that no other filter can find: they depend on who has been asked and who is late, which only the server knows
+ *  (GET /governance/document-overview/ids?kind=). `?attn=<kind>` keeps the documents the server lists for it; any other value is ignored. */
+export const ATTENTION_KINDS = ['stuck', 'on_hold', 'late_approvals', 'late_acknowledgements'] as const;
+export type AttentionKind = (typeof ATTENTION_KINDS)[number];
+/** The words of the filter's chip; the Overview's Issues say the same. */
+export const ATTENTION_LABEL: Record<AttentionKind, string> = {
+  stuck: 'Stuck in a stage', on_hold: 'On hold', late_approvals: 'Late approvals', late_acknowledgements: 'Late acknowledgements',
+};
+const isAttention = (v: string | null): v is AttentionKind => !!v && (ATTENTION_KINDS as readonly string[]).includes(v);
+
+/** The department the server counts the documents of: the one department the Department filter is on ('none' for no department), else none given (the server's own default). */
+export const attentionDepartment = (f: Pick<Filters, 'departments'>): string => (f.departments.length === 1 ? f.departments[0] : '');
+
 export interface Health { reviewable: number; upToDate: number; dueSoon: number; overdue: number; unscheduled: number }
 
 /** The "Document health" card: the documents a review is owed on, by where their review date stands. */
@@ -309,18 +324,20 @@ export interface Filters {
   mine: boolean;
   /** expiring in the next 30 days (the overview's counter; off unless the address or the filter list asks, `?expiry=30d`) */
   expiring: boolean;
+  /** only what the Documents Overview names (stuck, late approvals ...): the server says which, `?attn=` */
+  attention: AttentionKind | null;
 }
 
 export const NO_FILTERS: Filters = {
   search: '', types: [], statuses: [], owners: [], departments: [], frameworks: [], review: [], attestation: [], classifications: [], mine: false,
-  expiring: false,
+  expiring: false, attention: null,
 };
 
-export type FacetKey = Exclude<keyof Filters, 'search' | 'mine' | 'expiring'>;
+export type FacetKey = Exclude<keyof Filters, 'search' | 'mine' | 'expiring' | 'attention'>;
 
 /** How many things are being filtered on (the search counts one). */
 export function filterCount(f: Filters): number {
-  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0) + (f.expiring ? 1 : 0)
+  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0) + (f.expiring ? 1 : 0) + (f.attention ? 1 : 0)
     + (['types', 'statuses', 'owners', 'departments', 'frameworks', 'review', 'attestation', 'classifications'] as FacetKey[])
       .reduce((n, k) => n + (f[k].length ? 1 : 0), 0);
 }
@@ -355,7 +372,11 @@ export function searchTerms(q: string): string[] {
   return fold(q).split(/\s+/).filter(Boolean);
 }
 
-export interface MatchContext extends Lookups { now: Date }
+export interface MatchContext extends Lookups {
+  now: Date;
+  /** the documents the server names for the Attention filter (`?attn=`); none until it has answered, and then that filter keeps nothing */
+  attention?: ReadonlySet<number> | null;
+}
 
 /** Whether a document passes every filter: one facet keeps the documents that have ANY of the values chosen in it; the facets
  *  together all have to hold. */
@@ -376,6 +397,7 @@ export function matchesFilters(d: LibDoc, f: Filters, ctx: MatchContext): boolea
   }
   if (f.attestation.length && !f.attestation.includes(attestationBucket(ctx.coverage[d.id]))) return false;
   if (f.expiring && !expiringSoon(d, ctx.now)) return false;
+  if (f.attention && !ctx.attention?.has(d.id)) return false;
   if (f.mine && !(ctx.me != null && (d.owner_id === ctx.me || d.author_id === ctx.me))) return false;
   const terms = searchTerms(f.search);
   if (terms.length) {
@@ -487,6 +509,7 @@ export function toParams(state: LibraryState): URLSearchParams {
   for (const [key, name] of LISTS) if (f[key].length) p.set(name, f[key].join(','));
   if (f.mine) p.set('mine', '1');
   if (f.expiring) p.set('expiry', EXPIRY_PARAM);
+  if (f.attention) p.set('attn', f.attention);
   if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) p.set('sort', `${sort.key}:${sort.dir}`);
   return p;
 }
@@ -503,6 +526,8 @@ export function fromParams(p: URLSearchParams): LibraryState {
   f.statuses = nextStatuses([], f.statuses);
   f.mine = p.get('mine') === '1';
   f.expiring = p.get('expiry') === EXPIRY_PARAM;
+  const attn = p.get('attn');
+  f.attention = isAttention(attn) ? attn : null;                       // a kind this page does not know is ignored, never an error
   const [key, dir] = (p.get('sort') ?? '').split(':');
   const sort: Sort = (SORT_KEYS as string[]).includes(key) && (dir === 'asc' || dir === 'desc') ? { key: key as SortKey, dir } : DEFAULT_SORT;
   return { filters: f, sort };
@@ -520,7 +545,7 @@ export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
 
 /** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
  *  `open` is the document peeked at in the drawer; `view` the layout. */
-export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'sort', 'open', 'id', 'view'];
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'attn', 'sort', 'open', 'id', 'view'];
 
 /** The address with the library's keys replaced by this state (and the open document, and the layout when the person has chosen
  *  one); every other key is kept as it was. */

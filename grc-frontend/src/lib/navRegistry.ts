@@ -22,6 +22,7 @@
 //   /governance                              Overview           Governance Overview + subtitle           Governance Overview           -                                        Overview; title "Governance Overview" (same)
 //   /governance/documents                    Documents          tabs                                     Document library              tab Documents; back "Documents"          Documents
 //   /governance/documents/:id                -                  tabs                                     the document's title          back "Documents"                         Document
+//   /governance/documents/overview           -                  tabs                                     Overview                      tab Overview, after Documents            Overview (the library at a glance, by department)
 //   /governance/documents/studio             -                  tabs                                     Comply AI Studio              tab Comply AI Studio                     Comply AI Studio
 //   /governance/documents/studio/:sessionId  -                  tabs                                     the draft's title (editable)  back "Studio"                            Studio draft
 //   /governance/documents/attestation        -                  tabs                                     Attestation                   tab Attestation                          Attestation
@@ -150,17 +151,18 @@ const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): R
 
 const pages: RouteEntry[] = [
   gov(`${DOCS}/:id`, 'Document', { parent: DOCS, hidden: 'opens from a library row or its drawer, a task, a notification or an e-mail link' }),
-  gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 2, studio: true, claims: `${DOCS}/:id` } }),
+  gov(`${DOCS}/overview`, 'Overview', { parent: DOCS, tab: { area: 'documents', id: 'overview', order: 2 } }),
+  gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 3, studio: true, claims: `${DOCS}/:id` } }),
   gov(`${DOCS}/studio/:sessionId`, 'Studio draft', { parent: `${DOCS}/studio`, hidden: 'opens from the Studio start page ("Your work") or from a document' }),
-  gov(ATTEST, 'Attestation', { parent: DOCS, tab: { area: 'documents', id: 'attestation', order: 3 } }),
+  gov(ATTEST, 'Attestation', { parent: DOCS, tab: { area: 'documents', id: 'attestation', order: 4 } }),
   gov('/governance/attestations', 'Attestation', { aliasOf: ATTEST, subtitle: 'Document acknowledgment campaigns' }),
   gov('/governance/attestations/campaigns', 'Attestation Campaigns', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/campaigns/:id', 'Attestation Campaign', { parent: '/governance/attestations/campaigns', hidden: 'opens from the legacy campaign list' }),
   gov('/governance/attestations/my', 'My Attestations', { parent: ATTEST, hidden: 'legacy page: no link opens it, kept for a typed or bookmarked URL' }),
   gov('/governance/attestations/complete/:id', 'Complete Attestation', { parent: '/governance/attestations/my', hidden: 'opens from the legacy My Attestations list' }),
-  gov('/governance/exceptions', 'Policy exceptions', { shortLabel: 'Exceptions', parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 5 } }),
-  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 6, permission: 'governance:settings:*' } }),
-  gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 4 }, keywords: ['Reviews', 'Review Calendar'] }),
+  gov('/governance/exceptions', 'Policy exceptions', { shortLabel: 'Exceptions', parent: DOCS, tab: { area: 'documents', id: 'exceptions', order: 6 } }),
+  gov('/governance/settings', 'Governance settings', { shortLabel: 'Settings', parent: DOCS, tab: { area: 'documents', id: 'settings', order: 7, permission: 'governance:settings:*' } }),
+  gov('/governance/reviews', 'Document Reviews', { shortLabel: 'Reviews', parent: DOCS, tab: { area: 'documents', id: 'reviews', order: 5 }, keywords: ['Reviews', 'Review Calendar'] }),
   gov('/governance/reviews/calendar', 'Document Reviews', { aliasOf: '/governance/reviews' }),
   gov('/governance/mappings', 'Policy-Control Mappings', { parent: DOCS, hidden: 'no link opens it; a document shows the same view as its Mappings tab', ownHeading: true }),
   gov('/governance/workflows', 'Approval Workflows', { parent: DOCS, hidden: 'opens only from a document\'s menu ("Older approval requests") where the document lifecycle is off', ownHeading: true }),

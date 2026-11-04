@@ -37,6 +37,15 @@ export async function fetchDocuments(params?: DocListParams): Promise<DocListRes
   return data as DocListResponse;
 }
 
+/** The documents the Documents Overview names for one of its figures (GET /governance/document-overview/ids): what the Attention filter (`?attn=`) keeps.
+ *  `department`: the one department the library is filtered to ('none' for none; '' lets the server choose its own scope). */
+export async function fetchAttention(kind: string, department: string): Promise<{ ids: number[]; total: number }> {
+  const res = await apiClient.get('/governance/document-overview/ids', { params: { kind, ...(department ? { department_id: department } : {}) } });
+  const d = res.data as { ids?: number[]; total?: number };
+  const ids = Array.isArray(d.ids) ? d.ids : [];
+  return { ids, total: typeof d.total === 'number' ? d.total : ids.length };
+}
+
 export interface OverdueReviewItem {
   id: number;
   document_code: string | null;

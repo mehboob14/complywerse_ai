@@ -62,6 +62,8 @@ export interface LibraryFiltersProps {
   /** the layout: the register table, or a folder for each department */
   view: LibraryViewId;
   onView: (view: LibraryViewId) => void;
+  /** how many documents the server names for the Attention filter (`?attn=`), said on its chip; null until it has answered */
+  attentionTotal?: number | null;
 }
 
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
@@ -397,11 +399,11 @@ function ViewsPanel({ views, activeViewId, canSave, onApply, onSave, onDelete, a
 
 export function LibraryFilters({
   filters, onChange, options, canFilterMine, shown, total, listSize, loading = false, views, activeViewId, onApplyView, onSaveView, onDeleteView,
-  columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport, view, onView,
+  columns, onToggleColumn, onResetColumns, density, onDensity, onExport, canExport, view, onView, attentionTotal = null,
 }: LibraryFiltersProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const filtering = filterCount(filters) > 0;
-  const chips = filterChips(filters, options);
+  const chips = filterChips(filters, options, { attentionTotal });
   const moreCount = filters.review.length + filters.attestation.length + filters.classifications.length + (filters.expiring ? 1 : 0);
   const activeView = views.find((v) => v.id === activeViewId) ?? null;
   const namedView = activeView && activeView.id !== 'all' ? activeView : null;      // "All documents" is the plain state: no name on the button
