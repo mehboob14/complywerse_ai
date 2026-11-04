@@ -15,12 +15,13 @@ import { createPortal } from 'react-dom';
 import { Bookmark, Check, ChevronDown, Columns3, Download, Plus, Search, SlidersHorizontal, UserRound, X } from 'lucide-react';
 import { Button, Checkbox, SegmentedControl, TextInput } from '@/components/ui/ds';
 import { buttonClasses, iconButtonClasses } from '@/components/ui/ds/buttonStyles';
+import { InfoTip } from '@/components/ui/InfoTip';
 import {
   ATTESTATION_BUCKETS, ATTESTATION_LABEL, NO_FILTERS, REVIEW_BUCKETS, REVIEW_BUCKET_LABEL, filterCount, nextStatuses,
   type AttestationBucket, type Filters, type LibraryViewId, type Option, type ReviewBucket, type SavedView,
 } from './libraryModel';
 import type { Density } from './libraryPrefs';
-import { EXPIRING_LABEL, filterChips, removeChip, validViewName, type FilterOptions } from './libraryFiltersLogic';
+import { DEPARTMENT_FILTER_NOTE, EXPIRING_LABEL, filterChips, removeChip, validViewName, type FilterOptions } from './libraryFiltersLogic';
 import { exportWords, resultLine, shownOf } from './libraryNumbers';
 
 export type { FilterOptions } from './libraryFiltersLogic';
@@ -258,11 +259,12 @@ function PillList({ title, items, selected, onApply, forceSearch, api }: {
   );
 }
 
-function FilterPill({ title, items, selected, onApply, forceSearch = false }: {
-  title: string; items: Option[]; selected: string[]; onApply: (next: string[]) => void; forceSearch?: boolean;
+/** `info`: what the pill's (i) says, beside the pill (not inside it: a button cannot hold a button). */
+function FilterPill({ title, items, selected, onApply, forceSearch = false, info }: {
+  title: string; items: Option[]; selected: string[]; onApply: (next: string[]) => void; forceSearch?: boolean; info?: string;
 }) {
   const words = pillWords(title, items, selected);
-  return (
+  const pill = (
     <PopoverMenu
       title={title}
       label={words.label}
@@ -278,6 +280,13 @@ function FilterPill({ title, items, selected, onApply, forceSearch = false }: {
     >
       {(api) => <PillList title={title} items={items} selected={selected} onApply={onApply} forceSearch={forceSearch} api={api} />}
     </PopoverMenu>
+  );
+  if (!info) return pill;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-[2px]">
+      {pill}
+      <InfoTip text={info} label={`About the ${title.toLowerCase()} filter`} />
+    </span>
   );
 }
 
@@ -451,7 +460,7 @@ export function LibraryFilters({
         <FilterPill title="Type" items={options.types} selected={filters.types} onApply={(next) => set({ types: next })} />
         <FilterPill title="Status" items={options.statuses} selected={filters.statuses} onApply={(next) => set({ statuses: nextStatuses(filters.statuses, next) })} />
         <FilterPill title="Owner" items={options.owners} selected={filters.owners} onApply={(next) => set({ owners: next })} forceSearch />
-        <FilterPill title="Department" items={options.departments} selected={filters.departments} onApply={(next) => set({ departments: next })} forceSearch />
+        <FilterPill title="Department" items={options.departments} selected={filters.departments} onApply={(next) => set({ departments: next })} forceSearch info={DEPARTMENT_FILTER_NOTE} />
         <FilterPill title="Framework" items={options.frameworks} selected={filters.frameworks} onApply={(next) => set({ frameworks: next })} forceSearch />
 
         <PopoverMenu

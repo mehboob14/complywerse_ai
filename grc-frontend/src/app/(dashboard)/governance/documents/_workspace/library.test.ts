@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { NO_DEPARTMENT, creation, departmentFilterOptions, departmentNames, matchesDepartment, shownFrameworkIds, versionGroups, versionStates } from './library.ts';
+import {
+  NO_DEPARTMENT, creation, departmentFilterOptions, departmentNames, departmentPaths, departmentScopes, matchesDepartment, shownFrameworkIds, versionGroups,
+  versionStates,
+} from './library.ts';
 
 test('the Frameworks column shows what the Details dialog edits, else the frameworks the document was made with', () => {
   assert.deepEqual(shownFrameworkIds({ applicable_framework_ids: [7, 9], framework_ids: [3] }), [7, 9]);
@@ -66,19 +69,81 @@ test('the Department filter keeps the documents of one department, or those with
   assert.deepEqual(ids('99'), []);
 });
 
-test('the Department filter offers "No department" and the active departments; a switched-off one only while a document is in it', () => {
+test('the Department filter offers "No department" and the active departments with their level; a switched-off one only while a document is in it', () => {
   const departments = [
     { id: 2, name: 'risk', is_active: true }, { id: 1, name: 'Compliance', is_active: true },
     { id: 3, name: 'Old unit', is_active: false }, { id: 4, name: 'Closed unit', is_active: false },
   ];
   assert.deepEqual(departmentFilterOptions(departments, [{ department_id: 3 }, { department_id: null }]), [
     { value: NO_DEPARTMENT, label: 'No department' },
-    { value: '1', label: 'Compliance' },
-    { value: '3', label: 'Old unit (inactive)' },               // a document is in it: still findable
-    { value: '2', label: 'risk' },
+    { value: '1', label: 'Compliance', subLabel: 'Department' },
+    { value: '3', label: 'Old unit (inactive)', subLabel: 'Department' },               // a document is in it: still findable
+    { value: '2', label: 'risk', subLabel: 'Department' },
   ]);                                                             // 4 is out: nothing is in it
   assert.deepEqual(departmentFilterOptions([], []), [{ value: NO_DEPARTMENT, label: 'No department' }]);
   assert.deepEqual(departmentFilterOptions(undefined, [{ department_id: 3 }]), [{ value: NO_DEPARTMENT, label: 'No department' }]);
+});
+
+// ── the tree: choosing a department takes in the ones under it (D57) ──────────────────────────────────────────────────────────
+
+const TREE = [
+  { id: 1, name: 'Operations', parent_department_id: null, is_active: true },
+  { id: 2, name: 'Support', parent_department_id: 1, is_active: true },
+  { id: 3, name: 'Helpdesk', parent_department_id: 2, is_active: true },
+  { id: 4, name: 'Billing', parent_department_id: 1, is_active: true },
+  { id: 5, name: 'Finance', parent_department_id: null, is_active: true },
+  { id: 6, name: 'Treasury', parent_department_id: 5, is_active: false },
+];
+
+test('each department knows itself and everything under it, however deep, and its whole path', () => {
+  const scope = departmentScopes(TREE);
+  const sorted = (key: string) => Array.from(scope[key]).sort((a, b) => a - b);
+  assert.deepEqual(sorted('1'), [1, 2, 3, 4]);                 // Operations: Support, Helpdesk (two levels down) and Billing
+  assert.deepEqual(sorted('2'), [2, 3]);
+  assert.deepEqual(sorted('3'), [3]);                          // a unit has nothing under it: only itself
+  assert.deepEqual(sorted('5'), [5, 6]);                       // a switched-off department under it is still in it
+  assert.deepEqual(Object.keys(scope).sort(), ['1', '2', '3', '4', '5', '6']);
+  assert.deepEqual(departmentScopes(null), {});
+  const paths = departmentPaths(TREE);
+  assert.equal(paths['3'], 'Operations › Support › Helpdesk');
+  assert.equal(paths['1'], 'Operations');                      // a top department: its path is its name
+  assert.deepEqual(departmentPaths(undefined), {});
+});
+
+test('a department in the filter keeps the documents in it and in every department under it; "no department" stays exact', () => {
+  const scope = departmentScopes(TREE);
+  const docs = [1, 2, 3, 4, 5, 6, null].map((department_id, i) => ({ id: i + 1, department_id }));
+  const ids = (filter: string, s: typeof scope | null = scope) => docs.filter((d) => matchesDepartment(d, filter, s)).map((d) => d.department_id);
+  assert.deepEqual(ids('1'), [1, 2, 3, 4]);                    // Operations, Support, Helpdesk, Billing
+  assert.deepEqual(ids('2'), [2, 3]);
+  assert.deepEqual(ids('3'), [3]);
+  assert.deepEqual(ids('5'), [5, 6]);
+  assert.deepEqual(ids(NO_DEPARTMENT), [null]);                // a document in no department is in no department's tree
+  assert.deepEqual(ids(''), [1, 2, 3, 4, 5, 6, null]);
+  // without a scope (the departments are not known yet, an older caller): a department matches only itself, as it always did
+  assert.deepEqual(ids('1', null), [1]);
+  assert.deepEqual(ids('1', {}), [1]);
+  assert.equal(matchesDepartment({ department_id: 2 }, '1'), false);                                          // no scope argument at all
+  // an id the scope does not know matches itself; a value from the address that is a name every object has finds nothing and does not throw
+  assert.deepEqual(ids('99'), []);
+  assert.deepEqual(ids('constructor'), []);
+  assert.deepEqual(ids('__proto__'), []);
+  assert.equal(matchesDepartment({ department_id: 7 }, 'toString', scope), false);
+});
+
+test('the Department filter lists every department in tree order by its path with its level, in the organisation\'s own words', () => {
+  const docs = [{ department_id: 6 }, { department_id: 3 }];
+  assert.deepEqual(departmentFilterOptions(TREE, docs), [
+    { value: NO_DEPARTMENT, label: 'No department' },
+    { value: '5', label: 'Finance', subLabel: 'Department' },
+    { value: '6', label: 'Finance › Treasury (inactive)', subLabel: 'Sub-department' },    // switched off, but a document is in it
+    { value: '1', label: 'Operations', subLabel: 'Department' },
+    { value: '4', label: 'Operations › Billing', subLabel: 'Sub-department' },
+    { value: '2', label: 'Operations › Support', subLabel: 'Sub-department' },
+    { value: '3', label: 'Operations › Support › Helpdesk', subLabel: 'Unit' },
+  ]);
+  assert.deepEqual(departmentFilterOptions(TREE, [], ['Division', 'Branch', 'Team']).map((o) => o.subLabel), [undefined, 'Division', 'Division', 'Branch', 'Branch', 'Team']);
+  assert.equal(departmentFilterOptions(TREE, []).some((o) => o.value === '6'), false);       // Treasury is switched off and holds nothing: not offered
 });
 
 test('the register names a document\'s department; an id the list does not know has no name', () => {

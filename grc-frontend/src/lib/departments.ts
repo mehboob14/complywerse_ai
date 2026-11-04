@@ -1,6 +1,6 @@
 // Administration → Departments: the small rules of the page and of the Department pickers. Pure (no React), so `node --test`
 // runs departments.test.ts against it. The department list is the one list every picker reads (documents, sign-off, assets,
-// assessments, stage owners, risks); a department's people are those added by hand, its lead and everyone who holds one of its roles.
+// assessments, stage owners, risks); a department's people are those added by hand, its owner and everyone who holds one of its roles.
 
 export type MemberRole = 'lead' | 'member' | 'viewer';
 export const MEMBER_ROLES: { value: MemberRole; label: string }[] = [
@@ -15,7 +15,7 @@ export const roleLabel = (role: string | null | undefined): string => ROLE_LABEL
  *  given other people or switched off. */
 export const DEPARTMENT_QUERY_KEYS: readonly (readonly string[])[] = [
   ['admin-departments'], ['org-departments'], ['signoff-targets'], ['teams-for-asset-edit'],
-  ['assessment-assignee-teams'], ['stage-owner-teams'], ['risk-modal-teams'],
+  ['assessment-assignee-teams'], ['stage-owner-teams'], ['risk-modal-teams'], ['department-levels'],
 ];
 
 /** Marks every cached list that is read from the departments out of date: call it after any create, edit, switch-off or switch-on,
@@ -25,7 +25,7 @@ export function refreshDepartments(qc: { invalidateQueries(filters: { queryKey: 
   DEPARTMENT_QUERY_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }));
 }
 
-const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' });
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });         // "Finance 2" before "Finance 10"
 const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
 export type PickItem = { value: string; label: string; subLabel?: string };
@@ -33,19 +33,20 @@ export type PickItem = { value: string; label: string; subLabel?: string };
 // ── members ──────────────────────────────────────────────────────────────────
 
 export interface MemberHow {
-  /** how the person belongs: 'head' (the lead), 'manual' (added by hand), 'role' (holds one of the department's roles) */
+  /** how the person belongs: 'head' (the owner), 'manual' (added by hand), 'role' (holds one of the department's roles) */
   how: readonly string[];
   member_role?: string | null;
   via_roles?: readonly string[] | null;
 }
+/** `kind` names the tint ('lead' is the owner's: Administration's CSS table is keyed by it); the words are `label`. */
 export type HowChip = { key: string; label: string; kind: 'lead' | 'hand' | 'role' };
 
-/** The chips that say how a person belongs to a department, in the order the server lists them: "Lead", "Added by hand · Member",
- *  "Through role · Compliance Officer" (one for each role). */
+/** The chips that say how a person belongs to a department, in the order the server lists them: "Owner", "Added by hand · Member"
+ *  (a membership role: Lead, Member or Viewer), "Through role · Compliance Officer" (one for each role). */
 export function howChips(m: MemberHow): HowChip[] {
   const out: HowChip[] = [];
   m.how.forEach((how) => {
-    if (how === 'head') out.push({ key: 'head', label: 'Lead', kind: 'lead' });
+    if (how === 'head') out.push({ key: 'head', label: 'Owner', kind: 'lead' });
     else if (how === 'manual') out.push({ key: 'manual', label: `Added by hand · ${roleLabel(m.member_role)}`, kind: 'hand' });
     else if (how === 'role') {
       const names = (m.via_roles ?? []).filter(Boolean);
@@ -57,13 +58,13 @@ export function howChips(m: MemberHow): HowChip[] {
 }
 
 /** Why a person cannot be removed from the members list (null: they were added by hand, so Remove works). Someone who belongs
- *  through a role leaves with the role (or by losing it), the lead by changing the lead under Edit. */
+ *  through a role leaves with the role (or by losing it), the owner by changing the owner under Edit. */
 export function removeBlock(m: MemberHow): string | null {
   if (m.how.includes('manual')) return null;
   const roles = (m.via_roles ?? []).filter(Boolean);
   if (roles.length) return `Belongs through the role${roles.length === 1 ? '' : 's'} ${roles.join(', ')}`;
   if (m.how.includes('role')) return 'Belongs through a role';
-  return 'Is the lead of this department: change the lead under Edit';
+  return 'Is the owner of this department: change the owner under Edit';
 }
 
 /** "5 people · 3 through roles" */
@@ -91,7 +92,7 @@ export function roleItems(
   return out.sort((a, b) => byName(a.label, b.label));
 }
 
-/** The people to choose from (lead, new member), by name. */
+/** The people to choose from (owner, new member), by name. */
 export function userItems(users: readonly { id: number; display_name: string; email?: string | null }[] | null | undefined): PickItem[] {
   return (users ?? [])
     .map((u) => ({ value: String(u.id), label: u.display_name || u.email || `User ${u.id}`, subLabel: u.email || undefined }))
@@ -236,10 +237,76 @@ export function descendantIds(all: readonly TreeDepartment[], id: number): Set<n
   return departmentTree(all).subtree(id);
 }
 
-/** The Documents cell: the number, and the words for a tooltip or a screen reader ("12 documents", "No documents"). */
-export function documentsLabel(count: number | null | undefined): { text: string; long: string } {
-  const n = typeof count === 'number' && count > 0 ? Math.floor(count) : 0;
-  return { text: String(n), long: n === 0 ? 'No documents' : `${n} ${n === 1 ? 'document' : 'documents'}` };
+/** What the form's Parent field lists: the places `parentChoices` allows, in tree order, each named by its whole path with its level
+ *  under it. The paths are read over every department (a place whose parent is not itself a choice keeps its path). */
+export function parentPickItems<D extends TreeDepartment & { is_active?: boolean }>(
+  all: readonly D[],
+  selfId: number | null,
+  currentParentId: number | null,
+  labels?: readonly string[],
+): PickItem[] {
+  const allowed = new Set(parentChoices(all, selfId, currentParentId).map((d) => d.id));
+  return departmentPickItems(all, { labels, withInactive: true }).filter((item) => allowed.has(Number(item.value)));
+}
+
+/** What the Parent field says the department will be once it is saved there: "Will be: Sub-department" (no article: the organisation
+ *  chooses the level names, and "a Unit" is as likely as "an Office"). `parentId` null: a top department. */
+export function willBeText(all: readonly TreeDepartment[], parentId: number | null, labels?: readonly string[]): string {
+  const level = parentId == null ? 1 : departmentTree(all).level(parentId) + 1;
+  return `Will be: ${levelLabel(level, labels)}`;
+}
+
+/** The (i) of the Parent field of a department that has departments under it: why some places are not offered. */
+export const PARENT_LIMITS_NOTE = `Not listed: itself, the departments under it, and any place that would take it past ${MAX_DEPTH} levels.`;
+/** The (i) of the Owner field: what being the owner of a department gives. */
+export const OWNER_NOTE = 'Sees the Documents overview for this department and everything under it.';
+
+/** What a row's menu says for adding under it: "Add Sub-department"; null on the deepest level, where nothing can sit under it. */
+export function addUnderLabel(level: number, labels?: readonly string[]): string | null {
+  return level >= MAX_DEPTH ? null : `Add ${levelLabel(level + 1, labels)}`;
+}
+
+// ── "Level names": the boxes of Governance → Settings (PUT /admin/departments/levels) ──
+
+/** A level name is at most this long (the server refuses a longer one: org_departments.LEVEL_LABEL_MAX). */
+export const LEVEL_NAME_MAX = 40;
+export interface LevelNames { labels: readonly string[]; defaults: readonly string[] }
+
+const defaultsOf = (levels?: LevelNames | null): readonly string[] => (levels?.defaults?.length === MAX_DEPTH ? levels.defaults : DEFAULT_LEVEL_LABELS);
+
+/** What the three boxes start with: a level the organisation has named shows its name; one still at its default is an empty box (the
+ *  default is its placeholder), which is also how a name is taken back. */
+export function levelInputs(levels?: LevelNames | null): string[] {
+  const defaults = defaultsOf(levels);
+  return defaults.map((fallback, i) => {
+    const name = (levels?.labels?.[i] ?? '').trim();
+    return name && name !== fallback ? name : '';
+  });
+}
+
+/** What Save sends: a name for each level, the spaces around it taken off; a blank one means its default (the server fills it in). */
+export function levelNamesBody(typed: readonly string[]): string[] {
+  return Array.from({ length: MAX_DEPTH }, (_, i) => (typed[i] ?? '').trim());
+}
+
+/** Whether the boxes differ from what is saved (spaces, and a name typed that is the default anyway, are not a difference). */
+export function levelNamesChanged(levels: LevelNames | null | undefined, typed: readonly string[]): boolean {
+  const defaults = defaultsOf(levels);
+  const saved = levelInputs(levels);
+  return levelNamesBody(typed).some((name, i) => (name === defaults[i] ? '' : name) !== saved[i]);
+}
+
+const whole = (n: number | null | undefined): number => (typeof n === 'number' && n > 0 ? Math.floor(n) : 0);
+
+/** The Documents cell: the number, and the words for a tooltip or a screen reader ("12 documents", "No documents"). `total` (the
+ *  department and everything under it) comes back as `total`, a second and quieter figure, only when it is more than the department's
+ *  own; the words then say both ("3 documents in it, 12 with the departments under it"). */
+export function documentsLabel(count: number | null | undefined, total?: number | null): { text: string; long: string; total?: string } {
+  const n = whole(count);
+  const all = whole(total);
+  const own = n === 0 ? 'No documents' : `${n} ${n === 1 ? 'document' : 'documents'}`;
+  if (all <= n) return { text: String(n), long: own };
+  return { text: String(n), long: `${own} in it, ${all} with the departments under it`, total: String(all) };
 }
 
 /** The facts line of the Departments section: "6 departments · 1 inactive". */
@@ -272,7 +339,7 @@ interface DepartmentRecord {
 
 const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((id) => b.includes(id));
 
-/** The PATCH body for an edit: only what the person changed (a cleared description is sent as '', a cleared lead or parent as
+/** The PATCH body for an edit: only what the person changed (a cleared description is sent as '', a cleared owner or parent as
  *  null, which is how the server clears them). Empty: nothing to save. */
 export function departmentPatch(d: DepartmentRecord, f: DepartmentForm): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -298,10 +365,16 @@ export function departmentCreateBody(f: DepartmentForm): Record<string, unknown>
 }
 
 /** Whether closing the form would throw something away: typed into a new department, or any field changed from the department being edited
- *  (the same comparison the save makes, so "nothing to save" and "nothing to lose" are one answer). Drives the drawer's "Discard changes?". */
-export function departmentFormDirty(mode: 'create' | 'edit', department: DepartmentRecord | undefined, f: DepartmentForm): boolean {
+ *  (the same comparison the save makes, so "nothing to save" and "nothing to lose" are one answer). Drives the drawer's "Discard changes?".
+ *  `startParentId`: the parent a new department was opened with ("Add Sub-department" on a row); leaving it there is not typing. */
+export function departmentFormDirty(
+  mode: 'create' | 'edit',
+  department: DepartmentRecord | undefined,
+  f: DepartmentForm,
+  startParentId: number | null = null,
+): boolean {
   if (mode === 'edit' && department) return Object.keys(departmentPatch(department, f)).length > 0;
-  return f.name.trim() !== '' || f.description.trim() !== '' || f.parentId != null || f.leadId != null || f.roleIds.length > 0;
+  return f.name.trim() !== '' || f.description.trim() !== '' || f.parentId !== startParentId || f.leadId != null || f.roleIds.length > 0;
 }
 
 // ── the Department pickers of other pages ────────────────────────────────────

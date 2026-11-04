@@ -15,6 +15,7 @@ import {
 } from './libraryModel.ts';
 import { drawnRows } from './libraryTableLogic.ts';
 import { foldersKey, loadFolderPrefs, saveFolderPrefs, type KeyValueStore } from './libraryPrefs.ts';
+import { departmentScopes } from './library.ts';
 
 const NOW = new Date('2026-10-26T09:00:00Z');
 let n = 0;
@@ -98,6 +99,29 @@ test('every document is in exactly one folder: the top folders add up to the doc
   assert.equal(displayOrder(folders).length, scope.length);
   assert.deepEqual(ids(displayOrder(folders)).sort((a, b) => a - b), ids(scope).sort((a, b) => a - b));
   assert.equal(folderEntries(folders).length, scope.length);
+});
+
+test('filtering by a department in the middle of three levels keeps it, what is under it and the way down to it, with rolled-up counts (D57)', () => {
+  const departments = [
+    dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1 }), dept(3, 'Helpdesk', { parent_department_id: 2 }),
+    dept(4, 'Billing', { parent_department_id: 1 }), dept(5, 'Finance'),
+  ];
+  const scope = [1, 2, 2, 3, 3, 3, 4, 5].map((department_id) => doc({ department_id }));
+  const ctx: MatchContext = { departments: {}, departmentScope: departmentScopes(departments), frameworks: {}, coverage: {}, me: null, now: NOW };
+  const matches = scope.filter((d) => matchesFilters(d, { ...NO_FILTERS, departments: ['2'] }, ctx)).map((d) => d.id);
+  assert.equal(matches.length, 5);                                                        // Support's two documents and Helpdesk's three
+  const folders = build(scope, departments, { matches, filtering: true });
+  assert.deepEqual(shape(folders), [['Operations', 0, [['Support', 1, [['Helpdesk', 2, []]]]]]]);       // Billing and Finance have no match; Operations is the way
+  const [operations] = folders;
+  const [support] = operations.folders;
+  const [helpdesk] = support.folders;
+  assert.deepEqual([operations.own.docs, operations.total.docs], [0, 5]);
+  assert.deepEqual([support.own.docs, support.total.docs], [2, 5]);
+  assert.deepEqual([helpdesk.own.docs, helpdesk.total.docs], [3, 3]);
+  // the same three levels with no filter: every folder, and each count is its own documents plus everything under it
+  const all = build(scope, departments);
+  const [finance, ops] = all;
+  assert.deepEqual([finance.total.docs, ops.total.docs, ops.folders.map((f) => f.total.docs)], [1, 7, [1, 5]]);
 });
 
 // ── bad data ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -430,21 +454,41 @@ test('the layout and the folders left open or closed come back as saved; only re
 
 // ── Move to… ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-test('Move to… offers the departments in use by their full name, A to Z, and "No department" last; a switched-off one is not offered', () => {
+test('Move to… offers the departments in use by their full path with their level, in tree order, and "No department" last; a switched-off one is not offered', () => {
   const departments = [
     dept(1, 'Operations'), dept(2, 'Security', { parent_department_id: 1 }), dept(3, 'Legal'), dept(4, 'Old', { is_active: false }),
     dept(5, 'Archive team', { parent_department_id: 4 }), dept(6, 'ámbito'),
   ];
   assert.deepEqual(moveTargets(departments), [
-    { id: 6, label: 'ámbito' },
-    { id: 3, label: 'Legal' },
-    { id: 5, label: 'Old › Archive team' },                   // it is in use; the path names where it sits (the department above it is switched off)
-    { id: 1, label: 'Operations' },
-    { id: 2, label: 'Operations › Security' },
+    { id: 6, label: 'ámbito', subLabel: 'Department' },
+    { id: 3, label: 'Legal', subLabel: 'Department' },
+    { id: 5, label: 'Old › Archive team', subLabel: 'Sub-department' },     // it is in use; the path names where it sits (the department above it is switched off)
+    { id: 1, label: 'Operations', subLabel: 'Department' },
+    { id: 2, label: 'Operations › Security', subLabel: 'Sub-department' },
     { id: null, label: NO_DEPARTMENT_NAME },
   ]);
   assert.deepEqual(moveTargets([]), [{ id: null, label: NO_DEPARTMENT_NAME }]);
   assert.deepEqual(moveTargets(null), [{ id: null, label: NO_DEPARTMENT_NAME }]);
+});
+
+test('Move to… handles three levels: each department is followed by what is under it, and the levels carry the organisation\'s own words', () => {
+  const departments = [
+    dept(1, 'Operations'), dept(2, 'Support', { parent_department_id: 1 }), dept(3, 'Helpdesk', { parent_department_id: 2 }),
+    dept(4, 'Billing', { parent_department_id: 1 }), dept(5, 'Finance'),
+  ];
+  const targets = moveTargets(departments, ['Division', 'Branch', 'Team']);
+  assert.deepEqual(targets.map((t) => [t.label, t.subLabel]), [
+    ['Finance', 'Division'],
+    ['Operations', 'Division'],
+    ['Operations › Billing', 'Branch'],                       // the sub-departments of a department come right after it, A to Z…
+    ['Operations › Support', 'Branch'],
+    ['Operations › Support › Helpdesk', 'Team'],              // …and a unit right after its own sub-department, not after all of them
+    [NO_DEPARTMENT_NAME, undefined],
+  ]);
+  assert.deepEqual(targets.map((t) => t.id), [5, 1, 4, 2, 3, null]);
+  // a number in a name is read by value, a sub-department of the same name under another department is told apart by its path
+  const same = moveTargets([dept(1, 'Unit 10'), dept(2, 'Unit 2'), dept(3, 'North'), dept(4, 'Desk', { parent_department_id: 3 }), dept(5, 'South'), dept(6, 'Desk', { parent_department_id: 5 })]);
+  assert.deepEqual(same.map((t) => t.label), ['North', 'North › Desk', 'South', 'South › Desk', 'Unit 2', 'Unit 10', NO_DEPARTMENT_NAME]);
 });
 
 test('the picker narrows by every word typed, accents and case aside, on the whole path', () => {

@@ -10,8 +10,9 @@ import { Loader2 } from 'lucide-react';
 import apiClient, { departmentsApi, governanceApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { InfoTip } from '@/components/ui/InfoTip';
-import { departmentPlaceholder } from '@/lib/departments';
+import { departmentPickItems, departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
+import { useDepartmentLevels } from '@/components/admin/DepartmentForm';
 import { EMPTY_DETAILS, applyRead, change, type DetailKey, type Details, type Origin, type ReadResult } from './_detailsRead';
 
 export const DOC_TYPES: [string, string][] = [
@@ -175,12 +176,14 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
     if (form.owner_id != null && !out.some((i) => i.value === String(form.owner_id))) out.unshift({ value: String(form.owner_id), label: `User ${form.owner_id}` });
     return out;
   }, [usersQ.data, form.owner_id]);
+  const levelNames = useDepartmentLevels().data?.labels;            // the organisation's words for the levels; the default names until they arrive
   const deptItems = useMemo<Item[]>(() => {
-    const out: Item[] = (deptQ.data || []).filter((x) => x.is_active !== false || x.id === form.department_id).map((x) => ({ value: String(x.id), label: x.name }));
+    // every department in tree order by its whole path, with its level under it; one switched off is listed only while this document sits in it
+    const out: Item[] = departmentPickItems(deptQ.data || [], { labels: levelNames, keep: [form.department_id] });
     // the chosen one the list does not hold (it could not be read, or is gone) still shows as chosen
     if (form.department_id != null && !deptQ.isLoading && !out.some((i) => i.value === String(form.department_id))) out.unshift({ value: String(form.department_id), label: `Department ${form.department_id}` });
     return out;
-  }, [deptQ.data, deptQ.isLoading, form.department_id]);
+  }, [deptQ.data, deptQ.isLoading, form.department_id, levelNames]);
 
   const tag = (key: DetailKey) => (from[key]
     ? <span className="mt-0.5 block text-[11px] text-[#586472]">{from[key] === 'ai' ? 'By Comply Agent' : 'From the file'}</span>

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-import { VIEW_NAME_MAX, exportTitle, filterChips, removeChip, resultText, validViewName, type FilterOptions } from './libraryFiltersLogic.ts';
+import { DEPARTMENT_FILTER_NOTE, VIEW_NAME_MAX, exportTitle, filterChips, removeChip, resultText, validViewName, type FilterOptions } from './libraryFiltersLogic.ts';
 import { NO_FILTERS, filterCount, type Filters } from './libraryModel.ts';
 
 const OPTIONS: FilterOptions = {
@@ -44,6 +45,20 @@ test('a value the options do not know shows as it is, even a name that exists on
   assert.deepEqual(labelsOf(f({ types: ['procedure'], owners: ['999', 'constructor'], departments: ['__proto__'] })),
     ['Type: procedure', 'Owner: 999', 'Owner: constructor', 'Department: __proto__']);
   assert.deepEqual(labelsOf(f({ owners: ['none'] })), ['Owner: No owner']);
+});
+
+test('a department chip says its whole path (the level under it in the list is not part of it), and only the Department pill carries a note', () => {
+  const options: FilterOptions = {
+    ...OPTIONS,
+    departments: [{ value: '10', label: 'Operations', subLabel: 'Department' }, { value: '12', label: 'Operations › Support', subLabel: 'Sub-department' }],
+  };
+  assert.deepEqual(filterChips(f({ departments: ['10', '12'] }), options).map((c) => c.label), ['Department: Operations', 'Department: Operations › Support']);
+  assert.equal(DEPARTMENT_FILTER_NOTE, 'Includes the departments under it.');
+  const bar = readFileSync(new URL('./LibraryFilters.tsx', import.meta.url), 'utf8');
+  assert.match(bar, /<FilterPill title="Department"[^\n]*info=\{DEPARTMENT_FILTER_NOTE\}/);
+  assert.match(bar, /<InfoTip text=\{info\} label=\{`About the \$\{title\.toLowerCase\(\)\} filter`\} \/>/);        // beside the pill: a button cannot hold a button
+  const others = bar.slice(bar.indexOf('<FilterPill title="Type"'), bar.indexOf('<PopoverMenu\n          title="Filters"'));
+  assert.equal((others.match(/info=\{/g) ?? []).length, 1);                                                    // the other pills have none
 });
 
 test('the chips are as many as the filters that are on (a search or My documents is one each)', () => {

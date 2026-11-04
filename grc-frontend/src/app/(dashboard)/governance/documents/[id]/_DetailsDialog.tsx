@@ -16,8 +16,9 @@ import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, FormField, Select, Textarea, TextInput, useReportedMutation } from '@/components/ui/ds';
-import { departmentPlaceholder } from '@/lib/departments';
+import { departmentPickItems, departmentPlaceholder } from '@/lib/departments';
 import { personOf } from '@/lib/people';
+import { useDepartmentLevels } from '@/components/admin/DepartmentForm';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { MAX_TAGS, addTags, leftOut, splitTags, tagSuggestions } from '../_tags';
 import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoice } from '../_SignoffControl';
@@ -200,10 +201,12 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     return out;
   }, [usersQ.data, form.owner_id, doc?.owner_name]);
 
+  const levelNames = useDepartmentLevels().data?.labels;            // the organisation's words for the levels; the default names until they arrive
   const departments = deptQ.data || [];
+  // every department in tree order by its whole path with its level under it; one switched off is listed only while this document sits in it
   const deptItems = useMemo<Item[]>(
-    () => departments.filter((d) => d.is_active !== false || d.id === form.department_id).map((d) => ({ value: String(d.id), label: d.name })),
-    [departments, form.department_id],
+    () => departmentPickItems(departments, { labels: levelNames, keep: [form.department_id] }),
+    [departments, levelNames, form.department_id],
   );
 
   const frameworks = (fwQ.data || []) as any[];
@@ -317,7 +320,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     row('Owner', doc?.owner_name || '',
       <MultiSelectDropdown title="Owner" items={ownerItems} selectedValues={one(form.owner_id)} onApply={(v) => set({ owner_id: toId(v) })}
         multiSelect={false} triggerVariant="input" size="sm" forceSearch placeholder="Choose a person" triggerClassName={TRIGGER} />, { picker: true }),
-    row('Department', departments.find((d) => d.id === form.department_id)?.name || '',
+    row('Department', deptItems.find((i) => i.value === String(form.department_id))?.label || '',
       <MultiSelectDropdown title="Department" items={deptItems} selectedValues={one(form.department_id)} onApply={(v) => set({ department_id: toId(v) })}
         multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false}
         placeholder={departmentPlaceholder({ loading: deptQ.isLoading, failed: deptQ.isError, count: deptItems.length })} triggerClassName={TRIGGER} />, { picker: true }),

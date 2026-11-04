@@ -19,6 +19,9 @@ export interface FilterOptions {
 /** The words of the optional expiry filter, on its chip and in the filter list. */
 export const EXPIRING_LABEL = 'Expiring in 30 days';
 
+/** The (i) beside the Department filter: choosing a department keeps the documents of the departments under it too (libraryModel.matchesFilters). */
+export const DEPARTMENT_FILTER_NOTE = 'Includes the departments under it.';
+
 export interface FilterChip {
   /** unique among the chips shown */
   key: string;

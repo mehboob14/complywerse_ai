@@ -323,11 +323,12 @@ export function LibraryTable({
   const cell = (r: DrawnRow<GovDoc>, id: Column['id']): ReactNode => {
     const { doc } = r;
     const department = doc.department_id != null ? lookups.departments[String(doc.department_id)] : undefined;
+    const departmentPath = doc.department_id != null ? lookups.departmentPaths?.[String(doc.department_id)] : undefined;       // "Operations › Support": the name is drawn, the path is its title
     switch (id) {
       case 'type': return <TypeCell doc={doc} />;
       case 'lifecycle': return <LifecycleCell doc={doc} />;
-      case 'owner': return <OwnerCell doc={doc} department={hasDepartmentColumn || folders ? undefined : department} compact={compact} />;      // the column (or the folder) says it already
-      case 'department': return <DepartmentCell name={department} />;
+      case 'owner': return <OwnerCell doc={doc} department={hasDepartmentColumn || folders ? undefined : department} departmentPath={departmentPath} compact={compact} />;      // the column (or the folder) says it already
+      case 'department': return <DepartmentCell name={department} path={departmentPath} />;
       case 'frameworks': return <FrameworksCell doc={doc} info={lookups.frameworks} prefer={preferFrameworks} onPick={onPickFramework} />;
       case 'attestation': return <AttestationCell pct={lookups.coverage[doc.id]} count={counts[doc.id]} compact={compact} />;
       case 'review': return <ReviewCell doc={doc} compact={compact} />;

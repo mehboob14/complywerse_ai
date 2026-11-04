@@ -35,7 +35,7 @@ import {
   bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, moveDocument, restoreDocument,
 } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
-import { creation, departmentFilterOptions } from './library';
+import { creation, departmentFilterOptions, departmentPaths, departmentScopes } from './library';
 import { buildFolders, chooseView, displayOrder, moveAll, moveMessage, moveTargets, type MoveTarget } from './libraryFolders';
 import {
   BUILT_IN_VIEWS, NO_FILTERS, NO_OWNER,
@@ -57,6 +57,7 @@ import { DocumentDrawer } from './DocumentDrawer';
 import { useMinWidth } from './useMinWidth';
 import DetailsDialog from '../[id]/_DetailsDialog';
 import { useOrgDepartments } from '../_DetailsFields';
+import { useDepartmentLevels } from '@/components/admin/DepartmentForm';
 
 export interface DocumentsWorkspaceProps {
   canCreate: boolean;
@@ -191,9 +192,16 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // ── names the rules and the cells need ──
   const departmentName = useDepartmentNames();
   const frameworkInfo = useFrameworkInfo();
+  const departmentsQ = useOrgDepartments();
+  const departments = useMemo(() => departmentsQ.data ?? [], [departmentsQ.data]);
+  const levelNames = useDepartmentLevels().data?.labels;           // what the organisation calls the three levels; the default names until they arrive
+  // a department in the Department filter takes in the departments under it (departmentScope); the column draws the name and keeps the whole path as its title
   const lookups: Lookups = useMemo(
-    () => ({ departments: departmentName, frameworks: frameworkInfo, coverage: coverage?.pct ?? {}, me: currentUserId ?? null }),
-    [departmentName, frameworkInfo, coverage, currentUserId],
+    () => ({
+      departments: departmentName, departmentScope: departmentScopes(departments), departmentPaths: departmentPaths(departments),
+      frameworks: frameworkInfo, coverage: coverage?.pct ?? {}, me: currentUserId ?? null,
+    }),
+    [departmentName, departments, frameworkInfo, coverage, currentUserId],
   );
   const counts = coverage?.counts ?? NO_COUNTS;
   // the same instant for every rule until the list is read again
@@ -201,13 +209,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const now = useMemo(() => new Date(), [listData]);
   const ctx: MatchContext = useMemo(() => ({ ...lookups, now }), [lookups, now]);
 
-  // ── the options the filters offer ──
-  const departmentsQ = useOrgDepartments();
-
   // ── the layout: the register table, or a folder for each department ──
   // The address wins, then what the person chose before, then Folders where a department is in use and the table where none is. Until
   // that is known the body waits as a skeleton, so a library that opens in Folders never flashes the table first.
-  const departments = useMemo(() => departmentsQ.data ?? [], [departmentsQ.data]);
   const noDepartments = !departments.some((d) => d.is_active !== false);
   const view: LibraryViewId = chooseView({ address: viewParam, remembered: folderPrefs?.view ?? null, departments });
   const deciding = viewParam == null && (folderPrefs == null || (folderPrefs.view == null && departmentsQ.isLoading));
@@ -216,7 +220,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // Folders chosen but there is nothing to group by (no department in use), or the departments could not be read (the folders cannot be
   // told from "No department" without them): the body says so instead of drawing folders
   const foldersBlocked = inFolders && !waiting && (departmentsQ.isError || noDepartments);
-  const targets = useMemo(() => moveTargets(departments), [departments]);
+  const targets = useMemo(() => moveTargets(departments, levelNames), [departments, levelNames]);
+  // ── the options the filters offer ──
   const options: FilterOptions = useMemo(() => {
     const knownTypes = Object.keys(DOC_TYPE_STYLE);
     const otherTypes = Array.from(new Set(allDocs.map((d) => d.doc_type))).filter((t) => t && !knownTypes.includes(t));
@@ -224,11 +229,11 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       types: [...knownTypes, ...otherTypes].map((k) => ({ value: k, label: DOC_TYPE_STYLE[k]?.label ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ') })),
       statuses: STATUS_OPTIONS,
       owners: [{ value: NO_OWNER, label: 'No owner' }, ...users.map((u) => ({ value: String(u.id), label: u.display_name, subLabel: u.email }))],
-      departments: departmentFilterOptions(departmentsQ.data, allDocs),
+      departments: departmentFilterOptions(departmentsQ.data, allDocs, levelNames),
       frameworks: frameworkOptions(allDocs, frameworkInfo),
       classifications: classificationOptions(allDocs),
     };
-  }, [allDocs, users, departmentsQ.data, frameworkInfo]);
+  }, [allDocs, users, departmentsQ.data, levelNames, frameworkInfo]);
 
   // archived documents count only under Archived (archive.ts)
   const totals = useMemo(() => libraryCounts(allDocs), [allDocs]);

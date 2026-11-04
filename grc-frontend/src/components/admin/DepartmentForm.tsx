@@ -11,7 +11,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, X } from 'lucide-react';
 import { assetsApi, departmentsApi, type Department } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
-import { DEACTIVATE_NOTE, departmentCreateBody, departmentFormDirty, departmentPatch, parentChoices, roleItems, userItems, type DepartmentForm } from '@/lib/departments';
+import {
+  DEACTIVATE_NOTE, OWNER_NOTE, PARENT_LIMITS_NOTE, departmentCreateBody, departmentFormDirty, departmentPatch, departmentTree, levelLabel, parentPickItems, roleItems,
+  userItems, willBeText, type DepartmentForm,
+} from '@/lib/departments';
+import { InfoTip } from '@/components/ui/InfoTip';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { Button } from '@/components/ui/ds/Button';
@@ -19,7 +23,7 @@ import { Button } from '@/components/ui/ds/Button';
 export type TenantUser = { id: number; display_name: string; email: string };
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
-const LABEL = 'mb-1 block text-xs font-medium text-[#3f4b58]';
+const LABEL = 'block text-xs font-medium text-[#3f4b58]';
 export const TRIGGER = 'w-full !h-[38px] !text-[13px]';
 export const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1';
 export const PRIMARY = `inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50 ${FOCUS}`;
@@ -36,13 +40,24 @@ export function useAdminDepartments() {
   });
 }
 
-/** The people a lead or a member can be chosen from. */
+/** The people an owner or a member can be chosen from. */
 export function useTenantUsers(enabled = true) {
   return useQuery({
     queryKey: ['admin-departments-users'],
     queryFn: () => assetsApi.getTenantUsers().then((r) => r.data as TenantUser[]),
     staleTime: 60 * 1000,
     enabled,
+  });
+}
+
+/** What the organisation calls the three levels of its department tree (anyone signed in reads them; `data` is undefined until they
+ *  arrive, or if they could not be read: every picker then uses the default names, lib/departments.ts levelLabel). */
+export function useDepartmentLevels() {
+  return useQuery({
+    queryKey: ['department-levels'],
+    queryFn: () => departmentsApi.levels().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 }
 
@@ -87,11 +102,15 @@ export function Modal({ title, subtitle, size = 'lg', onClose, footer, children 
   );
 }
 
-function Field({ label, htmlFor, hint, wide, children }: { label: string; htmlFor?: string; hint?: string; wide?: boolean; children: ReactNode }) {
+/** `info`: what the field's (i) says, beside its caption (outside the <label>, so a press on it does not move focus into the field). */
+function Field({ label, htmlFor, hint, info, wide, children }: { label: string; htmlFor?: string; hint?: string; info?: string; wide?: boolean; children: ReactNode }) {
+  // a picker's trigger names itself (aria-label), so its caption is not a label for anything
+  const caption = htmlFor ? <label htmlFor={htmlFor} className={LABEL}>{label}</label> : <span className={LABEL}>{label}</span>;
   return (
     <div className={`min-w-0 ${wide ? 'sm:col-span-2' : ''}`}>
-      {/* a picker's trigger names itself (aria-label), so its caption is not a label for anything */}
-      {htmlFor ? <label htmlFor={htmlFor} className={LABEL}>{label}</label> : <span className={LABEL}>{label}</span>}
+      {info
+        ? <div className="mb-[2px] flex items-center gap-1">{caption}<InfoTip text={info} label={`About ${label.toLowerCase()}`} /></div>
+        : <div className="mb-1">{caption}</div>}
       {children}
       {hint && <p className="mt-1 text-[11px] text-[#586472]">{hint}</p>}
     </div>
@@ -103,20 +122,22 @@ function Field({ label, htmlFor, hint, wide, children }: { label: string; htmlFo
 /** `departments`: every department (the parent choices come from it). `onSaved(message)`: it was saved - the caller closes the
  *  dialog, refreshes the lists (refreshDepartments) and says `message`. `drawer`: draw it as the design-system drawer (RightSlidePanel) that asks
  *  "Discard changes?" before Escape, the X or a click outside throws typed input away, with the kit's buttons; without it the dialog is the one
- *  Administration → Departments has always opened (same fields, same save, same words). */
-export function DepartmentFormModal({ mode, department, departments, onClose, onSaved, drawer = false }: {
+ *  Administration → Departments has always opened (same fields, same save, same words). `parentId`: the department a NEW one is opened under
+ *  ("Add Sub-department" on a row); it starts as the Parent and is not typing. */
+export function DepartmentFormModal({ mode, department, departments, onClose, onSaved, drawer = false, parentId: startParent = null }: {
   mode: 'create' | 'edit';
   department?: Department;
   departments: Department[];
   onClose: () => void;
   onSaved: (message: string) => void;
   drawer?: boolean;
+  parentId?: number | null;
 }) {
   const id = useId();
   const [form, setForm] = useState<DepartmentForm>(() => ({
     name: department?.name ?? '',
     description: department?.description ?? '',
-    parentId: department?.parent_department_id ?? null,
+    parentId: department ? department.parent_department_id ?? null : startParent,
     leadId: department?.department_head_user_id ?? null,
     roleIds: department?.roles.map((r) => r.id) ?? [],
     active: department?.is_active ?? true,
@@ -131,19 +152,23 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
     staleTime: 60 * 1000,
   });
   const usersQ = useTenantUsers();
+  const levelNames = useDepartmentLevels().data?.labels;
   const roleList = useMemo(() => roleItems(rolesQ.data, department?.roles), [rolesQ.data, department]);
   const peopleList = useMemo(() => {
     const items = userItems(usersQ.data);
-    // a lead who is no longer among the people the list offers still shows, and a chosen lead can be taken off again
+    // an owner who is no longer among the people the list offers still shows, and a chosen owner can be taken off again
     if (form.leadId != null && !items.some((i) => i.value === String(form.leadId))) {
       items.unshift({ value: String(form.leadId), label: department?.department_head_name || `User ${form.leadId}` });
     }
-    return form.leadId != null ? [{ value: '', label: 'No lead' }, ...items] : items;
+    return form.leadId != null ? [{ value: '', label: 'No owner' }, ...items] : items;
   }, [usersQ.data, form.leadId, department?.department_head_name]);
+  // The places it can go: by path and level, in tree order. A department with departments under it has fewer (it must fit three levels with them).
   const parents = useMemo(
-    () => parentChoices(departments, department?.id ?? null, department?.parent_department_id ?? null),
-    [departments, department],
+    () => parentPickItems(departments, department?.id ?? null, department ? department.parent_department_id ?? null : startParent, levelNames),
+    [departments, department, startParent, levelNames],
   );
+  const tree = useMemo(() => departmentTree(departments), [departments]);
+  const hasUnder = department != null && tree.height(department.id) > 0;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -174,24 +199,27 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
   };
 
   const formId = `${id}-form`;
-  const title = mode === 'create' ? 'New department' : `Edit department — ${department?.name}`;
+  // a new one is named by the level it starts at ("New Sub-department" when opened under a department); the Parent field says where it ends up
+  const title = mode === 'create'
+    ? `New ${levelLabel(startParent == null ? 1 : tree.level(startParent) + 1, levelNames)}`
+    : `Edit department — ${department?.name}`;
   const fields = (
       <form id={formId} onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Name *" htmlFor={`${id}-name`} wide>
           <input id={`${id}-name`} value={form.name} onChange={(e) => set({ name: e.target.value })} required autoFocus className={INPUT}
             placeholder="Compliance / IT Security / Risk" />
         </Field>
-        <Field label="Parent department" htmlFor={`${id}-parent`} wide>
+        <Field label="Parent department" htmlFor={`${id}-parent`} wide info={hasUnder ? PARENT_LIMITS_NOTE : undefined} hint={willBeText(departments, form.parentId, levelNames)}>
           <select id={`${id}-parent`} value={form.parentId ?? ''} onChange={(e) => set({ parentId: e.target.value ? Number(e.target.value) : null })} className={INPUT}>
             <option value="">— None —</option>
-            {parents.map((p) => <option key={p.id} value={p.id}>{p.name}{p.is_active ? '' : ' (inactive)'}</option>)}
+            {parents.map((p) => <option key={p.value} value={p.value}>{p.label}{p.subLabel ? ` · ${p.subLabel}` : ''}</option>)}
           </select>
         </Field>
         <Field label="Description" htmlFor={`${id}-description`} wide>
           <textarea id={`${id}-description`} value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} className={INPUT} />
         </Field>
-        <Field label="Lead">
-          <MultiSelectDropdown title="Lead" items={peopleList} selectedValues={form.leadId == null ? [] : [String(form.leadId)]}
+        <Field label="Owner" info={OWNER_NOTE}>
+          <MultiSelectDropdown title="Owner" items={peopleList} selectedValues={form.leadId == null ? [] : [String(form.leadId)]}
             onApply={(v) => set({ leadId: v[0] ? Number(v[0]) : null })} multiSelect={false} autoApply forceSearch triggerVariant="input"
             size="sm" placeholder="— None —" searchPlaceholder="Search people" triggerClassName={TRIGGER} />
         </Field>
@@ -220,7 +248,7 @@ export function DepartmentFormModal({ mode, department, departments, onClose, on
         isOpen
         onClose={onClose}
         title={title}
-        dirty={departmentFormDirty(mode, department, form)}
+        dirty={departmentFormDirty(mode, department, form, startParent)}
         footer={(
           <div className="flex justify-end gap-2">
             <Button onClick={onClose}>Cancel</Button>
