@@ -1110,6 +1110,9 @@ def request_changes(
     again when it is submitted again. Only the people the open step asks."""
     ruled = _by_rule(exception_id, db, current_user, "changes", data.get("comment") or data.get("reason"))
     if ruled is None:
+        if db.query(PolicyException.id).filter(PolicyException.id == exception_id,
+                                               PolicyException.tenant_id.in_(get_user_tenants(current_user, db))).first() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="This exception is not waiting under an approval rule, so it cannot be sent back for changes. Reject it instead.")
     return ruled

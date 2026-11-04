@@ -237,6 +237,12 @@ def runs_of(db: Session, exc_id: int) -> List[ExceptionApprovalRun]:
     return db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id == exc_id).order_by(ExceptionApprovalRun.round).all()
 
 
+def _lock(db: Session, model, row_id: int):
+    """The row read again under a lock (SELECT ... FOR UPDATE on PostgreSQL; nothing on SQLite): two people deciding at the same moment
+    are taken one after the other, so the step is judged on everybody's decision."""
+    return db.query(model).filter(model.id == row_id).with_for_update().populate_existing().one()
+
+
 def open_run(db: Session, exc: PolicyException) -> Optional[ExceptionApprovalRun]:
     return db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id == exc.id, ExceptionApprovalRun.status == "open") \
         .order_by(ExceptionApprovalRun.round.desc()).first()
@@ -305,6 +311,9 @@ def start(db: Session, exc: PolicyException, user: GRCUser) -> Optional[Exceptio
     rule = matching_rule(db, exc)
     if rule is None:
         return None
+    exc = _lock(db, PolicyException, exc.id)                          # a second submission at the same moment waits here, then finds it submitted
+    if exc.status != "draft" or open_run(db, exc) is not None:
+        raise _problem("This exception has already been submitted.", status.HTTP_409_CONFLICT)
     tree = org_departments.Tree.load(db, exc.tenant_id)
     unit = unit_of(db, exc)
     steps = copy.deepcopy(rule["steps"])
@@ -337,6 +346,10 @@ def decide(db: Session, exc: PolicyException, user: GRCUser, decision: str, comm
     """Approve, reject or ask for changes at the open step. Refused (403 / 409 / 400, with a sentence) unless it is the person's turn."""
     run = open_run(db, exc)
     if run is None or decision not in R.DECISIONS:
+        raise _problem(NO_RUN, status.HTTP_409_CONFLICT)
+    run = _lock(db, ExceptionApprovalRun, run.id)
+    exc = _lock(db, PolicyException, exc.id)
+    if run.status != "open" or exc.status != "pending_approval":      # decided by someone else while this request waited its turn
         raise _problem(NO_RUN, status.HTTP_409_CONFLICT)
     if exc.requested_by == user.id:
         raise _problem(OWN, status.HTTP_403_FORBIDDEN)
@@ -396,6 +409,9 @@ def withdraw(db: Session, exc: PolicyException, user: GRCUser) -> ExceptionAppro
     """Take a waiting exception back to a draft (its rule and steps are chosen again when it is submitted again)."""
     run = open_run(db, exc)
     if run is None:
+        raise _problem(NO_RUN, status.HTTP_409_CONFLICT)
+    run = _lock(db, ExceptionApprovalRun, run.id)
+    if run.status != "open":
         raise _problem(NO_RUN, status.HTTP_409_CONFLICT)
     now = datetime.utcnow()
     run.status, run.finished_at, run.asked = "withdrawn", now, []
