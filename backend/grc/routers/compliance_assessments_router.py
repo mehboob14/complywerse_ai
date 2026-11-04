@@ -26,7 +26,7 @@ from ..models import (
     ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem,
     AssessmentEvidenceApprovalWorkflow, AssessmentEvidenceApprovalTier,
     AssessmentItemEvidence, AssessmentEvidenceApprovalHistory,
-    Evidence, GRCUser, Tenant, get_db,
+    Evidence, GRCUser, ITAsset, Tenant, get_db,
     EvidenceControlMapping, ParsedFrameworkControl, ComplianceSlaPolicy
 )
 from .auth_router import (
@@ -4043,6 +4043,10 @@ def list_assessments(
     status_filter: Optional[str] = None,
     source: Optional[str] = None,
     assessment_format: Optional[str] = None,
+    scope_model: Optional[str] = Query(None, description="asset or process: the assessments made for one application or function; none: only the questionnaires (documents with no scope)"),
+    phase: Optional[str] = Query(None, description="scoping or in_progress"),
+    owner_id: Optional[int] = None,
+    asset_id: Optional[int] = Query(None, description="the assessments whose primary application is this asset"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -4079,6 +4083,17 @@ def list_assessments(
     if source:
         query = query.filter(ComplianceAssessmentDocument.source == source)
     
+    if scope_model == "none":
+        query = query.filter(ComplianceAssessmentDocument.scope_model.is_(None))
+    elif scope_model:
+        query = query.filter(ComplianceAssessmentDocument.scope_model == scope_model)
+    if phase:
+        query = query.filter(ComplianceAssessmentDocument.phase == phase)
+    if owner_id:
+        query = query.filter(ComplianceAssessmentDocument.owner_id == owner_id)
+    if asset_id:
+        query = query.filter(ComplianceAssessmentDocument.primary_asset_id == asset_id)
+
     total = query.count()
     summary_assessments = query.all()
     assessments = query.order_by(ComplianceAssessmentDocument.created_at.desc()).offset(skip).limit(limit).all()
@@ -4116,6 +4131,11 @@ def list_assessments(
             except Exception:
                 continue
     
+    people = {uid: (display or username) for uid, display, username in db.query(GRCUser.id, GRCUser.display_name, GRCUser.username).filter(
+        GRCUser.id.in_({a.owner_id for a in assessments if a.owner_id} or {0}))}
+    subjects = {aid: name for aid, name in db.query(ITAsset.id, ITAsset.name).filter(
+        ITAsset.id.in_({a.primary_asset_id for a in assessments if a.primary_asset_id} or {0}))}
+
     return {
         "assessments": [
             {
@@ -4135,6 +4155,14 @@ def list_assessments(
                 "not_complied_count": a.not_complied_count,
                 "in_progress_count": a.in_progress_count,
                 "na_count": a.na_count,
+                "scope_model": a.scope_model,
+                "phase": a.phase,
+                "template_id": a.template_id,
+                "owner_id": a.owner_id,
+                "owner_name": people.get(a.owner_id),
+                "primary_asset_id": a.primary_asset_id,
+                "primary_asset_name": subjects.get(a.primary_asset_id),
+                "started_at": a.started_at.isoformat() if a.started_at else None,
                 "created_at": a.created_at.isoformat(),
                 "updated_at": a.updated_at.isoformat() if a.updated_at else None
             }
@@ -5080,9 +5108,14 @@ def get_assessments_overview(
     cats: dict = {}
     sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
     unmapped = 0  # recognized (non-excluded) assessments with no family scorer
+    # A questionnaire nobody answered is the template of its type, not an assessment: once one made from it has started it is no row of the board (it would
+    # count every question as open for ever). An answered one is an assessment of its own, as it was before assessments were made per application.
+    started_from = {d.assessment_format for d in docs if d.scope_model and d.phase != "scoping"}
     for d in docs:
         fmt = getattr(d, "assessment_format", "standard") or "standard"
-        if fmt in EXCLUDED_FORMATS:
+        if fmt in EXCLUDED_FORMATS or d.phase == "scoping":      # a draft being scoped has no questions yet: it is not on the board
+            continue
+        if not d.scope_model and fmt in started_from and not (d.complied_count or d.partially_complied_count or d.not_complied_count or d.na_count):
             continue
         items = db.query(_Item).filter(_Item.assessment_id == d.id).all()
         ev = {}
@@ -5309,6 +5342,12 @@ def get_assessment(
         "notes": assessment.notes,
         "linked_asset_ids": getattr(assessment, "linked_asset_ids", None) or [],
         "asset_levels": getattr(assessment, "asset_levels", None) or {},
+        "scope_model": assessment.scope_model,
+        "phase": assessment.phase,
+        "template_id": assessment.template_id,
+        "owner_id": assessment.owner_id,
+        "primary_asset_id": assessment.primary_asset_id,
+        "started_at": assessment.started_at.isoformat() if assessment.started_at else None,
         "created_at": assessment.created_at.isoformat(),
         "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,
         "items": [
@@ -6234,7 +6273,8 @@ def get_item_evidence(
     # That feature creates EvidenceControlMapping entries (ParsedFrameworkControl → Evidence)
     # which are separate from AssessmentItemEvidence. We match them here by comparing the
     # assessment item's item_number against the parsed control's control_id / original_reference.
-    if item.item_number:
+    # An assessment of one application or function is given its evidence on purpose: the same item number in another assessment is not proof here.
+    if item.item_number and not getattr(item.assessment, "scope_model", None):
         item_number_lower = item.item_number.strip().lower()
         framework_links = (
             db.query(EvidenceControlMapping)

@@ -304,6 +304,7 @@ def list_assets(
     lifecycle_state: Optional[str] = None,
     data_classification: Optional[str] = None,
     internet_facing: Optional[bool] = None,
+    search: Optional[str] = Query(None, max_length=100, description="part of the name or host name"),
     stale_only: bool = Query(False, description="When true, return assets where last_seen_at is older than `stale_days` (default 30)."),
     stale_days: int = Query(30, ge=1, le=365),
     skip: int = 0,
@@ -338,6 +339,9 @@ def list_assets(
         query = query.filter(ITAsset.data_classification == data_classification)
     if internet_facing is not None:
         query = query.filter(ITAsset.internet_facing == internet_facing)
+    if search and search.strip():
+        like = f"%{search.strip()}%"
+        query = query.filter(ITAsset.name.ilike(like) | ITAsset.host_name.ilike(like))
     if stale_only:
         from datetime import timedelta
         cutoff = datetime.utcnow() - timedelta(days=stale_days)

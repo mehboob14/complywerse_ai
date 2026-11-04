@@ -349,6 +349,8 @@ def _item_lines(item: ComplianceAssessmentDocumentItem) -> List[str]:
         f"DOMAIN: {' / '.join(x for x in (v['area_domain'], v['subdomain_name']) if x) or '-'}",
         f"REQUIREMENT: {_text(v['control_description'], 2000) or '-'}",
     ]
+    if a.get("subject_summary"):                                  # an assessment of one application or function says what it is of
+        lines.insert(1, f"SCOPE: {_text(a['subject_summary'], 1500)}")
     if v["remarks"]:
         lines.append(f"DETAILS: {_text(v['remarks'], 500)}")
     status = v["compliance_status"] or "-"
@@ -572,6 +574,7 @@ def build_draft_prompt(item: ComplianceAssessmentDocumentItem, rec: Dict[str, An
         f"ASSESSMENT: {a.get('name') or 'Assessment'}"
         + (f" — each item is {FORMAT_GUIDE[fmt]}." if fmt in FORMAT_GUIDE else ""),
         f"REQUIREMENT {v['item_number'] or ''}: {_text(v['control_description'], 2000)}",
+        *([f"SCOPE OF THE ASSESSMENT: {_text(a['subject_summary'], 1500)}"] if a.get("subject_summary") else []),
         f"DOCUMENT TO WRITE: {rec.get('evidence_type')} (a {kind})",
         f"IT MUST SHOW: {rec.get('description') or '-'}",
         f"HOW IT WILL BE USED AS EVIDENCE: {rec.get('how_to_collect') or '-'}",

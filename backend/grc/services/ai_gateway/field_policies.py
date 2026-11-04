@@ -262,12 +262,12 @@ S assessment_id tenant_id
 
 _ASSESSMENT_DOCUMENT = _codes("""
 K id
-A assessment_type assessment_format status overall_score total_items complied_count partially_complied_count not_complied_count in_progress_count na_count
+A assessment_type assessment_format status overall_score total_items complied_count partially_complied_count not_complied_count in_progress_count na_count scope_model phase
 Y due_date
-R upload_date created_at updated_at
-T name notes file_name
-D xlsx_data asset_levels linked_asset_ids
-S tenant_id source file_path assessor created_by
+R upload_date created_at updated_at started_at
+T name notes file_name subject_summary
+D xlsx_data asset_levels linked_asset_ids scope scope_snapshot
+S tenant_id source file_path assessor created_by template_id owner_id primary_asset_id
 """)
 
 _ASSESSMENT_RECORD = _codes("""
@@ -312,8 +312,9 @@ _USES: Dict[str, Dict[str, Tuple[str, ...]]] = {
         "assessments.assess_item": ("area_domain:200", "control_description:2000", "remarks:4000"),
     },
     "ComplianceAssessmentDocument": {
-        "assessments.evidence_advice": ("name:200", "assessment_format"),
-        "assessments.evidence_draft": ("name:200", "assessment_format"),
+        # subject_summary: what the assessment is of (an application and its environment, or a function and its period), no person named
+        "assessments.evidence_advice": ("name:200", "assessment_format", "subject_summary:1500"),
+        "assessments.evidence_draft": ("name:200", "assessment_format", "subject_summary:1500"),
     },
     "CriticalTask": {
         "tasks.prioritize": ("id", "title:200", "priority", "status", "category", "source", "due_date", "escalation_level"),

@@ -14,7 +14,7 @@ from ....models import (
     ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, ControlImplementation,
     ImplementationEvidence, CertificationJourney,
-    ComplianceAssessmentDocumentItem, AssessmentItemEvidence,
+    ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem, AssessmentItemEvidence,
     AssessmentEvidenceApprovalWorkflow
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -863,7 +863,11 @@ def link_evidence_from_ai_suggestion(
         original_ref_lower = (control.original_reference or "").strip().lower()
 
         # Match by item_number == control_id OR item_number == original_reference
-        matching_items = db.query(ComplianceAssessmentDocumentItem).filter(
+        matching_items = db.query(ComplianceAssessmentDocumentItem).join(
+            ComplianceAssessmentDocument, ComplianceAssessmentDocument.id == ComplianceAssessmentDocumentItem.assessment_id,
+        ).filter(
+            # an assessment of one application or function is given its evidence on purpose: one application's file must not count for another's
+            ComplianceAssessmentDocument.scope_model.is_(None),
             ComplianceAssessmentDocumentItem.tenant_id == evidence.tenant_id,
             or_(
                 func.lower(ComplianceAssessmentDocumentItem.item_number) == control_id_lower,

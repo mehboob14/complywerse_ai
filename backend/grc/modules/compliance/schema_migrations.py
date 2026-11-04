@@ -470,6 +470,16 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_documents", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
     # Per-asset target ASVS level {asset_id: level} for level-scoped assessments.
     ("grc_compliance_assessment_documents", "asset_levels", "JSON DEFAULT '{}'::json", None),
+    # Scoping and initiation of the Cyber Security assessments: NULL on every assessment that predates it.
+    ("grc_compliance_assessment_documents", "scope_model", "VARCHAR(16)", None),
+    ("grc_compliance_assessment_documents", "phase", "VARCHAR(24)", None),
+    ("grc_compliance_assessment_documents", "template_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "owner_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "primary_asset_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "scope", "JSON DEFAULT '{}'::json", None),
+    ("grc_compliance_assessment_documents", "scope_snapshot", "JSON", None),
+    ("grc_compliance_assessment_documents", "subject_summary", "TEXT", None),
+    ("grc_compliance_assessment_documents", "started_at", "TIMESTAMP", None),
     # Point-score weights on the tenant SLA policy (grc_compliance_sla_policy is
     # a new table via create_all; these ALTERs cover tenants whose table was
     # created before the weight columns existed).
