@@ -311,6 +311,15 @@ def test_which_rule_an_exception_follows_unit_inheritance_priority_policy_kind_a
     assert (inherited["department_path"], inherited["department_inherited"]) == (["Operations", "Support"], True)
 
 
+def test_someone_asked_who_may_not_read_the_policy_still_sees_the_unit_the_rule_was_chosen_for(w):
+    make_rule(w, steps=[step(people=[{"type": "user", "id": APP1}])], department_id=10)
+    eid = raise_exception(w, document_id=1)["id"]                                # the policy sits in Support, under Operations
+    submit(w, eid)
+    seen = get(w, eid, APP1)                                                     # APP1 holds no library right: the policy's title stays hidden
+    assert seen["document_title"] is None
+    assert seen["department_path"] == ["Operations", "Support"] and seen["department_inherited"] is True and seen["department_id"] is None
+
+
 def test_in_turn_asks_one_after_another_and_at_least_counts_different_people(w):
     make_rule(w, steps=[step("review", [{"type": "user", "id": REV1}, {"type": "user", "id": REV2}], order="in_turn"),
                         step("approval", [{"type": "user", "id": APP1}, {"type": "user", "id": APP2}, {"type": "user", "id": APP3}], rule="at_least", min_count=2)])

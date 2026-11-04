@@ -1271,7 +1271,8 @@ def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) ->
     approval = getattr(v, "approvals", {}).get(exc.id)
     ruled = bool(approval and approval["status"] == "open")
     tree = getattr(v, "trees", {}).get(exc.tenant_id)
-    unit = exc.department_id or (doc.department_id if doc is not None and doc.id in v.readable else None)
+    # its own department, else the unit its approval rule was chosen for (known to everyone asked, who may not read the policy), else its policy's
+    unit = exc.department_id or (approval or {}).get("department_id") or (doc.department_id if doc is not None and doc.id in v.readable else None)
     unit_path = [d.name for d in tree.path(unit)] if tree is not None and unit in tree.rows else []
 
     return {
