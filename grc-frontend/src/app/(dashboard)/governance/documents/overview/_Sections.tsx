@@ -198,7 +198,7 @@ function IssuesCard({ data }: { data: Overview }) {
       id="issues"
       title="Issues"
       meta={`${data.issues.documents} ${data.issues.documents === 1 ? 'document' : 'documents'}`}
-      info="Documents that need attention. One document can be in several of these, so the rows add up to more than the documents named above."
+      info="Documents that need attention. One document can be in several of these, so the rows can add up to more than the number of documents."
     >
       <ul className="flex flex-col">
         {rows.map((r) => (

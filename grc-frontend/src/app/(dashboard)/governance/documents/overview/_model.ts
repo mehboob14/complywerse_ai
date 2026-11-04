@@ -292,7 +292,7 @@ export function issueRows(d: Pick<Overview, 'issues' | 'links'>): IssueRow[] {
   const i = d.issues;
   const row = (key: IssueRow['key'], label: string, noun: string, tone: Tone, info: string): IssueRow => ({ key, label, noun, count: i[key], tone, href: figureHref(d, `issues.${key}`), info });
   return [
-    row('stuck', 'Stuck in a stage', 'documents stuck in a stage', 'danger', 'In review or approval with nobody asked, or whose oldest request is later than the days set for escalation in Governance settings.'),
+    row('stuck', 'Stuck in a stage', 'documents stuck in a stage', 'danger', 'In review or approval with nobody asked, or with a request overdue for more days than the escalation period in Governance settings.'),
     row('on_hold', 'On hold', 'documents on hold', 'warning', 'Someone asked for changes, or proposed one, and the route waits for the author.'),
     row('late_approvals', 'Late approvals', 'documents with late approvals', 'danger', 'A review or an approval is past its due date.'),
     row('late_acknowledgements', 'Late acknowledgements', 'documents with late acknowledgements', 'warning', 'Someone has not acknowledged a document in force by the due date.'),
