@@ -268,6 +268,114 @@ def sync_team_shim(db: Session, department: GRCDepartment) -> Team:
     return team
 
 
+# ── the tree (DECISIONS D57) ─────────────────────────────────────────────────
+MAX_DEPTH = 3                                                    # department > sub-department > unit
+DEFAULT_LEVEL_LABELS = ("Department", "Sub-department", "Unit")
+LEVEL_LABEL_MAX = 40
+
+
+class Tree:
+    """An organisation's departments as a tree, read once and answered from memory. A department whose parent is missing, is itself,
+    or would close a loop (old data can hold one: the vulnerability module wrote parents without a check) counts as a top one, so
+    every department has a level and none is lost. Switched-off departments are in the tree: a document may still sit in one."""
+
+    def __init__(self, rows: Iterable[GRCDepartment]):
+        self.rows: Dict[int, GRCDepartment] = {d.id: d for d in rows}
+        self.parent: Dict[int, Optional[int]] = {}
+        for node, department in self.rows.items():
+            up = department.parent_department_id
+            ok = up is not None and up in self.rows and up != node
+            seen, walker = set(), up
+            while ok and walker is not None and walker not in seen:
+                if walker == node:                                    # the chain above comes back to this department: a loop
+                    ok = False
+                seen.add(walker)
+                walker = self.rows[walker].parent_department_id if walker in self.rows else None
+            self.parent[node] = up if ok else None
+        self.children: Dict[int, List[int]] = defaultdict(list)
+        for node in sorted(self.rows):
+            if self.parent[node] is not None:
+                self.children[self.parent[node]].append(node)
+
+    @classmethod
+    def load(cls, db: Session, tenant_id: int) -> "Tree":
+        return cls(db.query(GRCDepartment).filter(GRCDepartment.tenant_id == tenant_id))
+
+    def level(self, node_id: int) -> int:
+        """1 for a top department, 2 for one under it, and so on (more than ``MAX_DEPTH`` only in data that predates the limit)."""
+        n = 1
+        while self.parent.get(node_id) is not None:
+            node_id, n = self.parent[node_id], n + 1
+        return n
+
+    def path(self, node_id: int) -> List[GRCDepartment]:
+        """The department and the ones above it, the top one first."""
+        out = [self.rows[node_id]]
+        while self.parent.get(out[-1].id) is not None:
+            out.append(self.rows[self.parent[out[-1].id]])
+        return out[::-1]
+
+    def subtree(self, node_id: int) -> Set[int]:
+        """The department and everything under it, however deep."""
+        out, todo = set(), [node_id]
+        while todo:
+            n = todo.pop()
+            if n in out or n not in self.rows:
+                continue
+            out.add(n)
+            todo.extend(self.children.get(n, []))
+        return out
+
+    def height(self, node_id: int) -> int:
+        """How many levels sit under the department (0 when nothing does)."""
+        below = [self.height(c) for c in self.children.get(node_id, [])]
+        return 1 + max(below) if below else 0
+
+
+def level_labels(db: Session, tenant_id: int) -> List[str]:
+    """What the organisation calls the three levels, top first; a level never named has its default."""
+    from ..models import GRCDepartmentLevel
+
+    named = {level: label for level, label in db.query(GRCDepartmentLevel.level, GRCDepartmentLevel.label).filter(
+        GRCDepartmentLevel.tenant_id == tenant_id)}
+    return [(named.get(i) or "").strip() or DEFAULT_LEVEL_LABELS[i - 1] for i in range(1, MAX_DEPTH + 1)]
+
+
+def set_level_labels(db: Session, tenant_id: int, labels: Iterable[Optional[str]], by_user_id: Optional[int] = None) -> List[str]:
+    """Name the levels. One name per level, a blank one means its default, no two the same; a default is stored as no row."""
+    from ..models import GRCDepartmentLevel
+
+    given = [str(label or "").strip() for label in (labels or [])]
+    if len(given) != MAX_DEPTH:
+        raise _problem(f"Give a name for each of the {MAX_DEPTH} levels.")
+    clean = [label or DEFAULT_LEVEL_LABELS[i] for i, label in enumerate(given)]
+    if any(len(label) > LEVEL_LABEL_MAX for label in clean):
+        raise _problem(f"A level name is at most {LEVEL_LABEL_MAX} characters.")
+    if len({label.casefold() for label in clean}) != len(clean):
+        raise _problem("Each level needs its own name.")
+    rows = {r.level: r for r in db.query(GRCDepartmentLevel).filter(GRCDepartmentLevel.tenant_id == tenant_id)}
+    for level, label in enumerate(clean, start=1):
+        row = rows.get(level)
+        if label == DEFAULT_LEVEL_LABELS[level - 1]:
+            if row is not None:
+                db.delete(row)
+        elif row is None:
+            db.add(GRCDepartmentLevel(tenant_id=tenant_id, level=level, label=label, updated_by=by_user_id))
+        elif row.label != label:
+            row.label, row.updated_by, row.updated_at = label, by_user_id, datetime.utcnow()
+    db.flush()
+    return level_labels(db, tenant_id)
+
+
+def headed_by(db: Session, user_id: int, tenant_ids: Iterable[int]) -> Set[int]:
+    """The ids of the departments the person is the head (owner) of."""
+    ids = list(tenant_ids)
+    if not ids:
+        return set()
+    return {i for (i,) in db.query(GRCDepartment.id).filter(GRCDepartment.department_head_user_id == user_id,
+                                                           GRCDepartment.tenant_id.in_(ids))}
+
+
 # ── departments ──────────────────────────────────────────────────────────────
 def unique_code(db: Session, tenant_id: int, name: str, exclude_id: Optional[int] = None) -> str:
     """A code for a new department, from its name: the initials of its words, or the first letters of a single word, in capitals
@@ -306,16 +414,25 @@ def _check_unique(db: Session, tenant_id: int, name: Optional[str], code: Option
 
 
 def _check_parent(db: Session, tenant_id: int, parent_id: int, self_id: Optional[int] = None) -> None:
-    """The parent exists in the tenant and is not the department itself or one of its own sub-departments (no loop)."""
-    node = db.get(GRCDepartment, int(parent_id))
-    if node is None or node.tenant_id != tenant_id:
+    """Where a department may be placed: the parent exists in the tenant and is switched on, is not the department itself or one of
+    its own sub-departments (no loop), and the department with everything under it still fits in ``MAX_DEPTH`` levels."""
+    tree = Tree.load(db, tenant_id)
+    node = tree.rows.get(int(parent_id))
+    if node is None:
         raise _problem("The parent department chosen does not exist.")
-    seen = set()
-    while self_id is not None and node is not None and node.id not in seen:
-        if node.id == self_id:
-            raise _problem("A department cannot be placed under itself or under one of its own sub-departments.")
-        seen.add(node.id)
-        node = db.get(GRCDepartment, node.parent_department_id) if node.parent_department_id else None
+    if node.is_active is False:
+        raise _problem(f"'{node.name}' is switched off. Choose a parent that is switched on.")
+    if self_id is not None and node.id in tree.subtree(int(self_id)):
+        raise _problem("A department cannot be placed under itself or under one of its own sub-departments.")
+    level, height = tree.level(node.id), (tree.height(int(self_id)) if self_id is not None else 0)
+    if level + 1 + height > MAX_DEPTH:
+        labels = level_labels(db, tenant_id)
+        shape = " › ".join(labels)
+        if height == 0:
+            raise _problem(f"'{node.name}' is a {labels[min(level, MAX_DEPTH) - 1]}: nothing can be placed under it. "
+                           f"The tree has {MAX_DEPTH} levels: {shape}.")
+        raise _problem(f"Moving it under '{node.name}' would put what is under it {level + 1 + height} levels deep. "
+                       f"The tree has {MAX_DEPTH} levels: {shape}.")
 
 
 def _check_person(db: Session, user_id: int, missing: HTTPException) -> GRCUser:

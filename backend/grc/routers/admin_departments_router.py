@@ -47,6 +47,11 @@ class DepartmentOut(BaseModel):
     manual_member_count: int = 0            # those of them added by hand
     team_id: Optional[int] = None           # the picker record other modules store (Administration → Teams' id)
     document_count: int = 0                 # its documents the caller may read, archived ones left out
+    document_count_total: int = 0           # the same for it and everything under it
+    level: int = 1                          # 1 = a top department, 2 = under one, 3 = the deepest the tree goes (D57)
+    level_label: str = "Department"         # what the organisation calls that level
+    path: List[str] = []                    # the names from the top department down to this one
+    child_count: int = 0                    # departments directly under it, switched off ones included
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -103,6 +108,16 @@ class RolesIn(BaseModel):
     role_ids: List[int] = []
 
 
+class LevelsIn(BaseModel):
+    labels: List[Optional[str]]             # one name per level, top first; blank = the default
+
+
+class LevelsOut(BaseModel):
+    labels: List[str]
+    defaults: List[str]
+    max_depth: int
+
+
 class MemberIn(BaseModel):
     user_id: int
     role: Optional[str] = "member"          # lead | member | viewer
@@ -143,17 +158,28 @@ def _document_counts(db: Session, rows: List[GRCDepartment], user: GRCUser) -> d
 def _views(db: Session, rows: List[GRCDepartment], user: GRCUser) -> List[DepartmentOut]:
     """The departments as the API shows them, in a handful of queries however many there are."""
     info = org_departments.overview(db, rows)
-    documents = _document_counts(db, rows, user)
+    trees = {t: org_departments.Tree.load(db, t) for t in {r.tenant_id for r in rows}}
+    labels = {t: org_departments.level_labels(db, t) for t in trees}
+    # the counts cover the whole tree of each organisation: a department's total takes in departments that are not in `rows`
+    documents = _document_counts(db, [d for tree in trees.values() for d in tree.rows.values()], user)
     parent_ids = {r.parent_department_id for r in rows if r.parent_department_id}
     head_ids = {r.department_head_user_id for r in rows if r.department_head_user_id}
     parents = dict(db.query(GRCDepartment.id, GRCDepartment.name).filter(GRCDepartment.id.in_(parent_ids)).all()) if parent_ids else {}
     heads = ({u.id: u.display_name or u.username for u in db.query(GRCUser).filter(GRCUser.id.in_(head_ids))} if head_ids else {})
-    return [DepartmentOut(
-        id=r.id, tenant_id=r.tenant_id, name=r.name, code=r.code, description=r.description,
-        parent_department_id=r.parent_department_id, parent_department_name=parents.get(r.parent_department_id),
-        department_head_user_id=r.department_head_user_id, department_head_name=heads.get(r.department_head_user_id),
-        is_active=r.is_active is not False, document_count=documents.get(r.id, 0), created_at=r.created_at, updated_at=r.updated_at,
-        **info[r.id]) for r in rows]
+    out = []
+    for r in rows:
+        tree = trees[r.tenant_id]
+        level = tree.level(r.id)
+        out.append(DepartmentOut(
+            id=r.id, tenant_id=r.tenant_id, name=r.name, code=r.code, description=r.description,
+            parent_department_id=r.parent_department_id, parent_department_name=parents.get(r.parent_department_id),
+            department_head_user_id=r.department_head_user_id, department_head_name=heads.get(r.department_head_user_id),
+            is_active=r.is_active is not False, document_count=documents.get(r.id, 0),
+            document_count_total=sum(documents.get(i, 0) for i in tree.subtree(r.id)),
+            level=level, level_label=labels[r.tenant_id][min(level, org_departments.MAX_DEPTH) - 1],
+            path=[d.name for d in tree.path(r.id)], child_count=len(tree.children.get(r.id, [])),
+            created_at=r.created_at, updated_at=r.updated_at, **info[r.id]))
+    return out
 
 
 def _detail(db: Session, row: GRCDepartment, user: GRCUser) -> DepartmentDetailOut:
@@ -201,6 +227,33 @@ def role_options(
     from ..modules.governance.routers.document_signoff import signoff_roles
 
     return signoff_roles(db, get_user_tenants(current_user, db))
+
+
+@router.get("/levels", response_model=LevelsOut)
+def get_levels(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What the organisation calls the levels of its department tree (a Department, a Sub-department, a Unit until it says
+    otherwise). Open to anyone signed in: every picker names the levels."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return LevelsOut(labels=org_departments.level_labels(db, tenant_id) if tenant_id else list(org_departments.DEFAULT_LEVEL_LABELS),
+                     defaults=list(org_departments.DEFAULT_LEVEL_LABELS), max_depth=org_departments.MAX_DEPTH)
+
+
+@router.put("/levels", response_model=LevelsOut)
+def set_levels(
+    payload: LevelsIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant.")
+    labels = org_departments.set_level_labels(db, tenant_id, payload.labels, by_user_id=current_user.id)
+    db.commit()
+    return LevelsOut(labels=labels, defaults=list(org_departments.DEFAULT_LEVEL_LABELS), max_depth=org_departments.MAX_DEPTH)
 
 
 @router.post("", response_model=DepartmentOut, status_code=status.HTTP_201_CREATED)

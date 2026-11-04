@@ -41,7 +41,7 @@ ADMIN_ROLE, EDITORS, ANALYSTS, AUDITORS, DO_ROLE = 1, 2, 3, 4, 5
 
 DEPARTMENT_KEYS = {"id", "tenant_id", "name", "code", "description", "parent_department_id", "parent_department_name",
                    "department_head_user_id", "department_head_name", "is_active", "roles", "member_count", "manual_member_count",
-                   "team_id", "document_count", "created_at", "updated_at"}
+                   "team_id", "document_count", "document_count_total", "level", "level_label", "path", "child_count", "created_at", "updated_at"}
 MEMBER_KEYS = {"user_id", "name", "email", "designation", "how", "member_role", "via_roles", "added_at"}
 MANAGED = "This team is managed as a department. Change it in Administration → Departments."
 
