@@ -176,17 +176,17 @@ export function DepartmentsSection() {
     return <Menu label={`Actions for ${d.name}`} iconOnly items={items} />;
   };
 
-  // The tree is the Name column (indented under its parent, so there is no Parent column); the narrower the window, the fewer columns: below 768px
-  // each department is a card with the same facts as lines.
+  // The tree is the Name column (indented under its parent, so there is no Parent column); the narrower the window, the fewer columns: Level goes
+  // below 1024px (the indent still shows it), and below 768px each department is a card with the same facts as lines.
   const columns: RegisterColumn<Row>[] = [
     { key: 'name', header: 'Name', isRowHeader: true, cell: (r) => <NameCell {...r} /> },
-    { key: 'level', header: 'Level', priority: 2, width: 'w-[140px]', card: 'meta', cell: (r) => <LevelChip row={r} names={names} /> },
+    { key: 'level', header: 'Level', priority: 3, width: 'w-[128px]', card: 'meta', cell: (r) => <LevelChip row={r} names={names} /> },
     {
-      key: 'owner', header: 'Owner', priority: 2, width: 'w-[130px]', card: 'meta',
+      key: 'owner', header: 'Owner', priority: 2, width: 'w-[120px]', card: 'meta',
       cell: ({ department: d }) => (d.department_head_name ? <span className="line-clamp-2" title={d.department_head_name}>{d.department_head_name}</span> : <None />),
     },
     {
-      key: 'documents', header: 'Documents', priority: 2, align: 'right', width: 'w-[104px]', card: 'meta',
+      key: 'documents', header: 'Documents', priority: 2, align: 'right', width: 'w-[88px]', card: 'meta',
       cell: ({ department: d }) => {
         // its own number, and (quieter) the number with everything under it when that is more; the words are for the tooltip and the screen reader
         const documents = documentsLabel(d.document_count, d.document_count_total);
