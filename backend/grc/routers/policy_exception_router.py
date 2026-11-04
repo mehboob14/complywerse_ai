@@ -50,10 +50,13 @@ def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
     from ..services import org_departments
 
     exceptions = list(exceptions)
-    return SimpleNamespace(id=user.id, held=_held(db, user),
-                           readable=readable_among(db, user, [e.document_id for e in exceptions]),
-                           approvals=exception_approvals.bulk_views(db, exceptions, user.id),
-                           trees={t: org_departments.Tree.load(db, t) for t in {e.tenant_id for e in exceptions}})
+    held = _held(db, user)
+    approvals = exception_approvals.bulk_views(db, exceptions, user.id)
+    if approvals and not held:      # who decided what, with their words: for people who work with exceptions and those raising or asked about this one
+        mine = {e.id for e in exceptions if e.requested_by == user.id} | exception_approvals.involved_ids(db, approvals, user.id)
+        approvals = {eid: view for eid, view in approvals.items() if eid in mine}
+    return SimpleNamespace(id=user.id, held=held, readable=readable_among(db, user, [e.document_id for e in exceptions]),
+                           approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in {e.tenant_id for e in exceptions}})
 
 
 def _may_change(v, exc) -> bool:

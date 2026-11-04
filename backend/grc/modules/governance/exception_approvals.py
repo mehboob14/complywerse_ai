@@ -143,9 +143,9 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
     where = int(where) if where not in (None, "") else None
     if where is not None and where not in tree.rows:
         raise _problem("The department chosen does not exist.")
-    _check_people(db, tenant_id, steps)
     active = payload.get("is_active") is not False
     if active:
+        _check_people(db, tenant_id, steps)           # a rule that is switched off is never asked: someone who left does not stop it being switched off
         for other in db.query(ExceptionApprovalRule).filter(ExceptionApprovalRule.tenant_id == tenant_id, ExceptionApprovalRule.is_active.is_(True)):
             if (rule is None or other.id != rule.id) and other.department_id == where and \
                     set(other.priorities or []) == set(priorities) and set(other.doc_types or []) == set(doc_types):
@@ -513,6 +513,17 @@ def involved(db: Session, exc: PolicyException, user_id: int) -> bool:
                                                      ExceptionApprovalDecision.user_id == user_id).first() is not None:
         return True
     return any(user_id in (r.asked or []) for r in runs_of(db, exc.id))
+
+
+def involved_ids(db: Session, exception_ids: Iterable[int], user_id: int) -> Set[int]:
+    """The ids among ``exception_ids`` the person was asked about at some step, or decided on (``involved`` for many at once)."""
+    ids = list(exception_ids)
+    if not ids:
+        return set()
+    out = {e for (e,) in db.query(ExceptionApprovalDecision.exception_id).filter(
+        ExceptionApprovalDecision.exception_id.in_(ids), ExceptionApprovalDecision.user_id == user_id)}
+    out |= {r.exception_id for r in db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id.in_(ids)) if user_id in (r.asked or [])}
+    return out
 
 
 def waiting_for(db: Session, user_id: int, tenant_ids: Iterable[int]) -> List[PolicyException]:

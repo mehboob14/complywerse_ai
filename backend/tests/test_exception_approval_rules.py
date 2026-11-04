@@ -320,6 +320,30 @@ def test_someone_asked_who_may_not_read_the_policy_still_sees_the_unit_the_rule_
     assert seen["department_path"] == ["Operations", "Support"] and seen["department_inherited"] is True and seen["department_id"] is None
 
 
+def test_a_rule_can_be_switched_off_after_someone_in_it_has_left_but_not_on_again(w):
+    rule = make_rule(w, steps=[step(people=[{"type": "user", "id": APP3}])])
+    w.db.get(m.GRCUser, APP3).is_active = False
+    w.db.commit()
+    body = {k: rule[k] for k in ("name", "department_id", "priorities", "doc_types", "steps")}
+    off = w.as_(SETTER).put(f"{RULES}/{rule['id']}", json={**body, "is_active": False})
+    assert off.status_code == 200 and off.json()["is_active"] is False
+    on = w.as_(SETTER).put(f"{RULES}/{rule['id']}", json={**body, "is_active": True})
+    assert on.status_code == 400 and "is not an active user" in on.json()["detail"]
+
+
+def test_who_decided_what_with_their_words_is_for_people_who_work_with_exceptions_or_are_involved(w):
+    make_rule(w, steps=[step(people=[{"type": "user", "id": APP1}])])
+    eid = raise_exception(w)["id"]
+    submit(w, eid)
+    decide(w, eid, APP1, comments="Agreed, with conditions")
+    for who, sees in [(REQ, True), (APP1, True), (ADMIN, True), (EXCADMIN, True), (PLAIN, False), (REV1, False)]:
+        one = get(w, eid, who)
+        listed = next(e for e in w.as_(who).get(EX).json() if e["id"] == eid)
+        assert (one["approval"] is not None, listed["approval"] is not None) == (sees, sees), who
+        assert one["status"] == "approved"                                          # the exception itself is read as before
+    assert get(w, eid, PLAIN)["can_decide"] is False and get(w, eid, PLAIN)["can_withdraw"] is False
+
+
 def test_in_turn_asks_one_after_another_and_at_least_counts_different_people(w):
     make_rule(w, steps=[step("review", [{"type": "user", "id": REV1}, {"type": "user", "id": REV2}], order="in_turn"),
                         step("approval", [{"type": "user", "id": APP1}, {"type": "user", "id": APP2}, {"type": "user", "id": APP3}], rule="at_least", min_count=2)])
