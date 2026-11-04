@@ -239,7 +239,9 @@ def runs_of(db: Session, exc_id: int) -> List[ExceptionApprovalRun]:
 
 def _lock(db: Session, model, row_id: int):
     """The row read again under a lock (SELECT ... FOR UPDATE on PostgreSQL; nothing on SQLite): two people deciding at the same moment
-    are taken one after the other, so the step is judged on everybody's decision."""
+    are taken one after the other, so the step is judged on everybody's decision. What the session holds unwritten is flushed first:
+    reading the row again would otherwise drop it."""
+    db.flush()
     return db.query(model).filter(model.id == row_id).with_for_update().populate_existing().one()
 
 
