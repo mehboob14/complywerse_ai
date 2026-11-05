@@ -732,10 +732,13 @@ def test_the_board_asks_for_the_same_rights_as_the_figures_and_counts_only_what_
     assert all(card["id"] not in (1, 4, 5) for c in reader["columns"] for card in c["cards"])
 
 
+BOM = chr(0xFEFF)                                                           # the byte-order mark Excel reads as UTF-8
+
+
 def csv_rows(text):
     import csv as csv_module
     import io
-    return list(csv_module.reader(io.StringIO(text.lstrip("﻿"))))
+    return list(csv_module.reader(io.StringIO(text.lstrip(BOM))))
 
 
 def test_the_export_is_a_csv_of_the_documents_in_scope_with_what_is_wrong_with_each(w):
@@ -744,25 +747,26 @@ def test_the_export_is_a_csv_of_the_documents_in_scope_with_what_is_wrong_with_e
     doc(w, 9, FINANCE, status="archived", next_review_date=None)
     w.db.commit()
     text, name = S.export_documents(w.db, user(w, ADMIN), None, now=NOW)
-    assert text.startswith("﻿") and name == "documents-whole-organisation-2026-11-04.csv"
+    assert text.startswith(BOM) and name == "documents-whole-organisation-2026-11-04.csv"
     rows = csv_rows(text)
-    assert rows[0] == ["ID", "Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"]
+    assert rows[0] == ["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"]       # no internal id: nobody can use it (UX rule U1)
     assert len(rows) == 1 + 8                                                               # the archived one is left out, as in every figure
-    by_id = {r[0]: r for r in rows[1:]}
-    assert by_id["4"] == ["4", "", "Doc 4", "Standard", "In review", "1.0", "Operations > Support > Helpdesk", "Ada", "", "Stuck in a stage; Late approval"]
-    assert by_id["2"][4:] == ["Published", "1.0", "Operations > Support", "Ada", "2026-11-03", "Review overdue"]
-    assert by_id["3"][7] == "" and by_id["3"][9] == "No owner" and by_id["7"][6] == "" and by_id["6"][9] == "Late acknowledgement"
-    assert [r[6] for r in rows[1:]] == sorted((r[6] for r in rows[1:]), key=str.casefold)       # in department order, then by title
+    by_title = {r[1]: r for r in rows[1:]}
+    assert by_title["Doc 4"] == ["", "Doc 4", "Standard", "In review", "1.0", "Operations > Support > Helpdesk", "Ada", "", "Stuck in a stage; Late approval"]
+    assert by_title["Doc 2"][3:] == ["Published", "1.0", "Operations > Support", "Ada", "2026-11-03", "Review overdue"]
+    assert by_title["Doc 3"][6] == "" and by_title["Doc 3"][8] == "No owner" and by_title["Doc 7"][5] == "" and by_title["Doc 6"][8] == "Late acknowledgement"
+    assert [r[5] for r in rows[1:]] == sorted((r[5] for r in rows[1:]), key=str.casefold)       # in department order, then by title
     # a scope is its own file; the file's name says which
     scoped, scoped_name = S.export_documents(w.db, user(w, ADMIN), str(SUP), now=NOW)
-    assert scoped_name == "documents-support-2026-11-04.csv" and sorted(int(r[0]) for r in csv_rows(scoped)[1:]) == [2, 3, 4, 5, 8]
+    assert scoped_name == "documents-support-2026-11-04.csv" and sorted(r[1] for r in csv_rows(scoped)[1:]) == ["Doc 2", "Doc 3", "Doc 4", "Doc 5", "Doc 8"]
     # a title a spreadsheet would run as a formula is text
     for did, title in [(20, '=HYPERLINK("http://evil.test","x")'), (21, "+1+1"), (22, "-2+3"), (23, "@SUM(A1)"), (24, "\tTabbed")]:
         doc(w, did, FINANCE).title = title
     w.db.commit()
-    cells = {r[0]: r[2] for r in csv_rows(S.export_documents(w.db, user(w, ADMIN), str(FINANCE), now=NOW)[0])[1:]}
-    assert cells["20"] == "'" + '=HYPERLINK("http://evil.test","x")' and cells["21"] == "'+1+1" and cells["22"] == "'-2+3" and cells["23"] == "'@SUM(A1)" and cells["24"] == "'\tTabbed"
-    assert cells["6"] == "Doc 6"                                                            # an ordinary title is untouched
+    titles = {r[1] for r in csv_rows(S.export_documents(w.db, user(w, ADMIN), str(FINANCE), now=NOW)[0])[1:]}
+    assert {"'" + '=HYPERLINK("http://evil.test","x")', "'+1+1", "'-2+3", "'@SUM(A1)", "'\tTabbed"} <= titles
+    assert not any(t[:1] in "=+-@\t\r" for t in titles if t)                                # none is left for a spreadsheet to run
+    assert "Doc 6" in titles                                                                # an ordinary title is untouched
 
 
 def test_the_export_is_an_attachment_and_asks_for_the_same_rights_as_the_figures(w):
@@ -776,7 +780,7 @@ def test_the_export_is_an_attachment_and_asks_for_the_same_rights_as_the_figures
     assert get(w, PLAIN, path=URL + "/export").status_code == 403
     assert get(w, MID, OPS, path=URL + "/export").status_code == 403 and get(w, ADMIN, 999, path=URL + "/export").status_code == 404
     reader = csv_rows(get(w, READER, path=URL + "/export").content.decode("utf-8"))        # what a library reader may read: the documents in force
-    assert {r[0] for r in reader[1:]} == {"2", "3", "6", "7"}
+    assert {r[1] for r in reader[1:]} == {"Doc 2", "Doc 3", "Doc 6", "Doc 7"}
     assert S.STATUS_WORDS["pending_review"] == "In review"
 
 

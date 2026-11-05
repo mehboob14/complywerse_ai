@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { csvCell, csvName, csvText } from './_csv.ts';
+const BOM = String.fromCharCode(0xfeff);                                         // the byte-order mark: Excel reads the file as UTF-8
 
 test('a cell is quoted when it holds a comma, a quote or a line break; a quote is doubled; nothing and a number are plain', () => {
   assert.equal(csvCell('plain'), 'plain');
@@ -27,9 +28,9 @@ test('text that a spreadsheet would run as a formula starts with a quote mark, a
 
 test('the file is UTF-8 with a byte-order mark (Excel reads it right), CRLF between the rows and one at the end', () => {
   const text = csvText([['Name', 'Count'], ['Operations', 5], ['Sales, EMEA', 2]]);
-  assert.ok(text.startsWith('﻿Name,Count\r\n'));
-  assert.equal(text, '﻿Name,Count\r\nOperations,5\r\n"Sales, EMEA",2\r\n');
-  assert.equal(csvText([]), '﻿\r\n');
+  assert.ok(text.startsWith(BOM + 'Name,Count\r\n'));
+  assert.equal(text, BOM + 'Name,Count\r\nOperations,5\r\n"Sales, EMEA",2\r\n');
+  assert.equal(csvText([]), BOM + '\r\n');
 });
 
 test('the file name says what is in it, for what, and the day', () => {

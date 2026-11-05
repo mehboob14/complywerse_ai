@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { PARAM_KEYS } from '../_workspace/libraryModel.ts';
 import { IN_OPERATIONS, OPERATIONS, SUPPORT, WHOLE, row } from './_fixture.ts';
 import { ISSUE_COLUMNS, MEASURE_IDS, MEASURES, REVIEW_COLUMNS, TABLE_MEASURE_IDS, WAITING_COLUMNS, columnsFor, csvLabel, matrixCsv, matrixLines, matrixTotals, ownOf, statusColumns, typeColumns } from './_matrix.ts';
+const BOM = String.fromCharCode(0xfeff);                                         // the byte-order mark: Excel reads the file as UTF-8
 
 const ids = (cols: readonly { id: string }[]) => cols.map((c) => c.id);
 const cells = (line: { cells: { value: number }[] }) => line.cells.map((c) => c.value);
@@ -114,7 +115,7 @@ test('what is filed in a department itself is its figure less the figures of the
 test('the CSV has every department and the columns given, in words of their groups, and a department named like a formula is text', () => {
   const text = matrixCsv(WHOLE, columnsFor('status', WHOLE));
   const lines = text.split('\r\n');
-  assert.ok(text.startsWith('﻿Department,Path,Level,Owner,Documents,Filed in it,Status: Draft,Status: In review,Status: In approval,Status: Approved,Status: Published\r\n'));
+  assert.ok(text.startsWith(BOM + 'Department,Path,Level,Owner,Documents,Filed in it,Status: Draft,Status: In review,Status: In approval,Status: Approved,Status: Published\r\n'));
   assert.equal(lines[2], 'Operations,Operations,Department,Tom,5,1,1,1,1,0,2');
   assert.equal(lines[4], 'Helpdesk,Operations > Support > Helpdesk,Unit,,2,2,0,1,1,0,0');
   assert.equal(lines[5], 'No department,,,,1,1,0,0,0,0,1');

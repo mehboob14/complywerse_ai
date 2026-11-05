@@ -615,7 +615,7 @@ def _safe(cell: Any) -> str:
 
 def export_documents(db: Session, user: GRCUser, department: Optional[str] = None, now: Optional[datetime] = None) -> Tuple[str, str]:
     """(the CSV text, a file name) for the documents of the scope that the person may read: one row each, archived ones left out as in every figure.
-    Columns: ID, Code, Title, Type, Status, Version, Department, Owner, Next review, Issues."""
+    Columns: Code, Title, Type, Status, Version, Department, Owner, Next review, Issues. No internal id: nobody can use it (UX rule U1)."""
     now = now or datetime.utcnow()
     who = access(db, user)
     scope = scope_of(who, department)
@@ -633,10 +633,10 @@ def export_documents(db: Session, user: GRCUser, department: Optional[str] = Non
     rows = sorted(live.values(), key=lambda d: (where(d).casefold(), (d.title or "").casefold(), d.id))
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\r\n")
-    writer.writerow(["ID", "Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"])
+    writer.writerow(["Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"])
     for d in rows:
         flags = _flags(d, attention, _review_state(d, now, horizon))
-        writer.writerow([_safe(x) for x in [d.id, d.document_code, d.title, _type_label(d.doc_type) if d.doc_type else "", STATUS_WORDS.get(d.status or "draft", d.status),
+        writer.writerow([_safe(x) for x in [d.document_code, d.title, _type_label(d.doc_type) if d.doc_type else "", STATUS_WORDS.get(d.status or "draft", d.status),
                                             permissions.in_force_number(d) or d.current_version, where(d), owners.get(d.owner_id) if d.owner_id else "",
                                             d.next_review_date.date().isoformat() if d.next_review_date else "", "; ".join(issue_words[f] for f in flags)]])
     name = re.sub(r"[^a-z0-9]+", "-", (scope.choice["name"] or "documents").lower()).strip("-") or "documents"
