@@ -109,7 +109,8 @@ test('the panels read with the contract\'s keys; a failed read says so with Retr
   assert.match(panels, /SkeletonLines/);
   assert.match(src['_AssetsPanel.tsx'], /enabled: adding,/);                            // the organisation's assets are read only once "Add assets" is pressed
   assert.match(src['_AssetsPanel.tsx'], /queryKey: \['assets-for-exception-link'\]/);   // the form's own entry
-  assert.match(src['_RisksPanel.tsx'], /enabled: turn !== null && hasPermission\('erm:risks:view'\),/);         // the scales are read only for the person who records, and who may read them
+  assert.match(src['_RisksPanel.tsx'], /const words = answerWords\(answer\.data\?\.scales\);/);                     // the organisation's words for the levels come with the list: no second request, no right needed
+  assert.doesNotMatch(src['_RisksPanel.tsx'], /ermApi|erm-scales/);
 });
 
 test('AI runs only when its button is pressed and saves nothing until Add: no effect or query starts it, and a suggestion is added as AI-suggested', () => {
@@ -130,8 +131,8 @@ test('AI runs only when its button is pressed and saves nothing until Add: no ef
 
 test('the person asked is told what they may do by the server: my_turn for the form, can_edit for a risk, can_complete and my_turn for the implementer; never a guess from a role', () => {
   for (const f of MINE.filter((name) => name !== '_RisksPanel.tsx')) assert.doesNotMatch(code(src[f]), /hasPermission|usePermissions/, f);
-  // the one place a right is read: the Risk Management module's own lists (the register for the link, the scales for the level names), which the server gives to its readers only
-  assert.deepEqual(code(src['_RisksPanel.tsx']).match(/hasPermission\('[^']+'\)/g), ["hasPermission('risks:risk_register:view')", "hasPermission('erm:risks:view')"]);
+  // the one place a right is read: the Risk Management module's own register (for the link), which the server gives to its readers only
+  assert.deepEqual(code(src['_RisksPanel.tsx']).match(/hasPermission\('[^']+'\)/g), ["hasPermission('risks:risk_register:view')"]);
   assert.match(src['_RisksPanel.tsx'], /\{canLink && <IconButton label=\{`\$\{r\.register_risk_id !== null \? 'Change register link' : 'Link to risk register'\}: \$\{what\}`\}/);
   assert.match(src['_RisksPanel.tsx'], /\{turn && <Assessment /);
   assert.match(src['_RisksPanel.tsx'], /\{r\.can_edit && \(/);

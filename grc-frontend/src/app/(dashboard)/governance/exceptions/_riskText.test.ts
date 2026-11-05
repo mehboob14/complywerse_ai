@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   addedLine, assessmentWord, assetNameMap, byLine, controlDue, controlFormTouched, controlInput, controlWord, coverNames, coverableRisks, currentRound, draftOfRisk, emptyControlForm,
   emptyRiskDraft, foundNoneLine, formOfControl, groupRisks, levelOptions, levelPill, levelsLine, myAssessment, ratingOf, riskDraftTouched, riskInput, riskTitleMap, roundLabel,
-  scaleWords, uncoveredQuestion, withChosen,
+  answerWords, uncoveredQuestion, withChosen,
 } from './_riskText.ts';
 import type { CompensatingControl, PotentialRisk } from './_types.ts';
 
@@ -53,11 +53,10 @@ test('likelihood and impact are said in the organisation\'s words when it has se
   assert.equal(levelsLine(risk({ likelihood_label: 'Possible' })), 'Likelihood Possible · Impact 5');
   assert.equal(levelsLine(risk({ impact: null })), 'Likelihood 3');
   assert.equal(levelsLine(risk({ likelihood: null, impact: null })), '');
-  const words = scaleWords([
-    { scale_type: 'likelihood', level: 3, label: 'Possible' }, { scale_type: 'impact', level: 3, label: 'Moderate' }, { scale_type: 'other', level: 1, label: 'x' }, { scale_type: 'impact', level: 4, label: '' },
-  ]);
+  const words = answerWords({ likelihood: { '3': 'Possible' }, impact: { '3': 'Moderate', '4': '', x: 'not a level' } });
   assert.deepEqual(words, { likelihood: { 3: 'Possible' }, impact: { 3: 'Moderate' } });
-  assert.deepEqual(scaleWords(null), { likelihood: {}, impact: {} });
+  assert.deepEqual(answerWords(null), { likelihood: {}, impact: {} });
+  assert.deepEqual(answerWords(undefined), { likelihood: {}, impact: {} });
   assert.deepEqual(levelOptions(words.likelihood), [
     { value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3 · Possible' }, { value: '4', label: '4' }, { value: '5', label: '5' },
   ]);

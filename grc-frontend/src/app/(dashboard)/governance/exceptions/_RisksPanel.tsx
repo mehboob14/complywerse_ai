@@ -9,7 +9,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, ExternalLink, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { ermApi, policyExceptionApi, risksApi } from '@/lib/api';
+import { policyExceptionApi, risksApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { truncate } from '@/lib/format';
 import { AnimatedModal } from '@/components/ui';
@@ -19,7 +19,7 @@ import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { RiskHelper } from './_assistReview';
 import {
   assessmentWord, byLine, currentRound, draftOfRisk, emptyRiskDraft, foundNoneLine, groupRisks, levelOptions, levelPill, levelsLine, myAssessment, riskDraftTouched, riskInput,
-  roundLabel, scaleWords, type RiskDraft, type RiskGroup, type ScaleWords,
+  roundLabel, answerWords, type RiskDraft, type RiskGroup, type ScaleWords,
 } from './_riskText';
 import { LIST_KEYS, risksKey, type ExceptionItem, type PotentialRisk, type RiskInput, type RisksAnswer } from './_types';
 
@@ -193,19 +193,11 @@ export function RisksPanel({ exception: e, action, onDirty }: {
   });
   const turn = answer.data?.my_turn ?? null;
   const risks = answer.data?.risks ?? [];
-  // The risk register and the scales are the Risk Management module's own lists, and the server gives them to its readers only: the link action is offered, and the
-  // scales are read, only for someone who holds that right (a request that is certain to be refused is not made); everyone else records with plain levels.
+  // The risk register is the Risk Management module's own list, and the server gives it to its readers only: the link action is offered only to someone who holds
+  // that right (a request that is certain to be refused is not made). The organisation's words for the levels come with the list itself, for everyone.
   const { hasPermission } = usePermissions();
   const canLink = hasPermission('risks:risk_register:view');
-  // the organisation's own names for the levels: read only for the person who records (a failure leaves the plain numbers)
-  const scales = useQuery({
-    queryKey: ['erm-scales'],
-    queryFn: async () => scaleWords((await ermApi.scales.getAll()).data),
-    enabled: turn !== null && hasPermission('erm:risks:view'),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const words = scales.data ?? scaleWords(null);
+  const words = answerWords(answer.data?.scales);
 
   const [draft, setDraft] = useState<RiskDraft>(emptyRiskDraft());
   const [editing, setEditing] = useState<{ id: number; draft: RiskDraft } | null>(null);

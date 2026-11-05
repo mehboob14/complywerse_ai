@@ -140,7 +140,8 @@ export interface PotentialRisk {
 }
 /** Where the person records now: the open step they are asked at (without a rule, the plain approval). null: they are not asked. */
 export interface RisksTurn { round: number | null; step_position: number | null; step_name: string | null; kind: 'review' | 'approval'; recorded: boolean; none_identified: boolean }
-export interface RisksAnswer { risks: PotentialRisk[]; my_turn: RisksTurn | null }
+/** `scales`: the organisation's own words for the levels (keys are the levels as text; empty when it set none), so the form can name them for a reviewer who has no right to the Risk Management module's own list. */
+export interface RisksAnswer { risks: PotentialRisk[]; my_turn: RisksTurn | null; scales?: { likelihood: Record<string, string>; impact: Record<string, string> } }
 export interface RiskInput { title?: string; description?: string; likelihood?: number | null; impact?: number | null; none_identified?: boolean; source?: 'manual' | 'ai' }
 
 // ─── Compensating controls ──────────────────────────────────────────────────────────────────────────────────────────────────────

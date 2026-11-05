@@ -33,10 +33,12 @@ export function levelsLine(r: Pick<PotentialRisk, 'likelihood' | 'impact' | 'lik
 
 export interface ScaleWords { likelihood: Record<number, string>; impact: Record<number, string> }
 
-/** The organisation's names for the five levels (Risk Management > Scales), when it has set them; empty otherwise. */
-export function scaleWords(rows: ReadonlyArray<{ scale_type: string; level: number; label: string }> | null | undefined): ScaleWords {
+/** The organisation's names for the five levels (Risk Management > Scales), as the list of potential risks carries them (keys are text); empty when it set none. */
+export function answerWords(scales: { likelihood?: Record<string, string>; impact?: Record<string, string> } | null | undefined): ScaleWords {
   const out: ScaleWords = { likelihood: {}, impact: {} };
-  for (const r of rows ?? []) if ((r.scale_type === 'likelihood' || r.scale_type === 'impact') && r.label) out[r.scale_type][r.level] = r.label;
+  for (const kind of ['likelihood', 'impact'] as const) {
+    for (const [level, label] of Object.entries(scales?.[kind] ?? {})) if (label && Number.isInteger(Number(level))) out[kind][Number(level)] = label;
+  }
   return out;
 }
 
