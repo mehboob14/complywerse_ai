@@ -52,6 +52,8 @@ interface Props {
   cleanReferenceLine?: (text: string) => string;
   /** className for the outer wrapper — caller can adjust prose width. */
   className?: string;
+  /** Filter for every link and picture address (react-markdown's own when absent): a reader who is not signed in gets a stricter one. */
+  urlTransform?: (url: string, key: string) => string;
 }
 
 // ─── Defaults ──────────────────────────────────────────────────────────
@@ -314,6 +316,7 @@ export function GovernanceDocumentMarkdown({
   parentTitle,
   cleanReferenceLine = defaultCleanReferenceLine,
   className,
+  urlTransform,
 }: Props) {
   const normalized = useMemo(() => normalizeGovernanceMarkdown(content), [content]);
 
@@ -336,6 +339,7 @@ export function GovernanceDocumentMarkdown({
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={urlTransform}
         components={{
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold text-gray-900 mt-6 mb-3 pb-2 border-b border-gray-200">

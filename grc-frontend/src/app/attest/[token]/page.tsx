@@ -4,12 +4,17 @@
  * Public document attestation page — no dashboard login required.
  * Token in the URL identifies the campaign; tenant via subdomain or ?tenant_slug=.
  * Email must match the campaign creator's organization domain.
+ * The person reads the document (as a document: see _Reader.tsx), then acknowledges it below; a bar keeps the way to the form in reach
+ * until the form is on screen.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
-import { governanceApi, getTenantSlug } from '@/lib/api';
+import apiClient, { governanceApi, getTenantSlug } from '@/lib/api';
 import SignaturePad from '@/components/governance/SignaturePad';
+import { Button, FormField, Notice, TextInput } from '@/components/ui/ds';
+import Reader from './_Reader';
+import { dueDay, titleLine, type PublicDocument } from './_logic';
 
 type PublicPayload = {
   campaign: {
@@ -22,16 +27,11 @@ type PublicPayload = {
     acknowledgment_count?: number;
     attestation_percent?: number | null;
   };
-  document: {
-    title: string;
-    description?: string;
-    version?: string;
-    doc_type?: string;
-    html?: string | null;
-    content?: string | null;
-    file_name?: string | null;
-  };
+  document: PublicDocument;
 };
+
+const SCREEN = 'flex min-h-screen items-center justify-center bg-ds-bg px-[16px]';
+const CARD = 'max-w-md rounded-ds-card border border-ds-border bg-ds-surface p-[32px] text-center';
 
 export default function PublicAttestPage() {
   const params = useParams();
@@ -50,6 +50,10 @@ export default function PublicAttestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ message: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const formRef = useRef<HTMLElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [formInView, setFormInView] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -82,6 +86,21 @@ export default function PublicAttestPage() {
       cancelled = true;
     };
   }, [token, tenantSlug]);
+
+  // the bar that leads to the form is only for as long as the form is out of sight
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form || typeof IntersectionObserver === 'undefined') return undefined;
+    const watch = new IntersectionObserver(([entry]) => setFormInView(entry.isIntersecting), { threshold: 0.1 });
+    watch.observe(form);
+    return () => watch.disconnect();
+  }, [data, done]);
+
+  const toForm = (e: React.MouseEvent) => {
+    e.preventDefault();
+    formRef.current?.scrollIntoView({ block: 'start' });
+    nameRef.current?.focus({ preventScroll: true });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,154 +142,132 @@ export default function PublicAttestPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className={SCREEN} role="status" aria-label="Loading the document">
+        <Loader2 aria-hidden className="h-[32px] w-[32px] animate-spin text-ds-fg-muted" />
       </div>
     );
   }
 
   if (loadError || !data) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <AlertCircle className="mx-auto h-10 w-10 text-rose-500" />
-          <h1 className="mt-3 text-lg font-semibold text-slate-900">Unable to open attestation</h1>
-          <p className="mt-2 text-sm text-slate-600">{loadError || 'Link not found.'}</p>
+      <main className={SCREEN}>
+        <div className={CARD}>
+          <AlertCircle aria-hidden className="mx-auto h-[40px] w-[40px] text-ds-danger" />
+          <h1 className="mt-[12px] text-ds-section text-ds-fg">Unable to open attestation</h1>
+          <p className="mt-[8px] text-ds-body text-ds-fg-muted">{loadError || 'Link not found.'}</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (done) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-          <h1 className="mt-3 text-lg font-semibold text-slate-900">Acknowledgment received</h1>
-          <p className="mt-2 text-sm text-slate-600">{done.message}</p>
+      <main className={SCREEN}>
+        <div className={CARD}>
+          <CheckCircle2 aria-hidden className="mx-auto h-[40px] w-[40px] text-ds-success" />
+          <h1 className="mt-[12px] text-ds-section text-ds-fg">Acknowledgment received</h1>
+          <p className="mt-[8px] text-ds-body text-ds-fg-muted" role="status">{done.message}</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   const { campaign, document: doc } = data;
   const domain = campaign.allowed_email_domain;
+  const due = dueDay(campaign.due_date);
+  const base = apiClient.defaults.baseURL || '/api';
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
-            <FileText className="h-4 w-4" />
+    <div className="min-h-screen bg-ds-bg">
+      <header className="border-b border-ds-border bg-ds-surface">
+        <div className="mx-auto flex max-w-[920px] items-center gap-[12px] px-[16px] py-[12px]">
+          <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-ds-control bg-ds-primary text-ds-on-primary">
+            <FileText aria-hidden className="h-[18px] w-[18px]" />
           </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Document attestation</p>
-            <h1 className="text-base font-semibold text-slate-900">{campaign.name}</h1>
+          <div className="min-w-0">
+            <p className="m-0 text-ds-label text-ds-fg-muted">Document attestation</p>
+            <p className="m-0 truncate text-ds-body font-medium text-ds-fg">{campaign.name}</p>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-5 px-4 py-6">
-        {campaign.message && (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
-            {campaign.message}
-          </div>
-        )}
-
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">{doc.title}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {[doc.doc_type, doc.version ? `v${doc.version}` : null].filter(Boolean).join(' · ')}
-            </p>
-            {doc.description && <p className="mt-2 text-sm text-slate-600">{doc.description}</p>}
-          </div>
-          <div className="max-h-[50vh] overflow-y-auto px-4 py-4 text-sm leading-relaxed text-slate-800">
-            {doc.html ? (
-              <div dangerouslySetInnerHTML={{ __html: doc.html }} />
-            ) : doc.content ? (
-              <pre className="whitespace-pre-wrap font-sans">{doc.content}</pre>
-            ) : (
-              <p className="text-slate-500">
-                Document content is not available for preview
-                {doc.file_name ? ` (${doc.file_name})` : ''}. Please review the document with your organization if needed, then acknowledge below.
-              </p>
-            )}
-          </div>
+      <main className="mx-auto max-w-[920px] px-[16px] pb-[96px] pt-[20px]">
+        <section aria-labelledby="doc-title" className="mb-[16px]">
+          <h1 id="doc-title" className="m-0 break-words text-ds-title text-ds-fg">{doc.title}</h1>
+          <p className="mt-[4px] text-ds-body text-ds-fg-muted">
+            {[titleLine(doc), due ? `Due ${due}` : ''].filter(Boolean).join(' · ')}
+          </p>
+          {doc.description && <p className="mt-[8px] break-words text-ds-body text-ds-fg-body">{doc.description}</p>}
+          {campaign.message && <Notice className="mt-[12px]">{campaign.message}</Notice>}
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <h2 className="text-sm font-semibold text-slate-900">Acknowledge</h2>
-          <p className="mt-1 text-sm text-slate-500">
+        <section aria-label="The document" className="mb-[24px]">
+          <Reader doc={doc} base={base} tenantSlug={tenantSlug} />
+        </section>
+
+        <section
+          id="acknowledge"
+          ref={formRef}
+          aria-labelledby="ack-title"
+          className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px] sm:p-[24px]"
+        >
+          <h2 id="ack-title" className="m-0 text-ds-section text-ds-fg">Acknowledge</h2>
+          <p className="mt-[4px] text-ds-body text-ds-fg-muted">
             By signing below, you confirm that you have read and understood this document.
           </p>
-          {domain && (
-            <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Use your organization email ending in{' '}
-              <span className="font-semibold text-slate-800">@{domain}</span>. Other domains are not accepted.
-            </p>
-          )}
-          <form onSubmit={submit} className="mt-4 space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Full name</label>
-                <input
-                  required
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoComplete="name"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Email{domain ? ` (@${domain})` : ''}
-                </label>
-                <input
+          <form onSubmit={submit} className="mt-[16px] flex flex-col gap-[16px]">
+            <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+              <FormField label="Full name" required>
+                <TextInput ref={nameRef} required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+              </FormField>
+              <FormField label="Email" required hint={domain ? `Use your organization email ending in @${domain}.` : undefined}>
+                <TextInput
                   required
                   type="email"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
                   placeholder={domain ? `you@${domain}` : undefined}
                 />
-              </div>
+              </FormField>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Designation</label>
-              <input
+            <FormField label="Designation" required>
+              <TextInput
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 value={designation}
                 onChange={(e) => setDesignation(e.target.value)}
                 placeholder="e.g. Compliance Officer"
                 autoComplete="organization-title"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Electronic signature</label>
+            </FormField>
+            <div role="group" aria-labelledby="signature-label">
+              <p id="signature-label" className="m-0 mb-[4px] text-ds-label text-ds-fg">Electronic signature</p>
               <SignaturePad onChange={setSignature} />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-[4px] text-ds-label font-normal text-ds-fg-muted">
                 Draw it with your mouse, finger or pen. It is kept with your acknowledgment, with the time and your IP address.
               </p>
             </div>
-            {submitError && <p className="text-sm text-rose-600">{submitError}</p>}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 sm:w-auto"
-            >
-              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Submit acknowledgment
-            </button>
+            {submitError && <Notice tone="danger">{submitError}</Notice>}
+            <div>
+              <Button type="submit" variant="primary" loading={submitting} className="w-full sm:w-auto">
+                Submit acknowledgment
+              </Button>
+            </div>
           </form>
         </section>
-
-        <p className="pb-8 text-center text-xs text-slate-400">
-          Secure attestation link · No app login required
-        </p>
       </main>
+
+      {!formInView && (
+        <aside aria-label="Acknowledge" className="fixed inset-x-0 bottom-0 z-20 border-t border-ds-border bg-ds-surface">
+          <div className="mx-auto flex max-w-[920px] items-center justify-between gap-[12px] px-[16px] py-[8px]">
+            <p className="m-0 min-w-0 text-ds-body text-ds-fg-muted">Read it, then acknowledge.</p>
+            <Button href="#acknowledge" variant="primary" onClick={toForm} className="shrink-0">
+              Acknowledge
+            </Button>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

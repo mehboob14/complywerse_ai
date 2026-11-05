@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { FileWarning, Loader2 } from 'lucide-react';
+import { hardenLinks, labelPictures } from './safeLinks';
 
 const OPTIONS = {
   className: 'docx',
@@ -31,7 +32,9 @@ const FRAME = `
   .docx-wrapper > section.docx { box-shadow: 0 1px 4px rgba(15, 23, 42, .18); margin-bottom: 20px !important; }
 `;
 
-export default function WordView({ file, height, label = 'Document' }: {
+export default function WordView({ file, height, label = 'Document', onFailed }: {
+  /** called when the file could not be drawn (a page that has another way to show it uses this) */
+  onFailed?: () => void;
   /** the .docx file to draw (null while it is being fetched) */
   file: Blob | null;
   /** a fixed height (a preview); the whole document otherwise */
@@ -72,6 +75,8 @@ export default function WordView({ file, height, label = 'Document' }: {
         const prepared = await fidelity.prepareDocx(file).catch(() => null);         // a file it cannot read is drawn as it is
         if (cancelled) return;
         await renderAsync(prepared?.file ?? file, body, styles, { ...OPTIONS, experimental: !prepared });
+        labelPictures(body);
+        hardenLinks(body);                                            // a link in the file is what its author typed: only the web, e-mail, phone and the document itself stay
         if (cancelled) return;
         if (prepared) {
           const css = document.createElement('style');
@@ -90,7 +95,7 @@ export default function WordView({ file, height, label = 'Document' }: {
         resize.observe(el);
         setState('ready');
       })
-      .catch(() => { if (!cancelled) setState('failed'); });
+      .catch(() => { if (!cancelled) { setState('failed'); onFailed?.(); } });
     return () => { cancelled = true; resize.disconnect(); root.removeEventListener('click', follow); };
   }, [file]);
 
