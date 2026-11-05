@@ -7,7 +7,7 @@ governance router with real tokens on in-memory SQLite (``_exc_world``).
 * the exception's own status never changes (approved stays approved); "Waiting for me" lists what is to be implemented; a revoked
   exception has nothing left to implement; a rejected one never had.
 """
-from _exc_world import (APP1, EX, EXCADMIN, IMPL1, IMPL2, REQ, REV1, RULES, SEEN, SETTER, SUP, _schema, approved, decide, get,  # noqa: F401
+from _exc_world import (APP1, EX, EXCADMIN, IMPL1, IMPL2, PLAIN, REQ, REV1, RULES, SEEN, SETTER, SUP, _schema, approved, decide, get,  # noqa: F401
                         implementer, implementing, make_rule, raise_exception, step, submit, w)
 
 import grc.models as m  # noqa: E402
@@ -106,6 +106,16 @@ def test_the_requester_may_be_the_implementer(w):
     eid, _ = implementing(w, impl=implementer([{"type": "user", "id": REQ}]))         # in a small organisation the owner is its own coordinator
     assert [p["id"] for p in get(w, eid)["implementation"]["asked"]] == [REQ]
     assert w.as_(REQ).post(f"{EX}/{eid}/controls", json={"title": "Monitor the box"}).status_code == 201
+
+
+def test_the_people_asked_to_implement_see_how_it_was_approved_and_nobody_else_without_a_right_does(w):
+    eid, _ = implementing(w)                                                        # IMPL1 is asked; IMPL2 and PLAIN are not and hold no exception right
+    seen = get(w, eid, IMPL1)
+    assert seen["approval"] is not None and [d["decision"] for d in seen["approval"]["decisions"]] == ["approve"]
+    assert w.as_(IMPL1).get(f"{EX}/{eid}/approval").status_code == 200
+    for who in (IMPL2, PLAIN):
+        assert get(w, eid, who)["approval"] is None, who
+        assert w.as_(who).get(f"{EX}/{eid}/approval").status_code == 403, who
 
 
 def test_waiting_for_me_lists_what_is_to_be_implemented_after_what_waits_for_a_decision(w):

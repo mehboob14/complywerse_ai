@@ -65,6 +65,7 @@ def test_without_a_rule_a_person_allowed_to_approve_may_record_and_nothing_is_re
 # ── what is recorded ─────────────────────────────────────────────────────────
 def test_a_potential_risk_is_rated_in_the_risk_registers_bands_and_in_the_organisations_own_words(w):
     eid = waiting(w)
+    assert w.as_(PLAIN).get(f"{EX}/{eid}/risks").json()["scales"] == {"likelihood": {}, "impact": {}}      # no scales set: plain levels
     for likelihood, impact, score, band in [(5, 4, 20, "critical"), (3, 4, 12, "high"), (2, 3, 6, "medium"), (1, 2, 2, "low")]:
         r = record(w, eid, APP1, likelihood=likelihood, impact=impact)
         assert (r["score"], r["rating"], r["rating_label"]) == (score, band, band.title())
@@ -72,6 +73,7 @@ def test_a_potential_risk_is_rated_in_the_risk_registers_bands_and_in_the_organi
     w.db.commit()
     r = record(w, eid, APP1, likelihood=3, impact=1)
     assert r["likelihood_label"] == "Possible" and r["impact_label"] is None                    # a level the organisation has not named has no label
+    assert w.as_(PLAIN).get(f"{EX}/{eid}/risks").json()["scales"] == {"likelihood": {"3": "Possible"}, "impact": {}}   # its words come with the list, for a reviewer with no Risk Management right
     half = record(w, eid, APP1, likelihood=3, impact=None)
     assert (half["score"], half["rating"]) == (None, None)                                      # a rating needs both
 

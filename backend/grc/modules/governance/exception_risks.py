@@ -132,7 +132,8 @@ def _editable(db: Session, exc: PolicyException, r: ExceptionRisk, user: GRCUser
 
 
 def listing(db: Session, exc: PolicyException, user: GRCUser, older_flow_decider: bool = False) -> Dict[str, Any]:
-    """``{risks, my_turn}`` for the risks panel."""
+    """``{risks, my_turn, scales}`` for the risks panel: ``scales`` are the organisation's own words for the levels (empty when it set none), so the form can name
+    them for a reviewer who has no right to the Risk Management module's own list."""
     rows = rows_of(db, exc.id)
     names = A._names(db, {r.recorded_by for r in rows})
     labels = level_labels(db, exc.tenant_id)
@@ -147,7 +148,7 @@ def listing(db: Session, exc: PolicyException, user: GRCUser, older_flow_decider
         have = assessment_for(db, ctx["run"].id if ctx["run"] is not None else None, exc.id, ctx["position"], user.id)
         turn = {"round": ctx["round"], "step_position": ctx["position"], "step_name": ctx["name"], "kind": ctx["kind"],
                 "recorded": have["recorded"], "none_identified": have["none_identified"]}
-    return {"risks": out, "my_turn": turn}
+    return {"risks": out, "my_turn": turn, "scales": {"likelihood": labels["likelihood"], "impact": labels["impact"]}}
 
 
 def count_real(db: Session, exc_id: int) -> int:

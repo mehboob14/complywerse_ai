@@ -542,22 +542,27 @@ def history(db: Session, exc: PolicyException, viewer_id: Optional[int]) -> Dict
                                       for d in decisions if d.run_id == r.id]} for r in runs]}
 
 
+def _asked_anywhere(run: ExceptionApprovalRun, user_id: int) -> bool:
+    """Asked at a step of the run, or (once it was approved) asked to implement it."""
+    return user_id in (run.asked or []) or user_id in ((run.implementation or {}).get("asked") or [])
+
+
 def involved(db: Session, exc: PolicyException, user_id: int) -> bool:
-    """Whether the person was asked at a step of this exception, or decided on it."""
+    """Whether the person was asked at a step of this exception or to implement it, or decided on it."""
     if db.query(ExceptionApprovalDecision.id).filter(ExceptionApprovalDecision.exception_id == exc.id,
                                                      ExceptionApprovalDecision.user_id == user_id).first() is not None:
         return True
-    return any(user_id in (r.asked or []) for r in runs_of(db, exc.id))
+    return any(_asked_anywhere(r, user_id) for r in runs_of(db, exc.id))
 
 
 def involved_ids(db: Session, exception_ids: Iterable[int], user_id: int) -> Set[int]:
-    """The ids among ``exception_ids`` the person was asked about at some step, or decided on (``involved`` for many at once)."""
+    """The ids among ``exception_ids`` the person was asked about at some step or to implement, or decided on (``involved`` for many at once)."""
     ids = list(exception_ids)
     if not ids:
         return set()
     out = {e for (e,) in db.query(ExceptionApprovalDecision.exception_id).filter(
         ExceptionApprovalDecision.exception_id.in_(ids), ExceptionApprovalDecision.user_id == user_id)}
-    out |= {r.exception_id for r in db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id.in_(ids)) if user_id in (r.asked or [])}
+    out |= {r.exception_id for r in db.query(ExceptionApprovalRun).filter(ExceptionApprovalRun.exception_id.in_(ids)) if _asked_anywhere(r, user_id)}
     return out
 
 
