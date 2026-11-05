@@ -1189,7 +1189,6 @@ export default function CompliancePluginsPage() {
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Triggered by</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Summary</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase">Evidence Hash</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
@@ -1291,21 +1290,22 @@ export default function CompliancePluginsPage() {
                           </div>
                         </div>
                       )}
-                    </td>
-                    <td className="px-3 py-2 text-xs font-mono text-gray-500">
-                      {r.evidence_hash ? (
-                        <button
-                          onClick={() => {
-                            navigator.clipboard?.writeText(r.evidence_hash!);
-                            setHashCopied(r.id);
-                            setTimeout(() => setHashCopied((c) => (c === r.id ? null : c)), 1500);
-                          }}
-                          title={`${r.evidence_hash}\n\nSHA-256 fingerprint of the full scan evidence (raw stdout, command, expected, timestamp, asset, connection). Click to copy. Used for tamper-proof audit chain of custody (SOC 2 / ISO 27001 evidence integrity requirement).`}
-                          className="text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"
-                        >
-                          {hashCopied === r.id ? '✓ copied' : r.evidence_hash.slice(0, 12) + '…'}
-                        </button>
-                      ) : '—'}
+                      {r.evidence_hash && (
+                        <details className="mt-1 text-gray-500">
+                          <summary className="cursor-pointer hover:text-blue-600">Evidence record</summary>
+                          <div className="mt-1 break-all font-mono">{r.evidence_hash}</div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(r.evidence_hash!);
+                              setHashCopied(r.id);
+                              setTimeout(() => setHashCopied((c) => (c === r.id ? null : c)), 1500);
+                            }}
+                            className="mt-0.5 text-blue-600 hover:underline"
+                          >
+                            {hashCopied === r.id ? '✓ copied' : 'Copy'}
+                          </button>
+                        </details>
+                      )}
                     </td>
                   </tr>
                   );

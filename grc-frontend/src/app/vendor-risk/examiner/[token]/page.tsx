@@ -43,7 +43,7 @@ export default function ExaminerReportPage() {
               <span>
                 <Lock className="mr-1 inline h-3.5 w-3.5 align-text-bottom" />
                 Shared read-only. {report.kind_label}, generated {fmtDay(report.generated_at)}, approved {fmtDay(report.approved_at)}.
-                This link works until {fmtDay(report.expires_at)}. Fingerprint <span className="font-mono">{report.content_hash.slice(0, 12)}</span>.
+                This link works until {fmtDay(report.expires_at)}.
               </span>
               <button type="button" onClick={() => window.print()}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 font-medium text-slate-700 print:hidden">

@@ -260,7 +260,7 @@ export function SignoffAction({ documentId, due, version: shown, onDirty }: {
         <div>
           <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-[#26323d]">
             Signature
-            <InfoTip label="What signing records" text="Your drawn signature is kept with this sign-off, with your name, the time, your IP address and a fingerprint (hash) of the document, and added to the audit trail. Signing stamps your name, date and the signature fingerprint into the document's Approval Signoff table and moves the document to its next stage." />
+            <InfoTip label="What signing records" text="Your drawn signature is kept with this sign-off, with your name, the time and your IP address, and added to the audit trail. Signing stamps your name, date and signature into the document's Approval Signoff table and moves the document to its next stage." />
           </p>
           <SignaturePad onChange={setSignature} height={120} />
         </div>
