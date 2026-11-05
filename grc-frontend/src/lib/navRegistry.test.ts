@@ -225,14 +225,14 @@ test('titleFor: the destination\'s title, its label by default; a forward has it
   assert.equal(titleFor('/is-projects'), 'Projects');
   assert.equal(titleFor('/erm/kris'), 'KRIs');
   assert.equal(titleFor('/dashboard'), 'Performance Overview');
-  assert.equal(titleFor('/governance/exceptions'), 'Policy exceptions');
-  assert.equal(entry('/governance/exceptions').shortLabel, 'Exceptions');
+  assert.equal(titleFor('/governance/exceptions'), 'Exceptions');
+  assert.equal(entry('/governance/exceptions').shortLabel, undefined);          // the tab says what the page is called
 });
 
 test('the five pages that said only "Governance" in the top bar have their own name now', () => {
   assert.deepEqual(
     ['/governance/approvals', '/governance/mappings', '/governance/reviews', '/governance/workflows', '/governance/exceptions'].map((p) => titleFor(p)),
-    ['My Approvals', 'Policy-Control Mappings', 'Document Reviews', 'Approval Workflows', 'Policy exceptions'],
+    ['My Approvals', 'Policy-Control Mappings', 'Document Reviews', 'Approval Workflows', 'Exceptions'],
   );
   for (const e of routes.filter((r) => r.area === 'governance')) {
     assert.notEqual(titleFor(example(e.path)), 'Governance', e.path);
@@ -297,10 +297,10 @@ test('the Documents strip: seven tabs in order; the Studio only where it is on, 
     '/governance/exceptions', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
-  assert.deepEqual(labels(false, false), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.deepEqual(labels(true, true), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Exceptions']);
   assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 7, 'the right asked for is governance:settings:*');
   assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 6);
   assert.deepEqual(tabsFor('nowhere'), []);
