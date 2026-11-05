@@ -5,9 +5,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  decisionOptions, decisionRows, dueText, earlierRounds, isRuled, progressText, roundMeta, runTone, runWord, slotChips, statusDetail, stepLine, stepWord, waitingLine,
+  APPROVE_HINT, approveBlocked, approveBlockedFor, decisionOptions, decisionRows, dueText, earlierRounds, implementationDue, implementationOpen, implementationTone,
+  implementationWord, implementedLine, implementerLine, isRuled, progressText, roundMeta, runTone, runWord, slotChips, statusDetail, statusLine, stepLine, stepWord, waitingLine,
 } from './_approval.ts';
-import type { ApprovalStep, ExceptionApproval } from './_types.ts';
+import type { ApprovalStep, ExceptionApproval, Implementation } from './_types.ts';
 
 const step = (over: Partial<ApprovalStep> = {}): ApprovalStep => ({
   position: 1, name: 'Review', kind: 'review', order: 'together', rule: 'all', min_count: null, due_days: null, allow_reject: false, allow_changes: true, state: 'done',
@@ -127,4 +128,62 @@ test('the person asked may approve, and ask for changes or reject only where the
   assert.deepEqual(decisionOptions({ can_reject: false, can_ask_changes: false }), ['approve']);
   assert.deepEqual(decisionOptions(null), []);
   assert.deepEqual(decisionOptions(undefined), []);
+});
+
+// ── the assessment an approval needs, and the implementation after the last approval (D62) ──────────────────────────────────
+
+const myStep = (recorded: boolean) => ({ position: 2, name: 'Approval', kind: 'approval' as const, can_reject: true, can_ask_changes: true, assessment: { recorded, none_identified: false, count: recorded ? 1 : 0 } });
+const implementation = (over: Partial<Implementation> = {}): Implementation => ({
+  state: 'waiting', name: 'Implementation', asked: [{ id: 7, name: 'Chen' }, { id: 8, name: 'Bina' }], due_at: '2026-11-14T09:00:00', overdue: false, opened_at: '2026-11-09T09:00:00',
+  completed_at: null, completed_by_name: null, note: null, stalled: false, my_turn: false, can_complete: false, controls_count: 0, risks_count: 2, uncovered_count: 2, ...over,
+});
+
+test('Approve waits for the person\'s own assessment at the open step: nothing recorded blocks it, a risk or "none identified" frees it; nobody asked blocks nothing', () => {
+  assert.equal(approveBlocked(myStep(false)), true);
+  assert.equal(approveBlocked(myStep(true)), false);
+  assert.equal(approveBlocked(null), false);
+  assert.equal(approveBlocked(undefined), false);
+  assert.equal(approveBlocked({ assessment: null }), false);                    // a server that sends no assessment (the older flow) never blocks
+  assert.equal(approveBlockedFor({ approval: approval({ my_step: myStep(false) }) }), true);
+  assert.equal(approveBlockedFor({ approval: approval({ my_step: myStep(true) }) }), false);
+  assert.equal(approveBlockedFor({ approval: approval({ status: 'approved', my_step: myStep(false) }) }), false);   // only a run that is open asks anyone
+  assert.equal(approveBlockedFor({ approval: null }), false);
+  assert.equal(approveBlockedFor({}), false);
+  assert.equal(APPROVE_HINT, 'Record a potential risk, or none identified, to approve.');
+});
+
+test('the implementation has a word and a tone for each state, and a state nobody registered is said readably', () => {
+  assert.deepEqual(['waiting', 'in_progress', 'done', 'cancelled'].map(implementationWord), ['Waiting for compensating controls', 'In progress', 'Implemented', 'Cancelled']);
+  assert.deepEqual(['waiting', 'in_progress', 'done', 'cancelled'].map(implementationTone), ['pending', 'progress', 'success', 'neutral']);
+  assert.equal(implementationWord('on_hold'), 'On hold');
+  assert.equal(implementationWord(''), '—');
+  assert.equal(implementationTone('on_hold'), 'neutral');
+  assert.equal(implementationOpen({ state: 'waiting' }), true);
+  assert.equal(implementationOpen({ state: 'in_progress' }), true);
+  assert.equal(implementationOpen({ state: 'done' }), false);
+  assert.equal(implementationOpen(null), false);
+});
+
+test('the header line says the status and, once approved under a rule with an implementer, where the implementation stands', () => {
+  assert.equal(statusLine('approved', { state: 'waiting' }), 'Approved · Waiting for compensating controls');
+  assert.equal(statusLine('approved', { state: 'in_progress' }), 'Approved · In progress');
+  assert.equal(statusLine('approved', { state: 'done' }), 'Approved · Implemented');
+  assert.equal(statusLine('approved', null), 'Approved');
+  assert.equal(statusLine('pending_approval', undefined), 'Pending approval');
+});
+
+test('who the implementation waits for, when it is due and who finished it: names, never numbers', () => {
+  assert.equal(implementerLine(implementation()), 'Waiting for Chen, Bina');
+  assert.equal(implementerLine(implementation({ state: 'in_progress', asked: ['A', 'B', 'C', 'D', 'E'].map((name, id) => ({ id, name })) })), 'Waiting for A, B, C and 2 more');
+  assert.equal(implementerLine(implementation({ stalled: true })), 'Nobody can act');
+  assert.equal(implementerLine(implementation({ asked: [] })), 'Nobody can act');
+  assert.equal(implementerLine(implementation({ state: 'done' })), '');
+  assert.equal(implementerLine(implementation({ state: 'cancelled' })), '');
+  assert.equal(implementationDue(implementation()), 'Due 14 Nov 2026');
+  assert.equal(implementationDue(implementation({ overdue: true })), 'Overdue since 14 Nov 2026');
+  assert.equal(implementationDue(implementation({ due_at: null })), '');
+  assert.equal(implementationDue(implementation({ state: 'done', overdue: true })), '');
+  assert.equal(implementedLine(implementation({ state: 'done', completed_by_name: 'Bina', completed_at: '2026-11-12T09:00:00' })), 'Implemented by Bina · 12 Nov 2026');
+  assert.equal(implementedLine(implementation({ state: 'done' })), 'Implemented');
+  assert.equal(implementedLine(implementation()), '');
 });

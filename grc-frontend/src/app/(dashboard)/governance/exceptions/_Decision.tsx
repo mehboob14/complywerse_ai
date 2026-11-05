@@ -10,6 +10,7 @@ import { policyExceptionApi } from '@/lib/api';
 import { truncate } from '@/lib/format';
 import { AnimatedModal } from '@/components/ui';
 import { Button, FormField, Textarea, useReportedMutation } from '@/components/ui/ds';
+import { APPROVE_HINT, approveBlockedFor } from './_approval';
 import { LIST_KEYS, type ExceptionItem } from './_types';
 
 export type DecisionKind = 'approve' | 'changes' | 'reject' | 'revoke';
@@ -47,7 +48,9 @@ export function DecisionDialog({ kind, exception, onClose }: { kind: DecisionKin
     invalidate: [...LIST_KEYS, ['exception-comments']],                 // a decision under an approval rule is also written into the comments (its history), which the open details show
     onSuccess: onClose,
   });
-  const missing = d.required && !text.trim();
+  // under an approval rule an approval needs the person's own assessment first (said in the details; the server refuses it too)
+  const blocked = kind === 'approve' && approveBlockedFor(exception);
+  const missing = (d.required && !text.trim()) || blocked;
 
   return (
     <AnimatedModal
@@ -68,6 +71,7 @@ export function DecisionDialog({ kind, exception, onClose }: { kind: DecisionKin
         <FormField label={d.field} required={d.required} optional={!d.required}>
           <Textarea rows={4} value={text} placeholder={d.placeholder} onChange={(e) => setText(e.target.value)} />
         </FormField>
+        {blocked && <p className="mt-[8px] text-ds-label text-ds-fg-muted">{APPROVE_HINT}</p>}
       </div>
     </AnimatedModal>
   );
