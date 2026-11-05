@@ -1,6 +1,6 @@
 """A risk linked to a control of a framework in the framework library (UAE IA, ISO 27001, ...): the tenant's installed frameworks live in
 `grc_uploaded_frameworks` / `grc_parsed_framework_controls`, which the older `grc_risk_framework_control_links` (to the legacy control
-catalog) cannot point at. Used by the Risk Library's "Add to register" and by the register's Controls tab (erm/risk_framework_requirements)."""
+catalog) cannot point at. Used by the register's Controls tab (erm/risk_framework_requirements)."""
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint

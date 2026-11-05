@@ -75,7 +75,7 @@ interface RiskDetailData {
     control_id?: string;
   }>;
   linked_framework_controls: Array<{id: number; framework_control_id: number; code: string; name: string; mitigation_effectiveness?: string; notes?: string}>;
-  /** Controls of the organisation's installed frameworks (UAE IA, ...): from the Risk Library or the Link Framework Control panel. */
+  /** Controls of the organisation's installed frameworks (UAE IA, ...): from the Link Framework Control panel. */
   linked_framework_requirements?: Array<{id: number; framework_id: number; framework_name: string | null; parsed_control_id: number; code: string; title: string | null; domain: string | null; mitigation_effectiveness?: string; notes?: string | null}>;
   linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
   linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;

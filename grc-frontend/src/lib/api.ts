@@ -268,7 +268,7 @@ export const risksApi = {
   updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
   linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
-  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab and the Risk Library link to these.
+  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab links to these.
   requirementFrameworks: () => apiClient.get<{ items: Array<{ id: number; name: string; slug: string | null; version: string | null; controls: number }> }>('/erm/framework-requirements/frameworks'),
   searchRequirements: (params: { framework_id: number; q?: string; skip?: number; limit?: number }) =>
     apiClient.get<{ items: Array<{ id: number; code: string; title: string; domain: string | null; category: string | null; priority_level: string | null; is_mandatory: boolean }>; total: number }>('/erm/framework-requirements', { params }),

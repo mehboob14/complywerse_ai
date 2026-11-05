@@ -215,7 +215,7 @@ def delete_uploaded_framework(
             EvidenceControlMapping.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)
         
-        # Risks linked to this framework's controls (Risk Library / register Controls tab) lose those links
+        # Risks linked to this framework's controls (register Controls tab) lose those links
         db.query(RiskFrameworkRequirementLink).filter(
             RiskFrameworkRequirementLink.uploaded_framework_id == framework_id
         ).delete(synchronize_session=False)

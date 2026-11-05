@@ -64,6 +64,6 @@ from ._87_tpra_supplier_requests import *  # noqa: F401,F403 - TPRM: what we ask
 from ._88_tpra_reviews import *  # noqa: F401,F403 - TPRM: who reviews which part of a supplier's answers
 from ._89_tpra_alert_rules import *  # noqa: F401,F403 - TPRM: what a monitoring signal sets off
 from ._90_tpra_roster import *  # noqa: F401,F403 - TPRM: who the workflow asks at each review stage
-from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework (Risk Library)
+from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework
 from ._92_department_levels import *  # noqa: F401,F403 - what an organisation calls the levels of its department tree
 from ._93_exception_approvals import *  # noqa: F401,F403 - who reviews and approves a policy exception: rules, runs, decisions
