@@ -537,3 +537,125 @@ def test_rules_and_runs_stay_inside_their_organisation_and_a_get_writes_nothing(
         for path in (EX, f"{EX}/{eid2}", f"{EX}/waiting-for-me", f"{EX}/{eid2}/approval", RULES):
             assert w.as_(who).get(path).status_code in (200, 403)
     assert counts() == before
+
+
+# ── the exception type (D59): the organisation's own list, on the exception, in the rules ────────────────────────────────
+
+TYPES = RULES + "/types"
+DEFAULT_TYPES = [("technical", "Technical"), ("business_process", "Business process"), ("third_party", "Third party"), ("regulatory", "Regulatory"), ("other", "Other")]
+
+
+def types_of(w, uid=REQ):
+    r = w.as_(uid).get(TYPES)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_the_types_start_as_a_list_in_code_anyone_reads_and_only_a_settings_editor_changes(w):
+    body = types_of(w, PLAIN)                                                   # a person with no governance right at all reads it: so do the exceptions
+    assert [(t["value"], t["label"], t["archived"]) for t in body["types"]] == [(v, n, False) for v, n in DEFAULT_TYPES] and body["can_edit"] is False
+    assert types_of(w, SETTER)["can_edit"] is True and types_of(w, ADMIN)["can_edit"] is True
+    r = w.as_(REQ).put(TYPES, json={"types": [{"label": "Anything"}]})
+    assert r.status_code == 403 and "change the exception types" in r.json()["detail"]
+    assert [t["value"] for t in types_of(w)["types"]] == [v for v, _ in DEFAULT_TYPES]
+    # rename one (its value stays), add one (made from its name), take one off (it is archived, not lost)
+    rows = [{"value": "technical", "label": "Technology"}, {"value": "business_process", "label": "Business process"},
+            {"value": "third_party", "label": "Third party"}, {"value": "regulatory", "label": "Regulatory"}, {"label": "Cloud service"}]
+    r = w.as_(SETTER).put(TYPES, json={"types": rows})
+    assert r.status_code == 200, r.text
+    got = {t["value"]: (t["label"], t["archived"]) for t in r.json()["types"]}
+    assert got == {"technical": ("Technology", False), "business_process": ("Business process", False), "third_party": ("Third party", False),
+                   "regulatory": ("Regulatory", False), "cloud_service": ("Cloud service", False), "other": ("Other", True)}
+    assert types_of(w)["types"] == r.json()["types"]
+    # what is refused is said: a name twice, a list with nothing in use, a blank name, no list
+    assert "listed twice" in w.as_(SETTER).put(TYPES, json={"types": [{"label": "A"}, {"label": "a"}]}).json()["detail"]
+    r = w.as_(SETTER).put(TYPES, json={"types": [{"value": "technical", "label": "Technology", "archived": True}]})
+    assert r.status_code == 400 and "at least one option" in r.json()["detail"]
+    assert w.as_(SETTER).put(TYPES, json={"types": [{"label": "   "}]}).status_code == 400
+    assert w.as_(SETTER).put(TYPES, json={"types": []}).status_code == 400
+    # the list is this organisation's: nothing is written for another one
+    assert w.db.query(m.ModuleSettings).filter(m.ModuleSettings.tenant_id == 1, m.ModuleSettings.module_key == "governance_exceptions").count() == 1
+    assert w.db.query(m.ModuleSettings).filter(m.ModuleSettings.tenant_id == 2).count() == 0
+
+
+def test_an_exception_has_a_type_from_the_list_and_keeps_it_when_the_type_is_taken_off(w):
+    plain = raise_exception(w)
+    assert plain["exception_type"] is None and plain["exception_type_label"] is None
+    e = raise_exception(w, exception_type="technical")
+    assert (e["exception_type"], e["exception_type_label"]) == ("technical", "Technical")
+    assert get(w, e["id"])["exception_type_label"] == "Technical"
+    r = w.as_(REQ).post(EX, json={"title": "x", "exception_type": "made_up"})
+    assert (r.status_code, r.json()["detail"]) == (400, "The type chosen does not exist.")
+    # change it, clear it
+    r = w.as_(REQ).put(f"{EX}/{e['id']}", json={"exception_type": "third_party"})
+    assert r.status_code == 200 and (r.json()["exception_type"], r.json()["exception_type_label"]) == ("third_party", "Third party")
+    assert w.as_(REQ).put(f"{EX}/{e['id']}", json={"exception_type": ""}).json()["exception_type"] is None
+    assert w.as_(REQ).put(f"{EX}/{e['id']}", json={"exception_type": "nope"}).status_code == 400
+    # the organisation takes "Third party" off its list: no new exception can choose it, the one that holds it keeps it (and can save with it)
+    held = raise_exception(w, exception_type="third_party")["id"]
+    rows = [{"value": v, "label": n} for v, n in DEFAULT_TYPES if v != "third_party"]
+    assert w.as_(SETTER).put(TYPES, json={"types": rows}).status_code == 200
+    r = w.as_(REQ).post(EX, json={"title": "x", "exception_type": "third_party"})
+    assert (r.status_code, r.json()["detail"]) == (400, "The type chosen is no longer offered.")
+    got = get(w, held)
+    assert (got["exception_type"], got["exception_type_label"]) == ("third_party", "Third party")                    # still named
+    assert w.as_(REQ).put(f"{EX}/{held}", json={"title": "Edited", "exception_type": "third_party"}).status_code == 200       # and savable as it is
+    assert w.as_(REQ).put(f"{EX}/{held}", json={"exception_type": "regulatory"}).json()["exception_type"] == "regulatory"
+    # the list filters by type
+    again = raise_exception(w, exception_type="technical")["id"]
+    ids = lambda **q: sorted(x["id"] for x in w.as_(ADMIN).get(EX, params=q).json())          # noqa: E731
+    assert ids(exception_type="regulatory") == [held] and ids(exception_type="technical") == [again] and ids(exception_type="other") == []
+
+
+def test_a_rule_may_name_types_and_the_most_specific_rule_wins(w):
+    make_rule(w, "Anything", steps=[step(people=[{"type": "user", "id": APP1}])])
+    technical = make_rule(w, "Technical", exception_types=["technical"], steps=[step(people=[{"type": "user", "id": APP2}])])
+    make_rule(w, "Operations", department_id=10, steps=[step(people=[{"type": "user", "id": APP3}])])
+    make_rule(w, "Operations technical", department_id=10, exception_types=["technical"], steps=[step(people=[{"type": "user", "id": REV1}])])
+    assert technical["exception_types"] == ["technical"]
+    pick = lambda unit=None, type=None: (svc.pick_rule(w.db, 1, unit, "medium", "policy", exception_type=type) or {}).get("name")       # noqa: E731
+    assert pick() == "Anything" and pick(type="regulatory") == "Anything"          # no type, or one no rule names: the rule with no condition
+    assert pick(type="technical") == "Technical"                                   # a named type beats none
+    assert pick(unit=10) == "Operations" and pick(unit=12) == "Operations"        # a department's rule covers what is under it
+    assert pick(unit=10, type="technical") == "Operations technical"               # the deepest unit first, then the conditions
+    assert pick(unit=13, type="technical") == "Technical" and pick(unit=13) == "Anything"      # Finance has no rule of its own
+    # an exception goes through the rule its type picks
+    e = raise_exception(w, document_id=2, exception_type="technical")["id"]        # Finance's standard
+    assert submit(w, e).json()["approval"]["rule"]["name"] == "Technical"
+    plain = raise_exception(w, document_id=2)["id"]
+    assert submit(w, plain).json()["approval"]["rule"]["name"] == "Anything"
+    # a rule can name only types the organisation has, and the same department and conditions are one rule
+    r = w.as_(SETTER).post(RULES, json={"name": "Typo", "exception_types": ["techincal"], "steps": [step()]})
+    assert (r.status_code, r.json()["detail"]) == (400, "A type chosen does not exist.")
+    r = w.as_(SETTER).post(RULES, json={"name": "Twice", "exception_types": ["technical"], "steps": [step()]})
+    assert r.status_code == 400 and "already covers the same department and conditions" in r.json()["detail"]
+    assert w.as_(SETTER).post(RULES, json={"name": "Regulatory", "exception_types": ["regulatory", "third_party"], "steps": [step()]}).status_code == 201
+    # a rule keeps a type taken off the list (it just no longer matches new exceptions); the editor sees it archived
+    rows = [{"value": v, "label": n} for v, n in DEFAULT_TYPES if v != "technical"]
+    assert w.as_(SETTER).put(TYPES, json={"types": rows}).status_code == 200
+    listed = w.as_(SETTER).get(RULES).json()
+    assert next(r for r in listed["rules"] if r["name"] == "Technical")["exception_types"] == ["technical"]
+    assert {t["value"]: t["archived"] for t in listed["exception_types"]}["technical"] is True
+
+
+def test_the_type_is_part_of_what_chose_the_rule_so_it_stays_while_the_exception_waits(w):
+    make_rule(w, "Technical", exception_types=["technical"])
+    e = raise_exception(w, exception_type="technical")["id"]
+    assert submit(w, e).status_code == 200
+    r = w.as_(REQ).put(f"{EX}/{e}", json={"exception_type": "regulatory"})
+    assert r.status_code == 409 and "type" in r.json()["detail"] and "Withdraw it first" in r.json()["detail"]
+    assert w.as_(REQ).put(f"{EX}/{e}", json={"exception_type": "technical", "title": "Same type, new title"}).status_code == 200        # the same one is fine
+    assert w.as_(REQ).put(f"{EX}/{e}", json={"exception_type": ""}).status_code == 409
+    assert w.as_(REQ).post(f"{EX}/{e}/withdraw").status_code == 200
+    assert w.as_(REQ).put(f"{EX}/{e}", json={"exception_type": "regulatory"}).json()["exception_type"] == "regulatory"
+
+
+def test_the_tester_takes_a_type(w):
+    make_rule(w, "Anything", steps=[step(people=[{"type": "user", "id": APP1}])])
+    make_rule(w, "Technical", exception_types=["technical"], steps=[step(people=[{"type": "user", "id": APP2}])])
+    ask = lambda **body: w.as_(SETTER).post(RULES + "/preview", json=body).json()          # noqa: E731
+    assert ask(priority="medium")["rule"]["name"] == "Anything"
+    got = ask(priority="medium", exception_type="technical")
+    assert got["rule"]["name"] == "Technical" and [s["members"] for s in got["steps"][0]["slots"]] == [[APP2]]
+    assert ask(exception_type="  ")["rule"]["name"] == "Anything"
+    assert w.as_(REQ).post(RULES + "/preview", json={}).status_code == 403

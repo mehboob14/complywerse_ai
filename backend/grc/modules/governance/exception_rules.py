@@ -1,15 +1,16 @@
 """Who reviews and approves a policy exception: the rules, as pure functions (DECISIONS D58; no database, so tests need none).
 
 A **rule** applies to the whole organisation or to one department at any level (and to everything under it), optionally only to
-some priorities or some kinds of policy, and has **steps**: each a Review or an Approval, asking named people, roles, "the owner of
+some priorities, some kinds of policy or some exception types (the organisation's own list, Governance > Settings), and has
+**steps**: each a Review or an Approval, asking named people, roles, "the owner of
 the unit" or "the owner of its parent", all at once or one after another, everyone / any one / at least N, with days to act and
 whether the step may reject or ask for changes. The last step is an approval: somebody decides.
 
 The vocabulary is the document route engine's (``routes.py``: orders together / in_turn, rules all / any / at_least); the tables
 are not (that engine is welded to documents, signatures and holds).
 
-**Which rule applies:** of the active rules that fit (unit is the exception's unit or above it, priority and policy kind
-fit when the rule names any), the most specific wins: the deepest unit, then the rule that names more conditions, then the oldest
+**Which rule applies:** of the active rules that fit (unit is the exception's unit or above it; priority, policy kind and
+exception type fit when the rule names any), the most specific wins: the deepest unit, then the rule that names more conditions, then the oldest
 rule. A rule for a department therefore covers its sub-departments until one of them has its own.
 
 A step's **slots** are what it asks, one per named person / role / owner, each with the people who may answer for it (resolved when
@@ -110,6 +111,11 @@ def clean_conditions(priorities: Optional[Iterable[Any]], doc_types: Optional[It
     return pri, types
 
 
+def clean_types(values: Optional[Iterable[Any]]) -> List[str]:
+    """The exception types a rule is limited to ([] = any): values of the organisation's list (module_settings, ``governance_exceptions``)."""
+    return list(dict.fromkeys(str(v).strip()[:80] for v in (values or []) if str(v).strip()))
+
+
 def clean_name(name: Any) -> str:
     name = str(name or "").strip()
     if not name:
@@ -120,7 +126,8 @@ def clean_name(name: Any) -> str:
 
 
 # ── which rule applies ───────────────────────────────────────────────────────
-def applies(rule: Dict[str, Any], unit_path: Sequence[int], priority: Optional[str], doc_type: Optional[str]) -> bool:
+def applies(rule: Dict[str, Any], unit_path: Sequence[int], priority: Optional[str], doc_type: Optional[str],
+            exception_type: Optional[str] = None) -> bool:
     """Whether the rule fits an exception raised for a unit whose chain (the unit and the departments above it) is ``unit_path``."""
     if not rule.get("is_active", True):
         return False
@@ -133,6 +140,9 @@ def applies(rule: Dict[str, Any], unit_path: Sequence[int], priority: Optional[s
     types = rule.get("doc_types") or []
     if types and (doc_type or "").strip().lower() not in types:
         return False
+    kinds = rule.get("exception_types") or []
+    if kinds and (exception_type or "").strip() not in kinds:
+        return False
     return True
 
 
@@ -140,13 +150,13 @@ def specificity(rule: Dict[str, Any], level_of: Callable[[int], int]) -> Tuple[i
     """(how deep its unit is - 0 for the whole organisation -, how many conditions it names)."""
     where = rule.get("department_id")
     return (level_of(where) if where is not None else 0,
-            (1 if rule.get("priorities") else 0) + (1 if rule.get("doc_types") else 0))
+            (1 if rule.get("priorities") else 0) + (1 if rule.get("doc_types") else 0) + (1 if rule.get("exception_types") else 0))
 
 
 def pick(rules: Iterable[Dict[str, Any]], unit_path: Sequence[int], priority: Optional[str], doc_type: Optional[str],
-         level_of: Callable[[int], int]) -> Optional[Dict[str, Any]]:
+         level_of: Callable[[int], int], exception_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """The rule that applies, or None (then the exception follows the older flow)."""
-    fits = [r for r in rules if applies(r, unit_path, priority, doc_type)]
+    fits = [r for r in rules if applies(r, unit_path, priority, doc_type, exception_type)]
     return max(fits, key=lambda r: (*specificity(r, level_of), -int(r.get("id") or 0)), default=None)
 
 

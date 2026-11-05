@@ -49,6 +49,10 @@ you know nothing extra needs to run on Ubuntu.
 - **New column `grc_policy_exceptions.department_id`** (INTEGER, nullable, index `ix_pol_exc_department`, no foreign key): the unit an exception is
   raised for; empty means its policy's department. Added by `schema_migrations._COLUMN_ADDS`, and by the exceptions router's own
   `_ensure_columns` for tenants provisioned before.
+- **New column `grc_policy_exceptions.exception_type`** (VARCHAR(40), nullable, index `ix_pol_exc_type`, added 2026-11-05, D59): the kind of
+  exception, a value of the organisation's own list of types. The list is not a table: it is the module-settings document
+  `governance_exceptions` (`grc_module_settings`, list `exception_type`; defaults in code, written on the first edit). The rules table carries
+  the types a rule names in `exception_types` (JSON, part of the new table). Added the same two ways as `department_id`.
 
 ### Why
 
@@ -59,7 +63,9 @@ rules for policy exceptions per department, sub-department or unit.
 
 Nothing to run: `create_all` makes the four tables at a tenant's first start and the column is added by the startup schema step. Equivalent SQL
 for a manual replay: `ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER; CREATE INDEX IF NOT EXISTS
-ix_pol_exc_department ON grc_policy_exceptions (department_id);` and the four `CREATE TABLE`s from the two model files.
+ix_pol_exc_department ON grc_policy_exceptions (department_id); ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type
+VARCHAR(40); CREATE INDEX IF NOT EXISTS ix_pol_exc_type ON grc_policy_exceptions (exception_type);` and the four `CREATE TABLE`s from the
+two model files.
 
 ### Risk
 

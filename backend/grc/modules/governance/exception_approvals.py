@@ -7,7 +7,7 @@ exceptions decides) is in ``routers/policy_exception_router.py`` and stays as it
 * **Decide** (``decide``): approve, reject (where the step allows it) or ask for changes (back to draft; the rules start again when
   the requester submits again). Only people asked at the open step decide, and never the requester: the rule binds everyone,
   administrators included. Every decision is kept with who, which step and when.
-* **Edits** to what chose the rule (priority, unit, policy) are refused while a run is open (``locked_fields``): withdraw first.
+* **Edits** to what chose the rule (priority, unit, type, policy) are refused while a run is open (``locked_fields``): withdraw first.
 * People are resolved when a step opens (a role's holders, the unit's owner and its parent's owner as they are then), so a person who
   joins the role meanwhile is asked from the next step on.
 
@@ -35,9 +35,9 @@ LINK = "/governance/exceptions?open={}"
 NOT_YOUR_TURN = "It is not your turn: {step} waits for {who}."
 OWN = "You requested this exception, so someone else has to decide it."
 NO_RUN = "This exception is not waiting for a decision under an approval rule."
-LOCKED = ("The approval rule was chosen when it was submitted, so its priority, department and policy cannot change while it waits. "
+LOCKED = ("The approval rule was chosen when it was submitted, so its priority, department, type and policy cannot change while it waits. "
           "Withdraw it first.")
-LOCKED_FIELDS = ("priority", "department_id", "document_id")
+LOCKED_FIELDS = ("priority", "department_id", "exception_type", "document_id")
 
 
 def _problem(detail: str, code: int = status.HTTP_400_BAD_REQUEST) -> HTTPException:
@@ -77,7 +77,8 @@ def _role_members(db: Session, tenant_id: int, role_id: int) -> Set[int]:
 # ── the rules ────────────────────────────────────────────────────────────────
 def rule_dict(rule: ExceptionApprovalRule) -> Dict[str, Any]:
     return {"id": rule.id, "name": rule.name, "department_id": rule.department_id, "priorities": list(rule.priorities or []),
-            "doc_types": list(rule.doc_types or []), "steps": copy.deepcopy(rule.steps or []), "is_active": rule.is_active is not False}
+            "doc_types": list(rule.doc_types or []), "exception_types": list(rule.exception_types or []),
+            "steps": copy.deepcopy(rule.steps or []), "is_active": rule.is_active is not False}
 
 
 def rule_dicts(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
@@ -136,8 +137,12 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
         name = R.clean_name(payload.get("name"))
         steps = R.validate_steps(payload.get("steps"))
         priorities, doc_types = R.clean_conditions(payload.get("priorities"), payload.get("doc_types"))
+        exception_types = R.clean_types(payload.get("exception_types"))
     except ValueError as exc:
         raise _problem(str(exc)) from None
+    from . import exception_types as types
+
+    types.check_known(db, tenant_id, exception_types)
     tree = org_departments.Tree.load(db, tenant_id)
     where = payload.get("department_id")
     where = int(where) if where not in (None, "") else None
@@ -148,7 +153,8 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
         _check_people(db, tenant_id, steps)           # a rule that is switched off is never asked: someone who left does not stop it being switched off
         for other in db.query(ExceptionApprovalRule).filter(ExceptionApprovalRule.tenant_id == tenant_id, ExceptionApprovalRule.is_active.is_(True)):
             if (rule is None or other.id != rule.id) and other.department_id == where and \
-                    set(other.priorities or []) == set(priorities) and set(other.doc_types or []) == set(doc_types):
+                    set(other.priorities or []) == set(priorities) and set(other.doc_types or []) == set(doc_types) and \
+                    set(other.exception_types or []) == set(exception_types):
                 raise _problem(f"The rule '{other.name}' already covers the same department and conditions. Change that one, or "
                                "switch it off first.")
     now = datetime.utcnow()
@@ -156,6 +162,7 @@ def save_rule(db: Session, tenant_id: int, payload: Dict[str, Any], by_user_id: 
         rule = ExceptionApprovalRule(tenant_id=tenant_id, created_by=by_user_id, created_at=now)
         db.add(rule)
     rule.name, rule.department_id, rule.priorities, rule.doc_types, rule.steps = name, where, priorities, doc_types, steps
+    rule.exception_types = exception_types
     rule.is_active, rule.updated_by, rule.updated_at = active, by_user_id, now
     db.flush()
     return rule
@@ -176,14 +183,14 @@ def _doc_type(db: Session, exc: PolicyException) -> Optional[str]:
 
 
 def pick_rule(db: Session, tenant_id: int, unit_id: Optional[int], priority: Optional[str], doc_type: Optional[str],
-              tree: Optional[org_departments.Tree] = None) -> Optional[Dict[str, Any]]:
+              tree: Optional[org_departments.Tree] = None, exception_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
     tree = tree or org_departments.Tree.load(db, tenant_id)
     path = [d.id for d in tree.path(unit_id)] if unit_id in tree.rows else []
-    return R.pick(rule_dicts(db, tenant_id), path, priority, doc_type, lambda i: tree.level(i) if i in tree.rows else 1)
+    return R.pick(rule_dicts(db, tenant_id), path, priority, doc_type, lambda i: tree.level(i) if i in tree.rows else 1, exception_type)
 
 
 def matching_rule(db: Session, exc: PolicyException) -> Optional[Dict[str, Any]]:
-    return pick_rule(db, exc.tenant_id, unit_of(db, exc), exc.priority, _doc_type(db, exc))
+    return pick_rule(db, exc.tenant_id, unit_of(db, exc), exc.priority, _doc_type(db, exc), exception_type=exc.exception_type)
 
 
 # ── the people a step asks ───────────────────────────────────────────────────
@@ -217,12 +224,13 @@ def resolve_slots(db: Session, tenant_id: int, unit_id: Optional[int], step: Dic
     return slots
 
 
-def preview(db: Session, tenant_id: int, unit_id: Optional[int], priority: Optional[str], doc_type: Optional[str]) -> Dict[str, Any]:
+def preview(db: Session, tenant_id: int, unit_id: Optional[int], priority: Optional[str], doc_type: Optional[str],
+            exception_type: Optional[str] = None) -> Dict[str, Any]:
     """Which rule would apply to an exception like this, and who each of its steps would ask (for the Settings page's tester)."""
     tree = org_departments.Tree.load(db, tenant_id)
     if unit_id is not None and unit_id not in tree.rows:
         raise _problem("The department chosen does not exist.")
-    rule = pick_rule(db, tenant_id, unit_id, priority, doc_type, tree)
+    rule = pick_rule(db, tenant_id, unit_id, priority, doc_type, tree, (exception_type or "").strip() or None)
     if rule is None:
         return {"rule": None, "steps": [], "problems": []}
     steps = copy.deepcopy(rule["steps"])
@@ -431,6 +439,8 @@ def locked_fields(db: Session, exc: PolicyException, data: Dict[str, Any]) -> Op
     def same(field: str, value: Any) -> bool:
         if field == "priority":
             return str(value or "").lower() == str(getattr(exc, field) or "").lower()
+        if field == "exception_type":
+            return str(value or "").strip() == str(exc.exception_type or "")
         try:
             return (int(value) if value not in (None, "", 0) else None) == (getattr(exc, field) or None)
         except (TypeError, ValueError):

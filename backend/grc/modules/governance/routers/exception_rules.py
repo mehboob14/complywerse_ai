@@ -18,12 +18,14 @@ from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, h
 from ....services import org_departments
 from .. import exception_approvals as svc
 from .. import exception_rules as R
+from .. import exception_types as types
 
 router = APIRouter(prefix="/exception-approval-rules", tags=["Policy Exception Approval Rules"])
 
 SETTINGS_RIGHT = "governance:settings:edit"
 WRITE_REFUSED = "Only an administrator or someone allowed to change governance settings can change these rules."
 READ_REFUSED = "Only an administrator or someone with a governance right can see these rules."
+TYPES_REFUSED = "Only an administrator or someone allowed to change governance settings can change the exception types."
 
 
 class PersonIn(BaseModel):
@@ -48,6 +50,7 @@ class RuleIn(BaseModel):
     department_id: Optional[int] = None     # None: the whole organisation
     priorities: List[str] = []
     doc_types: List[str] = []
+    exception_types: List[str] = []         # values of the organisation's list of exception types ([] = any)
     is_active: bool = True
     steps: List[StepIn] = []
 
@@ -56,6 +59,17 @@ class PreviewIn(BaseModel):
     department_id: Optional[int] = None
     priority: Optional[str] = None
     doc_type: Optional[str] = None
+    exception_type: Optional[str] = None
+
+
+class TypeIn(BaseModel):
+    value: Optional[str] = None             # a new type has none: it is made from its name
+    label: str
+    archived: bool = False
+
+
+class TypesIn(BaseModel):
+    types: List[TypeIn]
 
 
 def _tenant(db: Session, user: GRCUser) -> int:
@@ -101,7 +115,8 @@ def list_rules(db: Session = Depends(get_db), current_user: GRCUser = Depends(re
     can_edit = _may_write(db, current_user)
     return {"rules": svc.rules_view(db, tenant_id), "can_edit": can_edit,
             "options": _options(db, tenant_id) if can_edit else None,
-            "level_labels": org_departments.level_labels(db, tenant_id)}
+            "level_labels": org_departments.level_labels(db, tenant_id),
+            "exception_types": types.options(db, tenant_id)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -119,7 +134,33 @@ def preview_rule(body: PreviewIn, db: Session = Depends(get_db), current_user: G
     """Which rule would apply to an exception like this, and who each of its steps would ask now."""
     if not _may_write(db, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=WRITE_REFUSED)
-    return svc.preview(db, _tenant(db, current_user), body.department_id, body.priority, body.doc_type)
+    return svc.preview(db, _tenant(db, current_user), body.department_id, body.priority, body.doc_type, body.exception_type)
+
+
+@router.get("/types")
+def list_types(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The organisation's exception types (the exceptions page offers the ones in use; archived ones are listed so a name still shows).
+    Like the exceptions themselves, readable by anyone signed in."""
+    return {"types": types.options(db, _tenant(db, current_user)), "can_edit": _may_write(db, current_user)}
+
+
+@router.put("/types")
+def set_types(body: TypesIn, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Set the list of types. A type left out is archived, not lost: exceptions and rules that hold it keep it and its name."""
+    if not _may_write(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=TYPES_REFUSED)
+    tenant_id = _tenant(db, current_user)
+    before = types.options(db, tenant_id)
+    rows = types.save(db, tenant_id, [t.model_dump() for t in body.types], current_user.id)
+    try:
+        from ....rich_audit import write_rich_audit_log
+
+        write_rich_audit_log(db, tenant_id=tenant_id, user_id=current_user.id, action="settings_updated", resource_type="module_settings",
+                             resource_id=None, before={"exception_types": before}, after={"exception_types": rows},
+                             summary="Policy exception types updated", resource_name="Policy exceptions")
+    except Exception:       # the audit trail is best effort here, as for every module's settings
+        pass
+    return {"types": rows, "can_edit": True}
 
 
 @router.put("/{rule_id}")

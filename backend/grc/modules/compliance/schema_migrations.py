@@ -334,6 +334,7 @@ _COLUMN_ADDS = [
     ("grc_policy_exceptions", "revoked_by", "INTEGER", None),
     ("grc_policy_exceptions", "revocation_reason", "TEXT", None),
     ("grc_policy_exceptions", "department_id", "INTEGER", "ix_pol_exc_department"),   # the unit it is raised for (approval rules, D58)
+    ("grc_policy_exceptions", "exception_type", "VARCHAR(40)", "ix_pol_exc_type"),     # its kind, from the organisation's own list (D59)
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),

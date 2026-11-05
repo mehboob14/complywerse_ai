@@ -82,6 +82,9 @@ class PolicyException(Base):
     # The department / sub-department / unit it is raised for (the approval rules of Governance > Settings match on it; unset: the
     # policy's own department, else only the rules for the whole organisation).
     department_id = Column(Integer, nullable=True, index=True)
+    # What kind of exception it is: a value of the organisation's own list (Governance > Settings > Exception approvals > Types;
+    # module_settings ``governance_exceptions``). The approval rules may name types; empty: none chosen.
+    exception_type = Column(String(40), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})

@@ -22,6 +22,7 @@ class ExceptionApprovalRule(Base):
     department_id = Column(Integer, nullable=True, index=True)
     priorities = Column(JSON, default=list)          # [] = any priority; else some of low | medium | high | critical
     doc_types = Column(JSON, default=list)           # [] = any kind of policy; else document types (policy, standard, ...)
+    exception_types = Column(JSON, default=list)     # [] = any exception type; else values of the organisation's list (module_settings: governance_exceptions)
     steps = Column(JSON, default=list)               # exception_rules.validate_steps: [{position, name, kind, order, rule, min_count, due_days, ...}]
     is_active = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)

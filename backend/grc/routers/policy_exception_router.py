@@ -45,7 +45,7 @@ def _held(db: Session, user: GRCUser) -> set:
 def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
     """What one person may do and which document titles they may see, for these exceptions; the approval of each one that goes
     through a rule (exception_approvals) and the department tree its unit is named from."""
-    from ..modules.governance import exception_approvals
+    from ..modules.governance import exception_approvals, exception_types
     from ..modules.governance.permissions import readable_among
     from ..services import org_departments
 
@@ -55,8 +55,10 @@ def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
     if approvals and not held:      # who decided what, with their words: for people who work with exceptions and those raising or asked about this one
         mine = {e.id for e in exceptions if e.requested_by == user.id} | exception_approvals.involved_ids(db, approvals, user.id)
         approvals = {eid: view for eid, view in approvals.items() if eid in mine}
+    tenants = {e.tenant_id for e in exceptions}
     return SimpleNamespace(id=user.id, held=held, readable=readable_among(db, user, [e.document_id for e in exceptions]),
-                           approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in {e.tenant_id for e in exceptions}})
+                           approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in tenants},
+                           types={t: exception_types.labels(db, t) for t in tenants if any(e.tenant_id == t and e.exception_type for e in exceptions)})
 
 
 def _may_change(v, exc) -> bool:
@@ -115,6 +117,7 @@ def _ensure_columns(db: Session) -> None:
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS promoted_risk_id INTEGER"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type VARCHAR(40)"))
         db.commit()
         _COLS_ENSURED.add(key)
     except Exception:
@@ -624,6 +627,7 @@ def list_exceptions(
     status_filter: Optional[str] = Query(None, alias="status"),
     document_id: Optional[int] = Query(None),
     priority: Optional[str] = Query(None),
+    exception_type: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -644,6 +648,8 @@ def list_exceptions(
         query = query.filter(PolicyException.document_id == document_id)
     if priority:
         query = query.filter(PolicyException.priority == priority)
+    if exception_type:
+        query = query.filter(PolicyException.exception_type == exception_type)
 
     exceptions = query.order_by(PolicyException.created_at.desc()).offset(skip).limit(limit).all()
     v = _viewer(db, current_user, exceptions)
@@ -662,6 +668,7 @@ def create_exception(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant")
     if "create" not in _held(db, current_user):
         _refuse(CREATE_REFUSED)
+    from ..modules.governance import exception_types
 
     user_tenants = get_user_tenants(current_user, db)
 
@@ -679,6 +686,7 @@ def create_exception(
         tenant_id=tenant_id,
         document_id=data.get("document_id"),
         department_id=_clean_department(db, tenant_id, data.get("department_id")),
+        exception_type=exception_types.clean(db, tenant_id, data.get("exception_type")),
         title=data.get("title"),
         description=data.get("description"),
         justification=data.get("justification"),
@@ -928,13 +936,15 @@ def update_exception(
     if not _may_change(_viewer(db, current_user, []), exception):
         _refuse(CHANGE_REFUSED)
     _ensure_editable(exception)
-    from ..modules.governance import exception_approvals
+    from ..modules.governance import exception_approvals, exception_types
 
     locked = exception_approvals.locked_fields(db, exception, data)       # what chose its approval rule stays while it waits
     if locked:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=locked)
     if "department_id" in data:
         exception.department_id = _clean_department(db, exception.tenant_id, data["department_id"], current=exception.department_id)
+    if "exception_type" in data:
+        exception.exception_type = exception_types.clean(db, exception.tenant_id, data["exception_type"], current=exception.exception_type)
 
     _aids = _clean_asset_ids(data, db, user_tenants)
     if _aids is not None:
@@ -1285,6 +1295,8 @@ def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) ->
         "department_id": exc.department_id,
         "department_path": unit_path,
         "department_inherited": exc.department_id is None and bool(unit_path),
+        "exception_type": exc.exception_type,
+        "exception_type_label": getattr(v, "types", {}).get(exc.tenant_id, {}).get(exc.exception_type, exc.exception_type) if exc.exception_type else None,
         "approval": approval,
         "document_title": doc.title if doc and doc.id in v.readable else None,     # never a document the person may not open
         "title": exc.title,

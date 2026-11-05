@@ -409,6 +409,21 @@ MODULES: Dict[str, Dict[str, Any]] = {
             "fields": [],
         },
     },
+    # Governance > Exceptions: the kinds of policy exception the organisation tells apart (its approval rules may name them, D59). A list only:
+    # the exceptions page and the Settings > Exception approvals card read and write it through governance/exception_types.py.
+    "governance_exceptions": {
+        "label": "Policy exceptions",
+        "record": "Exception",
+        "sections": ("lists",),
+        "permissions": {"view": "governance:settings:view", "edit": "governance:settings:edit"},
+        "priorities": ("critical", "high", "medium", "low"),
+        "lists": {
+            "exception_type": {"label": "Exception type", "free_text": False, "options": _options(
+                ("technical", "Technical"), ("business_process", "Business process"), ("third_party", "Third party"),
+                ("regulatory", "Regulatory"), ("other", "Other"))},
+        },
+        "defaults": {"fields": []},
+    },
 }
 
 
