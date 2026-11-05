@@ -48,7 +48,7 @@ export default function PublicAttestPage() {
   const [designation, setDesignation] = useState('');
   const [signature, setSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ message: string; fingerprint?: string } | null>(null);
+  const [done, setDone] = useState<{ message: string } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,7 +112,6 @@ export default function PublicAttestPage() {
       );
       setDone({
         message: (res.data as any)?.message || 'Thank you — your acknowledgment has been recorded.',
-        fingerprint: (res.data as any)?.signature_fingerprint,
       });
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
@@ -149,11 +148,6 @@ export default function PublicAttestPage() {
           <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
           <h1 className="mt-3 text-lg font-semibold text-slate-900">Acknowledgment received</h1>
           <p className="mt-2 text-sm text-slate-600">{done.message}</p>
-          {done.fingerprint && (
-            <p className="mt-3 text-xs text-slate-500">
-              Your electronic signature was recorded with a fingerprint (SHA-256): <span className="font-mono">{done.fingerprint}</span>
-            </p>
-          )}
         </div>
       </div>
     );
@@ -258,8 +252,7 @@ export default function PublicAttestPage() {
               <label className="mb-1 block text-xs font-medium text-slate-600">Electronic signature</label>
               <SignaturePad onChange={setSignature} />
               <p className="mt-1 text-xs text-slate-500">
-                Draw it with your mouse, finger or pen. It is kept with your acknowledgment together with the time, your IP address and a
-                fingerprint (hash) of the document.
+                Draw it with your mouse, finger or pen. It is kept with your acknowledgment, with the time and your IP address.
               </p>
             </div>
             {submitError && <p className="text-sm text-rose-600">{submitError}</p>}

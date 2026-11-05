@@ -23,8 +23,8 @@ export default function SignDialog({
     <AnimatedModal isOpen={open} onClose={onClose} size="md" title="Sign this document" subtitle={title}>
       <div className="space-y-3 p-1">
         <p className="text-sm text-slate-600">
-          Draw your signature{stage ? ` to sign as “${stage}”` : ''}. It is kept with this sign-off with your name, the time, your IP address and a
-          fingerprint (hash) of the document, and added to the audit trail.
+          Draw your signature{stage ? ` to sign as “${stage}”` : ''}. It is kept with this sign-off, with your name, the time and your IP address,
+          and added to the audit trail.
         </p>
         <SignaturePad onChange={setSignature} />
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Optional comment…"
