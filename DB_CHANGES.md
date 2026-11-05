@@ -32,6 +32,44 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-05 - Exceptions: an implementer, potential risks, compensating controls, asset provenance (three new tables, five new columns; auto-applied)
+
+### What
+
+- **New tables** (model `backend/grc/models/_94_exception_workflow.py`, made by `create_all` at a tenant's first start; each ON DELETE CASCADE with its exception):
+  `grc_exception_risks` (the potential risks the people asked at a review or approval step record: who, which round and step, what could go wrong,
+  likelihood and impact 1-5, the score and its band, "none identified" as a row of its own, an optional link to a register risk, manual or AI),
+  `grc_exception_controls` (the compensating controls the implementer records: title, the potential risks and assets it covers as JSON id lists, owner,
+  due date, planned or in place, evidence as JSON: a link or an item of the Evidence library) and `grc_exception_asset_links` (who put each asset on an
+  exception and at which stage; unique per exception and asset; the list itself stays `grc_policy_exceptions.linked_asset_ids`). The nullable user
+  references (`owner_id`, `created_by`, `added_by`) are ON DELETE SET NULL; `grc_exception_risks.recorded_by` is kept like a decision's `user_id`.
+- **New columns** (`schema_migrations._COLUMN_ADDS`): `grc_policy_exceptions.business_impact` TEXT; `grc_exception_approval_rules.implementer` JSON (who
+  carries an approved exception out: name, people, days); `grc_exception_approval_runs.implementer` JSON (the rule's copy at submit),
+  `.implementation` JSON (who was asked when the last approval was given, due date, who completed it and when) and `.implementation_state`
+  VARCHAR(20) with index `ix_exc_run_impl_state` (waiting | in_progress | done | cancelled; empty: nothing to implement).
+
+### Why
+
+The user asked for an Implementer in the exception approval rules, potential risks recorded by reviewers and approvers before they decide, compensating
+controls recorded by the implementer after the approval, and assets visible to the requester and the implementer.
+
+### How
+
+Nothing to run. Equivalent SQL for a manual replay: `ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS business_impact TEXT; ALTER TABLE
+grc_exception_approval_rules ADD COLUMN IF NOT EXISTS implementer JSON; ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS implementer JSON;
+ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS implementation JSON; ALTER TABLE grc_exception_approval_runs ADD COLUMN IF NOT EXISTS
+implementation_state VARCHAR(20); CREATE INDEX IF NOT EXISTS ix_exc_run_impl_state ON grc_exception_approval_runs (implementation_state);` and the
+three `CREATE TABLE`s from the model file. Rehearsed 2026-11-05 on a throwaway PostgreSQL database: the objects were dropped, the startup schema step
+brought them back, a second run did nothing, SET NULL and CASCADE behaved.
+
+### Risk
+
+None for existing data: everything is additive and empty. A rule without an implementer, and every exception no rule matches, behave exactly as
+before; the approval of an exception under a rule now needs the approver's own assessment (a potential risk, or "none identified") - one constant,
+`exception_risks.REQUIRE_ASSESSMENT`, turns that off.
+
+---
+
 ## 2026-11-04 — Department tree and exception approval rules: four new tables, one new column (auto-applied)
 
 ### What

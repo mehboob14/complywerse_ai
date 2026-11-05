@@ -4,7 +4,8 @@ A **rule** applies to the whole organisation or to one department at any level (
 some priorities, some kinds of policy or some exception types (the organisation's own list, Governance > Settings), and has
 **steps**: each a Review or an Approval, asking named people, roles, "the owner of
 the unit" or "the owner of its parent", all at once or one after another, everyone / any one / at least N, with days to act and
-whether the step may reject or ask for changes. The last step is an approval: somebody decides.
+whether the step may reject or ask for changes. The last step is an approval: somebody decides. A rule may also name an **implementer** (D62): who carries the exception out once it is
+approved (the coordinator), one or more people, any one of whom can; a rule with none ends at the last approval, as it always did.
 
 The vocabulary is the document route engine's (``routes.py``: orders together / in_turn, rules all / any / at_least); the tables
 are not (that engine is welded to documents, signatures and holds).
@@ -29,15 +30,17 @@ KIND_NAME = {"review": "Review", "approval": "Approval"}
 PEOPLE_TYPES = ("user", "role", "unit_owner", "parent_owner")
 MAX_STEPS = 8
 NAME_MAX = 120
+IMPLEMENTER_NAME = "Implementation"
 DECISIONS = ("approve", "reject", "changes")
 RUN_STATUSES = ("open", "approved", "rejected", "changes_requested", "withdrawn")
 
 
 # ── writing a rule ───────────────────────────────────────────────────────────
-def _person(i: int, name: str, raw: Any) -> Tuple[str, Optional[int]]:
+def _person(i: int, name: str, raw: Any, where: Optional[str] = None) -> Tuple[str, Optional[int]]:
+    where = where or f"Step {i} ({name})"
     kind = (raw or {}).get("type")
     if kind not in PEOPLE_TYPES:
-        raise ValueError(f"Step {i} ({name}): choose a person, a role or an owner to ask.")
+        raise ValueError(f"{where}: choose a person, a role or an owner to ask.")
     if kind in ("unit_owner", "parent_owner"):
         return kind, None
     try:
@@ -45,7 +48,7 @@ def _person(i: int, name: str, raw: Any) -> Tuple[str, Optional[int]]:
     except (TypeError, ValueError):
         ref = 0
     if ref < 1:
-        raise ValueError(f"Step {i} ({name}): choose who is asked.")
+        raise ValueError(f"{where}: choose who is asked.")
     return kind, ref
 
 
@@ -99,6 +102,31 @@ def validate_steps(steps_in: Optional[Sequence[Dict[str, Any]]]) -> List[Dict[st
     if out[-1]["kind"] != "approval":
         raise ValueError("The last step has to be an approval: somebody decides.")
     return out
+
+
+def validate_implementer(raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The implementer of a rule as saved, or None when the rule has none (nothing given, or an empty block). Who carries the exception out
+    after the last approval: people, roles, the owner of the unit or of its parent, any one of whom can; days to implement. Raises ValueError."""
+    raw = raw or {}
+    given = raw.get("people") or []
+    if not given and raw.get("due_days") in (None, "") and not str(raw.get("name") or "").strip():
+        return None
+    name = str(raw.get("name") or "").strip()[:NAME_MAX] or IMPLEMENTER_NAME
+    where = f"Implementer ({name})"
+    people = list(dict.fromkeys(_person(0, name, p, where) for p in given))
+    if not people:
+        raise ValueError(f"{where}: choose who carries it out.")
+    due = raw.get("due_days")
+    if due in (None, ""):
+        due = None
+    else:
+        try:
+            due = int(due)
+        except (TypeError, ValueError):
+            raise ValueError(f"{where}: the days to implement must be a number.") from None
+        if not 1 <= due <= 365:
+            raise ValueError(f"{where}: the days to implement must be from 1 to 365.")
+    return {"name": name, "due_days": due, "people": [{"type": t, **({"id": ref} if ref is not None else {})} for t, ref in people]}
 
 
 def clean_conditions(priorities: Optional[Iterable[Any]], doc_types: Optional[Iterable[Any]]) -> Tuple[List[str], List[str]]:
@@ -204,6 +232,17 @@ def progress(step: Dict[str, Any], approvers: Set[int]) -> Dict[str, int]:
         return {"required": need, "answered": min(len(approvers & people), need)}
     need = 1 if step.get("rule") == "any" else len(req)
     return {"required": need, "answered": min(sum(1 for s in req if _answered(s, approvers)), need)}
+
+
+def implementer_problems(implementer: Optional[Dict[str, Any]], unit_name: Optional[str] = None) -> List[str]:
+    """What stops a rule's implementer from working for a unit: nobody who can act (``implementer`` carries its resolved ``slots``)."""
+    if not implementer:
+        return []
+    slots = implementer.get("slots") or []
+    if any(s.get("members") for s in slots):
+        return []
+    what = ", ".join(s.get("label") or "someone" for s in slots) or "nobody"
+    return [f"The implementer ({implementer.get('name') or IMPLEMENTER_NAME}) has nobody who can act: {what}" + (f" for {unit_name}" if unit_name else "") + "."]
 
 
 def problems(steps: Sequence[Dict[str, Any]], unit_name: Optional[str] = None) -> List[str]:

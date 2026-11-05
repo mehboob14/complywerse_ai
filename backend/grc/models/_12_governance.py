@@ -85,6 +85,8 @@ class PolicyException(Base):
     # What kind of exception it is: a value of the organisation's own list (Governance > Settings > Exception approvals > Types;
     # module_settings ``governance_exceptions``). The approval rules may name types; empty: none chosen.
     exception_type = Column(String(40), nullable=True, index=True)
+    # What it would mean for the business if the exception were refused (the requester's words; AI may draft it): D62
+    business_impact = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})

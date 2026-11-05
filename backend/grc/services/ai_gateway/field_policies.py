@@ -339,6 +339,10 @@ _USES: Dict[str, Dict[str, Tuple[str, ...]]] = {
     },
     "ITAsset": {
         "vulnerabilities.suggest_fix": ("asset_type", "criticality", "internet_facing", "data_classification"),
+        # the exception assist (D62): the asset's name and class and how much it matters; the answer points back at the row
+        "governance.exception_assets": ("id", "name:120", "asset_type", "criticality", "confidentiality_rating", "integrity_rating", "availability_rating"),
+        "governance.exception_risks": ("name:120", "asset_type", "criticality", "confidentiality_rating", "integrity_rating", "availability_rating"),
+        "governance.exception_controls": ("id", "name:120", "asset_type", "criticality", "confidentiality_rating", "integrity_rating", "availability_rating"),
     },
 }
 

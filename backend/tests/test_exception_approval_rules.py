@@ -124,6 +124,8 @@ def asked(w, eid):
 
 
 def decide(w, eid, who, what="approve", **body):
+    if what == "approve":        # an approval needs the approver's own assessment (D62); for someone who is not asked this is refused and the approval says why
+        w.as_(who).post(f"{EX}/{eid}/risks", json={"none_identified": True})
     path = {"approve": "approve", "reject": "reject", "changes": "request-changes"}[what]
     return w.as_(who).post(f"{EX}/{eid}/{path}", json=body)
 
@@ -466,7 +468,8 @@ def test_waiting_for_me_lists_only_what_waits_for_this_person_now(w):
     decide(w, one, APP1)
     assert mine(APP1) == []
     assert w.as_(REV1).get(f"{EX}/waiting-for-me").json()[0]["approval"]["my_step"] == {
-        "position": 1, "name": "Review", "kind": "review", "can_reject": False, "can_ask_changes": True}
+        "position": 1, "name": "Review", "kind": "review", "can_reject": False, "can_ask_changes": True,
+        "assessment": {"recorded": False, "none_identified": False, "count": 0}}
 
 
 def test_the_department_of_an_exception_is_checked_and_who_may_see_how_it_was_approved(w):
