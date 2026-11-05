@@ -11,6 +11,7 @@ instant through the service.
 * archived documents, the library links, a fixed number of queries however many documents and departments there are, no writes.
 """
 import os
+import re
 
 os.environ.setdefault("SESSION_SECRET", "unit-test-secret")
 os.environ.setdefault("OPENAI_API_KEY", "dummy")
@@ -615,6 +616,170 @@ def test_by_department_is_the_tree_of_the_scope_with_what_is_in_each_department_
     assert reader["Operations"] == 2 and reader["Helpdesk"] == 0 and reader["Support"] == 2
 
 
+# ── the department table's breakdowns, the board and the export (D60) ────────
+
+def seed_matrix(w):
+    """Operations (10) > Support (11) > Helpdesk (12); Finance (13). Seven documents of every kind and a few requests, at NOW."""
+    doc(w, 1, OPS, status="draft", next_review_date=None)                                  # a policy
+    doc(w, 2, SUP, next_review_date=NOW - DAY)                                             # a policy in force, its review overdue
+    doc(w, 3, SUP, doc_type="procedure", owner=None, next_review_date=None)                # in force, no owner, no review date
+    doc(w, 4, HELP, status="pending_review", doc_type="standard", next_review_date=None)   # a review asked 30 days ago: late and stuck
+    ask(w, 4, "review", 11, NOW - 30 * DAY)
+    doc(w, 5, HELP, status="pending_approval", next_review_date=None)                      # an approval due in three days: waiting, not late
+    ask(w, 5, "approval", 12, NOW + 3 * DAY)
+    doc(w, 6, FINANCE, doc_type="guideline", next_review_date=None)                        # in force: one acknowledgement late, one not yet due
+    ask(w, 6, "acknowledgement", 13, NOW - DAY)
+    ask(w, 6, "acknowledgement", 14, NOW + 5 * DAY)
+    doc(w, 7, None, next_review_date=None)                                                 # in force, in no department
+    w.db.commit()
+
+
+def test_each_department_row_breaks_its_documents_down_by_status_type_waiting_reviews_and_issues(w):
+    seed_matrix(w)
+    rows = {r["department_id"]: r for r in figures(w, ADMIN)["by_department"]}
+    ops, sup, help_, fin, none = rows[OPS], rows[SUP], rows[HELP], rows[FINANCE], rows[None]
+    # operations: itself and below, in the order of the approval flow
+    assert list(ops["by_status"].items()) == [("draft", 1), ("pending_review", 1), ("pending_approval", 1), ("published", 2)]
+    assert ops["by_type"] == {"policy": 3, "procedure": 1, "standard": 1}
+    assert ops["waiting"] == {"review": {"pending": 1, "overdue": 1}, "approval": {"pending": 1, "overdue": 0}, "acknowledgement": {"pending": 0, "overdue": 0}}
+    assert ops["reviews"] == {"overdue": 1, "due_soon": 0, "unscheduled": 1}                # 2 is overdue, 3 has no date; a draft and a document in review owe none
+    assert ops["issues_by"] == {"stuck": 1, "on_hold": 0, "late_approvals": 1, "late_acknowledgements": 0, "no_owner": 1}
+    assert (ops["documents"], ops["in_force"], ops["in_progress"], ops["overdue_reviews"], ops["issues"]) == (5, 2, 3, 1, 2)       # the figures that were there are the same
+    # a department under it counts what is in it and below it, and the requests of the documents there
+    assert (sup["documents"], sup["by_status"], sup["waiting"]["review"]) == (4, {"pending_review": 1, "pending_approval": 1, "published": 2}, {"pending": 1, "overdue": 1})
+    assert help_["by_status"] == {"pending_review": 1, "pending_approval": 1} and help_["by_type"] == {"policy": 1, "standard": 1}
+    assert help_["reviews"] == {"overdue": 0, "due_soon": 0, "unscheduled": 0}
+    assert help_["issues_by"] == {"stuck": 1, "on_hold": 0, "late_approvals": 1, "late_acknowledgements": 0, "no_owner": 0}
+    # acknowledgements count as requests of the department the document is filed in; a late one on a document in force is an issue
+    assert fin["waiting"]["acknowledgement"] == {"pending": 2, "overdue": 1} and fin["waiting"]["review"] == {"pending": 0, "overdue": 0}
+    assert fin["issues_by"]["late_acknowledgements"] == 1 and fin["issues"] == 1 and fin["by_type"] == {"guideline": 1}
+    # "No department" has the same breakdowns
+    assert (none["documents"], none["by_status"], none["by_type"], none["reviews"]["unscheduled"]) == (1, {"published": 1}, {"policy": 1}, 1)
+    # the rows add up: the top departments and "No department" are every document (all filed somewhere that exists), the requests are all of them
+    top = [r for r in rows.values() if r["depth"] == 0]
+    assert sum(r["documents"] for r in top) == figures(w, ADMIN)["totals"]["documents"] == 7
+    assert sum(r["waiting"][k]["pending"] for r in top for k in ("review", "approval", "acknowledgement")) == 4
+    assert sum(r["by_status"].get("published", 0) for r in top) == figures(w, ADMIN)["totals"]["in_force"]
+    # a scope shows its own breakdowns, and what a person may not read is in none of them
+    assert figures(w, ADMIN, SUP)["by_department"][0]["by_type"] == sup["by_type"]
+    reader = {r["department_id"]: r for r in figures(w, READER)["by_department"]}
+    assert reader[OPS]["by_status"] == {"published": 2} and reader[OPS]["waiting"]["review"] == {"pending": 0, "overdue": 0}       # the documents in review are not READER's to see
+    assert reader[FINANCE]["waiting"]["acknowledgement"] == {"pending": 2, "overdue": 1}
+
+
+def board(w, uid=ADMIN, department=None, group="status", per=S.BOARD_CARDS, now=NOW):
+    w.db.commit()
+    return S.board(w.db, user(w, uid), None if department is None else str(department), group, per, now=now)
+
+
+def test_the_board_by_status_lists_the_flow_with_true_counts_and_the_most_urgent_cards(w):
+    seed_matrix(w)
+    for did in (8, 9):
+        doc(w, did, SUP, next_review_date=NOW + 60 * DAY)                                   # two more clean documents in force
+    doc(w, 10, FINANCE, status="expired", next_review_date=None)
+    doc(w, 11, FINANCE, status="archived", next_review_date=None)                           # archived: on no board
+    b = board(w, per=3)
+    assert (b["group"], b["per"], b["total"], b["scope"]["whole_organisation"]) == ("status", 3, 10, True)
+    assert [(c["value"], c["label"], c["count"]) for c in b["columns"]] == [
+        ("draft", "Draft", 1), ("pending_review", "In review", 1), ("pending_approval", "In approval", 1), ("approved", "Approved", 0), ("published", "Published", 6), ("expired", "Expired", 1)]
+    assert [c["key"] for c in b["columns"]][:2] == ["status:draft", "status:pending_review"]
+    published = next(c for c in b["columns"] if c["value"] == "published")
+    assert (len(published["cards"]), published["more"]) == (3, 3)                           # the true count is 6; three cards are listed, three are not
+    assert {c["id"] for c in published["cards"]} == {2, 3, 6}                               # the ones with something wrong come first (2: review overdue, 3: no owner, 6: a late acknowledgement)
+    assert next(c for c in b["columns"] if c["value"] == "approved") == {"key": "status:approved", "label": "Approved", "value": "approved", "count": 0, "cards": [], "more": 0}
+    card = next(c for c in b["columns"] if c["value"] == "pending_review")["cards"][0]
+    assert card == {"id": 4, "title": "Doc 4", "code": None, "doc_type": "standard", "type_label": "Standard", "status": "pending_review", "version": "1.0",
+                    "department_id": HELP, "department": "Helpdesk", "owner": "Ada", "next_review": None, "flags": ["stuck", "late_approvals"]}
+    assert next(c for c in published["cards"] if c["id"] == 3)["flags"] == ["no_owner"] and next(c for c in published["cards"] if c["id"] == 3)["owner"] is None
+    assert next(c for c in published["cards"] if c["id"] == 2)["flags"] == ["overdue_review"]
+    assert board(w, per=1)["columns"][0]["more"] == 0                                       # nothing left out of a column that fits
+    assert board(w, per=999)["per"] == S.BOARD_MAX                                          # a long column is cut at most at the limit
+    # no expired column while nothing has expired
+    assert "expired" not in {c["value"] for c in board(w, department=OPS)["columns"]}
+
+
+def test_the_board_by_type_and_by_department(w):
+    seed_matrix(w)
+    types = board(w, group="type")["columns"]
+    assert [(c["value"], c["label"], c["count"]) for c in types] == [("policy", "Policy", 4), ("guideline", "Guideline", 1), ("procedure", "Procedure", 1), ("standard", "Standard", 1)]
+    # by department: the top departments of the whole organisation, then "No department"
+    cols = board(w, group="department")["columns"]
+    assert [(c["label"], c["value"], c["count"], c["own"]) for c in cols] == [("Finance", str(FINANCE), 1, False), ("Operations", str(OPS), 5, False), ("No department", "none", 1, False)]
+    # under a department: its own documents, then each department directly under it (with everything in that one)
+    under = board(w, department=OPS, group="department")["columns"]
+    assert [(c["label"], c["department_id"], c["count"], c["own"]) for c in under] == [("Operations", OPS, 1, True), ("Support", SUP, 4, False)]
+    assert [(c["label"], c["count"], c["own"]) for c in board(w, department=SUP, group="department")["columns"]] == [("Support", 2, True), ("Helpdesk", 2, False)]
+    assert [(c["label"], c["count"]) for c in board(w, department=HELP, group="department")["columns"]] == [("Helpdesk", 2)]
+    assert [(c["label"], c["count"]) for c in board(w, department="none", group="department")["columns"]] == [("No department", 1)]
+    # a department scope with nothing under it still has a column for the scope
+    assert board(w, department=FINANCE, group="department")["columns"][0]["count"] == 1
+    # a switched-off department with nothing in it has no column; with a document it has
+    assert LEGACY not in {c["department_id"] for c in board(w, department=FINANCE, group="department")["columns"]}
+    doc(w, 12, LEGACY)
+    assert [(c["label"], c["count"]) for c in board(w, department=FINANCE, group="department")["columns"]] == [("Finance", 1), ("Legacy", 1)]
+
+
+def test_the_board_asks_for_the_same_rights_as_the_figures_and_counts_only_what_the_person_may_read(w):
+    seed_matrix(w)
+    b = lambda uid, **q: get(w, uid, path=URL + "/board", **q)                              # noqa: E731
+    assert b(PLAIN).status_code == 403 and b(PLAIN).json()["detail"] == REFUSED
+    assert b(ADMIN, group="nonsense").status_code == 400 and b(ADMIN, per=0).status_code == 422
+    assert b(ADMIN, department=999).status_code == 404 and b(MID, department=OPS).status_code == 403 and b(MID, department=OPS).json()["detail"] == S.NOT_YOURS
+    ok = b(MID)                                                                             # the head of Support, who reads no library: their scope, all of it
+    assert ok.status_code == 200 and ok.json()["scope"]["department_id"] == SUP and ok.json()["total"] == 4
+    reader = board(w, READER)                                                               # a library reader: what is in force, none of the documents in review
+    assert reader["total"] == 4 and {c["value"] for c in reader["columns"] if c["count"]} == {"published"}
+    assert all(card["id"] not in (1, 4, 5) for c in reader["columns"] for card in c["cards"])
+
+
+def csv_rows(text):
+    import csv as csv_module
+    import io
+    return list(csv_module.reader(io.StringIO(text.lstrip("﻿"))))
+
+
+def test_the_export_is_a_csv_of_the_documents_in_scope_with_what_is_wrong_with_each(w):
+    seed_matrix(w)
+    doc(w, 8, SUP, next_review_date=NOW + 60 * DAY)
+    doc(w, 9, FINANCE, status="archived", next_review_date=None)
+    w.db.commit()
+    text, name = S.export_documents(w.db, user(w, ADMIN), None, now=NOW)
+    assert text.startswith("﻿") and name == "documents-whole-organisation-2026-11-04.csv"
+    rows = csv_rows(text)
+    assert rows[0] == ["ID", "Code", "Title", "Type", "Status", "Version", "Department", "Owner", "Next review", "Issues"]
+    assert len(rows) == 1 + 8                                                               # the archived one is left out, as in every figure
+    by_id = {r[0]: r for r in rows[1:]}
+    assert by_id["4"] == ["4", "", "Doc 4", "Standard", "In review", "1.0", "Operations > Support > Helpdesk", "Ada", "", "Stuck in a stage; Late approval"]
+    assert by_id["2"][4:] == ["Published", "1.0", "Operations > Support", "Ada", "2026-11-03", "Review overdue"]
+    assert by_id["3"][7] == "" and by_id["3"][9] == "No owner" and by_id["7"][6] == "" and by_id["6"][9] == "Late acknowledgement"
+    assert [r[6] for r in rows[1:]] == sorted((r[6] for r in rows[1:]), key=str.casefold)       # in department order, then by title
+    # a scope is its own file; the file's name says which
+    scoped, scoped_name = S.export_documents(w.db, user(w, ADMIN), str(SUP), now=NOW)
+    assert scoped_name == "documents-support-2026-11-04.csv" and sorted(int(r[0]) for r in csv_rows(scoped)[1:]) == [2, 3, 4, 5, 8]
+    # a title a spreadsheet would run as a formula is text
+    for did, title in [(20, '=HYPERLINK("http://evil.test","x")'), (21, "+1+1"), (22, "-2+3"), (23, "@SUM(A1)"), (24, "\tTabbed")]:
+        doc(w, did, FINANCE).title = title
+    w.db.commit()
+    cells = {r[0]: r[2] for r in csv_rows(S.export_documents(w.db, user(w, ADMIN), str(FINANCE), now=NOW)[0])[1:]}
+    assert cells["20"] == "'" + '=HYPERLINK("http://evil.test","x")' and cells["21"] == "'+1+1" and cells["22"] == "'-2+3" and cells["23"] == "'@SUM(A1)" and cells["24"] == "'\tTabbed"
+    assert cells["6"] == "Doc 6"                                                            # an ordinary title is untouched
+
+
+def test_the_export_is_an_attachment_and_asks_for_the_same_rights_as_the_figures(w):
+    seed_matrix(w)
+    r = get(w, ADMIN, path=URL + "/export")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert re.fullmatch(r'attachment; filename="documents-whole-organisation-\d{4}-\d{2}-\d{2}\.csv"', r.headers["content-disposition"])
+    assert r.content.startswith(b"\xef\xbb\xbf") and len(csv_rows(r.content.decode("utf-8"))) == 1 + 7
+    mine = get(w, MID, path=URL + "/export")                                                # the head of Support: their own scope
+    assert mine.status_code == 200 and "documents-support-" in mine.headers["content-disposition"] and len(csv_rows(mine.content.decode("utf-8"))) == 1 + 4
+    assert get(w, PLAIN, path=URL + "/export").status_code == 403
+    assert get(w, MID, OPS, path=URL + "/export").status_code == 403 and get(w, ADMIN, 999, path=URL + "/export").status_code == 404
+    reader = csv_rows(get(w, READER, path=URL + "/export").content.decode("utf-8"))        # what a library reader may read: the documents in force
+    assert {r[0] for r in reader[1:]} == {"2", "3", "6", "7"}
+    assert S.STATUS_WORDS["pending_review"] == "In review"
+
+
 # ── queries, writes ──────────────────────────────────────────────────────────
 
 def test_the_number_of_queries_does_not_depend_on_the_number_of_documents_or_departments(w):
@@ -687,7 +852,7 @@ def test_the_response_has_the_documented_shape(w):
     assert list(body) == ["scope", "choices", "as_of", "totals", "by_type", "by_status", "by_department", "stages", "requests", "waiting", "reviews", "issues",
                           "links"]
     assert set(body["by_department"][0]) == {"key", "department_id", "name", "path", "level", "level_label", "depth", "is_active", "owner", "own", "documents",
-                                             "in_force", "in_progress", "overdue_reviews", "issues"}
+                                             "in_force", "in_progress", "overdue_reviews", "issues", "by_status", "by_type", "waiting", "reviews", "issues_by"}
     assert set(body["scope"]) == {"value", "department_id", "name", "path", "level", "level_label", "whole_organisation", "includes_below"}
     assert set(body["choices"][0]) == {"value", "department_id", "name", "path", "level", "level_label", "is_active"}
     assert set(body["waiting"][0]) == {"document_id", "title", "kind", "stage", "waiting_for", "waiting_count", "due_date", "days_late"}

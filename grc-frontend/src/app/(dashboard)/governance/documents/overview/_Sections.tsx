@@ -1,137 +1,41 @@
 'use client';
 
-// The cards of the overview, each a SectionCard on the kit: By department (the tree of the scope, one row each), By type, By status (the approval flow,
-// what has lapsed, the stages documents in review are at), Waiting on people, Reviews and Issues. What each number means and where it opens is _model.ts;
-// every number is a Figure (a link to the library, or text). Colours are the kit's tokens; a bar is only a picture, the numbers beside it are what is read.
-// While the answer is on its way each card is a skeleton.
+// The cards of the overview that are lists and figures, each a SectionCard on the kit: By status (the approval flow, what has lapsed, the stages documents in review
+// are at), Waiting on people, Reviews and Issues. (The department table is _DepartmentTable.tsx, the graphs _Charts.tsx, the board _BoardPanel.tsx.) What each number means and
+// where it opens is _model.ts; every number is a Figure (a link to the library, or text). Colours are the kit's tokens; a bar is only a picture, the numbers beside
+// it are what is read. While the answer is on its way each card is a skeleton.
 import Link from 'next/link';
 import { clsx } from 'clsx';
-import { CornerDownRight } from 'lucide-react';
 import { RegisterTable, SectionCard, SkeletonLines, type RegisterColumn } from '@/components/ui/ds';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { EMPTY, formatDate } from '@/lib/format';
 import { Figure } from './_Figure';
 import {
-  departmentLines, flow, hasDepartmentTable, issueRows, lapsed, lateBy, namesText, openHref, requestRows, reviewRows, reviewShares, stages, typeBars,
-  type DepartmentLine, type Overview, type RequestRow, type Reviews, type WaitingRow,
+  flow, issueRows, lapsed, lateBy, namesText, openHref, requestRows, reviewRows, reviewShares, stages,
+  type Overview, type RequestRow, type Reviews, type WaitingRow,
 } from './_model';
 
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 const DOC_LINK = `rounded-ds-control font-medium text-ds-fg hover:underline ${FOCUS}`;
-const QUIET = 'text-ds-body text-ds-fg-muted';
 
-/** The grid the cards sit in: two columns from 1024px, one below. */
+/** The grid two cards sit side by side in: two columns from 1024px, one below. */
 export const CARDS = 'grid gap-[16px] lg:grid-cols-2';
 
 // ── skeleton ─────────────────────────────────────────────────────────────────
 export function CardsSkeleton() {
   return (
-    <div className={CARDS}>
-      {[['types', 'By type'], ['status', 'By status'], ['waiting', 'Waiting on people'], ['reviews', 'Reviews'], ['issues', 'Issues']].map(([id, title]) => (
-        <div key={id} className={id === 'waiting' ? 'lg:col-span-2' : undefined}>
-          <SectionCard id={`${id}-loading`} title={title}>
-            <SkeletonLines lines={id === 'waiting' ? 5 : 4} label={`Loading ${title.toLowerCase()}`} />
-          </SectionCard>
-        </div>
+    <>
+      {[['departments', 'By department', 5], ['status', 'By status', 4], ['waiting', 'Waiting on people', 5]].map(([id, title, lines]) => (
+        <SectionCard key={id} id={`${id}-loading`} title={String(title)}>
+          <SkeletonLines lines={Number(lines)} label={`Loading ${String(title).toLowerCase()}`} />
+        </SectionCard>
       ))}
-    </div>
-  );
-}
-
-// ── By department ────────────────────────────────────────────────────────────
-/** The department's name, indented under its parent; the name opens the department's own overview (not on the row that is this page). */
-function DepartmentName({ line, flat = false }: { line: DepartmentLine; flat?: boolean }) {
-  const { row } = line;
-  const off = !row.is_active;
-  const name = line.open ? (
-    <Link href={line.open} title={line.title} className={clsx('line-clamp-2 min-w-0 break-words', DOC_LINK, off && '!text-ds-fg-muted')}>{row.name}</Link>
-  ) : (
-    <span title={line.title} className={clsx('line-clamp-2 min-w-0 break-words font-[600]', off ? 'text-ds-fg-muted' : 'text-ds-fg')}>{row.name}</span>
-  );
-  const depth = flat ? 0 : row.depth;
-  return (
-    <span className="flex min-w-0 items-center gap-[6px]" style={{ paddingLeft: Math.min(depth, 4) * 20 }}>
-      {depth > 0 && <CornerDownRight aria-hidden strokeWidth={1.75} className="h-[14px] w-[14px] shrink-0 text-ds-fg-muted" />}
-      {name}
-    </span>
-  );
-}
-
-const departmentColumns: RegisterColumn<DepartmentLine>[] = [
-  { key: 'department', header: 'Department', isRowHeader: true, width: 'w-[30%]', cell: (l) => <DepartmentName line={l} /> },
-  {
-    key: 'documents', header: 'Documents', align: 'right', card: 'meta',
-    cell: (l) => <Figure value={l.row.documents} href={l.documentsHref} noun={`documents in ${l.row.name}${l.row.department_id === null ? '' : ' and under it'}`} />,
-  },
-  {
-    key: 'in_force', header: 'In force', align: 'right', priority: 2, card: 'meta',
-    cell: (l) => <Figure value={l.row.in_force} href={l.inForceHref} noun={`documents in force in ${l.row.name}`} tone="success" />,
-  },
-  {
-    key: 'in_progress', header: 'In progress', align: 'right', priority: 2, card: 'meta',
-    cell: (l) => <Figure value={l.row.in_progress} href={l.inProgressHref} noun={`documents in progress in ${l.row.name}`} />,
-  },
-  {
-    key: 'overdue', header: 'Overdue reviews', align: 'right', card: 'meta',
-    cell: (l) => <Figure value={l.row.overdue_reviews} href={l.overdueHref} noun={`overdue reviews in ${l.row.name}`} tone="danger" />,
-  },
-  {
-    key: 'issues', header: 'Issues', align: 'right', card: 'meta',
-    cell: (l) => <Figure value={l.row.issues} href={l.issuesHref} noun={`documents with issues in ${l.row.name}`} tone="warning" opens={l.here ? 'Go to the list below' : 'Open its overview'} />,
-  },
-  { key: 'owner', header: 'Owner', priority: 3, card: 'meta', cell: (l) => <span className="line-clamp-1 break-words text-ds-fg-body" title={l.row.owner ?? undefined}>{l.row.owner ?? EMPTY}</span> },
-];
-
-function ByDepartment({ data }: { data: Overview }) {
-  return (
-    <SectionCard
-      id="departments"
-      title="By department"
-      info="One row for each department of this view, from the top down. Each row counts the documents filed in that department and in the ones under it. Open a department for its own overview."
-    >
-      <RegisterTable<DepartmentLine>
-        caption="Documents by department"
-        columns={departmentColumns}
-        rows={departmentLines(data)}
-        getRowId={(l) => l.row.key}
-        cardTitle={(l) => <DepartmentName line={l} flat />}
-        empty={<div className="px-[16px] py-[24px] text-center text-ds-body text-ds-fg-muted">No departments</div>}
-      />
-    </SectionCard>
-  );
-}
-
-// ── By type ──────────────────────────────────────────────────────────────────
-function ByType({ data }: { data: Overview }) {
-  const bars = typeBars(data);
-  return (
-    <SectionCard id="types" title="By type" info="Documents that are not archived, by what they are. Each bar is as long as its count against the biggest type; the second number is how many of them are in force.">
-      {bars.length === 0 ? (
-        <p className={QUIET}>No documents</p>
-      ) : (
-        <ul className="flex flex-col gap-[4px]">
-          {bars.map((b) => (
-            <li key={b.key} className="grid min-h-[36px] grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_auto] items-center gap-x-[12px]">
-              <span className="truncate text-ds-body text-ds-fg-body" title={b.label}>{b.label}</span>
-              <span aria-hidden className="block h-[8px] overflow-hidden rounded-full bg-ds-surface-hover">
-                <span className="block h-full rounded-full bg-ds-primary" style={{ width: `${b.percent}%` }} />
-              </span>
-              <span className="flex items-baseline justify-end gap-[8px]">
-                <Figure value={b.count} href={b.href} noun={`${b.label.toLowerCase()} documents`} />
-                <span className="whitespace-nowrap text-ds-label text-ds-fg-muted">
-                  <Figure value={b.inForce} href={b.inForceHref} noun={`${b.label.toLowerCase()} documents in force`} className="!text-ds-label" /> in force
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </SectionCard>
+    </>
   );
 }
 
 // ── By status and stage ──────────────────────────────────────────────────────
-function ByStatus({ data }: { data: Overview }) {
+export function ByStatus({ data }: { data: Overview }) {
   const lapse = lapsed(data);
   const at = stages(data);
   return (
@@ -202,7 +106,7 @@ const waitingColumns: RegisterColumn<WaitingRow>[] = [
   },
 ];
 
-function Waiting({ data }: { data: Overview }) {
+export function Waiting({ data }: { data: Overview }) {
   const rows = requestRows(data);
   return (
     <SectionCard
@@ -230,7 +134,7 @@ function Waiting({ data }: { data: Overview }) {
 // ── Reviews ──────────────────────────────────────────────────────────────────
 const FILL: Record<keyof Reviews, string> = { overdue: 'bg-ds-danger', due_soon: 'bg-ds-warning', unscheduled: 'bg-ds-border-strong', up_to_date: 'bg-ds-success' };
 
-function ReviewsCard({ data }: { data: Overview }) {
+export function ReviewsCard({ data }: { data: Overview }) {
   const rows = reviewRows(data);
   const shares = reviewShares(data.reviews);
   return (
@@ -256,7 +160,7 @@ function ReviewsCard({ data }: { data: Overview }) {
 }
 
 // ── Issues ───────────────────────────────────────────────────────────────────
-function IssuesCard({ data }: { data: Overview }) {
+export function IssuesCard({ data }: { data: Overview }) {
   const rows = issueRows(data);
   return (
     <SectionCard
@@ -277,19 +181,5 @@ function IssuesCard({ data }: { data: Overview }) {
         ))}
       </ul>
     </SectionCard>
-  );
-}
-
-// ── all of them ──────────────────────────────────────────────────────────────
-export function Cards({ data }: { data: Overview }) {
-  return (
-    <div className={CARDS}>
-      {hasDepartmentTable(data) && <div className="lg:col-span-2"><ByDepartment data={data} /></div>}
-      <ByType data={data} />
-      <ByStatus data={data} />
-      <div className="lg:col-span-2"><Waiting data={data} /></div>
-      <ReviewsCard data={data} />
-      <IssuesCard data={data} />
-    </div>
   );
 }

@@ -56,6 +56,15 @@ export interface DepartmentRow {
   in_progress: number;
   overdue_reviews: number;
   issues: number;
+  /** the documents in it and below it by status and by type (only the ones that are there; a document with no type is under "") */
+  by_status: Record<string, number>;
+  by_type: Record<string, number>;
+  /** requests asked of people for those documents, by kind: pending, and how many of them are overdue (people asked, as in `requests`) */
+  waiting: Record<RequestKind, { pending: number; overdue: number }>;
+  /** where the review dates of the documents that owe a review stand */
+  reviews: { overdue: number; due_soon: number; unscheduled: number };
+  /** documents with each of these issues (a document can have several) */
+  issues_by: { stuck: number; on_hold: number; late_approvals: number; late_acknowledgements: number; no_owner: number };
 }
 export type RequestKind = 'review' | 'approval' | 'acknowledgement';
 export interface RequestFigures { pending: number; overdue: number; due_soon: number; oldest_days_late: number | null }
@@ -161,12 +170,6 @@ export function namesText(row: Pick<WaitingRow, 'waiting_for' | 'waiting_count'>
 /** "As of 4 Nov 2026, 14:05" (the server's time is naive UTC: the viewer's own clock). */
 export const asOfText = (asOf: string): string => `As of ${formatDateTime(asOf)}`;
 
-/** How wide a bar is, as a percent of the longest: nothing for none, and never so thin that a document does not show. */
-export function barPercent(count: number, max: number): number {
-  if (!(count > 0) || !(max > 0)) return 0;
-  return Math.min(100, Math.max(3, Math.round((count / max) * 100)));
-}
-
 /** "3 overdue reviews. Open in the library": what a figure's link is called for a screen reader. */
 export const figureName = (n: number, noun: string): string => `${formatCount(n)} ${noun}. Open in the library`;
 
@@ -215,57 +218,22 @@ export const isEmpty = (d: Pick<Overview, 'totals'>): boolean => d.totals.docume
 
 // ─── By department ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface DepartmentLine {
-  row: DepartmentRow;
-  /** the address value of the department's own overview ("12", "none") */
-  value: string;
-  /** the row is the department the page is about: its name is not a link */
-  here: boolean;
-  /** the department's own overview, or null on the row that is the page itself */
-  open: string | null;
-  /** where the Issues figure leads: the list on this page, or on the department's own page */
-  issuesHref: string;
-  /** the path, the level in the organisation's word and how many documents are filed in the department itself */
-  title: string;
-  documentsHref: string | null;
-  inForceHref: string | null;
-  inProgressHref: string | null;
-  overdueHref: string | null;
-}
+/** The address value of a row's department (what `?dept=` takes): its id, or "none" for the documents in no department. */
+export const rowValue = (row: Pick<DepartmentRow, 'department_id'>): string => (row.department_id === null ? 'none' : String(row.department_id));
+/** The row is the department the page is about (the scope itself). */
+export const rowIsHere = (row: Pick<DepartmentRow, 'department_id'>, scope: Pick<Scope, 'department_id'>): boolean => row.department_id !== null && row.department_id === scope.department_id;
 
-/** The rows of the department table, each with the addresses of its figures (the library on that department and everything under it). */
-export function departmentLines(d: Pick<Overview, 'by_department' | 'links' | 'scope'>): DepartmentLine[] {
-  return d.by_department.map((row) => {
-    const value = row.department_id === null ? 'none' : String(row.department_id);
-    const here = row.department_id !== null && row.department_id === d.scope.department_id;
-    const below = row.documents - row.own;
-    const title = [row.path.length > 1 ? row.path.join(' › ') : '', row.level_label, below > 0 ? `${formatCount(row.own)} filed in it, ${formatCount(below)} below it` : ''].filter(Boolean).join(' · ');
-    return {
-      row, value, here,
-      open: here ? null : overviewHref(value),
-      issuesHref: here ? '#issues' : `${overviewHref(value)}#issues`,
-      title: title || row.name,
-      documentsHref: figureHref(d, row.key), inForceHref: figureHref(d, `${row.key}:in_force`),
-      inProgressHref: figureHref(d, `${row.key}:in_progress`), overdueHref: figureHref(d, `${row.key}:overdue_reviews`),
-    };
-  });
-}
-
-/** The table is worth a card when there is more than one row to compare: a unit with nothing under it is the six figures above. */
+/** The table is worth a card on the summary when there is more than one row to compare: a unit with nothing under it is the six figures above. */
 export const hasDepartmentTable = (d: Pick<Overview, 'by_department'>): boolean => d.by_department.length > 1;
 
 // ─── By type, by status, by stage ──────────────────────────────────────────────────────────────────────────────────────────
 
-export interface Bar { key: string; label: string; count: number; inForce: number; percent: number; href: string | null; inForceHref: string | null }
+export interface TypeLine { key: string; label: string; count: number; inForce: number; href: string | null; inForceHref: string | null }
 
-/** The type bars: each as long as its count against the biggest type. */
-export function typeBars(d: Pick<Overview, 'by_type' | 'links'>): Bar[] {
-  const max = d.by_type.reduce((m, t) => Math.max(m, t.count), 0);
-  return d.by_type.map((t) => ({
-    key: t.key, label: t.label, count: t.count, inForce: t.in_force, percent: barPercent(t.count, max),
-    href: figureHref(d, t.key), inForceHref: figureHref(d, t.in_force_key),
-  }));
-}
+/** The kinds of document, each with how many and how many of them are in force, and where both open (the server's order: the most first). */
+export const typeLines = (d: Pick<Overview, 'by_type' | 'links'>): TypeLine[] => d.by_type.map((t) => ({
+  key: t.key, label: t.label, count: t.count, inForce: t.in_force, href: figureHref(d, t.key), inForceHref: figureHref(d, t.in_force_key),
+}));
 
 export interface Step { key: string; status: string; label: string; noun: string; count: number; href: string | null }
 
