@@ -300,7 +300,7 @@ function LinksSection({ vendorId, canEdit }: { vendorId: number; canEdit: boolea
   const live = links.filter((l) => l.active);
   return (
     <Section title={`Links (${live.length} active)`}
-      tip="Every personal link sent to this vendor's contacts, newest first. Only a fingerprint of each is kept, so a lost link cannot be shown again: send a new one."
+      tip="Every personal link sent to this vendor's contacts, newest first. A link cannot be shown again once it is sent: if one is lost, send a new one."
       action={canEdit && live.length > 0 ? (
         <button type="button" className={quiet} disabled={revokeAll.isPending}
           onClick={() => window.confirm(`Revoke all ${live.length} active links? The vendor's contacts will need new ones.`) && revokeAll.mutate()}>

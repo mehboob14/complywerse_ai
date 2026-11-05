@@ -312,8 +312,8 @@ export default function CompleteAttestationPage() {
             </span>
           </div>
           <p className="mb-2 text-xs text-slate-500">
-            Draw your signature with your mouse, finger or pen. It is kept with this attestation together with your name, the time, your IP
-            address and a fingerprint (hash) of what you signed, and added to the audit trail.
+            Draw your signature with your mouse, finger or pen. It is kept with this attestation, with your name, the time and your IP
+            address, and added to the audit trail.
           </p>
           <SignaturePad onChange={setSignature} />
         </div>
