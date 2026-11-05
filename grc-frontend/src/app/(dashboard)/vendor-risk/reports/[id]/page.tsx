@@ -50,7 +50,6 @@ export default function KeptReportPage() {
         <p className="text-[11px] text-gray-500">
           {r.kind_label} · generated {fmtDay(r.generated_at)}{r.generated_by ? ` by ${r.generated_by}` : ''} ·{' '}
           {r.approved_at ? `approved ${fmtDay(r.approved_at)}${r.approved_by ? ` by ${r.approved_by}` : ''}` : 'draft, not approved'}
-          {' '}· fingerprint <span className="font-mono">{r.content_hash.slice(0, 12)}</span>
           {r.share.active && <> · shared with an examiner until {fmtDay(r.share.expires_at)}, {r.share.views} view{r.share.views === 1 ? '' : 's'}</>}
         </p>
         <ReportView content={r.content} />

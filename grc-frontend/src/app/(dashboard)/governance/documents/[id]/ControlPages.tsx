@@ -128,7 +128,7 @@ function SignatureCell({ person, stage }: { person: RecordPerson; stage: RecordS
       {sealed && (
         // (Verify is drawn by SignatureSeal in the light teal of its other screens; here it is the dark one, and it is for the screen)
         <div className="mt-1 flex justify-center text-left [&_button]:text-[#0b6b58] print:[&_button]:hidden">
-          <SignatureSeal id={s.id} fingerprint={s.seal_short || ''} thumb={false} codeTitle="Short code of this signature's seal. Verify checks the whole signed record." />
+          <SignatureSeal id={s.id} fingerprint={s.seal_short || ''} thumb={false} showCode codeTitle="Short code of this signature's seal. Verify checks the whole signed record." />
         </div>
       )}
     </div>

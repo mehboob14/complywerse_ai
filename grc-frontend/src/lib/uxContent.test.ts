@@ -27,12 +27,6 @@ export function visibleText(source: string, jsx = true): string[] {
 
 /** Files that show such a word on purpose today, with why. Each is a decision for the owner, not an exemption: fix the text and delete the line. */
 const ALLOWED: Record<string, string> = {
-  'components/governance/SignatureSeal.tsx': 'the seal beside a signature shows its short code with a Verify; the code is the tooltip of "E-signed" (move it into Verify when decided)',
-  'app/(dashboard)/governance/documents/_SignoffControl.tsx': 'an (i) note on what signing stamps into the document-control sign-off table (D38/D39): wording decided with that page',
-  'app/(dashboard)/compliance-plugins/page.tsx': 'Evidence Collectors: an "Evidence hash" column and its chain-of-custody tooltip, for auditors of collected evidence',
-  'app/(dashboard)/compliance-plugins/[id]/page.tsx': 'Evidence Collectors: the "Evidence hash" column of a run, for auditors of collected evidence',
-  'app/(dashboard)/vendor-risk/reports/[id]/page.tsx': 'the report header prints the report fingerprint (the examiner page shows the same code): decide whether anyone needs it there',
-  'app/vendor-risk/examiner/[token]/page.tsx': 'the examiner page of a shared report prints the report fingerprint beside the expiry: decide whether examiners need it',
   'app/(dashboard)/vulnerabilities/ctem-scopes/CtemScopesRedesign.tsx': 'Cybersecurity Assurance (outside the UX pass): a "Membership hash" column',
   'app/(dashboard)/cyber-assurance/vulnerabilities/ctem-scopes/CtemScopesRedesign.tsx': 'Cybersecurity Assurance (outside the UX pass): a "Membership hash" column',
   'app/(dashboard)/cyber-assurance/compliance-plugins/page.tsx': 'Cybersecurity Assurance copy of the Evidence Collectors page (outside the UX pass)',
