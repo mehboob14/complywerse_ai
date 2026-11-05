@@ -14,8 +14,8 @@ test('below lg the top bar has the button that opens the menu drawer, and from l
   assert.match(header, /aria-expanded=\{menuOpen\}/);
 });
 
-test('ComplyChat is reachable where the input is hidden: an icon to the same chat', () => {
-  assert.match(header, /href="\/complychat" aria-label="Ask ComplyChat"/);
+test('Comply Agent is reachable where the input is hidden: an icon to the same chat', () => {
+  assert.match(header, /href="\/complychat" aria-label="Ask Comply Agent"/);
   assert.match(header, /md:hidden/, 'below md, where the input is hidden');
   assert.match(header, /'lg:hidden'/, 'in the Documents area, which keeps the room for its tabs below lg');
 });

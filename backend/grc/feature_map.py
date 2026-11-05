@@ -155,7 +155,7 @@ BY_PREFIX: Dict[str, Place] = {
     "/analytics": ("Reports", "Analytics"),
     "/search": ("Reports", "Search"),
     # AI Assistant
-    "/ai": ("AI Assistant", "ComplyChat"),
+    "/ai": ("AI Assistant", "Comply Agent"),
     "/ai-recommendations": ("AI Assistant", "Saved AI Recommendations"),
     # Administration
     "/admin": ("Administration", "Company"),

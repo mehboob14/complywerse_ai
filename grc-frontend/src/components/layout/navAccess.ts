@@ -202,7 +202,7 @@ export const navigation: NavEntry[] = [
     ],
   },
   // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).
-  // ComplyChat remains the global AI assistant in the top bar.
+  // Comply Agent remains the global AI assistant in the top bar.
   // Administration stays as the pinned bottom popover.
 ];
 
@@ -218,7 +218,7 @@ export function flattenLeaves(entries: NavEntry[]): NavItem[] {
 
 // Pages with no sidebar entry, reached from the top bar or from another page, and the rights each needs
 const PAGE_PERMISSIONS: Record<string, string[]> = {
-  '/complychat': ['dashboard:ai_insights:view'],                          // Dashboard > ComplyChat
+  '/complychat': ['dashboard:ai_insights:view'],                          // Dashboard > Comply Agent
   '/users': ['admin:users:view'],                                         // Administration > User Management
   '/reports/dashboards': ['reports:dashboards:*'],
   '/reports/trends': ['reports:reports:*', 'reports:dashboards:*', 'reports:analytics:*'],

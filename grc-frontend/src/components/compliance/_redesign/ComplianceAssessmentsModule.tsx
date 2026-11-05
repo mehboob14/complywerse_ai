@@ -155,7 +155,7 @@ export default function ComplianceAssessmentsModule({
           <div className="flex-1" />
           <div className="flex h-[34px] w-[280px] items-center gap-2 rounded-[9px] border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-400">
             <Search className="h-[15px] w-[15px]" style={{ color: '#0f766e' }} />
-            <span>Ask ComplyChat anything…</span>
+            <span>Ask Comply Agent anything…</span>
           </div>
           <button className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] border border-slate-200 text-slate-500"><Bell className="h-[17px] w-[17px]" /></button>
         </header>

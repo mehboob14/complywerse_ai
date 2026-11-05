@@ -202,15 +202,15 @@ export default function Header() {
       </div>
 
       <div className="ml-3 flex items-center gap-2.5">
-        {/* ComplyChat — global AI assistant, as a wide input (replaces the
+        {/* Comply Agent — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
         <form onSubmit={submitChat} className="relative hidden md:block">
           <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
           <input
             value={chatQ}
             onChange={(e) => setChatQ(e.target.value)}
-            placeholder="Ask ComplyChat anything…"
-            aria-label="Ask ComplyChat"
+            placeholder="Ask Comply Agent anything…"
+            aria-label="Ask Comply Agent"
             className="h-8 w-64 rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30"
           />
           <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">

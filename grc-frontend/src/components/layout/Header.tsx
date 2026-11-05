@@ -312,7 +312,7 @@ export default function Header() {
       </div>
 
       <div className="ml-2 flex items-center gap-1.5 sm:ml-3 sm:gap-2.5">
-        {/* ComplyChat — global AI assistant, as a wide input (replaces the
+        {/* Comply Agent — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
         {canAskComplyChat && (
           <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
@@ -320,8 +320,8 @@ export default function Header() {
             <input
               value={chatQ}
               onChange={(e) => setChatQ(e.target.value)}
-              placeholder="Ask ComplyChat anything…"
-              aria-label="Ask ComplyChat"
+              placeholder="Ask Comply Agent anything…"
+              aria-label="Ask Comply Agent"
               className={`h-8 ${inDocumentsArea(pathname) ? 'w-44 2xl:w-64' : 'w-64'} rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30`}
             />
             <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
@@ -329,10 +329,10 @@ export default function Header() {
             </button>
           </form>
         )}
-        {/* where the input is not shown (below md; in the Documents area, which needs the room for its tabs, below lg) ComplyChat is an icon.
+        {/* where the input is not shown (below md; in the Documents area, which needs the room for its tabs, below lg) Comply Agent is an icon.
             It opens what the input opens when it is submitted empty: the chat. */}
         {canAskComplyChat && (
-          <Link href="/complychat" aria-label="Ask ComplyChat" title="Ask ComplyChat"
+          <Link href="/complychat" aria-label="Ask Comply Agent" title="Ask Comply Agent"
             className={`inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${inDocumentsArea(pathname) ? 'lg:hidden' : 'md:hidden'}`}>
             <Sparkles size={18} strokeWidth={1.75} />
           </Link>
