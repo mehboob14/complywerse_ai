@@ -130,10 +130,8 @@ test('AI runs only when its button is pressed and saves nothing until Add: no ef
 });
 
 test('the person asked is told what they may do by the server: my_turn for the form, can_edit for a risk, can_complete and my_turn for the implementer; never a guess from a role', () => {
-  for (const f of MINE.filter((name) => name !== '_RisksPanel.tsx')) assert.doesNotMatch(code(src[f]), /hasPermission|usePermissions/, f);
-  // the one place a right is read: the Risk Management module's own register (for the link), which the server gives to its readers only
-  assert.deepEqual(code(src['_RisksPanel.tsx']).match(/hasPermission\('[^']+'\)/g), ["hasPermission('risks:risk_register:view')"]);
-  assert.match(src['_RisksPanel.tsx'], /\{canLink && <IconButton label=\{`\$\{r\.register_risk_id !== null \? 'Change register link' : 'Link to risk register'\}: \$\{what\}`\}/);
+  for (const f of MINE) assert.doesNotMatch(code(src[f]), /hasPermission|usePermissions/, f);                // no right is read here: the link is offered to whoever can edit the risk (the register lookup is the exception's own)
+  assert.match(src['_RisksPanel.tsx'], /<IconButton label=\{`\$\{r\.register_risk_id !== null \? 'Change register link' : 'Link to risk register'\}: \$\{what\}`\}/);
   assert.match(src['_RisksPanel.tsx'], /\{turn && <Assessment /);
   assert.match(src['_RisksPanel.tsx'], /\{r\.can_edit && \(/);
   assert.match(src['_ControlsPanel.tsx'], /const canEdit = Boolean\(impl\?\.my_turn\);/);
@@ -211,8 +209,9 @@ test('typed input is not lost by accident: the drawer asks before it is closed o
 test('the potential risks: the register link is a button that opens the register in a new tab, a risk is changed or taken back only by its author while the step is open, and the choice of register entry is read when asked', () => {
   const r = src['_RisksPanel.tsx'];
   assert.match(r, /href=\{`\/erm\/risks\/\$\{r\.register_risk_id\}`\} target="_blank" rel="noopener noreferrer" variant="link"/);
-  assert.match(r, /queryKey: \['risk-register-for-exception-link'\]/);
-  assert.match(r, /risksApi\.getAll\(\)/);
+  assert.match(r, /queryKey: \['risk-register-for-exception-link', exceptionId\]/);
+  assert.match(r, /policyExceptionApi\.getRiskRegister\(exceptionId\)/);                  // the exception's own lookup, not the Risk Management module's list
+  assert.doesNotMatch(r, /risksApi/);
   assert.match(r, /\{linking && <LinkDialog key=\{linking\.id\}/);                      // the register is read only once the dialog is open
   assert.match(r, /confirm\(\{ title: 'Remove this risk\?'/);
   assert.match(r, /const \{ current, earlier \} = groupRisks\(risks, currentRound\(risks, e\.approval\?\.round\)\);/);       // an implementer is not shown the approval: the round comes from the rows then

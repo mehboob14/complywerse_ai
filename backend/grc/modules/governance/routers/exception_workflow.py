@@ -72,8 +72,8 @@ def _exception(db: Session, user: GRCUser, exception_id: int) -> PolicyException
 
 
 def _decider(db: Session, user: GRCUser, exc: PolicyException) -> bool:
-    """The older flow (no rule): someone allowed to approve who is not the requester."""
-    return "approve" in legacy._held(db, user) and exc.requested_by != user.id
+    """The older flow (no rule): someone allowed to approve who is not the requester, or the organisation's only administrator."""
+    return "approve" in legacy._held(db, user) and (exc.requested_by != user.id or A.lone_decider(db, user))
 
 
 def _may_edit(db: Session, user: GRCUser) -> bool:
@@ -185,6 +185,13 @@ def link_risk(exception_id: int, risk_id: int, body: LinkIn, db: Session = Depen
     row = K.link_register(db, exc, current_user, risk_id, body.risk_id, _decider(db, current_user, exc))
     db.commit()
     return _risk_out(db, exc, current_user, row)
+
+
+@router.get("/{exception_id}/risk-register")
+def risk_register(exception_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The register entries a potential risk can be linked to (number and title), for the person asked at the open step."""
+    exc = _exception(db, current_user, exception_id)
+    return K.register_choices(db, exc, current_user, _decider(db, current_user, exc))
 
 
 @router.post("/{exception_id}/ai/risks")

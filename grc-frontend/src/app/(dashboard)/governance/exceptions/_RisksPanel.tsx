@@ -9,8 +9,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, ExternalLink, Link2, Pencil, Plus, Trash2 } from 'lucide-react';
-import { policyExceptionApi, risksApi } from '@/lib/api';
-import { usePermissions } from '@/hooks/usePermissions';
+import { policyExceptionApi } from '@/lib/api';
 import { truncate } from '@/lib/format';
 import { AnimatedModal } from '@/components/ui';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -57,8 +56,8 @@ function RiskForm({ draft, onChange, words }: { draft: RiskDraft; onChange: (nex
 /** Link a potential risk to an entry of the risk register, or take the link off. The register is read only once this is open. */
 function LinkDialog({ exceptionId, risk, onClose }: { exceptionId: number; risk: PotentialRisk; onClose: () => void }) {
   const register = useQuery({
-    queryKey: ['risk-register-for-exception-link'],
-    queryFn: async () => ((await risksApi.getAll()).data ?? []).map((r) => ({ value: String(r.id), label: r.title })),
+    queryKey: ['risk-register-for-exception-link', exceptionId],
+    queryFn: async () => (((await policyExceptionApi.getRiskRegister(exceptionId)).data ?? []) as Array<{ id: number; title: string }>).map((r) => ({ value: String(r.id), label: r.title })),
     retry: (n, e) => n < 2 && canRetry(e),
   });
   const [choice, setChoice] = useState<string | null>(null);
@@ -98,7 +97,7 @@ function LinkDialog({ exceptionId, risk, onClose }: { exceptionId: number; risk:
 }
 
 /** One risk, or the line that says the person found none. */
-function RiskItem({ risk: r, canLink, onEdit, onLink, onRemove }: { risk: PotentialRisk; canLink: boolean; onEdit: () => void; onLink: () => void; onRemove: () => void }) {
+function RiskItem({ risk: r, onEdit, onLink, onRemove }: { risk: PotentialRisk; onEdit: () => void; onLink: () => void; onRemove: () => void }) {
   if (r.none_identified) {
     return (
       <li className={`${ROW} flex flex-wrap items-center justify-between gap-x-[8px] gap-y-[4px]`}>
@@ -125,7 +124,7 @@ function RiskItem({ risk: r, canLink, onEdit, onLink, onRemove }: { risk: Potent
         {r.can_edit && (
           <span className="flex shrink-0 items-center">
             <IconButton label={`Edit risk: ${what}`} onClick={onEdit}><Pencil aria-hidden /></IconButton>
-            {canLink && <IconButton label={`${r.register_risk_id !== null ? 'Change register link' : 'Link to risk register'}: ${what}`} onClick={onLink}><Link2 aria-hidden /></IconButton>}
+            <IconButton label={`${r.register_risk_id !== null ? 'Change register link' : 'Link to risk register'}: ${what}`} onClick={onLink}><Link2 aria-hidden /></IconButton>
             <IconButton label={`Remove risk: ${what}`} onClick={onRemove}><Trash2 aria-hidden /></IconButton>
           </span>
         )}
@@ -193,10 +192,8 @@ export function RisksPanel({ exception: e, action, onDirty }: {
   });
   const turn = answer.data?.my_turn ?? null;
   const risks = answer.data?.risks ?? [];
-  // The risk register is the Risk Management module's own list, and the server gives it to its readers only: the link action is offered only to someone who holds
-  // that right (a request that is certain to be refused is not made). The organisation's words for the levels come with the list itself, for everyone.
-  const { hasPermission } = usePermissions();
-  const canLink = hasPermission('risks:risk_register:view');
+  // The organisation's words for the levels come with the list itself, for everyone. The register entries a risk can be linked to come from the exception's own
+  // lookup (number and title), for whoever may record risks here, whether or not they may read the Risk Management module.
   const words = answerWords(answer.data?.scales);
 
   const [draft, setDraft] = useState<RiskDraft>(emptyRiskDraft());
@@ -236,7 +233,7 @@ export function RisksPanel({ exception: e, action, onDirty }: {
             </div>
           </li>
         ) : (
-          <RiskItem key={r.id} risk={r} canLink={canLink} onEdit={() => setEditing({ id: r.id, draft: draftOfRisk(r) })} onLink={() => setLinking(r)} onRemove={() => { void askRemove(r); }} />
+          <RiskItem key={r.id} risk={r} onEdit={() => setEditing({ id: r.id, draft: draftOfRisk(r) })} onLink={() => setLinking(r)} onRemove={() => { void askRemove(r); }} />
         )))}
       </ul>
     </div>

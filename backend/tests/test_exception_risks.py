@@ -194,6 +194,17 @@ def test_a_risk_can_be_linked_to_a_register_entry_of_the_organisation(w):
     assert w.as_(APP1).put(f"{EX}/{eid}/risks/{none['id']}", json={"title": "x"}).status_code == 409
 
 
+def test_the_register_entries_to_link_to_are_offered_to_whoever_is_asked_at_the_open_step_with_a_number_and_a_title_only(w):
+    eid = waiting(w)                                                                            # APP1 holds no Risk Management right in this organisation
+    mine = w.as_(APP1).get(f"{EX}/{eid}/risk-register")
+    assert mine.status_code == 200 and mine.json() == [{"id": 5, "title": "Register risk"}]       # the organisation's own entries; entry 90 is another organisation's
+    for who in (PLAIN, REQ, ADMIN, APP2):                                                       # not asked at the open step: nothing of the register is shown
+        r = w.as_(who).get(f"{EX}/{eid}/risk-register")
+        assert r.status_code == 403 and r.json()["detail"] == K.NOT_YOUR_STEP, who
+    assert w.as_(APP1).get(f"{EX}/99999/risk-register").status_code == 404
+    assert w.db.query(m.ExceptionRisk).count() == 0                                             # a read writes nothing
+
+
 def test_the_risks_are_read_by_anyone_signed_in_and_a_get_writes_nothing(w):
     eid = reviewed(w)
     record(w, eid, REV1)

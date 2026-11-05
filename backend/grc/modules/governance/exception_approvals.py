@@ -6,7 +6,8 @@ exceptions decides) is in ``routers/policy_exception_router.py`` and stays as it
   nobody can follow for this exception's unit (a step with nobody who can decide) is refused at submit, in words, and nothing changes.
 * **Decide** (``decide``): approve, reject (where the step allows it) or ask for changes (back to draft; the rules start again when
   the requester submits again). Only people asked at the open step decide, and never the requester: the rule binds everyone,
-  administrators included. Every decision is kept with who, which step and when.
+  administrators included, but for an organisation's only administrator when nobody else could decide (the history says so).
+  Every decision is kept with who, which step and when.
 * **Edits** to what chose the rule (priority, unit, type, policy) are refused while a run is open (``locked_fields``): withdraw first.
 * People are resolved when a step opens (a role's holders, the unit's owner and its parent's owner as they are then), so a person who
   joins the role meanwhile is asked from the next step on.
@@ -76,6 +77,28 @@ def _role_members(db: Session, tenant_id: int, role_id: int) -> Set[int]:
     from .routers.document_signoff import _resolve_target_users
 
     return _people(db, _resolve_target_users(db, [tenant_id], "role", role_id))
+
+
+def lone_decider(db: Session, user: Optional[GRCUser]) -> bool:
+    """The person is the organisation's only administrator and nobody else holds the right to approve exceptions: nobody else could ever
+    decide their exception, so (and only so) they may decide their own. The history says it."""
+    from ...routers.auth_router import is_tenant_admin, tenant_permission_names
+    from . import doc_lifecycle
+
+    if user is None or not is_tenant_admin(db, user):
+        return False
+    others = set(doc_lifecycle._people(db)) - {user.id}
+    return not any(is_tenant_admin(db, o) or "governance:policy_exceptions:approve" in tenant_permission_names(db, o)
+                   for o in db.query(GRCUser).filter(GRCUser.id.in_(others))) if others else True
+
+
+def lone_decider_for(db: Session, user_id: Optional[int]) -> bool:
+    return bool(user_id) and lone_decider(db, db.get(GRCUser, user_id))
+
+
+def _alone(step: Optional[Dict[str, Any]], user_id: int) -> bool:
+    """The step was opened with this person, the requester, as its only possible decider (``resolve_slots`` with ``self_ok``)."""
+    return any(s.get("self") and user_id in (s.get("members") or []) for s in (step or {}).get("slots") or [])
 
 
 # ── the rules ────────────────────────────────────────────────────────────────
@@ -205,8 +228,9 @@ def matching_rule(db: Session, exc: PolicyException) -> Optional[Dict[str, Any]]
 
 # ── the people a step asks ───────────────────────────────────────────────────
 def resolve_slots(db: Session, tenant_id: int, unit_id: Optional[int], step: Dict[str, Any], requester_id: Optional[int],
-                  tree: Optional[org_departments.Tree] = None) -> List[Dict[str, Any]]:
-    """One slot for each person / role / owner the step names, with the people who may answer for it now (the requester never)."""
+                  tree: Optional[org_departments.Tree] = None, self_ok: bool = False) -> List[Dict[str, Any]]:
+    """One slot for each person / role / owner the step names, with the people who may answer for it now (the requester never; ``self_ok``:
+    unless that leaves the step with nobody, then the requester alone, marked ``self``: the organisation's only administrator)."""
     tree = tree or org_departments.Tree.load(db, tenant_id)
     unit = tree.rows.get(unit_id) if unit_id else None
     parent = tree.rows.get(tree.parent.get(unit.id)) if unit is not None and tree.parent.get(unit.id) is not None else None
@@ -230,7 +254,13 @@ def resolve_slots(db: Session, tenant_id: int, unit_id: Optional[int], step: Dic
                 label += " (none set)"
             key = f"{kind}:{holder.id if holder is not None else 0}"
         slots.append({"key": key, "type": kind, "ref": p.get("id"), "label": label,
-                      "members": sorted(members - ({requester_id} if requester_id else set()))})
+                      "members": sorted(members - ({requester_id} if requester_id else set())), "_had": bool(requester_id and requester_id in members)})
+    if self_ok and requester_id and not any(s["members"] for s in slots):
+        for s in slots:
+            if s["_had"]:
+                s["members"], s["self"] = [requester_id], True
+    for s in slots:
+        s.pop("_had", None)
     return slots
 
 
@@ -317,7 +347,7 @@ def _activate(db: Session, run: ExceptionApprovalRun, exc: PolicyException, posi
     steps = copy.deepcopy(run.steps or [])
     step = next(s for s in steps if s["position"] == position)
     now = datetime.utcnow()
-    step["slots"] = resolve_slots(db, exc.tenant_id, run.department_id, step, exc.requested_by)
+    step["slots"] = resolve_slots(db, exc.tenant_id, run.department_id, step, exc.requested_by, self_ok=lone_decider_for(db, exc.requested_by))
     step["state"], step["activated_at"] = "active", now.isoformat()
     step["due_at"] = (now + timedelta(days=step["due_days"])).isoformat() if step.get("due_days") else None
     run.current_step = position
@@ -341,7 +371,7 @@ def start(db: Session, exc: PolicyException, user: GRCUser) -> Optional[Exceptio
     unit = unit_of(db, exc)
     steps = copy.deepcopy(rule["steps"])
     for step in steps:
-        step["slots"] = resolve_slots(db, exc.tenant_id, unit, step, exc.requested_by, tree)
+        step["slots"] = resolve_slots(db, exc.tenant_id, unit, step, exc.requested_by, tree, self_ok=lone_decider_for(db, exc.requested_by))
         step["state"] = "waiting"
     implementer = copy.deepcopy(rule.get("implementer"))
     if implementer:
@@ -378,7 +408,7 @@ def decide(db: Session, exc: PolicyException, user: GRCUser, decision: str, comm
     exc = _lock(db, PolicyException, exc.id)
     if run.status != "open" or exc.status != "pending_approval":      # decided by someone else while this request waited its turn
         raise _problem(NO_RUN, status.HTTP_409_CONFLICT)
-    if exc.requested_by == user.id:
+    if exc.requested_by == user.id and not _alone(_step(run, run.current_step), user.id):
         raise _problem(OWN, status.HTTP_403_FORBIDDEN)
     step = _step(run, run.current_step)
     if step is None or user.id not in (run.asked or []):
@@ -399,7 +429,7 @@ def decide(db: Session, exc: PolicyException, user: GRCUser, decision: str, comm
     db.add(ExceptionApprovalDecision(run_id=run.id, exception_id=exc.id, step_position=step["position"], step_name=step["name"],
                                      user_id=user.id, decision=decision, comment=text or None, decided_at=now))
     db.flush()
-    where = f"step {step['position']}, {step['name']}"
+    where = f"step {step['position']}, {step['name']}" + (", by the requester, as nobody else could decide" if exc.requested_by == user.id else "")
     if decision == "reject":
         run.status, run.finished_at, run.asked = "rejected", now, []
         exc.status, exc.rejected_by, exc.rejected_at, exc.rejection_reason = "rejected", user.id, now, text

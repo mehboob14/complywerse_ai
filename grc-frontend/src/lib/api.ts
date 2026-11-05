@@ -742,6 +742,8 @@ export const policyExceptionApi = {
   /** link a potential risk to an entry of the risk register, or take the link off (null) */
   linkRisk: (id: number, riskId: number, registerRiskId: number | null) =>
     apiClient.post(`/governance/policy-exceptions/${id}/risks/${riskId}/link`, { risk_id: registerRiskId }),
+  /** the register entries a potential risk can be linked to ({ id, title }), for the person asked at the open step */
+  getRiskRegister: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/risk-register`),
   aiRisks: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/ai/risks`),
   // The implementation (after the last approval, when the rule has an implementer): compensating controls, then Mark implemented.
   getControls: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/controls`),

@@ -72,15 +72,16 @@ def _level(value: Any, what: str) -> Optional[int]:
 # ── who may record, and where ────────────────────────────────────────────────
 def context(db: Session, exc: PolicyException, user: GRCUser, older_flow_decider: bool = False) -> Optional[Dict[str, Any]]:
     """Where the person may record potential risks now: the open step they are asked at (``run``, ``step``), or, for an exception no rule
-    governs, the plain "pending approval" for someone allowed to approve who is not the requester (``older_flow_decider``, which the caller
+    governs, the plain "pending approval" for someone allowed to approve who is not the requester, or is the organisation's only administrator
+    (``older_flow_decider``, which the caller
     works out from the person's rights). None: they may not."""
     run = A.open_run(db, exc)
     if run is not None:
         step = A._step(run, run.current_step)
-        if step is not None and user.id in (run.asked or []) and exc.requested_by != user.id:
+        if step is not None and user.id in (run.asked or []) and (exc.requested_by != user.id or A._alone(step, user.id)):
             return {"run": run, "step": step, "round": run.round, "position": step["position"], "name": step["name"], "kind": step["kind"]}
         return None
-    if exc.status == "pending_approval" and older_flow_decider and exc.requested_by != user.id:
+    if exc.status == "pending_approval" and older_flow_decider:
         return {"run": None, "step": None, "round": None, "position": None, "name": None, "kind": "approval"}
     return None
 
@@ -249,6 +250,17 @@ def delete(db: Session, exc: PolicyException, user: GRCUser, rid: int, older_flo
     _may_change(db, exc, row, user, older_flow_decider)
     db.delete(row)
     db.flush()
+
+
+REGISTER_CAP = 500
+
+
+def register_choices(db: Session, exc: PolicyException, user: GRCUser, older_flow_decider: bool = False) -> List[Dict[str, Any]]:
+    """The register entries a potential risk can be linked to: number and title, for the person asked at the open step (any reviewer or
+    approver, whether or not they may read the Risk Management module: linking needs the title and no more)."""
+    if context(db, exc, user, older_flow_decider) is None:
+        raise _problem(NOT_YOUR_STEP, status.HTTP_403_FORBIDDEN)
+    return [{"id": i, "title": t} for i, t in db.query(Risk.id, Risk.title).filter(Risk.tenant_id == exc.tenant_id).order_by(Risk.title, Risk.id).limit(REGISTER_CAP)]
 
 
 def link_register(db: Session, exc: PolicyException, user: GRCUser, rid: int, register_risk_id: Optional[int], older_flow_decider: bool = False) -> ExceptionRisk:

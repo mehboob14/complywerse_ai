@@ -45,6 +45,8 @@ def _held(db: Session, user: GRCUser) -> set:
 def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
     """What one person may do and which document titles they may see, for these exceptions; the approval of each one that goes
     through a rule (exception_approvals) and the department tree its unit is named from."""
+    from functools import lru_cache
+
     from ..modules.governance import exception_approvals, exception_types
     from ..modules.governance.permissions import readable_among
     from ..services import org_departments
@@ -60,6 +62,7 @@ def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
 
     ids = [e.id for e in exceptions]
     return SimpleNamespace(id=user.id, held=held, readable=readable_among(db, user, [e.document_id for e in exceptions]),
+                           alone=lru_cache(maxsize=1)(lambda: exception_approvals.lone_decider(db, user)),     # the organisation's only administrator (asked only for their own exception)
                            approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in tenants},
                            implementations=exception_approvals.bulk_implementations(db, exceptions, user.id),
                            risk_counts=exception_risks.counts_for(db, ids), control_counts=exception_controls.counts_for(db, ids),
@@ -75,7 +78,7 @@ def _may_delete(v, exc) -> bool:
 
 
 def _may_decide(v, exc) -> bool:
-    return exc.requested_by != v.id and "approve" in v.held
+    return "approve" in v.held and (exc.requested_by != v.id or v.alone())
 
 
 def _refuse(detail: str):
@@ -85,7 +88,7 @@ def _refuse(detail: str):
 def _ensure_decider(v, exc) -> None:
     if "approve" not in v.held:
         _refuse(DECIDE_REFUSED)
-    if exc.requested_by == v.id:
+    if exc.requested_by == v.id and not v.alone():
         _refuse(OWN_REFUSED)
 
 
@@ -100,6 +103,7 @@ def _ensure_editable(exc) -> None:
 def _log_decision(db: Session, exc: PolicyException, user: GRCUser, what: str, text: Optional[str]) -> None:
     """A decision is written into the exception's comments too, with who and when: its history."""
     text = (text or "").strip()
+    what = what + (" by the requester, as nobody else could decide" if exc.requested_by == user.id else "")       # only the organisation's only administrator gets here
     db.add(PolicyExceptionComment(exception_id=exc.id, user_id=user.id, comment=f"{what}: {text}" if text else f"{what}."))
 
 # Self-heal the additive columns (linked_asset_ids, closed_at) for tenants
