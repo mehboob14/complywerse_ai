@@ -58,7 +58,7 @@ const SOURCE_LABELS: Record<string, string> = {
   incident: 'Incident',
   rcsa: 'RCSA finding',
   framework_gap: 'Framework gap',
-  risk_library: 'Risk library',
+  risk_library: 'Added from a standard', // rows added before the Risk Library was removed (2026-11-06) keep this source_type
   ubl_import: 'UBL register',
   nca_import: 'NCA register',
   unknown: 'Unspecified',
