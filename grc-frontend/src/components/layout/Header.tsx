@@ -263,7 +263,8 @@ export default function Header() {
         {(() => {
           // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
           // they are the library's, so someone only asked about a document (no library right) gets none
-          if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : null;
+          // (the owner of a department who holds no governance right gets the two tabs made for them: the library and its overview)
+          if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : perms.headsDepartment ? <DocumentsTabs ownerOnly /> : null;
           // a Governance page is named by the registry, whatever page it is; every other page still reads PAGE_TITLES
           const named = routeFor(pathname)?.area === 'governance' ? titleFor(pathname) : undefined;
           const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: ownHeadingSection(pathname) } : PAGE_TITLES[pathname ?? ''];

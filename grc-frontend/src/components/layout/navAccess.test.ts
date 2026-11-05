@@ -57,3 +57,32 @@ test('every entry names the permissions that open it, and its page guards itself
   assert.deepEqual(navPermissions('/reports/analytics'), ['reports:analytics:*']);
   assert.deepEqual(navPermissions('/nowhere'), []);
 });
+
+// ── the owner of a department (D59) ──
+
+test('the owner of a department sees the Documents area whatever their rights, and nothing else of Governance opens with it', () => {
+  const owner = (permissions: string[] = []) => me(permissions, { heads_department: true });
+  assert.deepEqual(sees(owner()), [['Governance', ['Documents']]], 'no right at all: the one door');
+  assert.deepEqual(sees(me([])), [], 'a person who heads nothing sees nothing');
+  assert.deepEqual(sees(me([], { heads_department: false })), []);
+  assert.deepEqual(sees(owner(['governance:policies:view'])), sees(me(['governance:policies:view'])), 'with the governance right the door adds nothing');
+  assert.deepEqual(sees(owner(['critical_tasks:tasks:view'])), ['Task Management', ['Governance', ['Documents']]], 'a right in another module: the group opens for the door only');
+  assert.deepEqual(sees(owner(['governance:committees:view'])), [['Governance', ['Documents', 'Committees']]], 'and what their rights open stays');
+  assert.deepEqual(sees(owner(['erm:kris:view'])).find((e) => Array.isArray(e) && e[0] === 'Governance'), ['Governance', ['Documents']], 'KRIs is a Governance entry they cannot reach by the door');
+  const admin = { permissions: ['*:*:*'], allowed_modules: [], is_admin: true };
+  assert.deepEqual(sees(me([], { ...admin, heads_department: true })), sees(me([], admin)), 'an administrator sees what an administrator sees');
+  assert.equal(navAccessFromMe(me([], { heads_department: true })).headsDepartment, true);
+  assert.equal(navAccessFromMe(me([])).headsDepartment, false);
+  assert.equal(navAccessFromMe(null).headsDepartment, false);
+});
+
+test('only the Documents entry is a door, and the top bar gives the owner the two tabs made for them', async () => {
+  const { readFileSync } = await import('node:fs');
+  assert.deepEqual(flattenLeaves(navigation).filter((i) => i.ownerDoor).map((i) => i.name), ['Documents']);
+  const header = readFileSync(new URL('./Header.tsx', import.meta.url), 'utf8');
+  assert.ok(header.includes('perms.headsDepartment ? <DocumentsTabs ownerOnly /> : null'), 'the strip for someone with no governance right but a department');
+  const tabs = readFileSync(new URL('../governance/DocumentsTabs.tsx', import.meta.url), 'utf8');
+  assert.ok(tabs.includes('ownerOnly = false') && tabs.includes('ownerOnly })'), 'the strip asks the registry for the owner\'s tabs');
+  const hook = readFileSync(new URL('../../hooks/usePermissions.ts', import.meta.url), 'utf8');
+  assert.ok(hook.includes('data.user.heads_department') && hook.includes('headsDepartment,'), 'the hook reads the flag from /auth/me and shares it');
+});

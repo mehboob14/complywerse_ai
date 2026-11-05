@@ -22,7 +22,7 @@
 //   /governance                              Overview           Governance Overview + subtitle           Governance Overview           -                                        Overview; title "Governance Overview" (same)
 //   /governance/documents                    Documents          tabs                                     Document library              tab Documents; back "Documents"          Documents
 //   /governance/documents/:id                -                  tabs                                     the document's title          back "Documents"                         Document
-//   /governance/documents/overview           -                  tabs                                     Overview                      tab Overview, after Documents            Overview (the library at a glance, by department)
+//   /governance/documents/overview           -                  tabs                                     At a glance                   tab At a glance, after Documents         At a glance (the library by department, type and stage; was "Overview", which the sidebar's Governance Overview already is)
 //   /governance/documents/studio             -                  tabs                                     Comply AI Studio              tab Comply AI Studio                     Comply AI Studio
 //   /governance/documents/studio/:sessionId  -                  tabs                                     the draft's title (editable)  back "Studio"                            Studio draft
 //   /governance/documents/attestation        -                  tabs                                     Attestation                   tab Attestation                          Attestation
@@ -67,6 +67,8 @@ export interface TabSpec {
   studio?: true;
   /** listed only to people who hold this right */
   permission?: string;
+  /** also listed to the owner (head) of a department who holds no governance right: the library and its overview are theirs to read (D59) */
+  ownerDoor?: true;
   /** a route pattern whose pages light this tab (where it is listed) instead of the tab their path is under */
   claims?: string;
 }
@@ -130,7 +132,7 @@ const PROJECTS = '/is-projects';
 const OF_LEAF: Record<string, Extra> = {
   '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true },
   '/governance/kpi-report': { ownHeading: true },
-  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1 }, keywords: ['Document library'] },
+  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, keywords: ['Document library'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'], ownHeading: true },
   '/erm/kris': { keywords: ['Key Risk Indicators'] },
@@ -151,7 +153,7 @@ const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): R
 
 const pages: RouteEntry[] = [
   gov(`${DOCS}/:id`, 'Document', { parent: DOCS, hidden: 'opens from a library row or its drawer, a task, a notification or an e-mail link' }),
-  gov(`${DOCS}/overview`, 'Overview', { parent: DOCS, tab: { area: 'documents', id: 'overview', order: 2 } }),
+  gov(`${DOCS}/overview`, 'At a glance', { parent: DOCS, tab: { area: 'documents', id: 'overview', order: 2, ownerDoor: true }, keywords: ['Overview', 'Documents overview'] }),
   gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 3, studio: true, claims: `${DOCS}/:id` } }),
   gov(`${DOCS}/studio/:sessionId`, 'Studio draft', { parent: `${DOCS}/studio`, hidden: 'opens from the Studio start page ("Your work") or from a document' }),
   gov(ATTEST, 'Attestation', { parent: DOCS, tab: { area: 'documents', id: 'attestation', order: 4 } }),
@@ -245,13 +247,17 @@ export interface TabContext {
   studio?: boolean;
   /** whether the person holds a right; without it the tabs that ask for one are left out */
   can?: (permission: string) => boolean;
+  /** the person holds no governance right but heads a department: only the tabs made for them (`ownerDoor`) */
+  ownerOnly?: boolean;
 }
 
-/** The tabs of a strip in order: all of them, or with a context only those it lists (the Studio where it is on, Settings to the right's holders). */
+/** The tabs of a strip in order: all of them, or with a context only those it lists (the Studio where it is on, Settings to the right's holders, an owner of
+ *  a department with no governance right only the two made for them). */
 export function tabsFor(area: string, context?: TabContext): TabEntry[] {
   return routes
     .filter((entry): entry is TabEntry => !!entry.tab && entry.tab.area === area
-      && (!context || ((!entry.tab.studio || !!context.studio) && (!entry.tab.permission || !!(context.can && context.can(entry.tab.permission))))))
+      && (!context || ((!entry.tab.studio || !!context.studio) && (!entry.tab.permission || !!(context.can && context.can(entry.tab.permission)))
+        && (!context.ownerOnly || !!entry.tab.ownerDoor))))
     .sort((a, b) => a.tab.order - b.tab.order);
 }
 

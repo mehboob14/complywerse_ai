@@ -297,19 +297,19 @@ test('the Documents strip: seven tabs in order; the Studio only where it is on, 
     '/governance/exceptions', '/governance/settings',
   ]);
   const labels = (studio: boolean, can: boolean) => tabsFor('documents', { studio, can: () => can }).map((t) => t.label);
-  assert.deepEqual(labels(true, true), ['Documents', 'Overview', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(false, true), ['Documents', 'Overview', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
-  assert.deepEqual(labels(true, false), ['Documents', 'Overview', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
-  assert.deepEqual(labels(false, false), ['Documents', 'Overview', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.deepEqual(labels(true, true), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(false, true), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions', 'Governance settings']);
+  assert.deepEqual(labels(true, false), ['Documents', 'At a glance', 'Comply AI Studio', 'Attestation', 'Document Reviews', 'Policy exceptions']);
+  assert.deepEqual(labels(false, false), ['Documents', 'At a glance', 'Attestation', 'Document Reviews', 'Policy exceptions']);
   assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:*' }).length, 7, 'the right asked for is governance:settings:*');
   assert.equal(tabsFor('documents', { studio: true, can: (p) => p === 'governance:settings:view' }).length, 6);
   assert.deepEqual(tabsFor('nowhere'), []);
 });
 
-test('the Overview is the second tab, for everyone who sees the strip with or without the Studio, and its page lights it and not Documents', () => {
+test('At a glance is the second tab, for everyone who sees the strip with or without the Studio, and its page lights it and not Documents', () => {
   const overview = entry('/governance/documents/overview');
   assert.deepEqual([overview.tab?.area, overview.tab?.id, overview.tab?.order, overview.tab?.permission, overview.tab?.studio], ['documents', 'overview', 2, undefined, undefined]);
-  assert.equal(overview.label, 'Overview');
+  assert.equal(overview.label, 'At a glance', 'not "Overview": the sidebar\'s Governance Overview is the dashboard');
   assert.equal(overview.shortLabel, undefined, 'the tab says what the page is called');
   assert.equal(overview.hidden, undefined);
   assert.equal(overview.permissions, null, 'the registry adds no right and no guard: the server answers 403 to anyone who reads no library and heads no department');
@@ -320,9 +320,9 @@ test('the Overview is the second tab, for everyone who sees the strip with or wi
     assert.equal(isInArea('documents', url), true, url);
     assert.equal(activeTab('documents', url)?.path, '/governance/documents/overview', url);
     assert.equal(activeTab('documents', url, { studio: true })?.path, '/governance/documents/overview', `${url} (Studio on)`);
-    assert.equal(titleFor(url), 'Overview', url);
+    assert.equal(titleFor(url), 'At a glance', url);
   }
-  assert.deepEqual(breadcrumbFor('/governance/documents/overview').map((c) => c.label), ['Governance', 'Documents', 'Overview']);
+  assert.deepEqual(breadcrumbFor('/governance/documents/overview').map((c) => c.label), ['Governance', 'Documents', 'At a glance']);
   assert.equal(activeTab('documents', '/governance/documents')?.path, '/governance/documents', 'the library still lights Documents');
   assert.equal(activeNavHref('/governance/documents/overview', navigation), '/governance/documents', 'the sidebar keeps Documents lit');
   // Next finds the page before the document page: a static folder beats [id]
@@ -402,4 +402,13 @@ test('a page that draws its own heading is flagged in the registry, and only its
   assert.equal(ownHeadingSection('/governance/approvals'), undefined, 'a page without the flag shows its own title in the top bar');
   assert.equal(ownHeadingSection('/risk/unknown-page'), undefined, 'not a route');
   assert.equal(ownHeadingSection(null), undefined);
+});
+
+test('the owner of a department with no governance right gets the library and At a glance, and no other tab', () => {
+  const owner = { studio: true, can: () => false, ownerOnly: true };
+  assert.deepEqual(tabsFor('documents', owner).map((t) => t.label), ['Documents', 'At a glance']);
+  assert.deepEqual(tabsFor('documents', { ...owner, studio: false }).map((t) => t.label), ['Documents', 'At a glance']);
+  assert.equal(tabsFor('documents', { studio: true, can: () => true }).length, 7, 'without the flag nothing changes');
+  assert.equal(tabsFor('documents').length, 7);
+  for (const tab of tabsFor('documents')) assert.equal(!!tab.tab.ownerDoor, ['documents', 'overview'].includes(tab.tab.id), tab.tab.id);
 });

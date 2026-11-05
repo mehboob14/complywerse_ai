@@ -40,13 +40,13 @@ const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffe
 /** Whether a page belongs to the Documents area (the pages these tabs lead to). */
 export const inDocumentsArea = (pathname: string | null) => isInArea('documents', pathname);
 
-export default function DocumentsTabs() {
+export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boolean }) {
   const pathname = usePathname() ?? '';
   const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   const { hasPermission } = usePermissions();
   const studioOn = !!studio.data?.enabled;
   // a document opens in the AI Studio where it is on, so that tab is the open one there (the registry knows which page a tab takes)
-  const tabs = tabsFor('documents', { studio: studioOn, can: hasPermission });
+  const tabs = tabsFor('documents', { studio: studioOn, can: hasPermission, ownerOnly });
   const open = activeTab('documents', pathname, { studio: studioOn });
   // the strip scrolls sideways on a narrow screen: the tab that is open is brought into view (sideways only), so a page far along the strip says where it is
   const strip = useRef<HTMLElement>(null);

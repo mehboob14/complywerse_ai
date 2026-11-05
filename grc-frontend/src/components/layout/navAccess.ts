@@ -20,6 +20,9 @@ export interface NavItem {
   exact?: boolean;
   /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
   requiredFeature?: string;
+  /** Also shown to the owner (head) of a department, whatever their rights: the Documents area is theirs to read (D59). Their group opens with it,
+   *  showing only the entries that have this. */
+  ownerDoor?: true;
 }
 
 export interface NavGroup {
@@ -57,7 +60,7 @@ export const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
       // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
-      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations'], icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations'], icon: ScrollText, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
       { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
@@ -236,9 +239,11 @@ export interface NavAccess {
   modules: string[];
   /** the tenant's client-specific modules (/auth/me tenant.features) */
   features: string[];
+  /** the person is the owner (head) of a department (/auth/me user.heads_department) */
+  headsDepartment: boolean;
 }
 
-export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [] };
+export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [], headsDepartment: false };
 
 const normalizePerm = (perm: string): string => {
   const cleaned = perm.trim();
@@ -254,7 +259,7 @@ export function navAccessFromMe(me: any): NavAccess {
     .map(normalizePerm);
   const explicit: string[] = Array.isArray(user.allowed_modules) ? user.allowed_modules : [];
   const modules = Array.from(new Set([...explicit, ...permissions.map((perm) => perm.split(':')[0]).filter((mod) => !!mod)]));
-  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [] };
+  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department };
 }
 
 function holds(granted: string[], requiredPerm: string): boolean {
@@ -267,19 +272,22 @@ function holds(granted: string[], requiredPerm: string): boolean {
   return parts.length === 3 && (granted.includes(`${parts[0]}:${parts[1]}:*`) || granted.includes(`${parts[0]}:*:*`));
 }
 
-/** The entries `access` may see; a group with no visible entry disappears. */
+/** The entries `access` may see; a group with no visible entry disappears. The owner of a department also sees the entries made for them (`ownerDoor`)
+ *  without any right, and a group they are not in the module of opens only with those. */
 export function visibleNav(entries: NavEntry[], access: NavAccess): NavEntry[] {
   const inModules = (required?: string[]) => !required?.length || access.isAdmin || required.some((mod) => access.modules.includes(mod));
+  const door = (entry: NavEntry) => !isGroup(entry) && !!entry.ownerDoor && access.headsDepartment;
   return entries.reduce<NavEntry[]>((acc, entry) => {
     if (entry.adminOnly && !access.isAdmin) return acc;
-    if (!inModules(entry.requiredModules)) return acc;
     if (isGroup(entry)) {
-      const items = visibleNav(entry.items, access);
+      let items = visibleNav(entry.items, access);
+      if (!inModules(entry.requiredModules)) items = items.filter(door);
       if (items.length > 0) acc.push({ ...entry, items });
       return acc;
     }
+    if (!inModules(entry.requiredModules) && !door(entry)) return acc;
     if (entry.requiredFeature && !access.features.includes(entry.requiredFeature)) return acc;
-    if (access.isAdmin || (entry.requiredPermissions ?? []).some((perm) => holds(access.permissions, perm))) acc.push(entry);
+    if (access.isAdmin || (entry.requiredPermissions ?? []).some((perm) => holds(access.permissions, perm)) || door(entry)) acc.push(entry);
     return acc;
   }, []);
 }

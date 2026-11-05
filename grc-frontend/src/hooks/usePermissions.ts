@@ -27,20 +27,24 @@ export function useTenantFeatures(): { features: string[]; isLoading: boolean } 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  // the owner (head) of a department: the menu gives them the Documents area whatever their rights (/auth/me user.heads_department)
+  const [headsDepartment, setHeadsDepartment] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Try sessionStorage cache first to avoid repeated API calls
     try {
       const cached = sessionStorage.getItem(PERM_CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
+      const parsed0 = cached ? JSON.parse(cached) : null;
+      if (cached && typeof parsed0?.headsDepartment === 'boolean') {       // (a cache from before the key existed is read again)
+        const parsed = parsed0;
         const cachedPermsRaw = Array.isArray(parsed?.permissions) ? parsed.permissions : [];
         const cachedPerms = cachedPermsRaw
           .filter((p: unknown) => typeof p === 'string')
           .map((p: string) => normalizePerm(p));
         setPermissions(cachedPerms);
         setIsAdmin(!!parsed.isAdmin);
+        setHeadsDepartment(parsed.headsDepartment);
         setIsLoading(false);
         return;
       }
@@ -59,10 +63,12 @@ export function usePermissions() {
                   .map((p: string) => normalizePerm(p))
               : [];
             const admin = !!data.user.is_admin;
+            const heads = !!data.user.heads_department;
             setPermissions(perms);
             setIsAdmin(admin);
+            setHeadsDepartment(heads);
             // Write to cache so PermissionGuard and usePermissions share the same data
-            sessionStorage.setItem(PERM_CACHE_KEY, JSON.stringify({ permissions: perms, isAdmin: admin, loading: false }));
+            sessionStorage.setItem(PERM_CACHE_KEY, JSON.stringify({ permissions: perms, isAdmin: admin, headsDepartment: heads, loading: false }));
           }
         }
       } catch (error) {
@@ -103,6 +109,7 @@ export function usePermissions() {
   return {
     permissions,
     isAdmin,
+    headsDepartment,
     hasPermission,
     hasAnyPermission,
     isLoading,
