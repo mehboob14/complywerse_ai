@@ -16,7 +16,7 @@ import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, ErrorState, SkeletonLines, StatusPill } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import {
-  decisionOptions, decisionRows, dueText, earlierRounds, progressText, roundMeta, runTone, runWord, slotChips, stepWord, waitingLine,
+  APPROVE_HINT, approveBlocked, decisionOptions, decisionRows, dueText, earlierRounds, progressText, roundMeta, runTone, runWord, slotChips, stepWord, waitingLine,
   type DecisionRow,
 } from './_approval';
 import type { DecisionKind } from './_Decision';
@@ -103,8 +103,11 @@ export function ApprovalPanel({ exception: e, approval: a, onDecide, onWithdraw,
   withdrawing: boolean;
 }) {
   const headingId = useId();
+  const gateId = useId();
   const live = a.status === 'open';
   const options = live && e.can_decide ? decisionOptions(a.my_step) : [];
+  // under a rule an approval needs the person's own assessment at this step: Approve waits for it (the server refuses it too); Ask for changes and Reject do not
+  const gated = options.includes('approve') && approveBlocked(a.my_step);
   const waiting = waitingLine(a);
   const rows = decisionRows(a.decisions);
 
@@ -176,10 +179,11 @@ export function ApprovalPanel({ exception: e, approval: a, onDecide, onWithdraw,
       {(options.length > 0 || (live && e.can_withdraw)) && (
         <div role="group" aria-label="What you can do" className="flex flex-wrap items-center gap-[8px] border-t border-ds-border pt-[12px]">
           {options.length > 0 && a.my_step && <span className="mr-auto min-w-0 text-ds-body text-ds-fg-body [overflow-wrap:anywhere]">{`Your turn · ${a.my_step.name}`}</span>}
-          {options.includes('approve') && <Button variant="primary" leftIcon={<Check aria-hidden />} onClick={() => onDecide('approve')}>Approve</Button>}
+          {options.includes('approve') && <Button variant="primary" leftIcon={<Check aria-hidden />} disabled={gated} aria-describedby={gated ? gateId : undefined} onClick={() => onDecide('approve')}>Approve</Button>}
           {options.includes('changes') && <Button leftIcon={<MessageSquare aria-hidden />} onClick={() => onDecide('changes')}>Ask for changes</Button>}
           {options.includes('reject') && <Button variant="dangerOutline" leftIcon={<XCircle aria-hidden />} onClick={() => onDecide('reject')}>Reject</Button>}
           {live && e.can_withdraw && <Button leftIcon={<Undo2 aria-hidden />} loading={withdrawing} onClick={onWithdraw}>Withdraw</Button>}
+          {gated && <p id={gateId} className="w-full text-ds-label text-ds-fg-muted">{APPROVE_HINT}</p>}
         </div>
       )}
     </section>
