@@ -23,8 +23,8 @@ const count = (text: string, re: RegExp) => (text.match(re) ?? []).length;
 
 test('the page is made of the files this test knows about', () => {
   assert.deepEqual(files.sort(), [
-    '_ApprovalPanel.tsx', '_ColumnsMenu.tsx', '_Decision.tsx', '_DocumentPicker.tsx', '_DocumentTree.tsx', '_ExceptionDetails.tsx', '_ExceptionForm.tsx', '_Suggest.tsx', '_Summary.tsx',
-    '_UnitTree.tsx', '_assistOwner.tsx', '_chips.tsx', 'page.tsx',
+    '_ApprovalPanel.tsx', '_AssetsPanel.tsx', '_ColumnsMenu.tsx', '_ControlsPanel.tsx', '_Decision.tsx', '_DocumentPicker.tsx', '_DocumentTree.tsx', '_ExceptionDetails.tsx',
+    '_ExceptionForm.tsx', '_ImplementationPanel.tsx', '_RisksPanel.tsx', '_Suggest.tsx', '_Summary.tsx', '_UnitTree.tsx', '_assistOwner.tsx', '_assistReview.tsx', '_chips.tsx', 'page.tsx',
   ]);
 });
 
@@ -48,10 +48,10 @@ test('no file of the page uses a class the platform CSS rewrites, a hex colour, 
     assert.doesNotMatch(src[f], /#[0-9a-fA-F]{6}\b/, `${f}: colours are the --ds tokens and the status tones`);
     assert.doesNotMatch(src[f], /<(select|textarea|input)\b/, `${f}: the kit's Select, Textarea, TextInput and Checkbox`);
   }
-  // the only bare buttons: the clear-search cross, the +N of the linked assets (both small, kit-ringed), the presses of the two trees (a unit, a count, an exception,
-  // a folder) and a document in the picker's list; everything else is Button, IconButton or Menu
+  // the only bare buttons: the clear-search cross (small, kit-ringed), the presses of the two trees (a unit, a count, an exception, a folder) and a document in the
+  // picker's list; everything else is Button, IconButton or Menu. (The details drawer has none now: the Assets panel lists every asset, there is no +N.)
   assert.equal(count(page, /<button\b/g), 1);
-  assert.equal(count(src['_ExceptionDetails.tsx'], /<button\b/g), 1);
+  assert.equal(count(src['_ExceptionDetails.tsx'], /<button\b/g), 0);
   assert.equal(count(src['_UnitTree.tsx'], /<button\b/g), 2);
   assert.equal(count(src['_DocumentTree.tsx'], /<button\b/g), 2);
   assert.equal(count(src['_DocumentPicker.tsx'], /<button\b/g), 1);
@@ -237,9 +237,9 @@ test('the form has a Type from the organisation\'s list: optional, the one the e
   assert.match(page, /setPickedCols\(toggleHidden\(hiddenCols, key\)\)/);                       // the first tick in the menu is the person's own choice from then on
 });
 
-test('the details show the department path (and that it comes from the policy) and draw the approval only when the server sent one', () => {
+test('the details show the unit path (and that it comes from the document) and draw the approval only when the server sent one', () => {
   const d = src['_ExceptionDetails.tsx'];
-  assert.match(d, /<Fact label="Department">/);
+  assert.match(d, /<Fact label="Unit">/);
   assert.match(d, /\{e\.approval && \(\s*<ApprovalPanel exception=\{e\} approval=\{e\.approval\}/);
 });
 
