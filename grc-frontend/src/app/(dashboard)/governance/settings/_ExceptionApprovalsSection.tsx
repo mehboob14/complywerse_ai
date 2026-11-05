@@ -1,7 +1,7 @@
 'use client';
 
-// Governance > Settings > Exception approvals: who reviews and approves a policy exception, for the whole organisation or for a department, sub-department
-// or unit. A table of the rules (where each applies, when, the chain of its steps, on or off) with Add rule, and a row's menu: Edit, Switch off / on, Delete.
+// Governance > Settings > Exception approvals: who reviews and approves an exception, and who carries it out afterwards, for the whole organisation or for a department,
+// sub-department or unit. A table of the rules (where each applies, when, the chain of its steps and its implementer, on or off) with Add rule, and a row's menu: Edit, Switch off / on, Delete.
 // Adding and changing is a drawer (_RuleDrawer.tsx); a tester below the table says which rule an exception like this would follow (_RuleTester.tsx). Anyone
 // with a governance right reads the rules; changing needs governance:settings:edit, and the server says which (`can_edit`): a person who cannot change them
 // sees the table and "View only". A rule applies when an exception is submitted; one already waiting keeps the steps it started with. With no rules, anyone
@@ -97,8 +97,8 @@ export function ExceptionApprovalsSection() {
     },
     {
       key: 'steps', header: 'Steps', card: 'meta',
-      cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps)}>{stepsLine(r.steps)}</span>,
-      cardCell: (r) => <span className="block whitespace-pre-line [overflow-wrap:anywhere]">{stepsLong(r.steps)}</span>,       // a phone has no tooltip: every step in full, one to a line
+      cell: (r) => <span className="line-clamp-2 [overflow-wrap:anywhere]" title={stepsLong(r.steps, r.implementer)}>{stepsLine(r.steps, r.implementer)}</span>,
+      cardCell: (r) => <span className="block whitespace-pre-line [overflow-wrap:anywhere]">{stepsLong(r.steps, r.implementer)}</span>,       // a phone has no tooltip: every step in full, one to a line, the implementer last
     },
     { key: 'status', header: 'Status', width: 'w-[88px]', card: 'meta', cell: (r) => <StatusPill size="sm" tone={r.is_active ? 'success' : 'neutral'} label={r.is_active ? 'Active' : 'Off'} /> },
     ...(canEdit ? [{ key: 'actions', header: 'Actions', align: 'right' as const, width: 'w-[56px]', cell: actionsOf }] : []),
