@@ -230,15 +230,16 @@ test('a date field shows the day the server stored: a stored date has a time, wh
   for (const none of [null, undefined, '', 'not a date', '15/11/2026']) assert.equal(toDateInput(none), '');
 });
 
-test('Edit starts with what the exception has: its dates as days, its long texts as numbered lines, its assets', () => {
+test('Edit starts with what the exception has: its dates as days, its justification as lines, its business impact, its assets', () => {
   const form = formFrom({
-    title: 'Legacy VPN', document_id: 44, justification: '["Vendor cannot patch"]', risk_assessment: "['Exposure', 'Audit finding']", compensating_controls: null,
+    title: 'Legacy VPN', document_id: 44, justification: '["Vendor cannot patch"]', business_impact: 'Remote staff lose access',
     priority: undefined, effective_date: '2026-10-01T08:22:49', expiry_date: '2026-12-15T08:22:49', linked_asset_ids: [3, 1],
   });
   assert.deepEqual(form, {
-    title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', risk_assessment: '1. Exposure\n2. Audit finding', compensating_controls: '',
+    title: 'Legacy VPN', document_id: 44, justification: 'Vendor cannot patch', business_impact: 'Remote staff lose access',
     priority: 'medium', department_id: '', exception_type: '', effective_date: '2026-10-01', expiry_date: '2026-12-15', asset_ids: [3, 1],
   });
+  assert.equal(formFrom({ title: 'x', document_id: 4 }).business_impact, '');                                  // an exception raised before it existed
   assert.equal(formFrom({ title: 'x', document_id: null }).document_id, '');
   assert.equal(formFrom({ title: 'x', document_id: 4, department_id: 12 }).department_id, 12);                  // its own department; one it takes from its policy is not in the form
   assert.equal(formFrom({ title: 'x', document_id: 4, exception_type: 'technical' }).exception_type, 'technical');      // its type, as the organisation's list names it
@@ -258,7 +259,7 @@ test('closing the form has something to lose only when it differs from where it 
   assert.ok(sameForm(start, { ...start, asset_ids: [2, 1] }));
   assert.ok(sameForm(start, { ...start, document_id: '4' }));
   assert.ok(sameForm({ ...start, department_id: 12 }, { ...start, department_id: '12' }));
-  for (const changed of [{ title: 'T2' }, { justification: 'J2' }, { risk_assessment: 'r' }, { compensating_controls: 'c' }, { priority: 'high' }, { effective_date: '2026-01-01' },
+  for (const changed of [{ title: 'T2' }, { justification: 'J2' }, { business_impact: 'b' }, { priority: 'high' }, { effective_date: '2026-01-01' },
     { expiry_date: '2026-01-01' }, { asset_ids: [1] }, { document_id: '' }, { department_id: 12 }, { exception_type: 'technical' }]) assert.ok(!sameForm(start, { ...start, ...changed }), JSON.stringify(changed));
   assert.ok(sameForm(emptyForm(), emptyForm()));
 });
@@ -270,12 +271,17 @@ test('the title and the justification are required, and spaces alone are nothing
   assert.deepEqual(formErrors({ ...emptyForm(), title: 'T', justification: 'J' }), {});
 });
 
-test('a new exception sends what it always did: a date only when set, the policy only when chosen, and its department (none: null, its policy\'s)', () => {
+test('a new exception sends what it always did: a date only when set, the document only when chosen, and its department (none: null, its document\'s); the two long texts are no longer sent', () => {
   const form = { ...emptyForm(), title: 'T', justification: 'J', document_id: '44', expiry_date: '2026-12-15', asset_ids: [1, 2] };
   assert.deepEqual(payloadOf(form, false), {
-    title: 'T', justification: 'J', risk_assessment: '', compensating_controls: '', priority: 'medium', document_id: 44, department_id: null, exception_type: null,
+    title: 'T', justification: 'J', priority: 'medium', document_id: 44, department_id: null, exception_type: null,
     expiry_date: '2026-12-15', asset_ids: [1, 2],
   });
+  assert.equal(payloadOf({ ...form, business_impact: 'It stops the migration' }, false).business_impact, 'It stops the migration');
+  assert.ok(!('business_impact' in payloadOf(form, false)));                                                       // a new exception without it sends none
+  assert.equal(payloadOf({ ...form, business_impact: '' }, true).business_impact, null);                           // an edit that empties it: the server clears it
+  const sentKeys = Object.keys(payloadOf(form, true));
+  assert.ok(!sentKeys.includes('risk_assessment') && !sentKeys.includes('compensating_controls'));               // nothing the old long boxes held is wiped by an edit
   assert.equal(payloadOf({ ...form, exception_type: 'technical' }, false).exception_type, 'technical');
   assert.equal(payloadOf({ ...form, exception_type: '' }, true).exception_type, null);                            // an edit that empties it: the server clears it
   assert.equal(payloadOf({ ...form, department_id: '12' }, false).department_id, 12);
