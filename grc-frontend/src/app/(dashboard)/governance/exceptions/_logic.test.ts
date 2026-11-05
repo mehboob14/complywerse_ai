@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   ADDRESS, DATA_COLS, DEFAULT_PAGE_SIZE, DOC_TYPES, HIDDEN_DOCUMENT, NO_DOCUMENT, PAGE_SIZES, PICKER_LIMIT, TITLE_MIN_WIDTH,
   NARROW_HIDDEN, WIDE_WINDOW, browseDocuments, countLabel, countText, countsSummary, cutNotice, docTypeLabel, documentGroupName, documentOf, draftPatch, emptyForm, formFrom, formForPolicy, formatDate, hiddenColumns, listParams, nextSort,
-  pagerOf, payloadOf, sameForm, schedulePatch, searchExceptions, serverList, shownCols, sortRows, stillSuggested, tableMinWidth, toCsv, toggleHidden, uniqueDocuments,
+  pagerOf, payloadOf, sameForm, schedulePatch, searchExceptions, serverList, shownCols, sortRows, stillSuggested, tableMinWidth, toCsv, toggleHidden, uniqueDocuments, withDocumentDetail,
   unitChipText, unitPlaceholder, unitText, visibleUnits, waitingKindLabel, waitingRows,
   type DataCol, type ExceptionFields, type Filters,
 } from './_logic.ts';
@@ -176,6 +176,17 @@ test('commas, quotes and line breaks in a value are quoted so the line stays one
   assert.equal(toCsv([cols[0]], [row({ title: 'plain' }), row({ title: 'a,b' })]), 'Title\nplain\n"a,b"');
   assert.equal(toCsv([cols[0]], [row({ title: 'say "hi"' })]), 'Title\n"say ""hi"""');
   assert.equal(toCsv([cols[0]], [row({ title: 'two\nlines' })]), 'Title\n"two\nlines"');
+});
+
+test('the CSV also names the kind and the code of the document, right after it, and nothing when the Document column is off', () => {
+  const rows = [row({ title: 'One', document_title: 'Backup Standard', document_type: 'standard', document_code: 'STD-001' }), row({ title: 'Two', document_title: null, document_id: null })];
+  const all = withDocumentDetail(cols);
+  assert.equal(toCsv(all, []), 'Title,Document,Document type,Document code,Unit,Status,Priority,Type,Created,Expiry');
+  const lines = toCsv(all, rows).split('\n');
+  assert.ok(lines[1].startsWith('One,Backup Standard,Standard,STD-001,'), lines[1]);
+  assert.ok(lines[2].startsWith('Two,,,,'), lines[2]);                                                          // about no document: three empty cells
+  const off = cols.filter((c) => c.id !== 'document');
+  assert.deepEqual(withDocumentDetail(off), off);                                                               // the person switched the document off: the file has none of it
 });
 
 test('a column switched off is not exported, and a column that only draws never is', () => {

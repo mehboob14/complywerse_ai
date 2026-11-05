@@ -114,6 +114,20 @@ export function documentGroupName(group: { title: string | null; doc_type: strin
 /** The document's name for a sort, the CSV and a search: '' when there is none. */
 export const documentText = (e: Parameters<typeof documentOf>[0]): string => documentOf(e)?.title ?? '';
 
+/**
+ * The document's kind and code, for the CSV only (the table shows them as a chip and a line under the title): right after the Document column, so a sheet can be
+ * filtered by the kind of document an exception is about.
+ */
+export function withDocumentDetail<T extends Parameters<typeof documentOf>[0]>(cols: DataCol<T>[]): DataCol<T>[] {
+  const at = cols.findIndex((c) => c.id === 'document');
+  if (at === -1) return cols;
+  const detail: DataCol<T>[] = [
+    { id: 'document_type', header: 'Document type', csv: (e) => documentOf(e)?.type ?? '' },
+    { id: 'document_code', header: 'Document code', csv: (e) => documentOf(e)?.code ?? '' },
+  ];
+  return [...cols.slice(0, at + 1), ...detail, ...cols.slice(at + 1)];
+}
+
 /** The unit an exception is raised for, "Operations › Support"; '' when it has none. */
 export const unitText = (e: { department_path?: string[]; department_inherited?: boolean }): string => departmentOf(e)?.text ?? '';
 

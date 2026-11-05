@@ -36,7 +36,7 @@ import { DepartmentSelect } from '@/components/governance/DepartmentSelect';
 import { useAdminDepartments } from '@/components/admin/DepartmentForm';
 import {
   ADDRESS, DATA_COLS, DEFAULT_PAGE_SIZE, DOC_TYPES, PAGE_SIZES, VIEW_OPTIONS, WIDE_WINDOW, countLabel, csvDone, cutNotice, dayText, departmentOf, documentOf, emptyForm, formForPolicy, formFrom, itemsOf,
-  hiddenColumns, listParams, momentDay, openIdOf, pagerOf, longRefusal, requesterOf, rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, unitChipText, unitPathOf,
+  hiddenColumns, listParams, momentDay, openIdOf, pagerOf, longRefusal, requesterOf, rowActionKeys, searchExceptions, serverList, sortLoaded, toCsv, toggleHidden, unitChipText, unitPathOf, withDocumentDetail,
   waitingLabel, waitingRows, withoutOpen,
   type DataCol, type DocumentOption, type ExceptionForm, type Filters, type RowActionKey,
 } from './_logic';
@@ -325,7 +325,7 @@ export default function ExceptionsPage() {
   const exportCsv = () => {
     // the columns the person switched off in the menu are not exported; the ones a narrow window leaves out on its own are (the file does not depend on the window)
     const cols = columns.filter((c) => c.key in DATA_COLS && !(pickedCols ?? []).includes(c.key)).map((c) => ({ id: c.key, ...DATA_COLS[c.key as keyof typeof DATA_COLS] }));
-    downloadCsv('exceptions', cols, sorted);
+    downloadCsv('exceptions', withDocumentDetail(cols), sorted);
     notify.success(csvDone(sorted.length, loaded.length, server));
   };
 
