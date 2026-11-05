@@ -55,7 +55,7 @@ test('the same names in another order give the same folders (a tie is settled by
   assert.deepEqual(build(scope, b).map((x) => x.id), [3, 5, 7]);
 });
 
-test('a department with a parent sits inside it, to any depth; the folders inside a folder come first, then its own documents', () => {
+test('a department with a parent sits inside it, to any depth; a folder lists its own documents first, then the folders inside it', () => {
   const departments = [dept(1, 'Operations'), dept(2, 'Security', { parent_department_id: 1 }), dept(3, 'SOC', { parent_department_id: 2 }), dept(4, 'Finance'), dept(5, 'Audit', { parent_department_id: 1 })];
   const own = doc({ department_id: 1 });
   const sec = doc({ department_id: 2 });
@@ -69,8 +69,8 @@ test('a department with a parent sits inside it, to any depth; the folders insid
   const operations = folders[1];
   assert.deepEqual(ids(operations.top), [own.id]);                            // its own documents only
   assert.deepEqual(allFolders(folders).map((x) => x.name), ['Finance', 'Operations', 'Audit', 'Security', 'SOC']);
-  // the order the CSV and the drawer's next / previous follow: folders in the order drawn, the ones inside a folder before its own documents
-  assert.deepEqual(ids(displayOrder(folders)), [fin.id, soc.id, sec.id, own.id]);
+  // the order the CSV and the drawer's next / previous follow: folders in the order drawn, a folder's own documents before the folders inside it
+  assert.deepEqual(ids(displayOrder(folders)), [fin.id, own.id, sec.id, soc.id]);
 });
 
 test('counts are the folder\'s own documents and, rolled up, everything in the folders inside it', () => {
@@ -359,7 +359,7 @@ test('a folder lists its first 15 documents and one click shows up to 50 more', 
 
 // ── what is drawn ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-test('a closed folder draws its header only; an open one draws the folders inside it, then its own documents (the first ones, with how many are left)', () => {
+test('a closed folder draws its header only; an open one draws its own documents (the first ones, with how many are left), then the folders inside it', () => {
   const departments = [dept(1, 'Ops'), dept(2, 'Security', { parent_department_id: 1 }), dept(3, 'Legal')];
   const scope = [...Array.from({ length: 20 }, () => doc({ department_id: 1 })), doc({ department_id: 2 }), doc({ department_id: 3 })];
   const folders = build(scope, departments);
@@ -371,9 +371,9 @@ test('a closed folder draws its header only; an open one draws the folders insid
   }).map((item) => (item.kind === 'folder' ? `${item.node.name}${item.open ? ' (open)' : ''}` : `${item.node.name}: ${item.rows.length} rows, ${item.remaining} left`));
   assert.deepEqual(draw([]), ['Legal', 'Ops']);
   assert.deepEqual(draw(['d3']), ['Legal (open)', 'Legal: 1 rows, 0 left', 'Ops']);
-  assert.deepEqual(draw(['d1']), ['Legal', 'Ops (open)', 'Security', 'Ops: 15 rows, 5 left']);                   // Security is closed: header only
-  assert.deepEqual(draw(['d1', 'd2']), ['Legal', 'Ops (open)', 'Security (open)', 'Security: 1 rows, 0 left', 'Ops: 15 rows, 5 left']);
-  assert.deepEqual(draw(['d1'], 5), ['Legal', 'Ops (open)', 'Security', 'Ops: 20 rows, 0 left']);
+  assert.deepEqual(draw(['d1']), ['Legal', 'Ops (open)', 'Ops: 15 rows, 5 left', 'Security']);                   // Security is closed: header only, after Ops' own documents
+  assert.deepEqual(draw(['d1', 'd2']), ['Legal', 'Ops (open)', 'Ops: 15 rows, 5 left', 'Security (open)', 'Security: 1 rows, 0 left']);
+  assert.deepEqual(draw(['d1'], 5), ['Legal', 'Ops (open)', 'Ops: 20 rows, 0 left', 'Security']);
 });
 
 test('a folder\'s tick box ticks every document of it that matches, the folders inside included', () => {

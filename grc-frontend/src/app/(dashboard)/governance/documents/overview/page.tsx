@@ -2,36 +2,51 @@
 
 export const dynamic = 'force-dynamic';
 
-// Governance > Documents > Overview: the library at a glance for a department head, a CISO, or anyone who may read the whole library. One answer from
-// GET /governance/document-overview for the scope in the header (the whole organisation, one department with everything under it, or "No department"):
-// six figures, then By type, By status (with the stage each document in review is at), Waiting on people, Reviews and Issues. Every number opens the
-// library already filtered (the server gives each its address: _model.ts figureHref); only documents the person may read are counted, by the server.
-// The scope is in the address (?dept=), so a link opens the same view. A head of a department who reads no library sees their own department first.
-// While the answer is on its way every figure and card is a skeleton; a failure is "Unavailable" with Retry (or what the server refused), never a 0.
-//   _model.ts  the rules (tested)   _Tiles.tsx  the six figures   _Sections.tsx  the cards   _Figure.tsx  a number that is a link
+// Governance > Documents > At a glance: the library for a department head, a CISO, or anyone who may read the whole library, in four views of one scope (the whole
+// organisation, one department with everything under it, or "No department"): Summary (the default: the figures, graphs, the table of departments and a strip of the
+// board, then the lists), Table (the departments by status, type, waiting on people, reviews or issues), Graph and Board (a Kanban by status, type or department),
+// and an Export of the departments or of the documents as CSV. One answer from GET /governance/document-overview feeds all but the board, which has its own
+// (/board); every number opens the library already filtered (the server gives each its address: _model.ts figureHref); only documents the person may read are counted,
+// by the server. The scope, the view, the board's grouping and the table's columns are in the address (?dept= &view= &group= &measure=), so a link opens the same view.
+// A head of a department who reads no library sees their own department first. While the answer is on its way every figure and card is a skeleton; a failure is
+// "Unavailable" with Retry (or what the server refused), never a 0.
+//   _model.ts  the rules (tested)   _views.ts _matrix.ts _chart.ts _board.ts _csv.ts  what each view shows (tested)
+//   _Layouts.tsx  the views   _Tiles.tsx  the six figures   _DepartmentTable.tsx  the department table   _Charts.tsx  the graphs   _BoardPanel.tsx  the board
+//   _Sections.tsx  the lists   _Export.tsx  the export menu   _Figure.tsx  a number that is a link
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, SearchX } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { PageHeader } from '@/components/ui';
-import { Button, EmptyState, ErrorState, NoAccessState, Select, useAddressState } from '@/components/ui/ds';
+import { Button, EmptyState, ErrorState, NoAccessState, SegmentedControl, Select, useAddressState } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
-import { text } from '@/lib/addressState';
+import { oneOf, text } from '@/lib/addressState';
 import { routeFor } from '@/lib/navRegistry';
-import { Cards, CardsSkeleton } from './_Sections';
-import { Tiles, TilesSkeleton } from './_Tiles';
+import { ExportMenu } from './_Export';
+import { MatrixCard } from './_DepartmentTable';
+import { CardsSkeleton } from './_Sections';
+import { TilesSkeleton } from './_Tiles';
+import { BoardView, GraphView, Summary } from './_Layouts';
+import { DEFAULT_MEASURE, TABLE_MEASURE_IDS, type MeasureId } from './_matrix';
 import {
   ENDPOINT, LIBRARY, asOfText, choiceLabel, failureOf, isEmpty, pickedValue, retryOverview, scopeOptions, scopeParams, statusOf,
   type Choice, type Overview,
 } from './_model';
+import { DEFAULT_GROUP, DEFAULT_VIEW, GROUP_IDS, VIEW_IDS, VIEWS, type GroupId, type ViewId } from './_views';
 
-const ADDRESS = { dept: text() };
-const TITLE = routeFor('/governance/documents/overview')?.label ?? 'Overview';
-const INFO = 'The documents of one department and everything under it, or of the whole organisation: how many, of what kind, at what status and stage, who they wait for and what needs attention. Only documents you may read are counted.';
+const ADDRESS = {
+  dept: text(),
+  view: oneOf<ViewId>(VIEW_IDS, DEFAULT_VIEW),
+  group: oneOf<GroupId>(GROUP_IDS, DEFAULT_GROUP),
+  measure: oneOf<MeasureId>(TABLE_MEASURE_IDS, DEFAULT_MEASURE),
+};
+const VIEW_OPTIONS = VIEWS.map((v) => ({ value: v.id, label: v.label }));
+const TITLE = routeFor('/governance/documents/overview')?.label ?? 'At a glance';
+const INFO = 'The documents of one department and everything under it, or of the whole organisation: how many, of what kind, at what status and stage, who they wait for and what needs attention. Switch between the summary, a table, graphs and a board, and export what you see. Only documents you may read are counted.';
 
 export default function DocumentsOverviewPage() {
   const [address, setAddress] = useAddressState(ADDRESS);
-  const dept = address.dept;
+  const { dept, view, group, measure } = address;
   const query = useQuery<Overview>({
     queryKey: ['gov-doc-overview', dept],
     queryFn: async () => (await apiClient.get(ENDPOINT, { params: scopeParams(dept) })).data as Overview,
@@ -90,8 +105,10 @@ export default function DocumentsOverviewPage() {
             className="rounded-ds-card border border-ds-danger-border bg-ds-danger-soft"
           />
         )}
-        <Tiles data={data} />
-        <Cards data={data} />
+        {view === 'summary' && <Summary data={data} measure={measure} onMeasure={(next) => setAddress({ measure: next })} />}
+        {view === 'table' && <MatrixCard data={data} measure={measure} onMeasure={(next) => setAddress({ measure: next })} view="table" group={group} />}
+        {view === 'graph' && <GraphView data={data} />}
+        {view === 'board' && <BoardView data={data} group={group} onGroup={(next) => setAddress({ group: next })} />}
       </>
     );
   }
@@ -99,6 +116,10 @@ export default function DocumentsOverviewPage() {
   return (
     <div className="flex flex-col gap-[16px]">
       <PageHeader variant="page" title={TITLE} info={INFO} meta={data ? asOfText(data.as_of) : undefined} actions={picker} />
+      <div className="flex flex-wrap items-center justify-between gap-[12px]">
+        <SegmentedControl label="View" name="overview-view" options={VIEW_OPTIONS} value={view} onChange={(next) => setAddress({ view: next }, { push: true })} />
+        {data && !isEmpty(data) && <ExportMenu data={data} />}
+      </div>
       {body}
     </div>
   );
