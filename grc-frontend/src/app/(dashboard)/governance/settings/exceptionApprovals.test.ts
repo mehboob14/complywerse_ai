@@ -122,7 +122,7 @@ test('the Types drawer (D59): the organisation\'s own list, for an editor only; 
   assert.match(types, /aria-label="Type name"/);
   assert.match(types, /label=\{`Remove \$\{d\.label \|\| 'type'\}`\}/);                                                    // each button is named for its type
   assert.match(types, /Bring back/);
-  assert.match(drawer, /<MultiSelect label="Type" options=\{typeOptions\}/);
+  assert.match(drawer, /<MultiSelect label="Exception type" options=\{typeOptions\}/);
   assert.match(drawer, /typeChoices\(types, rule\?\.exception_types \?\? \[\]\)/);                                            // a type the rule names stays choosable after it is removed
   assert.match(tester, /exception_type: type \|\| null/);
   assert.match(api, /apiClient\.get<TypesAnswer>\('\/governance\/exception-approval-rules\/types'\)/);
@@ -141,7 +141,7 @@ test('the implementer is one optional block after the steps: Add and Remove, the
   const editor = drawer.slice(drawer.indexOf('function ImplementerEditor'), drawer.indexOf('export function RuleDrawer'));
   assert.ok(editor.length > 300);
   assert.match(editor, /role="group" aria-label="Implementer"/);
-  assert.match(editor, /<FormField label="Who carries it out" required error=\{errors\?\.people\}/);
+  assert.match(editor, /<FormField label="Who implements" required error=\{errors\?\.people\}/);
   assert.match(editor, /<MultiSelect label="Implementer: who carries it out" options=\{choices\} value=\{imp\.people\}[\s\S]*?display="chips"/);
   assert.match(editor, /<FormField label="Days to implement" optional error=\{errors\?\.due_days\}/);
   assert.match(editor, /min=\{1\} max=\{365\}[^>]*unit="days"/);
@@ -176,5 +176,5 @@ test('the words: "Document type" for a kind of document, "exception" for a polic
   assert.match(tester, /<FormField label="Document type">/);
   assert.match(section, /conditionsLong\(r, types\)/);                                                            // the table's sentence is the library's ("Document type: Policy")
   assert.match(section, /title="The kinds of exception your organisation tells apart"/);
-  assert.match(drawer, /label="Type" optional/);                                                                  // the exception type keeps its own word
+  assert.match(drawer, /label="Exception type" optional/);                                                                  // the exception type keeps its own word
 });

@@ -113,7 +113,7 @@ function ImplementerEditor({ implementer: imp, choices, errors, onChange }: {
 }) {
   return (
     <div role="group" aria-label="Implementer" className="grid grid-cols-1 gap-[12px] rounded-ds-card border border-ds-border p-[12px] sm:grid-cols-2">
-      <FormField label="Who carries it out" required error={errors?.people} className="sm:col-span-2">
+      <FormField label="Who implements" required error={errors?.people} className="sm:col-span-2">
         <MultiSelect label="Implementer: who carries it out" options={choices} value={imp.people} onChange={(people) => onChange({ people })} display="chips" placeholder="People, roles or owners" />
       </FormField>
       <FormField label="Days to implement" optional error={errors?.due_days}>
@@ -206,8 +206,8 @@ export function RuleDrawer({ rule, options, types, onClose }: {
             <FormField label="Document type" optional>
               <MultiSelect label="Document type" options={wordOptions(options?.doc_types, KIND_ORDER)} value={form.doc_types} onChange={(doc_types) => set({ doc_types })} display="chips" placeholder="Any" />
             </FormField>
-            <FormField label="Type" optional>
-              <MultiSelect label="Type" options={typeOptions} value={form.exception_types} onChange={(exception_types) => set({ exception_types })} display="chips" placeholder="Any" />
+            <FormField label="Exception type" optional>
+              <MultiSelect label="Exception type" options={typeOptions} value={form.exception_types} onChange={(exception_types) => set({ exception_types })} display="chips" placeholder="Any" />
             </FormField>
           </div>
         </div>

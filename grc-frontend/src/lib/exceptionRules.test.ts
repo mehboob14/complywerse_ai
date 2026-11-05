@@ -56,8 +56,8 @@ test('the conditions in a sentence for a screen reader: the priorities, the docu
   assert.equal(conditionsLong(rule({ priorities: [], doc_types: ['policy', 'standard'] })), 'Document type: Policy, Standard');
   assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority, document type and exception type');
   const types = [{ value: 'technical', label: 'Technical', archived: false }, { value: 'third_party', label: 'Third party', archived: true }];
-  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [], exception_types: ['technical', 'third_party'] }), types), 'Type: Technical, Third party');
-  assert.equal(conditionsLong(rule({ exception_types: ['technical'] }), types), 'Priority: High, Critical. Document type: Policy. Type: Technical');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [], exception_types: ['technical', 'third_party'] }), types), 'Exception type: Technical, Third party');
+  assert.equal(conditionsLong(rule({ exception_types: ['technical'] }), types), 'Priority: High, Critical. Document type: Policy. Exception type: Technical');
   assert.deepEqual(conditionChips(rule({ exception_types: ['technical', 'gone'] }), types), ['High', 'Critical', 'Policy', 'Technical', 'gone']);      // a type the list no longer holds is shown as it was kept
 });
 

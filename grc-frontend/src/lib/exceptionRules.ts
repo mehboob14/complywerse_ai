@@ -113,12 +113,12 @@ export const typeLabel = (value: string, types: readonly Pick<ExceptionTypeOptio
 export const conditionChips = (rule: Pick<ExceptionRule, 'priorities' | 'doc_types' | 'exception_types'>, types: readonly ExceptionTypeOption[] = []): string[] =>
   [...rule.priorities.map((w) => statusLabel(w)), ...rule.doc_types.map((w) => statusLabel(w)), ...(rule.exception_types ?? []).map((v) => typeLabel(v, types))];
 
-/** The same in a sentence, for a screen reader and a tooltip: "Priority: High, Critical. Document type: Policy. Type: Technical", or "Any priority, document type and exception type". */
+/** The same in a sentence, for a screen reader and a tooltip: "Priority: High, Critical. Document type: Policy. Exception type: Technical", or "Any priority, document type and exception type". */
 export function conditionsLong(rule: Pick<ExceptionRule, 'priorities' | 'doc_types' | 'exception_types'>, types: readonly ExceptionTypeOption[] = []): string {
   const parts = [
     rule.priorities.length ? `Priority: ${rule.priorities.map((w) => statusLabel(w)).join(', ')}` : '',
     rule.doc_types.length ? `Document type: ${rule.doc_types.map((w) => statusLabel(w)).join(', ')}` : '',
-    rule.exception_types?.length ? `Type: ${rule.exception_types.map((v) => typeLabel(v, types)).join(', ')}` : '',
+    rule.exception_types?.length ? `Exception type: ${rule.exception_types.map((v) => typeLabel(v, types)).join(', ')}` : '',
   ].filter(Boolean);
   return parts.length ? parts.join('. ') : 'Any priority, document type and exception type';
 }

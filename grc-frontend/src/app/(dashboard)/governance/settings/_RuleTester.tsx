@@ -61,7 +61,7 @@ export function RuleTester({ rules, options, types, levelLabels }: {
             {(options?.doc_types?.length ? options.doc_types : KIND_ORDER).map((w) => <option key={w} value={w}>{statusLabel(w)}</option>)}
           </Select>
         </FormField>
-        <FormField label="Type">
+        <FormField label="Exception type">
           <Select placeholder="Not set" value={type} onChange={(e) => setType(e.target.value)}>
             {types.filter((t) => !t.archived).map((t) => <option key={t.value} value={t.value}>{typeChoiceLabel(t)}</option>)}
           </Select>
