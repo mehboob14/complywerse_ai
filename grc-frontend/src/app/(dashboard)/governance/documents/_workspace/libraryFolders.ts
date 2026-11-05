@@ -228,13 +228,13 @@ export function matchedIds<T extends FolderDoc>(n: FolderNode<T>): number[] {
   return out;
 }
 
-/** The documents that match, in the order the folders show them (folders A to Z, the ones inside a folder before its own documents):
+/** The documents that match, in the order the folders show them (folders A to Z, a folder's own documents first and then the folders inside it):
  *  what the CSV and the drawer's next / previous follow. */
 export function displayOrder<T extends FolderDoc>(nodes: readonly FolderNode<T>[]): T[] {
   const out: T[] = [];
   const walk = (list: readonly FolderNode<T>[]) => list.forEach((n) => {
-    walk(n.folders);
     n.entries.forEach((e) => { if (e.match) out.push(e.doc); });
+    walk(n.folders);
   });
   walk(nodes);
   return out;
@@ -313,8 +313,9 @@ export type PlanItem<T extends FolderDoc> =
   | { kind: 'docs'; node: FolderNode<T>; rows: DrawnRow<T>[]; /** top-level documents not listed yet */ remaining: number };
 
 /**
- * The folders in the order they are drawn: a folder's header, then (when it is open) the folders inside it, then its own documents.
- * A closed folder draws nothing below its header. `rowsOf` gives the table's rows (with the documents under them) for the first
+ * The folders in the order they are drawn: a folder's header, then (when it is open) its own documents, then the folders inside it. The documents come
+ * first so that what stands right under a department is its own, never what looks like the contents of the last folder above it (2026-11-05, the user:
+ * the documents of a department seemed to be the child's). A closed folder draws nothing below its header. `rowsOf` gives the table's rows (with the documents under them) for the first
  * `limit` top-level documents of a folder.
  */
 export function planFolders<T extends FolderDoc>(nodes: readonly FolderNode<T>[], o: {
@@ -327,11 +328,11 @@ export function planFolders<T extends FolderDoc>(nodes: readonly FolderNode<T>[]
     const open = o.isOpen(n);
     out.push({ kind: 'folder', node: n, open });
     if (!open) return;
-    walk(n.folders);
     if (n.top.length > 0) {
       const limit = o.limit(n);
       out.push({ kind: 'docs', node: n, rows: o.rowsOf(n, limit), remaining: Math.max(0, n.top.length - limit) });
     }
+    walk(n.folders);
   });
   walk(nodes);
   return out;
