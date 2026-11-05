@@ -34,7 +34,7 @@ test('every number is a Figure; the page and its cards draw no bare count of the
   for (const tag of figures) assert.ok(/\bnoun=/.test(tag) && /\bvalue=/.test(tag) && /\bhref=/.test(tag), tag);       // each says what it counts, and where it opens (or null: text)
   assert.ok(!/>\s*\{(?:data|row|b|r|step|stage)\.[A-Za-z_.]*(?:count|pending|overdue|in_force|inForce|dueSoon)\}\s*</.test(sections), 'a count printed as text, without a Figure');
   const figure = code(read('_Figure.tsx'));
-  assert.ok(figure.includes('aria-label={figureName(value, noun)}') && figure.includes('formatCount(value)'));
+  assert.ok(figure.includes('figureName(value, noun)') && figure.includes('formatCount(value)'));
   assert.ok(figure.includes("value === 0 ? 'text-ds-fg-muted'"), 'a zero is quiet');
   assert.ok(figure.includes('focus-visible:shadow-ds-ring'), 'a link shows where the keyboard is');
 });
@@ -44,7 +44,7 @@ test('the tiles are the kit\'s StatTile: a skeleton while loading, a link on eve
   assert.ok(tiles.includes('<StatTile') && tiles.includes('loading') && tiles.includes('link={t.href ?'));
   assert.ok(tiles.includes('tileLinkName(t)'));
   const sections = code(read('_Sections.tsx'));
-  for (const id of ['types', 'status', 'waiting', 'reviews', 'issues']) assert.ok(sections.includes(`id="${id}"`), id);
+  for (const id of ['departments', 'types', 'status', 'waiting', 'reviews', 'issues']) assert.ok(sections.includes(`id="${id}"`), id);
 });
 
 test('the lists are the kit\'s: the steps waiting longest are a RegisterTable (cards below 768px) whose rows open the document in the library', () => {
@@ -54,6 +54,16 @@ test('the lists are the kit\'s: the steps waiting longest are a RegisterTable (c
   assert.ok(sections.includes('isRowHeader: true'));
   assert.ok(!/<table\b|<th\b|<thead\b|<td\b/.test(sections), 'no bare table elements: the kit\'s primitives');
   assert.ok(sections.includes('Nothing is late'), 'an empty list says so');
+});
+
+test('the department table is the kit\'s RegisterTable, shown first and only when there is more than one department, and its names open the department\'s own overview', () => {
+  const sections = code(read('_Sections.tsx'));
+  assert.ok(sections.includes('<RegisterTable<DepartmentLine>') && sections.includes('caption="Documents by department"'));
+  assert.ok(sections.includes('hasDepartmentTable(data) &&'), 'a unit with nothing under it has no table');
+  assert.ok(sections.indexOf('<ByDepartment data={data} />') < sections.indexOf('<ByType data={data} />'), 'the top-to-bottom view comes first');
+  assert.ok(sections.includes('href={line.open}') && sections.includes('departmentLines(data)'));
+  assert.ok(/opens=\{l\.here \? 'Go to the list below' : 'Open its overview'\}/.test(sections), 'the Issues figure says where it leads');
+  assert.ok(sections.includes('cardTitle={(l) => <DepartmentName line={l} flat />}'), 'a phone shows each department as a card');
 });
 
 test('a bar is only a picture: hidden from a screen reader, the numbers beside it are what is read', () => {

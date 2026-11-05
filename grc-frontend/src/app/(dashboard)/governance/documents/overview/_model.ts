@@ -37,6 +37,26 @@ export interface Totals { documents: number; in_force: number; in_progress: numb
 export interface TypeRow { key: string; doc_type: string; label: string; count: number; in_force: number; in_force_key: string }
 export interface StatusRow { key: string; status: string; count: number }
 export interface StageRow { key: string; name: string; kind: string; count: number }
+/** One department of the scope: what is filed in it and under it (documents_overview.py `_by_department`); `own` is what is filed in it alone. */
+export interface DepartmentRow {
+  key: string;
+  /** null: "No department" */
+  department_id: number | null;
+  name: string;
+  path: string[];
+  level: number;
+  level_label: string;
+  /** how far under the top row of the table (0 for the scope itself, or for a top department) */
+  depth: number;
+  is_active: boolean;
+  owner: string | null;
+  own: number;
+  documents: number;
+  in_force: number;
+  in_progress: number;
+  overdue_reviews: number;
+  issues: number;
+}
 export type RequestKind = 'review' | 'approval' | 'acknowledgement';
 export interface RequestFigures { pending: number; overdue: number; due_soon: number; oldest_days_late: number | null }
 export interface WaitingRow {
@@ -70,6 +90,7 @@ export interface Overview {
   totals: Totals;
   by_type: TypeRow[];
   by_status: StatusRow[];
+  by_department: DepartmentRow[];
   stages: StageRow[];
   requests: Record<RequestKind, RequestFigures>;
   waiting: WaitingRow[];
@@ -191,6 +212,47 @@ export function tiles(d: Overview): Tile[] {
 
 /** Nothing to show: no document in this scope, not even an archived one. */
 export const isEmpty = (d: Pick<Overview, 'totals'>): boolean => d.totals.documents === 0 && d.totals.archived === 0;
+
+// ─── By department ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface DepartmentLine {
+  row: DepartmentRow;
+  /** the address value of the department's own overview ("12", "none") */
+  value: string;
+  /** the row is the department the page is about: its name is not a link */
+  here: boolean;
+  /** the department's own overview, or null on the row that is the page itself */
+  open: string | null;
+  /** where the Issues figure leads: the list on this page, or on the department's own page */
+  issuesHref: string;
+  /** the path, the level in the organisation's word and how many documents are filed in the department itself */
+  title: string;
+  documentsHref: string | null;
+  inForceHref: string | null;
+  inProgressHref: string | null;
+  overdueHref: string | null;
+}
+
+/** The rows of the department table, each with the addresses of its figures (the library on that department and everything under it). */
+export function departmentLines(d: Pick<Overview, 'by_department' | 'links' | 'scope'>): DepartmentLine[] {
+  return d.by_department.map((row) => {
+    const value = row.department_id === null ? 'none' : String(row.department_id);
+    const here = row.department_id !== null && row.department_id === d.scope.department_id;
+    const below = row.documents - row.own;
+    const title = [row.path.length > 1 ? row.path.join(' › ') : '', row.level_label, below > 0 ? `${formatCount(row.own)} filed in it, ${formatCount(below)} below it` : ''].filter(Boolean).join(' · ');
+    return {
+      row, value, here,
+      open: here ? null : overviewHref(value),
+      issuesHref: here ? '#issues' : `${overviewHref(value)}#issues`,
+      title: title || row.name,
+      documentsHref: figureHref(d, row.key), inForceHref: figureHref(d, `${row.key}:in_force`),
+      inProgressHref: figureHref(d, `${row.key}:in_progress`), overdueHref: figureHref(d, `${row.key}:overdue_reviews`),
+    };
+  });
+}
+
+/** The table is worth a card when there is more than one row to compare: a unit with nothing under it is the six figures above. */
+export const hasDepartmentTable = (d: Pick<Overview, 'by_department'>): boolean => d.by_department.length > 1;
 
 // ─── By type, by status, by stage ──────────────────────────────────────────────────────────────────────────────────────────
 
