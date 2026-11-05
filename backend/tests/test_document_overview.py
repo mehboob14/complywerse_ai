@@ -216,57 +216,63 @@ def test_a_department_counts_everything_under_it_through_three_levels(w):
     total = lambda d: get(w, ADMIN, d).json()["totals"]            # noqa: E731
     assert [total(d)["documents"] for d in (OPS, SUP, HELP, FINANCE, LEGACY, "none", None)] == [4, 3, 1, 2, 1, 1, 8]    # whole: also the one in a gone department
     assert [total(d)["archived"] for d in (OPS, SUP, HELP, FINANCE, "none", None)] == [1, 1, 1, 0, 0, 1]
-    assert get(w, MID).json()["totals"]["documents"] == 0                  # a head without a library right counts their own, here none (see readability)
+    assert get(w, MID).json()["totals"]["documents"] == 3                  # a head without a library right reads everything in the departments they head (2, 3, 4)
     assert get(w, READER, SUP).json()["totals"]["documents"] == 3 and get(w, EDITOR, OPS).json()["totals"]["documents"] == 4
     for uid in (ADMIN, READER):
         assert get(w, uid, SUP).json()["scope"]["path"] == ["Operations", "Support"]
 
 
-def test_a_head_without_a_library_right_counts_only_what_they_own_wrote_or_are_asked_about(w):
-    doc(w, 1, OPS, status="draft", owner=TOP)                              # their own draft
-    doc(w, 2, SUP, owner=ADMIN, author_id=TOP)                             # published, they wrote it
-    doc(w, 3, SUP)                                                         # published, nothing to do with them
-    doc(w, 4, HELP, status="pending_review")                               # they are asked to review it
-    ask(w, 4, "review", TOP, NOW + 3 * DAY)
-    doc(w, 5, HELP, status="draft", owner=EVE)                             # somebody else's draft
-    doc(w, 6, HELP, status="pending_review", published_version="1.0")      # a new version on its way over a published one
+def test_a_head_without_a_library_right_reads_every_document_of_their_departments_and_nothing_else_of_the_library(w):
+    """The user's decision of 2026-11-05: the owner of a unit reads all of the unit (drafts included) and of what is under it."""
+    doc(w, 1, OPS, status="draft", owner=EVE)                              # a draft in Operations, somebody else's
+    doc(w, 2, SUP, owner=ADMIN, author_id=EVE)                             # published
+    doc(w, 3, SUP, status="archived", owner=EVE)                           # archived: only the archived total counts it
+    doc(w, 4, HELP, status="pending_review", owner=EVE)
+    doc(w, 5, HELP, status="draft", owner=EVE)
+    doc(w, 6, HELP, status="pending_review", published_version="1.0", owner=EVE)      # a new version on its way over a published one
+    doc(w, 7, FINANCE, status="draft", owner=EVE)                          # another department's draft
+    doc(w, 8, None, status="draft", owner=EVE)                             # filed under no department
     w.db.commit()
     count = lambda uid, d=None: get(w, uid, d).json()["totals"]["documents"]     # noqa: E731
-    assert count(ADMIN) == 6 and count(EDITOR) == 6                        # whoever may edit reads every draft
-    assert count(READER) == 3                                              # 2, 3 (in force) and 6 (a version in force): no draft that was never published
-    assert count(TOP) == 3 and count(TOP, OPS) == 3                        # 1, 2, 4: owned, written, asked
-    assert count(TOP, HELP) == 1 and count(TOP, SUP) == 2                  # the scopes inside theirs
-    assert count(MID) == 0 and count(LEAF) == 0                            # they head departments full of documents, but own, wrote and are asked about none
-    # owning or writing is all it takes, wherever in their own tree the document sits
-    doc(w, 7, HELP, status="draft", owner=LEAF)
-    doc(w, 8, SUP, status="draft", owner=ADMIN, author_id=MID)
-    w.db.commit()
-    assert count(LEAF) == 1 and count(MID) == 1 and count(MID, HELP) == 0 and count(TOP) == 3      # (TOP owns neither new one)
+    assert count(ADMIN) == 7 and count(EDITOR) == 7                        # whoever may edit reads every draft (all but the archived one)
+    assert count(READER) == 2                                              # 2 (in force) and 6 (a version in force): no draft that was never published
+    assert count(TOP) == 5 and count(TOP, OPS) == 5                        # 1, 2, 4, 5, 6: all of Operations and below, not Finance's draft nor the unfiled one
+    assert count(TOP, SUP) == 4 and count(TOP, HELP) == 3
+    assert count(MID) == 4 and count(MID, HELP) == 3                       # Support and what is under it, not Operations' own draft (1)
+    assert count(LEAF) == 3                                                # the Helpdesk
+    assert count(FIN) == 1                                                 # Finance's draft, theirs as its head
+    assert get(w, MID).json()["totals"]["archived"] == 1
+    assert get(w, EVE, path=URL).status_code == 403                        # owning drafts everywhere is not heading a department
+    assert get(w, MID, FINANCE).status_code == 403 and get(w, LEAF, SUP).status_code == 403      # never outside their departments
 
 
-def test_a_head_is_never_shown_a_document_they_may_not_read_in_any_figure_or_list(w):
-    doc(w, 1, HELP, status="pending_review", owner=TOP)                    # TOP's: late approval, stuck-looking, listed
+def test_a_reader_is_never_shown_a_document_they_may_not_read_in_any_figure_or_list(w):
+    doc(w, 1, HELP, status="pending_review", owner=READER)                 # READER's own: late approval, listed
     ask(w, 1, "review", 11, NOW - 3 * DAY)
-    doc(w, 2, HELP, status="pending_review", owner=ADMIN)                  # not TOP's: stuck, late, on hold, no owner shown to them
+    doc(w, 2, HELP, status="pending_review", owner=ADMIN)                  # a draft not in force: stuck, late, no owner shown to them
     ask(w, 2, "review", 12, NOW - 20 * DAY)
     doc(w, 3, HELP, status="pending_review", owner=None)                   # nobody's
-    doc(w, 4, HELP, status="published", owner=ADMIN)                       # not TOP's: an overdue acknowledgement
+    doc(w, 4, HELP, status="published", owner=ADMIN)                       # in force: READER reads it; an overdue acknowledgement
     ask(w, 4, "acknowledgement", 13, NOW - DAY)
     w.db.commit()
-    mine, everything = figures(w, TOP), figures(w, ADMIN)
-    assert (mine["totals"]["documents"], everything["totals"]["documents"]) == (1, 4)
+    mine, everything = figures(w, READER), figures(w, ADMIN)
+    assert (mine["totals"]["documents"], everything["totals"]["documents"]) == (2, 4)
     assert (mine["issues"]["late_approvals"], everything["issues"]["late_approvals"]) == (1, 2)
     assert (mine["issues"]["stuck"], everything["issues"]["stuck"]) == (0, 2)         # doc 1's review is 3 days late: not stuck yet; 2 and 3 are
     assert (mine["issues"]["no_owner"], everything["issues"]["no_owner"]) == (0, 1)
-    assert (mine["issues"]["late_acknowledgements"], everything["issues"]["late_acknowledgements"]) == (0, 1)
+    assert (mine["issues"]["late_acknowledgements"], everything["issues"]["late_acknowledgements"]) == (1, 1)
     assert (mine["requests"]["review"]["overdue"], everything["requests"]["review"]["overdue"]) == (1, 2)
-    assert [r["document_id"] for r in mine["waiting"]] == [1] and [r["document_id"] for r in everything["waiting"]] == [2, 1, 4]    # 4: the acknowledgement
+    assert [r["document_id"] for r in mine["waiting"]] == [1, 4] and [r["document_id"] for r in everything["waiting"]] == [2, 1, 4]    # 4: the acknowledgement
     assert mine["waiting"][0]["waiting_for"] == ["Person 11"]
-    assert ids_of(w, "late_approvals", TOP)["ids"] == [1] and ids_of(w, "late_approvals")["ids"] == [1, 2]
-    assert ids_of(w, "stuck", TOP)["ids"] == [] and ids_of(w, "stuck")["ids"] == [2, 3]
-    assert ids_of(w, "late_acknowledgements", TOP) == {"ids": [], "total": 0} and ids_of(w, "late_acknowledgements")["ids"] == [4]
-    assert {t["doc_type"] for t in mine["by_type"]} == {"policy"} and sum(t["count"] for t in mine["by_type"]) == 1
+    assert ids_of(w, "late_approvals", READER)["ids"] == [1] and ids_of(w, "late_approvals")["ids"] == [1, 2]
+    assert ids_of(w, "stuck", READER)["ids"] == [] and ids_of(w, "stuck")["ids"] == [2, 3]
+    assert ids_of(w, "late_acknowledgements", READER)["ids"] == [4] and ids_of(w, "late_acknowledgements")["ids"] == [4]
+    assert {t["doc_type"] for t in mine["by_type"]} == {"policy"} and sum(t["count"] for t in mine["by_type"]) == 2
     assert mine["stages"] == [{"key": "stage:review:Review", "name": "Review", "kind": "review", "count": 1}]
+    # the head of the department all four are filed in (LEAF) reads them all: their figures are the administrator's for that department
+    for key in ("totals", "issues", "requests"):
+        assert figures(w, LEAF, HELP)[key] == figures(w, ADMIN, HELP)[key], key
+    assert [r["document_id"] for r in figures(w, LEAF, HELP)["waiting"]] == [2, 1, 4]
 
 
 def test_another_organisations_rows_are_never_counted_or_listed(w):
@@ -288,7 +294,7 @@ def test_another_organisations_rows_are_never_counted_or_listed(w):
         assert [s["name"] for s in f["stages"]] == ["Review"]
     reader = figures(w, READER)                                            # reads our published one only (doc 4 was never published)
     assert reader["totals"]["documents"] == 1 and reader["requests"]["review"]["pending"] == 0 and reader["waiting"] == [] and reader["stages"] == []
-    assert figures(w, TOP)["totals"]["documents"] == 0
+    assert figures(w, TOP)["totals"]["documents"] == 2                     # heads Operations: reads both of ours there, none of the other organisation's
     assert [ids_of(w, k)["ids"] for k in S.KINDS] == [[], [4], [], []]
     assert get(w, ADMIN, 900).status_code == 404 and get(w, TOP, 900).status_code == 404
     assert {c["name"] for c in get(w, ADMIN).json()["choices"]} == {"Whole organisation", "Finance", "Legacy", "Operations", "Support", "Helpdesk", "No department"}
@@ -551,9 +557,62 @@ def test_every_figure_has_the_address_that_opens_the_library_on_it(w):
         assert scoped["links"][f"issues.{kind}"] == {"dept": str(SUP), "attn": kind}
     for row in scoped["by_type"]:
         assert row["key"] in scoped["links"] and row["in_force_key"] in scoped["links"]
-    for row in scoped["by_status"] + scoped["stages"]:
+    for row in scoped["by_status"] + scoped["stages"] + scoped["by_department"]:
         assert row["key"] in scoped["links"]
-    assert all(v.get("dept") in (None, str(SUP)) for v in scoped["links"].values())          # every address carries the scope; none says another
+    # every address carries the scope, none says another department; the rows of the department table carry their own (the scope or under it)
+    assert all(v.get("dept") in (None, str(SUP)) for k, v in scoped["links"].items() if not k.startswith("dept:"))
+    assert scoped["links"][f"dept:{HELP}"] == {"dept": str(HELP)} and scoped["links"][f"dept:{HELP}:in_force"] == {"dept": str(HELP), "status": "published"}
+    assert scoped["links"][f"dept:{SUP}:in_progress"] == {"dept": str(SUP), "status": "draft,pending_review,pending_approval,approved"}
+    assert scoped["links"][f"dept:{SUP}:overdue_reviews"] == {"dept": str(SUP), "review": "overdue"}
+    assert whole["links"]["dept:" + str(OPS)] == {"dept": str(OPS)} and none["links"] == {k: v for k, v in none["links"].items() if not k.startswith("dept:")}
+
+
+# ── the table by department ──────────────────────────────────────────────────
+
+def test_by_department_is_the_tree_of_the_scope_with_what_is_in_each_department_and_below_it(w):
+    """Operations (10) > Support (11) > Helpdesk (12); Finance (13) > Legacy (14, switched off)."""
+    doc(w, 1, OPS, status="draft")                                         # in progress, directly in Operations
+    doc(w, 2, SUP, next_review_date=NOW - DAY)                             # in force, review overdue
+    doc(w, 3, SUP, owner=None)                                             # in force, no owner: an issue
+    doc(w, 4, HELP, status="pending_review"); ask(w, 4, "review", 11, NOW - 30 * DAY)       # in progress, late and stuck: an issue
+    doc(w, 5, HELP, status="archived")                                     # archived: in no figure
+    doc(w, 6, FINANCE)                                                     # in force
+    doc(w, 7, None)                                                        # no department
+    doc(w, 8, 4242)                                                        # a department that is gone (old data): in the totals, in no row
+    w.db.commit()
+    whole = figures(w, ADMIN)
+    rows = {r["department_id"]: r for r in whole["by_department"]}
+    # picker order (A-Z, each followed by what is under it); a switched-off department with nothing in it is left out; "No department" is last
+    assert [r["name"] for r in whole["by_department"]] == ["Finance", "Operations", "Support", "Helpdesk", "No department"]
+    assert [r["depth"] for r in whole["by_department"]] == [0, 0, 1, 2, 0]
+    assert [r["level_label"] for r in whole["by_department"]] == ["Department", "Department", "Sub-department", "Unit", ""]
+    figs = lambda r: (r["own"], r["documents"], r["in_force"], r["in_progress"], r["overdue_reviews"], r["issues"])      # noqa: E731
+    assert figs(rows[OPS]) == (1, 4, 2, 2, 1, 2)                           # itself and below: 1, 2, 3, 4 (not the archived 5)
+    assert figs(rows[SUP]) == (2, 3, 2, 1, 1, 2)
+    assert figs(rows[HELP]) == (1, 1, 0, 1, 0, 1)
+    assert figs(rows[FINANCE]) == (1, 1, 1, 0, 0, 0)
+    assert figs(rows[None]) == (1, 1, 1, 0, 0, 0)
+    assert rows[HELP]["path"] == ["Operations", "Support", "Helpdesk"] and rows[HELP]["level"] == 3 and rows[None]["path"] == []
+    assert whole["totals"]["documents"] == 7                               # the one in a gone department is in the totals and in no row
+    # the owner (head) of each department is named; a department with none says so
+    assert (rows[OPS]["owner"], rows[SUP]["owner"], rows[HELP]["owner"], rows[FINANCE]["owner"]) == ("Tom", "Mia", "Leo", "Fay") and rows[None]["owner"] is None
+    # the scope is the root: a department shows itself and what is under it, depth counted from it
+    sup = figures(w, ADMIN, SUP)["by_department"]
+    assert [(r["name"], r["depth"]) for r in sup] == [("Support", 0), ("Helpdesk", 1)] and figs(sup[0]) == figs(rows[SUP])
+    assert [r["name"] for r in figures(w, ADMIN, HELP)["by_department"]] == ["Helpdesk"]
+    assert figures(w, ADMIN, "none")["by_department"] == []                # "No department" is no tree
+    # a switched-off department shows once something is filed in it (and its parent with it)
+    doc(w, 9, LEGACY)
+    w.db.commit()
+    again = figures(w, ADMIN)["by_department"]
+    assert [r["name"] for r in again] == ["Finance", "Legacy", "Operations", "Support", "Helpdesk", "No department"]
+    assert next(r for r in again if r["name"] == "Legacy")["is_active"] is False and figs(next(r for r in again if r["name"] == "Finance")) == (1, 2, 2, 0, 0, 0)
+    # a head without a library right gets the table of their own departments, with the numbers of what they read (all of it)
+    mine = figures(w, MID)["by_department"]
+    assert [(r["name"], r["documents"]) for r in mine] == [("Support", 3), ("Helpdesk", 1)]
+    # the library reader's table counts what they read: the draft in Operations and the late one in the Helpdesk are not theirs
+    reader = {r["name"]: r["documents"] for r in figures(w, READER)["by_department"]}
+    assert reader["Operations"] == 2 and reader["Helpdesk"] == 0 and reader["Support"] == 2
 
 
 # ── queries, writes ──────────────────────────────────────────────────────────
@@ -625,7 +684,10 @@ def test_the_response_has_the_documented_shape(w):
     r = get(w, ADMIN, HELP)
     assert r.status_code == 200
     body = r.json()
-    assert list(body) == ["scope", "choices", "as_of", "totals", "by_type", "by_status", "stages", "requests", "waiting", "reviews", "issues", "links"]
+    assert list(body) == ["scope", "choices", "as_of", "totals", "by_type", "by_status", "by_department", "stages", "requests", "waiting", "reviews", "issues",
+                          "links"]
+    assert set(body["by_department"][0]) == {"key", "department_id", "name", "path", "level", "level_label", "depth", "is_active", "owner", "own", "documents",
+                                             "in_force", "in_progress", "overdue_reviews", "issues"}
     assert set(body["scope"]) == {"value", "department_id", "name", "path", "level", "level_label", "whole_organisation", "includes_below"}
     assert set(body["choices"][0]) == {"value", "department_id", "name", "path", "level", "level_label", "is_active"}
     assert set(body["waiting"][0]) == {"document_id", "title", "kind", "stage", "waiting_for", "waiting_count", "due_date", "days_late"}

@@ -709,6 +709,8 @@ def get_me(
     role_ids = platform_role_ids(db, user)
     roles = db.query(Role).filter(Role.id.in_(role_ids)).all() if role_ids else []
     is_admin = is_tenant_admin(db, user)
+    from ..services import org_departments       # (inside the function, like the other late imports of this module)
+    heads_department = bool(tenant and org_departments.headed_by(db, user.id, [tenant.id]))
 
     if is_admin:
         permissions = ["*:*:*"]
@@ -739,6 +741,8 @@ def get_me(
             "primary_tenant_name": tenant.name if tenant else None,
             "roles": [{"id": r.id, "name": r.name} for r in roles],
             "is_admin": is_admin,
+            # the owner (head) of a department: the menu shows them the Documents area (the sidebar and the top bar read it, nothing else)
+            "heads_department": heads_department,
             "permissions": permissions,
             "allowed_modules": allowed_modules,
         },

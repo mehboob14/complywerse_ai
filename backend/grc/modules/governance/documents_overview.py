@@ -3,9 +3,10 @@ may read the whole library - how many documents, of which types, at which status
 due and what needs attention - for the whole organisation or for one department and everything under it.
 
 Who may ask: whoever reads the whole library (an administrator, or a platform-given role holding ``governance:policies:*``) and the
-head of at least one department (``org_departments.headed_by``). Nobody else (403). A head without a library right is held to the
-library's own rule: only the documents they own, wrote or are asked about are counted (``permissions.visible_filter``, applied to
-every figure and to the ``ids`` list); the overview never widens what anyone may read.
+head of at least one department (``org_departments.headed_by``). Nobody else (403). Every figure and the ``ids`` list count only what
+``permissions.visible_filter`` lets the viewer read, so the overview never widens what anyone may read. A head without a library
+right reads every document of the departments they head and of everything under them (``permissions.headed_units``, the user's
+decision of 2026-11-05) and, besides, what they own, wrote or are asked about.
 
 Scope. A whole-organisation reader may pick "Whole organisation", any department (it counts everything under it, switched-off
 departments included) or "No department" (``department_id IS NULL``); a head picks the departments they head and what is under them.
@@ -27,6 +28,10 @@ Definitions (every figure counts the documents of the scope that the viewer may 
   version in force (published, or a newer version on its way over a published one).
 * ``issues.documents`` = the documents with at least one of the issues (no owner, expired, exception, stuck, on hold, late approvals,
   late acknowledgements), each counted once. Request counts are people asked, not documents.
+* ``by_department`` = the tree of the scope in one table: a row for the department asked for and for each department under it (the
+  whole organisation: every department, then "No department"), in picker order, each counting the documents filed in it **and below it**
+  (documents, in force, in progress, overdue reviews, documents with an issue) with the figures defined above and its own count apart
+  (``own``); a switched-off department with nothing in it is left out. "No department" is the one scope that has no rows.
 
 Every figure has its address in ``links`` (the library's own parameters, ``dept`` first): the fixed ones by their path in the answer
 ("totals.in_force", "reviews.overdue", "issues.stuck", "requests.review.overdue"), the rows of a list by their ``key`` ("type:policy",
@@ -284,6 +289,67 @@ def _waiting(db: Session, longest: list, stages: Dict[int, List[Tuple[int, str, 
     return out
 
 
+def _by_department(db: Session, who: Access, scope: Scope, live: Dict[int, Any], flagged: Set[int], now: datetime) -> List[dict]:
+    """The scope as a table (see the module docstring): one row per department, the documents in it and below it, in picker order. The
+    keys of the figures that open the library are ``dept:<id>`` (documents), ``dept:<id>:in_force``, ``:in_progress`` and ``:overdue_reviews``."""
+    if scope.no_department:
+        return []
+    tree = who.tree
+    ids = scope.ids if scope.ids is not None else set(tree.rows)
+    mine: Dict[Optional[int], Counter] = defaultdict(Counter)       # filed in the department itself
+    below: Dict[int, Counter] = defaultdict(Counter)                # filed in it or under it
+    for d in live.values():
+        if d.department_id is not None and d.department_id not in tree.rows:
+            continue                                                # a department that is gone (old data): in the totals, in no row
+        one = Counter(documents=1)
+        if d.status == "published":
+            one["in_force"] = 1
+        if d.status in IN_PROGRESS:
+            one["in_progress"] = 1
+        if _reviewable(d) and d.next_review_date is not None and d.next_review_date < now:
+            one["overdue_reviews"] = 1
+        if d.id in flagged:
+            one["issues"] = 1
+        mine[d.department_id].update(one)
+        if d.department_id is not None:
+            for node in tree.path(d.department_id):
+                if node.id in ids:
+                    below[node.id].update(one)
+
+    labels = org_departments.level_labels(db, who.tenant_id)
+    root = scope.department.id if scope.department is not None else None
+    base = tree.level(root) if root is not None else 1
+    heads = {n: tree.rows[n].department_head_user_id for n in ids if tree.rows[n].department_head_user_id}
+    owners = doc_lifecycle._names(db, set(heads.values())) if heads else {}
+    by_name = lambda n: (tree.rows[n].name.casefold(), n)           # noqa: E731  (the picker order)
+    rows: List[dict] = []
+
+    def row(node: Optional[int], name: str, path: List[str], level: int, depth: int, active: bool, owner: Optional[str], total: Counter, own: int) -> dict:
+        key = f"dept:{node if node is not None else NONE}"
+        return {"key": key, "department_id": node, "name": name, "path": path, "level": level,
+                "level_label": labels[min(level, org_departments.MAX_DEPTH) - 1] if level else "", "depth": depth, "is_active": active,
+                "owner": owner, "own": own, "documents": total["documents"], "in_force": total["in_force"],
+                "in_progress": total["in_progress"], "overdue_reviews": total["overdue_reviews"], "issues": total["issues"]}
+
+    def walk(node: int) -> None:
+        department = tree.rows[node]
+        total = below[node]
+        shown = node == root or department.is_active is not False or total["documents"] > 0 or any(
+            tree.rows[x].is_active is not False for x in tree.subtree(node))
+        if shown:
+            rows.append(row(node, department.name, [d.name for d in tree.path(node)], tree.level(node), tree.level(node) - base,
+                            department.is_active is not False, owners.get(department.department_head_user_id), total, mine[node]["documents"]))
+        for child in sorted(tree.children.get(node, []), key=by_name):
+            if child in ids:
+                walk(child)
+
+    for top in ([root] if root is not None else sorted((n for n in tree.rows if tree.parent[n] is None), key=by_name)):
+        walk(top)
+    if scope.ids is None and mine[None]["documents"]:
+        rows.append(row(None, "No department", [], 0, 0, True, None, mine[None], mine[None]["documents"]))
+    return rows
+
+
 def summary(db: Session, user: GRCUser, department: Optional[str] = None, now: Optional[datetime] = None) -> dict:
     now = now or datetime.utcnow()
     who = access(db, user)
@@ -374,9 +440,16 @@ def summary(db: Session, user: GRCUser, department: Optional[str] = None, now: O
                   "issues.on_hold": link(attn="on_hold"), "issues.late_acknowledgements": link(attn="late_acknowledgements"),
                   "issues.late_approvals": link(attn="late_approvals")})
 
+    by_department = _by_department(db, who, scope, live, flagged, now)
+    for r in by_department:
+        where = {"dept": str(r["department_id"]) if r["department_id"] is not None else NONE}
+        links.update({r["key"]: where, f"{r['key']}:in_force": {**where, "status": "published"},
+                      f"{r['key']}:in_progress": {**where, "status": ",".join(IN_PROGRESS)},
+                      f"{r['key']}:overdue_reviews": {**where, "review": "overdue"}})
+
     return {"scope": _scope_view(scope), "choices": who.choices, "as_of": now.isoformat(), "totals": totals, "by_type": by_type,
-            "by_status": by_status_rows, "stages": stage_rows, "requests": requests, "waiting": _waiting(db, longest, stages, live, now),
-            "reviews": reviews, "issues": issues, "links": links}
+            "by_status": by_status_rows, "by_department": by_department, "stages": stage_rows, "requests": requests,
+            "waiting": _waiting(db, longest, stages, live, now), "reviews": reviews, "issues": issues, "links": links}
 
 
 def ids(db: Session, user: GRCUser, kind: str, department: Optional[str] = None, now: Optional[datetime] = None) -> dict:

@@ -17,6 +17,9 @@ Who may read it (the user's decisions of 2026-10-17, "rights or asked"):
   D29) and one restored from the archive until it is published again only if they may also edit or publish documents, or they
   are asked about it (below).
 * Its owner and its author.
+* The owner (head) of a department reads every document of that department and of every department under it, drafts and
+  archived ones included (the user's decision of 2026-11-05: the owner of a unit reads all of the unit). It is reading only: it
+  gives no right to change, publish or delete, and no sight of a newer version on its way over the one in force.
 * Anyone asked about it: a request (review, approval, acknowledgement) still waiting, or one answered while staff read the
   document or while it was never published (never once archived, nor restored until it is published again), or its sign-off
   naming them as prepared by, reviewer or approver - by name, by a role the platform gave them, or by a team they belong to or lead.
@@ -239,9 +242,28 @@ def asked_ids(db: Session, user: GRCUser):
         O.status == "pending", and_(O.status != "cancelled", O.document_id.in_(answered)))).union(_assigned(db, user))
 
 
+def headed_units(db: Session, user: GRCUser) -> Set[int]:
+    """The ids of the departments the person is the owner (head) of and of everything under them: the documents filed in these are
+    theirs to read. Empty for nearly everyone, and then costs one small query."""
+    tenants = list(get_user_tenants(user, db))
+    heads = org_departments.headed_by(db, user.id, tenants)
+    if not heads:
+        return set()
+    units: Set[int] = set()
+    for tenant_id in tenants:
+        tree = org_departments.Tree.load(db, tenant_id)
+        for head in heads & set(tree.rows):
+            units |= tree.subtree(head)
+    return units
+
+
 def _own_or_asked(db: Session, user: GRCUser):
     G = GovernanceDocument
-    return or_(G.owner_id == user.id, G.author_id == user.id, G.id.in_(asked_ids(db, user)))
+    units = headed_units(db, user)
+    mine = [G.owner_id == user.id, G.author_id == user.id, G.id.in_(asked_ids(db, user))]
+    if units:
+        mine.append(G.department_id.in_(units))
+    return or_(*mine)
 
 
 def readable_ids(db: Session, user: GRCUser):
@@ -274,6 +296,8 @@ def staff_reads(doc: GovernanceDocument) -> bool:
 
 def can_read(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
     if user.id in (doc.owner_id, doc.author_id):
+        return True
+    if doc.department_id is not None and doc.department_id in headed_units(db, user):     # the owner of its department, or of one above it
         return True
     library, auditor, drafts = _rights(db, user)
     if drafts or auditor or (library and staff_reads(doc)):
