@@ -138,24 +138,24 @@ test('the page sizes offered include the one the page starts with, smallest firs
 // ── CSV ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('the CSV has the data columns, named as the table names them, in the table\'s order', () => {
-  assert.equal(toCsv(cols, []), 'Title,Status,Priority,Created,Expiry');
+  assert.equal(toCsv(cols, []), 'Title,Status,Priority,Type,Created,Expiry');
 });
 
 test('the CSV holds the raw values: the status as the server names it, the date as it was sent, nothing for no expiry', () => {
   const rows = [
-    row({ title: 'Legacy VPN', status: 'pending_approval', priority: 'high', created_at: '2026-10-01T09:30:00', expiry_date: null }),
+    row({ title: 'Legacy VPN', status: 'pending_approval', priority: 'high', exception_type_label: 'Technical', created_at: '2026-10-01T09:30:00', expiry_date: null }),
     row({ title: 'Old FTP', status: 'approved', priority: 'critical', created_at: '2026-09-20T07:00:00', expiry_date: '2026-12-31' }),
   ];
   assert.equal(toCsv(cols, rows), [
-    'Title,Status,Priority,Created,Expiry',
-    'Legacy VPN,pending_approval,high,2026-10-01T09:30:00,',
-    'Old FTP,approved,critical,2026-09-20T07:00:00,2026-12-31',
+    'Title,Status,Priority,Type,Created,Expiry',
+    'Legacy VPN,pending_approval,high,Technical,2026-10-01T09:30:00,',
+    'Old FTP,approved,critical,,2026-09-20T07:00:00,2026-12-31',          // no type: nothing
   ].join('\n'));
 });
 
 test('commas, quotes and line breaks in a value are quoted so the line stays one row', () => {
   const rows = [row({ title: 'He said "no", then\nleft' })];
-  assert.equal(toCsv(cols, rows).split('\n').slice(1).join('\n'), '"He said ""no"", then\nleft",draft,medium,2026-10-01T09:30:00,');
+  assert.equal(toCsv(cols, rows).split('\n').slice(1).join('\n'), '"He said ""no"", then\nleft",draft,medium,,2026-10-01T09:30:00,');
   // each of the three on its own
   assert.equal(toCsv([cols[0]], [row({ title: 'plain' }), row({ title: 'a,b' })]), 'Title\nplain\n"a,b"');
   assert.equal(toCsv([cols[0]], [row({ title: 'say "hi"' })]), 'Title\n"say ""hi"""');
@@ -164,7 +164,7 @@ test('commas, quotes and line breaks in a value are quoted so the line stays one
 
 test('a column switched off is not exported, and a column that only draws never is', () => {
   const rows = [row({ title: 'One', status: 'draft' })];
-  assert.equal(toCsv(cols.filter((c) => c.id !== 'priority' && c.id !== 'created'), rows), 'Title,Status,Expiry\nOne,draft,');
+  assert.equal(toCsv(cols.filter((c) => c.id !== 'priority' && c.id !== 'created' && c.id !== 'type'), rows), 'Title,Status,Expiry\nOne,draft,');
   assert.equal(toCsv([{ id: 'policy', header: 'Policy' }, ...cols.slice(0, 1)], rows), 'Title\nOne');
 });
 

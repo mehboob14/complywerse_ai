@@ -46,7 +46,7 @@ import {
   GovernanceDashboard,
   AssetType,
 } from '@/types';
-import type { ExceptionRule, PreviewAnswer, RulePayload, RulesAnswer } from './exceptionRules';
+import type { ExceptionRule, PreviewAnswer, RulePayload, RulesAnswer, TypesAnswer } from './exceptionRules';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
@@ -730,8 +730,11 @@ export const exceptionRulesApi = {
   update: (id: number, data: RulePayload) => apiClient.put<ExceptionRule>(`/governance/exception-approval-rules/${id}`, data),
   remove: (id: number) => apiClient.delete<{ message: string; id: number }>(`/governance/exception-approval-rules/${id}`),
   /** which rule an exception like this would follow, and who each step would ask */
-  preview: (data: { department_id: number | null; priority: string | null; doc_type: string | null }) =>
+  preview: (data: { department_id: number | null; priority: string | null; doc_type: string | null; exception_type?: string | null }) =>
     apiClient.post<PreviewAnswer>('/governance/exception-approval-rules/preview', data),
+  /** the organisation's exception types (anyone signed in reads them; setting them needs governance:settings:edit) */
+  types: () => apiClient.get<TypesAnswer>('/governance/exception-approval-rules/types'),
+  setTypes: (types: Array<{ value?: string; label: string; archived?: boolean }>) => apiClient.put<TypesAnswer>('/governance/exception-approval-rules/types', { types }),
 };
 
 export const documentsApi = {

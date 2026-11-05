@@ -1,13 +1,13 @@
 'use client';
 
-// Governance > Settings > Exception approvals: "Which rule applies?" Pick what an exception is like (its department, priority and the kind of policy) and the
+// Governance > Settings > Exception approvals: "Which rule applies?" Pick what an exception is like (its department, priority, the kind of policy and its type) and the
 // card says, as the choice changes, which rule it would follow and who each step would ask now (POST .../preview: the rules as they are saved), and warns of a
 // step nobody could act at (the server's sentences, as they are). No rule: anyone allowed to approve exceptions decides, as before. Only people who can change
 // the rules ask it (the server answers nobody else).
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { exceptionRulesApi } from '@/lib/api';
-import { RULES_KEY, RULE_NOTES, KIND_ORDER, PRIORITY_ORDER, previewSteps, scopeOf, type ExceptionRule, type RuleOptions } from '@/lib/exceptionRules';
+import { RULES_KEY, RULE_NOTES, KIND_ORDER, PRIORITY_ORDER, previewSteps, scopeOf, typeChoiceLabel, type ExceptionRule, type ExceptionTypeOption, type RuleOptions } from '@/lib/exceptionRules';
 import { statusLabel } from '@/lib/format';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { ErrorState, FormField, Notice, Select, SkeletonLines } from '@/components/ui/ds';
@@ -16,17 +16,20 @@ import { DepartmentSelect } from '@/components/governance/DepartmentSelect';
 
 const CHIP = 'inline-flex max-w-full items-center rounded-ds-control border border-ds-border bg-ds-surface px-[6px] text-ds-label text-ds-fg-body [overflow-wrap:anywhere]';
 
-export function RuleTester({ rules, options, levelLabels }: { rules: ExceptionRule[]; options: RuleOptions | null; levelLabels?: readonly string[] }) {
+export function RuleTester({ rules, options, types, levelLabels }: {
+  rules: ExceptionRule[]; options: RuleOptions | null; types: readonly ExceptionTypeOption[]; levelLabels?: readonly string[];
+}) {
   const [department, setDepartment] = useState('');
   const [priority, setPriority] = useState('');
   const [kind, setKind] = useState('');
-  const asked = department !== '' || priority !== '' || kind !== '';
+  const [type, setType] = useState('');
+  const asked = department !== '' || priority !== '' || kind !== '' || type !== '';
   const names = useMemo(() => new Map((options?.users ?? []).map((u) => [u.id, u.name])), [options]);
 
   // the key starts with the rules' own: saving, switching or deleting a rule asks again
   const answer = useQuery({
-    queryKey: [...RULES_KEY, 'preview', department, priority, kind],
-    queryFn: async () => (await exceptionRulesApi.preview({ department_id: department ? Number(department) : null, priority: priority || null, doc_type: kind || null })).data,
+    queryKey: [...RULES_KEY, 'preview', department, priority, kind, type],
+    queryFn: async () => (await exceptionRulesApi.preview({ department_id: department ? Number(department) : null, priority: priority || null, doc_type: kind || null, exception_type: type || null })).data,
     enabled: asked,
     retry: (n, e) => n < 2 && canRetry(e),
   });
@@ -42,7 +45,7 @@ export function RuleTester({ rules, options, levelLabels }: { rules: ExceptionRu
         <h3 className="!text-ds-section !text-ds-fg">Which rule applies?</h3>
         <InfoTip text={RULE_NOTES.tester} label="About which rule applies" />
       </div>
-      <div className="mt-[8px] grid grid-cols-1 gap-[12px] sm:grid-cols-3">
+      <div className="mt-[8px] grid grid-cols-1 gap-[12px] sm:grid-cols-2 lg:grid-cols-4">
         <FormField label="Department">
           <DepartmentSelect label="Department" value={department} onChange={setDepartment} placeholder="Not set" />
         </FormField>
@@ -54,6 +57,11 @@ export function RuleTester({ rules, options, levelLabels }: { rules: ExceptionRu
         <FormField label="Policy kind">
           <Select placeholder="Not set" value={kind} onChange={(e) => setKind(e.target.value)}>
             {(options?.doc_types?.length ? options.doc_types : KIND_ORDER).map((w) => <option key={w} value={w}>{statusLabel(w)}</option>)}
+          </Select>
+        </FormField>
+        <FormField label="Type">
+          <Select placeholder="Not set" value={type} onChange={(e) => setType(e.target.value)}>
+            {types.filter((t) => !t.archived).map((t) => <option key={t.value} value={t.value}>{typeChoiceLabel(t)}</option>)}
           </Select>
         </FormField>
       </div>

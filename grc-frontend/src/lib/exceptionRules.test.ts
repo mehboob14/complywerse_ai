@@ -5,9 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, askOptions, blankStep, conditionChips, conditionsLong, emptyRuleForm, formFromRule, hasRuleErrors, payloadOf,
+  KIND_ORDER, MAX_STEPS, PRIORITY_ORDER, RULES_KEY, RULE_NOTES, TYPE_NAME_MAX, TYPE_NOTES, askOptions, blankStep, conditionChips, conditionsLong, emptyRuleForm, formFromRule, hasRuleErrors, payloadOf,
   payloadOfRule, personFromKey, personKey, personLabel, previewSteps, ruleErrors, ruleProblem, rulesSummary, sameRuleForm, scopeOf, slotLine, slotText, stepHow, stepText, stepsLine,
-  stepsLong, turnLine,
+  stepsLong, turnLine, sameTypes, typeChoiceLabel, typeChoices, typeDrafts, typeLabel, typeProblem, typesPayload,
   type ExceptionRule, type PreviewAnswer, type RuleForm, type RuleOptions, type RuleStep,
 } from './exceptionRules.ts';
 
@@ -16,7 +16,7 @@ const step = (over: Partial<RuleStep> = {}): RuleStep => ({
   people: [{ type: 'user', id: 7, label: 'App1' }], ...over,
 });
 const rule = (over: Partial<ExceptionRule> = {}): ExceptionRule => ({
-  id: 1, name: 'Support exceptions', department_id: 11, department_path: ['Operations', 'Support'], department_level: 2, priorities: ['high', 'critical'], doc_types: ['policy'],
+  id: 1, name: 'Support exceptions', department_id: 11, department_path: ['Operations', 'Support'], department_level: 2, priorities: ['high', 'critical'], doc_types: ['policy'], exception_types: [],
   steps: [step({ position: 1, name: 'Review', kind: 'review', allow_reject: false, people: [{ type: 'user', id: 3, label: 'Rev1' }, { type: 'user', id: 4, label: 'Rev2' }] }),
           step({ position: 2, people: [{ type: 'unit_owner', label: 'Owner of the unit' }] })],
   is_active: true, created_at: '2026-11-01T09:00:00', updated_at: '2026-11-01T09:00:00', ...over,
@@ -52,7 +52,11 @@ test('the conditions in a sentence for a screen reader: the priorities, the kind
   assert.equal(conditionsLong(rule()), 'Priority: High, Critical. Policy kind: Policy');
   assert.equal(conditionsLong(rule({ doc_types: [] })), 'Priority: High, Critical');
   assert.equal(conditionsLong(rule({ priorities: [], doc_types: ['policy', 'standard'] })), 'Policy kind: Policy, Standard');
-  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority and kind of policy');
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [] })), 'Any priority, kind of policy and type');
+  const types = [{ value: 'technical', label: 'Technical', archived: false }, { value: 'third_party', label: 'Third party', archived: true }];
+  assert.equal(conditionsLong(rule({ priorities: [], doc_types: [], exception_types: ['technical', 'third_party'] }), types), 'Type: Technical, Third party');
+  assert.equal(conditionsLong(rule({ exception_types: ['technical'] }), types), 'Priority: High, Critical. Policy kind: Policy. Type: Technical');
+  assert.deepEqual(conditionChips(rule({ exception_types: ['technical', 'gone'] }), types), ['High', 'Critical', 'Policy', 'Technical', 'gone']);      // a type the list no longer holds is shown as it was kept
 });
 
 test('the card says how many rules there are and how many are off', () => {
@@ -162,10 +166,10 @@ test('the pickers list the two owners, the roles with how many people hold them 
 // ── what the editor sends ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('what is sent: the name trimmed, the whole organisation as null, the conditions in a fixed order, people as the server takes them', () => {
-  const f = filled({ name: '  Support  ', department_id: '11', priorities: ['critical', 'low'], doc_types: ['standard', 'policy'] });
+  const f = filled({ name: '  Support  ', department_id: '11', priorities: ['critical', 'low'], doc_types: ['standard', 'policy'], exception_types: ['technical'] });
   f.steps[0].people = ['user:7', 'role:3', 'unit_owner'];
   assert.deepEqual(payloadOf(f), {
-    name: 'Support', department_id: 11, priorities: ['low', 'critical'], doc_types: ['policy', 'standard'], is_active: true,
+    name: 'Support', department_id: 11, priorities: ['low', 'critical'], doc_types: ['policy', 'standard'], exception_types: ['technical'], is_active: true,
     steps: [{ name: '', kind: 'approval', order: 'together', rule: 'all', min_count: null, due_days: null, allow_reject: true, allow_changes: true,
       people: [{ type: 'user', id: 7 }, { type: 'role', id: 3 }, { type: 'unit_owner' }] }],
   });
@@ -286,4 +290,49 @@ test('the notes say what the card used to say: which rule wins, when a rule appl
   assert.match(RULE_NOTES.none, /anyone allowed to approve exceptions decides, as before/);
   assert.match(RULE_NOTES.submitted, /applies when an exception is submitted.*already waiting keeps the steps it started with/);
   assert.match(RULE_NOTES.decides, /never decides it.*Only the people asked decide, administrators included/);
+});
+
+// ── the exception types (D59) ──
+
+test('a rule names exception types as one more condition; the form, the switch and the comparison carry them', () => {
+  const r = rule({ exception_types: ['technical'] });
+  assert.deepEqual(formFromRule(r).exception_types, ['technical']);
+  assert.deepEqual(formFromRule(rule()).exception_types, []);
+  assert.deepEqual(formFromRule({ ...rule(), exception_types: undefined as unknown as string[] }).exception_types, [], 'an answer from before types existed');
+  assert.deepEqual(payloadOfRule(r, false).exception_types, ['technical']);
+  assert.ok(!sameRuleForm(formFromRule(r), { ...formFromRule(r), exception_types: [] }));
+  assert.ok(sameRuleForm({ ...formFromRule(r), exception_types: ['a', 'b'] }, { ...formFromRule(r), exception_types: ['b', 'a'] }), 'chosen in any order');
+  assert.deepEqual(emptyRuleForm().exception_types, []);
+});
+
+test('the types a person may choose are those in use, and the one they hold even if it was removed; a removed one says so', () => {
+  const types = [{ value: 'technical', label: 'Technical', archived: false }, { value: 'third_party', label: 'Third party', archived: true }, { value: 'other', label: 'Other', archived: false }];
+  assert.deepEqual(typeChoices(types).map((t) => t.value), ['technical', 'other']);
+  assert.deepEqual(typeChoices(types, ['third_party']).map((t) => t.value), ['technical', 'third_party', 'other']);
+  assert.deepEqual(typeChoices(types, ['gone']).map((t) => [t.value, t.archived]), [['technical', false], ['other', false], ['gone', true]], 'a type the list does not hold at all is kept, named as it was');
+  assert.deepEqual(typeChoices(types, ['']).map((t) => t.value), ['technical', 'other']);
+  assert.equal(typeChoiceLabel(types[0]), 'Technical');
+  assert.equal(typeChoiceLabel(types[1]), 'Third party (removed)');
+  assert.equal(typeLabel('technical', types), 'Technical');
+  assert.equal(typeLabel('gone', types), 'gone');
+  assert.equal(typeLabel('x'), 'x');
+});
+
+test('the Types drawer starts with the list, checks the obvious, and sends every type in order (a new one without a value)', () => {
+  const saved = [{ value: 'technical', label: 'Technical', archived: false }, { value: 'third_party', label: 'Third party', archived: true }];
+  const drafts = typeDrafts(saved);
+  assert.deepEqual(drafts, saved);
+  assert.ok(sameTypes(drafts, typeDrafts(saved)));
+  assert.equal(typeProblem(drafts), '');
+  assert.equal(typeProblem([...drafts, { value: '', label: '  ', archived: false }]), 'Give every type a name.');
+  assert.equal(typeProblem([...drafts, { value: '', label: ' technical ', archived: false }]), "'technical' is listed twice.");
+  assert.equal(typeProblem([{ ...drafts[0], archived: true }, drafts[1]]), 'Keep at least one type.');
+  assert.equal(typeProblem([{ ...drafts[0], label: 'x'.repeat(TYPE_NAME_MAX + 1) }]), `A type's name is at most ${TYPE_NAME_MAX} characters.`);
+  assert.equal(typeProblem([drafts[0], { value: '', label: 'Third party', archived: false }, { value: 'third_party', label: 'Third party', archived: true }]), '', 'a removed type is not compared');
+  // what is sent: renamed ones keep their value, a new one has none, a removed one that was saved stays (archived), one added and removed again is not sent
+  const edited = [{ ...drafts[0], label: '  Technology ' }, drafts[1], { value: '', label: 'Cloud', archived: false }, { value: '', label: 'Oops', archived: true }];
+  assert.deepEqual(typesPayload(edited), [
+    { value: 'technical', label: 'Technology', archived: false }, { value: 'third_party', label: 'Third party', archived: true }, { label: 'Cloud', archived: false },
+  ]);
+  assert.ok(TYPE_NOTES.card.length > 20 && TYPE_NOTES.removed.length > 20);
 });

@@ -42,7 +42,7 @@ import { Summary } from './_Summary';
 
 const STATUS_OPTIONS = exceptionStatus.words.map((w) => ({ value: w, label: exceptionStatus.label(w) }));
 const PRIORITY_OPTIONS = ['critical', 'high', 'medium', 'low'].map((w) => ({ value: w, label: priorityStatus.label(w) }));
-const TOGGLEABLE = ['policy', 'status', 'priority', 'requester', 'created', 'expiry'];
+const TOGGLEABLE = ['policy', 'status', 'priority', 'type', 'requester', 'created', 'expiry'];
 
 /** Downloaded as `<name>.csv`; the text is toCsv's. */
 function downloadCsv(name: string, cols: DataCol<ExceptionItem>[], rows: ExceptionItem[]) {
@@ -229,6 +229,10 @@ export default function PolicyExceptionsPage() {
     },
     { key: 'status', header: 'Status', sortable: true, width: 'w-[152px]', card: 'meta', cell: (e) => <StatusCell exception={e} /> },
     { key: 'priority', header: 'Priority', sortable: true, width: 'w-[96px]', card: 'meta', cell: (e) => <StatusPill size="sm" {...statusPill(priorityStatus, e.priority)} /> },
+    {
+      key: 'type', header: 'Type', priority: 3, sortable: true, width: 'w-[120px]', card: 'meta',
+      cell: (e) => (e.exception_type_label ? <span className="line-clamp-2" title={e.exception_type_label}>{e.exception_type_label}</span> : <span className="text-ds-fg-muted">Not set</span>),
+    },
     { key: 'requester', header: 'Requester', priority: 3, width: 'w-[128px]', card: 'meta', cell: (e) => <PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /> },
     { key: 'created', header: 'Created', priority: 3, sortable: true, width: 'w-[100px]', cell: (e) => <span className="whitespace-nowrap tabular-nums">{momentDay(e.created_at)}</span> },
     {

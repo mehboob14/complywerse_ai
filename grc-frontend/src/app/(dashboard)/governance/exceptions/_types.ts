@@ -28,6 +28,9 @@ export interface ExceptionItem extends ExceptionFields {
   promoted_risk_id?: number | null;
   /** its own department, and the names from the top department down to the one it is raised for (its own, else its policy's) */
   department_id?: number | null;
+  /** its type: a value of the organisation's list, and its name (a type taken off the list is still named) */
+  exception_type?: string | null;
+  exception_type_label?: string | null;
   department_path?: string[];
   /** the department comes from its policy: none was chosen for the exception itself */
   department_inherited?: boolean;

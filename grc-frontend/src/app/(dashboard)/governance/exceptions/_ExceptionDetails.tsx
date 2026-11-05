@@ -142,6 +142,7 @@ export function ExceptionDetailsDrawer({ exception: e, onClose, onDecide, onWith
           <Fact label="Department">
             {department ? <>{department.text}{department.inherited && <Muted> · From the policy</Muted>}</> : <Muted>{NOT_SET}</Muted>}
           </Fact>
+          <Fact label="Type">{e.exception_type_label || e.exception_type || <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Requester"><PersonChip name={requesterOf(e)} emptyLabel={EMPTY} /></Fact>
           <Fact label="Effective date">{e.effective_date ? dayText(e.effective_date) : <Muted>{NOT_SET}</Muted>}</Fact>
           <Fact label="Expiry date">{e.expiry_date ? dayText(e.expiry_date) : <Muted>{NOT_SET}</Muted>}</Fact>

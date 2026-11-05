@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { Pencil, Plus, Power, ShieldCheck, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Power, ShieldCheck, Tags, Trash2 } from 'lucide-react';
 import { exceptionRulesApi } from '@/lib/api';
 import {
   RULES_KEY, RULE_NOTES, conditionChips, conditionsLong, payloadOfRule, rulesSummary, scopeOf, stepsLine, stepsLong, type ExceptionRule,
@@ -20,6 +20,7 @@ import { Button, EmptyState, Menu, ReadOnlyNote, RegisterTable, SectionCard, Sta
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { RuleDrawer } from './_RuleDrawer';
 import { RuleTester } from './_RuleTester';
+import { TypesDrawer } from './_TypesDrawer';
 
 const CHIP = 'inline-flex max-w-full items-center rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[6px] text-ds-label text-ds-fg-body';
 
@@ -31,10 +32,12 @@ export function ExceptionApprovalsSection() {
     retry: (n, e) => n < 2 && canRetry(e),                          // a refusal (403) is not tried again: it is said at once
   });
   const [editing, setEditing] = useState<ExceptionRule | 'new' | null>(null);
+  const [typing, setTyping] = useState(false);
 
   const rules = answer.data?.rules ?? [];
   const canEdit = !!answer.data?.can_edit;
   const labels = answer.data?.level_labels;
+  const types = answer.data?.exception_types ?? [];
   const failed = answer.isError && !answer.data;
   const empty = !answer.isLoading && !failed && rules.length === 0;
 
@@ -83,10 +86,10 @@ export function ExceptionApprovalsSection() {
     {
       key: 'when', header: 'When', priority: 3, width: 'w-[152px]', card: 'meta',
       cell: (r) => {
-        const chips = conditionChips(r);
+        const chips = conditionChips(r, types);
         return chips.length === 0 ? <span className="text-ds-fg-muted">Any</span> : (
           <>
-            <span className="sr-only">{conditionsLong(r)}</span>
+            <span className="sr-only">{conditionsLong(r, types)}</span>
             <span aria-hidden className="flex flex-wrap gap-[4px]">{chips.map((c, i) => <span key={i} className={CHIP}>{c}</span>)}</span>
           </>
         );
@@ -102,6 +105,7 @@ export function ExceptionApprovalsSection() {
   ];
 
   const add = <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setEditing('new')}>Add rule</Button>;
+  const typesButton = <Button leftIcon={<Tags aria-hidden />} onClick={() => setTyping(true)} title="The kinds of exception your organisation tells apart">Types</Button>;
 
   return (
     <>
@@ -110,7 +114,7 @@ export function ExceptionApprovalsSection() {
         title="Exception approvals"
         info={RULE_NOTES.card}
         meta={answer.data && !empty ? rulesSummary(rules) : undefined}
-        actions={canEdit ? (!empty && !failed ? add : undefined) : answer.data ? (
+        actions={canEdit ? (failed ? undefined : <>{typesButton}{!empty && add}</>) : answer.data ? (
           <ReadOnlyNote>
             View only
             <InfoTip text="Only an administrator, or someone allowed to change governance settings, can change these rules." label="Why the exception approvals are view only" />
@@ -136,10 +140,11 @@ export function ExceptionApprovalsSection() {
             )}
           />
         )}
-        {canEdit && rules.length > 0 && <RuleTester rules={rules} options={answer.data?.options ?? null} levelLabels={labels} />}
+        {canEdit && rules.length > 0 && <RuleTester rules={rules} options={answer.data?.options ?? null} types={types} levelLabels={labels} />}
       </SectionCard>
 
-      {editing && <RuleDrawer key={editing === 'new' ? 'new' : editing.id} rule={editing === 'new' ? null : editing} options={answer.data?.options ?? null} onClose={() => setEditing(null)} />}
+      {editing && <RuleDrawer key={editing === 'new' ? 'new' : editing.id} rule={editing === 'new' ? null : editing} options={answer.data?.options ?? null} types={types} onClose={() => setEditing(null)} />}
+      {typing && <TypesDrawer types={types} onClose={() => setTyping(false)} />}
       {confirmDialog}
     </>
   );

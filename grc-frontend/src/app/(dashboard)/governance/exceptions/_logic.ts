@@ -22,6 +22,8 @@ export interface ExceptionFields {
   expiry_date: string | null;
   document_title?: string;
   policy_name?: string;
+  /** the name of its type, when it has one */
+  exception_type_label?: string | null;
   /** the server sends the user's id (a number); older payloads a name */
   requested_by?: string | number;
   requested_by_name?: string;
@@ -45,10 +47,11 @@ type DataField = Required<Pick<DataCol<ExceptionFields>, 'header' | 'sort' | 'cs
  * The columns that carry data, by id (the page adds the cell, the width and whether it can be hidden). Raw values on purpose, as the
  * shared table's export had them: the status as the server names it ("pending_approval"), the date as it was sent, "" for no expiry.
  */
-export const DATA_COLS: Record<'title' | 'status' | 'priority' | 'created' | 'expiry', DataField> = {
+export const DATA_COLS: Record<'title' | 'status' | 'priority' | 'type' | 'created' | 'expiry', DataField> = {
   title: { header: 'Title', sort: (e) => e.title, csv: (e) => e.title },
   status: { header: 'Status', sort: (e) => e.status, csv: (e) => e.status },
   priority: { header: 'Priority', sort: (e) => e.priority, csv: (e) => e.priority },
+  type: { header: 'Type', sort: (e) => e.exception_type_label ?? '', csv: (e) => e.exception_type_label ?? '' },
   created: { header: 'Created', sort: (e) => e.created_at, csv: (e) => e.created_at },
   expiry: { header: 'Expiry', sort: (e) => e.expiry_date ?? '', csv: (e) => e.expiry_date ?? '' },
 };
@@ -317,6 +320,8 @@ export interface ExceptionForm {
   priority: string;
   /** the department it is raised for; '' leaves it to its policy's (the approval rules read it) */
   department_id: string | number;
+  /** a value of the organisation's list of types; '' is none (the approval rules may read it) */
+  exception_type: string;
   /** "YYYY-MM-DD" (a date field's value) or '' */
   effective_date: string;
   expiry_date: string;
@@ -324,7 +329,7 @@ export interface ExceptionForm {
 }
 
 export const emptyForm = (): ExceptionForm => ({
-  title: '', document_id: '', justification: '', risk_assessment: '', compensating_controls: '', priority: 'medium', department_id: '', effective_date: '', expiry_date: '', asset_ids: [],
+  title: '', document_id: '', justification: '', risk_assessment: '', compensating_controls: '', priority: 'medium', department_id: '', exception_type: '', effective_date: '', expiry_date: '', asset_ids: [],
 });
 
 /** A date field's value from what the server stored ("2026-11-15T08:22:49"): the day as written, "YYYY-MM-DD"; '' for none. A date field shows nothing for a value with a time. */
@@ -333,7 +338,7 @@ export const toDateInput = (value: string | null | undefined): string => /^\d{4}
 /** What Edit starts with: the exception's own values, its long texts as tidy numbered lines, its dates as the day they are. */
 export function formFrom(e: {
   title: string; document_id: number | null; justification?: unknown; risk_assessment?: unknown; compensating_controls?: unknown;
-  priority?: string; department_id?: number | null; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
+  priority?: string; department_id?: number | null; exception_type?: string | null; effective_date?: string | null; expiry_date?: string | null; linked_asset_ids?: number[];
 }): ExceptionForm {
   return {
     title: e.title,
@@ -343,6 +348,7 @@ export function formFrom(e: {
     compensating_controls: toEditableText(e.compensating_controls),
     priority: e.priority || 'medium',
     department_id: e.department_id || '',                             // its own: one it takes from its policy is not written into the form
+    exception_type: e.exception_type || '',
     effective_date: toDateInput(e.effective_date),
     expiry_date: toDateInput(e.expiry_date),
     asset_ids: e.linked_asset_ids || [],
@@ -358,7 +364,7 @@ export function formForPolicy(documentId: number, opts?: { title?: string; justi
 export function sameForm(a: ExceptionForm, b: ExceptionForm): boolean {
   const ids = (f: ExceptionForm) => [...f.asset_ids].sort((x, y) => x - y).join(',');
   return a.title === b.title && String(a.document_id) === String(b.document_id) && a.justification === b.justification && a.risk_assessment === b.risk_assessment
-    && a.compensating_controls === b.compensating_controls && a.priority === b.priority && String(a.department_id) === String(b.department_id)
+    && a.compensating_controls === b.compensating_controls && a.priority === b.priority && String(a.department_id) === String(b.department_id) && a.exception_type === b.exception_type
     && a.effective_date === b.effective_date && a.expiry_date === b.expiry_date && ids(a) === ids(b);
 }
 
@@ -385,6 +391,7 @@ export function payloadOf(form: ExceptionForm, editing: boolean): Record<string,
   };
   if (form.document_id) payload.document_id = Number(form.document_id);
   payload.department_id = form.department_id ? Number(form.department_id) : null;
+  payload.exception_type = form.exception_type || null;            // none clears it, as the department
   if (form.effective_date) payload.effective_date = form.effective_date;
   else if (editing) payload.effective_date = null;
   if (form.expiry_date) payload.expiry_date = form.expiry_date;

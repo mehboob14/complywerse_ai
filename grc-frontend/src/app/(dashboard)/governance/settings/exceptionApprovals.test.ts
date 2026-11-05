@@ -10,11 +10,12 @@ import { readFileSync } from 'node:fs';
 import { findViolations } from '../../../../components/ui/ds/kitRules.ts';
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
-const FILES = ['./_ExceptionApprovalsSection.tsx', './_RuleDrawer.tsx', './_RuleTester.tsx'] as const;
+const FILES = ['./_ExceptionApprovalsSection.tsx', './_RuleDrawer.tsx', './_RuleTester.tsx', './_TypesDrawer.tsx'] as const;
 const src = Object.fromEntries(FILES.map((f) => [f, read(f)])) as Record<(typeof FILES)[number], string>;
 const section = src['./_ExceptionApprovalsSection.tsx'];
 const drawer = src['./_RuleDrawer.tsx'];
 const tester = src['./_RuleTester.tsx'];
+const types = src['./_TypesDrawer.tsx'];
 const page = read('./page.tsx');
 const api = read('../../../../lib/api.ts');
 
@@ -43,7 +44,7 @@ test('who may change the rules is the server\'s answer (`can_edit`): a reader ge
   assert.doesNotMatch(section, /usePermissions|hasPermission/);
   assert.match(section, /\.\.\.\(canEdit \? \[\{ key: 'actions'/);                                                // the Actions column exists only for an editor
   assert.match(section, /if \(!canEdit\) return null;/);
-  assert.match(section, /canEdit \? \(!empty && !failed \? add : undefined\)/);
+  assert.match(section, /canEdit \? \(failed \? undefined : <>\{typesButton\}\{!empty && add\}<\/>\)/);
   assert.match(section, /<ReadOnlyNote>\s*View only/);
   assert.match(section, /\{canEdit && rules\.length > 0 && <RuleTester/);
 });
@@ -96,7 +97,8 @@ test('steps can be added (before the last, the approval), moved and removed, fro
 
 test('the tester asks only once something is picked, as the choice changes, refreshes with the rules, says the answer in a live region and warns in the server\'s words', () => {
   assert.match(tester, /enabled: asked,/);
-  assert.match(tester, /queryKey: \[\.\.\.RULES_KEY, 'preview', department, priority, kind\]/);
+  assert.match(tester, /queryKey: \[\.\.\.RULES_KEY, 'preview', department, priority, kind, type\]/);
+  assert.match(tester, /exception_type: type \|\| null/);
   assert.match(tester, /<div aria-live="polite"/);
   assert.match(tester, /answer\.data\.problems\.map\(\(problem, i\) => <Notice key=\{i\} tone="warning">\{problem\}<\/Notice>\)/);
   assert.match(tester, /errorMessage\(answer\.error\)/);
@@ -104,4 +106,25 @@ test('the tester asks only once something is picked, as the choice changes, refr
 
 test('nothing here names a model or a vendor', () => {
   for (const f of FILES) assert.doesNotMatch(src[f], /\b(gpt|openai|claude|anthropic)\b/i, f);
+});
+
+test('the Types drawer (D59): the organisation\'s own list, for an editor only; Save sends the whole list; a refusal is the server\'s sentence with everything kept', () => {
+  assert.match(section, /const typesButton = <Button leftIcon=\{<Tags aria-hidden \/>\} onClick=\{\(\) => setTyping\(true\)\}/);
+  assert.match(section, /\{typing && <TypesDrawer types=\{types\} onClose=\{\(\) => setTyping\(false\)\} \/>\}/);
+  assert.match(section, /const types = answer\.data\?\.exception_types \?\? \[\]/);
+  assert.match(section, /conditionChips\(r, types\)/);
+  assert.match(types, /exceptionRulesApi\.setTypes\(rows\)/);
+  assert.match(types, /invalidate: \[RULES_KEY, TYPES_KEY\]/);                                                         // the card, the rule editor and the exceptions form read the new list
+  assert.match(types, /dirty=\{!sameTypes\(drafts, initial\) \|\| adding\.trim\(\) !== ''\}/);
+  assert.match(types, /const problem = said \?\? \(tried \? typeProblem\(drafts\) : ''\)/);
+  assert.match(types, /onError: \(e\) => setSaid\(errorMessage\(e, /);
+  assert.match(types, /\{problem && <p role="alert"/);
+  assert.match(types, /aria-label="Type name"/);
+  assert.match(types, /label=\{`Remove \$\{d\.label \|\| 'type'\}`\}/);                                                    // each button is named for its type
+  assert.match(types, /Bring back/);
+  assert.match(drawer, /<MultiSelect label="Type" options=\{typeOptions\}/);
+  assert.match(drawer, /typeChoices\(types, rule\?\.exception_types \?\? \[\]\)/);                                            // a type the rule names stays choosable after it is removed
+  assert.match(tester, /exception_type: type \|\| null/);
+  assert.match(api, /apiClient\.get<TypesAnswer>\('\/governance\/exception-approval-rules\/types'\)/);
+  assert.match(api, /apiClient\.put<TypesAnswer>\('\/governance\/exception-approval-rules\/types', \{ types \}\)/);
 });

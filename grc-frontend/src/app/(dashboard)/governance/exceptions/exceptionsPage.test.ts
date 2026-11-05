@@ -187,7 +187,19 @@ test('the form has a Department that is optional, says it defaults to the policy
   assert.match(f, /<DepartmentSelect label="Department"/);
   assert.match(f, /const locked = exception !== null && isRuled\(exception\)/);
   assert.equal((f.match(/disabled=\{locked\}/g) ?? []).length, 3);                      // the policy, the department, the priority
-  assert.match(f, /<Notice>Priority, department and policy are locked while it waits for approval\./);
+  assert.match(f, /<Notice>Priority, department, type and policy are locked while it waits for approval\./);
+});
+
+test('the form has a Type from the organisation\'s list: optional, the one the exception holds stays choosable after it is removed, locked while it waits under a rule', () => {
+  const f = src['_ExceptionForm.tsx'];
+  assert.match(f, /<FormField label="Type" optional info="What kind of exception it is\./);
+  assert.match(f, /queryKey: TYPES_KEY, queryFn: async \(\) => \(await exceptionRulesApi\.types\(\)\)\.data/);
+  assert.match(f, /typeChoices\(types\.data\?\.types \?\? \[\], form\.exception_type \? \[form\.exception_type\] : \[\]\)/);
+  assert.match(f, /disabled=\{locked \|\| \(types\.isError && !form\.exception_type\)\}/);
+  assert.match(f, /typeChoiceLabel\(t\)/);
+  assert.match(src['_ExceptionDetails.tsx'], /<Fact label="Type">\{e\.exception_type_label \|\| e\.exception_type \|\| <Muted>\{NOT_SET\}<\/Muted>\}<\/Fact>/);
+  assert.match(src['page.tsx'], /key: 'type', header: 'Type', priority: 3, sortable: true/);
+  assert.match(src['page.tsx'], /TOGGLEABLE = \['policy', 'status', 'priority', 'type', 'requester', 'created', 'expiry'\]/);
 });
 
 test('the details show the department path (and that it comes from the policy) and draw the approval only when the server sent one', () => {

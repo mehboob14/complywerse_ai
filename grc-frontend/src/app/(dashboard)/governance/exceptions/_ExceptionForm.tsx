@@ -7,7 +7,9 @@
 // how the dates are read are in _logic.ts (formErrors, payloadOf, formFrom).
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
-import { policyExceptionApi } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { exceptionRulesApi, policyExceptionApi } from '@/lib/api';
+import { TYPES_KEY, typeChoiceLabel, typeChoices } from '@/lib/exceptionRules';
 import { useAutoGrow } from '@/lib/useAutoGrow';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
@@ -102,6 +104,9 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
   };
   const policyId = form.document_id ? Number(form.document_id) : 0;
   const locked = exception !== null && isRuled(exception);                  // it waits under an approval rule: what chose the rule stays as it is
+  // the organisation's types: those in use, and the one the exception holds even if it was taken off the list since
+  const types = useQuery({ queryKey: TYPES_KEY, queryFn: async () => (await exceptionRulesApi.types()).data, staleTime: 60_000 });
+  const typeOptions = typeChoices(types.data?.types ?? [], form.exception_type ? [form.exception_type] : []);
   const inherited = exception?.department_inherited ? exception.department_path?.join(' › ') : '';
 
   return (
@@ -119,7 +124,7 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
       )}
     >
       <div className="flex flex-col gap-[16px]">
-        {locked && <Notice>Priority, department and policy are locked while it waits for approval. Withdraw it to change them.</Notice>}
+        {locked && <Notice>Priority, department, type and policy are locked while it waits for approval. Withdraw it to change them.</Notice>}
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <FormField label="Title" required error={errors.title}>
             <TextInput value={form.title} maxLength={500} onChange={(e) => set({ title: e.target.value })} />
@@ -192,6 +197,16 @@ export function ExceptionFormDrawer({ exception, initial, policies, assets, onCl
             </Select>
           </FormField>
         </div>
+        {(typeOptions.length > 0 || types.isError) && (
+          <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
+            <FormField label="Type" optional info="What kind of exception it is. Approval rules may follow it.">
+              <Select value={form.exception_type} onChange={(e) => set({ exception_type: e.target.value })} disabled={locked || (types.isError && !form.exception_type)}
+                placeholder={types.isError ? "Couldn't load the types" : 'No type'}>
+                {typeOptions.map((t) => <option key={t.value} value={t.value}>{typeChoiceLabel(t)}</option>)}
+              </Select>
+            </FormField>
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
           <FormField label="Effective date">
             <TextInput type="date" value={form.effective_date} onChange={(e) => set({ effective_date: e.target.value })} />

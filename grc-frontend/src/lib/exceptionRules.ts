@@ -22,8 +22,15 @@ export interface ExceptionRule {
   /** the names from the top department down to the rule's own; [] for the whole organisation */
   department_path: string[];
   department_level: number | null;
-  priorities: string[]; doc_types: string[]; steps: RuleStep[]; is_active: boolean; created_at: string | null; updated_at: string | null;
+  priorities: string[]; doc_types: string[];
+  /** values of the organisation's list of exception types ([] = any) */
+  exception_types: string[];
+  steps: RuleStep[]; is_active: boolean; created_at: string | null; updated_at: string | null;
 }
+/** One of the organisation's exception types; a removed one is archived, not lost (an exception or a rule that holds it keeps it and its name). */
+export interface ExceptionTypeOption { value: string; label: string; archived: boolean }
+/** GET and PUT .../types. */
+export interface TypesAnswer { types: ExceptionTypeOption[]; can_edit: boolean }
 /** What the editor picks from; the server sends it only to people who can change the rules. */
 export interface RuleOptions {
   users: { id: number; name: string; email: string | null }[];
@@ -31,11 +38,11 @@ export interface RuleOptions {
   priorities: string[];
   doc_types: string[];
 }
-export interface RulesAnswer { rules: ExceptionRule[]; can_edit: boolean; options: RuleOptions | null; level_labels: string[] }
+export interface RulesAnswer { rules: ExceptionRule[]; can_edit: boolean; options: RuleOptions | null; level_labels: string[]; exception_types: ExceptionTypeOption[] }
 
 /** What POST / PUT take. */
 export interface RulePayload {
-  name: string; department_id: number | null; priorities: string[]; doc_types: string[]; is_active: boolean;
+  name: string; department_id: number | null; priorities: string[]; doc_types: string[]; exception_types: string[]; is_active: boolean;
   steps: Array<{
     name: string; kind: StepKind; order: StepOrder; rule: StepRule; min_count: number | null; due_days: number | null;
     allow_reject: boolean; allow_changes: boolean; people: Array<{ type: PersonType; id?: number }>;
@@ -51,6 +58,8 @@ export interface PreviewAnswer { rule: { id: number; name: string; department_id
 
 /** The query key of the rules; their editor and the tester refresh with it (the tester's keys start with it). */
 export const RULES_KEY = ['exception-approval-rules'];
+/** The query key of the exception types (the exceptions page, the rule editor and the Types drawer share it). */
+export const TYPES_KEY = ['exception-types'];
 export const MAX_STEPS = 8;
 export const NAME_MAX = 120;
 export const WHOLE_ORGANISATION = 'Whole organisation';
@@ -84,16 +93,21 @@ export function scopeOf(
   return { text: rule.department_path.join(' › '), level: levelLabel(rule.department_level ?? rule.department_path.length, labels) };
 }
 
-/** The priorities and kinds of policy a rule is limited to, as words ("High", "Policy"); none: it applies to any. */
-export const conditionChips = (rule: Pick<ExceptionRule, 'priorities' | 'doc_types'>): string[] => [...rule.priorities, ...rule.doc_types].map((w) => statusLabel(w));
+/** The name of an exception type: the organisation's word, else the value as it was kept (a type the list no longer holds). */
+export const typeLabel = (value: string, types: readonly Pick<ExceptionTypeOption, 'value' | 'label'>[] = []): string => types.find((t) => t.value === value)?.label ?? value;
 
-/** The same in a sentence, for a screen reader and a tooltip: "Priority: High, Critical. Policy kind: Policy", or "Any priority and kind of policy". */
-export function conditionsLong(rule: Pick<ExceptionRule, 'priorities' | 'doc_types'>): string {
+/** The priorities, kinds of policy and exception types a rule is limited to, as words ("High", "Policy", "Technical"); none: it applies to any. */
+export const conditionChips = (rule: Pick<ExceptionRule, 'priorities' | 'doc_types' | 'exception_types'>, types: readonly ExceptionTypeOption[] = []): string[] =>
+  [...rule.priorities.map((w) => statusLabel(w)), ...rule.doc_types.map((w) => statusLabel(w)), ...(rule.exception_types ?? []).map((v) => typeLabel(v, types))];
+
+/** The same in a sentence, for a screen reader and a tooltip: "Priority: High, Critical. Policy kind: Policy. Type: Technical", or "Any priority, kind of policy and type". */
+export function conditionsLong(rule: Pick<ExceptionRule, 'priorities' | 'doc_types' | 'exception_types'>, types: readonly ExceptionTypeOption[] = []): string {
   const parts = [
     rule.priorities.length ? `Priority: ${rule.priorities.map((w) => statusLabel(w)).join(', ')}` : '',
     rule.doc_types.length ? `Policy kind: ${rule.doc_types.map((w) => statusLabel(w)).join(', ')}` : '',
+    rule.exception_types?.length ? `Type: ${rule.exception_types.map((v) => typeLabel(v, types)).join(', ')}` : '',
   ].filter(Boolean);
-  return parts.length ? parts.join('. ') : 'Any priority and kind of policy';
+  return parts.length ? parts.join('. ') : 'Any priority, kind of policy and type';
 }
 
 /** "3 rules · 1 off" */
@@ -172,7 +186,9 @@ export interface DraftStep {
   /** personKey of each, in the order they were chosen (the order they are asked, for one after another) */
   people: string[];
 }
-export interface RuleForm { name: string; /** '' is the whole organisation */ department_id: string; priorities: string[]; doc_types: string[]; is_active: boolean; steps: DraftStep[] }
+export interface RuleForm {
+  name: string; /** '' is the whole organisation */ department_id: string; priorities: string[]; doc_types: string[]; exception_types: string[]; is_active: boolean; steps: DraftStep[];
+}
 
 let made = 0;
 
@@ -182,7 +198,7 @@ export function blankStep(kind: StepKind = 'approval'): DraftStep {
 }
 
 /** A new rule starts with the one step every rule needs: somebody decides. */
-export const emptyRuleForm = (): RuleForm => ({ name: '', department_id: '', priorities: [], doc_types: [], is_active: true, steps: [blankStep('approval')] });
+export const emptyRuleForm = (): RuleForm => ({ name: '', department_id: '', priorities: [], doc_types: [], exception_types: [], is_active: true, steps: [blankStep('approval')] });
 
 /** Edit starts with the rule as it is saved. */
 export function formFromRule(rule: ExceptionRule): RuleForm {
@@ -191,6 +207,7 @@ export function formFromRule(rule: ExceptionRule): RuleForm {
     department_id: rule.department_id == null ? '' : String(rule.department_id),
     priorities: rule.priorities,
     doc_types: rule.doc_types,
+    exception_types: rule.exception_types ?? [],
     is_active: rule.is_active,
     steps: rule.steps.map((s) => ({
       key: `step-${++made}`, name: s.name === kindName(s.kind) ? '' : s.name, kind: s.kind, order: s.order, rule: s.rule, min_count: String(s.min_count ?? 2),
@@ -201,7 +218,7 @@ export function formFromRule(rule: ExceptionRule): RuleForm {
 
 /** Whether two forms say the same (the step keys are only for React): what decides that closing the drawer has something to lose. */
 export function sameRuleForm(a: RuleForm, b: RuleForm): boolean {
-  const flat = (f: RuleForm) => JSON.stringify({ ...f, priorities: [...f.priorities].sort(), doc_types: [...f.doc_types].sort(), steps: f.steps.map(({ key, ...s }) => s) });
+  const flat = (f: RuleForm) => JSON.stringify({ ...f, priorities: [...f.priorities].sort(), doc_types: [...f.doc_types].sort(), exception_types: [...f.exception_types].sort(), steps: f.steps.map(({ key, ...s }) => s) });
   return flat(a) === flat(b);
 }
 
@@ -237,6 +254,7 @@ export function payloadOf(form: RuleForm): RulePayload {
     department_id: form.department_id ? Number(form.department_id) : null,
     priorities: inOrder(form.priorities, PRIORITY_ORDER),
     doc_types: inOrder(form.doc_types, KIND_ORDER),
+    exception_types: [...form.exception_types],
     is_active: form.is_active,
     steps: form.steps.map((s): PayloadStep => {
       const inTurn = s.order === 'in_turn';
@@ -254,7 +272,7 @@ export function payloadOf(form: RuleForm): RulePayload {
 /** A saved rule as PUT takes it, with its switch set: Switch off and Switch on send the whole rule (the server replaces it). */
 export function payloadOfRule(rule: ExceptionRule, isActive: boolean): RulePayload {
   return {
-    name: rule.name, department_id: rule.department_id, priorities: rule.priorities, doc_types: rule.doc_types, is_active: isActive,
+    name: rule.name, department_id: rule.department_id, priorities: rule.priorities, doc_types: rule.doc_types, exception_types: rule.exception_types ?? [], is_active: isActive,
     steps: rule.steps.map((s): PayloadStep => ({
       name: s.name, kind: s.kind, order: s.order, rule: s.rule, min_count: s.min_count, due_days: s.due_days, allow_reject: s.allow_reject, allow_changes: s.allow_changes,
       people: s.people.map(({ type, id }) => (id == null ? { type } : { type, id })),
@@ -316,3 +334,50 @@ export function ruleProblem(form: RuleForm): string {
   }
   return '';
 }
+
+// ─── The types editor ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export const TYPE_NAME_MAX = 80;
+
+/** A type as the Types drawer holds it: a new one has no value yet (the server makes it from the name); a removed one is archived, kept for what holds it. */
+export interface TypeDraft { value: string; label: string; archived: boolean }
+
+export const TYPE_NOTES = {
+  card: 'The kinds of policy exception your organisation tells apart. A rule may be limited to some of them, and a person raising an exception chooses one.',
+  removed: 'A removed type is kept for the exceptions and rules that hold it, and no new exception can choose it. Bring it back to use it again.',
+};
+
+export const typeDrafts = (types: readonly ExceptionTypeOption[]): TypeDraft[] => types.map((t) => ({ value: t.value, label: t.label, archived: t.archived }));
+
+/** Whether two lists say the same: what decides that closing the drawer has something to lose. */
+export const sameTypes = (a: readonly TypeDraft[], b: readonly TypeDraft[]): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** The first thing wrong, in the server's own words, or ''. Each name is in use once (case aside) and at least one type stays in use. */
+export function typeProblem(drafts: readonly TypeDraft[]): string {
+  const live = drafts.filter((d) => !d.archived);
+  if (live.some((d) => !d.label.trim())) return 'Give every type a name.';
+  if (live.some((d) => d.label.trim().length > TYPE_NAME_MAX)) return `A type's name is at most ${TYPE_NAME_MAX} characters.`;
+  const seen = new Set<string>();
+  for (const d of live) {
+    const key = d.label.trim().toLowerCase();
+    if (seen.has(key)) return `'${d.label.trim()}' is listed twice.`;
+    seen.add(key);
+  }
+  if (live.length === 0) return 'Keep at least one type.';
+  return '';
+}
+
+/** What PUT takes: every type, in the order they are listed; a new one without a value. A removed type that was never saved is not sent. */
+export function typesPayload(drafts: readonly TypeDraft[]): Array<{ value?: string; label: string; archived: boolean }> {
+  return drafts.filter((d) => d.value || !d.archived).map((d) => (d.value ? { value: d.value, label: d.label.trim(), archived: d.archived } : { label: d.label.trim(), archived: false }));
+}
+
+/** The types a person may choose for an exception or a rule: those in use, and the one it already holds even if it was removed since. */
+export function typeChoices(types: readonly ExceptionTypeOption[], keep: readonly string[] = []): ExceptionTypeOption[] {
+  const out = types.filter((t) => !t.archived || keep.includes(t.value));
+  keep.forEach((v) => { if (v && !out.some((t) => t.value === v)) out.push({ value: v, label: v, archived: true }); });
+  return out;
+}
+
+/** "Technical" for a type in use, "Third party (removed)" for one that was taken off the list: how a choice is named where a person picks. */
+export const typeChoiceLabel = (t: Pick<ExceptionTypeOption, 'label' | 'archived'>): string => (t.archived ? `${t.label} (removed)` : t.label);

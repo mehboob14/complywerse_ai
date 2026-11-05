@@ -1,7 +1,7 @@
 'use client';
 
 // Governance > Settings > Exception approvals: add or change one rule, in a drawer that asks "Discard changes?" before it throws typed input away. A rule says
-// where it applies (the whole organisation, or a department, sub-department or unit), when (a priority, a kind of policy: empty is any) and its steps: each a
+// where it applies (the whole organisation, or a department, sub-department or unit), when (a priority, a kind of policy, a type of exception: empty is any) and its steps: each a
 // Review or an Approval that asks people, roles or the owner of the unit and of its parent, together or one after another, everyone / any one / at least N, in
 // so many days, and may reject or ask for changes. The last step is an approval: somebody decides. What it checks before it sends and what it sends are in
 // lib/exceptionRules.ts; the server checks again and its sentence is said as it is, above the Save button, with everything typed kept. A save is reported by
@@ -12,7 +12,8 @@ import { exceptionRulesApi } from '@/lib/api';
 import { moved } from '@/lib/approvalRoutes';
 import {
   KINDS, MAX_STEPS, NAME_MAX, ORDERS, PRIORITY_ORDER, KIND_ORDER, RULES, RULES_KEY, RULE_NOTES, WHOLE_ORGANISATION, askOptions, blankStep, emptyRuleForm, formFromRule, hasRuleErrors,
-  kindName, payloadOf, ruleErrors, ruleProblem, sameRuleForm, turnLine, type DraftStep, type ExceptionRule, type RuleErrors, type RuleForm, type RuleOptions, type RulePayload,
+  kindName, payloadOf, ruleErrors, ruleProblem, sameRuleForm, turnLine, typeChoiceLabel, typeChoices, type DraftStep, type ExceptionRule, type ExceptionTypeOption, type RuleErrors, type RuleForm,
+  type RuleOptions, type RulePayload,
 } from '@/lib/exceptionRules';
 import { statusLabel } from '@/lib/format';
 import { RightSlidePanel } from '@/components/ui';
@@ -102,11 +103,13 @@ function StepEditor({ step: s, index, count, choices, errors, onChange, onMove, 
   );
 }
 
-export function RuleDrawer({ rule, options, onClose }: {
+export function RuleDrawer({ rule, options, types, onClose }: {
   /** the rule being changed; null adds a new one */
   rule: ExceptionRule | null;
   /** what the editor picks from (the server sends it to people who can change the rules) */
   options: RuleOptions | null;
+  /** the organisation's exception types */
+  types: readonly ExceptionTypeOption[];
   onClose: () => void;
 }) {
   const initial = useMemo(() => (rule ? formFromRule(rule) : emptyRuleForm()), [rule]);
@@ -115,6 +118,8 @@ export function RuleDrawer({ rule, options, onClose }: {
   const [said, setSaid] = useState<string | null>(null);                  // the server's sentence, as it is
   const errors = tried ? ruleErrors(form) : NO_ERRORS;
   const choices = useMemo(() => askOptions(options, rule ? rule.steps.flatMap((s) => s.people) : []), [options, rule]);
+  // the types in use, and any this rule already names that were taken off the list since
+  const typeOptions = useMemo(() => typeChoices(types, rule?.exception_types ?? []).map((t) => ({ value: t.value, label: typeChoiceLabel(t) })), [types, rule]);
   const set = (patch: Partial<RuleForm>) => { setForm((f) => ({ ...f, ...patch })); setSaid(null); };
   const setStep = (key: string, patch: Partial<DraftStep>) => set({ steps: form.steps.map((s) => (s.key === key ? { ...s, ...patch } : s)) });
   // a new step goes before the last one: the last step is the approval, and a review is what is usually added
@@ -179,6 +184,9 @@ export function RuleDrawer({ rule, options, onClose }: {
             </FormField>
             <FormField label="Policy kind" optional>
               <MultiSelect label="Policy kind" options={wordOptions(options?.doc_types, KIND_ORDER)} value={form.doc_types} onChange={(doc_types) => set({ doc_types })} display="chips" placeholder="Any" />
+            </FormField>
+            <FormField label="Type" optional>
+              <MultiSelect label="Type" options={typeOptions} value={form.exception_types} onChange={(exception_types) => set({ exception_types })} display="chips" placeholder="Any" />
             </FormField>
           </div>
         </div>
