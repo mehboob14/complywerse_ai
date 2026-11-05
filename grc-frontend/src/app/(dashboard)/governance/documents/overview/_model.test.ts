@@ -149,7 +149,7 @@ test('the people a step waits for: the names, and how many more', () => {
 
 test('the tiles: four open the library on what they count, two jump to their list; late requests are people asked, and issues count each document once', () => {
   const t = tiles(OVERVIEW);
-  assert.deepEqual(t.map((x) => x.label), ['Documents', 'In force', 'In progress', 'Overdue reviews', 'Late requests', 'Issues']);
+  assert.deepEqual(t.map((x) => x.label), ['Documents', 'Published', 'In progress', 'Overdue reviews', 'Late requests', 'Issues']);
   assert.deepEqual(t.map((x) => x.value), [40, 22, 14, 6, 4, 9]);                                     // 3 + 1 + 0 overdue requests; 9 documents with an issue
   assert.equal(lateRequests(OVERVIEW), 4);
   assert.deepEqual(t.map((x) => x.href), [

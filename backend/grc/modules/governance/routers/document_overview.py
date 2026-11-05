@@ -4,6 +4,7 @@ GET /governance/document-overview              the figures of one scope: ?depart
 GET /governance/document-overview/ids?kind=    the documents behind a figure (stuck, late_approvals, late_acknowledgements, on_hold)
 GET /governance/document-overview/board        the documents of the scope as a Kanban: ?group=status|type|department&per=<cards a column lists>
 GET /governance/document-overview/export       the documents of the scope as a CSV file (an attachment)
+GET /governance/document-overview/export/pdf   the figures of the scope as a PDF for a committee pack (an attachment; the same numbers and read rules as the page)
 
 All need a sign-in and either the right to read the whole library or the headship of a department; none writes.
 """
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ....models import GRCUser, get_db
 from ....routers.auth_router import require_auth
-from .. import documents_overview
+from .. import documents_overview, documents_overview_pdf
 
 router = APIRouter(prefix="/document-overview", tags=["Governance Documents Overview"])
 
@@ -41,3 +42,9 @@ def get_board(department_id: Optional[str] = Query(None), group: str = Query("st
 def export_documents(department_id: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     text, name = documents_overview.export_documents(db, current_user, department_id)
     return Response(content=text.encode("utf-8"), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/export/pdf")
+def export_summary_pdf(department_id: Optional[str] = Query(None), db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    data, media_type, name = documents_overview_pdf.build(documents_overview.summary(db, current_user, department_id), current_user.display_name or current_user.username or "a user")
+    return Response(content=data, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{name}"'})

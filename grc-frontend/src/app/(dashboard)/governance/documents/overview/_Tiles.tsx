@@ -1,6 +1,6 @@
 'use client';
 
-// The six figures the overview opens with (_model.tiles): Documents, In force, In progress, Overdue reviews, Late requests, Issues. The first four open the
+// The six figures the overview opens with (_model.tiles): Documents, Published, In progress, Overdue reviews, Late requests, Issues. The first four open the
 // library on what they count; the last two add up several things, so they jump to their list on this page. While the answer is on its way each is a skeleton, and
 // a failed request is said by the page, never drawn here as a 0.
 import Link from 'next/link';
@@ -9,7 +9,7 @@ import { formatCount } from '@/lib/format';
 import { figureHref, figureName, tileLinkName, tiles, type Overview } from './_model';
 
 const GRID = 'grid grid-cols-2 gap-[12px] md:grid-cols-3 xl:grid-cols-6';
-const LABELS = ['Documents', 'In force', 'In progress', 'Overdue reviews', 'Late requests', 'Issues'];
+const LABELS = ['Documents', 'Published', 'In progress', 'Overdue reviews', 'Late requests', 'Issues'];
 
 export function TilesSkeleton() {
   return (

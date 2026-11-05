@@ -1,9 +1,9 @@
 'use client';
 
-// The export of At a glance: a menu of two CSV files for the scope on screen. "Departments" is the table of this view with every group of columns (made here from
+// The export of At a glance: a menu of a PDF summary (GET /governance/document-overview/export/pdf, the figures of the scope for a committee pack) and two CSV files for the scope on screen. "Departments" is the table of this view with every group of columns (made here from
 // the figures already loaded, so it is exactly what the person sees); "Documents" is one row for each document the person may read, from the server (GET
 // /governance/document-overview/export, which counts what the figures count). A failed download says so, with Retry; nothing is ever saved from a failed request.
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { Menu, useNotify } from '@/components/ui/ds';
 import { EXPORT_ENDPOINT } from './_board';
@@ -34,10 +34,19 @@ export function ExportMenu({ data }: { data: Overview }) {
       notify.error(e, { title: "Couldn't export the documents", retry: () => { void documents(); } });
     }
   };
+  const summary = async (): Promise<void> => {
+    try {
+      const res = await apiClient.get(`${EXPORT_ENDPOINT}/pdf`, { params: scopeParams(data.scope.value), responseType: 'blob' });
+      save(csvName('At a glance', data.scope.name, new Date(), 'pdf'), res.data as Blob);
+    } catch (e) {
+      notify.error(e, { title: "Couldn't make the PDF", retry: () => { void summary(); } });
+    }
+  };
   return (
     <Menu
       label="Export"
       items={[
+        { key: 'summary', label: 'Summary (PDF)', icon: FileText, onSelect: () => { void summary(); } },
         { key: 'departments', label: 'Departments (CSV)', icon: FileSpreadsheet, onSelect: departments },
         { key: 'documents', label: 'Documents (CSV)', icon: Download, onSelect: () => { void documents(); } },
       ]}

@@ -138,7 +138,7 @@ export function ReviewsCard({ data }: { data: Overview }) {
   const rows = reviewRows(data);
   const shares = reviewShares(data.reviews);
   return (
-    <SectionCard id="reviews" title="Reviews" info="Documents in force or approved, by where their next review date stands. A draft, an expired or an archived document owes no review.">
+    <SectionCard id="reviews" title="Reviews" info="Published or approved documents, by where their next review date stands. A draft, an expired or an archived document owes no review.">
       {shares.length > 0 && (
         <div aria-hidden className="mb-[12px] flex h-[8px] overflow-hidden rounded-full bg-ds-surface-hover">
           {shares.map((s) => <span key={s.key} className={clsx('h-full', FILL[s.key])} style={{ width: `${s.percent}%` }} />)}

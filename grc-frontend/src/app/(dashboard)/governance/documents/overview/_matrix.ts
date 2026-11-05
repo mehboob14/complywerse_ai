@@ -13,7 +13,7 @@ export const MEASURES: ReadonlyArray<{ id: MeasureId; label: string; info: strin
   { id: 'status', label: 'Status', info: 'Documents by where they are in the approval flow, for each department and everything under it.' },
   { id: 'type', label: 'Type', info: 'Documents by kind, for each department and everything under it.' },
   { id: 'waiting', label: 'Waiting on people', info: 'Reviews, approvals and acknowledgements asked of people and not answered yet, for the documents of each department and everything under it. One for each person asked, so a number can be larger than the documents it opens.' },
-  { id: 'reviews', label: 'Reviews', info: 'Where the review dates of documents in force or approved stand, for each department and everything under it.' },
+  { id: 'reviews', label: 'Reviews', info: 'Where the review dates of published or approved documents stand, for each department and everything under it.' },
   { id: 'issues', label: 'Issues', info: 'Documents that need attention, for each department and everything under it. One document can have several issues, so the columns can add up to more than the documents.' },
   { id: 'all', label: 'All columns', info: 'Every column, side by side.' },
 ];

@@ -141,9 +141,10 @@ test('the scope, the view, the grouping and the columns are in the address and h
   assert.ok(page.includes("routeFor('/governance/documents/overview')"), 'the title is the registry\'s name');
 });
 
-test('the export is a menu of two CSV files; the departments one is made from the figures on screen, the documents one comes from the server, and a failure says so with Retry', () => {
+test('the export is a menu of a PDF summary and two CSV files; the departments CSV is made from the figures on screen, the other two come from the server, and a failure says so with Retry', () => {
   const menu = code(read('_Export.tsx'));
-  assert.ok(menu.includes('<Menu') && menu.includes('label="Export"') && menu.includes('Departments (CSV)') && menu.includes('Documents (CSV)'));
+  assert.ok(menu.includes('<Menu') && menu.includes('label="Export"') && menu.includes('Departments (CSV)') && menu.includes('Documents (CSV)') && menu.includes('Summary (PDF)'));
+  assert.ok(menu.includes('${EXPORT_ENDPOINT}/pdf') && menu.includes("'pdf'"), 'the PDF comes from the server and is named .pdf');
   assert.ok(menu.includes("matrixCsv(data, columnsFor('all', data))") && menu.includes('csvName('), 'every column, and a file name that says what and for what');
   assert.ok(menu.includes("responseType: 'blob'") && menu.includes('notify.error(e,') && menu.includes('retry:'));
   assert.ok(menu.includes('URL.revokeObjectURL'), 'the temporary address is let go');
@@ -158,10 +159,10 @@ test('the board is read-only: a card opens the document, a column title opens th
   assert.ok(!/onDrag|draggable|useSortable/.test(board), 'moving a card would change a document\'s status: the board only shows');
 });
 
-test('only the server\'s numbers are shown: the page reads three endpoints (the figures, the board, the export) and the library; it writes nothing', () => {
+test('only the server\'s numbers are shown: the page reads four endpoints (the figures, the board, the documents export, the PDF summary) and the library; it writes nothing', () => {
   const all = files.map((n) => code(read(n))).join('\n');
   assert.ok(!/\.(post|put|patch|delete)\(/.test(all), 'a read-only page');
-  assert.equal((all.match(/apiClient\.get\(/g) ?? []).length, 3);
+  assert.equal((all.match(/apiClient\.get\(/g) ?? []).length, 4);
   assert.ok(code(read('page.tsx')).includes('apiClient.get(ENDPOINT') && code(read('_BoardPanel.tsx')).includes('apiClient.get(BOARD_ENDPOINT') && code(read('_Export.tsx')).includes('apiClient.get(EXPORT_ENDPOINT'));
   assert.ok(code(read('_model.ts')).includes("export const ENDPOINT = '/governance/document-overview'"));
   assert.ok(code(read('_board.ts')).includes("BOARD_ENDPOINT = '/governance/document-overview/board'") && code(read('_board.ts')).includes("EXPORT_ENDPOINT = '/governance/document-overview/export'"));

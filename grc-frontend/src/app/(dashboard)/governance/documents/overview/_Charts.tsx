@@ -133,7 +133,7 @@ export function TypeChart({ data }: { data: Overview }) {
                 <span className="flex items-baseline gap-[8px]">
                   <Figure value={b.count} href={b.href} noun={`${b.label.toLowerCase()} documents`} />
                   <span className="whitespace-nowrap text-ds-label text-ds-fg-muted">
-                    <Figure value={b.inForce} href={b.inForceHref} noun={`${b.label.toLowerCase()} documents in force`} className="!text-ds-label" /> in force
+                    <Figure value={b.inForce} href={b.inForceHref} noun={`published ${b.label.toLowerCase()} documents`} className="!text-ds-label" /> published
                   </span>
                 </span>
               </li>

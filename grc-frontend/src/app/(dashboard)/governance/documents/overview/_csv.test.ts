@@ -39,4 +39,5 @@ test('the file name says what is in it, for what, and the day', () => {
   assert.equal(csvName('At a glance', 'Operations › Support', day), 'at-a-glance-operations-support-2026-11-05.csv');
   assert.equal(csvName('', '', day), 'export-2026-11-05.csv');
   assert.equal(csvName('Documents', '###', day), 'documents-2026-11-05.csv');
+  assert.equal(csvName('At a glance', 'Operations', day, 'pdf'), 'at-a-glance-operations-2026-11-05.pdf');
 });

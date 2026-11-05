@@ -784,6 +784,28 @@ def test_the_export_is_an_attachment_and_asks_for_the_same_rights_as_the_figures
     assert S.STATUS_WORDS["pending_review"] == "In review"
 
 
+def test_the_pdf_export_is_a_pdf_of_the_same_figures_under_the_same_rights(w):
+    import io
+
+    from PyPDF2 import PdfReader
+
+    def words(content: bytes) -> str:
+        return " ".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(content)).pages)
+
+    seed_matrix(w)
+    r = get(w, ADMIN, path=URL + "/export/pdf")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
+    assert re.fullmatch(r'attachment; filename="at-a-glance-whole-organisation-\d{4}-\d{2}-\d{2}\.pdf"', r.headers["content-disposition"])
+    whole = words(r.content)
+    assert "At a glance" in whole and "Whole organisation" in whole and "Published" in whole and "In force" not in whole
+    assert "Finance" in whole and "Support" in whole and "Waiting on people" in whole
+    mine = get(w, MID, path=URL + "/export/pdf")                                           # the head of Support: their own scope, and nothing of Finance
+    assert mine.status_code == 200 and "at-a-glance-support-" in mine.headers["content-disposition"]
+    assert "Support" in words(mine.content) and "Finance" not in words(mine.content)
+    assert get(w, PLAIN, path=URL + "/export/pdf").status_code == 403
+    assert get(w, MID, OPS, path=URL + "/export/pdf").status_code == 403 and get(w, ADMIN, 999, path=URL + "/export/pdf").status_code == 404
+
+
 # ── queries, writes ──────────────────────────────────────────────────────────
 
 def test_the_number_of_queries_does_not_depend_on_the_number_of_documents_or_departments(w):

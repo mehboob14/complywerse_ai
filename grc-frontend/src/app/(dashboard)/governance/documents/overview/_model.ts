@@ -201,11 +201,11 @@ export function tiles(d: Overview): Tile[] {
   const late = lateRequests(d);
   return [
     { id: 'documents', label: 'Documents', noun: 'documents', value: d.totals.documents, href: figureHref(d, 'totals.documents'), tone: 'default', info: 'Every document that is not archived.' },
-    { id: 'in_force', label: 'In force', noun: 'documents in force', value: d.totals.in_force, href: figureHref(d, 'totals.in_force'), tone: 'success', info: 'Published documents.' },
+    { id: 'in_force', label: 'Published', noun: 'published documents', value: d.totals.in_force, href: figureHref(d, 'totals.in_force'), tone: 'success', info: 'Documents with the status Published.' },
     { id: 'in_progress', label: 'In progress', noun: 'documents in progress', value: d.totals.in_progress, href: figureHref(d, 'totals.in_progress'), tone: 'default',
       info: 'Drafts, and documents in review, in approval or approved.' },
     { id: 'overdue_reviews', label: 'Overdue reviews', noun: 'overdue reviews', value: d.reviews.overdue, href: figureHref(d, 'reviews.overdue'), tone: d.reviews.overdue ? 'danger' : 'default',
-      info: 'Documents in force or approved whose review date has passed.' },
+      info: 'Published or approved documents whose review date has passed.' },
     { id: 'late_requests', label: 'Late requests', noun: 'late requests', value: late, href: '#waiting', tone: late ? 'danger' : 'default',
       info: 'Reviews, approvals and acknowledgements past their due date, one for each person asked. Opens the list below.' },
     { id: 'issues', label: 'Issues', noun: 'documents with issues', value: d.issues.documents, href: '#issues', tone: d.issues.documents ? 'warning' : 'default',
@@ -325,7 +325,7 @@ export function issueRows(d: Pick<Overview, 'issues' | 'links'>): IssueRow[] {
     row('stuck', 'Stuck in a stage', 'documents stuck in a stage', 'danger', 'In review or approval with nobody asked, or with a request overdue for more days than the escalation period in Governance settings.'),
     row('on_hold', 'On hold', 'documents on hold', 'warning', 'Someone asked for changes, or proposed one, and the route waits for the author.'),
     row('late_approvals', 'Late approvals', 'documents with late approvals', 'danger', 'A review or an approval is past its due date.'),
-    row('late_acknowledgements', 'Late acknowledgements', 'documents with late acknowledgements', 'warning', 'Someone has not acknowledged a document in force by the due date.'),
+    row('late_acknowledgements', 'Late acknowledgements', 'documents with late acknowledgements', 'warning', 'Someone has not acknowledged a published document by the due date.'),
     row('no_owner', 'No owner', 'documents without an owner', 'warning', 'Documents nobody owns.'),
     row('expired', 'Expired', 'expired documents', 'danger', 'Documents past their expiry date.'),
     row('exception_applied', 'Exception', 'documents under an exception', 'warning', 'Documents under a policy exception.'),
