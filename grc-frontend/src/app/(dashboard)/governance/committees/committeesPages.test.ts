@@ -92,7 +92,8 @@ test('the old committee address still works: it forwards to the filtered home (t
   assert.match(src, /router\.replace\(/);
   assert.match(src, /<PageHeader\s+variant="page"/, 'the registry flags the page as drawing the kit head');
   assert.match(code(src), /useSearchParams\(\)\?\.get\('tab'\)/, 'the old ?tab= is read');
-  assert.doesNotMatch(code(src), /useQuery|committeeApi/, 'the forward asks the server for nothing');
+  // it asks for the committee once, under the key the shell's trail reads (components/shell/records.test.ts) and the filtered home reads next, and for nothing else
+  assert.equal((code(src).match(/committeeApi\.\w+/g) || []).join(), 'committeeApi.getCommittee', 'the forward asks the server for the committee only');
 });
 
 test('the pages keep their query keys, so every existing invalidation still finds them', () => {
@@ -229,6 +230,15 @@ test('the pages draw their own heading with the kit and the registry says so, so
   for (const url of ['/governance/committees', '/governance/committees/3', '/governance/committees/meetings/9', '/governance/committees/actions']) {
     assert.equal(ownHeadingSection(url), 'Governance', `${url} is not flagged ownHeading in lib/navRegistry.ts`);
   }
+});
+
+test('under the shell: a meeting opened from a lane carries the page it came from (withFrom), its committee is a link in the header facts, and no page draws a landmark of its own', () => {
+  const rows = code(EVERY['LaneParts.tsx']);
+  assert.equal((rows.match(/withFrom\(`\/governance\/committees\/meetings\//g) || []).length, 2, 'the meeting row and the decision row');
+  assert.match(code(EVERY['hooks.ts']), /cleanQuery\(search\)/, 'the page it came from is its address without the parameters that only say how it was opened');
+  assert.match(code(SOURCES.meeting), /href=\{committeeHomeAddress\(meeting\.committee_id\)\}/, 'the committee is a link to its meetings');
+  assert.doesNotMatch(code(SOURCES.meeting), /Back to \$\{/, "the shell's trail is the way back to the committee");
+  for (const [name, src] of Object.entries(EVERY)) assert.doesNotMatch(code(src), /<aside\b/, `${name} draws a right-hand column of its own: the shell's panel is the one complementary landmark`);
 });
 
 test('the pages take their headings from the registry (Committees, Oversight Actions)', () => {

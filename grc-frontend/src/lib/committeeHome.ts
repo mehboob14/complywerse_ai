@@ -142,14 +142,14 @@ export function stripCells(h: Health, { charters, today = new Date() }: { charte
         : { label: 'Next meeting', value: 'None', sub: 'not scheduled', tone: 'warning' },
     h.attendance_pct == null
       ? { label: 'Attendance', value: NOT_RECORDED, sub: 'no roll in 12 months', tone: 'muted', why: 'No meeting held in the last 12 months has a roll call.' }
-      : { label: 'Attendance', value: `${Math.round(h.attendance_pct)}%`, sub: 'of meetings held, 12 months', tone: 'default' },
+      : { label: 'Attendance', value: `${Math.round(h.attendance_pct)}%`, sub: '12-month average', tone: 'default' },
     { label: 'Overdue', value: formatCount(overdue), sub: h.open_actions == null ? 'actions' : `of ${formatCount(open)} open ${open === 1 ? 'action' : 'actions'}`, tone: overdue > 0 ? 'danger' : 'default' },
     charter
       ? { label: 'Charter', value: 'In force', sub: `v${charter.version}${charter.expires_on ? `, until ${formatDate(charter.expires_on, { calendar: true })}` : ''}`, tone: 'success' }
       : (charters ?? 0) > 0
         ? { label: 'Charter', value: 'Draft only', sub: 'none in force', tone: 'warning' }
         : { label: 'Charter', value: 'None', sub: 'no charter yet', tone: 'warning' },
-    { label: 'Members', value: formatCount(members), sub: 'on the committee', tone: 'default' },
+    { label: 'Members', value: formatCount(members), sub: '', tone: 'default' },
   ];
 }
 

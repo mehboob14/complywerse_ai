@@ -58,9 +58,10 @@ test('the committee actions page opens its Overdue filter from the address, as t
   const page = read('../committees/actions/page.tsx');
   assert.ok(page, 'the actions page exists');
   assert.match(def('overdue_actions').href, /\?overdue=1$/);
-  assert.match(page!, /useSearchParams\(\)/);
-  // the page reads the address once, for its first render, through the committees model's parser (lib/committees.test.ts pins the parser itself)
-  assert.match(page!, /useState\(\(\) => overdueFromSearch\(/);
+  // the page keeps its filters in the address through the Committees model's schema (its `overdue` flag is the counter's ?overdue=1) and opens on the Overdue view through the model's
+  // viewOf (lib/committeeHome.test.ts pins both; lib/committees.test.ts pins the parser)
+  assert.match(page!, /useAddressState\(ACTIONS_SCHEMA\)/);
+  assert.match(page!, /viewOf\(address\)/);
   assert.equal(overdueFromSearch(def('overdue_actions').href.split('?')[1]), true, 'the counter\'s address switches the filter on');
 });
 

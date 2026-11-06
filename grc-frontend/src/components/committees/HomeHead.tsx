@@ -13,7 +13,8 @@ import { useLineClamped } from '@/components/ui/ds/useLineClamped';
 import { useMediaQuery } from './hooks';
 import { CommitteeActivity } from './ui';
 
-export const SHOW_INACTIVE = '__inactive';
+/** How many chips the row shows before the rest go to its "+N more" menu (the overview sends the committees most in need of attention first). */
+export const CHIPS_SHOWN = 6;
 
 export function ChipsRow({ chips, inactive, showingInactive, onPick, onToggleInactive }: {
   chips: ChipSpec[];
@@ -28,20 +29,27 @@ export function ChipsRow({ chips, inactive, showingInactive, onPick, onToggleIna
   const list: FilterChip[] = chips.map((c) => ({
     key: c.key, label: c.label, count: c.count, active: c.active, title: c.title, flag: c.flag, icon: c.live && c.flag?.text != null ? Radio : undefined,
   }));
-  if (inactive > 0 || showingInactive) list.push({ key: SHOW_INACTIVE, label: showingInactive ? 'Hide inactive' : 'Show inactive', count: inactive > 0 ? inactive : undefined, active: false });
-  // `relative` + a clip: the chips' screen-reader words are absolutely placed, and inside a sideways scroller that is not positioned they escape it (and widen the page on a phone)
+  // `relative` + a clip: the chips' screen-reader words are absolutely placed, and inside a sideways scroller that is not positioned they escape it (and widen the page on a phone).
+  // From 640px the toggle sits at the end of the chips' first line; on a phone it has its own line under the one line of chips.
   return (
-    <div className="relative -mx-[4px] min-w-0 overflow-x-clip px-[4px]">
-      <FilterChips
-        label="Committee"
-        chips={list}
-        overflow={narrow ? 'scroll' : 'wrap'}
-        onToggle={(key) => {
-          if (key === SHOW_INACTIVE) onToggleInactive();
-          else if (key === 'all') onPick(null);
-          else onPick(chips.find((c) => c.key === key)?.active ? null : parseInt(key, 10));
-        }}
-      />
+    <div className="flex min-w-0 flex-wrap items-start gap-x-[8px] sm:flex-nowrap">
+      <div className="relative -mx-[4px] min-w-0 flex-[1_1_100%] overflow-x-clip px-[4px] sm:flex-1">
+        <FilterChips
+          label="Committee"
+          chips={list}
+          overflow={narrow ? 'scroll' : 'wrap'}
+          maxVisible={narrow ? undefined : CHIPS_SHOWN}
+          onToggle={(key) => {
+            if (key === 'all') onPick(null);
+            else onPick(chips.find((c) => c.key === key)?.active ? null : parseInt(key, 10));
+          }}
+        />
+      </div>
+      {(inactive > 0 || showingInactive) && (
+        <Button variant="link" size="sm" aria-pressed={showingInactive} onClick={onToggleInactive} className="shrink-0">
+          {showingInactive ? 'Hide inactive' : `Show inactive (${formatCount(inactive)})`}
+        </Button>
+      )}
     </div>
   );
 }
@@ -113,41 +121,37 @@ export function CommitteeStrip({ row, health, detail, canEdit, canSwitch, busy, 
       ? { key: 'off', label: 'Deactivate committee…', icon: PowerOff, onSelect: onToggleActive, danger: true, hidden: !canSwitch, disabled: busy }
       : { key: 'on', label: 'Reactivate committee', icon: Power, onSelect: onToggleActive, hidden: !canSwitch, disabled: busy },
   ];
-  const facts = detail
-    ? [FREQUENCY[detail.meeting_frequency ?? ''] ?? null].filter(Boolean)
-    : [];
+  const frequency = detail ? FREQUENCY[detail.meeting_frequency ?? ''] ?? null : null;
+  // two rows: who it is and what to do with it, then its seven facts in a grid (the shell leaves 1032px at 1440: a strip in columns wrapped its buttons under its name)
   return (
     <section aria-label={`${row.name} at a glance`} className="rounded-ds-card border border-l-[3px] border-ds-border border-l-ds-primary bg-ds-surface px-[12px] py-[8px]">
-      <div className="flex flex-wrap items-start gap-x-[20px] gap-y-[8px]">
-        <div className="min-w-[200px] max-w-full flex-[2_1_300px]">
-          <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
-            <h2 ref={nameRef} title={nameCut ? row.name : undefined} className="line-clamp-2 min-w-0 break-words !text-ds-section !text-ds-fg">{row.name}</h2>
-            <StatusPill size="sm" tone="neutral" label={committeeTypeLabel(row.committee_type, 'long')} />
-            <CommitteeActivity size="sm" active={active} />
-          </div>
-          <p className="mt-[2px] flex flex-wrap items-center gap-x-[6px] text-ds-label font-normal text-ds-fg-muted">
-            {facts.length > 0 && <span>{facts.join(' · ')} ·</span>}
-            <span className="inline-flex items-center gap-[4px]">Chair <PersonChip name={detail?.chair_name} size={20} emptyLabel="not set" className="text-ds-label" /></span>
-            <span aria-hidden>·</span>
-            <span className="inline-flex items-center gap-[4px]">Secretary <PersonChip name={detail?.secretary_name} size={20} emptyLabel="not set" className="text-ds-label" /></span>
-          </p>
-        </div>
-        <dl className="flex min-w-0 flex-[3_1_500px] flex-wrap gap-x-[18px] gap-y-[6px]">
-          {cells.map((c) => (
-            <div key={c.label} className="min-w-[84px] max-w-[170px] flex-1">
-              <dt className="text-ds-label font-normal text-ds-fg-muted">{c.label}</dt>
-              <dd className="m-0">
-                <span className={`flex items-center gap-[4px] text-ds-body font-[600] ${CELL_TONE[c.tone]}`}>{c.value}{c.why && <InfoTip text={c.why} label={`Why ${c.label.toLowerCase()} is not recorded`} />}</span>
-                <span className="block truncate text-ds-label font-normal text-ds-fg-muted" title={c.sub}>{c.sub}</span>
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <div className="flex shrink-0 items-center gap-[6px]">
+      <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
+        <h2 ref={nameRef} title={nameCut ? row.name : undefined} className="line-clamp-2 min-w-0 max-w-full break-words !text-ds-section !text-ds-fg">{row.name}</h2>
+        <StatusPill size="sm" tone="neutral" label={committeeTypeLabel(row.committee_type, 'long')} />
+        <CommitteeActivity size="sm" active={active} />
+        {frequency && <span className="text-ds-label font-normal text-ds-fg-muted">{frequency}</span>}
+        <div className="ml-auto flex shrink-0 items-center gap-[6px]">
           <Button onClick={onOpen}>Open committee</Button>
           <Menu iconOnly label={`More actions for ${row.name}`} items={items} />
         </div>
       </div>
+      <dl className="mt-[6px] grid grid-cols-2 gap-x-[16px] gap-y-[8px] sm:grid-cols-4 xl:grid-cols-7">
+        {cells.map((c) => (
+          <div key={c.label} className="min-w-0">
+            <dt className="text-ds-label font-normal text-ds-fg-muted">{c.label}</dt>
+            <dd className="m-0">
+              <span className={`flex items-center gap-[4px] text-ds-body font-[600] ${CELL_TONE[c.tone]}`}>{c.value}{c.why && <InfoTip text={c.why} label={`Why ${c.label.toLowerCase()} is not recorded`} />}</span>
+              {c.sub && <span className="block truncate text-ds-label font-normal text-ds-fg-muted" title={c.sub}>{c.sub}</span>}
+            </dd>
+          </div>
+        ))}
+        {([['Chair', detail?.chair_name], ['Secretary', detail?.secretary_name]] as const).map(([label, name]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-ds-label font-normal text-ds-fg-muted">{label}</dt>
+            <dd className="m-0 min-w-0"><PersonChip name={name} size={20} emptyLabel="not set" /></dd>
+          </div>
+        ))}
+      </dl>
       {!active && <p role="note" className="mt-[6px] text-ds-label font-normal text-ds-fg-body">{inactiveNote(canSwitch)}</p>}
     </section>
   );

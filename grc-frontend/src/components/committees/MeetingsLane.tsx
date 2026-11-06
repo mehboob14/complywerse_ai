@@ -57,7 +57,7 @@ export function MeetingsLane({ ids, cut, committeeId, search, canSchedule, onSch
     <Lane
       id="lane-meetings"
       title="Meetings"
-      count={loading ? undefined : formatCount(q ? matched.length : total)}
+      count={loading || failed.length > 0 ? undefined : formatCount(q ? matched.length : total)}     // a failed list is not "0": no number until every committee has answered
       hiddenOnPhone={hiddenOnPhone}
       controls={canSchedule ? <Button size="sm" leftIcon={<CalendarPlus aria-hidden />} onClick={onSchedule}>Schedule</Button> : undefined}
     >

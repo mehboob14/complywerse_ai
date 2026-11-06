@@ -11,10 +11,13 @@ import { AlertTriangle } from 'lucide-react';
 import { Button, Checkbox, PersonChip, StatusPill } from '@/components/ui/ds';
 import { dueBadge } from '@/components/ui/ds/workModel';
 import { chipName, dateBox, decisionDay, meetingClock, readiness, type DecisionRow, type MeetingRow } from '@/lib/committeeHome';
+import { slaPill } from '@/lib/committees';
 import { meetingQuorum, notClosed } from '@/lib/meetingRun';
 import { formatCount, formatDate } from '@/lib/format';
 import { meetingStatus, statusPill } from '@/lib/status';
 import { decisionOutcome } from '@/lib/statuses/committees';
+import { withFrom } from '@/components/shell/withFrom';
+import { useHere } from './hooks';
 import { SlaTag } from './ui';
 
 /** One lane: a card with a heading, a count (the true total) and the lane's own controls. */
@@ -98,22 +101,23 @@ export function ActionRow({ a, showCommittee, canTick, ticking, onTick }: {
   const who = a.assigned_to_name || a.assignee_name || '';
   const committee = a.committee_name ?? '';
   return (
-    <li className={clsx(ROW, canTick ? 'grid-cols-[auto_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_auto]')}>
+    <li className={clsx(ROW, canTick ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]')}>
       {canTick && (
         <label className="relative -my-[6px] -ml-[8px] inline-grid h-ds-control w-[var(--ds-control-h)] shrink-0 cursor-pointer place-items-center row-span-2">
           <Checkbox checked={ticking} disabled={ticking} aria-label={`Mark completed: ${a.title}`} onChange={() => onTick(a)} />
         </label>
       )}
       <span title={a.title} className={clsx(TITLE, 'line-clamp-2')}>{a.title}</span>
-      <span className="justify-self-end"><SlaTag size="sm" sla={a.sla} /></span>
-      <span className={clsx(META, 'col-span-2', canTick && 'col-start-2')}>
-        {showCommittee && committee && <><span className="max-w-[160px] truncate" title={committee}>{chipName(committee)}</span><span aria-hidden>·</span></>}
-        <PersonChip name={who} size={20} className="text-ds-label" />
-        <span aria-hidden>·</span>
+      {/* no dots between the parts: on a narrow lane the line breaks anywhere, and a dot left at the end of a line says nothing */}
+      <span className={META}>
+        {showCommittee && committee && <span className="max-w-[120px] truncate" title={committee}>{chipName(committee)}</span>}
+        <PersonChip name={who} size={20} className="max-w-[140px] text-ds-label" />
         <span className={clsx('inline-flex items-center gap-[4px] whitespace-nowrap', DUE_TONE[badge.tone])}>
           {badge.overdue && <AlertTriangle aria-hidden className="h-[14px] w-[14px] shrink-0" strokeWidth={2} />}
-          {a.due_date ? <>{badge.overdue ? 'Due ' : ''}{formatDate(a.due_date, { calendar: true })}</> : 'No due date'}
+          {badge.overdue && <span className="sr-only">Due </span>}
+          {a.due_date ? formatDate(a.due_date, { calendar: true }) : 'No due date'}
         </span>
+        {slaPill(a.sla) && <SlaTag size="sm" sla={a.sla} />}
       </span>
     </li>
   );
@@ -137,10 +141,11 @@ export function MeetingRowItem({ m, showCommittee, pinned }: { m: MeetingRow; sh
   const upcoming = m.status === 'scheduled' && !notClosed(m);
   const quorum = meetingQuorum(m);
   const present = m.quorum_present;
+  const here = useHere();
   return (
     <li className="border-t border-ds-border first:border-t-0">
       <Link
-        href={`/governance/committees/meetings/${m.id}`}
+        href={withFrom(`/governance/committees/meetings/${m.id}`, here)}
         className={clsx(ROW, '!border-t-0 grid-cols-[40px_minmax(0,1fr)_auto]', ROW_LINK, pinned && 'border-l-[3px] border-l-ds-info bg-ds-info-soft pl-[9px]')}
       >
         <DateBox value={m.scheduled_date} />
@@ -166,9 +171,10 @@ export function MeetingRowItem({ m, showCommittee, pinned }: { m: MeetingRow; sh
 // ── a decision ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** A decision: the outcome as a word, the item, what was decided (two lines; the whole of it is in the meeting) and where and when. One link to the meeting. */
 export function DecisionRowItem({ d, showCommittee }: { d: DecisionRow; showCommittee: boolean }) {
+  const here = useHere();
   return (
     <li className="border-t border-ds-border first:border-t-0">
-      <Link href={`/governance/committees/meetings/${d.meeting_id}`} className={clsx(ROW, '!border-t-0 grid-cols-[84px_minmax(0,1fr)]', ROW_LINK)}>
+      <Link href={withFrom(`/governance/committees/meetings/${d.meeting_id}`, here)} className={clsx(ROW, '!border-t-0 grid-cols-[84px_minmax(0,1fr)]', ROW_LINK)}>
         <span className="pt-[1px]">
           {d.outcome ? <StatusPill size="sm" {...statusPill(decisionOutcome, d.outcome)} /> : <StatusPill size="sm" tone="neutral" label="Recorded" />}
         </span>

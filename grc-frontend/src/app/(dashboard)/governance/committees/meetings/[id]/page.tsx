@@ -10,8 +10,9 @@
 // PageHeader variant="page", AccordionRow, ChipList, ClampedText, StatusPill, every write a useReportedMutation, every question a useConfirm, drawers that ask "Discard changes?".
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Calendar, Link as LinkIcon, MapPin, Play, Users } from 'lucide-react';
+import { Calendar, Landmark, Link as LinkIcon, MapPin, Play, Users } from 'lucide-react';
 import { committeeApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PageHeader } from '@/components/ui';
@@ -32,10 +33,14 @@ import { LiveBar, useRunMeeting } from '@/components/committees/RunMeeting';
 
 export default function MeetingPage() {
   const params = useParams();
-  const meetingId = parseInt(params.id as string, 10);
+  const meetingId = parseInt(params.id as string);
+  // the meeting's own query: the shell's trail reads this cache entry too (same key, the raw answer: components/shell/records.test.ts pins it)
   const meetingQ = useQuery({
     queryKey: ['meeting', meetingId],
-    queryFn: async () => (await committeeApi.getMeeting(meetingId)).data as Meeting,
+    queryFn: async () => {
+      const res = await committeeApi.getMeeting(meetingId);
+      return res.data as Meeting;
+    },
   });
   const meeting = meetingQ.data;
 
@@ -127,7 +132,6 @@ function Workspace({ meeting }: { meeting: Meeting }) {
         <PageHeader
           variant="page"
           title={meeting.title}
-          back={{ href: committeeHomeAddress(meeting.committee_id), label: `Back to ${truncate(meeting.committee_name || 'the committee', 60).text}` }}
           chips={(
             <>
               <StatusPill tone="neutral" label={statusLabel(meeting.meeting_type)} />
@@ -140,6 +144,20 @@ function Workspace({ meeting }: { meeting: Meeting }) {
             : undefined}
         />
         <dl className="mt-[12px] flex flex-wrap items-center gap-x-[20px] gap-y-[8px] text-ds-body text-ds-fg-body">
+          {/* the committee: the way back to its meetings (the shell's trail names it too, but not when the meeting was opened from another page) */}
+          <div className="flex min-w-0 items-center gap-[6px]">
+            <dt className="sr-only">Committee</dt>
+            <dd className="min-w-0">
+              <Link
+                href={committeeHomeAddress(meeting.committee_id)}
+                title={meeting.committee_name || undefined}
+                className="inline-flex min-h-ds-control-sm max-w-full items-center gap-[6px] rounded-ds-control text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring"
+              >
+                <Landmark aria-hidden className="h-[16px] w-[16px] shrink-0" />
+                <span className="min-w-0 break-words">{truncate(meeting.committee_name || 'Committee', 60).text}</span>
+              </Link>
+            </dd>
+          </div>
           <div className="flex items-center gap-[6px]"><dt className="sr-only">When</dt><dd className="inline-flex items-center gap-[6px]"><Calendar aria-hidden className="h-[16px] w-[16px] text-ds-fg-muted" />{meetingWhen(meeting.scheduled_date)}</dd></div>
           {meeting.location && (
             <div className="flex items-center gap-[6px]"><dt className="sr-only">Location</dt><dd className="inline-flex items-center gap-[6px] break-words"><MapPin aria-hidden className="h-[16px] w-[16px] shrink-0 text-ds-fg-muted" />{meeting.location}</dd></div>

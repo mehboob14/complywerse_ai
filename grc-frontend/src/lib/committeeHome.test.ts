@@ -107,7 +107,7 @@ test('the strip: next meeting (or In progress, or None), attendance (or Not reco
   assert.deepEqual([cells[2].value, cells[2].sub, cells[2].tone], ['1', 'of 6 open actions', 'danger']);
   assert.deepEqual([cells[3].value, cells[3].tone], ['In force', 'success']);
   assert.match(cells[3].sub, /^v2\.0, until /);
-  assert.deepEqual([cells[4].value, cells[4].sub], ['7', 'on the committee']);
+  assert.deepEqual([cells[4].value, cells[4].sub], ['7', '']);
 
   const bare = stripCells({}, { today });
   assert.deepEqual([bare[0].value, bare[0].sub, bare[0].tone], ['None', 'not scheduled', 'warning']);
