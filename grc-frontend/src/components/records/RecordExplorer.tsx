@@ -9,6 +9,7 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { Button, FilterChips, IconButton, SegmentedControl, Sheet, TextInput, type FilterChip, type SegmentedOption } from '@/components/ui/ds';
 import { formatCount } from '@/lib/format';
 import { FacetRail, type FacetGroupView } from './FacetRail';
+import { useMinWidth } from './useMinWidth';
 
 export interface RecordExplorerProps {
   /** names the regions: "Documents" */
@@ -58,6 +59,7 @@ export function RecordExplorer({
   const bodyId = `${uid}-body`;
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sheet, setSheet] = useState(false);
+  const wide = useMinWidth(768);
   const rail = ready ? <FacetRail groups={groups} onToggle={onToggle} onClear={onClear} idPrefix="rail" /> : (
     <p role="status" className="px-[12px] py-[8px] text-ds-label text-ds-fg-muted">The filters, with their counts, appear when the {noun.other} have loaded.</p>
   );
@@ -65,14 +67,19 @@ export function RecordExplorer({
     <div className="flex min-w-0 flex-col gap-[12px]" role="region" aria-label={label}>
       <a
         href={`#${bodyId}`}
-        onClick={(e) => { e.preventDefault(); bodyRef.current?.focus(); }}
+        onClick={(e) => {
+          e.preventDefault();
+          // past the filters to the first record (its title); with no record, to the list itself
+          const first = bodyRef.current?.querySelector<HTMLElement>('[data-record-row] a[href], [data-record-row] button, [data-folder-row] button');
+          (first ?? bodyRef.current)?.focus();
+        }}
         className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:z-[60] focus-visible:rounded-ds-control focus-visible:border focus-visible:border-ds-primary focus-visible:bg-ds-surface focus-visible:px-[12px] focus-visible:py-[8px] focus-visible:text-ds-body focus-visible:font-[600] focus-visible:text-ds-primary-text focus-visible:shadow-ds-ring focus-visible:outline-none"
       >
         {`Skip the filters, go to the ${noun.other}`}
       </a>
       {head}
       {notices}
-      <div className="grid min-w-0 gap-[16px] lg:grid-cols-[232px_minmax(0,1fr)]">
+      <div className="grid min-w-0 gap-[16px] lg:grid-cols-[216px_minmax(0,1fr)] xl:grid-cols-[232px_minmax(0,1fr)]">
         <aside aria-label="Filters" className="hidden min-w-0 lg:block">
           <div className="sticky top-[72px] max-h-[calc(100vh-6rem)] overflow-auto rounded-ds-card border border-ds-border bg-ds-surface">
             <div className="flex items-center gap-[8px] border-b border-ds-border px-[12px] py-[6px]">
@@ -86,7 +93,8 @@ export function RecordExplorer({
 
         <div className="flex min-w-0 flex-col gap-[8px]">
           <div className="flex min-w-0 items-start gap-[8px]">
-            <FilterChips label={quickLabel} chips={quick} onToggle={onQuick} className="min-w-0 flex-1" />
+            {/* a phone keeps the chips on one line that scrolls sideways (the records are what the screen is for); wider, they wrap */}
+            <FilterChips label={quickLabel} chips={quick} onToggle={onQuick} overflow={wide ? 'wrap' : 'scroll'} className="min-w-0 flex-1" />
             {quickExtra}
           </div>
           <div role="search" aria-label={`Search the ${noun.other}`} className="flex min-w-0 flex-wrap items-center gap-[8px]">

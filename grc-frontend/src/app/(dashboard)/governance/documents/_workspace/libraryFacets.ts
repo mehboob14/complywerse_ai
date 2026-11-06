@@ -106,6 +106,7 @@ export interface RailInput {
 }
 
 const STATUS_FIRST: readonly string[] = [...STAGE_ORDER, 'expired'];
+const capitalised = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const KNOWN_TYPES = ['policy', 'standard', 'procedure', 'guideline', 'charter', 'framework'];
 
 export function railOptions(input: RailInput): Record<FacetKey, RailOption[]> {
@@ -119,7 +120,7 @@ export function railOptions(input: RailInput): Record<FacetKey, RailOption[]> {
   const tree = departmentTree(departments ?? []);
   const departmentItems = departmentPickItems(departments ?? [], { labels: input.levelNames, keep: docs.map((d) => d.department_id) });
   return {
-    statuses: [...STATUS_FIRST, ...otherStatuses, 'archived'].map((v) => ({ value: v, label: statusLabel(v), title: v === 'archived' ? 'Archived documents are shown on their own' : undefined })),
+    statuses: [...STATUS_FIRST, ...otherStatuses, 'archived'].map((v) => ({ value: v, label: capitalised(statusLabel(v)), title: v === 'archived' ? 'Archived documents are shown on their own' : undefined })),
     review: REVIEW_BUCKETS.map((v) => ({ value: v, label: REVIEW_BUCKET_LABEL[v] })),
     types: [...KNOWN_TYPES, ...otherTypes].map((v) => ({ value: v, label: typeLabel(v) })),
     departments: [

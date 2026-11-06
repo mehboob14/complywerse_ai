@@ -762,11 +762,11 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         actions={(
           <>
             {!inBoard && !inFolders && parents.length > 0 && !loading && (
-              <Button variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
+              <Button className="max-md:hidden" variant="ghost" onClick={() => setFold(allParentsOpen ? collapseAll(parents) : expandAll(fold))} leftIcon={allParentsOpen ? <ChevronsDownUp aria-hidden /> : <ChevronsUpDown aria-hidden />}>
                 <span className="max-lg:sr-only">{allParentsOpen ? 'Collapse all' : 'Expand all'}</span>
               </Button>
             )}
-            {!inBoard && <Menu label="Sort and rows" items={sortItems} />}
+            {!inBoard && <Menu label="Sort" items={sortItems} />}
             <Button leftIcon={<Download aria-hidden />} onClick={exportCsv} disabled={filteredDocs.length === 0 || loading} title={words.title}>
               <span className="max-md:sr-only">{words.label}</span>
             </Button>

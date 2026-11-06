@@ -22,11 +22,11 @@ test('sortDocs gives the order compareDocs gives, for every key and direction', 
   }
 });
 
-test('10,000 documents sort by title within a loose bound (printed)', () => {
+test('10,000 documents sort by title within a loose bound (reported as a diagnostic)', (ctx) => {
   const many = Array.from({ length: 10_000 }, (_, i) => ({ ...docs[i % docs.length], id: i + 1, title: `${TITLES[i % TITLES.length]} ${i}` }));
   const t = performance.now();
   sortDocs(many, { key: 'title', dir: 'asc' }, lookups);
   const took = performance.now() - t;
-  console.log(`# sortDocs by title, 10,000 documents: ${took.toFixed(0)} ms`);
+  ctx.diagnostic(`sortDocs by title, 10,000 documents: ${took.toFixed(0)} ms`);
   assert.ok(took < 3000, String(took));
 });

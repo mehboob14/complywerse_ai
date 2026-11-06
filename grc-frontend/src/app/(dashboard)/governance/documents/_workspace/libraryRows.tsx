@@ -113,11 +113,11 @@ export function OwnerAvatar({ doc, withName = false }: { doc: GovDoc; withName?:
 export function documentColumns(env: RowEnv): RecordColumn<GovDoc>[] {
   return [
     { key: 'title', header: 'Document', sortKey: 'title', cell: (row) => <RowLead row={row}><DocumentTitle row={row} env={env} /></RowLead> },
-    { key: 'status', header: 'Status', sortKey: 'lifecycle', width: 'w-[128px]', cell: (row) => <LifecycleCell doc={row.record} /> },
-    { key: 'review', header: 'Next review', sortKey: 'review', width: 'w-[132px]', priority: 2, cell: (row) => <ReviewDate doc={row.record} now={env.now} compact={env.compact} /> },
-    { key: 'owner', header: 'Owner', sortKey: 'owner', width: 'w-[72px] 2xl:w-[176px]', priority: 2, cell: (row) => <><span className="2xl:hidden"><OwnerAvatar doc={row.record} /></span><span className="hidden min-w-0 2xl:inline"><OwnerAvatar doc={row.record} withName /></span></> },
+    { key: 'status', header: 'Status', sortKey: 'lifecycle', width: 'w-[116px]', cell: (row) => <LifecycleCell doc={row.record} /> },
+    { key: 'review', header: 'Next review', sortKey: 'review', width: 'w-[124px]', priority: 2, cell: (row) => <ReviewDate doc={row.record} now={env.now} compact={env.compact} /> },
+    { key: 'owner', header: 'Owner', sortKey: 'owner', width: 'w-[68px] 2xl:w-[176px]', priority: 2, cell: (row) => <><span className="2xl:hidden"><OwnerAvatar doc={row.record} /></span><span className="hidden min-w-0 2xl:inline"><OwnerAvatar doc={row.record} withName /></span></> },
     {
-      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', width: 'w-[96px]', priority: 3,
+      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', width: 'w-[92px]', priority: 3,
       cell: (row) => <FrameworksCell as="count" doc={row.record} info={env.info} prefer={env.preferFrameworks} onPick={env.onPickFramework} />,
     },
   ];
@@ -127,11 +127,9 @@ export function documentColumns(env: RowEnv): RecordColumn<GovDoc>[] {
 export function DocumentCard({ row, env }: { row: RecordRow<GovDoc>; env: RowEnv }) {
   const doc = row.record;
   const s = reviewState(doc, env.now);
-  const { text, title } = subline(doc, env.lookups);
   return (
     <div className="flex min-w-0 flex-col gap-[4px]">
-      <span dir="auto" title={doc.title} className={`line-clamp-2 text-ds-body [overflow-wrap:anywhere] ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}>{doc.title}</span>
-      {text && <span className="truncate text-ds-label text-ds-fg-muted" title={title}>{text}</span>}
+      <span dir="auto" title={doc.title} className={`truncate text-ds-body ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}>{doc.title}</span>
       <span className="flex min-w-0 flex-wrap items-center gap-x-[10px] gap-y-[4px]">
         <StatusPill size="sm" {...statusPill(documentStatus, doc.status)} />
         {s.label && <span className="text-ds-label text-ds-fg-muted">{s.long || s.label}</span>}

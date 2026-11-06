@@ -88,7 +88,7 @@ function Caret<R>({ row }: { row: RecordRow<R> }) {
       aria-label={n.label}
       title={n.label}
       onClick={(e) => { e.stopPropagation(); n.onToggle(); }}
-      className="inline-grid h-ds-control-sm w-[24px] shrink-0 place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring [@media(pointer:coarse)]:w-[44px]"
+      className="inline-grid h-ds-control-sm w-[24px] shrink-0 place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring max-md:w-[44px] [@media(pointer:coarse)]:w-[44px]"
     >
       <Icon aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
     </button>
@@ -174,11 +174,11 @@ export function RecordTable<R>({
               className={clsx('flex items-start gap-[4px] rounded-ds-card border', active ? 'border-ds-primary bg-ds-primary-soft' : 'border-ds-border bg-ds-surface', item.context && 'text-ds-fg-muted')}
             >
               {selection && !item.context && (
-                <label className="flex min-h-ds-control shrink-0 items-center pl-[8px] pt-[2px]">
+                <label className="flex min-h-ds-control min-w-[44px] shrink-0 items-center justify-center">
                   <Checkbox aria-label={selection.rowLabel(record)} checked={selection.ticked.has(id)} onChange={() => selection.onToggle(id)} />
                 </label>
               )}
-              <button type="button" onClick={() => onActivate(record)} aria-current={active ? 'true' : undefined} className="min-h-ds-control min-w-0 flex-1 px-[12px] py-[8px] text-left focus-visible:outline-none focus-visible:shadow-ds-ring">
+              <button type="button" onClick={() => onActivate(record)} aria-current={active ? 'true' : undefined} className="min-h-ds-control min-w-0 flex-1 px-[8px] py-[6px] text-left focus-visible:outline-none focus-visible:shadow-ds-ring">
                 {card(item)}
               </button>
               {item.nested && item.nested.count > 0 && <div className="pt-[2px]"><Caret row={item} /></div>}

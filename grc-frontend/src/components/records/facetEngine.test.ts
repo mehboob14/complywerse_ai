@@ -103,7 +103,7 @@ test('the unchosen rule of a facet keeps archived records out of every other cou
   assert.ok(archived.matches.every((d) => d.archived));
 });
 
-test('10,000 records are indexed and evaluated within a loose bound (printed)', () => {
+test('10,000 records are indexed and evaluated within a loose bound (reported as a diagnostic)', (ctx) => {
   const data = rows(10_000, 5);
   let t = performance.now();
   const index = indexRows(data, SPECS, (d) => d.text);
@@ -111,6 +111,6 @@ test('10,000 records are indexed and evaluated within a loose bound (printed)', 
   t = performance.now();
   for (let k = 0; k < 20; k++) evaluate(index, { status: ['draft'], tags: ['a'] }, { terms: ['beta'] });
   const each = (performance.now() - t) / 20;
-  console.log(`# 10,000 records: index ${built.toFixed(1)} ms, evaluate ${each.toFixed(2)} ms each`);
+  ctx.diagnostic(`10,000 records: index ${built.toFixed(1)} ms, evaluate ${each.toFixed(2)} ms each`);
   assert.ok(built < 1500 && each < 150, `${built} ${each}`);
 });
