@@ -69,6 +69,12 @@ test('the panel is the kit\'s SidePanel in three places, with sections that are 
   assert.match(src, /<nav aria-label=\{section\.navLabel\}>/);
   assert.match(src, /aria-current=\{row\.current \? 'page' : undefined\}/);
   assert.equal((src.match(/<Disclosure /g) ?? []).length, 5, 'the queue, the committee, the module, Pinned, Recent');
+  // the queue section: shut to begin with on the pages that draw the queue themselves, and its two links outside what shuts, so they stay on show
+  assert.match(src, /id === 'queue' \? !queueStartsShut\(pathname\)/, 'the rule is panelModel.queueStartsShut, not a path of its own');
+  assert.match(src, /open=\{queueOpen\} onOpenChange=\{toggle\('queue'\)\} className="!border-b-0">/);
+  assert.match(src, /<\/Disclosure>\s*<div className="border-b border-ds-border pb-\[2px\]">\s*<Link href="\/needs-my-action" onClick=\{onPick\} className=\{MORE\}>Open Needs my action →<\/Link>\s*\{canAssessments && <Link href="\/compliance\/assessments\/approvals"/, 'the two links follow the section, not inside it');
+  assert.match(src, /const hasFirstItem = queueOpen && needs\.items\.length > 0/, 'Ctrl . lands on a pending item only while the queue shows its rows');
+  assert.match(src, /data-panel-first=\{hasFirstItem && i === 0 \? '' : undefined\}/);
   assert.match(src, /role="alert"/, 'a source of the queue that could not be loaded says so, with Retry');
   assert.match(src, /queue\.refetch\(n\.source\)/);
 });
@@ -94,9 +100,29 @@ test('the rail is a fixed column with a short name under each icon, and the queu
   assert.match(src, /title=\{item\.name\}/);
 });
 
+test('the first-run pointer is in the bar and covers nothing of the page: the panel button carries its name until the palette or the panel has been used once; no card floats over the page', () => {
+  const hook = code(read('useFirstRunHint.ts'));
+  assert.doesNotMatch(hook, /\b(fixed|absolute|sticky)\b|role="note"/, 'a pointer drawn over the page hid its rows');
+  assert.match(hook, /hintShows\(gone, placement\)/);
+  assert.match(hook, /hintUsed\(\{ paletteOpen, panelShown, placement \}\)/);
+  assert.match(hook, /const KEY = 'cw-shell-hint'/);
+  assert.match(hook, /window\.localStorage\.setItem\(KEY, '1'\)/, 'dismissed once per browser');
+  assert.ok(!files.includes('FirstRunHint.tsx'), 'the floating card is gone');
+  assert.doesNotMatch(read('PageShell.tsx'), /FirstRunHint|useFirstRunHint/, 'the frame mounts nothing over the page');
+  const header = code(readFileSync('src/components/layout/Header.tsx', 'utf8'));
+  assert.match(header, /const hint = useFirstRunHint\(\)/);
+  assert.match(header, /\{hint && <span className="hidden text-ds-body font-\[600\] lg:inline">Work and context<\/span>\}/, 'in the bar, from 1024, beside the panel button\'s icon');
+});
+
+test('a page\'s own sticky bar cannot hide the focused element: main keeps a scroll padding at its top edge (and still the padding it always had)', () => {
+  const src = read('PageShell.tsx');
+  assert.match(src, /const STICKY_PAD = '96px'/);
+  assert.match(src, /<main id="main-content" tabIndex=\{-1\} className="min-w-0 flex-1 overflow-auto bg-\[var\(--color-subtle\)\] p-4 lg:p-5 scrollbar-thin focus:outline-none" style=\{\{ scrollPaddingTop: STICKY_PAD \}\}>/);
+});
+
 test('what is kept per browser goes through the one store: every access in try/catch, nothing else touches storage', () => {
   const stores = files.filter((f) => /localStorage|sessionStorage/.test(code(read(f))));
-  assert.deepEqual(stores.sort(), ['FirstRunHint.tsx', 'ShellProvider.tsx', 'pinnedRecent.ts'].sort());
+  assert.deepEqual(stores.sort(), ['ShellProvider.tsx', 'pinnedRecent.ts', 'useFirstRunHint.ts'].sort());
   for (const f of stores) {
     const src = code(read(f));
     const accesses = (src.match(/(localStorage|sessionStorage)\.(getItem|setItem|removeItem)|\(store \?\? window\.localStorage\)|store \?\? browserStore|window\.localStorage\b/g) ?? []).length;

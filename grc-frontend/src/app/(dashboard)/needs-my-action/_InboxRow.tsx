@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { ChevronRight, FileCheck, FileCheck2, GitPullRequest, PenLine, Pencil, RotateCcw, Send, ShieldCheck, UserCheck, type LucideIcon } from 'lucide-react';
 import { StatusPill } from '@/components/ui/ds';
+import { withFrom } from '@/components/shell/withFrom';
 import { againLine } from '@/lib/approvalRoutes';
 import { formatDate } from '@/lib/format';
 import { statusPill } from '@/lib/status';
@@ -20,7 +21,8 @@ const ICON: Record<Kind, LucideIcon> = {
 
 const CONTROL = 'group flex w-full items-start gap-[12px] px-[12px] py-[10px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring max-sm:flex-wrap';
 
-export function InboxRow({ item, now, onOpen }: { item: InboxItem; now: Date; onOpen: (item: InboxItem) => void }) {
+/** `here`: the address of the page the row is on; the links that open a record carry it, so the menu and the trail come back to this page. */
+export function InboxRow({ item, now, here, onOpen }: { item: InboxItem; now: Date; here: string; onOpen: (item: InboxItem) => void }) {
   const sent = item.section === 'sent';
   const Icon = sent ? Send : ICON[item.kind];
   const dialog = !sent && KIND_META[item.kind].inDialog;
@@ -64,7 +66,7 @@ export function InboxRow({ item, now, onOpen }: { item: InboxItem; now: Date; on
         <button type="button" aria-haspopup="dialog" data-inbox-row={item.key} onClick={() => onOpen(item)} className={CONTROL}>{body}</button>
       ) : (
         <Link
-          href={item.href}
+          href={withFrom(item.href, here)}
           data-inbox-row={item.key}
           // a link answers Enter by itself; a row answers Space too, as the buttons beside it do
           onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } }}
@@ -74,7 +76,7 @@ export function InboxRow({ item, now, onOpen }: { item: InboxItem; now: Date; on
         </Link>
       )}
       {item.extraLinks.map((link) => (
-        <Link key={link.href} href={link.href}
+        <Link key={link.href} href={withFrom(link.href, here)}
           className="ml-[56px] mb-[8px] inline-flex min-h-ds-control items-center rounded-ds-control px-[4px] text-ds-label font-[600] text-ds-primary-text underline-offset-[2px] hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">
           {link.label}
         </Link>

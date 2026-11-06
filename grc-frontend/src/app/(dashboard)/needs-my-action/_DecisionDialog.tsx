@@ -13,6 +13,7 @@ import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { Button, ErrorState, FormField, Notice, SegmentedControl, SkeletonLines, Textarea, useReportedMutation } from '@/components/ui/ds';
 import SignaturePad from '@/components/governance/SignaturePad';
+import { withFrom } from '@/components/shell/withFrom';
 import { againLine, seeChangesHref } from '@/lib/approvalRoutes';
 import { formatDate } from '@/lib/format';
 import { signRoleOf } from '@/lib/proposals';
@@ -28,6 +29,8 @@ const FULL_ON_PHONE = 'max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-no
 
 export interface DecisionDialogProps {
   item: InboxItem;
+  /** the address of the page the dialog is on: the links that open a record carry it (withFrom), so the menu and the trail come back to this page */
+  here: string;
   /** the live list still holds the item (a refresh that drops it means someone decided it, here or elsewhere) */
   stillWaiting: boolean;
   /** the dialog was closed without a decision */
@@ -38,7 +41,7 @@ export interface DecisionDialogProps {
   onStale: (item: InboxItem) => void;
 }
 
-export function DecisionDialog({ item, stillWaiting, onClose, onDecided, onStale }: DecisionDialogProps) {
+export function DecisionDialog({ item, here, stillWaiting, onClose, onDecided, onStale }: DecisionDialogProps) {
   const [dirty, setDirty] = useState(false);
   const evidence = item.kind === 'evidence';
   return (
@@ -46,8 +49,8 @@ export function DecisionDialog({ item, stillWaiting, onClose, onDecided, onStale
       <div className="flex flex-col gap-[12px] p-[16px]">
         <Subject item={item} />
         {!stillWaiting ? <Gone onClose={onClose} />
-          : evidence ? <EvidenceForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />
-          : <DocumentForm item={item} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />}
+          : evidence ? <EvidenceForm item={item} here={here} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />
+          : <DocumentForm item={item} here={here} onDirty={setDirty} onClose={onClose} onDecided={onDecided} onStale={onStale} />}
       </div>
     </AnimatedModal>
   );
@@ -98,7 +101,7 @@ function commentLabel(choice: ChoiceSpec): string {
 
 // ── documents: sign, ask for changes, reject ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function DocumentForm({ item, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
+function DocumentForm({ item, here, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'here' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
   const documentId = item.documentId as number;
   const signoff = useSignoff(documentId);
   const data = signoff.data;
@@ -153,12 +156,12 @@ function DocumentForm({ item, onDirty, onClose, onDecided, onStale }: Pick<Decis
   return (
     <>
       {again && (
-        <Notice tone="warning" title="Asked again after changes" action={changes ? <Button href={changes} target="_blank" rel="noopener noreferrer">See what changed</Button> : undefined}>
+        <Notice tone="warning" title="Asked again after changes" action={changes ? <Button href={withFrom(changes, here)} target="_blank" rel="noopener noreferrer">See what changed</Button> : undefined}>
           {againLine(again, (iso) => formatDate(iso))}{again.note ? ` ${again.by || 'The author'} wrote: “${again.note}”` : ''}
         </Notice>
       )}
       <div className="flex flex-wrap items-center gap-[8px]">
-        <Button href={`/governance/documents/${documentId}`} target="_blank" rel="noopener noreferrer" leftIcon={<ExternalLink aria-hidden />}>Read the document</Button>
+        <Button href={withFrom(`/governance/documents/${documentId}`, here)} target="_blank" rel="noopener noreferrer" leftIcon={<ExternalLink aria-hidden />}>Read the document</Button>
         <span className="text-ds-label text-ds-fg-muted">{step?.can_delegate ? 'Read it first. To hand this step to someone else, open the document.' : 'Read it first, then decide.'}</span>
       </div>
       <Choices choices={choices} value={choice.id} onChange={(c) => { setChoiceId(c); setMissing(''); setFailure(null); }} disabled={send.isPending || finished} />
@@ -183,7 +186,7 @@ function DocumentForm({ item, onDirty, onClose, onDecided, onStale }: Pick<Decis
 
 // ── evidence: approve, return, reject ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function EvidenceForm({ item, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
+function EvidenceForm({ item, here, onDirty, onClose, onDecided, onStale }: Pick<DecisionDialogProps, 'item' | 'here' | 'onClose' | 'onDecided' | 'onStale'> & { onDirty: (d: boolean) => void }) {
   const choices = evidenceChoices();
   const [choiceId, setChoiceId] = useState<Choice>('approve');
   const choice = choices.find((c) => c.id === choiceId) ?? choices[0];
@@ -223,7 +226,7 @@ function EvidenceForm({ item, onDirty, onClose, onDecided, onStale }: Pick<Decis
   return (
     <>
       <div className="flex flex-wrap items-center gap-[8px]">
-        <Button href={item.href} target="_blank" rel="noopener noreferrer" leftIcon={<ExternalLink aria-hidden />}>Open the assessment approval</Button>
+        <Button href={withFrom(item.href, here)} target="_blank" rel="noopener noreferrer" leftIcon={<ExternalLink aria-hidden />}>Open the assessment approval</Button>
         <span className="text-ds-label text-ds-fg-muted">{KIND_META.evidence.authority}</span>
       </div>
       <Choices choices={choices} value={choice.id} onChange={(c) => { setChoiceId(c); setFailure(null); }} disabled={send.isPending || finished || checking} />

@@ -13,6 +13,7 @@ import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import { Button, EmptyState, ErrorState, Notice, SkeletonRows } from '@/components/ui/ds';
 import { navPermissions } from '@/components/layout/navAccess';
+import { useHere } from '@/components/shell/useShellRoute';
 import { usePermissions } from '@/hooks/usePermissions';
 import { routeFor } from '@/lib/navRegistry';
 import { useInbox } from '@/lib/inbox/inboxApi';
@@ -32,6 +33,7 @@ function Queue() {
   // the page asks again every time it is opened (freshOnOpen): what the person did on a document page or on the assessments page, which refresh only some of the lists, shows at once, not up to a minute later
   const { inbox, refetch, fetching, fetchingSource } = useInbox({ includeSent: true, freshOnOpen: true });
   const search = useSearchParams();
+  const here = useHere();                                                             // every link that opens a record carries this page (withFrom): the trail and the menu come back to it
   const asked = sectionParam(search?.get('section'));
   const queryClient = useQueryClient();
   const perms = usePermissions();
@@ -136,6 +138,7 @@ function Queue() {
           shown={shown[spec.key]}
           onMore={() => setShown((s) => ({ ...s, [spec.key]: s[spec.key] + PAGE_SIZE }))}
           now={now}
+          here={here}
           onOpenItem={(item) => { setDone(null); setDeciding(item); }}
           onRetry={(source) => refetch(source)}
           fetching={fetchingSource}
@@ -145,6 +148,7 @@ function Queue() {
       {deciding && (
         <DecisionDialog
           item={deciding}
+          here={here}
           stillWaiting={stillWaiting}
           onClose={() => setDeciding(null)}
           onDecided={decided}

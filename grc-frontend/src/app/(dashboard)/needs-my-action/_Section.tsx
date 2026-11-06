@@ -20,13 +20,15 @@ export interface SectionProps {
   shown: number;
   onMore: () => void;
   now: Date;
+  /** this page's address: the links that open a record carry it (withFrom) */
+  here: string;
   onOpenItem: (item: InboxItem) => void;
   onRetry: (source: InboxItem['source']) => void;
   /** the sources being asked right now (a Retry shows it) */
   fetching: Partial<Record<InboxItem['source'], boolean>>;
 }
 
-export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, onOpenItem, onRetry, fetching }: SectionProps) {
+export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, here, onOpenItem, onRetry, fetching }: SectionProps) {
   const items = inbox.bySection[spec.section];
   const status = sectionStatus(inbox, spec.section);
   const decisions = spec.key === 'decide';
@@ -78,7 +80,7 @@ export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, 
             <ul className="m-0 list-none p-0" aria-label={spec.title}>
               {page.rows.map((item, i) => (
                 <FragmentRow key={item.key} divider={i === firstOther && i >= 0 ? `You can also decide · ${formatCount(inbox.counts.canDecide)}` : null}>
-                  <InboxRow item={item} now={now} onOpen={onOpenItem} />
+                  <InboxRow item={item} now={now} here={here} onOpen={onOpenItem} />
                 </FragmentRow>
               ))}
             </ul>

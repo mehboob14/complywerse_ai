@@ -21,7 +21,10 @@ import { ShellProvider, useShell } from './ShellProvider';
 import { PinnedRecentProvider } from './PinnedRecentProvider';
 import WorkPanel from './WorkPanel';
 import CommandPalette from './CommandPalette';
-import FirstRunHint from './FirstRunHint';
+
+// A page's own bar that sticks to the top of `main` (a toolbar, a live meeting's bar: 60 to 90px, below main's padding or reaching up through it) hides what the keyboard scrolls to the
+// top edge of `main`. `scroll-padding-top` keeps a focused element, or one a link scrolls to, that far below the edge, so it is never under such a bar. A taller bar needs a larger value.
+const STICKY_PAD = '96px';
 
 const SKIP = 'sr-only focus:not-sr-only focus:fixed focus:top-3 focus:z-[3000] focus:rounded-ds-control focus:bg-ds-primary focus:px-[12px] focus:py-[8px] focus:text-ds-body focus:font-[500] focus:text-ds-on-primary focus:shadow-ds-pop focus-visible:outline-none focus-visible:shadow-ds-ring';
 
@@ -44,7 +47,7 @@ export default function PageShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Header />
             <div className="flex min-h-0 flex-1">
-              <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-auto bg-[var(--color-subtle)] p-4 lg:p-5 scrollbar-thin focus:outline-none">
+              <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-auto bg-[var(--color-subtle)] p-4 lg:p-5 scrollbar-thin focus:outline-none" style={{ scrollPaddingTop: STICKY_PAD }}>
                 {children}
               </main>
               <WorkPanel />
@@ -55,7 +58,6 @@ export default function PageShell({ children }: { children: ReactNode }) {
           {/* Guide mode slide-over — renders nothing until a marker is clicked. */}
           <GuidePanel />
           <CommandPalette />
-          <FirstRunHint />
         </div>
       </PinnedRecentProvider>
     </ShellProvider>

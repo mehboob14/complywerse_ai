@@ -13,6 +13,24 @@ export function panelOpen(placement: PanelPlacement, dockedShut: boolean, asked:
   return placement === 'dock' ? !dockedShut : asked;
 }
 
+// The pages that draw the person's queue themselves (the Overview's worklist, the Needs my action page): beside them the panel would list the same rows a second time.
+const OWN_WORKLIST = ['/governance', '/needs-my-action'];
+
+/** Whether the panel's queue section starts shut on this page (its count and its links stay on show; the person can open it). Open everywhere else. */
+export function queueStartsShut(pathname: string): boolean {
+  return OWN_WORKLIST.includes(pathname.split(/[?#]/)[0].replace(/\/+$/, '') || '/');
+}
+
+/** The first-run label on the panel's button: below 1440 (from there the panel is open beside the page and needs no pointing at), until the person has used it once. */
+export function hintShows(dismissed: boolean, placement: PanelPlacement): boolean {
+  return !dismissed && placement !== 'dock';
+}
+
+/** Whether the person has now used what the label points at: the palette is open, or the panel was opened by them (a docked panel is open by itself, which is no use). */
+export function hintUsed(c: { paletteOpen: boolean; panelShown: boolean; placement: PanelPlacement }): boolean {
+  return c.paletteOpen || (c.panelShown && c.placement !== 'dock');
+}
+
 export interface PanelRow {
   kind: 'row';
   key: string;
