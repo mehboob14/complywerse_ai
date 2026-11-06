@@ -10,9 +10,10 @@
 // label is read out of its menu group ("Overview" -> "Governance Overview"); `keywords` are the names it used to go by (a future command palette
 // finds the page by any of them).
 //
-// WHAT READS IT: the Header (the top-bar title of Governance pages, and of any page that has `ownHeading`), DocumentsTabs (its tabs and the "in the area"
-// rule). A page of another module reads the Header's own title map (PAGE_TITLES) until it moves to the kit's page head and sets `ownHeading`; each group
-// of such pages declares its entries in its own file, lib/navPages/<group>.ts (collected by navPages/index.ts), so the groups never edit the same lines.
+// WHAT READS IT: the application shell (components/shell): the top bar's trail (crumbsModel: breadcrumbFor, ownHeadingSection), the command palette (searchRoutes,
+// areaName), the Work and context panel (tabsFor, activeTab) and DocumentsTabs (its tabs and the "in the area" rule). A page that draws its own heading sets
+// `ownHeading`, so the trail does not repeat its name; each group of pages declares its entries in its own file, lib/navPages/<group>.ts (collected by
+// navPages/index.ts), so the groups never edit the same lines. (The Header's own title map, PAGE_TITLES, went with the trail: the registry names every page.)
 //
 // RIGHTS: `permissions` is who is offered the page (any one of them; null: any signed-in user). A sidebar leaf has navAccess's; a page navAccess lists
 // (PAGE_PERMISSIONS: /complychat, /users, /reports/...) has those; a page that gates itself says so in its group file (`permissions`, or `adminOnly`);

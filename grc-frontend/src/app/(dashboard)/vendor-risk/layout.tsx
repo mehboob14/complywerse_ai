@@ -18,7 +18,7 @@ export default function VendorRiskLayout({ children }: { children: React.ReactNo
   const drillDown = isDrillDown(pathname);
 
   return (
-    <div className="-m-4 min-h-full text-slate-900 lg:-m-5">
+    <div className="-m-[14px] min-h-full text-slate-900 lg:-m-4">
       <div className="min-w-0">
         {/* Remount only when entering/leaving a vendor-detail route so moving
             between list pages reuses cached queries instead of flashing loaders. */}

@@ -24,9 +24,9 @@ import { ADMIN_GROUP, FOCUS, FullTree, NavGroupSection, type EntryBadge } from '
 
 function Brand() {
   return (
-    <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
+    <span className="flex items-baseline gap-0.5 whitespace-nowrap text-base font-semibold text-ds-fg">
       Compliverse
-      <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
+      <span className="ml-1 text-xs font-medium text-ds-primary-text">AI</span>
     </span>
   );
 }

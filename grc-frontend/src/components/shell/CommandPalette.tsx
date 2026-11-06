@@ -177,7 +177,7 @@ function PaletteDialog() {
             className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-ds-fg placeholder:text-ds-fg-muted focus-visible:outline-none"
           />
           {view.searching && <Loader2 size={16} aria-hidden className="shrink-0 animate-spin" />}
-          <button type="button" onClick={close} aria-label="Close" className="inline-flex h-ds-control w-ds-control shrink-0 items-center justify-center rounded-ds-control hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring">
+          <button type="button" onClick={close} aria-label="Close" className="inline-flex h-ds-control w-[var(--ds-control-h)] shrink-0 items-center justify-center rounded-ds-control hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring">
             <X size={16} strokeWidth={1.75} aria-hidden />
           </button>
         </div>

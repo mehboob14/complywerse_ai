@@ -76,6 +76,8 @@ interface Ui {
   /** a number that goes up when something asks the panel to take keyboard focus (Ctrl .); the panel focuses its first row when it sees a new one */
   focusRequest: number;
   requestPanelFocus: () => void;
+  /** the panel asks, once, whether it was opened to take focus (Ctrl .): true the first time after a request, then false, so a panel opened by its button never takes focus */
+  takeFocusRequest: () => boolean;
   /** the top bar's panel button: where focus goes back to when the panel is closed from the keyboard */
   panelButton: RefObject<HTMLButtonElement>;
 }
@@ -130,6 +132,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const [asked, setAsked] = useState(false);
   const [dockedShut, setDockedShut] = useState(readDockedShut);
   const [focusRequest, setFocusRequest] = useState(0);
+  const pendingFocus = useRef(false);
   const panelButton = useRef<HTMLButtonElement>(null);
   const shown = panelOpen(placement, dockedShut, asked);
 
@@ -137,7 +140,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     if (placement === 'dock') { setDockedShut(!next); writeDockedShut(!next); } else setAsked(next);
   }, [placement]);
   const togglePanel = useCallback(() => setPanel(!shown), [setPanel, shown]);
-  const requestPanelFocus = useCallback(() => { setPanel(true); setFocusRequest((n) => n + 1); }, [setPanel]);
+  const requestPanelFocus = useCallback(() => { pendingFocus.current = true; setPanel(true); setFocusRequest((n) => n + 1); }, [setPanel]);
+  const takeFocusRequest = useCallback(() => { const wanted = pendingFocus.current; pendingFocus.current = false; return wanted; }, []);
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const closePalette = useCallback(() => setPaletteOpen(false), []);
 
@@ -164,8 +168,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   }, [shown, setPanel, requestPanelFocus]);
 
   const ui = useMemo<Ui>(() => ({
-    mode, placement, paletteOpen, openPalette, closePalette, panelShown: shown, setPanel, togglePanel, focusRequest, requestPanelFocus, panelButton,
-  }), [mode, placement, paletteOpen, openPalette, closePalette, shown, setPanel, togglePanel, focusRequest, requestPanelFocus]);
+    mode, placement, paletteOpen, openPalette, closePalette, panelShown: shown, setPanel, togglePanel, focusRequest, requestPanelFocus, takeFocusRequest, panelButton,
+  }), [mode, placement, paletteOpen, openPalette, closePalette, shown, setPanel, togglePanel, focusRequest, requestPanelFocus, takeFocusRequest]);
 
   return (
     <AccessCtx.Provider value={value}>

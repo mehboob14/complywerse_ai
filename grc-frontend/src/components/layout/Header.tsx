@@ -27,7 +27,7 @@ const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible
 // the Notifications dropdown: under the bar across a phone's width, else at the button
 const DROPDOWN = 'fixed inset-x-3 top-14 z-50 rounded-lg border border-gray-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2';
 // the bar's icon buttons: the control height (32px; 44px on a phone or a coarse pointer)
-const BAR_BUTTON = 'relative inline-flex h-ds-control min-w-ds-control shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted transition-colors hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring';
+const BAR_BUTTON = 'relative inline-flex h-ds-control min-w-[var(--ds-control-h)] shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted transition-colors hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 export default function Header() {
   const router = useRouter();

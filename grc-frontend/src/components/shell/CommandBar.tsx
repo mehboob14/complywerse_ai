@@ -38,7 +38,7 @@ export default function CommandBar() {
         aria-haspopup="dialog"
         aria-label={label}
         title="Search or jump to"
-        className="inline-flex h-ds-control w-ds-control shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring md:hidden"
+        className="inline-flex h-ds-control w-[var(--ds-control-h)] shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring md:hidden"
       >
         <Search size={18} strokeWidth={1.75} aria-hidden />
       </button>

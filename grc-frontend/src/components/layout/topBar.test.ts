@@ -61,7 +61,7 @@ test('the dropdowns close on Escape, give focus back to their button, and say th
 });
 
 test('the bar\'s buttons are 32px, 44px on a phone or a coarse pointer (the control height token)', () => {
-  assert.match(header, /const BAR_BUTTON = '[^']*h-ds-control min-w-ds-control/);
+  assert.match(header, /const BAR_BUTTON = '[^']*h-ds-control min-w-\[var\(--ds-control-h\)\]/);
   assert.equal((header.match(/className=\{BAR_BUTTON\}|\$\{BAR_BUTTON\}/g) ?? []).length >= 3, true, 'the menu button, the panel button and the bell use it');
 });
 

@@ -18,11 +18,12 @@ import { studioApi } from '@/lib/studio/api';
 import { activeTab } from '@/lib/navRegistry';
 import { KIND_META, dropdownOf } from '@/lib/inbox/buildInbox';
 import { dueLine } from '@/lib/inbox/inboxView';
-import { holds } from '@/components/layout/navAccess';
+import { holds, isGroup } from '@/components/layout/navAccess';
 import { usePortfolioCounts } from '@/app/(dashboard)/vendor-risk/_lib/portfolioApi';
 import { badgeText as vendorBadge } from '@/app/(dashboard)/vendor-risk/_lib/portfolioModel';
 import { RAIL } from '@/app/(dashboard)/vendor-risk/_lib/railModel';
-import { moduleSection, type PanelItem, type PanelRow } from './panelModel';
+import { moduleSection, type PanelContext, type PanelItem, type PanelRow } from './panelModel';
+import { moduleOf } from './railModel';
 import { documentsStrip } from './shellAccess';
 import { recordIdsIn, meetingChoices } from './records';
 import { useCommitteeMeetings, useCrumbRecords } from './useShellRecords';
@@ -78,7 +79,18 @@ function ModuleList({ items, firstRowIsEntry, onPick }: { items: PanelItem[]; fi
   );
 }
 
-export default function WorkPanel() {
+/** The numbers that wait at the vendor module's Intake and Findings: asked only while the person is in that module. */
+function WithVendorCounts({ onPick }: { onPick: () => void }) {
+  const counts = usePortfolioCounts();
+  const vendorCounts = Object.fromEntries(RAIL.filter((e) => e.count).map((e) => {
+    const text = vendorBadge(counts?.[e.count!]);
+    return [e.count!, text ? { text, label: `${text} ${e.waiting ?? ''}`.trim() } : undefined];
+  }));
+  return <PanelContent onPick={onPick} vendorCounts={vendorCounts} />;
+}
+
+/** The sections. Mounted only while the panel is showing, so nothing here asks the server while it is shut (the studio flag, the committee's meetings, the vendor numbers). */
+function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCounts?: PanelContext['vendorCounts'] }) {
   const ui = useShell();
   const { access, nav } = useShellAccess();
   const queue = useShellQueue();
@@ -87,8 +99,6 @@ export default function WorkPanel() {
   const pins = usePinnedRecent();
   const notify = useNotify();
   const root = useRef<HTMLDivElement>(null);
-  const docked = ui.placement === 'dock';
-  const onPick = () => { if (!docked) ui.setPanel(false); };
 
   // sections the person shut stay shut for this visit; on the queue's own page that section starts shut (the page is the same list)
   const [shut, setShut] = useState<Record<string, boolean>>({});
@@ -96,27 +106,24 @@ export default function WorkPanel() {
   const isOpen = (id: string, dflt = true) => (id in shut ? !shut[id] : id === 'queue' && onQueuePage ? false : dflt);
   const toggle = (id: string) => (open: boolean) => setShut((s) => ({ ...s, [id]: !open }));
 
-  // Ctrl . asks for focus: the first pending item, else the first row
+  // Ctrl . asks for focus (once: a panel opened by its button never takes it): the first pending item, else the first row
   useEffect(() => {
-    if (!ui.focusRequest) return undefined;
+    if (!ui.takeFocusRequest()) return undefined;
     const frame = window.requestAnimationFrame(() => {
       const el = root.current?.querySelector<HTMLElement>('[data-panel-first]') ?? root.current?.querySelector<HTMLElement>('a[href], button');
       el?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the request counter is the trigger
   }, [ui.focusRequest]);
 
   // the Documents strip the person has (the same studio flag the strip reads) and the tab the page lights
-  const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false, enabled: access.signedIn });
+  const inGovernance = moduleOf(nav, litHref)?.name === 'Governance';
+  const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false, enabled: access.signedIn && inGovernance });
   const studioOn = !!studio.data?.enabled;
   const docTabs = documentsStrip(access, studioOn);
   const docTabPath = activeTab('documents', pathname, { studio: studioOn })?.path;
 
-  const counts = usePortfolioCounts();
-  const vendorCounts = Object.fromEntries(RAIL.filter((e) => e.count).map((e) => {
-    const text = vendorBadge(counts?.[e.count!]);
-    return [e.count!, text ? { text, label: `${text} ${e.waiting ?? ''}`.trim() } : undefined];
-  }));
   const section = moduleSection({ nav, litHref, pathname, docTabs, docTabPath, vendorCounts });
 
   const needs = dropdownOf(queue.inbox, 6);
@@ -125,7 +132,7 @@ export default function WorkPanel() {
 
   const ids = recordIdsIn(pathname);
   const committeeId = ids.meetingId != null ? records.meeting?.committeeId ?? null : ids.committeeId;
-  const meetings = useCommitteeMeetings(committeeId, ui.panelShown && committeeId != null);
+  const meetings = useCommitteeMeetings(committeeId, committeeId != null);
   const [allMeetings, setAllMeetings] = useState(false);
   const choices = meetingChoices(meetings.data, ids.meetingId);
 
@@ -138,20 +145,6 @@ export default function WorkPanel() {
   };
 
   return (
-    <SidePanel
-      open={ui.panelShown}
-      onClose={() => ui.setPanel(false)}
-      title="Work and context"
-      dockFrom={1440}
-      mode={docked ? 'docked' : ui.placement === 'overlay' ? 'overlay' : 'sheet'}
-      width="sm"
-      padded={false}
-      initialFocus={docked ? undefined : '[data-panel-first]'}
-      restoreFocus={ui.panelButton}
-      closeLabel="Close Work and context"
-      // the docked column is 320px, as in the lab (the kit's narrowest width is 360 and the overlay keeps it): a layout-only override, so the page keeps 1032px at 1440
-      className="!w-[320px]"
-    >
       <div ref={root} data-work-panel="">
         <Disclosure label="Needs my action" level={3} region={false} count={queue.inbox.counts.decision} countLabel="to decide" open={isOpen('queue')} onOpenChange={toggle('queue')}>
           <div aria-busy={loading}>
@@ -221,7 +214,7 @@ export default function WorkPanel() {
                 <Pin size={16} strokeWidth={1.75} aria-hidden className="shrink-0 text-ds-fg-muted" />
                 <span className="min-w-0 truncate">{p.label}</span>
               </Link>
-              <button type="button" onClick={() => pins.unpin(p.href)} aria-label={`Unpin ${p.label}`} className="mr-[4px] inline-flex h-ds-control w-ds-control shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring">
+              <button type="button" onClick={() => pins.unpin(p.href)} aria-label={`Unpin ${p.label}`} className="mr-[4px] inline-flex h-ds-control w-[var(--ds-control-h)] shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring">
                 <X size={14} strokeWidth={1.75} aria-hidden />
               </button>
             </div>
@@ -240,6 +233,33 @@ export default function WorkPanel() {
           ))}
         </Disclosure>
       </div>
+  );
+}
+
+export default function WorkPanel() {
+  const ui = useShell();
+  const { nav } = useShellAccess();
+  const { litHref } = useShellRoute();
+  const docked = ui.placement === 'dock';
+  const onPick = () => { if (!docked) ui.setPanel(false); };
+  const module = moduleOf(nav, litHref);
+  const inVendor = !!module && !isGroup(module) && module.href === '/vendor-risk';
+  return (
+    <SidePanel
+      open={ui.panelShown}
+      onClose={() => ui.setPanel(false)}
+      title="Work and context"
+      dockFrom={1440}
+      mode={docked ? 'docked' : ui.placement === 'overlay' ? 'overlay' : 'sheet'}
+      width="sm"
+      padded={false}
+      initialFocus={docked ? undefined : '[data-panel-first]'}
+      restoreFocus={ui.panelButton}
+      closeLabel="Close Work and context"
+      // the docked column is 320px, as in the lab (the kit's narrowest width is 360 and the overlay keeps it): a layout-only override, so the page keeps 1032px at 1440
+      className="!w-[320px]"
+    >
+      {inVendor ? <WithVendorCounts onPick={onPick} /> : <PanelContent onPick={onPick} />}
     </SidePanel>
   );
 }

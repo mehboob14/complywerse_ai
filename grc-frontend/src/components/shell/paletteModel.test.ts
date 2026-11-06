@@ -56,6 +56,18 @@ test('a query: pages and records (the better match first), the queue items that 
   assert.deepEqual(r.groups.map((g) => g.name), ['Records', 'Pages', 'Actions']);
 });
 
+test('the highlighted option (the first) is the best match of any group, the person\'s queue included', () => {
+  const pending = [{ key: 'a', title: 'G4F3 Document mapped to every framework', sub: 'To acknowledge · Due 15 Nov 2026', href: '/x/1' }];
+  const pages = [{ path: '/governance/documents', label: 'Documents', sub: 'Governance' }];
+  const v = paletteView(base({ query: 'doc', pages, pending }));
+  assert.deepEqual(v.groups.map((g) => g.name), ['Pages', 'Needs my action', 'Actions'], 'a page that starts with what was typed beats a queue item that has it in a word');
+  assert.equal(v.options[0].href, '/governance/documents');
+  const same = paletteView(base({ query: 'g4f3', pages: [{ path: '/governance/reviews', label: 'Document Reviews', sub: 'Governance' }], pending }));
+  assert.deepEqual(same.groups.map((g) => g.name), ['Needs my action', 'Pages', 'Actions'], 'typing the name of a queue item puts it before a page that only shares a word');
+  const tie = paletteView(base({ query: 'document', pages: [{ path: '/governance/documents', label: 'Document Reviews', sub: 'Governance' }], pending: [{ ...pending[0], title: 'Document policy' }] }));
+  assert.deepEqual(tie.groups.map((g) => g.name).slice(0, 2), ['Needs my action', 'Pages'], 'equal matches keep the queue first, then pages, then records');
+});
+
 test('actions are matched on their words; "Ask Comply Agent" is always there when it is offered, and absent when the person cannot use it', () => {
   const v = paletteView(base({ query: 'pin' }));
   assert.deepEqual(v.groups.find((g) => g.name === 'Actions')!.options.map((o) => o.action), ['pin-page', 'ask']);

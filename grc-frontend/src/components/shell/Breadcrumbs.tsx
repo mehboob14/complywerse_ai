@@ -50,7 +50,7 @@ export default function Breadcrumbs() {
   const { nav, access, loaded } = useShellAccess();
   const records = useCrumbRecords(pathname);
   const trail = loaded ? crumbsFor({ pathname, from, nav, access, records }) : { crumbs: [], hideCurrent: false };
-  if (trail.crumbs.length === 0) return <nav aria-label="Breadcrumb" className="min-w-0 flex-1" />;
+  if (trail.crumbs.length === 0) return <div className="min-w-0 flex-1" />;
 
   const shown = foldTrail(trail.hideCurrent ? trail.crumbs.slice(0, -1) : trail.crumbs);
   const committeeId = records.committee?.id ?? null;

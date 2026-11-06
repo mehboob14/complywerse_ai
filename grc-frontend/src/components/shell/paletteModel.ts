@@ -140,7 +140,7 @@ export function paletteView(input: PaletteInput): PaletteView {
     return { groups, options: groups.flatMap((g) => g.options), notices, searching: false, documentsTotal: 0 };
   }
 
-  add('Needs my action', queue(input.pending.filter((p) => wordsMatch(p.title, q)).slice(0, LIMITS.queuePending)));
+  const waiting = input.pending.filter((p) => wordsMatch(p.title, q)).slice(0, LIMITS.queuePending);
 
   const pages = input.pages.slice(0, LIMITS.pages).map<Omit<PaletteOption, 'id' | 'group'>>((p) => ({ label: p.label, sub: p.sub, icon: 'page', href: p.path }));
   const iconOf = { document: 'file', committee: 'users', meeting: 'calendar' } as const;
@@ -154,7 +154,14 @@ export function paletteView(input: PaletteInput): PaletteView {
   const bestRecord = Math.min(5, ...found.map((r) => matchTier(r.label, q)));
   const documentsTotal = input.records.documents.status === 'ready' ? (input.records.documents.total ?? input.records.documents.hits.length) : 0;
   const recordsNote = searching && records.length === 0 ? 'Searching…' : undefined;
-  if (bestRecord < bestPage) { add('Records', records, recordsNote); add('Pages', pages); } else { add('Pages', pages); add('Records', records, recordsNote); }
+  const bestWaiting = Math.min(5, ...waiting.map((p) => matchTier(p.title, q)));
+  // the group whose best match is better comes first (equal: the queue, then pages, then records), so the highlighted option is the best match whatever it is
+  const order: Array<{ best: number; run: () => void }> = [
+    { best: bestWaiting, run: () => add('Needs my action', queue(waiting)) },
+    { best: bestPage, run: () => add('Pages', pages) },
+    { best: bestRecord, run: () => add('Records', records, recordsNote) },
+  ];
+  order.map((g, i) => ({ g, i })).sort((a, b) => a.g.best - b.g.best || a.i - b.i).forEach(({ g }) => g.run());
 
   const rest = input.actions.filter((a) => a.id === 'ask' || wordsMatch(`${a.label} ${a.sub}`, q));
   const asks = rest.filter((a) => a.id === 'ask').map((a) => ({ ...action(a), label: `${a.label}: “${q}”` }));

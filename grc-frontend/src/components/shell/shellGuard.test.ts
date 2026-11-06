@@ -73,7 +73,7 @@ test('the panel is the kit\'s SidePanel in three places, with sections that are 
 
 test('the trail: named navs for the wide and the phone bar, current page marked, the module\'s first crumb a switcher, a menu list that is a menu', () => {
   const crumbs = read('Breadcrumbs.tsx');
-  assert.equal((crumbs.match(/aria-label="Breadcrumb"/g) ?? []).length, 3, 'one nav for the phone, one for the wide bar, one for the empty trail');
+  assert.equal((crumbs.match(/aria-label="Breadcrumb"/g) ?? []).length, 2, 'one nav for the phone, one for the wide bar (an empty trail draws no landmark)');
   assert.match(crumbs, /aria-current="page"/);
   assert.match(crumbs, /md:hidden/);
   assert.match(crumbs, /hidden min-w-0 flex-1 md:block/);
