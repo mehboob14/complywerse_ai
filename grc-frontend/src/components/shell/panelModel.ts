@@ -59,7 +59,8 @@ const row = (key: string, label: string, href: string, current: boolean, extra: 
 function documentsRows(c: PanelContext, leaf: NavItem): PanelRow[] {
   const inArea = c.docTabs.length > 0 && !!c.docTabPath;
   const own = row(leaf.href, leaf.name, leaf.href, c.litHref === leaf.href && !inArea, { icon: leaf.icon });
-  const tabs = c.docTabs.map((t) => row(t.path, tabText(t), t.path, t.path === c.docTabPath, { depth: 1, name: tabName(t) }));
+  // the first tab is the Documents page itself: its key must differ from the row above it
+  const tabs = c.docTabs.map((t) => row(`tab:${t.path}`, tabText(t), t.path, t.path === c.docTabPath, { depth: 1, name: tabName(t) }));
   return [own].concat(tabs);
 }
 

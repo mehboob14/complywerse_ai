@@ -202,7 +202,7 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
 
         <Disclosure label="Pinned" level={3} region={false} count={pins.pins.length} countLabel="pinned" open={isOpen('pinned')} onOpenChange={toggle('pinned')}>
           {pins.current && (
-            <button type="button" onClick={togglePin} aria-pressed={pins.currentPinned} className={ROW}>
+            <button type="button" onClick={togglePin} className={ROW}>
               {pins.currentPinned ? <PinOff size={16} strokeWidth={1.75} aria-hidden className="shrink-0 text-ds-fg-muted" /> : <Pin size={16} strokeWidth={1.75} aria-hidden className="shrink-0 text-ds-fg-muted" />}
               <span className="min-w-0 truncate">{pins.currentPinned ? 'Unpin this page' : 'Pin this page'}</span>
             </button>

@@ -14,7 +14,8 @@ import { useShellAccess, useShellQueue } from './ShellProvider';
 
 // an inset ring: the rail's list scrolls and would clip one drawn outside the item
 const FOCUS = 'focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ds-focus)]';
-const ITEM = 'relative flex min-h-[48px] w-full flex-col items-center justify-center gap-[2px] rounded-ds-control px-[2px] py-[5px]';
+// 44px tall: thirteen entries and the foot fit a 720px window without the list scrolling
+const ITEM = 'relative flex min-h-[44px] w-full flex-col items-center justify-center gap-[2px] rounded-ds-control px-[2px] py-[3px]';
 const IDLE = 'text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg';
 const LIT = 'bg-ds-primary-soft text-ds-primary-text before:absolute before:bottom-[8px] before:left-[-2px] before:top-[8px] before:w-[3px] before:rounded-r-[2px] before:bg-ds-primary before:content-[""]';
 // the name under the icon: 12px is the floor; a name that is longer than the column is cut and its whole text is the tooltip and the accessible name

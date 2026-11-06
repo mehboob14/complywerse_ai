@@ -44,6 +44,13 @@ test('Governance: the menu\'s pages, Documents expanded to its tabs, and exactly
   assert.equal(rows(c).find((r) => r.label === 'Reviews')?.name, 'Document Reviews');
 });
 
+test('every item of a section has its own key (React lists them by it): the Documents row and its first tab share a page, not a key', () => {
+  for (const path of ['/governance/documents', '/governance/documents/studio', '/governance/committees', '/vendor-risk/vendors/12', '/erm/risks', '/tasks']) {
+    const keys = moduleSection(contextFor(admin, path)).items.map((i) => i.key);
+    assert.equal(new Set(keys).size, keys.length, `${path}: duplicate keys ${keys.filter((k, i) => keys.indexOf(k) !== i).join(', ')}`);
+  }
+});
+
 test('a Governance page outside the Documents area lights its own row, and Documents is not lit', () => {
   const c = contextFor(admin, '/governance/committees/4');
   assert.deepEqual(lit(c), ['Committees']);

@@ -314,7 +314,7 @@ export function sectionOfEntry(entry: Pick<RouteEntry, 'area' | 'label' | 'title
 }
 
 /** Whether the registry names the page in the top bar: every Governance page, and any other page that has moved to the kit's own heading
- *  (`ownHeading`); the rest still read the Header's own title map (PAGE_TITLES). */
+ *  (`ownHeading`). The shell's trail names every page, so the shell itself no longer asks; the pages' own tests still pin it. */
 export function registryNamesPage(pathname: string | null | undefined): boolean {
   const hit = routeFor(pathname);
   return !!hit && (hit.area === 'governance' || !!canonical(hit).ownHeading);
