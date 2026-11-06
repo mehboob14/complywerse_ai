@@ -762,7 +762,7 @@ def test_an_attestation_campaign_shows_and_seals_the_version_in_force(noflush, m
         req = SimpleNamespace(**vars(_request()), state=SimpleNamespace())
         shown = external.public_get_by_token(token="tok", request=req, db=db)["document"]
         assert (shown["version"], shown["title"], shown["doc_type"]) == ("1.0", "Access policy", "policy")
-        assert "Version one." in shown["html"] and "new rule" not in shown["html"]
+        assert "Version one." in shown["content"] and "new rule" not in shown["content"]       # plain text: the page draws it as it is
         body = external.PublicAckSubmit(name="Ali Raza", email="ali@cfsb.test", designation="Analyst", signature_data=_png())
         external.public_acknowledge(token="tok", body=body, request=req, db=db)
         sig = db.query(m.ElectronicSignature).filter_by(record_type="doc_attestation_ack").one()

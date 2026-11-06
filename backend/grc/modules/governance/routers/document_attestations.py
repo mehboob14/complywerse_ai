@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -34,6 +34,7 @@ from ....models import (
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 from ....rich_audit import write_rich_audit_log
 from ....services import esign
+from .. import attestation_view
 from ..permissions import edit_filter, ensure_editor, in_force_number, in_force_row, require_library_reader
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ _SIG_DIR = os.path.join(
     "document-attestations",
 )
 _ensured_engines: set[int] = set()
+PUBLIC_BASE = "/governance/document-attestations/public"      # the paths the public page is given for the file and the pages
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _COLUMN_ADDS = (
@@ -303,60 +305,9 @@ def _serialize_campaign(
     return data
 
 
-def _doc_content_preview(doc: GovernanceDocument, row: Any = None) -> Dict[str, Any]:
-    """Return content safe for the public viewer: the document's, or the version row ``row`` (the version in force while a newer
-    one is in review; a row has no description or type, those stay the document's)."""
-    src = row or doc
-    html = None
-    text_content = src.content
-    if src.file_path and os.path.exists(src.file_path):
-        file_type = (src.file_type or "").lower()
-        try:
-            if file_type == "pdf" or (src.file_name or "").lower().endswith(".pdf"):
-                from PyPDF2 import PdfReader
-
-                reader = PdfReader(src.file_path)
-                parts = []
-                for i, page in enumerate(reader.pages[:40]):
-                    t = page.extract_text() or ""
-                    if t.strip():
-                        parts.append(f"<h3>Page {i + 1}</h3><pre style='white-space:pre-wrap'>{_escape(t)}</pre>")
-                html = "\n".join(parts) if parts else None
-            elif file_type in {"docx", "doc"} or (src.file_name or "").lower().endswith((".docx", ".doc")):
-                from docx import Document as DocxDocument
-
-                d = DocxDocument(src.file_path)
-                parts = [f"<p>{_escape(p.text)}</p>" for p in d.paragraphs if p.text.strip()]
-                html = "\n".join(parts) if parts else None
-            elif file_type in {"txt", "md"} or (src.file_name or "").lower().endswith((".txt", ".md")):
-                with open(src.file_path, "r", encoding="utf-8", errors="replace") as f:
-                    text_content = f.read()
-        except Exception as e:
-            logger.warning("public doc preview extract failed: %s", e)
-
-    if not html and text_content:
-        html = f"<div style='white-space:pre-wrap'>{_escape(text_content)}</div>"
-
-    return {
-        "title": doc.title,
-        "description": doc.description,
-        "version": row.version_number if row is not None else doc.current_version,
-        "doc_type": doc.doc_type,
-        "has_file": bool(src.file_path),
-        "file_name": src.file_name,
-        "html": html,
-        "content": text_content if not html else None,
-    }
-
-
-def _escape(s: str) -> str:
-    return (
-        (s or "")
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+def _doc_content_preview(doc: GovernanceDocument, row: Any = None, token: str = "") -> Dict[str, Any]:
+    """The document as the public page draws it (attestation_view.describe): the version row ``row`` while a newer one is in review."""
+    return attestation_view.describe(doc, row, base=f"{PUBLIC_BASE}/{token}")
 
 
 def _save_signature(data_url: str, campaign_id: int) -> tuple[str, Optional[str]]:
@@ -700,13 +651,8 @@ def delete_campaign(
 
 # ── Public routes (no require_auth) ──────────────────────────────────────────
 
-@router.get("/public/{token}")
-def public_get_by_token(
-    token: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """Load campaign + document for the external acknowledgment page."""
+def _open_campaign(db: Session, token: str) -> DocumentAttestationCampaign:
+    """The campaign of a public link; 404 for a link that is not one, 410 once it is closed."""
     _ensure_tables(db)
     camp = (
         db.query(DocumentAttestationCampaign)
@@ -717,11 +663,26 @@ def public_get_by_token(
         raise HTTPException(status_code=404, detail="This attestation link is invalid or has expired.")
     if camp.status == "closed":
         raise HTTPException(status_code=410, detail="This attestation campaign is closed.")
+    return camp
 
+
+def _version_shown(db: Session, camp: DocumentAttestationCampaign):
+    """(document, what is read): outside signers read the version in force, never a newer round."""
     doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == camp.document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found for this attestation.")
+    return doc, in_force_row(db, doc)
 
+
+@router.get("/public/{token}")
+def public_get_by_token(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Load campaign + document for the external acknowledgment page."""
+    camp = _open_campaign(db, token)
+    doc, row = _version_shown(db, camp)
     prog = _progress(db, camp)
     domain = prog["allowed_email_domain"]
     return {
@@ -735,9 +696,47 @@ def public_get_by_token(
             "acknowledgment_count": prog["acknowledgment_count"],
             "attestation_percent": prog["attestation_percent"],
         },
-        "document": _doc_content_preview(doc, in_force_row(db, doc)),      # outside signers read the version in force
+        "document": _doc_content_preview(doc, row, token),
         "tenant_slug": getattr(request.state, "tenant_slug", None),
     }
+
+
+_PUBLIC_FILE_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=300", "Referrer-Policy": "no-referrer"}
+
+
+@router.get("/public/{token}/file")
+def public_file(token: str, db: Session = Depends(get_db)):
+    """The file of the version in force - a PDF (opened in the browser) or a Word file (drawn by the page). Nothing else is served."""
+    doc, row = _version_shown(db, _open_campaign(db, token))
+    served = attestation_view.served_file(row or doc)
+    if served is None:
+        raise HTTPException(status_code=404, detail="There is no file to show for this document.")
+    kind, path, name, media = served
+    return FileResponse(path, media_type=media, filename=name, headers=_PUBLIC_FILE_HEADERS,
+                        content_disposition_type="inline" if kind == "pdf" else "attachment")
+
+
+@router.get("/public/{token}/text")
+def public_text(token: str, db: Session = Depends(get_db)):
+    """The Word file in force as text that reflows (Markdown): the same words as the drawn pages, for a narrow screen."""
+    doc, row = _version_shown(db, _open_campaign(db, token))
+    served = attestation_view.served_file(row or doc)
+    text = attestation_view.word_text(served[1]) if served is not None and served[0] == "docx" else None
+    if not text:
+        raise HTTPException(status_code=404, detail="There is no text to show for this document.")
+    return JSONResponse({"markdown": text}, headers=_PUBLIC_FILE_HEADERS)
+
+
+@router.get("/public/{token}/pages/{page}")
+def public_page(token: str, page: int, db: Session = Depends(get_db)):
+    """Page ``page`` (from 1) of the PDF in force, drawn as a picture so a phone reads it as well as a desktop."""
+    doc, row = _version_shown(db, _open_campaign(db, token))
+    src = row or doc
+    served = attestation_view.served_file(src)
+    png = attestation_view.draw_page(served[1], page) if served is not None and served[0] == "pdf" else None
+    if png is None:
+        raise HTTPException(status_code=404, detail="There is no such page.")
+    return Response(content=png, media_type="image/png", headers=_PUBLIC_FILE_HEADERS)
 
 
 @router.post("/public/{token}/acknowledge")
