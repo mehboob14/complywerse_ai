@@ -14,6 +14,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
+import { problemOf } from '@/lib/frameworkOnboarding';
+import { OnboardingNeeded } from '@/components/compliance/onboarding/gate/OnboardingNeeded';
+import { refusalFromProblem, type Refusal } from '@/components/compliance/onboarding/gate/gateModel';
 import { CertificationJourney } from '@/types';
 import { SearchInput, PageLoader } from '@/components/ui';
 import {
@@ -41,6 +44,7 @@ export default function FrameworksManagePage() {
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
   const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
   const [frameworkSearch, setFrameworkSearch] = useState('');
+  const [refusal, setRefusal] = useState<{ framework: UploadedFramework; why: Refusal } | null>(null);   // a journey the server held back until its onboarding is finished
 
   const deleteMutation = useMutation({
     mutationFn: async (frameworkId: number) => {
@@ -203,6 +207,7 @@ export default function FrameworksManagePage() {
   };
 
   const handleStartCertification = async (framework: UploadedFramework) => {
+    setRefusal(null);
     try {
       const cleanName = stripCertificationPostfix(framework.name);
       const response = await certificationsApi.create({
@@ -211,6 +216,8 @@ export default function FrameworksManagePage() {
       });
       router.push(`/frameworks/${response.data.id}`);
     } catch (error) {
+      const why = refusalFromProblem(problemOf(error));
+      if (why) { setRefusal({ framework, why }); return; }
       console.error('Failed to start certification:', error);
     }
   };
@@ -237,6 +244,12 @@ export default function FrameworksManagePage() {
         </div>
       )}
 
+      {refusal && (
+        <OnboardingNeeded
+          frameworkId={refusal.framework.id} name={stripCertificationPostfix(refusal.framework.name) || refusal.framework.name}
+          onboardingId={refusal.why.onboardingId} state={refusal.why.state ?? 'not_started'} open={refusal.why.open}
+        />
+      )}
       {actionError && (
         <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
           <AlertCircle className="h-4 w-4" />
