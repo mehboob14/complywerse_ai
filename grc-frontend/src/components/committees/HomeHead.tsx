@@ -9,6 +9,7 @@ import { Button, FilterChips, Menu, PersonChip, StatusPill, type FilterChip, typ
 import { formatCount } from '@/lib/format';
 import { committeeTypeLabel, gradeTone, inactiveNote, isActiveCommittee, type OverviewCommittee } from '@/lib/committees';
 import { stripCells, type ChipSpec, type Health, type Pulse } from '@/lib/committeeHome';
+import { useLineClamped } from '@/components/ui/ds/useLineClamped';
 import { useMediaQuery } from './hooks';
 import { CommitteeActivity } from './ui';
 
@@ -28,17 +29,20 @@ export function ChipsRow({ chips, inactive, showingInactive, onPick, onToggleIna
     key: c.key, label: c.label, count: c.count, active: c.active, title: c.title, flag: c.flag, icon: c.live && c.flag?.text != null ? Radio : undefined,
   }));
   if (inactive > 0 || showingInactive) list.push({ key: SHOW_INACTIVE, label: showingInactive ? 'Hide inactive' : 'Show inactive', count: inactive > 0 ? inactive : undefined, active: false });
+  // `relative` + a clip: the chips' screen-reader words are absolutely placed, and inside a sideways scroller that is not positioned they escape it (and widen the page on a phone)
   return (
-    <FilterChips
-      label="Committee"
-      chips={list}
-      overflow={narrow ? 'scroll' : 'wrap'}
-      onToggle={(key) => {
-        if (key === SHOW_INACTIVE) onToggleInactive();
-        else if (key === 'all') onPick(null);
-        else onPick(chips.find((c) => c.key === key)?.active ? null : parseInt(key, 10));
-      }}
-    />
+    <div className="relative -mx-[4px] min-w-0 overflow-x-clip px-[4px]">
+      <FilterChips
+        label="Committee"
+        chips={list}
+        overflow={narrow ? 'scroll' : 'wrap'}
+        onToggle={(key) => {
+          if (key === SHOW_INACTIVE) onToggleInactive();
+          else if (key === 'all') onPick(null);
+          else onPick(chips.find((c) => c.key === key)?.active ? null : parseInt(key, 10));
+        }}
+      />
+    </div>
   );
 }
 
@@ -100,6 +104,7 @@ export function CommitteeStrip({ row, health, detail, canEdit, canSwitch, busy, 
   onSettings: () => void;
 }) {
   const active = isActiveCommittee(row);
+  const [nameRef, nameCut] = useLineClamped<HTMLHeadingElement>();          // a very long name is cut at two lines here: the whole of it is the sheet's heading ("Open committee")
   const cells = stripCells(health, { charters: detail?.charters?.length });
   const items: MenuItem[] = [
     { key: 'edit', label: 'Edit committee', icon: Pencil, onSelect: onEdit, hidden: !canEdit },
@@ -114,9 +119,9 @@ export function CommitteeStrip({ row, health, detail, canEdit, canSwitch, busy, 
   return (
     <section aria-label={`${row.name} at a glance`} className="rounded-ds-card border border-l-[3px] border-ds-border border-l-ds-primary bg-ds-surface px-[12px] py-[8px]">
       <div className="flex flex-wrap items-start gap-x-[20px] gap-y-[8px]">
-        <div className="min-w-[200px] max-w-full flex-[1_1_240px]">
+        <div className="min-w-[200px] max-w-full flex-[2_1_300px]">
           <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
-            <h2 className="min-w-0 break-words !text-ds-section !text-ds-fg">{row.name}</h2>
+            <h2 ref={nameRef} title={nameCut ? row.name : undefined} className="line-clamp-2 min-w-0 break-words !text-ds-section !text-ds-fg">{row.name}</h2>
             <StatusPill size="sm" tone="neutral" label={committeeTypeLabel(row.committee_type, 'long')} />
             <CommitteeActivity size="sm" active={active} />
           </div>
@@ -127,7 +132,7 @@ export function CommitteeStrip({ row, health, detail, canEdit, canSwitch, busy, 
             <span className="inline-flex items-center gap-[4px]">Secretary <PersonChip name={detail?.secretary_name} size={20} emptyLabel="not set" className="text-ds-label" /></span>
           </p>
         </div>
-        <dl className="flex min-w-0 flex-[3_1_520px] flex-wrap gap-x-[18px] gap-y-[6px]">
+        <dl className="flex min-w-0 flex-[3_1_500px] flex-wrap gap-x-[18px] gap-y-[6px]">
           {cells.map((c) => (
             <div key={c.label} className="min-w-[84px] max-w-[170px] flex-1">
               <dt className="text-ds-label font-normal text-ds-fg-muted">{c.label}</dt>

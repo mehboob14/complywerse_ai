@@ -135,7 +135,7 @@ export function AgendaSection({ meeting, canCreate, canRun }: {
                   onOpenChange={(next) => setOpenIds((s) => ({ ...s, [it.id]: next }))}
                 >
                   {isOpen && (
-                    <div className="space-y-[10px] px-[12px] pb-[12px] pt-[4px]">
+                    <div className="space-y-[10px] pt-[4px]">
                       {it.description && <ClampedText text={it.description} lines={3} />}
                       {links.length > 0 && <ChipList items={links} label="related records" shown={2} />}
                       {decided && (

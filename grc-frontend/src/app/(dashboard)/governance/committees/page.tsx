@@ -123,7 +123,9 @@ export default function CommitteesPage() {
             leftAdornment={<Search aria-hidden />}
             className="w-[280px] max-w-full"
           />
-          <Button leftIcon={<Users aria-hidden />} onClick={() => setListOpen(true)} title="Every committee, with its status">Committees</Button>
+          <Button leftIcon={<Users aria-hidden />} onClick={() => setListOpen(true)} aria-label="Committees" title="Every committee, with its status" className="max-sm:min-w-[var(--ds-control-h)]">
+            <span className="hidden sm:inline">Committees</span>
+          </Button>
           {canCreate && (
             <>
               <Button

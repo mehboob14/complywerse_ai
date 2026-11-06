@@ -168,7 +168,7 @@ export function MeetingRowItem({ m, showCommittee, pinned }: { m: MeetingRow; sh
 export function DecisionRowItem({ d, showCommittee }: { d: DecisionRow; showCommittee: boolean }) {
   return (
     <li className="border-t border-ds-border first:border-t-0">
-      <Link href={`/governance/committees/meetings/${d.meeting_id}`} className={clsx(ROW, '!border-t-0 grid-cols-[auto_minmax(0,1fr)]', ROW_LINK)}>
+      <Link href={`/governance/committees/meetings/${d.meeting_id}`} className={clsx(ROW, '!border-t-0 grid-cols-[84px_minmax(0,1fr)]', ROW_LINK)}>
         <span className="pt-[1px]">
           {d.outcome ? <StatusPill size="sm" {...statusPill(decisionOutcome, d.outcome)} /> : <StatusPill size="sm" tone="neutral" label="Recorded" />}
         </span>

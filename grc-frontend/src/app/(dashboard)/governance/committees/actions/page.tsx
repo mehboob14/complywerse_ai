@@ -4,7 +4,7 @@
 // of the Committees home's Needs action lane, so the numbers are the same), the four totals of the overview, filters (the status, the committee and "Assigned to me" go to the API,
 // so they work on every action; the search reads the page that is shown), the list as a table (a card each below 768px), the priority changed in place by anyone who can edit.
 // Everything is kept in the address (?committee=3&mine=1&view=overdue&status=open&q=&page=2&size=50), and the old ?overdue=1 (the Governance Overview's counter links there) opens the
-// Overdue view. On the design-system kit: PageHeader variant="page", FilterChips, StatTile, RegisterTable + Pager, StatusPill, PersonChip, Menu for the status change,
+// Overdue view. On the design-system kit: PageHeader variant="page", FilterChips, RegisterTable + Pager, StatusPill, PersonChip, Menu for the status change,
 // EmptyState / ErrorState, useReportedMutation for every write.
 // Four things this page used to get wrong, fixed (G4-E): a failed request is an error with Retry (it used to be answered with made-up committees and seven made-up actions); "Overdue"
 // is what the API means by it (is_overdue); the four totals are the server's, not the length of a list cut at 100; all 18 action types read as themselves.
@@ -12,7 +12,7 @@
 // actions are still here: the committee filter lists it too, marked "(inactive)", while the form that adds an action offers the active committees only.
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, CheckSquare, Clock, Plus, Search } from 'lucide-react';
+import { CheckCircle, CheckSquare, Clock, Plus, Search } from 'lucide-react';
 import { committeeApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PageHeader } from '@/components/ui';
@@ -33,7 +33,7 @@ import {
 import { ACTIONS_SCHEMA, ACTION_VIEWS, GROUP_LABEL, VIEW_LABEL, committeeHomeAddress, groupQuery, laterTotal, viewOf, viewQuery, type ActionQuery, type ActionView } from '@/lib/committeeHome';
 import { useDebounced } from '@/components/committees/hooks';
 import { ManualActionPanel } from '@/components/committees/ManualActionPanel';
-import { ActionStatusPills, PriorityTag, SlaTag, StatTile } from '@/components/committees/ui';
+import { ActionStatusPills, PriorityTag, SlaTag } from '@/components/committees/ui';
 
 interface Action {
   id: number;
@@ -221,21 +221,17 @@ export default function ActionsPage() {
         actions={add}
       />
 
-      {/* ── the four totals (the server's counts, for every committee or the one chosen) ── */}
+      {/* ── the four totals (the server's counts, for every committee or the one chosen): one line ── */}
       {overviewQ.isError && !totals ? (
         <ErrorState compact className="rounded-ds-card border border-ds-border bg-ds-surface" title="Couldn't load the totals" message={errorMessage(overviewQ.error)} onRetry={() => { void overviewQ.refetch(); }} />
+      ) : totals === null && overviewQ.isLoading ? (
+        <Skeleton className="h-[40px]" />
       ) : (
-        <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
-          {totals === null && overviewQ.isLoading ? (
-            [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[88px]" />)
-          ) : (
-            <>
-              <StatTile label="Open" icon={Clock} value={totals ? formatCount(totals.open) : '—'} />
-              <StatTile label="In progress" icon={Clock} value={totals ? formatCount(totals.in_progress) : '—'} />
-              <StatTile label="Overdue" icon={AlertTriangle} value={totals ? formatCount(totals.overdue) : '—'} tone={totals && totals.overdue > 0 ? 'danger' : 'default'} note="Open or in progress, past its due date" />
-              <StatTile label="Completed" icon={CheckCircle} value={totals ? formatCount(totals.completed) : '—'} tone="success" />
-            </>
-          )}
+        <div role="group" aria-label="Totals" className="flex flex-wrap items-center gap-x-[18px] gap-y-[4px] rounded-ds-card border border-ds-border bg-ds-surface px-[12px] py-[6px] text-ds-body text-ds-fg-body">
+          <span><b className="text-ds-fg">{totals ? formatCount(totals.open) : '—'}</b> open</span>
+          <span><b className="text-ds-fg">{totals ? formatCount(totals.in_progress) : '—'}</b> in progress</span>
+          <span title="Open or in progress, past its due date"><b className={totals && totals.overdue > 0 ? 'text-ds-danger' : 'text-ds-fg'}>{totals ? formatCount(totals.overdue) : '—'}</b> overdue</span>
+          <span><b className="text-ds-success">{totals ? formatCount(totals.completed) : '—'}</b> completed</span>
         </div>
       )}
 
@@ -263,11 +259,11 @@ export default function ActionsPage() {
             placeholder={view === 'all' ? 'All statuses' : `Open actions: ${GROUP_LABEL[view === 'later' ? 'later' : view === 'week' ? 'week' : 'overdue'].toLowerCase()}`}
             disabled={view !== 'all'}
             onChange={(e) => setAddress({ status: e.target.value as typeof address.status, page: 1 })}
-            className="w-[200px]"
+            className="min-w-0 max-sm:flex-1 sm:w-[200px]"
           >
             {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </Select>
-          <Select aria-label="Committee" value={committeeId ? String(committeeId) : ''} placeholder="All committees" onChange={(e) => setAddress({ committee: e.target.value ? parseInt(e.target.value, 10) : 0, page: 1 })} className="w-[220px]" disabled={committeesQ.isError}>
+          <Select aria-label="Committee" value={committeeId ? String(committeeId) : ''} placeholder="All committees" onChange={(e) => setAddress({ committee: e.target.value ? parseInt(e.target.value, 10) : 0, page: 1 })} className="min-w-0 max-sm:flex-1 sm:w-[220px]" disabled={committeesQ.isError}>
             {committees.map((c) => <option key={c.id} value={String(c.id)}>{committeeChoiceLabel(c)}</option>)}
           </Select>
           <Checkbox label="Assigned to me" checked={address.mine} onChange={(e) => setAddress({ mine: e.target.checked, page: 1 })} />

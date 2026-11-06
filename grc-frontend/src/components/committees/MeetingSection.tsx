@@ -65,7 +65,7 @@ export function Outline({ order, status, counts, current, onJump, layout }: {
   const wide = layout === 'column';
   return (
     <nav aria-label="On this page" className={wide ? 'hidden lg:block' : 'lg:hidden'}>
-      <ul className={clsx(wide ? 'flex flex-col gap-[2px]' : 'flex gap-[6px] overflow-x-auto px-[2px] py-[6px]')}>
+      <ul className={clsx('relative', wide ? 'flex flex-col gap-[2px]' : 'flex gap-[6px] overflow-x-auto px-[2px] py-[6px]')}>
         {order.map((key) => {
           const lit = key === current;
           const count = counts[key];

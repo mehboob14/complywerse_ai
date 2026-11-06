@@ -148,7 +148,7 @@ function Workspace({ meeting }: { meeting: Meeting }) {
             <dt className="inline-flex items-center gap-[6px] text-ds-fg-muted"><Users aria-hidden className="h-[16px] w-[16px]" />Quorum</dt>
             <dd className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px]">
               {meeting.quorum_required ? `${formatCount(meeting.quorum_required)} required` : 'Not set'}
-              {meeting.status !== 'scheduled' && <><span className="text-ds-fg-muted">·</span><span>{reading.label === 'Not recorded' ? 'no roll recorded' : reading.text}</span><StatusPill size="sm" tone={reading.tone} label={reading.label} /></>}
+              {meeting.status === 'completed' && <><span className="text-ds-fg-muted">·</span><span>{reading.label === 'Not recorded' ? 'no roll recorded' : reading.text}</span><StatusPill size="sm" tone={reading.tone} label={reading.label} /></>}
             </dd>
           </div>
           {meeting.virtual_link && (
@@ -161,7 +161,8 @@ function Workspace({ meeting }: { meeting: Meeting }) {
       </div>
 
       {/* the bars that stay in view: what state the meeting is in, and (under 1024px) the outline as a row of pills */}
-      <div className="sticky top-0 z-[20] -mx-[4px] space-y-[6px] bg-[var(--color-subtle)] px-[4px] pb-[4px] pt-[2px]">
+      {/* (it sticks at the top of <main>'s content box, below its padding, so it reaches up through the padding and covers it: the page's content must not show above it) */}
+      <div className="sticky top-[-14px] z-[20] -mx-[14px] !-mt-[2px] space-y-[6px] bg-[var(--color-subtle)] px-[14px] pb-[6px] pt-[14px] lg:top-[-16px] lg:-mx-[16px] lg:!-mt-[4px] lg:px-[16px] lg:pt-[16px]">
         {bar && <LiveBar meeting={meeting} roll={roll} canRun={canRun} run={run} />}
         <Outline layout="pills" order={order} status={meeting.status} counts={counts} current={current} onJump={jump} />
       </div>

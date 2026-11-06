@@ -102,7 +102,7 @@ export function ActionsLane({ scope, onMine, search, canTick, hiddenOnPhone }: {
       controls={(
         <>
           <FilterChips label="Actions shown" chips={[{ key: 'mine', label: 'Mine', active: scope.mine }]} onToggle={onMine} />
-          <Button size="sm" href={actionsListAddress(scope)} title="Every action, paged and filtered">All</Button>
+          <Button size="sm" href={actionsListAddress(scope)} title="Every action, paged and filtered" className="min-w-[var(--ds-control-h)]">All</Button>
         </>
       )}
     >
