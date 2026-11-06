@@ -1,8 +1,8 @@
 // node --test "src/app/(dashboard)/governance/committees/committeesPages.test.ts"
 // Source-text pins for the four committee pages (the list, a committee, a meeting, Oversight Actions): what they must not do again (invented data when a request
 // fails, a browser dialog, a write that says nothing, text under 12px, an action that only appears under the mouse) and what they must keep (the query keys, the
-// requests, the hard delete as it is, "Add manual action" open to everyone). Like settingsPage.test.ts these read the files; the rules they pin are in
-// src/lib/committees.ts and its test, and the behaviour was checked in a browser (the report names how).
+// requests, "Add manual action" open to everyone) or now do (a committee is deactivated, never deleted, from any page). Like settingsPage.test.ts these read the
+// files; the rules they pin are in src/lib/committees.ts and its test, and the behaviour was checked in a browser (the report names how).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -28,9 +28,10 @@ test('no committee page opens a browser dialog: questions are dialogs of the kit
 test('every write is a reported mutation: no bare useMutation, and each page reports what it writes', () => {
   const reported = (src: string) => (src.match(/useReportedMutation\(/g) || []).length;
   for (const [name, src] of Object.entries(SOURCES)) assert.doesNotMatch(code(src), /\buseMutation\s*[(<]/, `${name} has a bare useMutation`);
-  assert.ok(reported(SOURCES.overview) >= 3, 'overview: delete, new committee, new meeting');
+  assert.ok(reported(SOURCES.overview) >= 2, 'overview: new committee, new meeting (Deactivate and Reactivate are the two of useCommitteeActivation)');
   assert.equal(reported(SOURCES.actions), 4, 'actions: status, create, reword, summarise');
-  assert.equal(reported(SOURCES.committee), 16, 'committee: the 16 writes it always had');
+  assert.equal(reported(SOURCES.committee), 15, 'committee: the 15 writes it has left (the 16th, the delete, is Deactivate and Reactivate now)');
+  assert.equal(reported(read('_ui.tsx')), 2, '_ui: Deactivate and Reactivate, the one hook both pages use');
   assert.ok(reported(SOURCES.meeting) >= 11, 'meeting: its ten writes and the vote');
   assert.doesNotMatch(SOURCES.meeting, /useToast\s*\(/, 'the meeting page used toast() by hand: it reports through the kit now');
 });
@@ -77,13 +78,65 @@ test('the pages keep their query keys, so every existing invalidation still find
   for (const [page, list] of Object.entries(keys)) for (const key of list) assert.ok(SOURCES[page as keyof typeof PAGES].includes(`'${key}'`), `${page} lost the query key '${key}'`);
 });
 
-test('the requests are the ones the pages always made: the endpoints of committeeApi, nothing new, and the delete is still the hard delete', () => {
-  assert.match(SOURCES.overview, /committeeApi\.deleteCommittee\(/);
-  assert.match(SOURCES.committee, /committeeApi\.deleteCommittee\(/);
+test('no page deletes a committee: the list and the committee deactivate and reactivate it, through one hook (the API DELETE stays for API clients)', () => {
   for (const [name, src] of Object.entries(SOURCES)) {
-    assert.doesNotMatch(code(src), /is_active\s*:\s*false|deactivate/i, `${name} deactivates: that is the plan (G4_committee_deactivation_plan.md), not part of this change`);
+    assert.doesNotMatch(code(src), /deleteCommittee\b/, `${name} calls deleteCommittee or its plan: the hard delete is not a screen's`);
   }
-  assert.doesNotMatch(readFileSync('src/lib/api.ts', 'utf8').slice(readFileSync('src/lib/api.ts', 'utf8').indexOf('export const committeeApi')).split('export interface QuickAssessRequest')[0], /deactivate|reactivate/i, 'no new endpoint call for it');
+  assert.doesNotMatch(code(read('_ui.tsx')), /deleteCommittee\b/);
+  const ui = code(read('_ui.tsx'));
+  assert.match(ui, /committeeApi\.deactivateCommittee\(/);
+  assert.match(ui, /committeeApi\.reactivateCommittee\(/);
+  for (const name of ['overview', 'committee'] as const) assert.match(SOURCES[name], /useCommitteeActivation\(/, `${name} deactivates through the shared hook`);
+  // the question is asked first, with the counts, and only a yes calls the server; Reactivate takes nothing away, so it asks nothing
+  assert.match(ui, /deactivateCommitteePlan\(/);
+  assert.match(ui, /if \(await confirm\(\{[^}]*\}\)\) deactivation\.mutate\(c\)/);
+  assert.doesNotMatch(ui, /confirm\([^)]*\)[^;]*reactivation\.mutate/, 'Reactivate asks no question');
+  // the endpoint calls and their words in the API file: the two new POSTs, optional params only on the two reads, DELETE kept for scripts
+  const api = readFileSync('src/lib/api.ts', 'utf8');
+  const committeeApi = api.slice(api.indexOf('export const committeeApi')).split('export interface QuickAssessRequest')[0];
+  assert.match(committeeApi, /deactivateCommittee: \(id: number\) => apiClient\.post\(`\/governance\/committees\/\$\{id\}\/deactivate`\)/);
+  assert.match(committeeApi, /reactivateCommittee: \(id: number\) => apiClient\.post\(`\/governance\/committees\/\$\{id\}\/reactivate`\)/);
+  assert.match(committeeApi, /deleteCommittee: \(id: number\) => apiClient\.delete\(`\/governance\/committees\/\$\{id\}`\)/);
+});
+
+test('Deactivate and Reactivate are offered to the delete right only (the server asks for the same key) and an inactive committee is not offered new things', () => {
+  for (const name of ['overview', 'committee'] as const) assert.match(SOURCES[name], /hasPermission\('governance:committees:delete'\)/, `${name} gates on the delete right`);
+  // the committee's own buttons: Deactivate while active, Reactivate while not; the old red Delete is gone
+  assert.match(SOURCES.committee, /Deactivate<\/Button>/);
+  assert.match(SOURCES.committee, /Reactivate<\/Button>/);
+  assert.doesNotMatch(SOURCES.committee, /variant="dangerOutline"[^\n]*>Delete<\/Button>/);
+  assert.match(SOURCES.committee, /\{!active && <p role="note"[^>]*>\{inactiveNote\(canDelete\)\}<\/p>\}/, 'one line says what Inactive means, and the way back only to whoever can take it');
+  // no way to add a meeting, an action or a member to it: all six entry points are behind canAdd (= canCreate and active)
+  assert.match(SOURCES.committee, /const canAdd = canCreate && active;/);
+  assert.equal((SOURCES.committee.match(/\bcanAdd\b/g) || []).length, 1 + 6, 'the definition and the six places that add');
+  // a meeting of an inactive committee does not offer to create an action either
+  assert.match(SOURCES.meeting, /takesActions/);
+  assert.match(SOURCES.meeting, /Committee inactive/);
+  // the panel beside the list
+  assert.match(SOURCES.overview, /Reactivate<\/Button>/);
+  assert.match(SOURCES.overview, /Deactivate<\/Button>/);
+  assert.doesNotMatch(SOURCES.overview, /label=\{`Delete /, 'the panel has no Delete icon any more');
+});
+
+test('the list opens on Active, keeps its status filter in the address, and offers a new meeting the active committees only', () => {
+  const src = SOURCES.overview;
+  assert.match(src, /status: oneOf<CommitteeStatusFilter>\(COMMITTEE_STATUS_VALUES, DEFAULT_COMMITTEE_STATUS\)/);
+  assert.match(src, /useAddressState\(ADDRESS\)/);
+  assert.match(src, /<SegmentedControl\s+label="Show committees"/);
+  assert.match(src, /matchesStatus\(c, status\) && matchesCommittee\(c, search\)/, 'the table is the filter and the search together');
+  assert.match(src, /activeCommittees\(committees\)\.map/, 'the New meeting picker is built from the active committees');
+  assert.match(src, /selected && isActiveCommittee\(selected\) \? selected\.id : null/, 'a selected inactive committee is not pre-chosen for a meeting');
+  // the tiles keep counting every committee: they read the server's kpis, not the filtered rows
+  assert.match(src, /value=\{formatCount\(k\.active_committees\)\}/);
+  assert.match(src, /formatCount\(k\.total_committees\)\} total/);
+});
+
+test('Oversight Actions still finds the actions of a deactivated committee: its filter lists it marked "(inactive)", the form that adds an action does not', () => {
+  const src = SOURCES.actions;
+  assert.match(src, /committeeApi\.getCommittees\(\{ is_active: 'all' \}\)/);
+  assert.match(src, /\{committeeChoiceLabel\(c\)\}<\/option>/);
+  assert.match(src, /\{activeCommittees\(committees\)\.map\(\(c\) => <option key=\{c\.id\} value=\{String\(c\.id\)\}>\{c\.name\}<\/option>\)\}/);
+  assert.ok(src.includes("queryKey: ['committees-list']"), 'the query key is the same');
 });
 
 test('"Add manual action" stays open to every signed-in user (the server asks no more): recorded in the permission matrix, not changed here', () => {
@@ -157,8 +210,10 @@ test('the drawers ask before they throw typing away (dirty) and none of them is 
   }
 });
 
-test('nothing in the shared files was widened: only the types of getActions gained skip and limit', () => {
+test('the shared API file only gained optional things: getActions skip and limit and the optional assigned_to / due_after / due_before, an optional is_active on getCommittees, optional filters on getMeetings, and the new calls', () => {
   const api = readFileSync('src/lib/api.ts', 'utf8');
-  assert.match(api, /getActions: \(params\?: \{ status\?: string; committee_id\?: number; overdue_only\?: boolean; skip\?: number; limit\?: number \}\)/);
+  assert.match(api, /getActions: \(params\?: \{ status\?: string; committee_id\?: number; overdue_only\?: boolean; assigned_to\?: number \| 'me'; due_after\?: string; due_before\?: string; skip\?: number; limit\?: number \}\)/);
+  assert.match(api, /getCommittees: \(params\?: \{ is_active\?: 'true' \| 'false' \| 'all' \}\) => apiClient\.get\('\/governance\/committees', \{ params \}\)/);
+  assert.match(api, /getMeetings: \(committeeId: number, params\?: \{ status\?: string; from_date\?: string; limit\?: number \}\) =>/);
   assert.equal(ALL.length, 5);
 });

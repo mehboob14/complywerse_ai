@@ -8,7 +8,12 @@ import { clsx } from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { Button, StatusPill, useFieldControl } from '@/components/ui/ds';
-import { NOT_RECORDED, isOverdueAction, slaPill, type SlaLike } from '@/lib/committees';
+import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import type { ConfirmOptions } from '@/components/ui/ds/useConfirm';
+import { committeeApi } from '@/lib/api';
+import {
+  NOT_RECORDED, deactivateCommitteePlan, deactivatedLine, isOverdueAction, reactivatedLine, slaPill, whatStays, type SlaLike, type WhatStays,
+} from '@/lib/committees';
 import { EMPTY, truncate } from '@/lib/format';
 import { actionStatus, committeeStatus, priority as priorityStatus, statusPill } from '@/lib/status';
 
@@ -147,6 +152,63 @@ export function DrawerFooter({ onCancel, form, pending, label, pendingLabel, dis
 /** A committee's state as a word: Active or Inactive (it has `is_active`, not a status column). */
 export function CommitteeActivity({ active, size }: { active: boolean; size?: 'sm' | 'md' }) {
   return <StatusPill size={size} {...statusPill(committeeStatus, active ? 'active' : 'inactive')} />;
+}
+
+// ── Deactivate / Reactivate: the same two calls and the same question from the list and from the committee ─────────────────────────────────────────────
+/** What stays when `committeeId` is deactivated, read just before the question is asked: the committee's own count of open actions and the number of its
+ *  meetings still to come (scheduled, not yet past; naive UTC, as the server stores times). A request that fails is not 0: the question then says it
+ *  without the number. */
+async function readWhatStays(committeeId: number): Promise<WhatStays> {
+  const now = new Date().toISOString().slice(0, 19);
+  const [committee, meetings] = await Promise.allSettled([
+    committeeApi.getCommittee(committeeId),
+    committeeApi.getMeetings(committeeId, { status: 'scheduled', from_date: now, limit: 1 }),
+  ]);
+  return whatStays(committee.status === 'fulfilled' ? committee.value.data : null, meetings.status === 'fulfilled' ? meetings.value.data : null);
+}
+
+export interface ActivationTarget { id: number; name: string }
+
+/** Deactivate (asked first, with what stays) and Reactivate (no question: it takes nothing away) for one committee at a time. Both are reported
+ *  mutations: the toast comes after the server answered, a failure stays with the server's words (an open audit extension request says so in a 409) and a
+ *  Retry where repeating can help. `invalidate` is the page's own queries; `onChanged` runs after the server confirmed. `confirm` is the page's useConfirm. */
+export function useCommitteeActivation({ confirm, invalidate, onChanged, deactivatedNote }: {
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  invalidate: ReadonlyArray<readonly unknown[]>;
+  onChanged?: (committee: ActivationTarget, active: boolean) => void;
+  /** a second line under "X is deactivated.", for a page where the committee leaves the list */
+  deactivatedNote?: string;
+}) {
+  const [reading, setReading] = useState(false);
+  const label = (c: ActivationTarget) => truncate(c.name, 60).text;
+  const deactivation = useReportedMutation({
+    mutationFn: (c: ActivationTarget) => committeeApi.deactivateCommittee(c.id),
+    success: (_r, c) => (deactivatedNote ? { title: deactivatedLine(label(c)), message: deactivatedNote } : deactivatedLine(label(c))),
+    failure: "Couldn't deactivate the committee",
+    invalidate,
+    onSuccess: (_r, c) => onChanged?.(c, false),
+  });
+  const reactivation = useReportedMutation({
+    mutationFn: (c: ActivationTarget) => committeeApi.reactivateCommittee(c.id),
+    success: (_r, c) => reactivatedLine(label(c)),
+    failure: "Couldn't reactivate the committee",
+    invalidate,
+    onSuccess: (_r, c) => onChanged?.(c, true),
+  });
+  const askDeactivate = async (c: ActivationTarget) => {
+    setReading(true);
+    let stays: WhatStays;
+    try { stays = await readWhatStays(c.id); } finally { setReading(false); }
+    const plan = deactivateCommitteePlan(label(c), stays);
+    // tone "danger" puts focus on Cancel, as for a department: a stray Enter does not switch a committee off (it is reversible, but other screens change)
+    if (await confirm({ title: plan.title, message: plan.message, confirmLabel: plan.confirmLabel, tone: 'danger' })) deactivation.mutate(c);
+  };
+  return {
+    askDeactivate,
+    reactivate: (c: ActivationTarget) => reactivation.mutate(c),
+    /** a question is being prepared or a call is on its way: the buttons wait */
+    busy: reading || deactivation.isPending || reactivation.isPending,
+  };
 }
 
 /** An action's status as a word, and "Overdue" beside it when the API says it is late (an open action past its due date is not "overdue" by status). */

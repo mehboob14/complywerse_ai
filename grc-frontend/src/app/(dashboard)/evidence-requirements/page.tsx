@@ -1,806 +1,295 @@
 ﻿'use client';
 
-
-import { PageLoader } from '@/components/ui';
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+// Evidence Requirements: what each control of a framework asks you to show, and where each requirement stands in review (draft, submitted, pending review,
+// approved, rejected). One framework at a time, read in full and filtered in the browser (the largest has 1,070 requirements), a page of it at a time.
+// Everything the person chose lives in the address (?framework= &q= &status= &priority= &type= &open= &page=), so a link opens the same view. On the
+// design-system kit: PageHeader variant="page", RegisterTable (cards below 768px), Pager with the true count, status pills from the registries, the details
+// in a right-hand panel that opens from the keyboard, every step through useReportedMutation (said after the server answers, in its words) and the
+// rejection in a dialog that keeps what was typed. The rules (filters, search, tiles, steps) are requirementsModel.ts, tested there.
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { EMPTY, formatCount, truncate } from '@/lib/format';
+import { integer, listOf, text } from '@/lib/addressState';
+import { priority, statusPill } from '@/lib/status';
+import { requirementStatus } from '@/lib/statuses/evidence';
+import { PageHeader } from '@/components/ui';
+import { InfoTip } from '@/components/ui/InfoTip';
 import {
-  FileCheck,
-  Loader2,
-  AlertCircle,
-  Search,
-  Filter,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  X,
-  Clock,
-  CheckCircle,
-  FileText,
-  AlertTriangle,
-  Sparkles,
-  Calendar,
-  Archive,
-  List,
-  Eye,
-  Send,
-  ThumbsUp,
-  ThumbsDown,
-  RotateCcw,
-} from 'lucide-react';
+  Button, Combobox, EmptyState, ErrorState, Menu, MultiSelect, Notice, Pager, ReadOnlyNote, RegisterTable, Skeleton, StatTile, StatusPill, TextInput, useAddressState,
+  type RegisterColumn,
+} from '@/components/ui/ds';
+import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
+import { pageOfRows } from '../evidence/_workspace/evidenceModel';
+import { loadCatalogue, loadControls, loadFrameworks } from './_queries';
+import { RejectDialog } from './_RejectDialog';
+import { RequirementDrawer } from './_Drawer';
+import { useSteps } from './_useSteps';
+import { MUTED } from './_parts';
+import {
+  PRIORITIES, REQUIREMENT_STATUSES, catalogueTiles, controlLabel, countLine, filterRequirements, isFiltered, readable, stepsFor, typeChoices,
+  type ParsedControl, type Requirement, type StepKey,
+} from './requirementsModel';
 
-interface EvidenceRequirement {
-  id: number;
-  parsed_control_id: number;
-  evidence_title: string;
-  evidence_description: string;
-  evidence_type: string;
-  evidence_format: string;
-  exact_requirements: string[] | null;
-  acceptance_criteria: string[] | null;
-  sample_evidence: string;
-  collection_guidance: string;
-  collection_frequency: string;
-  retention_period: string | null;
-  priority: string;
-  is_mandatory: boolean;
-  status: string;
-  ai_confidence: number | null;
-  ai_reasoning?: string;
-  created_at: string;
-  submitted_at: string | null;
-  reviewed_at: string | null;
-  approved_at: string | null;
-  rejection_reason?: string | null;
-  control_id?: string;
-  control_title?: string;
-}
-
-interface UploadedFramework {
-  id: number;
-  name: string;
-  version: string;
-  upload_status: string;
-  parsed_controls_count: number;
-}
-
-interface ParsedControl {
-  id: number;
-  control_id: string;
-  title: string;
-  original_reference: string | null;
-}
-
-interface EvidenceRequirementsResponse {
-  framework_id: number;
-  framework_name: string;
-  total: number;
-  status_counts: Record<string, number>;
-  requirements: EvidenceRequirement[];
-}
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'pending_review', label: 'Pending Review' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: '', label: 'All Priorities' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
-
-const EVIDENCE_TYPE_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy' },
-  { value: 'procedure', label: 'Procedure' },
-  { value: 'configuration', label: 'Configuration' },
-  { value: 'log', label: 'Log' },
-  { value: 'report', label: 'Report' },
-  { value: 'contract', label: 'Contract' },
-  { value: 'register', label: 'Register' },
-  { value: 'attestation', label: 'Attestation' },
-  { value: 'training', label: 'Training' },
-  { value: 'screenshot', label: 'Screenshot' },
-];
-
-const getStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    draft: 'bg-slate-50 text-slate-700',
-    submitted: 'bg-primary-50 text-primary-700',
-    pending_review: 'bg-amber-50 text-amber-700',
-    approved: 'bg-emerald-50 text-emerald-700',
-    rejected: 'bg-rose-50 text-rose-700',
-  };
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    submitted: 'Submitted',
-    pending_review: 'Pending Review',
-    approved: 'Approved',
-    rejected: 'Rejected',
-  };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] || 'bg-slate-50 text-slate-700'}`}>
-      {labels[status] || status}
-    </span>
-  );
+const SCHEMA = {
+  framework: integer(0, { min: 1 }),
+  q: text(),
+  status: listOf(REQUIREMENT_STATUSES),
+  priority: listOf(PRIORITIES),
+  type: listOf(),
+  open: integer(0, { min: 1 }),
+  page: integer(1, { min: 1 }),
 };
-
-const getPriorityBadge = (priority: string) => {
-  const styles: Record<string, string> = {
-    high: 'bg-rose-50 text-rose-700',
-    medium: 'bg-amber-50 text-amber-700',
-    low: 'bg-emerald-50 text-emerald-700',
-  };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[priority] || 'bg-slate-50 text-slate-700'}`}>
-      {priority}
-    </span>
-  );
-};
-
-const getTypeBadge = (type: string) => {
-  // Categorical evidence-type scale (data-viz): kept distinct, normalized to
-  // light pills. Dark chips flattened; raw green/yellow mapped to emerald/amber.
-  const styles: Record<string, string> = {
-    policy: 'bg-indigo-50 text-indigo-700',
-    procedure: 'bg-cyan-50 text-cyan-700',
-    configuration: 'bg-orange-50 text-orange-700',
-    log: 'bg-amber-50 text-amber-700',
-    report: 'bg-blue-50 text-blue-700',
-    contract: 'bg-pink-50 text-pink-700',
-    register: 'bg-primary-50 text-primary-700',
-    attestation: 'bg-primary-50 text-primary-700',
-    training: 'bg-emerald-50 text-emerald-700',
-    screenshot: 'bg-slate-50 text-slate-700',
-  };
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${styles[type] || 'bg-slate-50 text-slate-700'}`}>
-      {type}
-    </span>
-  );
-};
+const PAGE_SIZES = [25, 50, 100] as const;
+const STATUS_OPTIONS = REQUIREMENT_STATUSES.map((value) => ({ value, label: requirementStatus.label(value) }));
+const PRIORITY_OPTIONS = PRIORITIES.map((value) => ({ value, label: priority.label(value) }));
+/** a refusal (403, 404) is final, anything else is tried once more after a short wait: a failure is said within a couple of seconds, not after seven of spinner */
+const retryRead = (failures: number, error: unknown): boolean => canRetry(error) && failures < 1;
+const RETRY_AFTER = 800;
 
 export default function EvidenceRequirementsPage() {
-  const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isLoading: permsLoading } = usePermissions();
   const canEdit = hasPermission('evidence:evidence_library:edit');
-  const [selectedFramework, setSelectedFramework] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [expandedRow, setExpandedRow] = useState<number | null>(null);
-  const [showRejectModal, setShowRejectModal] = useState<number | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [showAiReasoning, setShowAiReasoning] = useState<number | null>(null);
+  const [a, set] = useAddressState(SCHEMA);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [rejecting, setRejecting] = useState<Requirement | null>(null);
+  const framework = a.framework || null;
 
-  const { data: frameworks, isLoading: frameworksLoading } = useQuery({
-    queryKey: ['uploaded-frameworks-for-evidence'],
-    queryFn: async () => {
-      const response = await apiClient.get('/framework-upload/upload');
-      const items = response.data?.items || [];
-      return items.filter((f: UploadedFramework) => 
-        f.upload_status === 'completed' || 
-        f.upload_status === 'parsed' || 
-        f.upload_status === 'published'
-      ) as UploadedFramework[];
-    },
-  });
+  const frameworksQ = useQuery({ queryKey: ['uploaded-frameworks-for-evidence'], queryFn: loadFrameworks, retry: retryRead, retryDelay: RETRY_AFTER });
+  const controlsQ = useQuery({ queryKey: ['parsed-controls-for-evidence', framework], queryFn: () => loadControls(framework as number), enabled: framework !== null, retry: retryRead, retryDelay: RETRY_AFTER });
+  const catalogueQ = useQuery({ queryKey: ['evidence-requirements', framework], queryFn: () => loadCatalogue(framework as number), enabled: framework !== null, retry: retryRead, retryDelay: RETRY_AFTER });
+  const steps = useSteps(framework ?? 0, () => setRejecting(null));
 
-  const { data: controls } = useQuery({
-    queryKey: ['parsed-controls-for-evidence', selectedFramework],
-    queryFn: async () => {
-      if (!selectedFramework) return [];
-      const response = await apiClient.get(`/framework-upload/parser/${selectedFramework}/controls`, {
-        params: { limit: 1000 }
-      });
-      return (response.data?.items || []) as ParsedControl[];
-    },
-    enabled: !!selectedFramework,
-  });
+  const catalogue = catalogueQ.data;
+  const rows = useMemo(() => catalogue?.requirements ?? [], [catalogue]);
+  const controlMap = useMemo(() => new Map<number, ParsedControl>((controlsQ.data ?? []).map((c) => [c.id, c])), [controlsQ.data]);
+  const filters = useMemo(() => ({ q: a.q, status: a.status, priority: a.priority, types: a.type }), [a.q, a.status, a.priority, a.type]);
+  const matches = useMemo(() => filterRequirements(rows, filters, controlMap), [rows, filters, controlMap]);
+  const types = useMemo(() => typeChoices(rows), [rows]);
+  const { range, rows: pageRows } = pageOfRows(matches, a.page, pageSize);
+  const tiles = catalogueTiles(catalogue?.status_counts, catalogue?.total);
+  const opened = a.open ? rows.find((r) => r.id === a.open) : undefined;
+  const labelOf = (r: Requirement) => controlLabel(r, controlMap.get(r.parsed_control_id));
+  const pendingId = [steps.submit, steps.review, steps.approve, steps.reject].find((m) => m.isPending)?.variables?.id;
+  const frameworkName = frameworksQ.data?.find((f) => f.id === framework)?.name ?? catalogue?.framework_name;
+  const clearFilters = () => set({ q: '', status: [], priority: [], type: [], page: 1 });
+  const readOnly = !permsLoading && !canEdit;
 
-  const controlMap = useMemo(() => {
-    const map: Record<number, ParsedControl> = {};
-    controls?.forEach((c: ParsedControl) => {
-      map[c.id] = c;
-    });
-    return map;
-  }, [controls]);
-
-  const { data: requirementsData, isLoading: requirementsLoading, error } = useQuery({
-    queryKey: ['evidence-requirements', selectedFramework, statusFilter, priorityFilter, typeFilter],
-    queryFn: async () => {
-      if (!selectedFramework) return null;
-      const params: Record<string, any> = { limit: 500 };
-      if (statusFilter) params.status = statusFilter;
-      if (priorityFilter) params.priority = priorityFilter;
-      if (typeFilter) params.evidence_type = typeFilter;
-      
-      const url = `/framework-upload/parser/${selectedFramework}/evidence-requirements`;
-      const data = (await apiClient.get(url, { params })).data as EvidenceRequirementsResponse;
-      // The API returns at most 500 rows a page: fetch the rest (UAE IA has 860).
-      while (data.requirements.length < data.total) {
-        const next = (await apiClient.get(url, { params: { ...params, skip: data.requirements.length } })).data as EvidenceRequirementsResponse;
-        if (!next.requirements.length) break;
-        data.requirements.push(...next.requirements);
-      }
-      return data;
-    },
-    enabled: !!selectedFramework,
-  });
-
-  const filteredRequirements = useMemo(() => {
-    if (!requirementsData?.requirements) return [];
-    if (!searchTerm) return requirementsData.requirements;
-    
-    const term = searchTerm.toLowerCase();
-    return requirementsData.requirements.filter((req) => {
-      const control = controlMap[req.parsed_control_id];
-      const controlId = control?.control_id || control?.original_reference || '';
-      const controlTitle = control?.title || '';
-      return (
-        req.evidence_title.toLowerCase().includes(term) ||
-        controlId.toLowerCase().includes(term) ||
-        controlTitle.toLowerCase().includes(term)
-      );
-    });
-  }, [requirementsData?.requirements, searchTerm, controlMap]);
-
-  const submitMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await apiClient.post(`/framework-upload/parser/evidence-requirements/${id}/submit`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-requirements'] });
-    },
-  });
-
-  const reviewMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await apiClient.post(`/framework-upload/parser/evidence-requirements/${id}/review`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-requirements'] });
-    },
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return await apiClient.post(`/framework-upload/parser/evidence-requirements/${id}/approve`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-requirements'] });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      return await apiClient.post(`/framework-upload/parser/evidence-requirements/${id}/reject`, { reason });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-requirements'] });
-      setShowRejectModal(null);
-      setRejectionReason('');
-    },
-  });
-
-  const handleReject = () => {
-    if (showRejectModal && rejectionReason.trim()) {
-      rejectMutation.mutate({ id: showRejectModal, reason: rejectionReason });
+  const onStep = (r: Requirement, key: StepKey) => {
+    if (key === 'reject') {
+      steps.reject.reset();
+      setRejecting(r);
+      return;
     }
+    steps.run(key, { id: r.id, title: r.evidence_title });
   };
 
-  const statusCounts = requirementsData?.status_counts || {};
-  const totalRequirements = requirementsData?.total || 0;
-  const draftCount = statusCounts['draft'] || 0;
-  const pendingReviewCount = (statusCounts['submitted'] || 0) + (statusCounts['pending_review'] || 0);
-  const approvedCount = statusCounts['approved'] || 0;
+  const head = (
+    <PageHeader
+      variant="page"
+      title="Evidence requirements"
+      info="What each control of a framework asks you to show, how often to collect it and what makes it acceptable, with where each requirement stands in review: draft, submitted, pending review, approved or rejected."
+      meta={readOnly ? (
+        <ReadOnlyNote>
+          View only
+          <InfoTip text="Only people who may edit the evidence library can move a requirement through review." label="Why the requirements are view only" />
+        </ReadOnlyNote>
+      ) : undefined}
+    />
+  );
 
-  if (frameworksLoading) {
+  const picker = (
+    <div className="w-full sm:w-[420px]">
+      {frameworksQ.isLoading ? <Skeleton className="h-[32px] w-full" /> : (
+        <Combobox
+          label="Framework"
+          showLabel
+          placeholder="Choose a framework"
+          searchPlaceholder="Search frameworks"
+          options={(frameworksQ.data ?? []).map((f) => ({ value: String(f.id), label: f.name, description: f.version ? `Version ${f.version}` : undefined }))}
+          value={framework === null ? null : String(framework)}
+          onChange={(v) => set({ framework: v ? Number(v) : 0, open: 0, page: 1 })}
+          className="w-full"
+        />
+      )}
+    </div>
+  );
+
+  if (frameworksQ.isError && !frameworksQ.data) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <PageLoader size="md" />
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <ErrorState title="Couldn't load the frameworks" message={errorMessage(frameworksQ.error)} onRetry={canRetry(frameworksQ.error) ? () => { void frameworksQ.refetch(); } : undefined} />
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <FileCheck className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
-          Evidence Requirements
-        </h1>
-        <p className="text-slate-600">AI-generated evidence requirements for compliance controls</p>
+  if (!frameworksQ.isLoading && (frameworksQ.data ?? []).length === 0) {
+    return (
+      <div className="flex flex-col gap-[16px]">
+        {head}
+        <EmptyState kind="firstUse" title="No frameworks to show" description="Evidence requirements belong to a framework that has been read. None is available yet." />
       </div>
+    );
+  }
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-600" />
-            <select
-              value={selectedFramework || ''}
-              onChange={(e) => {
-                setSelectedFramework(e.target.value ? Number(e.target.value) : null);
-                setExpandedRow(null);
-              }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
+  const loading = framework !== null && catalogueQ.isLoading;
+  const failed = framework !== null && catalogueQ.isError && !catalogue;
+  const loaded = !!catalogue;
+
+  const columns: RegisterColumn<Requirement>[] = [
+    {
+      key: 'control', header: 'Control', isRowHeader: true, width: 'w-[200px]',
+      cell: (r) => {
+        const l = labelOf(r);
+        return (
+          <span className="block min-w-0">
+            <span className="block break-words font-[500] text-ds-fg">{l.reference}</span>
+            <span className={`line-clamp-2 break-words text-ds-label ${MUTED}`} title={l.title}>{l.title}</span>
+          </span>
+        );
+      },
+    },
+    {
+      key: 'evidence', header: 'Evidence',
+      cell: (r) => (
+        <span className="flex min-w-0 flex-wrap items-center gap-x-[8px] gap-y-[2px]">
+          <span className="line-clamp-2 min-w-0 break-words text-ds-fg" title={r.evidence_title} dir="auto">{r.evidence_title}</span>
+          {!r.is_mandatory && <span className={`shrink-0 rounded-ds-control border border-ds-border px-[6px] text-ds-label ${MUTED}`}>Optional</span>}
+        </span>
+      ),
+    },
+    { key: 'type', header: 'Type', priority: 2, width: 'w-[112px]', card: 'meta', cell: (r) => readable(r.evidence_type) || <span className={MUTED}>{EMPTY}</span> },
+    { key: 'priority', header: 'Priority', priority: 3, width: 'w-[96px]', card: 'meta', cell: (r) => <StatusPill size="sm" {...statusPill(priority, r.priority)} /> },
+    { key: 'status', header: 'Status', width: 'w-[128px]', card: 'meta', cell: (r) => <StatusPill size="sm" {...statusPill(requirementStatus, r.status)} /> },
+    { key: 'frequency', header: 'How often', priority: 3, width: 'w-[96px]', card: 'meta', cell: (r) => readable(r.collection_frequency) || <span className={MUTED}>{EMPTY}</span> },
+    ...(canEdit ? [{
+      key: 'actions', header: 'Actions', align: 'right' as const, width: 'w-[190px]',
+      cell: (r: Requirement) => (
+        <span className="inline-flex flex-wrap justify-end gap-[6px]">
+          {stepsFor(r.status, canEdit).map((s) => (
+            <Button
+              key={s.key} size="sm" variant={s.key === 'reject' ? 'dangerOutline' : 'primary'} aria-label={`${s.label}: ${truncate(r.evidence_title, 60).text}`}
+              loading={pendingId === r.id} disabled={pendingId !== undefined && pendingId !== r.id} onClick={() => onStep(r, s.key)}
             >
-              <option value="">Select Framework</option>
-              {frameworks?.map((fw) => (
-                <option key={fw.id} value={fw.id}>
-                  {fw.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              {s.label}
+            </Button>
+          ))}
+        </span>
+      ),
+    }] : []),
+  ];
 
-          {selectedFramework && (
-            <>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+  const empty = !loaded ? undefined : rows.length === 0 ? (
+    <EmptyState bare kind="firstUse" title="No evidence requirements for this framework" description="None have been added for it yet." />
+  ) : (
+    <EmptyState bare kind="noMatches" title="No requirements match" description="Try another search or fewer filters." onClearFilters={clearFilters} />
+  );
 
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+  return (
+    <div className="flex flex-col gap-[16px]">
+      {head}
 
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                {EVIDENCE_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </>
-          )}
-        </div>
-
-        {selectedFramework && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search by control ID or title..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-80"
-            />
-          </div>
+      <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+        {picker}
+        {framework !== null && loaded && (
+          <TextInput
+            className="w-full sm:w-[260px]" aria-label="Search requirements" placeholder="Search by control or title" maxLength={100} leftAdornment={<Search aria-hidden />}
+            value={a.q} onChange={(e) => set({ q: e.target.value, page: 1 })}
+          />
         )}
       </div>
 
-      {selectedFramework && requirementsData && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                <List className="h-5 w-5 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{totalRequirements}</p>
-                <p className="text-sm text-slate-600">Total Requirements</p>
-              </div>
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-50">
-                <FileText className="h-5 w-5 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{draftCount}</p>
-                <p className="text-sm text-slate-600">Draft</p>
-              </div>
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                <Clock className="h-5 w-5 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{pendingReviewCount}</p>
-                <p className="text-sm text-slate-600">Pending Review</p>
-              </div>
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
-                <CheckCircle className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">{approvedCount}</p>
-                <p className="text-sm text-slate-600">Approved</p>
-              </div>
-            </div>
-          </div>
+      {framework === null && (
+        <EmptyState kind="firstUse" title="Choose a framework" description="Pick one above to see what evidence each of its controls asks for." />
+      )}
+
+      {framework !== null && !failed && (
+        <div className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 xl:grid-cols-5">
+          <StatTile label="Requirements" value={loaded ? formatCount(tiles.total) : null} loading={loading} note="In this framework" />
+          <StatTile label="Draft" value={loaded ? formatCount(tiles.draft) : null} loading={loading} />
+          <StatTile label="In review" value={loaded ? formatCount(tiles.inReview) : null} loading={loading} note="Submitted or pending review" />
+          <StatTile label="Approved" value={loaded ? formatCount(tiles.approved) : null} loading={loading} tone="success" />
+          <StatTile label="Rejected" value={loaded ? formatCount(tiles.rejected) : null} loading={loading} tone={tiles.rejected > 0 ? 'danger' : 'default'} />
         </div>
       )}
 
-      {!selectedFramework && (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <FileCheck className="mb-4 h-16 w-16 text-slate-400" strokeWidth={1.75} />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">Select a Framework</h3>
-          <p className="text-slate-600 max-w-md">
-            Choose a framework from the dropdown above to view its AI-generated evidence requirements.
-            Evidence requirements help you understand what documentation is needed for each control.
-          </p>
-        </div>
+      {failed && (
+        <ErrorState
+          title="Couldn't load the requirements" message={errorMessage(catalogueQ.error)}
+          onRetry={canRetry(catalogueQ.error) ? () => { void catalogueQ.refetch(); } : undefined}
+        />
       )}
 
-      {selectedFramework && requirementsLoading && (
-        <div className="flex h-64 items-center justify-center">
-          <PageLoader size="md" />
-        </div>
+      {loaded && catalogue.requirements.length < catalogue.total && (
+        <Notice
+          tone="warning" title={`Showing ${formatCount(catalogue.requirements.length)} of ${formatCount(catalogue.total)} requirements`}
+          action={<Button size="sm" onClick={() => { void catalogueQ.refetch(); }}>Reload</Button>}
+        >
+          The server sent fewer than it counted. Search and filters use the ones shown.
+        </Notice>
       )}
 
-      {selectedFramework && error && (
-        <div className="flex h-64 flex-col items-center justify-center text-rose-600">
-          <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
-          <p>Failed to load evidence requirements</p>
-        </div>
-      )}
-
-      {selectedFramework && requirementsData && filteredRequirements.length === 0 && (
-        <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <Sparkles className="mb-4 h-16 w-16 text-slate-400" strokeWidth={1.75} />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">No Evidence Requirements</h3>
-          <p className="text-slate-600 max-w-md">
-            {searchTerm || statusFilter || priorityFilter || typeFilter
-              ? 'No requirements match your current filters. Try adjusting them.'
-              : 'No evidence requirements have been generated for this framework yet. Use the "Generate Evidence Requirements" button on the Framework Controls page.'}
-          </p>
-        </div>
-      )}
-
-      {selectedFramework && filteredRequirements.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="w-full">
-            <thead className="bg-white">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Control</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Evidence Title</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 md:table-cell">Type</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 lg:table-cell">Priority</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Status</th>
-                <th className="hidden px-4 py-3 text-left text-sm font-medium text-slate-600 xl:table-cell">Frequency</th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {filteredRequirements.map((req) => {
-                const control = controlMap[req.parsed_control_id];
-                const isExpanded = expandedRow === req.id;
-                return (
-                  <>
-                    <tr
-                      key={req.id}
-                      className="bg-white hover:bg-slate-50 cursor-pointer"
-                      onClick={() => setExpandedRow(isExpanded ? null : req.id)}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-slate-600 flex-shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-slate-600 flex-shrink-0" />
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-mono text-sm text-slate-900 truncate">
-                              {control?.original_reference || control?.control_id || `Control #${req.parsed_control_id}`}
-                            </p>
-                            <p className="text-xs text-slate-600 truncate max-w-[200px]">
-                              {control?.title || 'Unknown Control'}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm text-slate-900 line-clamp-1">{req.evidence_title}</p>
-                          {req.is_mandatory && (
-                            <span className="flex-shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
-                              Required
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="hidden px-4 py-3 md:table-cell">
-                        {getTypeBadge(req.evidence_type)}
-                      </td>
-                      <td className="hidden px-4 py-3 lg:table-cell">
-                        {getPriorityBadge(req.priority)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {getStatusBadge(req.status)}
-                      </td>
-                      <td className="hidden px-4 py-3 xl:table-cell">
-                        <span className="text-sm text-slate-600">{req.collection_frequency || '-'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          {req.status === 'draft' && canEdit && (
-                            <button
-                              onClick={() => submitMutation.mutate(req.id)}
-                              disabled={submitMutation.isPending}
-                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
-                            >
-                              <Send className="h-3 w-3" />
-                              Submit
-                            </button>
-                          )}
-                          {req.status === 'submitted' && canEdit && (
-                            <button
-                              onClick={() => reviewMutation.mutate(req.id)}
-                              disabled={reviewMutation.isPending}
-                              className="flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
-                            >
-                              <Eye className="h-3 w-3" />
-                              Review
-                            </button>
-                          )}
-                          {req.status === 'pending_review' && canEdit && (
-                            <>
-                              <button
-                                onClick={() => approveMutation.mutate(req.id)}
-                                disabled={approveMutation.isPending}
-                                className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                              >
-                                <ThumbsUp className="h-3 w-3" />
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => setShowRejectModal(req.id)}
-                                className="flex items-center gap-1 rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700"
-                              >
-                                <ThumbsDown className="h-3 w-3" />
-                                Reject
-                              </button>
-                            </>
-                          )}
-                          {(req.status === 'approved' || req.status === 'rejected') && (
-                            <span className="text-xs text-slate-500">
-                              {req.status === 'approved' ? 'Approved' : 'Rejected'}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr key={`${req.id}-details`} className="bg-slate-50">
-                        <td colSpan={7} className="px-4 py-4 border-t border-slate-200">
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Type</h4>
-                                <p className="text-sm text-slate-900 capitalize">{req.evidence_type}</p>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Frequency</h4>
-                                <p className="text-sm text-slate-900">{req.collection_frequency || 'Not specified'}</p>
-                              </div>
-                              {req.retention_period != null && (
-                                <div>
-                                  <h4 className="text-sm font-medium text-slate-600 mb-1">Retention Period</h4>
-                                  <p className="text-sm text-slate-900">{req.retention_period || 'Not specified'}</p>
-                                </div>
-                              )}
-                              {req.ai_confidence != null && (
-                                <div>
-                                  <h4 className="text-sm font-medium text-slate-600 mb-1">AI Confidence</h4>
-                                  <p className={`text-sm font-medium ${
-                                    req.ai_confidence >= 0.8 ? 'text-emerald-600' :
-                                    req.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
-                                  }`}>
-                                    {Math.round((req.ai_confidence || 0) * 100)}%
-                                  </p>
-                                </div>
-                              )}
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Mandatory</h4>
-                                <p className={`text-sm font-medium ${req.is_mandatory ? 'text-rose-600' : 'text-slate-600'}`}>
-                                  {req.is_mandatory ? 'Yes' : 'No'}
-                                </p>
-                              </div>
-                              {req.evidence_format && (
-                                <div>
-                                  <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Format</h4>
-                                  <p className="text-sm text-slate-900">{(() => {
-                                    const fmt = req.evidence_format.toString().toLowerCase().replace(/^\./, '');
-                                    return ['pdf', 'doc', 'docx', 'docs', 'xls', 'xlsx'].includes(fmt)
-                                      ? 'Document'
-                                      : req.evidence_format;
-                                  })()}</p>
-                                </div>
-                              )}
-                            </div>
-
-                            {req.evidence_description && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Description</h4>
-                                <p className="text-sm text-slate-600">{req.evidence_description}</p>
-                              </div>
-                            )}
-
-                            {req.exact_requirements && req.exact_requirements.length > 0 && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-2">Exact Requirements</h4>
-                                <ul className="space-y-1">
-                                  {req.exact_requirements.map((item, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                      <Check className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                                      <span>{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {req.acceptance_criteria && req.acceptance_criteria.length > 0 && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-2">Acceptance Criteria</h4>
-                                <ul className="space-y-1">
-                                  {req.acceptance_criteria.map((item, idx) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                      <span className="text-primary-600 mt-1">•</span>
-                                      <span>{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {req.sample_evidence && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Sample Evidence</h4>
-                                <p className="text-sm text-slate-600">{req.sample_evidence}</p>
-                              </div>
-                            )}
-
-                            {req.collection_guidance && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Guidance</h4>
-                                <p className="text-sm text-slate-600">{req.collection_guidance}</p>
-                              </div>
-                            )}
-
-                            {req.ai_reasoning && (
-                              <div>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowAiReasoning(showAiReasoning === req.id ? null : req.id);
-                                  }}
-                                  className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                                >
-                                  <Sparkles className="h-4 w-4 text-primary-600" />
-                                  <span>AI Reasoning</span>
-                                  <ChevronDown className={`h-4 w-4 transition-transform ${showAiReasoning === req.id ? 'rotate-180' : ''}`} />
-                                </button>
-                                {showAiReasoning === req.id && (
-                                  <div className="mt-2 rounded-lg bg-white p-3 text-sm text-slate-600">
-                                    {req.ai_reasoning}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {req.rejection_reason && (
-                              <div className="rounded-lg bg-rose-50 border border-rose-200 p-3">
-                                <h4 className="text-sm font-medium text-rose-700 mb-1 flex items-center gap-2">
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Rejection Reason
-                                </h4>
-                                <p className="text-sm text-slate-600">{req.rejection_reason}</p>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-4 pt-2 text-xs text-slate-500">
-                              {req.created_at && (
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  Created: {new Date(req.created_at).toLocaleDateString()}
-                                </span>
-                              )}
-                              {req.submitted_at && (
-                                <span className="flex items-center gap-1">
-                                  <Send className="h-3 w-3" />
-                                  Submitted: {new Date(req.submitted_at).toLocaleDateString()}
-                                </span>
-                              )}
-                              {req.approved_at && (
-                                <span className="flex items-center gap-1">
-                                  <CheckCircle className="h-3 w-3" />
-                                  Approved: {new Date(req.approved_at).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50">
-          <div className="w-full max-w-md mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <ThumbsDown className="h-5 w-5 text-rose-600" />
-                Reject Evidence Requirement
-              </h2>
-              <button
-                onClick={() => {
-                  setShowRejectModal(null);
-                  setRejectionReason('');
-                }}
-                className="rounded-lg p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-4">
-              <label className="block text-sm font-medium text-slate-600 mb-2">
-                Rejection Reason <span className="text-rose-600">*</span>
-              </label>
-              <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Please provide a reason for rejecting this evidence requirement..."
-                rows={4}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none resize-none"
+      {framework !== null && !failed && (
+        <>
+          {loaded && rows.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+              <MultiSelect showLabel label="Status" placeholder="All" options={STATUS_OPTIONS} value={a.status} onChange={(v) => set({ status: v, page: 1 })} className="w-full sm:w-[200px]" />
+              <MultiSelect showLabel label="Priority" placeholder="All" options={PRIORITY_OPTIONS} value={a.priority} onChange={(v) => set({ priority: v, page: 1 })} className="w-full sm:w-[190px]" />
+              <MultiSelect
+                showLabel label="Type" placeholder="All" value={a.type} onChange={(v) => set({ type: v, page: 1 })} className="w-full sm:w-[190px]"
+                options={types.map((t) => ({ value: t.value, label: t.label, description: `${formatCount(t.count)} requirements` }))}
               />
+              {isFiltered(filters) && <Button variant="link" onClick={clearFilters}>Clear filters</Button>}
+              <span aria-live="polite" className={`text-ds-body ${MUTED} sm:ml-auto`}>{countLine(matches.length, rows.length)}</span>
             </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 p-4">
-              <button
-                onClick={() => {
-                  setShowRejectModal(null);
-                  setRejectionReason('');
-                }}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={!rejectionReason.trim() || rejectMutation.isPending}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+          <RegisterTable
+            caption={frameworkName ? `Evidence requirements of ${frameworkName}` : 'Evidence requirements'}
+            columns={columns}
+            rows={pageRows}
+            getRowId={(r) => r.id}
+            loading={loading}
+            loadingRows={8}
+            empty={empty}
+            selectedId={a.open || null}
+            onRowActivate={(r) => set({ open: r.id })}
+            cardTitle={(r) => (
+              <span className="block min-w-0">
+                <span className="line-clamp-3 break-words" title={r.evidence_title} dir="auto">{r.evidence_title}</span>
+                <span className={`mt-[2px] block break-words text-ds-label font-normal ${MUTED}`}>{labelOf(r).reference}</span>
+              </span>
+            )}
+            cardActions={canEdit ? (r) => (
+              <Menu
+                iconOnly label={`Actions for ${truncate(r.evidence_title, 50).text}`}
+                items={stepsFor(r.status, canEdit).map((s) => ({ key: s.key, label: s.label, danger: s.key === 'reject', onSelect: () => onStep(r, s.key) }))}
+              />
+            ) : undefined}
+            footer={matches.length > 0 ? (
+              <Pager
+                page={range.page} pageSize={pageSize} total={matches.length} noun={{ one: 'requirement', other: 'requirements' }} pageSizes={PAGE_SIZES}
+                onPage={(page) => set({ page })} onPageSize={(n) => { setPageSize(n); set({ page: 1 }); }}
+              />
+            ) : undefined}
+          />
+        </>
+      )}
+
+      {opened && (
+        <RequirementDrawer
+          key={opened.id} req={opened} control={labelOf(opened)} steps={stepsFor(opened.status, canEdit)} busy={pendingId === opened.id}
+          onStep={(key) => onStep(opened, key)} onClose={() => set({ open: 0 })}
+        />
+      )}
+      {rejecting && (
+        <RejectDialog
+          key={rejecting.id} title={rejecting.evidence_title} busy={steps.reject.isPending}
+          error={steps.reject.isError ? errorMessage(steps.reject.error) : null}
+          onSubmit={(reason) => steps.reject.mutate({ id: rejecting.id, title: rejecting.evidence_title, reason })}
+          onClose={() => setRejecting(null)}
+        />
       )}
     </div>
   );

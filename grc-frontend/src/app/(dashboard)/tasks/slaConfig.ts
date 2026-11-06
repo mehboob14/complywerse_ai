@@ -40,14 +40,21 @@ export function getTaskSLAConfig(): Record<TaskSLALevel, number> {
   }
 }
 
-export function setTaskSLAConfig(config: Record<TaskSLALevel, number>): void {
-  if (typeof window === 'undefined') return;
+/** Stores the levels in this browser; false when it could not (storage blocked or full), so the page can say it was not saved. */
+export function setTaskSLAConfig(config: Record<TaskSLALevel, number>): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     window.dispatchEvent(new CustomEvent('task-sla-config-changed'));
+    return true;
   } catch {
-    /* swallow */
+    return false;
   }
+}
+
+/** The days a person typed for a level: a whole number, at least 1 (what the page has always stored; nothing typed is 1). */
+export function daysFromDraft(text: string | number): number {
+  return Math.max(1, Math.floor(Number(text) || 0));
 }
 
 export function resolveTaskSLADays(level: TaskSLALevel | string | undefined): number | undefined {

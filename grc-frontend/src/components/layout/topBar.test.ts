@@ -32,8 +32,9 @@ test('signing out keeps the one thing the shell remembers about this browser', (
   assert.match(header, /readCollapsed\(\)[\s\S]{0,80}localStorage\.clear\(\)[\s\S]{0,80}writeCollapsed\(/);
 });
 
-test('a Governance page that draws its own heading shows only its section in the top bar, so its name is not on screen twice', () => {
+test('a page that draws its own heading shows only its section in the top bar, so its name is not on screen twice', () => {
   assert.doesNotMatch(header, /OWN_HEADING/, 'which pages own their heading is registry data (ownHeading in lib/navRegistry.ts), not a list in the top bar');
   assert.match(header, /section: ownHeadingSection\(pathname\)/);
-  assert.match(header, /if \(info\.section\) \{/, 'the branch that prints the section and not the title');
+  assert.match(header, /if \(info\.section !== undefined\) \{/, 'the branch that prints the section and not the title (an empty section prints nothing)');
+  assert.match(header, /registryNamesPage\(pathname\) \? titleFor\(pathname\)/, 'the registry names every Governance page and every page with ownHeading, in any module');
 });

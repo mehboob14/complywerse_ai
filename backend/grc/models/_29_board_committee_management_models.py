@@ -128,7 +128,8 @@ class CommitteeMeeting(Base):
     minutes = relationship("MeetingMinutes", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
     oversight_actions = relationship("OversightAction", back_populates="meeting")
     attachments = relationship("MeetingAttachment", back_populates="meeting", cascade="all, delete-orphan")
-    
+    attendance = relationship("MeetingAttendance", back_populates="meeting", cascade="all, delete-orphan")
+
     __table_args__ = (
         Index("ix_committee_meeting_tenant", "tenant_id"),
         Index("ix_committee_meeting_committee", "committee_id"),
@@ -250,6 +251,32 @@ class MeetingAttachment(Base):
     __table_args__ = (
         Index("ix_meeting_attachment_tenant", "tenant_id"),
         Index("ix_meeting_attachment_meeting", "meeting_id"),
+    )
+
+
+class MeetingAttendance(Base):
+    """Who was at a committee meeting: one row per member and meeting, written by the roll call (routers/committees.py).
+
+    Not kept in MeetingMinutes.attendees on purpose: that needs a minutes row, and a minutes row is what the overviews read as "minutes recorded".
+    """
+    __tablename__ = "grc_meeting_attendance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False)  # present, late, absent
+    # The member's committee role when the roll was taken. An observer is on the roll but does not count toward quorum or attendance.
+    role = Column(String(50), nullable=True)
+    marked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    marked_at = Column(DateTime, default=datetime.utcnow)
+
+    meeting = relationship("CommitteeMeeting", back_populates="attendance")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    marker = relationship("GRCUser", foreign_keys=[marked_by])
+
+    __table_args__ = (
+        UniqueConstraint("meeting_id", "user_id", name="uq_meeting_attendance_user"),
     )
 
 

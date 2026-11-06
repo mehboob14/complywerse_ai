@@ -49,6 +49,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Task Management',
     href: '/tasks',
+    activeMatch: '/my-work',
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
@@ -60,7 +61,7 @@ export const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
       // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
-      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations'], icon: ScrollText, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
+      { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations', '/documents'], icon: ScrollText, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
       { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
@@ -102,10 +103,10 @@ export const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
-      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
+      { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Organisation Profile', href: '/compliance/organisation', icon: Building2, requiredPermissions: ['compliance:frameworks:*', 'compliance:org_profile:*'] },
-      { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
+      { name: 'Evidence Management', href: '/evidence', activeMatch: '/evidence-requirements', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
@@ -144,8 +145,8 @@ export const navigation: NavEntry[] = [
     icon: Zap,
     requiredModules: ['controls'],
     items: [
-      { name: 'Overview', href: '/automation/overview', exact: true, icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/assurance', '/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Common Controls', href: '/automation/soc2-controls', activeMatch: '/automation/scope', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },
   {
@@ -166,12 +167,12 @@ export const navigation: NavEntry[] = [
     // codebase untouched, just no longer linked from here.
     items: [
       // Performance reads every cyber module (its cards for a module the person cannot open say "unavailable"): any of their rights
-      { name: 'Performance',            href: '/cyber-assurance/dashboard',       icon: LayoutDashboard, requiredPermissions: ['assets:asset_inventory:*', 'vulnerabilities:vulnerability_register:*', 'erm:risks:*'] },
-      { name: 'IT Asset Discovery',     href: '/cyber-assurance/asset-discovery', icon: Radar,      requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'IT Asset Inventory',     href: '/cyber-assurance/assets',          icon: Server,     requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    icon: Activity,   requiredPermissions: ['erm:risks:*'] },
-      { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Vulnerability Scanning', href: '/cyber-assurance/scan-flows',      icon: Crosshair,  requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Performance',            href: '/cyber-assurance/dashboard',       activeMatch: ['/cyber-assurance', '/compliance-overview', '/my-runs'], icon: LayoutDashboard, requiredPermissions: ['assets:asset_inventory:*', 'vulnerabilities:vulnerability_register:*', 'erm:risks:*'] },
+      { name: 'IT Asset Discovery',     href: '/cyber-assurance/asset-discovery', activeMatch: '/asset-discovery', icon: Radar,      requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'IT Asset Inventory',     href: '/cyber-assurance/assets',          activeMatch: ['/assets', '/compliance-plugins', '/cyber-assurance/compliance-plugins'], icon: Server,     requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    activeMatch: '/risk-posture', icon: Activity,   requiredPermissions: ['erm:risks:*'] },
+      { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', activeMatch: '/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Vulnerability Scanning', href: '/cyber-assurance/scan-flows',      activeMatch: ['/integrations', '/cyber-assurance/integrations'], icon: Crosshair,  requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       // the catalog has no pentest key: the vulnerability register's, which its API (/pentest) checks
       { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
     ],

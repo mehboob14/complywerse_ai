@@ -361,16 +361,97 @@ export function removeMemberPlan(
   };
 }
 
-/** Deleting a committee: what the server removes (committees.py delete_committee: the ORM cascade over members, charters, meetings with their agenda, minutes
- *  and attached documents, and actions; the actions' Task Management copies are dropped first). A vote on any agenda item makes the server fail the whole delete
- *  (500, nothing removed: tried on the scratch tenant), and the question says so. Plan, not a change: G4_committee_deactivation_plan.md. */
-export function deleteCommitteePlan(name: string): ConfirmPlan {
+// ── a committee that is switched off ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The screens only DEACTIVATE a committee (G4_committee_deactivation_plan.md, D43 for departments): POST /committees/{id}/deactivate sets is_active false and
+// removes nothing; /reactivate sets it back. While it is off the server hides it from the pickers and answers 400 to a new meeting, action or member. The
+// hard DELETE /committees/{id} stays for API clients (an administrator's delete) and no page calls it. The right to do either is governance:committees:delete,
+// asked of the person on the screen and of the server.
+// A missing or null flag is ACTIVE, as committees.py reads it (_is_active): nothing writes NULL, and two readers used to disagree about it.
+export const isActiveCommittee = (c: { is_active?: boolean | null }): boolean => c.is_active !== false;
+
+export type CommitteeStatusFilter = 'active' | 'inactive' | 'all';
+export const COMMITTEE_STATUS_VALUES: readonly CommitteeStatusFilter[] = ['active', 'inactive', 'all'];
+/** The list opens on the committees people work with; an inactive one is one press away (and the tiles above keep counting every committee). */
+export const DEFAULT_COMMITTEE_STATUS: CommitteeStatusFilter = 'active';
+
+export function matchesStatus(c: { is_active?: boolean | null }, filter: CommitteeStatusFilter): boolean {
+  return filter === 'all' || (filter === 'active') === isActiveCommittee(c);
+}
+
+export function statusCounts(list: ReadonlyArray<{ is_active?: boolean | null }>): Record<CommitteeStatusFilter, number> {
+  const active = list.filter(isActiveCommittee).length;
+  return { active, inactive: list.length - active, all: list.length };
+}
+
+/** The three choices of the list's filter, each with how many committees it holds ("Active (5)"). */
+export function statusOptions(counts: Record<CommitteeStatusFilter, number>): Array<{ value: CommitteeStatusFilter; label: string }> {
+  return [
+    { value: 'active', label: `Active (${formatCount(counts.active)})` },
+    { value: 'inactive', label: `Inactive (${formatCount(counts.inactive)})` },
+    { value: 'all', label: `All (${formatCount(counts.all)})` },
+  ];
+}
+
+/** What the table says when the filter and the search leave it empty. `switchTo` is the filter that would show something, offered as a button. null: the
+ *  search itself found nothing (the page's own "No committee matches"). */
+export function emptyListReading(
+  filter: CommitteeStatusFilter, counts: Record<CommitteeStatusFilter, number>, search: string,
+): { title: string; description: string; switchTo: CommitteeStatusFilter | null } | null {
+  if (search.trim()) return null;
+  if (filter === 'active' && counts.active === 0) {
+    return { title: 'No active committees', description: `${plural(counts.inactive, 'committee is', 'committees are')} inactive. Reactivate one to use it again.`, switchTo: 'inactive' };
+  }
+  if (filter === 'inactive' && counts.inactive === 0) {
+    return { title: 'No inactive committees', description: 'A committee you deactivate is kept here, with everything it holds.', switchTo: 'active' };
+  }
+  return null;
+}
+
+/** The committees a new meeting or action can go to: the active ones (the server refuses an inactive committee with a 400). */
+export function activeCommittees<T extends { is_active?: boolean | null }>(list: readonly T[]): T[] {
+  return list.filter(isActiveCommittee);
+}
+
+/** A committee's name where an inactive one must still be findable (the Oversight Actions filter lists the actions of a deactivated committee too). */
+export function committeeChoiceLabel(c: { name: string; is_active?: boolean | null }): string {
+  return isActiveCommittee(c) ? c.name : `${c.name} (inactive)`;
+}
+
+/** The one line an inactive committee's page carries. The way back ("Reactivate it") is said only to someone who can take it: the delete right. */
+export const inactiveNote = (canReactivate: boolean): string => `Inactive: kept for the record, no new meetings, actions or members.${canReactivate ? ' Reactivate it to use it again.' : ''}`;
+
+/** What stays exactly as it is when a committee is deactivated: its open actions (open, in progress, overdue) and the meetings still to come. null: the count
+ *  could not be read, and the question then says so without a number. */
+export interface WhatStays { openActions: number | null; scheduledMeetings: number | null }
+
+/** The counts from the two replies the page asked for: the committee itself (`pending_actions_count`, the server's count of open, in-progress and overdue
+ *  actions) and its scheduled, not yet past meetings (the list's `total`, never the length of what came back). null in place of a reply that failed. */
+export function whatStays(committee: unknown, scheduledMeetings: unknown): WhatStays {
+  const pending = (committee as { pending_actions_count?: unknown } | null)?.pending_actions_count;
   return {
-    title: `Delete ${name}?`,
-    message: 'This permanently deletes the committee with its members, charters, meetings (agendas, minutes and attached documents) and actions, and the copies of those actions in Task Management. It cannot be undone. If a vote was cast on any agenda item, the server refuses and nothing is deleted.',
-    confirmLabel: 'Delete committee',
+    openActions: typeof pending === 'number' && Number.isFinite(pending) ? pending : null,
+    scheduledMeetings: scheduledMeetings == null ? null : listOf(scheduledMeetings).total,
   };
 }
+
+function staysClause({ openActions, scheduledMeetings }: WhatStays): string {
+  if (openActions == null || scheduledMeetings == null) return 'its open actions and scheduled meetings stay as they are';
+  if (openActions === 0 && scheduledMeetings === 0) return 'it has no open actions and no scheduled meetings';
+  return `${plural(openActions, 'open action')} and ${plural(scheduledMeetings, 'scheduled meeting')} stay as they are`;
+}
+
+/** Deactivating a committee: asked once, in the words of the plan, with the numbers that stay as they are. Nothing is removed, and it can be undone. */
+export function deactivateCommitteePlan(name: string, stays: WhatStays): ConfirmPlan {
+  return {
+    title: `Deactivate ${name}?`,
+    message: `It stops appearing in committee pickers and takes no new meetings, actions or members. Its members, charters, meetings, agendas, minutes and actions stay and can still be read; ${staysClause(stays)}. You can reactivate it at any time.`,
+    confirmLabel: 'Deactivate',
+  };
+}
+
+/** The toasts, once the server has answered. */
+export const deactivatedLine = (name: string): string => `${name} is deactivated.`;
+export const reactivatedLine = (name: string): string => `${name} is active again.`;
 
 // ── forms ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** Whether a form holds typed input that its opening state did not: what makes a drawer ask "Discard changes?". Plain values, arrays and flat objects. */
