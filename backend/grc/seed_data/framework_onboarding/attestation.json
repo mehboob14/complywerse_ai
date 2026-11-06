@@ -68,7 +68,7 @@
       "key": "readiness", "label": "Readiness",
       "source": {"ref": "Audit-firm readiness guidance: control owners, evidence locations and a dry run before the window or fieldwork", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.smartsuite.com/grc-foundation/soc-2-audit-timeline-readiness-observation-window-bridge-letters", "https://www.a-lign.com/articles/what-is-soc-2-complete-guide"]},
       "fields": [
-        {"key": "owners", "label": "Control owners", "type": "bool", "level": "required", "note": "Every control has a named owner, an evidence location and a frequency."},
+        {"key": "owners", "label": "Control owners", "type": "bool", "level": "advised", "note": "Every control has a named owner, an evidence location and a frequency."},
         {"key": "dry_run", "label": "Dry run", "type": "choice", "level": "required", "applies_to": ["soc2", "hitrust_csf", "csa_ccm_v4"], "options": ["Not done", "Done with open gaps", "Done and clean"], "note": "A readiness pass before the window opens. Failing controls should be fixed or dated before the observation starts."},
         {"key": "policies", "label": "Policies approved", "type": "bool", "level": "advised", "note": "Policies and procedures the controls rely on are approved."},
         {"key": "kickoff", "label": "Kickoff date", "type": "date", "level": "advised", "note": "Engagement kickoff with the auditor or assessor."},
