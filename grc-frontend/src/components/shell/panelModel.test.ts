@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { navAccessFromMe, navigation, visibleNav } from '../layout/navAccess.ts';
 import { activeNavHref } from '../layout/navActive.ts';
 import { activeTab, tabsFor } from '../../lib/navRegistry.ts';
-import { moduleSection, panelOpen, type PanelContext, type PanelRow } from './panelModel.ts';
+import { hintShows, hintUsed, moduleSection, panelOpen, queueStartsShut, type PanelContext, type PanelRow } from './panelModel.ts';
 
 const me = (permissions: string[], extra: Record<string, unknown> = {}) => ({
   authenticated: true,
@@ -31,6 +31,23 @@ test('the panel is docked-open unless the person shut it; an overlay or a sheet 
   assert.equal(panelOpen('overlay', false, true), true);
   assert.equal(panelOpen('sheet', false, false), false);
   assert.equal(panelOpen('sheet', true, true), true);
+});
+
+test('the queue section starts shut on the two pages that draw the queue themselves (the Overview, Needs my action) and open everywhere else', () => {
+  for (const path of ['/governance', '/needs-my-action', '/governance/', '/needs-my-action?section=ack', '/governance#top']) assert.equal(queueStartsShut(path), true, path);
+  for (const path of ['/governance/documents', '/governance/committees', '/governance/committees/3', '/governance/documents/47', '/dashboard', '/tasks', '/erm/risks', '/vendor-risk', '/needs-my-action/extra', '/']) assert.equal(queueStartsShut(path), false, path);
+});
+
+test('the first-run label shows below 1440 until the palette or the panel has been used once, and never beside a docked panel', () => {
+  assert.equal(hintShows(false, 'overlay'), true);
+  assert.equal(hintShows(false, 'sheet'), true);
+  assert.equal(hintShows(false, 'dock'), false, 'the panel is open beside the page: nothing to point at');
+  assert.equal(hintShows(true, 'overlay'), false, 'dismissed: once per browser');
+  assert.equal(hintUsed({ paletteOpen: true, panelShown: false, placement: 'overlay' }), true, 'the palette was opened');
+  assert.equal(hintUsed({ paletteOpen: false, panelShown: true, placement: 'overlay' }), true, 'the person opened the panel');
+  assert.equal(hintUsed({ paletteOpen: false, panelShown: true, placement: 'sheet' }), true);
+  assert.equal(hintUsed({ paletteOpen: false, panelShown: true, placement: 'dock' }), false, 'a docked panel is open by itself: no use');
+  assert.equal(hintUsed({ paletteOpen: false, panelShown: false, placement: 'overlay' }), false);
 });
 
 test('Governance: the menu\'s pages, Documents expanded to its tabs, and exactly one lit row per level', () => {

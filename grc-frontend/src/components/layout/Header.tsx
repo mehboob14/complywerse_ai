@@ -16,6 +16,7 @@ import Breadcrumbs from '@/components/shell/Breadcrumbs';
 import CommandBar from '@/components/shell/CommandBar';
 import { mayAskComplyAgent, offeredEntry, visibleLeafHrefs } from '@/components/shell/shellAccess';
 import { useShell, useShellAccess, useShellQueue } from '@/components/shell/ShellProvider';
+import { useFirstRunHint } from '@/components/shell/useFirstRunHint';
 import { useNotifications } from '@/components/shell/useNotifications';
 import { routeFor } from '@/lib/navRegistry';
 import { notificationHref } from './headerLinks';
@@ -42,6 +43,7 @@ export default function Header() {
   const { me, access, nav } = useShellAccess();
   const ui = useShell();
   const queue = useShellQueue();
+  const hint = useFirstRunHint();
 
   const currentUser = me?.user;
   const displayName = currentUser?.display_name || currentUser?.username || 'User';
@@ -185,9 +187,11 @@ export default function Header() {
           aria-pressed={ui.panelShown}
           aria-label={`Work and context. ${queue.label}`}
           title="Work and context (Ctrl .)"
-          className={`${BAR_BUTTON} ${ui.panelShown ? 'bg-ds-surface-hover !text-ds-fg' : ''} ${queue.text ? 'gap-[4px] px-[6px]' : ''}`}
+          className={`${BAR_BUTTON} ${ui.panelShown ? 'bg-ds-surface-hover !text-ds-fg' : ''} ${queue.text ? 'gap-[4px] px-[6px]' : ''} ${hint ? 'lg:gap-[6px] lg:bg-ds-primary-soft lg:px-[10px] lg:!text-ds-primary-text' : ''}`}
         >
           <PanelRight size={18} strokeWidth={1.75} aria-hidden />
+          {/* the first-run pointer (useFirstRunHint): the button's name beside its icon until the palette or the panel has been used once; in the bar, so it covers nothing of the page */}
+          {hint && <span className="hidden text-ds-body font-[600] lg:inline">Work and context</span>}
           {queue.text && (
             <span aria-hidden className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[4px] text-[12px] font-[600] leading-none text-ds-on-primary ${queue.urgent ? 'bg-ds-danger' : 'bg-ds-warning'}`}>{queue.text}</span>
           )}

@@ -3,7 +3,8 @@
 // The Work and context panel: what the person has to do and where they can go, on every page. On the kit's SidePanel, in the three places the window width gives it
 // (shellMode.placementOf): docked beside the page from 1440 (the page keeps scrolling, nothing is covered), an overlay opened from the top bar between 1024 and 1439, a bottom
 // sheet below 1024. Sections, each a disclosure:
-//   Needs my action   the person's queue (the inbox: the same hook, count rule and links as the page), with Retry for a source that could not be loaded
+//   Needs my action   the person's queue (the inbox: the same hook, count rule and links as the page), with Retry for a source that could not be loaded; shut to begin with on the two
+//                     pages that draw the queue themselves (panelModel.queueStartsShut), its count and its two links on show
 //   In this committee the meetings of the committee a committee page or a meeting page is about
 //   In {module}       the module's pages on the person's menu, Documents expanded to its tabs, the Vendor module's eight entries with the numbers that wait at two of them
 //   Pinned, Recent    what the person pinned and opened last (per browser)
@@ -22,7 +23,7 @@ import { holds, isGroup } from '@/components/layout/navAccess';
 import { usePortfolioCounts } from '@/app/(dashboard)/vendor-risk/_lib/portfolioApi';
 import { badgeText as vendorBadge } from '@/app/(dashboard)/vendor-risk/_lib/portfolioModel';
 import { RAIL } from '@/app/(dashboard)/vendor-risk/_lib/railModel';
-import { moduleSection, type PanelContext, type PanelItem, type PanelRow } from './panelModel';
+import { moduleSection, queueStartsShut, type PanelContext, type PanelItem, type PanelRow } from './panelModel';
 import { moduleOf } from './railModel';
 import { documentsStrip } from './shellAccess';
 import { recordIdsIn, meetingChoices } from './records';
@@ -100,11 +101,11 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
   const notify = useNotify();
   const root = useRef<HTMLDivElement>(null);
 
-  // sections the person shut stay shut for this visit; on the queue's own page that section starts shut (the page is the same list)
+  // sections the person shut (or opened) keep that for this visit; on a page that draws the queue itself (the Overview, Needs my action) the queue section starts shut: the same rows are not on the screen twice
   const [shut, setShut] = useState<Record<string, boolean>>({});
-  const onQueuePage = pathname === '/needs-my-action';
-  const isOpen = (id: string, dflt = true) => (id in shut ? !shut[id] : id === 'queue' && onQueuePage ? false : dflt);
+  const isOpen = (id: string, dflt = true) => (id in shut ? !shut[id] : id === 'queue' ? !queueStartsShut(pathname) : dflt);
   const toggle = (id: string) => (open: boolean) => setShut((s) => ({ ...s, [id]: !open }));
+  const queueOpen = isOpen('queue');
 
   // Ctrl . asks for focus (once: a panel opened by its button never takes it): the first pending item, else the first row.
   // The request is taken inside the frame, not before it: a development build runs a mounting effect twice (run, clean up, run), and a request taken by the first run
@@ -138,7 +139,8 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
   const [allMeetings, setAllMeetings] = useState(false);
   const choices = meetingChoices(meetings.data, ids.meetingId);
 
-  const hasFirstItem = needs.items.length > 0;
+  // the first thing Ctrl . lands on: the first pending item that shows, else the first page of the module (a shut queue shows none)
+  const hasFirstItem = queueOpen && needs.items.length > 0;
 
   const togglePin = () => {
     const was = pins.currentPinned;
@@ -150,7 +152,8 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
       // `relative`: the docked column sits in the page flow, and a visually hidden label (the kit's sr-only is absolutely positioned) far down a long list would otherwise be placed
       // against the window, outside the list's own scroll box, and stretch the document: a scrollbar of its own that narrows the whole shell by 15px
       <div ref={root} data-work-panel="" className="relative">
-        <Disclosure label="Needs my action" level={3} region={false} count={queue.inbox.counts.decision} countLabel="to decide" open={isOpen('queue')} onOpenChange={toggle('queue')}>
+        {/* its bottom rule is drawn under the two links below, which stay on show when the rows are shut */}
+        <Disclosure label="Needs my action" level={3} region={false} count={queue.inbox.counts.decision} countLabel="to decide" open={queueOpen} onOpenChange={toggle('queue')} className="!border-b-0">
           <div aria-busy={loading}>
             {needs.notices.map((n) => (
               <div key={n.source} role="alert" className={clsx(NOTE, 'flex items-center justify-between gap-[8px] !text-ds-danger')}>
@@ -162,7 +165,7 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
             {needs.items.map((item, i) => {
               const due = dueLine(item);
               return (
-                <Link key={item.key} href={item.href} onClick={onPick} title={item.title} data-panel-first={i === 0 ? '' : undefined} className={clsx(ROW, 'items-start')}>
+                <Link key={item.key} href={item.href} onClick={onPick} title={item.title} data-panel-first={hasFirstItem && i === 0 ? '' : undefined} className={clsx(ROW, 'items-start')}>
                   <ClipboardCheck size={16} strokeWidth={1.75} aria-hidden className="mt-[2px] shrink-0 text-ds-warning" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-[500] text-ds-fg">{item.title}</span>
@@ -174,10 +177,12 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
             {!loading && needs.items.length === 0 && needs.notices.length === 0 && <p className={NOTE}>Nothing needs your decision.</p>}
             {needs.more > 0 && <Link href="/needs-my-action" onClick={onPick} className={MORE}>{needs.more.toLocaleString('en-US')} more to decide →</Link>}
             {needs.acknowledgements > 0 && <Link href="/needs-my-action?section=ack" onClick={onPick} className={MORE}>{needs.acknowledgements.toLocaleString('en-US')} to acknowledge →</Link>}
-            <Link href="/needs-my-action" onClick={onPick} className={MORE}>Open Needs my action →</Link>
-            {canAssessments && <Link href="/compliance/assessments/approvals" onClick={onPick} className={MORE}>Assessment approvals →</Link>}
           </div>
         </Disclosure>
+        <div className="border-b border-ds-border pb-[2px]">
+          <Link href="/needs-my-action" onClick={onPick} className={MORE}>Open Needs my action →</Link>
+          {canAssessments && <Link href="/compliance/assessments/approvals" onClick={onPick} className={MORE}>Assessment approvals →</Link>}
+        </div>
 
         {committeeId != null && (
           <Disclosure label="In this committee" level={3} region={false} count={meetings.status === 'ready' ? choices.length : null} countLabel="meetings" open={isOpen('committee')} onOpenChange={toggle('committee')}>
