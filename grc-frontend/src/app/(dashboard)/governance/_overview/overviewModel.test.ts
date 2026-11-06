@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
-  ATTENTION, ATTENTION_KEYS, allUnavailable, attentionTotal, breakdownSections, counterFor, coverageTile, documentsHref, documentsTile, loadOf, monthLabel,
+  ATTENTION, ATTENTION_KEYS, GOVERNANCE_SOURCES, allUnavailable, attentionTotal, breakdownSections, counterFor, coverageTile, documentsHref, documentsTile, isRefused, loadOf, monthLabel,
   performanceTile, postureRows, postureSummary, radarSpokes, retryOverview, scoreText, trendIsEmpty, trendRows, trendSummary, trendTotals,
   type Attention, type AttentionSources, type Load, type Scorecard,
 } from './overviewModel.ts';
@@ -225,4 +225,19 @@ test('nothing created is "no rate" and an empty chart, not 0%', () => {
   assert.equal(trendIsEmpty(trendRows(undefined)), true);
   assert.equal(trendSummary(rows), 'No documents were created or published in this period.');
   assert.equal(trendRows({ created: [{ month: '2026-05', count: 2 }], published: [] })[0].published, 0);
+});
+
+// ── a refusal and the worklist's sources ─────────────────────────────────────
+test('a refusal (403) is a refusal, not a failure to load: only the server saying "not allowed" is one', () => {
+  const http = (status: number) => ({ isAxiosError: true, response: { status } });
+  assert.equal(isRefused(http(403)), true);
+  assert.equal(isRefused(http(401)), false);
+  assert.equal(isRefused(http(404)), false);
+  assert.equal(isRefused(http(500)), false);
+  assert.equal(isRefused(new Error('Network Error')), false);
+  assert.equal(isRefused(undefined), false);
+});
+
+test('the worklist of the Overview reads the document sources of the shared inbox and nothing else', () => {
+  assert.deepEqual([...GOVERNANCE_SOURCES], ['doc.lifecycle', 'doc.signoff']);
 });

@@ -5,7 +5,7 @@
 // (the sum and the live rate of the throughput card).
 import { formatDate } from '../../../../lib/format.ts';
 import type { Tone } from '../../../../lib/status.ts';
-import { canRetry } from '../../../../components/ui/ds/reportOutcome.ts';
+import { canRetry, statusOf } from '../../../../components/ui/ds/reportOutcome.ts';
 
 // ── where a request stands ───────────────────────────────────────────────────
 export type Load = 'loading' | 'error' | 'ready';
@@ -20,6 +20,9 @@ export function loadOf(q: { status: 'pending' | 'error' | 'success'; data?: unkn
 
 /** React Query's retry for the Overview's seven requests: a refusal (invalid, not allowed, not found) is final and is said at once, the rest is tried once more. */
 export const retryOverview = (failures: number, error: unknown): boolean => canRetry(error) && failures < 1;
+
+/** The server refused the request (403): the person may not read this, which is not a failure to load and never a 0. */
+export const isRefused = (error: unknown): boolean => statusOf(error) === 403;
 
 const isNum = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 const count = (n: unknown): number => (isNum(n) ? n : 0);
@@ -135,6 +138,10 @@ export function counterFor(def: Attention, s: AttentionSources): Counter {
   return failed.length ? { state: 'error', retry: failed } : { state: 'none' };
 }
 
+/** The sources of the shared inbox that hold the Governance module's own work: document requests (reviews, approvals, acknowledgements) and sign-offs.
+ *  Assessment evidence belongs to Compliance, the requests the person sent are not theirs to do. */
+export const GOVERNANCE_SOURCES: readonly ('doc.lifecycle' | 'doc.signoff')[] = ['doc.lifecycle', 'doc.signoff'];
+
 export type Total = { state: 'ready'; value: number } | { state: 'loading' } | { state: 'error' } | { state: 'none' };
 
 /** The server's own total of the eight (`attention_queue.total`). */
@@ -152,12 +159,18 @@ export const allUnavailable = (counters: readonly Counter[]): boolean => counter
 export const SECTION_ORDER = ['documents', 'mappings', 'approvals', 'reviews', 'exceptions', 'attestations', 'committees', 'kris', 'kpi', 'projects'] as const;
 
 export interface ScoreMetric { key: string; label: string; weight: number; score: number | null; numerator: number; denominator: number; formula: string }
-export interface ScoreSection { key: string; label: string; weight: number; score: number | null; metrics: ScoreMetric[] }
+export interface ScoreSection { key: string; label: string; weight: number; score: number | null; metrics: ScoreMetric[]; /** the section's own counts, as the server sends them (their keys differ by section) */ counts?: Record<string, unknown> }
 export interface Scorecard {
   as_of?: string;
   sections?: Record<string, ScoreSection>;
   attention_queue?: Record<string, number>;
-  performance?: { score: number | null; grade: string | null; components?: Array<{ key: string; label: string; score: number | null; weight: number; target: number }> };
+  performance?: {
+    score: number | null;
+    grade: string | null;
+    components?: Array<{ key: string; label: string; score: number | null; weight: number; target: number }>;
+    /** the overall score at the end of each month (the server snapshots it when the scorecard is read; it fills in over time) */
+    health_trend?: Array<{ label: string; year?: string; value: number }>;
+  };
 }
 
 /** The sections the scorecard carries, in the order of the breakdown (the caller's own section type comes back: the detail dialog takes more than this file reads). */
