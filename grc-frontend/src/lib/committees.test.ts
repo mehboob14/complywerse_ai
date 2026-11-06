@@ -56,15 +56,16 @@ test('the word is "Not recorded"', () => {
   assert.equal(NOT_RECORDED, 'Not recorded');
 });
 
-test('attendance is not recorded while no held meeting has quorum data, and the reason comes from the counts the API sent', () => {
+test('attendance is not recorded while no held meeting has quorum data, the reason comes from the counts the API sent and says how to get one (a meeting can be run now)', () => {
   const r = attendanceReading(SCRATCH);
   assert.equal(r.value, null);
-  assert.match(r.why, /^No meeting has been marked completed\./);
-  assert.match(r.why, /cannot mark a meeting completed or record who attended yet/);
+  assert.match(r.why, /^No meeting has been completed\./);
+  assert.match(r.why, /Start a meeting, take the roll call and end it to record one\./);
+  assert.doesNotMatch(r.why, /cannot/, 'these screens can run a meeting now: the reason must not say they cannot');
   // some meetings are completed but none has attendance: a different reason, with the count
   const some = { ...SCRATCH, meetings_completed: 3 };
-  assert.match(attendanceWhy(some), /^3 meetings marked completed, none with quorum and attendance recorded\./);
-  assert.match(attendanceWhy({ ...SCRATCH, meetings_completed: 1 }), /^1 meeting marked completed, none/);
+  assert.match(attendanceWhy(some), /^3 meetings completed, none with quorum and attendance recorded\. Take the roll call of a meeting to record them\./);
+  assert.match(attendanceWhy({ ...SCRATCH, meetings_completed: 1 }), /^1 meeting completed, none/);
 });
 
 test('attendance with data is a rounded percent, with the quorum line only when quorum was counted', () => {
@@ -107,7 +108,7 @@ test('the performance score is the server\'s, said as far as the data goes', () 
   assert.equal(p.total, 5);
   assert.equal(p.note, '3 of 5 measures have data');
   assert.deepEqual(p.left.map((m) => m.key), ['minutes_discipline', 'quorum_rate']);
-  assert.match(p.why, /Minutes recorded: No meeting has been marked completed in the last 180 days\./);
+  assert.match(p.why, /Minutes recorded: No meeting has been completed in the last 180 days\./);
   assert.match(p.why, /Quorum met: No completed meeting has quorum and attendance recorded\./);
 });
 
@@ -144,7 +145,7 @@ test('every measure has a reason in words, and an unknown one still has one', ()
 
 test('the "Meetings held" line of the chart is left out while no meeting is completed, with the reason', () => {
   assert.equal(meetingsHeldReading(SCRATCH).recorded, false);
-  assert.match(meetingsHeldReading(SCRATCH).why, /^No meeting has been marked completed\./);
+  assert.match(meetingsHeldReading(SCRATCH).why, /^No meeting has been completed\. Start a meeting, take the roll call and end it to record one\./);
   assert.deepEqual(meetingsHeldReading({ ...SCRATCH, meetings_completed: 2 }), { recorded: true, why: '' });
 });
 
@@ -235,7 +236,7 @@ test('the SLA pill says what the SLA badge always said, and nothing when there i
 });
 
 // ── tabs ────────────────────────────────────────────────────────────────────
-test('every tab a committee has had still opens from the address, and anything else opens Meetings', () => {
+test('every tab the old committee page had is still a name the address knows (lib/committeeHome.ts forwards each to its place), and anything else opens Meetings', () => {
   assert.deepEqual([...COMMITTEE_TABS], ['members', 'charters', 'meetings', 'actions', 'settings']);
   assert.equal(DEFAULT_COMMITTEE_TAB, 'meetings');
   for (const tab of COMMITTEE_TABS) assert.equal(resolveTab(`?tab=${tab}`, 'tab', COMMITTEE_TABS, {}, DEFAULT_COMMITTEE_TAB), tab);
