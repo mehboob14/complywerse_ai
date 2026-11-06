@@ -117,7 +117,7 @@ export function documentColumns(env: RowEnv): RecordColumn<GovDoc>[] {
     { key: 'review', header: 'Next review', sortKey: 'review', width: 'w-[124px]', priority: 2, cell: (row) => <ReviewDate doc={row.record} now={env.now} compact={env.compact} /> },
     { key: 'owner', header: 'Owner', sortKey: 'owner', width: 'w-[68px] 2xl:w-[176px]', priority: 2, cell: (row) => <><span className="2xl:hidden"><OwnerAvatar doc={row.record} /></span><span className="hidden min-w-0 2xl:inline"><OwnerAvatar doc={row.record} withName /></span></> },
     {
-      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', width: 'w-[92px]', priority: 3,
+      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', width: 'w-[92px] max-xl:hidden', priority: 3,           // from 1280px: below it the title is worth more than the count (the details list the frameworks)
       cell: (row) => <FrameworksCell as="count" doc={row.record} info={env.info} prefer={env.preferFrameworks} onPick={env.onPickFramework} />,
     },
   ];
