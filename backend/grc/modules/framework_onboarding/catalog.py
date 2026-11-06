@@ -237,8 +237,8 @@ def _check_field(f: Dict[str, Any], where: str, errs: List[str], *, in_profile: 
         errs.append(f"{where}: departments_derived belongs to the profile")
     if "min_rows" in f and t not in ("table", "org_pick", "asset_refs", "countries", "departments_derived"):
         errs.append(f"{where}: min_rows on a {t} field")
-    if "min" in f and t != "number":
-        errs.append(f"{where}: min on a {t} field")
+    if ("min" in f or "max" in f) and t != "number":
+        errs.append(f"{where}: min/max on a {t} field")
     if f.get("applies_to"):
         if in_profile:
             errs.append(f"{where}: applies_to in the profile")

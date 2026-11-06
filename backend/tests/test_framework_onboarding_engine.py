@@ -225,3 +225,32 @@ def test_every_framework_can_be_filled_and_evaluated(slug):
     open_fields = [c["key"] for c in r["checks"] if c["kind"] == "field" and c["required"] and not c["ok"]]
     assert open_fields == [], open_fields
     assert all(isinstance(c["ok"], bool) for c in r["checks"] + r["org_checks"])
+
+
+# ---------------------------------------------------------------- gaps the independent review found
+def _org_without(*dropped):
+    org = {}
+    for key, v in profile_values().items():
+        if key in dropped:
+            continue
+        g, k = key.split(".")
+        org.setdefault(g, {})[k] = engine.normalise(catalog.profile_fields()[key], v)
+    return org
+
+
+def test_a_family_may_require_a_list_the_organisation_declared_empty():
+    """requires_org on third parties was impossible to meet for an organisation that ticked "nothing is outsourced"."""
+    res = {**MINI, "requires_org": [{"field": "data_systems.third_parties", "reason": "The providers are listed."}]}
+    org = _org_without("data_systems.third_parties")
+    need = lambda r: next(c for c in r["org_checks"] if c["key"] == "org.need.data_systems.third_parties")["ok"]   # noqa: E731
+    assert not need(engine.evaluate(res, {}, org, engine.evaluate_org(org)))
+    org["data_systems"]["no_third_parties"] = True
+    assert need(engine.evaluate(res, {}, org, engine.evaluate_org(org)))
+
+
+def test_a_minimum_of_zero_rows_asks_for_nothing_and_a_number_may_have_a_ceiling():
+    assert engine.answered(fld("org_pick", of="sites", min_rows=0), []) and not engine.answered(fld("org_pick", of="sites"), [])
+    score = fld("number", min=0, max=3)
+    assert engine.normalise(score, "3") == 3
+    with pytest.raises(F, match="3 or less"):
+        engine.normalise(score, 4)

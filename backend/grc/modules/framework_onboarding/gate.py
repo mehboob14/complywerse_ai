@@ -4,12 +4,13 @@ One function decides; both places a journey is made call it (``POST /certificati
 be forgotten. A framework that already has a journey is never blocked, whatever the catalog later asks for (plan section 6, D4)."""
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from ...models import CertificationJourney, UploadedFramework
+from ...models import CertificationJourney, FrameworkOnboardingEvent, UploadedFramework
 from . import catalog, engine, profile, service
 
 MESSAGE = "Finish this framework's onboarding before starting its journey."
@@ -45,8 +46,11 @@ def assert_can_start(db: Session, tenant_id: int, fw: UploadedFramework) -> None
         return
     ob = service.find(db, tenant_id, fw.id)
     if ob is not None:
-        service._event(db, ob, "journey_blocked", None, {"unmet": len(d["unmet"])})
-        db.commit()
+        last = (db.query(FrameworkOnboardingEvent).filter(FrameworkOnboardingEvent.onboarding_id == ob.id)
+                .order_by(FrameworkOnboardingEvent.id.desc()).first())
+        if not (last and last.kind == "journey_blocked" and last.created_at and datetime.utcnow() - last.created_at < timedelta(minutes=10)):
+            service._event(db, ob, "journey_blocked", None, {"unmet": len(d["unmet"])})      # one note per ten minutes, not one per click
+            db.commit()
     raise HTTPException(status_code=409, detail={"code": "onboarding_required", "message": d["reason"], "onboarding_id": d["onboarding_id"],
                                                  "uploaded_framework_id": fw.id, "state": d["state"], "unmet": d["unmet"]})
 

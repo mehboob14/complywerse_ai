@@ -28,16 +28,12 @@
       "key": "scope", "label": "Scope",
       "source": {"ref": "ISO management-system scoping practice, clause 4.3 (boundaries, activities, locations, interfaces; documented; exclusions justified)", "asked_by": "auditor, certification body", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/", "https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/NQA-ISO-22301-Business-Continuity-Checklist.pdf"]},
       "fields": [
-        {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "required", "note": "One written statement of what is covered, where and for whom, as clause 4.3 asks of a management system. Auditors and customers read it first."},
+        {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "required", "note": "One written statement of what is covered, where and for whom, as management-system standards ask. Auditors and customers read it first."},
         {"key": "entities", "label": "Entities", "type": "org_pick", "of": "entities", "level": "advised", "note": "Legal entities inside the scope, picked from the organisation profile."},
         {"key": "sites", "label": "Sites", "type": "org_pick", "of": "sites", "level": "advised", "note": "Sites inside the scope. An assessor plans visits and sampling from this list."},
         {"key": "systems", "label": "Systems", "type": "org_pick", "of": "systems", "level": "advised", "note": "Systems and services inside the boundary. Include the interfaces to systems outside it."},
         {"key": "units", "label": "Units", "type": "org_pick", "of": "departments", "level": "advised", "note": "Departments inside the scope."},
-        {"key": "exclusions", "label": "Exclusions", "type": "table", "level": "advised", "note": "Anything inside the organisation left out, each with the reason. An unjustified exclusion draws a finding. Leave empty if nothing is excluded.",
-          "columns": [
-            {"key": "item", "label": "Item", "type": "text", "required": true},
-            {"key": "reason", "label": "Reason", "type": "text", "required": true}
-          ]}
+        {"key": "exclusions", "label": "Exclusions", "type": "table", "level": "advised", "note": "Anything inside the organisation left out, each with the reason. An unjustified exclusion draws a finding. Leave empty if nothing is excluded.", "columns": [{"key": "item", "label": "Item", "type": "text", "required": true}, {"key": "reason", "label": "Reason", "type": "text", "required": true}]}
       ]
     },
     {
@@ -53,9 +49,9 @@
       "source": {"ref": "Certification-body practice: an independent assessment is planned before the audit and repeats on a cycle (Stage 1 and Stage 2, annual surveillance)", "asked_by": "certification body, auditor", "confidence": "secondary", "urls": ["https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
       "fields": [
         {"key": "assessor_kind", "label": "Assessed by", "type": "choice", "level": "required", "options": ["Self-assessment", "Internal review", "Third party"], "note": "Who judges compliance: the team itself, an internal function independent of the team such as internal audit, or an outside body. Customers and regulators usually expect more independence for higher stakes."},
-        {"key": "assessor", "label": "Third-party assessor", "type": "text", "level": "required", "when": {"field": "assessment.assessor_kind", "eq": "Third party"}, "note": "Name of the outside assessor or certification body. Name it early; it sets the scope data it will ask for."},
+        {"key": "assessor", "label": "Third-party assessor", "type": "text", "level": "advised", "when": {"field": "assessment.assessor_kind", "eq": "Third party"}, "note": "Name of the outside assessor or certification body. Name it early; it sets the scope data it will ask for."},
         {"key": "reviewer", "label": "Internal reviewer", "type": "person", "level": "advised", "when": {"field": "assessment.assessor_kind", "eq": "Internal review"}, "note": "The person or function that reviews. They should not review what they run."},
-        {"key": "first_date", "label": "First assessment", "type": "date", "level": "required", "note": "Planned date of the first assessment. It sets the pace of the work."},
+        {"key": "first_date", "label": "First assessment", "type": "date", "level": "advised", "note": "Planned date of the first assessment. It sets the pace of the work."},
         {"key": "cadence", "label": "Repeat cycle", "type": "choice", "level": "advised", "options": ["One-off", "Yearly", "Every two years", "Every three years"], "note": "How often the assessment repeats. Certificates and attestations expire, and internal programmes drift without a cycle."}
       ]
     }

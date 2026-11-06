@@ -244,7 +244,8 @@ def register(db: Session, tenant_id: int) -> Dict[str, Any]:
     tally = {s: 0 for s in ("not_started",) + STATES}
     for r in rows:
         tally[r["state"]] = tally.get(r["state"], 0) + 1
-    return {"frameworks": rows, "counts": tally, "org": {"complete": org_eval["complete"], "groups": org_eval["groups"]}}
+    return {"frameworks": rows, "counts": tally, "org": {"complete": org_eval["complete"], "groups": org_eval["groups"]},
+            "meta": {"underway_kinds": UNDERWAY_KINDS, "min_underway_reason": MIN_UNDERWAY_REASON, "min_reopen_reason": MIN_REOPEN_REASON}}
 
 
 # --------------------------------------------------------------------------- answers

@@ -429,3 +429,16 @@ def test_ai_answers_are_checked_before_they_are_shown(w, monkeypatch):
     monkeypatch.setattr(ai, "_ask_json", lambda prompt: {"questions": [{"field": "scope.statement", "question": "What does the statement leave out?"}, {"field": "made.up", "question": "x"}]})
     gap = http.post(f"{O}/{ob['id']}/ai/gap_review", json={}).json()
     assert gap["by"] == "ai" and gap["suggestion"]["questions"] == [{"field": "scope.statement", "question": "What does the statement leave out?"}]
+
+
+# ---------------------------------------------------------------- PostgreSQL enforces column lengths, SQLite does not
+def test_every_word_the_server_stores_fits_its_column():
+    """The scratch PostgreSQL run caught "Certified or attested outside the platform" (42) in a varchar(40): SQLite never would."""
+    cols = m.FrameworkOnboarding.__table__.c
+    for kind in service.UNDERWAY_KINDS:
+        assert len(kind) <= cols.underway_kind.type.length, kind
+    assert all(len(s) <= cols.state.type.length for s in service.STATES)
+    assert max(len(slug) for fam in catalog.families().values() for fw in fam["frameworks"] for slug in [fw["slug"]]) <= cols.framework_slug.type.length
+    assert max(len(k) for k in catalog.families()) <= cols.family.type.length
+    kinds = ["created", "saved", "submitted", "approved", "reopened", "marked_underway", "journey_started", "journey_blocked"]
+    assert max(len(k) for k in kinds) <= m.FrameworkOnboardingEvent.__table__.c.kind.type.length

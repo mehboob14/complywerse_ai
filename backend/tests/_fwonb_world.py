@@ -26,7 +26,7 @@ class Sampler:
         if t == "longtext":
             return f"Sample long answer for {f['key']}."
         if t == "number":
-            return max(int(f.get("min") or 0), 10)
+            return min(max(int(f.get("min") or 0), 10), int(f.get("max", 10**9)))
         if t == "date":
             self.d += 1
             return (date(2026, 3, 1) + timedelta(days=self.d)).isoformat()
@@ -60,7 +60,8 @@ def profile_values(sampler: Sampler | None = None) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for g in catalog.profile()["groups"]:
         for f in g["fields"]:
-            if f["level"] == "required" and f["type"] != "departments_derived":
+            # the required items, plus the systems every family's requires_org asks for (advised in the profile itself)
+            if (f["level"] == "required" or f["key"] == "key_systems") and f["type"] != "departments_derived":
                 out[f"{g['key']}.{f['key']}"] = sampler.value(f)
     return out
 

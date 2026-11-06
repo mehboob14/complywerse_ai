@@ -44,7 +44,7 @@ class FrameworkOnboarding(Base):
     approved_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     approval_note = Column(Text, nullable=True)
-    underway_kind = Column(String(40), nullable=True)
+    underway_kind = Column(String(80), nullable=True)
     underway_reason = Column(Text, nullable=True)
     underway_by = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
     underway_at = Column(DateTime, nullable=True)

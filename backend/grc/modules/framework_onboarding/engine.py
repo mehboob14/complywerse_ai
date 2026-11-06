@@ -120,6 +120,8 @@ def normalise(f: Dict[str, Any], value: Any, known: Optional[Known] = None, *, k
         n = _num(value)
         if "min" in f and n < f["min"]:
             raise FieldError(f"Enter {f['min']} or more.")
+        if "max" in f and n > f["max"]:
+            raise FieldError(f"Enter {f['max']} or less.")
         return n
     if t == "date":
         s = str(value)[:10]
@@ -209,10 +211,11 @@ def answered(f: Dict[str, Any], v: Any) -> bool:
     t = f.get("type")
     if t == "bool":
         return v is not None
+    need = int(f.get("min_rows", 1))               # 0 = no minimum
     if t == "table":
-        return sum(1 for r in v or [] if row_complete(f, r)) >= int(f.get("min_rows") or 1)
+        return sum(1 for r in v or [] if row_complete(f, r)) >= need
     if t in ("asset_refs", "org_pick", "countries", "multichoice", "departments_derived"):
-        return len(v or []) >= int(f.get("min_rows") or 1)
+        return len(v or []) >= need
     if t == "person":
         return isinstance(v, dict) and bool(v.get("user_id") or v.get("name"))
     return not _empty(v) and v is not False
@@ -429,10 +432,13 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
             org_checks.append({"key": f"org.{key}", "label": grp["label"], "ok": grp["complete"], "required": True, "kind": "org",
                                "hint": None if grp["complete"] else f"{grp['required_total'] - grp['required_ok']} required items are open in the organisation profile."})
     org_checks.extend({**c, "kind": "org"} for c in org_eval["checks"] if c["required"] or not c["ok"])
+    org_look = make_lookup({}, {}, org_fields, org_values, bare_is_org=True)
+    org_visible = make_visible(org_fields, org_look)
     for r in resolved.get("requires_org") or []:
         fdef = org_fields.get(r["field"])
         v = (org_values.get(r["field"].split(".")[0]) or {}).get(r["field"].split(".")[1])
-        good = bool(fdef) and (answered(fdef, v) if fdef["type"] not in ("departments_derived",) else bool(v))
+        # a list the organisation declared "none" for (the tick hides it) is a complete answer
+        good = bool(fdef) and (not org_visible(r["field"]) or (answered(fdef, v) if fdef["type"] not in ("departments_derived",) else bool(v)))
         org_checks.append({"key": f"org.need.{r['field']}", "label": fdef["label"] if fdef else r["field"], "ok": good, "required": True,
                            "hint": r.get("reason"), "kind": "org"})
     required = [c for c in checks + org_checks if c["required"]]

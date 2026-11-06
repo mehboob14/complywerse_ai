@@ -4,8 +4,7 @@
   "summary": "Asked once per organisation and reused by every framework's onboarding. A framework only asks for what is specific to it and picks rows from this profile (sites, systems, third parties, data types) by id.",
   "groups": [
     {
-      "key": "entities_sites",
-      "label": "Entities and sites",
+      "key": "entities_sites", "label": "Entities and sites",
       "source": {"ref": "Certification-body application forms (headcount, sites, shifts, outsourcing), HITRUST scope forms, SOC 2 system description", "asked_by": "certification body, auditor", "confidence": "secondary", "urls": ["https://www.nsai.ie/download/certification/AD-27-01_ISO_27001_RFQ_Rev.6.docx", "https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
       "fields": [
         {"key": "legal_entity", "label": "Legal entity", "type": "text", "level": "required", "maps_to": "tenant.legal_entity", "note": "The name that appears on a certificate, an attestation report or a regulator filing. Kept in Administration > Organization; this is the same value."},
@@ -16,124 +15,56 @@
         {"key": "headcount", "label": "Headcount", "type": "number", "level": "required", "min": 1, "note": "All staff including contractors and freelancers. Certification bodies use it to set audit time and regulators use it for size tests."},
         {"key": "annual_revenue", "label": "Revenue", "type": "number", "level": "advised", "min": 0, "note": "Annual turnover. Needed for size classes (NIS2, SOX filer status, NCA private-sector tiers). A rough figure is fine."},
         {"key": "revenue_currency", "label": "Currency", "type": "choice", "level": "advised", "options": ["USD", "EUR", "GBP", "SAR", "AED", "QAR", "PKR", "LKR", "SGD", "Other"], "note": "Currency of the revenue figure."},
-        {"key": "legal_entities", "label": "Legal entities", "type": "table", "level": "required", "min_rows": 1, "note": "Every company that could be in the scope of a framework: parent, subsidiaries, branches. A framework scope later picks from this list.",
-          "columns": [
-            {"key": "name", "label": "Name", "type": "text", "required": true},
-            {"key": "country", "label": "Country", "type": "country", "required": true},
-            {"key": "registration_no", "label": "Registration no.", "type": "text"},
-            {"key": "kind", "label": "Kind", "type": "choice", "options": ["Parent", "Subsidiary", "Branch", "Affiliate", "Joint venture"]},
-            {"key": "headcount", "label": "Headcount", "type": "number"},
-            {"key": "regulated", "label": "Regulated", "type": "bool"}
-          ]},
-        {"key": "sites", "label": "Sites", "type": "table", "level": "required", "min_rows": 1, "note": "Permanent and temporary sites with their staff and shifts. Certification bodies ask for exactly this to plan audits; HITRUST needs every facility that hosts an in-scope system.",
-          "columns": [
-            {"key": "name", "label": "Name", "type": "text", "required": true},
-            {"key": "kind", "label": "Kind", "type": "choice", "options": ["Head office", "Office", "Branch", "Data centre", "Disaster recovery site", "Plant or warehouse", "Store", "Remote hub"], "required": true},
-            {"key": "country", "label": "Country", "type": "country", "required": true},
-            {"key": "city", "label": "City", "type": "text"},
-            {"key": "headcount", "label": "Headcount", "type": "number"},
-            {"key": "shifts", "label": "Shifts", "type": "choice", "options": ["Office hours", "Two shifts", "Round the clock"]},
-            {"key": "tenure", "label": "Tenure", "type": "choice", "options": ["Owned", "Leased", "Provider-hosted"]}
-          ]},
+        {"key": "legal_entities", "label": "Legal entities", "type": "table", "level": "required", "min_rows": 1, "note": "Every company that could be in the scope of a framework: parent, subsidiaries, branches. A framework scope later picks from this list.", "columns": [{"key": "name", "label": "Name", "type": "text", "required": true}, {"key": "country", "label": "Country", "type": "country", "required": true}, {"key": "registration_no", "label": "Registration no.", "type": "text"}, {"key": "kind", "label": "Kind", "type": "choice", "options": ["Parent", "Subsidiary", "Branch", "Affiliate", "Joint venture"]}, {"key": "headcount", "label": "Headcount", "type": "number"}, {"key": "regulated", "label": "Regulated", "type": "bool"}]},
+        {"key": "sites", "label": "Sites", "type": "table", "level": "required", "min_rows": 1, "note": "Permanent and temporary sites with their staff and shifts. Certification bodies ask for exactly this to plan audits; HITRUST needs every facility that hosts an in-scope system.", "columns": [{"key": "name", "label": "Name", "type": "text", "required": true}, {"key": "kind", "label": "Kind", "type": "choice", "options": ["Head office", "Office", "Branch", "Data centre", "Disaster recovery site", "Plant or warehouse", "Store", "Remote hub"], "required": true}, {"key": "country", "label": "Country", "type": "country", "required": true}, {"key": "city", "label": "City", "type": "text"}, {"key": "headcount", "label": "Headcount", "type": "number"}, {"key": "shifts", "label": "Shifts", "type": "choice", "options": ["Office hours", "Two shifts", "Round the clock"]}, {"key": "tenure", "label": "Tenure", "type": "choice", "options": ["Owned", "Leased", "Provider-hosted"]}, {"key": "operated_by", "label": "Operated by", "type": "choice", "options": ["Own staff", "Colocation provider", "Cloud provider"]}]},
         {"key": "units", "label": "Units", "type": "departments_derived", "level": "advised", "min_rows": 1, "note": "Departments and sub-departments come from Governance > Settings > Departments. A framework scope picks the units it covers; define at least one first."}
       ]
     },
     {
-      "key": "regulators_obligations",
-      "label": "Regulators and obligations",
+      "key": "regulators_obligations", "label": "Regulators and obligations",
       "source": {"ref": "Regulator applicability rules, certification-body application forms (prior certificates), card-brand and customer requirements", "asked_by": "regulator, certification body, auditor", "confidence": "secondary", "urls": ["https://rulebook.sama.gov.sa/node/3837", "https://www.nsai.ie/download/certification/AD-27-01_ISO_27001_RFQ_Rev.6.docx"]},
       "fields": [
         {"key": "jurisdictions", "label": "Jurisdictions", "type": "countries", "level": "required", "min_rows": 1, "note": "Countries where the organisation is established, serves customers or holds data of residents. Territorial reach (GDPR Art. 3, PDPL, NIS2 Art. 26) starts here."},
         {"key": "regulatory_scope", "label": "Regulatory scope", "type": "text", "level": "optional", "maps_to": "tenant.regulatory_scope", "note": "A short phrase for the regime the organisation says it is under (kept in Administration > Organization)."},
-        {"key": "regulators", "label": "Regulators", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_regulator", "ne": true}, "note": "Every authority that licenses, supervises or receives reports from the organisation. Applicability of most regulator frameworks follows from this list.",
-          "columns": [
-            {"key": "regulator", "label": "Regulator", "type": "text", "required": true, "suggestions": ["SAMA", "NCA", "SDAIA", "NDMO", "SBP", "CBUAE", "UAE Cyber Security Council", "DoH Abu Dhabi", "QCB", "CBSL", "MAS", "SEC", "PCAOB", "HHS OCR", "National competent authority (EU)", "Data protection authority"]},
-            {"key": "country", "label": "Country", "type": "country", "required": true},
-            {"key": "relationship", "label": "Relationship", "type": "choice", "options": ["Licensed by", "Supervised by", "Reports to", "Registered with"], "required": true},
-            {"key": "reference", "label": "Reference", "type": "text"},
-            {"key": "next_filing", "label": "Next filing", "type": "date"}
-          ]},
+        {"key": "regulators", "label": "Regulators", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_regulator", "ne": true}, "note": "Every authority that licenses, supervises or receives reports from the organisation. Applicability of most regulator frameworks follows from this list.", "columns": [{"key": "regulator", "label": "Regulator", "type": "text", "required": true, "suggestions": ["SAMA", "NCA", "SDAIA", "NDMO", "SBP", "CBUAE", "UAE Cyber Security Council", "DoH Abu Dhabi", "QCB", "CBSL", "MAS", "SEC", "PCAOB", "HHS OCR", "National competent authority (EU)", "Data protection authority"]}, {"key": "country", "label": "Country", "type": "country", "required": true}, {"key": "relationship", "label": "Relationship", "type": "choice", "options": ["Licensed by", "Supervised by", "Reports to", "Registered with"], "required": true}, {"key": "reference", "label": "Reference", "type": "text"}, {"key": "next_filing", "label": "Next filing", "type": "date"}]},
         {"key": "no_regulator", "label": "No regulator", "type": "bool", "level": "optional", "note": "Tick when no authority supervises the organisation, so an empty list is a decision and not an omission."},
-        {"key": "certifications", "label": "Certifications", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_certifications", "ne": true}, "note": "Certificates and attestations held today, with validity. Certification bodies ask for prior certificates, transfers and expiry dates.",
-          "columns": [
-            {"key": "scheme", "label": "Scheme", "type": "text", "required": true, "suggestions": ["ISO/IEC 27001", "ISO 22301", "ISO/IEC 42001", "ISO 45001", "SOC 2 Type II", "PCI DSS", "HITRUST", "CSA STAR", "SWIFT CSP attestation", "Aramco CCC"]},
-            {"key": "scope", "label": "Scope", "type": "text"},
-            {"key": "body", "label": "Issued by", "type": "text"},
-            {"key": "issued", "label": "Issued", "type": "date"},
-            {"key": "expires", "label": "Expires", "type": "date"},
-            {"key": "status", "label": "Status", "type": "choice", "options": ["Valid", "Expired", "Suspended", "Withdrawn"]}
-          ]},
+        {"key": "certifications", "label": "Certifications", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_certifications", "ne": true}, "note": "Certificates and attestations held today, with validity. Certification bodies ask for prior certificates, transfers and expiry dates.", "columns": [{"key": "scheme", "label": "Scheme", "type": "text", "required": true, "suggestions": ["ISO/IEC 27001", "ISO 22301", "ISO/IEC 42001", "ISO 45001", "SOC 2 Type II", "PCI DSS", "HITRUST", "CSA STAR", "SWIFT CSP attestation", "Aramco CCC"]}, {"key": "scope", "label": "Scope", "type": "text"}, {"key": "body", "label": "Issued by", "type": "text"}, {"key": "issued", "label": "Issued", "type": "date"}, {"key": "expires", "label": "Expires", "type": "date"}, {"key": "status", "label": "Status", "type": "choice", "options": ["Valid", "Expired", "Suspended", "Withdrawn"]}]},
         {"key": "no_certifications", "label": "No certifications", "type": "bool", "level": "optional", "note": "Tick when the organisation holds no certificate or attestation yet."},
-        {"key": "audit_history", "label": "Audit history", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_prior_audits", "ne": true}, "note": "The last audits, inspections and reports with their date and result. Assessors read previous findings first; open findings often have to be closed before a new audit.",
-          "columns": [
-            {"key": "kind", "label": "Kind", "type": "choice", "options": ["Certification audit", "Surveillance audit", "Regulator inspection", "Internal audit", "SOC report", "Penetration test", "Customer audit", "Other"], "required": true},
-            {"key": "subject", "label": "Subject", "type": "text", "required": true},
-            {"key": "auditor", "label": "Auditor", "type": "text"},
-            {"key": "date", "label": "Date", "type": "date", "required": true},
-            {"key": "result", "label": "Result", "type": "choice", "options": ["No findings", "Minor findings", "Major findings", "Qualified or failed", "Report awaited"]},
-            {"key": "open_findings", "label": "Open findings", "type": "number"},
-            {"key": "report_ref", "label": "Report ref.", "type": "text"}
-          ]},
+        {"key": "audit_history", "label": "Audit history", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "regulators_obligations.no_prior_audits", "ne": true}, "note": "The last audits, inspections and reports with their date and result. Assessors read previous findings first; open findings often have to be closed before a new audit.", "columns": [{"key": "kind", "label": "Kind", "type": "choice", "options": ["Certification audit", "Surveillance audit", "Regulator inspection", "Internal audit", "SOC report", "Penetration test", "Customer audit", "Other"], "required": true}, {"key": "subject", "label": "Subject", "type": "text", "required": true}, {"key": "auditor", "label": "Auditor", "type": "text"}, {"key": "date", "label": "Date", "type": "date", "required": true}, {"key": "result", "label": "Result", "type": "choice", "options": ["No findings", "Minor findings", "Major findings", "Qualified or failed", "Report awaited"]}, {"key": "open_findings", "label": "Open findings", "type": "number"}, {"key": "report_ref", "label": "Report ref.", "type": "text"}]},
         {"key": "no_prior_audits", "label": "No audits yet", "type": "bool", "level": "optional", "note": "Tick when the organisation has never been audited."},
-        {"key": "external_requirements", "label": "Obligations", "type": "table", "level": "advised", "note": "Frameworks someone requires of the organisation: a regulator, a customer contract, an acquirer, a parent company, or its own decision. Feeds which frameworks to onboard first.",
-          "columns": [
-            {"key": "required_by", "label": "Required by", "type": "choice", "options": ["Regulator", "Customer or contract", "Card brand or acquirer", "Parent company", "Own decision"], "required": true},
-            {"key": "framework", "label": "Framework", "type": "text", "required": true},
-            {"key": "deadline", "label": "Deadline", "type": "date"},
-            {"key": "mandatory", "label": "Mandatory", "type": "bool"},
-            {"key": "reference", "label": "Reference", "type": "text"}
-          ]}
+        {"key": "external_requirements", "label": "Obligations", "type": "table", "level": "advised", "note": "Frameworks someone requires of the organisation: a regulator, a customer contract, an acquirer, a parent company, or its own decision. Feeds which frameworks to onboard first.", "columns": [{"key": "required_by", "label": "Required by", "type": "choice", "options": ["Regulator", "Customer or contract", "Card brand or acquirer", "Parent company", "Own decision"], "required": true}, {"key": "framework", "label": "Framework", "type": "text", "required": true}, {"key": "deadline", "label": "Deadline", "type": "date"}, {"key": "mandatory", "label": "Mandatory", "type": "bool"}, {"key": "reference", "label": "Reference", "type": "text"}]}
       ]
     },
     {
-      "key": "data_systems",
-      "label": "Data and systems",
+      "key": "data_systems", "label": "Data and systems",
       "source": {"ref": "Records of processing (GDPR Art. 30), PCI DSS account-data flows and inventory, HIPAA ePHI inventory, NCA ECC asset inventory and classification, ISO/IEC 27001 cl. 4.3 interfaces", "asked_by": "regulator, assessor, certification body", "confidence": "secondary", "urls": ["https://gdpr-info.eu/art-30-gdpr/", "https://cdn.nca.gov.sa/api/files/public/upload/86e09090-44e4-481f-bc28-355673607654_ECC--2024-EN.pdf"]},
       "fields": [
-        {"key": "classification_scheme", "label": "Classification", "type": "text", "level": "required", "note": "Name and levels of the data classification scheme in use, for example Public, Internal, Confidential, Restricted. NCA, SAMA, QCB, NDMO and ISO all start from it."},
-        {"key": "data_types", "label": "Data types", "type": "table", "level": "required", "min_rows": 1, "note": "The kinds of data held, how they are classified and how much. Drives personal-data, card-data, health-data and CUI applicability.",
-          "columns": [
-            {"key": "type", "label": "Type", "type": "choice", "required": true, "options": ["Customer personal data", "Employee data", "Payment card data", "Health information", "Financial records", "Authentication secrets", "Source code and IP", "Government or CUI", "Children's data", "Biometric data", "Location data", "Other"]},
-            {"key": "classification", "label": "Class", "type": "text", "required": true},
-            {"key": "volume", "label": "Volume", "type": "choice", "options": ["Under 10,000 records", "10,000 to 100,000", "100,000 to 1 million", "Over 1 million"]},
-            {"key": "stored_in", "label": "Stored in", "type": "countries"},
-            {"key": "systems", "label": "Systems", "type": "asset_refs"},
-            {"key": "shared_outside", "label": "Shared", "type": "bool"}
-          ]},
+        {"key": "classification_scheme", "label": "Classification", "type": "text", "level": "advised", "note": "Name and levels of the data classification scheme in use, for example Public, Internal, Confidential, Restricted. NCA, SAMA, QCB, NDMO and ISO all start from it."},
+        {"key": "data_types", "label": "Data types", "type": "table", "level": "required", "min_rows": 1, "note": "The kinds of data held, how they are classified and how much. Drives personal-data, card-data, health-data and CUI applicability.", "columns": [{"key": "type", "label": "Type", "type": "choice", "required": true, "options": ["Customer personal data", "Employee data", "Payment card data", "Health information", "Financial records", "Authentication secrets", "Source code and IP", "Government or CUI", "Children's data", "Biometric data", "Location data", "Other"]}, {"key": "classification", "label": "Class", "type": "text", "required": true}, {"key": "volume", "label": "Volume", "type": "choice", "options": ["Under 10,000 records", "10,000 to 100,000", "100,000 to 1 million", "Over 1 million"]}, {"key": "stored_in", "label": "Stored in", "type": "countries"}, {"key": "systems", "label": "Systems", "type": "asset_refs"}, {"key": "shared_outside", "label": "Shared", "type": "bool"}]},
         {"key": "special_environments", "label": "Special environments", "type": "multichoice", "level": "required", "options": ["Payment card processing", "SWIFT connection", "Industrial control or OT", "AI systems built or used", "Patient health information", "US government CUI", "Hosts customers' systems (cloud provider)", "Designated critical national infrastructure", "None of these"], "note": "Triggers that switch whole frameworks on: PCI DSS, SWIFT CSCF, OT controls, ISO 42001 and NIST AI RMF, HIPAA, NIST 800-171, CCC, NCA ECC."},
         {"key": "hosting", "label": "Hosting", "type": "multichoice", "level": "required", "options": ["On premises", "Colocation", "Private cloud", "Public cloud (IaaS or PaaS)", "SaaS only", "Hybrid"], "note": "Where systems run. Cloud use switches on cloud rules (NCA CCC, SBP and QCB cloud frameworks, SAMA 3.4.3, CSA CCM)."},
-        {"key": "key_systems", "label": "Key systems", "type": "asset_refs", "level": "required", "min_rows": 1, "note": "The applications and infrastructure that carry the business, picked from the asset library. Every framework scope picks a subset of these."},
-        {"key": "asset_inventory", "label": "Asset inventory", "type": "choice", "level": "required", "options": ["Complete and current", "Partial", "Not started"], "note": "CIS Controls, NCA ECC and CMMC all start from an inventory. Partial is accepted, but frameworks that need it will say so."},
-        {"key": "third_parties", "label": "Third parties", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "data_systems.no_third_parties", "ne": true}, "note": "Cloud, SaaS, outsourced and processor relationships that touch in-scope systems or data. DORA registers, SBP and QCB cloud registers, PCI TPSP lists and SOC 2 subservice lists all pick from here.",
-          "columns": [
-            {"key": "name", "label": "Name", "type": "text", "required": true},
-            {"key": "vendor", "label": "Vendor", "type": "vendor_ref"},
-            {"key": "kind", "label": "Kind", "type": "choice", "required": true, "options": ["Cloud provider", "SaaS provider", "Managed or outsourced service", "Payment processor", "Data processor", "Consultant", "Other"]},
-            {"key": "service", "label": "Service", "type": "text"},
-            {"key": "country", "label": "Country", "type": "country"},
-            {"key": "critical", "label": "Critical", "type": "bool"},
-            {"key": "security_report", "label": "Report", "type": "choice", "options": ["SOC 2", "ISO 27001", "Other", "None"]}
-          ]},
+        {"key": "key_systems", "label": "Key systems", "type": "asset_refs", "level": "advised", "min_rows": 1, "note": "The applications and infrastructure that carry the business, picked from the asset library. Every framework scope picks a subset of these."},
+        {"key": "asset_inventory", "label": "Asset inventory", "type": "choice", "level": "required", "options": ["Complete and current", "Partial", "Not started"], "note": "How complete the list of systems is. CIS Controls start with an inventory (Control 1) and CMMC asset categorisation needs one."},
+        {"key": "third_parties", "label": "Third parties", "type": "table", "level": "required", "min_rows": 1, "when": {"field": "data_systems.no_third_parties", "ne": true}, "note": "Cloud, SaaS, outsourced and processor relationships that touch in-scope systems or data. DORA registers, SBP and QCB cloud registers, PCI TPSP lists and SOC 2 subservice lists all pick from here.", "columns": [{"key": "name", "label": "Name", "type": "text", "required": true}, {"key": "vendor", "label": "Vendor", "type": "vendor_ref"}, {"key": "kind", "label": "Kind", "type": "choice", "required": true, "options": ["Cloud provider", "SaaS provider", "Managed or outsourced service", "Payment processor", "Data processor", "Consultant", "Other"]}, {"key": "service", "label": "Service", "type": "text"}, {"key": "country", "label": "Country", "type": "country"}, {"key": "critical", "label": "Critical", "type": "bool"}, {"key": "security_report", "label": "Report", "type": "choice", "options": ["SOC 2", "ISO 27001", "Other", "None"]}]},
         {"key": "no_third_parties", "label": "No third parties", "type": "bool", "level": "optional", "note": "Tick when nothing is outsourced or hosted by others."},
-        {"key": "data_flows", "label": "Data flows", "type": "choice", "level": "required", "options": ["Mapped and current", "Partly mapped", "Not mapped"], "note": "Whether data flows between systems and parties are drawn. PCI DSS, GDPR records and HIPAA all need them; a first pass is enough to start."},
+        {"key": "data_flows", "label": "Data flows", "type": "choice", "level": "required", "options": ["Mapped and current", "Partly mapped", "Not mapped"], "note": "Whether the flows of data between systems and parties are mapped. PCI DSS asks for an account data flow diagram; privacy laws and HIPAA need the same picture for their records."},
         {"key": "data_flow_ref", "label": "Flow diagram", "type": "text", "level": "optional", "note": "Where the diagram lives (document title or link)."},
         {"key": "data_subject_regions", "label": "Data subjects", "type": "countries", "level": "advised", "note": "Countries whose residents' personal data is processed. Decides GDPR, PDPL and similar reach."}
       ]
     },
     {
-      "key": "risk_people",
-      "label": "Risk and people",
+      "key": "risk_people", "label": "Risk and people",
       "source": {"ref": "ISO/IEC 27001 cl. 5.3 and 6.1.2, NIST CSF 2.0 GV.RM and GV.RR, regulator governance requirements (NCA ECC 1-2, SAMA 3.1.1, QCB 1.2, MAS TRM 3.1)", "asked_by": "auditor, regulator", "confidence": "secondary", "urls": ["https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf", "https://rulebook.sama.gov.sa/node/3837"]},
       "fields": [
         {"key": "risk_appetite", "label": "Risk appetite", "type": "choice", "level": "required", "options": ["Averse", "Minimal", "Cautious", "Open", "Hungry", "Not defined"], "note": "Where the board stands on risk. Frameworks use it to set priorities and tolerances; Not defined is allowed but is flagged."},
         {"key": "appetite_approval", "label": "Approval", "type": "choice", "level": "advised", "options": ["Approved by board", "Approved by management", "Draft only", "Not defined"], "note": "Who approved the risk appetite statement."},
         {"key": "appetite_note", "label": "Tolerance notes", "type": "longtext", "level": "optional", "note": "Tolerances in the organisation's own words, for example maximum tolerable outage or loss."},
-        {"key": "risk_method", "label": "Risk method", "type": "choice", "level": "required", "options": ["ISO/IEC 27005", "NIST SP 800-30", "FAIR", "OCTAVE", "In-house method", "None yet"], "note": "The method used to assess risk. ISO 27001 6.1.2 and the CSF both expect one to be fixed first."},
+        {"key": "risk_method", "label": "Risk method", "type": "choice", "level": "required", "options": ["ISO/IEC 27005", "NIST SP 800-30", "FAIR", "OCTAVE", "In-house method", "None yet"], "note": "The method used to rate risks. Management-system standards want one fixed before risks are assessed; NIST CSF 2.0 leaves the choice open."},
         {"key": "risk_register", "label": "Risk register", "type": "choice", "level": "advised", "options": ["Maintained", "Partial", "None"], "note": "Whether risks are kept in a register (the Risk Management module counts)."},
         {"key": "security_policy", "label": "Security policy", "type": "choice", "level": "advised", "options": ["Approved and current", "Draft", "None"], "note": "Top-level information security policy status. Most certifications expect it approved by top management."},
         {"key": "cyber_reporting_line", "label": "Cyber reports to", "type": "choice", "level": "required", "options": ["Board", "CEO or MD", "Risk or control function", "CIO or IT head", "Other"], "note": "Who the security function reports to. NCA, SAMA and QCB require it to be independent of IT."},
         {"key": "cyber_committee", "label": "Cyber committee", "type": "text", "level": "advised", "note": "Name of the committee that oversees cyber and information security, if any."},
-        {"key": "sponsor", "label": "Sponsor", "type": "person", "level": "required", "note": "The executive who owns the compliance programme and signs scope and approvals. ISO 33002-style assessments and most certification bodies start from a named sponsor."},
+        {"key": "sponsor", "label": "Sponsor", "type": "person", "level": "required", "note": "The executive who owns the compliance programme and signs scope and approvals. Management-system standards expect top management to own the system (ISO clause 5)."},
         {"key": "compliance_lead", "label": "Compliance lead", "type": "person", "level": "required", "note": "The person who runs onboarding day to day and answers the assessor."},
         {"key": "ciso", "label": "CISO", "type": "person", "level": "advised", "note": "Head of information security (an outsourced CISO is allowed: enter their name and organisation)."},
         {"key": "dpo", "label": "DPO", "type": "person", "level": "advised", "note": "Data protection officer, where one is appointed or required."},
@@ -141,13 +72,7 @@
         {"key": "head_of_risk", "label": "Head of risk", "type": "person", "level": "advised", "note": "Owner of enterprise risk management."},
         {"key": "internal_audit", "label": "Internal audit", "type": "person", "level": "advised", "note": "Head of internal audit. Assessors check that audit is independent of the people who run the controls."},
         {"key": "legal_counsel", "label": "Legal counsel", "type": "person", "level": "optional", "note": "Who answers legal and contractual questions (legal register, contracts)."},
-        {"key": "other_contacts", "label": "Other contacts", "type": "table", "level": "optional", "note": "Other roles frameworks ask for, such as an outsourced DPO, a QSA liaison or an authorised official.",
-          "columns": [
-            {"key": "role", "label": "Role", "type": "text", "required": true},
-            {"key": "name", "label": "Name", "type": "text", "required": true},
-            {"key": "email", "label": "Email", "type": "text"},
-            {"key": "organisation", "label": "Organisation", "type": "text"}
-          ]}
+        {"key": "other_contacts", "label": "Other contacts", "type": "table", "level": "optional", "note": "Other roles frameworks ask for, such as an outsourced DPO, a QSA liaison or an authorised official.", "columns": [{"key": "role", "label": "Role", "type": "text", "required": true}, {"key": "name", "label": "Name", "type": "text", "required": true}, {"key": "email", "label": "Email", "type": "text"}, {"key": "organisation", "label": "Organisation", "type": "text"}]}
       ]
     }
   ],
