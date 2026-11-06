@@ -79,3 +79,5 @@ export { ChipList, type ChipListProps, type ChipListItem } from './ds/ChipList';
 export { Fact, FactList, type FactProps, type FactListProps } from './ds/Facts';
 export { TitleLink, CardLink, type TitleLinkProps, type CardLinkProps } from './ds/Links';
 export { linkClasses, type LinkTone, type LinkSize } from './ds/linkModel';
+export { DebouncedSearch, type DebouncedSearchProps } from './ds/DebouncedSearch';
+export { FormError, type FormErrorProps } from './ds/FormError';

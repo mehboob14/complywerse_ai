@@ -1,5 +1,5 @@
 // Navigation-registry entries of the Administration pages (/admin/*) and User Management (/users) (see navPages/index.ts for the contract). Written by R-REG, 2026-11-01.
-// Administration is the menu pinned at the foot of the sidebar (components/layout/NavTree.tsx AdminMenu, shown to administrators only), not a leaf of `navigation`, so /admin is a root
+// Administration is the menu pinned at the foot of the rail (components/shell/ModuleIconRail.tsx AdminButton, shown to administrators only), not a leaf of `navigation`, so /admin is a root
 // outside the menu. Most of its sections are TABS of the /admin page (?tab=company|users|roles|departments|password-policy|integrations|cloud-connectors|connectors|evidence-collectors|identity|
 // workflow|audit): they are not pages, so their names are keywords of /admin; nine of them also exist as pages of their own, which the /admin page mounts as its tab bodies.
 // `adminOnly` (inherited from /admin) is the menu's rule; the four pages of the scanner onboarding gate themselves with the agents right instead.

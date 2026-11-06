@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { activeTab, isInArea, tabsFor } from '../../lib/navRegistry.ts';
+import { activeTab, isInArea, tabName, tabText, tabsFor } from '../../lib/navRegistry.ts';
 
 type Tab = { name: string; label: string; href: string; iconOnly?: boolean };
 type Ctx = { studio: boolean; settings: boolean };
@@ -105,14 +105,17 @@ test('the tabs, in order, by who sees them: the Studio where it is on, Settings 
 
 // ---- the registry gives the tab bar what the old rules gave it ----
 
-const OLD_NAME = (label: string) => (label === 'Governance settings' ? 'Settings' : label);       // the one deliberate change
+const OLD_NAME = (label: string) => (label === 'Governance settings' ? 'Settings' : label);       // a deliberate change
+const NOW_NAME = (name: string) => (name === 'Documents' ? 'Library (Documents)' : name === 'Settings' ? 'Governance settings' : name);
+const NOW_SHOWN = (text: string) => (text === 'Documents' ? 'Library' : text);                        // the other (D52): the first tab says Library; its accessible name still holds Documents
 
 test('the registry lists the same tabs in the same order, each showing the same text and leading to the same page', () => {
   for (const ctx of ALL) {
     const tabs = tabsFor('documents', { studio: ctx.studio, can: () => ctx.settings });
     const old = oracleTabs(ctx);
     assert.deepEqual(tabs.map((t) => t.path), old.map((t) => t.href), JSON.stringify(ctx));
-    assert.deepEqual(tabs.map((t) => t.shortLabel ?? t.label), old.map((t) => t.label), `${JSON.stringify(ctx)}: what each tab shows`);
+    assert.deepEqual(tabs.map((t) => tabText(t)), old.map((t) => NOW_SHOWN(t.label)), `${JSON.stringify(ctx)}: what each tab shows`);
+    assert.deepEqual(tabs.map((t) => tabName(t)), old.map((t) => NOW_NAME(t.name)), `${JSON.stringify(ctx)}: the accessible name holds what is shown`);
     assert.deepEqual(tabs.map((t) => OLD_NAME(t.label)), old.map((t) => t.name), `${JSON.stringify(ctx)}: tooltip and accessible name`);
   }
   assert.equal(tabsFor('documents').find((t) => t.tab.id === 'settings')?.label, 'Governance settings');
