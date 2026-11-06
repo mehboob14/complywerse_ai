@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { readAddress, writeAddress } from './addressState.ts';
 import { meetingDay, meetingRelative } from './committees.ts';
 import {
-  DECISIONS_SHOWN, GROUP_SHOWN, HOME_SCHEMA, OPEN_STATUSES, SEARCH_ROWS, chipName, committeeChips, committeeHomeAddress, dateBox, dayAfter, decisionScope, groupActions, groupMeetings,
-  groupQuery, inactiveHidden, laterTotal, legacyCommitteeAddress, matchesSearch, meetingScope, naiveUtc, pulseOf, readiness, searchCut, stripCells,
+  ACTIONS_SCHEMA, DECISIONS_SHOWN, GROUP_SHOWN, HOME_SCHEMA, OPEN_STATUSES, SEARCH_ROWS, chipName, committeeChips, committeeHomeAddress, dateBox, dayAfter, decisionScope, groupActions, groupMeetings,
+  actionsListAddress, groupQuery, inactiveHidden, laterTotal, legacyCommitteeAddress, matchesSearch, meetingClock, meetingScope, naiveUtc, pulseOf, readiness, searchCut, stripCells, viewOf, viewQuery,
   type MeetingRow,
 } from './committeeHome.ts';
 
@@ -226,4 +226,36 @@ test('the decisions lane lists the active committees\' decisions, a chosen commi
   assert.equal(decisionScope(null, 'inactive'), 'false');
   assert.equal(decisionScope(5, 'active'), 'all');
   assert.equal(DECISIONS_SHOWN, 8);
+});
+
+// ── the full list ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+test('Oversight Actions keeps its filters in the address, and the old ?overdue=1 of the Governance Overview opens the Overdue view', () => {
+  const read = (search: string) => readAddress(ACTIONS_SCHEMA, search);
+  assert.deepEqual(read(''), { committee: 0, mine: false, view: 'all', overdue: false, status: '', q: '', page: 1, size: 100 });
+  assert.deepEqual(read('?committee=4&mine=1&view=week&status=open&q=register&page=3&size=50'), { committee: 4, mine: true, view: 'week', overdue: false, status: 'open', q: 'register', page: 3, size: 50 });
+  assert.deepEqual(read('?view=nonsense&status=closed&page=0&size=900'), { committee: 0, mine: false, view: 'all', overdue: false, status: '', q: '', page: 1, size: 100 }, 'junk is the default');
+  assert.equal(viewOf(read('?overdue=1')), 'overdue');
+  assert.equal(viewOf(read('?overdue=1&view=later')), 'later', 'an explicit view wins over the old parameter');
+  assert.equal(viewOf(read('?overdue=0')), 'all');
+  // the lane's links land on the same page, with the same scope
+  assert.equal(actionsListAddress({ committeeId: null, mine: false }), '/governance/committees/actions');
+  assert.equal(actionsListAddress({ committeeId: 3, mine: true }, 'overdue'), '/governance/committees/actions?committee=3&mine=1&view=overdue');
+  assert.deepEqual(read(actionsListAddress({ committeeId: 3, mine: true }, 'later').split('?')[1]), { committee: 3, mine: true, view: 'later', overdue: false, status: '', q: '', page: 1, size: 100 });
+});
+
+test("a page of the full list asks for exactly what the lane asks for: All is the old request plus Mine, the other views are the lane's three groups, later skips the first two", () => {
+  const now = new Date('2026-11-06T15:00:00Z');
+  const none = { committeeId: null, mine: false, status: '' };
+  // the first page of All is what the page has always sent: no skip, the limit the server also defaults to
+  assert.deepEqual(viewQuery('all', none, now, { page: 1, size: 100, before: 0 }), { status: undefined, limit: 100 });
+  assert.deepEqual(viewQuery('all', { committeeId: 4, mine: true, status: 'completed' }, now, { page: 3, size: 25, before: 0 }), { status: 'completed', committee_id: 4, assigned_to: 'me', skip: 50, limit: 25 });
+  assert.deepEqual(viewQuery('overdue', none, now, { page: 2, size: 25, before: 0 }), { status: OPEN_STATUSES, overdue_only: true, skip: 25, limit: 25 });
+  const week = viewQuery('week', { committeeId: 9, mine: false, status: 'open' }, now, { page: 1, size: 50, before: 0 });
+  assert.deepEqual([week.due_after, week.due_before, week.committee_id, week.skip, week.limit], ['2026-11-06T15:00:00', dayAfter(now, 7), 9, undefined, 50]);
+  // later: skip the rows of the two groups before it (7 here), then page
+  assert.deepEqual(viewQuery('later', none, now, { page: 1, size: 25, before: 7 }), { status: OPEN_STATUSES, skip: 7, limit: 25 });
+  assert.deepEqual(viewQuery('later', none, now, { page: 3, size: 25, before: 7 }), { status: OPEN_STATUSES, skip: 57, limit: 25 });
+  assert.deepEqual(viewQuery('later', none, now, { page: 1, size: 25, before: 0 }), { status: OPEN_STATUSES, limit: 25 }, 'with nothing before it, later skips nothing');
+  // the status filter does not apply inside a view: the views are the open actions
+  assert.equal(viewQuery('overdue', { ...none, status: 'completed' }, now, { page: 1, size: 25, before: 0 }).status, OPEN_STATUSES);
 });

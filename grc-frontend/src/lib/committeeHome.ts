@@ -202,6 +202,20 @@ export function groupQuery(group: ActionGroup, scope: ActionScope, now: Date, { 
   return { ...base, ...(skip > 0 ? { skip } : {}), limit };
 }
 
+/** The views of the full Oversight Actions list the lane's groups lead to: every open action, and the three groups of the lane. */
+export type ActionView = 'all' | 'overdue' | 'week' | 'later';
+export const ACTION_VIEWS: readonly ActionView[] = ['all', 'overdue', 'week', 'later'];
+
+/** The address of the Oversight Actions page for a lane's scope (the committee, Mine) and, if given, one of its views. */
+export function actionsListAddress(scope: ActionScope, view: ActionView = 'all'): string {
+  const params = new URLSearchParams();
+  if (scope.committeeId) params.set('committee', String(scope.committeeId));
+  if (scope.mine) params.set('mine', '1');
+  if (view !== 'all') params.set('view', view);
+  const query = params.toString();
+  return `/governance/committees/actions${query ? `?${query}` : ''}`;
+}
+
 /** How many open actions are "later": all that are open, less the two groups before them. */
 export const laterTotal = (all: number, overdue: number, week: number): number => Math.max(0, all - overdue - week);
 
@@ -230,6 +244,40 @@ export function groupActions<T extends ActionLike>(rows: readonly T[], now: Date
 /** The line under a search that did not read everything: "The search reads the first 200 of 340 open actions." */
 export function searchCut(shown: number, total: number): string {
   return total > shown ? `The search reads the first ${formatCount(shown)} of ${formatCount(total)} open actions.` : '';
+}
+
+// ── the full list (Oversight Actions): the same views, paged ──────────────────────────────────────────────────────────────────────────────────────
+export const VIEW_LABEL: Record<ActionView, string> = { all: 'All', overdue: 'Overdue', week: 'Due this week', later: 'Later' };
+
+/** The address of the Oversight Actions page: the filters it keeps (`?committee=3&mine=1&view=overdue&status=open&q=&page=2&size=50`) and the old `?overdue=1` the Governance
+ *  Overview's counter links to, which opens the Overdue view. */
+export const ACTIONS_SCHEMA = {
+  committee: integer(0, { min: 0 }),
+  mine: flag(),
+  view: oneOf<ActionView>(ACTION_VIEWS, 'all'),
+  overdue: flag(),
+  status: oneOf<'' | 'open' | 'in_progress' | 'completed'>(['', 'open', 'in_progress', 'completed'], ''),
+  q: text(),
+  page: integer(1, { min: 1 }),
+  size: integer(100, { min: 1, max: 100 }),
+};
+
+/** The view the address asks for: `?view=` wins; the old `?overdue=1` is the Overdue view. */
+export const viewOf = (a: { view: ActionView; overdue: boolean }): ActionView => (a.view !== 'all' ? a.view : a.overdue ? 'overdue' : 'all');
+
+export interface ActionFilters { committeeId: number | null; mine: boolean; status: string }
+
+/**
+ * The request for one page of the list. "All" is what the page has always asked for (the status, the committee, any status; `skip` and `limit` only when they are not the
+ * server's own defaults) plus Mine; Overdue, Due this week and Later are the lane's three groups, so their totals are the same numbers. Later skips the rows the first two
+ * hold (`before` = overdue + this week), then pages.
+ */
+export function viewQuery(view: ActionView, f: ActionFilters, now: Date, { page, size, before }: { page: number; size: number; before: number }): ActionQuery & { limit: number } {
+  const skip = Math.max(0, (Math.max(1, Math.floor(page)) - 1) * size);
+  const scope = { ...(f.committeeId ? { committee_id: f.committeeId } : {}), ...(f.mine ? { assigned_to: 'me' as const } : {}) };
+  if (view === 'all') return { status: f.status || undefined, ...scope, ...(skip > 0 ? { skip } : {}), limit: size } as ActionQuery & { limit: number };
+  const base = groupQuery(view, { committeeId: f.committeeId, mine: f.mine }, now, { limit: size, skip: view === 'later' ? before + skip : skip });
+  return { ...base, ...(view !== 'later' && skip > 0 ? { skip } : {}), limit: size };
 }
 
 // ── the Meetings lane ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -275,6 +323,12 @@ export function meetingScope(rows: readonly Pick<OverviewCommittee, 'id' | 'is_a
   const wanted = selectedId ? rows.filter((c) => c.id === selectedId) : rows.filter((c) => matchesStatus(c, status));
   const ids = wanted.map((c) => c.id);
   return { ids: ids.slice(0, cap), cut: Math.max(0, ids.length - cap) };
+}
+
+/** The meeting's time of day in the viewer's clock ("13:22"); the day is in the date box beside it. '' for a date that is no date. */
+export function meetingClock(value: DateInput): string {
+  const d = parseUtc(value);
+  return d ? new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(d) : '';
 }
 
 /** The meeting's date as a day for the date box: "12" over "NOV" (the viewer's calendar). */
