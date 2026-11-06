@@ -68,3 +68,4 @@ from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk 
 from ._92_department_levels import *  # noqa: F401,F403 - what an organisation calls the levels of its department tree
 from ._93_exception_approvals import *  # noqa: F401,F403 - who reviews and approves a policy exception: rules, runs, decisions
 from ._94_exception_workflow import *  # noqa: F401,F403 - an exception's potential risks, compensating controls and who added which asset (D62)
+from ._95_framework_onboarding import *  # noqa: F401,F403 - the organisation profile and each framework's onboarding before its journey (D66)

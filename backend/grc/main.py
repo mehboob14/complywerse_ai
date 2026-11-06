@@ -54,6 +54,7 @@ from .modules.governance import governance_module_router
 from .modules.framework_upload import framework_upload_router
 from .modules.compliance import compliance_router
 from .modules.assessments.scope_router import router as assessment_scope_router
+from .modules.framework_onboarding.router import router as framework_onboarding_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.framework_templates import framework_templates_router
@@ -253,6 +254,7 @@ app.include_router(ai_risk_assessment_router)
 app.include_router(ai_recommendations_router)
 app.include_router(reporting_router)
 app.include_router(assessment_scope_router)               # before the older router: its literal paths (templates, initiate) must win over /{assessment_id}
+app.include_router(framework_onboarding_router)           # /compliance/org-profile and /compliance/framework-onboarding: literal paths, nothing older matches them
 app.include_router(compliance_assessments_router)
 app.include_router(artifacts_router)
 app.include_router(dcc_router)

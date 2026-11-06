@@ -337,7 +337,9 @@ def sync_workbench_scope(db: Session, tenant_id: int, scope: SCFScope, updated_b
 
 def sync_journeys_for_scope(db: Session, tenant_id: int, user: Any, scope: SCFScope) -> dict:
     """Idempotently ensure a certification journey exists for each in-scope slug."""
-    created, skipped, missing = [], [], []
+    from ..framework_onboarding import gate as onboarding_gate
+
+    created, skipped, missing, blocked = [], [], [], []
     for slug in scope.framework_slugs or []:
         fw = _find_uploaded_framework(db, tenant_id, slug)
         if fw is None:
@@ -345,6 +347,10 @@ def sync_journeys_for_scope(db: Session, tenant_id: int, user: Any, scope: SCFSc
             continue
         if not fw.slug:
             fw.slug = slug
+        gate = onboarding_gate.decide(db, tenant_id, fw)        # D66: the scope may list a framework, its journey waits for its onboarding
+        if not gate["allowed"]:
+            blocked.append({"slug": slug, "framework_id": fw.id, "state": gate["state"], "reason": gate["reason"]})
+            continue
         before = (
             db.query(CertificationJourney.id)
             .filter(
@@ -357,10 +363,11 @@ def sync_journeys_for_scope(db: Session, tenant_id: int, user: Any, scope: SCFSc
         journey = _create_journey_for_framework(db, tenant_id, user, fw)
         if before is None:
             created.append({"slug": slug, "journey_id": journey.id, "framework_id": fw.id})
+            onboarding_gate.record_started(db, tenant_id, fw, getattr(user, "id", None))
         else:
             skipped.append({"slug": slug, "journey_id": journey.id, "framework_id": fw.id})
     db.commit()
-    return {"created": created, "existing": skipped, "missing_frameworks": missing}
+    return {"created": created, "existing": skipped, "missing_frameworks": missing, "blocked": blocked}
 
 
 def backfill_normalized_links(db: Session, scope: SCFScope) -> dict:

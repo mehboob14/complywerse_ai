@@ -95,6 +95,8 @@ BY_PREFIX: Dict[str, Place] = {
     # Compliance Management
     "/compliance": ("Compliance Management", "Overview"),
     "/compliance/policies": ("Compliance Management", "Policy Statements"),
+    "/compliance/org-profile": ("Compliance Management", "Organisation Profile"),
+    "/compliance/framework-onboarding": ("Compliance Management", "Frameworks"),
     "/frameworks": ("Compliance Management", "Frameworks"),
     "/framework-upload": ("Compliance Management", "Frameworks"),
     "/framework-templates": ("Compliance Management", "Frameworks"),
@@ -227,7 +229,7 @@ PAGE_ORDER: Dict[str, List[str]] = {
     "Governance": ["Overview", "Documents", "Committees", "KRIs", "KPI Report", "Projects"],
     "Risk Management": ["Overview", "Risk Register", "Risk Assessments", "RCSA", "Scenario Analysis",
                         "Bow-Tie Analysis", "Advanced Analytics"],
-    "Compliance Management": ["Overview", "Frameworks", "Evidence Management", "Access Reviews",
+    "Compliance Management": ["Overview", "Frameworks", "Organisation Profile", "Evidence Management", "Access Reviews",
                               "Regulatory Changes", "Regulatory Feeds"],
     "Assessments": ["Overview", "Cyber Security", "NCA", "Digital Operations Maturity", "DPIA / PIA", "Saudi PDPL"],
     "Business Continuity": ["Overview", "Continuity Plans", "Drills & Invocations"],

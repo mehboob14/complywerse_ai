@@ -143,6 +143,18 @@ PERMISSION_MATRIX = [
                 "display_name": "Frameworks",
                 "actions": ["view", "create", "edit", "delete"]
             },
+            # Framework onboarding (D66): the organisation profile asked once and each framework's onboarding before its journey.
+            # Reads need a sign-in only; anyone with compliance:frameworks:edit may also edit both, approve/override are new grants.
+            {
+                "name": "org_profile",
+                "display_name": "Organisation Profile",
+                "actions": ["view", "edit"]
+            },
+            {
+                "name": "framework_onboarding",
+                "display_name": "Framework Onboarding",
+                "actions": ["view", "edit", "approve", "override"]
+            },
             # CIS integration: three scanning permissions gated by the
             # `Scanning Admin` preset role. Administrators auto-bypass; any
             # other role needs the explicit grant. Names match exactly what
