@@ -50,3 +50,6 @@ export { Sheet, type SheetProps } from './Sheet';
 export type { PanelMode, PanelWidth } from './sidePanelModel';
 export { FilterChips, type FilterChip, type FilterChipsProps, type ChipFlag, type FlagTone } from './FilterChips';
 export { Disclosure, AccordionRow, type DisclosureProps, type AccordionRowProps } from './Disclosure';
+// Kit 3 (UX revamp, Stage 2): the rows of a worklist and the wave-1 gaps
+export { WorkRow, type WorkRowProps, type WorkAction, type WorkCheck } from './WorkRow';
+export { CountRow, type CountRowProps } from './CountRow';
