@@ -20,13 +20,14 @@ import { DOC_TYPE_LABEL, STAGE_ORDER, STATUS_LABEL, statusLabel, type FrameworkI
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
   id: number;
-  tenant_id: number;
+  /** the fields marked optional are left out of a lean row (the library's list): the text, the tenant and the ids of who approved or published it */
+  tenant_id?: number;
   document_code: string | null;
   title: string;
   description: string | null;
-  content: string | null;
+  content?: string | null;
   doc_type: string;
-  doc_sub_type: string | null;
+  doc_sub_type?: string | null;
   classification: string;
   parent_document_id: number | null;
   current_version: string;
@@ -43,14 +44,14 @@ export interface GovDoc {
   review_cycle_months: number;
   next_review_date: string | null;
   last_reviewed_at: string | null;
-  last_reviewed_by: number | null;
+  last_reviewed_by?: number | null;
   regulatory_scope: string[];
   framework_ids: number[];
   applicable_framework_ids?: number[];
   tags: string[];
-  approved_by: number | null;
+  approved_by?: number | null;
   approved_at: string | null;
-  published_by: number | null;
+  published_by?: number | null;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -59,6 +60,8 @@ export interface GovDoc {
   file_type: string | null;
   has_file: boolean;
   policy_statement_count?: number;
+  /** a lean row carries the document's attestation (the coverage map's numbers); null: no campaign */
+  attestation?: { pct: number; done: number; total: number } | null;
 }
 
 // ─── Lifecycle stages ────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { Layers } from 'lucide-react';
 import { EMPTY } from '@/lib/format';
 import { FrameworkChip } from './atoms';
 import { FrameworkList } from './FrameworkList';
@@ -41,7 +42,8 @@ function placeBeside(r: DOMRect): Placement {
     : { left, bottom: window.innerHeight - r.top + GAP, maxHeight: Math.min(MAX_HEIGHT, above) };
 }
 
-export function FrameworksCell({ doc, info, prefer = [], onPick }: {
+export function FrameworksCell({ doc, info, prefer = [], onPick, as = 'chips' }: {
+  /** `chips`: the first two as chips and "+N" for the rest (the old cell); `count`: ONE button with the number of frameworks, which opens the whole list (the facet explorer's row) */
   doc: { applicable_framework_ids?: number[] | null; framework_ids?: number[] | null };
   /** framework id -> its short label and full name */
   info: Record<string, FrameworkInfo>;
@@ -49,6 +51,7 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
   prefer?: readonly string[];
   /** a chip or a row of the list was clicked: the page filters by that framework */
   onPick: (id: number) => void;
+  as?: 'chips' | 'count';
 }) {
   const ids = shownFrameworkIds(doc);
   const { chips, hidden, total } = frameworkDisplay(ids, info, { max: MAX_CHIPS, prefer });
@@ -105,10 +108,12 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
   return (
     <div className="flex min-w-0 items-center gap-1">
       {/* a click on the chips, or on the button, is not a click on the row; the blank part of the cell still is */}
-      <div className="-m-0.5 flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden p-0.5" onClick={(e) => e.stopPropagation()}>
-        {chips.map((c) => <FrameworkChip key={c.id} chip={c} active={prefer.includes(String(c.id))} onClick={() => onPick(c.id)} />)}
-      </div>
-      {hidden.length > 0 && (
+      {as === 'chips' && (
+        <div className="-m-0.5 flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden p-0.5" onClick={(e) => e.stopPropagation()}>
+          {chips.map((c) => <FrameworkChip key={c.id} chip={c} active={prefer.includes(String(c.id))} onClick={() => onPick(c.id)} />)}
+        </div>
+      )}
+      {(hidden.length > 0 || as === 'count') && (
         <button
           ref={btnRef}
           type="button"
@@ -124,7 +129,7 @@ export function FrameworksCell({ doc, info, prefer = [], onPick }: {
           }}
           className="inline-flex h-[24px] min-w-[28px] shrink-0 items-center justify-center rounded-ds-control border border-ds-border-strong bg-ds-surface px-[6px] text-ds-label font-[600] leading-none text-ds-fg-body hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring"
         >
-          +{hidden.length}
+          {as === 'count' ? <><Layers aria-hidden className="mr-[4px] h-[12px] w-[12px]" strokeWidth={1.75} />{total}</> : <>+{hidden.length}</>}
         </button>
       )}
       {place && typeof document !== 'undefined' &&
