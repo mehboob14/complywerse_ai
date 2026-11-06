@@ -187,11 +187,11 @@ export default function Header() {
           aria-pressed={ui.panelShown}
           aria-label={`Work and context. ${queue.label}`}
           title="Work and context (Ctrl .)"
-          className={`${BAR_BUTTON} ${ui.panelShown ? 'bg-ds-surface-hover !text-ds-fg' : ''} ${queue.text ? 'gap-[4px] px-[6px]' : ''} ${hint ? 'lg:gap-[6px] lg:bg-ds-primary-soft lg:px-[10px] lg:!text-ds-primary-text' : ''}`}
+          className={`${BAR_BUTTON} ${ui.panelShown ? 'bg-ds-surface-hover !text-ds-fg' : ''} ${queue.text ? 'gap-[4px] px-[6px]' : ''} ${hint ? 'min-[1280px]:gap-[6px] min-[1280px]:bg-ds-primary-soft min-[1280px]:px-[10px] min-[1280px]:!text-ds-primary-text' : ''}`}
         >
           <PanelRight size={18} strokeWidth={1.75} aria-hidden />
           {/* the first-run pointer (useFirstRunHint): the button's name beside its icon until the palette or the panel has been used once; in the bar, so it covers nothing of the page */}
-          {hint && <span className="hidden text-ds-body font-[600] lg:inline">Work and context</span>}
+          {hint && <span className="hidden text-ds-body font-[600] min-[1280px]:inline">Work and context</span>}
           {queue.text && (
             <span aria-hidden className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[4px] text-[12px] font-[600] leading-none text-ds-on-primary ${queue.urgent ? 'bg-ds-danger' : 'bg-ds-warning'}`}>{queue.text}</span>
           )}

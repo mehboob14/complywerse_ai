@@ -26,6 +26,7 @@ export function shortcutFor(pathname: string | null | undefined, search: string 
   const record = route.path.indexOf(':') >= 0;
   const label = record ? (heading ?? '').replace(/\s+/g, ' ').trim() : route.title ?? route.label;
   if (!label) return null;
-  const sub = record ? route.label : areaName(route.area) || undefined;
+  const area = areaName(route.area);
+  const sub = record ? route.label : area && area !== label ? area : undefined;       // a page named like its area ("Administration" in Administration) says it once
   return { label, href: `${path}${record ? '' : cleanQuery(search)}`, sub };
 }

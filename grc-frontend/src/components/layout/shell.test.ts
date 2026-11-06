@@ -111,7 +111,7 @@ test('the page has two skip links as its first stops, aimed at the main area and
 });
 
 test('the frame: main keeps its padding (a dozen pages cancel it with a negative margin), the panel sits beside it under the bar, the layout only adds guards and providers', () => {
-  assert.match(page, /<main id="main-content" tabIndex=\{-1\} className="min-w-0 flex-1 overflow-auto [^"]*p-4 lg:p-5 /);
+  assert.match(page, /<main id="main-content" tabIndex=\{-1\} className="relative min-w-0 flex-1 overflow-auto [^"]*p-4 lg:p-5 /);
   assert.ok(page.indexOf('<Header />') < page.indexOf('<main') && page.indexOf('<main') < page.indexOf('<WorkPanel />'));
   assert.match(layout, /<PageShell>\{children\}<\/PageShell>/);
   assert.match(layout, /AuthGuard/);

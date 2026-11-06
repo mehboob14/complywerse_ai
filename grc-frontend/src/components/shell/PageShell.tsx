@@ -47,7 +47,8 @@ export default function PageShell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Header />
             <div className="flex min-h-0 flex-1">
-              <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-auto bg-[var(--color-subtle)] p-4 lg:p-5 scrollbar-thin focus:outline-none" style={{ scrollPaddingTop: STICKY_PAD }}>
+              {/* `relative`: the kit's visually hidden labels (sr-only) are absolutely positioned; with no positioned box around them they were placed against the window, outside this scroll box, and a long list stretched the document: the whole shell scrolled (a phone's top bar slid away) */}
+              <main id="main-content" tabIndex={-1} className="relative min-w-0 flex-1 overflow-auto bg-[var(--color-subtle)] p-4 lg:p-5 scrollbar-thin focus:outline-none" style={{ scrollPaddingTop: STICKY_PAD }}>
                 {children}
               </main>
               <WorkPanel />

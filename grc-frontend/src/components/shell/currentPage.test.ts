@@ -11,6 +11,12 @@ test('a page with a name of its own is kept by that name, its module as the seco
   assert.equal(shortcutFor('/vendor-risk/intake', '', null)?.sub, 'Third-Party Vendor Risk');
 });
 
+test('a page named like its area is kept once: no second line that repeats its name', () => {
+  assert.deepEqual(shortcutFor('/admin', '', null), { label: 'Administration', href: '/admin', sub: undefined });
+  assert.equal(shortcutFor('/complychat', '', null)?.sub, undefined);
+  assert.equal(shortcutFor('/complychat', '', null)?.label, 'Comply Agent');
+});
+
 test('how a page was opened is not where it is: from, act, item and the like are dropped; a very long query is not kept', () => {
   assert.equal(cleanQuery('?status=draft&from=%2Fneeds-my-action&act=sign&item=a%3Ab'), '?status=draft');
   assert.equal(cleanQuery('?from=%2Fx'), '');

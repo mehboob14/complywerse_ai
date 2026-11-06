@@ -288,7 +288,7 @@ const SECTION: Record<string, string> = {
   'task-management': 'Task Management',
   'cybersecurity-assurance': 'Cybersecurity Assurance',
   administration: 'Administration',
-  complychat: 'ComplyChat',
+  complychat: 'Comply Agent',
 };
 
 /** The display name of an area (the sidebar group, or the module's own name): what a search result or the Work panel puts beside a page. An area of a top-level

@@ -50,8 +50,8 @@ test('a section shows 50 rows and the true total; "Show 50 more" is only as many
 
 test('the due line says how late, how soon, or that there is no date', () => {
   const at = (n: number, extra: Partial<{ overdue: boolean }> = {}) => dueLine({ dueAt: day(n), overdue: n < 0, ...extra }, NOW);
-  assert.deepEqual(at(-3), { text: 'Overdue 3 days', tone: 'danger' });
-  assert.deepEqual(at(-1), { text: 'Overdue 1 day', tone: 'danger' });
+  assert.deepEqual(at(-3), { text: 'Overdue by 3 days', tone: 'danger' });
+  assert.deepEqual(at(-1), { text: 'Overdue by 1 day', tone: 'danger' });
   assert.deepEqual(dueLine({ dueAt: day(0, 8), overdue: true }, NOW), { text: 'Overdue', tone: 'danger' });
   assert.deepEqual(dueLine({ dueAt: day(0, 18), overdue: false }, NOW), { text: 'Due today', tone: 'warning' });
   assert.deepEqual(at(1), { text: 'Due tomorrow', tone: 'warning' });

@@ -9,6 +9,7 @@ import { Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { RAIL_WIDTH } from '@/components/layout/shellMode';
 import { MenuLink, adminEntries, useFlyout } from '@/components/layout/NavTree';
+import { routeFor } from '@/lib/navRegistry';
 import { litFor, railOf, type RailItem } from './railModel';
 import { useShellAccess, useShellQueue } from './ShellProvider';
 
@@ -41,7 +42,7 @@ function RailLink({ item, urgent, count, countLabel }: { item: RailItem; urgent?
 }
 
 /** Administration, for administrators only: the foot of the rail. A menu button (arrows, Escape, outside press) that opens the sections to the right of the rail. */
-function AdminButton() {
+function AdminButton({ lit }: { lit: boolean }) {
   const fly = useFlyout(false);
   return (
     <div ref={fly.rootRef} onBlur={fly.onBlur} className="relative shrink-0 border-t border-ds-border px-[2px] py-[6px]">
@@ -51,11 +52,11 @@ function AdminButton() {
         onClick={fly.toggle}
         onKeyDown={fly.onTriggerKeyDown}
         title="Administration"
-        aria-label="Administration"
+        aria-label="Administration" aria-current={lit ? 'page' : undefined}
         aria-haspopup="menu"
         aria-expanded={fly.open}
         aria-controls={fly.open ? fly.panelId : undefined}
-        className={clsx(ITEM, FOCUS, fly.open ? 'bg-ds-surface-hover text-ds-fg' : IDLE)}
+        className={clsx(ITEM, FOCUS, fly.open ? 'bg-ds-surface-hover text-ds-fg' : lit ? LIT : IDLE)}
       >
         <Settings size={20} strokeWidth={1.75} aria-hidden />
         <span aria-hidden className={LABEL}>Admin</span>
@@ -108,7 +109,7 @@ export default function ModuleIconRail({ pathname, from }: { pathname: string; f
         )}
         {loaded && rail.modules.map((item) => <RailLink key={item.key} item={item} />)}
       </div>
-      {loaded && access.isAdmin && <AdminButton />}
+      {loaded && access.isAdmin && <AdminButton lit={routeFor(pathname)?.area === 'administration'} />}
     </nav>
   );
 }

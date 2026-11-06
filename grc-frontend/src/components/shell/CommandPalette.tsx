@@ -84,18 +84,17 @@ function PaletteDialog() {
 
   // actions, each only for the person who may do it
   const canCreate = access.isAdmin || holds(access.permissions, 'governance:policies:create');
-  const canGovern = access.isAdmin || holds(access.permissions, 'governance:policies:*');
   const studioOff = studio.data?.enabled === false;
   const actions = useMemo<ActionDef[]>(() => {
     const list: ActionDef[] = [];
     if (canCreate && !studioOff) list.push({ id: 'new-document', label: 'New document', sub: 'Governance · Library', icon: 'plus' });
-    if (canGovern && !studioOff) list.push({ id: 'ai-draft', label: 'AI Draft', sub: 'Governance · Comply AI Studio', icon: 'sparkles' });
+    if (canCreate && !studioOff) list.push({ id: 'ai-draft', label: 'AI Draft', sub: 'Governance · Comply AI Studio', icon: 'sparkles' });
     if (pins.current) list.push({ id: 'pin-page', label: pins.currentPinned ? 'Unpin this page' : 'Pin this page', sub: 'Shortcut', icon: 'pin' });
     if (notifications.unread > 0) list.push({ id: 'mark-read', label: 'Mark all notifications read', sub: 'Notifications', icon: 'check' });
     list.push({ id: 'guide', label: guide.enabled ? 'Turn off guide markers' : 'Turn on guide markers', sub: 'Help', icon: 'help' });
     if (mayAskComplyAgent(access, leaves)) list.push({ id: 'ask', label: 'Ask Comply Agent', sub: 'AI assistant', icon: 'sparkles' });
     return list;
-  }, [canCreate, canGovern, studioOff, pins.current, pins.currentPinned, notifications.unread, guide.enabled, access, leaves]);
+  }, [canCreate, studioOff, pins.current, pins.currentPinned, notifications.unread, guide.enabled, access, leaves]);
 
   const view = paletteView({
     query, pages, records: search.sources, pending, acknowledgements: queue.inbox.counts.acknowledgement,

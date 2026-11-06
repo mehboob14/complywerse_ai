@@ -287,7 +287,7 @@ test('breadcrumbFor gives a sane trail for an example URL of every module', () =
   assert.deepEqual(labels('/admin/roles'), ['Administration', 'Role Management']);
   assert.deepEqual(labels('/admin/users/4/usage'), ['Administration', 'User Management', 'User usage']);
   assert.deepEqual(labels('/users'), ['User Management']);
-  assert.deepEqual(labels('/complychat'), ['ComplyChat']);
+  assert.deepEqual(labels('/complychat'), ['Comply Agent']);
   assert.deepEqual(labels('/workflow-engine'), ['Administration', 'Workflow Engine']);
   assert.deepEqual(labels('/cyber-assurance/assets/11'), ['Cybersecurity Assurance', 'IT Asset Inventory', 'Asset']);
   assert.deepEqual(labels('/cyber-assurance/vulnerabilities/sla'), ['Cybersecurity Assurance', 'Vulnerabilities', 'Remediation days']);

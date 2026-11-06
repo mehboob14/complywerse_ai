@@ -53,11 +53,11 @@ export function pageOf<T>(items: readonly T[], shown: number) {
 
 export type DueTone = 'danger' | 'warning' | 'neutral';
 
-/** The due line of a row: "Overdue 3 days", "Due today", "Due tomorrow", "Due in 4 days", "Due 12 Nov 2026", "No due date". */
+/** The due line of a row: "Overdue by 3 days", "Due today", "Due tomorrow", "Due in 4 days", "Due 12 Nov 2026", "No due date". */
 export function dueLine(item: Pick<InboxItem, 'dueAt' | 'overdue'>, now: Date = new Date()): { text: string; tone: DueTone } {
   const rel = item.dueAt ? formatRelative(item.dueAt, now) : '';
   if (!rel) return { text: 'No due date', tone: 'neutral' };
-  if (item.overdue) return { text: rel.endsWith(' ago') ? `Overdue ${rel.slice(0, -4)}` : 'Overdue', tone: 'danger' };
+  if (item.overdue) return { text: rel.endsWith(' ago') ? `Overdue by ${rel.slice(0, -4)}` : 'Overdue', tone: 'danger' };
   if (rel === 'today') return { text: 'Due today', tone: 'warning' };
   const days = /^in (\d+) days?$/.exec(rel);
   const n = days ? Number(days[1]) : NaN;

@@ -259,11 +259,11 @@ export default function ActionsPage() {
             placeholder={view === 'all' ? 'All statuses' : `Open actions: ${GROUP_LABEL[view === 'later' ? 'later' : view === 'week' ? 'week' : 'overdue'].toLowerCase()}`}
             disabled={view !== 'all'}
             onChange={(e) => setAddress({ status: e.target.value as typeof address.status, page: 1 })}
-            className="min-w-0 max-sm:flex-1 sm:w-[200px]"
+            className="min-w-0 max-sm:min-w-[140px] max-sm:flex-1 sm:w-[200px]"
           >
             {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </Select>
-          <Select aria-label="Committee" value={committeeId ? String(committeeId) : ''} placeholder="All committees" onChange={(e) => setAddress({ committee: e.target.value ? parseInt(e.target.value, 10) : 0, page: 1 })} className="min-w-0 max-sm:flex-1 sm:w-[220px]" disabled={committeesQ.isError}>
+          <Select aria-label="Committee" value={committeeId ? String(committeeId) : ''} placeholder="All committees" onChange={(e) => setAddress({ committee: e.target.value ? parseInt(e.target.value, 10) : 0, page: 1 })} className="min-w-0 max-sm:min-w-[140px] max-sm:flex-1 sm:w-[220px]" disabled={committeesQ.isError}>
             {committees.map((c) => <option key={c.id} value={String(c.id)}>{committeeChoiceLabel(c)}</option>)}
           </Select>
           <Checkbox label="Assigned to me" checked={address.mine} onChange={(e) => setAddress({ mine: e.target.checked, page: 1 })} />

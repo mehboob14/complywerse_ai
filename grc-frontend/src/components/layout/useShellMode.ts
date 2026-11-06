@@ -26,3 +26,15 @@ function snapshot(): ShellMode {
 export function useShellMode(): ShellMode {
   return useSyncExternalStore(subscribe, snapshot, () => 'docked');
 }
+
+// A phone: below Tailwind's md (768px). The bar has room for about two tabs there; a strip of seven becomes a menu (DocumentsTabs). Same rules as above: the server answers false.
+const WIDE_QUERY = '(min-width: 768px)';
+const subscribePhone = (onChange: () => void): (() => void) => {
+  if (!canMatch()) return () => {};
+  const q = window.matchMedia(WIDE_QUERY);
+  q.addEventListener('change', onChange);
+  return () => q.removeEventListener('change', onChange);
+};
+export function usePhone(): boolean {
+  return useSyncExternalStore(subscribePhone, () => canMatch() && !window.matchMedia(WIDE_QUERY).matches, () => false);
+}

@@ -87,5 +87,5 @@ export const PAGES: PageSpec[] = [
   { path: `${ADMIN}/integrations/connect`, label: 'Connect Wizard', area: AREA, parent: `${ADMIN}/agents`, duplicateOf: '/admin/integrations/connect', permissions: ['compliance:agents:manage'], hidden: 'opens from Ava\'s Compliance Agents and asset pages; a copy of an Administration page' },
   { path: `${ADMIN}/integrations/connect/ad-discover`, label: 'Active Directory discovery', area: AREA, parent: `${ADMIN}/integrations/connect`, duplicateOf: '/admin/integrations/connect/ad-discover', permissions: ['compliance:agents:manage'], hidden: 'opens from Ava\'s Connect Wizard; a copy of an Administration page' },
   { path: '/cyber-assurance/users', label: 'User Management', area: AREA, parent: HOME, duplicateOf: '/users', hidden: `Ava's copy of User Management; ${NO_MENU}` },
-  { path: '/cyber-assurance/complychat', label: 'ComplyChat', area: AREA, parent: HOME, duplicateOf: '/complychat', hidden: `Ava's copy of ComplyChat; ${NO_MENU}` },
+  { path: '/cyber-assurance/complychat', label: 'Comply Agent', area: AREA, parent: HOME, duplicateOf: '/complychat', hidden: `Ava's copy of ComplyChat; ${NO_MENU}` },
 ];

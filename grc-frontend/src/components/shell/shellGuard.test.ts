@@ -14,7 +14,7 @@ const files = readdirSync(DIR).filter((name) => /\.tsx?$/.test(name) && !/\.test
 const read = (name: string) => readFileSync(`${DIR}/${name}`, 'utf8');
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\s\/\/ .*$/gm, '');
 
-// `main` keeps the classes the layout always gave it, byte for byte (a dozen pages cancel its padding with a negative margin): the one line the kit's rules do not apply to.
+// `main` keeps the classes the layout always gave it (a dozen pages cancel its padding with a negative margin), plus `relative`: the one line the kit's rules do not apply to.
 const KEPT_AS_IT_WAS = /^.*<main id="main-content".*$/m;
 
 test('every file of the shell follows the kit\'s rules (the same ones the kit is held to)', () => {
@@ -56,6 +56,12 @@ test('Ctrl/Cmd K opens the palette and Ctrl/Cmd . takes focus into the panel; a 
   assert.match(src, /e\.key === 'k' \|\| e\.key === 'K'/);
   assert.match(src, /e\.key === '\.'/);
   assert.match(src, /closest\?\.\('\[data-work-panel\]'\)/, 'pressed again from inside the panel it closes and focus goes back to its button');
+});
+
+test('Ctrl/Cmd . is left alone while a modal other than the panel is open: the panel is behind its scrim and focus put there would be out of reach', () => {
+  const src = read('ShellProvider.tsx');
+  assert.match(src, /querySelectorAll\('\[aria-modal="true"\]'\)\)\.some\(\(m\) => !m\.querySelector\('\[data-work-panel\]'\)\)/, 'a modal that does not hold the panel');
+  assert.ok(src.indexOf('if (covered) return;') > src.indexOf("e.key === '.'") && src.indexOf('if (covered) return;') < src.indexOf('requestPanelFocus();'));
 });
 
 test('the panel is the kit\'s SidePanel in three places, with sections that are disclosures, a named list for the module\'s pages and rows that are real links', () => {
@@ -111,13 +117,24 @@ test('the first-run pointer is in the bar and covers nothing of the page: the pa
   assert.doesNotMatch(read('PageShell.tsx'), /FirstRunHint|useFirstRunHint/, 'the frame mounts nothing over the page');
   const header = code(readFileSync('src/components/layout/Header.tsx', 'utf8'));
   assert.match(header, /const hint = useFirstRunHint\(\)/);
-  assert.match(header, /\{hint && <span className="hidden text-ds-body font-\[600\] lg:inline">Work and context<\/span>\}/, 'in the bar, from 1024, beside the panel button\'s icon');
+  assert.match(header, /\{hint && <span className="hidden text-ds-body font-\[600\] min-\[1280px\]:inline">Work and context<\/span>\}/, 'in the bar, from 1280 (at 1024 to 1100 its 129px crowded the trail and the search box), beside the panel button\'s icon');
 });
 
 test('a page\'s own sticky bar cannot hide the focused element: main keeps a scroll padding at its top edge (and still the padding it always had)', () => {
   const src = read('PageShell.tsx');
   assert.match(src, /const STICKY_PAD = '96px'/);
-  assert.match(src, /<main id="main-content" tabIndex=\{-1\} className="min-w-0 flex-1 overflow-auto bg-\[var\(--color-subtle\)\] p-4 lg:p-5 scrollbar-thin focus:outline-none" style=\{\{ scrollPaddingTop: STICKY_PAD \}\}>/);
+  assert.match(src, /<main id="main-content" tabIndex=\{-1\} className="relative min-w-0 flex-1 overflow-auto bg-\[var\(--color-subtle\)\] p-4 lg:p-5 scrollbar-thin focus:outline-none" style=\{\{ scrollPaddingTop: STICKY_PAD \}\}>/);
+});
+
+test('main is a positioned box: a visually hidden label (absolutely positioned) in a long list cannot stretch the window, so the shell never scrolls as a whole', () => {
+  assert.match(read('PageShell.tsx'), /<main id="main-content"[^>]*className="relative /);
+});
+
+test('the foot button of the rail is lit on the Administration pages (the pages under /admin), like every other entry for its pages', () => {
+  const src = read('ModuleIconRail.tsx');
+  assert.match(src, /<AdminButton lit=\{routeFor\(pathname\)\?\.area === 'administration'\} \/>/, 'the registry says which pages are Administration\'s: the rail matches no path itself');
+  assert.match(src, /aria-current=\{lit \? 'page' : undefined\}/);
+  assert.match(src, /fly\.open \? 'bg-ds-surface-hover text-ds-fg' : lit \? LIT : IDLE/);
 });
 
 test('what is kept per browser goes through the one store: every access in try/catch, nothing else touches storage', () => {

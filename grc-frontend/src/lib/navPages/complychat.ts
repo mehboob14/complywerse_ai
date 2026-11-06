@@ -5,5 +5,5 @@ import type { PageSpec, RouteExtra } from '../navRegistry.ts';
 export const LEAVES: Record<string, RouteExtra> = {};
 
 export const PAGES: PageSpec[] = [
-  { path: '/complychat', label: 'ComplyChat', area: 'complychat', hidden: 'opens from the question box and the ComplyChat button in the top bar', keywords: ['ComplyChat AI', 'AI assistant', 'Comply Agent', 'Ask a question'] },
+  { path: '/complychat', label: 'Comply Agent', area: 'complychat', hidden: 'opens from the question box and the ComplyChat button in the top bar', keywords: ['ComplyChat', 'ComplyChat AI', 'AI assistant', 'Ask a question'] },
 ];

@@ -158,6 +158,10 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         e.preventDefault();
         setPaletteOpen(true);
       } else if (e.key === '.') {
+        // a modal that is not the panel itself (a details sheet, a dialog, the palette, the menu drawer) is open: the panel is behind its scrim, and focus put there would be
+        // out of reach (Escape would stop closing the modal and Tab would walk covered rows). The overlay panel's own dialog holds [data-work-panel]: it does not count.
+        const covered = Array.from(document.querySelectorAll('[aria-modal="true"]')).some((m) => !m.querySelector('[data-work-panel]'));
+        if (covered) return;
         e.preventDefault();
         const inside = !!document.activeElement?.closest?.('[data-work-panel]');
         if (inside && shown) { setPanel(false); window.requestAnimationFrame(() => panelButton.current?.focus({ preventScroll: true })); } else requestPanelFocus();
