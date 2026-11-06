@@ -13,14 +13,42 @@ export interface Campaign {
   id: number;
   name: string;
   description?: string | null;
-  review_type: string;            // scope: 'all' | 'privileged' | 'terminated'
+  review_type: string;            // 'user_access' | 'privileged_access' | 'terminated_access'
+  source?: string | null;         // one connected source, e.g. 'digitalocean'; null = all
   status: CampaignStatus;
   population_size: number;
-  sampling_method: string;        // 'random' | 'risk' | 'full'
+  sampling_method: string;        // 'random' | 'risk_based' | 'full'
   requested_sample_size: number;
+  sample_size: number;            // what was actually drawn (falls back to requested)
+  items_reviewed_live: number;    // decided so far, without waiting for the close
   exceptions_found: number;
   items_reviewed: number;
   created_at?: string | null;
+  /** Which rules it runs: every enabled rule, one framework's rules, or a picked set. */
+  rule_scope?: RuleScope;
+  rule_framework?: string | null;
+  rule_framework_name?: string | null;
+  rule_ids?: string[];
+  /** The rules that actually ran, frozen when its checks ran (null before). */
+  rules_run?: string[] | null;
+}
+
+export type RuleScope = 'enabled' | 'framework' | 'custom';
+
+/** A rule set to run, as the pickers and the API speak it. */
+export interface RuleSelection {
+  rule_scope: RuleScope;
+  rule_framework?: string | null;
+  rule_ids?: string[] | null;
+}
+
+export interface ConnectorSource {
+  key: string;
+  label: string;
+  /** identities and access grants this source has put in the population */
+  people?: number;
+  entitlements?: number;
+  last_synced?: string | null;
 }
 
 export interface Finding {
@@ -32,14 +60,22 @@ export interface Finding {
   status: string;                 // 'open' | 'accepted' | 'false_positive'
 }
 
+/** What sort of identity a row is. */
+export type AccountKind = 'person' | 'cloud_credential' | 'db_account' | 'service_account';
+
 export interface ReviewItem {
   id: number;
   user_id: number | null;
+  kind?: AccountKind;
   email?: string | null;
   display_name?: string | null;
   department?: string | null;
   designation?: string | null;
   roles: string[];
+  /** What this identity holds, and the system that granted it. */
+  access: AccessGrant[];
+  /** Every rule the review ran against this identity, passed or failed. */
+  rules: RuleResult[];
   mfa_enabled: boolean | null;
   account_enabled: boolean | null;
   last_sign_in?: string | null;
@@ -47,6 +83,9 @@ export interface ReviewItem {
   termination_date?: string | null;
   is_privileged: boolean;
   decision: Decision;
+  /** the reviewer's justification and when they decided */
+  decision_comment?: string | null;
+  decision_at?: string | null;
   findings: Finding[];
   evidence_id?: number | null;
   escalation_tier?: number;
@@ -57,8 +96,53 @@ export interface ReviewItem {
   anomaly_note?: string | null;
 }
 
+export interface AccessGrant {
+  name: string;
+  source?: string | null;
+}
+
+/** What a rule found. A rule that judged nothing is never a pass. */
+export type Outcome = 'pass' | 'fail' | 'not_run' | 'not_applicable' | 'error';
+
+export interface RuleResult {
+  frameworks?: FrameworkRef[];
+  frameworks_total?: number | null;
+  id: string;
+  name: string;
+  domain: string;
+  severity: Severity;
+  regulation?: string | null;
+  status: Outcome;
+  detail?: string | null;
+  /** why it could not be judged (not_run / not_applicable) */
+  reason?: string | null;
+  /** 'identity' rules judge the sampled identities; 'connector' rules judge a source's own estate */
+  kind?: 'identity' | 'connector';
+  connector?: string;
+  /** present on the review-wide summary, not on a single identity */
+  failed?: number;
+  passed?: number;
+  /** how many it could judge, of how many there were */
+  tested?: number;
+  population?: number;
+  not_applicable?: number;
+  not_run?: number;
+  /** a connector rule's failing resources */
+  failures?: { resource: string; detail: string }[];
+  truncated?: boolean;
+  reads?: string | null;
+  trips?: string | null;
+  fix?: string | null;
+  scf?: string[];
+}
+
+/** What a connector cannot show, and which connector it is. */
+export interface ConnectorNote { connector: string; label: string; limits?: string }
+
 export interface CampaignDetail extends Campaign {
   items: ReviewItem[];
+  rule_results: RuleResult[];
+  connector_notes?: ConnectorNote[];
 }
 
 export interface Report {
@@ -69,14 +153,28 @@ export interface Report {
   findings_by_type: Record<string, number>;
   findings_by_severity: Record<string, number>;
   decisions: Record<string, number>;
-  verdict: string;
+  verdict: string;                // 'effective' | 'deficient' | 'material_weakness'
+  rule_results?: RuleResult[];
+  connector_notes?: ConnectorNote[];
+  /** why the verdict is what it is, in words */
+  verdict_reasons?: string[];
+  connector_rules_failed?: number;
   ai_summary?: string | null;
   exceptions_open?: number;
+  rule_scope?: RuleScope;
+  rule_framework?: string | null;
+  rule_framework_name?: string | null;
+  /** people still to decide */
+  pending?: number;
+  /** true until the review is sealed — the verdict can still move */
+  provisional?: boolean;
 }
 
 // GET /access-reviews/dashboard — keys match the backend response exactly.
 export interface DashboardSummary {
   campaigns_total: number;
+  /** rules that failed against a connected estate, in reviews still in progress */
+  connector_rules_failed?: number;
   findings_open: number;
   users_with_open_exceptions: number;
   items_reviewed: number;
@@ -90,17 +188,59 @@ export interface CatalogRule {
   id: string;
   name: string;
   severity: Severity;
+  /** 'connector' rules test a connector's own estate; 'identity' rules test sampled people and accounts */
+  kind?: 'identity' | 'connector';
+  connector?: string | null;
+  connector_label?: string | null;
+  /** the sources that can supply what an identity rule reads (empty = any) */
+  sources?: string[];
+  fix?: string | null;
   status: RuleStatus;
   reads: string;
   trips: string;
   regulation: string;             // e.g. 'SOX·SAMA'
   runnable: boolean;
   enabled: boolean;
+  /** SCF control ids this rule evidences */
+  scf?: string[];
+  /** the tenant's own frameworks those controls satisfy */
+  frameworks?: FrameworkRef[];
+  frameworks_total?: number;
+}
+
+export interface FrameworkRef {
+  slug: string;
+  name: string;
+  codes: string[];
 }
 
 export interface RuleCatalogView {
-  summary: { total: number; runnable: number; enabled_active: number };
+  summary: { total: number; catalog_total?: number; runnable: number; enabled_active: number; frameworks_covered?: number };
+  /** every framework the catalog evidences, from the tenant's own crosswalk. `library` names the platform
+   *  framework a source answers for when its own name does not (ISO 27002 2022 → "ISO 27001"). */
+  frameworks?: { slug: string; name: string; rules: number; runnable: number; library?: string | null }[];
+  framework?: string | null;
+  source?: string | null;
+  /** the connectors that carry rules of their own */
+  connectors?: { key: string; label: string; connected: boolean; rules: number; limits?: string }[];
+  /** the framework's own requirement clauses these rules relate to (in reading order), each with the rules that answer it */
+  clauses?: { code: string; rules: string[] }[];
+  /** the framework's access clauses (those its crosswalk maps to an Identification & Authentication control) that none of
+   *  these rules answers, each with the control that makes it an access clause; `access` counts them all */
+  gaps?: { code: string; scf: { id: string; name: string | null }[] }[];
+  access?: { total: number; answered: number };
   domains: { domain: string; rules: CatalogRule[] }[];
+}
+
+/** POST /connectors/{source}/rules/run */
+export interface ConnectorRun {
+  connector: string;
+  label: string;
+  connected: boolean;
+  limits?: string;
+  ran_at: string;
+  read?: Record<string, number>;
+  results: RuleResult[];
 }
 
 /** Connector tiers for the Connect-a-source screen. */

@@ -69,6 +69,13 @@ celery_app = Celery(
         # task that fans out daily; lives on `parsing` until the dedicated
         # `notification` queue spins up.
         "grc.tasks.exceptions",
+        # SCF Stage C — attestation due/overdue reminders (Celery beat).
+        "grc.tasks.scf",
+        # Audit issue register — due / past-due reminders and escalation.
+        "grc.tasks.audit_register",
+        "grc.tasks.document_lifecycle",
+        # Connected evidence collectors, collected daily (hourly sweep, 20h due window).
+        "grc.tasks.evidence_collectors",
         "grc.tasks.tprm",
         # Phase 7 — Cloud connector sync. Lives on `parsing` until the
         # dedicated `sync` queue spins up.
@@ -152,6 +159,8 @@ celery_app.conf.update(
         # Phase 8 — exception workflow sweep. Same story: shares `parsing`
         # until the dedicated `notification` queue lands.
         "grc.tasks.exceptions.*": {"queue": "parsing"},
+        "grc.tasks.scf.*": {"queue": "parsing"},
+        "grc.tasks.evidence_collectors.*": {"queue": "parsing"},
         "grc.tasks.tprm.*": {"queue": "parsing"},
         # Phase 7 — cloud connector sync. Shares `parsing` for now.
         "grc.tasks.cloud_sync.*": {"queue": "parsing"},
@@ -205,16 +214,49 @@ celery_app.conf.update(
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },
+        # SCF Stage C — daily attestation reminders for due/overdue controls.
+        "scf-attestation-daily-sweep": {
+            "task": "grc.tasks.scf.daily_attestation_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Governance documents — reminders, overdue and escalation for approvals and acknowledgements.
+        "document-lifecycle-daily-sweep": {
+            "task": "grc.tasks.document_lifecycle.daily_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Audit issue register — owners reminded of findings coming due / past due.
+        "audit-register-daily-reminders": {
+            "task": "grc.tasks.audit_register.daily_reminder_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Automated control tests: each connected collector runs once its last
+        # run is 20h old, so evidence stays inside its reassessment window.
+        "evidence-collectors-hourly-sweep": {
+            "task": "grc.tasks.evidence_collectors.hourly_sweep",
+            "schedule": 60 * 60,
+            "options": {"queue": "parsing"},
+        },
         # TPRM — daily portfolio + per-vendor risk snapshot so the dashboard
         # "risk over time" trend keeps moving between assessments.
+        # Third-party risk reminders: reassessments, questionnaires, remediation,
+        # risk acceptances and contracts, once per reminder period.
+        "tprm-daily-reminder-sweep": {
+            "task": "grc.tasks.tprm.daily_reminder_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
         "tprm-daily-snapshot-sweep": {
             "task": "grc.tasks.tprm.daily_tprm_snapshot_sweep",
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },
-        # TPRM — continuous-monitoring connector poll fan-out (every 6h). A no-op
-        # until a live provider is registered in tpra.monitoring_connectors.CONNECTORS;
-        # the seam is scheduled now so a feed goes live by adding the connector alone.
+        # TPRM — outside-in monitoring (every 6h). Each run polls the vendors that
+        # are due on their tier's cadence (tpra/monitoring_connectors.py): lapsed
+        # certificates always, and news for breaches and adverse media where a
+        # tenant has turned it on.
         "tprm-monitoring-connector-poll": {
             "task": "grc.tasks.tprm.poll_monitoring_connectors_sweep",
             "schedule": 6 * 60 * 60,

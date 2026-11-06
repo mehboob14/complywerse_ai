@@ -971,7 +971,7 @@ export default function VulnerabilityDashboardPage() {
 
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
-    <div className="space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
+    <div className="dash space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
 
       {/* -- Header -- */}
       <div className="flex items-start justify-between gap-3 flex-wrap">

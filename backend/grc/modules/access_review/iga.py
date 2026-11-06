@@ -145,6 +145,7 @@ def _map_pam_account(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "department": "Privileged", "designation": "Privileged account",
         "account_enabled": not bool(raw.get("disabled")), "terminated": False,
         "entitlements": [f"Privileged: {system}"],
+        "is_person": False,          # an account, not somebody to assign work to
     }
 
 
@@ -274,50 +275,12 @@ def sync_iga_population(tenant_db: Session, *, tenant_id: int, vendor_key: str,
     missing = [f["name"] for f in vendor["fields"] if not (credentials or {}).get(f["name"])]
     if not base_url or missing:
         raise ValueError(f"{vendor['label']} needs base URL and: {', '.join(missing) or 'credentials'}")
-    from ...routers.sso_router import _make_unloginable_hash
+    from ._ingest import ingest
 
     records = fetch_identities(vendor_key, base_url, credentials)
-    map_fn: Callable = vendor["map"]
-    created = updated = skipped = ent_links = 0
-    now = datetime.utcnow()
-    role_cache: Dict[str, Role] = {}
-    for raw in records:
-        m = map_fn(raw)
-        if not m:
-            skipped += 1
-            continue
-        user = (
-            tenant_db.query(GRCUser)
-            .filter((GRCUser.external_id == m["external_id"]) | (GRCUser.email == m["email"]))
-            .first()
-        )
-        if user is None:
-            user = GRCUser(username=m["email"], email=m["email"],
-                           password_hash=_make_unloginable_hash(), is_active=True,
-                           external_provider=provider_tag, external_id=m["external_id"])
-            tenant_db.add(user); tenant_db.flush()
-            created += 1
-        else:
-            if not user.external_id:
-                user.external_provider = provider_tag
-                user.external_id = m["external_id"]
-            updated += 1
-        user.display_name = m["display_name"] or user.display_name
-        user.department = m["department"] or user.department
-        user.designation = m["designation"] or user.designation
-        user.account_enabled = m["account_enabled"]
-        if m["terminated"] and not user.termination_date:
-            user.termination_date = date.today()
-        user.access_synced_at = now
-
-        tenant_db.query(UserRole).filter(
-            UserRole.user_id == user.id, UserRole.source == provider_tag
-        ).delete(synchronize_session=False)
-        for ent in m["entitlements"]:
-            role = _get_or_create_role(tenant_db, tenant_id, ent, role_cache)
-            tenant_db.add(UserRole(user_id=user.id, role_id=role.id,
-                                   tenant_id=tenant_id, source=provider_tag))
-            ent_links += 1
-    tenant_db.commit()
-    return {"vendor": vendor_key, "created": created, "updated": updated, "skipped": skipped,
-            "entitlements_linked": ent_links, "total_in_directory": len(records)}
+    # The shared upsert — the same one the sample path above uses. It is what
+    # honours `is_person`, so a PAM account stays out of the app's people
+    # pickers; this loop used to be a copy of it that didn't.
+    result = ingest(tenant_db, tenant_id=tenant_id, records=records,
+                    map_fn=vendor["map"], provider_tag=provider_tag)
+    return {"vendor": vendor_key, **result}

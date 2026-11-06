@@ -24,6 +24,10 @@ from ....models import (
     GRCUser, get_db, ParsedFrameworkControl, UploadedFramework, NormalizationRun
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
+from ....services.licence_guard import (
+    consolidated_recommendations, exclude_restricted, is_restricted_control,
+)
 
 router = APIRouter(prefix="/groups", tags=["Control Library - Groups"])
 
@@ -469,7 +473,8 @@ def _fetch_controls_for_grouping(
     framework_filter_active = bool(framework_ids)
 
     if not framework_filter_active:
-        for nc in db.query(NormalizedControl).all():
+        # Names and statements go to the model for clustering; SCF rows may not.
+        for nc in exclude_restricted(db.query(NormalizedControl), NormalizedControl).all():
             controls_list.append({
                 "id": nc.id,
                 "type": "normalized",
@@ -834,6 +839,7 @@ async def upload_set_evidence(nc_id: int, name: Optional[str] = Form(None),
             coverage_type="full", confidence_score=100.0, created_by_ai=False))
         linked += 1
     db.commit()
+    evidence_review.rate_upload(db, ev, current_user.id)
     return {"evidence_id": ev.id, "name": ev.name, "linked_controls": linked,
             "message": f"Added to the evidence library and linked to {linked} framework controls."}
 
@@ -2434,6 +2440,7 @@ async def upload_evidence_to_group(
 
     db.commit()
     db.refresh(ev)
+    evidence_review.rate_upload(db, ev, current_user.id)
     return {
         "evidence_id": ev.id,
         "name": ev.name,
@@ -2475,7 +2482,9 @@ def _resolve_control(db: Session, ctrl_type: str, ctrl_id: int):
                 fanout.append(("framework", ln.framework_control_id))
             if ln.parsed_control_id:
                 fanout.append(("parsed", ln.parsed_control_id))
-        return {"name": nc.name, "code": nc.code, "text": nc.statement or nc.objective or nc.name, "fanout": fanout}
+        return {"name": nc.name, "code": nc.code, "text": nc.statement or nc.objective or nc.name, "fanout": fanout,
+                # SCF rows carry licensed text: callers must not put name/text in a prompt.
+                "restricted": is_restricted_control(nc), "scf_id": nc.scf_id}
     if ctrl_type == "framework":
         fc = db.query(FrameworkControl).filter(FrameworkControl.id == ctrl_id).first()
         if not fc:
@@ -2976,7 +2985,21 @@ async def upload_evidence_to_control(
     db.commit()
     db.refresh(ev)
     if ocr == "pending":
-        _th.Thread(target=process_evidence_background, args=(ev.id,), daemon=True).start()
+        # process_evidence_background needs the tenant slug to open the tenant DB;
+        # called without it, the thread raised TypeError and OCR never ran.
+        from ....models import Tenant
+        from ....services.evidence_quality import QualityTarget
+        slug = db.query(Tenant.slug).filter(Tenant.id == tenant_id).scalar()
+        if slug:
+            # Also review the file against this control. SCF wording is licensed,
+            # so a restricted control is judged on its code alone.
+            target = QualityTarget(
+                kind="control", ref=info["code"] or str(ctrl_id), label=info["name"] or "",
+                requirement="" if info.get("restricted") else (info.get("text") or ""),
+                restricted=bool(info.get("restricted")),
+            )
+            _th.Thread(target=process_evidence_background, args=(ev.id, slug, target),
+                       daemon=True).start()
     return {
         "evidence_id": ev.id, "linked_controls": created,
         "ocr_processing": ocr == "pending",
@@ -2996,6 +3019,23 @@ def recommend_evidence_for_control(
     info = _resolve_control(db, ctrl_type, ctrl_id)
     if not info:
         raise HTTPException(status_code=404, detail="Control not found")
+    kw = ({"normalized_control_id": ctrl_id} if ctrl_type == "normalized"
+          else {"framework_control_id": ctrl_id} if ctrl_type == "framework"
+          else {"parsed_control_id": ctrl_id})
+    if info.get("restricted"):
+        # An SCF control's text may not reach a model, so it gets our consolidated
+        # evidence set for that control instead of a generated list.
+        recs = consolidated_recommendations(info.get("scf_id"))
+        db.query(AIEvidenceRecommendation).filter_by(tenant_id=tenant_id, **kw).delete()
+        for r in recs:
+            db.add(AIEvidenceRecommendation(
+                tenant_id=tenant_id, evidence_type=r["evidence_type"],
+                evidence_description=r["description"], priority=r["priority"],
+                ai_confidence=None, ai_reasoning=r["reasoning"], **kw))
+        db.commit()
+        return {"recommendations": [{k: r[k] for k in ("evidence_type", "description", "priority")}
+                                    for r in recs],
+                "source": "consolidated"}
     if not check_ai_available():
         _ai_unavailable()
     client = get_openai_client()
@@ -3015,9 +3055,6 @@ def recommend_evidence_for_control(
         recs = (json.loads(resp.choices[0].message.content or "{}").get("recommendations") or [])[:6]
     except json.JSONDecodeError:
         recs = []
-    kw = ({"normalized_control_id": ctrl_id} if ctrl_type == "normalized"
-          else {"framework_control_id": ctrl_id} if ctrl_type == "framework"
-          else {"parsed_control_id": ctrl_id})
     db.query(AIEvidenceRecommendation).filter_by(tenant_id=tenant_id, **kw).delete()
     out = []
     for r in recs:
@@ -3044,6 +3081,15 @@ def draft_document_for_control(
     info = _resolve_control(db, ctrl_type, ctrl_id)
     if not info:
         raise HTTPException(status_code=404, detail="Control not found")
+    if info.get("restricted"):
+        # Drafting a policy from an SCF control is the specific derivative SCF's
+        # licence (GEN-FAQ-006) prohibits, so there is no compliant way to do it.
+        raise HTTPException(
+            status_code=422,
+            detail=("AI policy drafting isn't available for Secure Controls Framework controls: "
+                    "SCF's licence doesn't allow its text to be used to generate documents with AI. "
+                    "Start from the control's artifact template instead, or write the policy directly."),
+        )
     if not check_ai_available():
         _ai_unavailable()
     client = get_openai_client()
@@ -3270,6 +3316,20 @@ def generate_summary(
         CommonControlGroupMapping.group_id == group_id
     ).all()
     
+    restricted_ids = {
+        m.normalized_control_id for m in mappings if m.normalized_control_id
+    }
+    if restricted_ids and any(
+        is_restricted_control(nc)
+        for nc in db.query(NormalizedControl).filter(NormalizedControl.id.in_(restricted_ids)).all()
+    ):
+        # An SCF domain group carries SCF's principles as its description and SCF
+        # controls as its members; a summary of it is a derivative of SCF text.
+        raise HTTPException(
+            status_code=422,
+            detail="Your control library is the Secure Controls Framework, and its licence doesn't allow its control names or text to be sent to an AI model, so AI summaries aren't available for its domain groups.",
+        )
+
     controls_text_parts = []
     for mapping in mappings:
         if mapping.normalized_control_id:

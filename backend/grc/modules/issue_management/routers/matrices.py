@@ -175,6 +175,8 @@ def upsert_classification_cell(
         IssueClassificationMatrix.issue_type == issue_type,
         IssueClassificationMatrix.severity == severity,
     ).first()
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("default_owner_user_id")], kept=[row.default_owner_user_id] if row else [])
     if row:
         row.default_owner_team_id = body.get("default_owner_team_id")
         row.default_owner_user_id = body.get("default_owner_user_id")

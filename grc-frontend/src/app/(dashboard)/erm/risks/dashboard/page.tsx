@@ -58,6 +58,7 @@ const SOURCE_LABELS: Record<string, string> = {
   incident: 'Incident',
   rcsa: 'RCSA finding',
   framework_gap: 'Framework gap',
+  risk_library: 'Risk library',
   ubl_import: 'UBL register',
   nca_import: 'NCA register',
   unknown: 'Unspecified',
@@ -187,7 +188,7 @@ export default function RiskRegisterDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="dash space-y-6">
       {/* ============== Header ============== */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-start gap-3">

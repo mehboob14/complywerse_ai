@@ -46,6 +46,10 @@ class IdentityProviderConfig(Base):
     iga_base_url = Column(String(255), nullable=True)
     iga_vendor = Column(String(32), nullable=True)
 
+    # What this source's credentials reach, as of its last sync: droplets,
+    # disks, databases, clusters. A key means little without the estate.
+    estate = Column(JSON, nullable=True)
+
     # LEGACY (per-tenant Azure-app pattern). New rows leave these NULL.
     azure_tenant_id = Column(String(64), nullable=True)
     client_id = Column(String(64), nullable=True)

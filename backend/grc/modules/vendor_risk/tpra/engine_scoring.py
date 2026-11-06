@@ -11,7 +11,7 @@ finding regardless of the headline score.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from .bootstrap import DEFAULT_TIERING_CONFIG
 from .engine_tiering import score_to_tier
@@ -40,6 +40,22 @@ def residual_to_grade(residual: float, bands: Optional[list] = None) -> str:
     return "F"
 
 
+def grade_for(residual: float, rating: Optional[str] = None, thresholds: Optional[dict] = None,
+              bands: Optional[list] = None) -> str:
+    """The A–F grade of a residual, never better than its rating. A rating worse
+    than its score (a failed critical control floors it at high) is graded at the
+    score where that rating starts on the thresholds: D for high, by default."""
+    starts = float((thresholds or DEFAULT_TIERING_CONFIG["thresholds"]).get((rating or "").lower(), 0))
+    return residual_to_grade(max(float(residual), starts), bands)
+
+
+def is_answered(ans) -> bool:
+    """Whether a question has an answer: anything not blank, of any type — text,
+    a choice, a rating, Yes/No or N/A."""
+    ans = _unwrap(ans)
+    return ans is not None and str(ans).strip() != ""
+
+
 def normalize_answer(ans) -> Optional[str]:
     """Coerce assorted answer encodings to Yes/Partial/No/N-A (or None if blank)."""
     if ans is None:
@@ -58,7 +74,70 @@ def normalize_answer(ans) -> Optional[str]:
     return None
 
 
-def build_responses_from_answers(question_defs: List[dict], answers: Optional[dict]) -> List[dict]:
+_LABEL = {"yes": "Yes", "partial": "Partial", "no": "No", "n-a": "N-A"}
+
+
+def _unwrap(ans):
+    """An answer stored as {"value": "yes", ...} or {"answer": ...} is unwrapped."""
+    if isinstance(ans, dict):
+        return ans.get("value") or ans.get("answer") or ans.get("response")
+    return ans
+
+
+def _option(question: dict, ans) -> Optional[dict]:
+    text = str(ans).strip().lower()
+    for option in question.get("options") or []:
+        if isinstance(option, dict) and str(option.get("value", "")).strip().lower() == text:
+            return option
+    return None
+
+
+def answer_score(question: dict, ans) -> Tuple[Optional[str], Optional[float]]:
+    """(label, score) for one answer. The score is 0..1, or None when the answer
+    does not count: unanswered, not applicable, or free text.
+
+    A question frozen into a template version carries its options with their
+    scores; anything else falls back to the Yes / Partial / No scale."""
+    ans = _unwrap(ans)
+    if ans is None or str(ans).strip() == "":
+        return None, None
+    option = _option(question, ans)
+    if option is not None:
+        label = str(option.get("label") or option.get("value"))
+        if option.get("na") or option.get("score") is None:
+            return label, None
+        return label, max(0.0, min(1.0, float(option["score"])))
+    norm = normalize_answer(ans)
+    if norm is None:
+        return None, None
+    return _LABEL[norm], (None if norm == "n-a" else _ANSWER_VALUE[norm])
+
+
+def default_severity(question: dict, score: Optional[float]) -> Optional[str]:
+    """The finding a weak answer raises when its question sets none: a failing
+    answer by importance, a half-way one lower, anything better none at all."""
+    if score is None or score > 0.5:
+        return None
+    critical = bool(question.get("critical_control"))
+    if score <= 0:
+        return "critical" if critical else ("high" if float(question.get("weight") or 1.0) >= 1.5 else "medium")
+    return "medium" if critical else "low"
+
+
+def finding_severity(question: dict, ans) -> Optional[str]:
+    """Severity of the finding this answer raises, or None. A version freezes the
+    rule on each option; an older question gets the defaults."""
+    ans = _unwrap(ans)
+    if ans is None or str(ans).strip() == "":
+        return None
+    option = _option(question, ans)
+    if option is not None and ("finding" in option or option.get("na")):
+        return option.get("finding")
+    return default_severity(question, answer_score(question, ans)[1])
+
+
+def build_responses_from_answers(question_defs: List[dict], answers: Optional[dict],
+                                 template_version_id: Optional[int] = None) -> List[dict]:
     """Map a questionnaire template's question defs + a ``{question_id: answer}``
     answer blob into the response dicts :func:`score_assessment` consumes.
 
@@ -76,17 +155,20 @@ def build_responses_from_answers(question_defs: List[dict], answers: Optional[di
         ans = answers.get(str(qid))
         if ans is None:
             ans = answers.get(qid)
-        # An answer stored as {"value": "yes", ...} or {"answer": ...} is unwrapped.
-        if isinstance(ans, dict):
-            ans = ans.get("value") or ans.get("answer") or ans.get("response")
+        ans = _unwrap(ans)
+        label, score = answer_score(q, ans)
         out.append({
             "domain": q.get("domain") or "cybersecurity",
             "answer": ans,
+            "label": label,
+            "score": score,
+            "finding": finding_severity(q, ans),
             "weight": float(q.get("weight", 1.0) or 1.0),
             "critical_control": bool(q.get("critical_control")),
             "question_key": qid,
             "question_id": qid,
             "title": q.get("text"),
+            "template_version_id": template_version_id,
         })
     return out
 
@@ -114,7 +196,11 @@ def score_assessment(
 
     for r in responses:
         domain = str(r.get("domain") or "cybersecurity")
-        norm = normalize_answer(r.get("answer"))
+        if "score" in r:
+            value = r["score"]
+        else:
+            norm = normalize_answer(r.get("answer"))
+            value = None if norm in (None, "n-a") else _ANSWER_VALUE[norm]
         weight = float(r.get("weight", 1.0) or 1.0)
         is_critical = bool(r.get("critical_control"))
 
@@ -122,7 +208,7 @@ def score_assessment(
         d["total"] += 1
 
         # A failed critical control is a blocking finding regardless of score.
-        if is_critical and norm == "no":
+        if is_critical and value is not None and value <= 0:
             critical_failures.append({
                 "domain": domain,
                 "question_key": r.get("question_key"),
@@ -131,10 +217,10 @@ def score_assessment(
                 "weight": weight,
             })
 
-        if norm is None or norm == "n-a":
-            continue  # excluded from scoring
+        if value is None:
+            continue  # unanswered, not applicable or free text: excluded from scoring
         d["answered"] += 1
-        d["weighted_sum"] += _ANSWER_VALUE[norm] * weight
+        d["weighted_sum"] += value * weight
         d["weight_total"] += weight
 
     domain_scores: Dict[str, dict] = {}
@@ -168,7 +254,8 @@ def score_assessment(
     # the weighted-average residual score (score_to_tier), NOT the inherent tier.
     # The only exception is that a failed CRITICAL control floors the rating at
     # "high" (and is always blocking) regardless of the numeric score. `rating_basis`
-    # makes that derivation explicit so the UI can show WHY a rating is what it is.
+    # makes that derivation explicit so the UI can show WHY a rating is what it is,
+    # and the grade follows the floored rating rather than the score.
     residual_rating = score_to_tier(overall_residual, thresholds)
     rating_basis = "residual_score"
     if critical_failures and residual_rating in ("low", "medium"):
@@ -180,7 +267,7 @@ def score_assessment(
         "overall_residual": overall_residual,
         "residual_rating": residual_rating,
         "rating_basis": rating_basis,
-        "rating_grade": residual_to_grade(overall_residual, cfg.get("grade_bands")),
+        "rating_grade": grade_for(overall_residual, residual_rating, thresholds, cfg.get("grade_bands")),
         "domain_scores": domain_scores,
         "critical_failures": critical_failures,
         "blocking": bool(critical_failures),

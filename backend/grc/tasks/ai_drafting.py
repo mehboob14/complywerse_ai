@@ -248,7 +248,8 @@ def _execute_drafting(
                 #   2. Raise the parent-content cap to 20 KB (still bounded).
                 #   3. Emit a single structured block that the Stage A / B
                 #      prompts both treat as authoritative.
-                excerpt = (parent.content or "").strip()
+                # the text the person reads (the version in force while a newer one is in review), passed by the route
+                excerpt = ((request_payload.get("parent_content") if "parent_content" in request_payload else parent.content) or "").strip()
                 if len(excerpt) > 20000:
                     excerpt = excerpt[:20000] + "\n...[truncated for prompt size]"
 
@@ -367,6 +368,7 @@ def _execute_drafting(
         new_document_id: Optional[int] = None
         if request_payload.get("save_as_document"):
             try:
+                from ..modules.governance.doc_details import schedule
                 from ..routers.nca_templates_router import _next_document_code
                 doc = GovernanceDocument(
                     tenant_id=tenant_id,
@@ -382,10 +384,10 @@ def _execute_drafting(
                     current_version="1.0",
                     status="draft",
                     author_id=request_payload.get("user_id"),
-                    author_name=request_payload.get("user_name"),
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
                 )
+                schedule(doc)                   # its next review, as a document made with New Document gets
                 db.add(doc)
                 db.commit()
                 db.refresh(doc)

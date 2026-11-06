@@ -11,6 +11,7 @@ import { FrameworkChartsOverview } from '../_components/FrameworkChartsOverview'
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import { SearchInput, MultiSelectDropdown, PageLoader, InlineLinkPicker } from '@/components/ui';
 import { InlineIssueBadge } from '@/components/issue-management/InlineIssueBadge';
@@ -74,6 +75,7 @@ import FrameworkDynamicRegisterTab from './_tabs/FrameworkDynamicRegisterTab';
 import PciCdeInventoryTab from './_tabs/_PciCdeInventoryTab';
 import HipaaEphiInventoryTab from './_tabs/_HipaaEphiInventoryTab';
 import FrameworkJourney from './_tabs/FrameworkJourney';
+import HierarchicalRequirements from './_tabs/HierarchicalRequirements';
 import TabDropdown from './_tabs/TabDropdown';
 import { orderRegisters, orderDocuments } from './_tabs/templateSequence';
 import { matchFrameworkFlow } from './_data/frameworkFlows';
@@ -335,6 +337,10 @@ function RequirementArtifactsSection({
   const realNames = new Set(
     realCatalog.map((c) => (c.name || '').toLowerCase().trim()).filter(Boolean),
   );
+  // Evidence items a curated artifact already provides need no suggestion of their own.
+  const providedNames = new Set(
+    realCatalog.flatMap((c) => c.provides || []).map((n) => n.toLowerCase().trim()),
+  );
   const refForVirtual = refTokens[0] || null;
   // Infer the artifact's logical type (Policy / Procedure / Register / ...)
   // from whatever signal we have — explicit `type`, the document name, or
@@ -366,7 +372,7 @@ function RequirementArtifactsSection({
   const virtualCatalog: ArtifactCatalogItemT[] = evidenceReqs
     .filter((ev) => {
       const name = ((ev.name ?? ev.title) || '').toLowerCase().trim();
-      return name && !realNames.has(name);
+      return name && !realNames.has(name) && !providedNames.has(name);
     })
     .map((ev, idx) => {
       const fileType = (ev.filetype || ev.format || 'DOCX').toUpperCase();
@@ -825,10 +831,11 @@ export default function CertificationJourneyPage() {
 
   const assessEvidenceMutation = useMutation({
     mutationFn: async (evidenceId: number) => {
-      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`);
+      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/review`, null, { params: { force: true } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-review'] });
       setAssessingEvidenceId(null);
     },
     onError: () => {
@@ -1325,7 +1332,8 @@ export default function CertificationJourneyPage() {
       const matchesSearch =
         control.control_code?.toLowerCase().includes(query) ||
         control.control_name?.toLowerCase().includes(query) ||
-        control.control_statement?.toLowerCase().includes(query);
+        control.control_statement?.toLowerCase().includes(query) ||
+        control.sub_control_tree?.some((n) => `${n.lead_in ?? ''} ${n.text}`.toLowerCase().includes(query));
       if (!matchesSearch) return false;
     }
     if (categoryFilter !== 'all') {
@@ -3030,9 +3038,16 @@ export default function CertificationJourneyPage() {
                               </div>
                             )}
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
-                                {aiBadge.label}
-                              </span>
+                              {ev.sub_control_code && (
+                                <span className="rounded bg-[#f3f6f8] px-1.5 py-0.5 font-mono text-[10px] text-[#5a6670]" title="Attached to this sub-control">{ev.sub_control_code}</span>
+                              )}
+                              {ev.linked_evidence_id ? (
+                                <EvidenceMaturity evidenceId={ev.linked_evidence_id} refresh={['certification-controls']} />
+                              ) : (
+                                <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
+                                  {aiBadge.label}
+                                </span>
+                              )}
                               <span className={`rounded px-2 py-0.5 text-xs ${
                                 ev.review_status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
                                 ev.review_status === 'rejected' ? 'bg-rose-50 text-rose-700' :
@@ -3562,6 +3577,20 @@ export default function CertificationJourneyPage() {
             <p className="text-slate-600">No {entityLabelPlural.toLowerCase()} found</p>
             <p className="mt-1 text-sm text-slate-500">Try adjusting your filters</p>
           </div>
+        ) : !isCustom && journey?.control_structure ? (
+          <HierarchicalRequirements
+            key={journeyId}
+            journeyId={journeyId}
+            sections={sectionsToRender}
+            structure={journey.control_structure}
+            filtersActive={!!searchQuery || categoryFilter !== 'all' || statusFilter !== 'all'}
+            focusControlId={selectedSpineControl?.id ?? null}
+            criteriaState={criteriaState}
+            onToggleCriterion={toggleCriterion}
+            onOpenControl={openSpineControl}
+            frameworkLabel={(journey as any)?.framework_name || journey?.name || ''}
+            tenantUsers={assignmentTenantUsers || []}
+          />
         ) : (
           <div className="relative">
             {sectionsToRender.map((section, idx) => {
@@ -4435,7 +4464,23 @@ export default function CertificationJourneyPage() {
       case 'phases':
         return renderPhasesTab();
       case 'scoping':
-        return renderScopingTab();
+        // Dead placeholder removed in Stage B — Automation → Scope is the control plane.
+        return (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <h2 className="text-lg font-semibold text-slate-900">Scope moved</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Framework applicability is configured once under Automation → Scope
+              (firm size, ESP, facilities, personal data, and in-scope frameworks).
+              That selection drives Common Controls, journeys, and the Control Catalog.
+            </p>
+            <Link
+              href="/automation/soc2-controls?configure=scope"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+            >
+              Open Automation Scope
+            </Link>
+          </div>
+        );
       case 'context':
         return renderPlaceholderTab(
           'Context of Organization',

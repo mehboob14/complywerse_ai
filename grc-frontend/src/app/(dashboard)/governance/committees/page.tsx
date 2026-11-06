@@ -1,130 +1,57 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { assetsApi, committeeApi } from '@/lib/api';
-import {
-  Users,
-  Plus,
-  Calendar,
-  CalendarPlus,
-  CheckSquare,
-  AlertTriangle,
-  ArrowUpRight,
-  Trophy,
-  TrendingUp,
-  UserCheck,
-  ClipboardList,
-  Trash2,
-  X,
-} from 'lucide-react';
+// Governance > Committees: where every committee stands now. Six numbers, the committees (a table; a card each below 768px) with the selected one's meetings
+// and actions beside it, six months of progress and the people who close the most actions.
+// On the design-system kit (components/ui/ds): PageHeader variant="page", SectionCard, RegisterTable + Pager, StatusPill, PersonChip, EmptyState / ErrorState,
+// useReportedMutation for every write and useConfirm for the delete. Every number says what it rests on: a tile whose source cannot be set today (attendance,
+// quorum, minutes, meetings held: no screen marks a meeting completed or enters attendance) says "Not recorded" and, from an (i), what is missing, instead of 0%
+// (lib/committees.ts holds the rules and their tests). The score and its formulas are the server's (committees.py, GET /overview); this page only says how far
+// the data behind them goes. Deleting a committee is still the server's hard delete, now asked in a dialog that names what goes with it:
+// G4_committee_deactivation_plan.md is the plan for replacing it with Deactivate.
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis } from 'recharts';
+import { Calendar, CalendarPlus, CheckSquare, ClipboardList, Plus, Search, Trash2, TrendingUp, Trophy, UserCheck, Users, X, AlertTriangle, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
+import { assetsApi, committeeApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
-import { StatusBadge } from '@/components/ui/StatusBadge';
+import { PageHeader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { ScoreRing, scoreBand } from '@/components/dashboard/score-kit';
 import {
-  type OverviewMetric,
-  scoreBand,
-  ScoreRing,
-  MetricRow,
-} from '@/components/dashboard/score-kit';
+  Button, EmptyState, ErrorState, FormField, IconButton, Pager, PersonChip, RegisterTable, SectionCard, Select, Skeleton, SkeletonLines, StatusPill, Textarea, TextInput,
+  sortRows, type RegisterColumn, type SortState,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { useConfirm } from '@/components/ui/ds/useConfirm';
+import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import { formatCount, formatPercent, truncate } from '@/lib/format';
+import { parseUtc } from '@/lib/serverTime';
+import { pageRange } from '@/lib/pagerModel';
+import { routeFor } from '@/lib/navRegistry';
+import { TONE } from '@/lib/status';
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RTooltip,
-} from 'recharts';
+  NOT_RECORDED, actionsDoneReading, attendanceReading, committeeTypeLabel, deleteCommitteePlan, dueDay, dueRelative, formChanged, gradeTone, isOverdueAction, listOf,
+  matchesCommittee, measureHasData, measureReason, meetingDay, meetingRelative, meetingsHeldReading, overdueReading, performanceReading, upcomingMeetings,
+  type Overview, type OverviewCommittee, type OverviewMeeting, type OverviewMetric, type OverviewMonth,
+} from '@/lib/committees';
+import { ActionStatusPills, CommitteeActivity, DrawerFooter, FormProblem, NotRecorded, PickerField, StatTile } from './_ui';
 
-// ── Types (mirror GET /governance/committees/overview) ──────────────────────
-interface OverviewCommittee {
-  id: number;
-  name: string;
-  committee_type: string;
-  is_active: boolean;
-  members_count: number;
-  next_meeting_date: string | null;
-  last_meeting: { date: string; status: string } | null;
-  open_actions: number;
-  in_progress_actions: number;
-  overdue_actions: number;
-  completed_actions: number;
-  total_actions: number;
-}
-interface OverviewMeeting {
-  id: number;
-  title: string;
-  committee_id: number;
-  committee_name: string | null;
-  scheduled_date: string | null;
-  status: string;
-}
-interface OverviewPerformer {
-  user_id: number;
-  name: string;
-  assigned: number;
-  completed: number;
-  on_time: number;
-  completion_pct: number;
-  on_time_pct: number;
-}
-interface OverviewMonth {
-  month: string;
-  meetings_held: number;
-  actions_completed: number;
-  completion_pct: number | null;
-}
-interface Overview {
-  kpis: {
-    total_committees: number;
-    active_committees: number;
-    meetings_upcoming: number;
-    meetings_completed: number;
-    meetings_this_quarter: number;
-    actions: { open: number; in_progress: number; overdue: number; completed: number; total: number; pct_done: number };
-    avg_attendance_pct: number | null;
-    quorum_met?: number;
-    quorum_meetings?: number;
-    quorum_met_rate_pct?: number | null;
-    charters_active: number;
-    performance?: {
-      score: number | null;
-      grade: string | null;
-      metrics: OverviewMetric[];
-    };
-  };
-  committees: OverviewCommittee[];
-  upcoming_meetings: OverviewMeeting[];
-  top_performers: OverviewPerformer[];
-  progress_over_time: OverviewMonth[];
-}
 interface ActionRow {
   id: number;
   title: string;
   status: string;
-  action_type?: string;
+  is_overdue?: boolean;
   due_date?: string | null;
-  assigned_to_name?: string;
   committee_name?: string;
+  assigned_to_name?: string;
 }
 interface TenantUserOption { id: number; display_name?: string; email?: string }
 
-// ── Committee type → light-theme badge ──────────────────────────────────────
-const TYPE_STYLE: Record<string, { label: string; cls: string }> = {
-  board: { label: 'Board', cls: 'bg-slate-100 text-slate-700' },
-  risk_committee: { label: 'Risk', cls: 'bg-rose-50 text-rose-700' },
-  audit_committee: { label: 'Audit', cls: 'bg-blue-50 text-blue-700' },
-  compliance_committee: { label: 'Compliance', cls: 'bg-emerald-50 text-emerald-700' },
-  it_steering: { label: 'IT Steering', cls: 'bg-slate-100 text-slate-600' },
-  custom: { label: 'Committee', cls: 'bg-slate-100 text-slate-600' },
-};
-const typeStyle = (t: string) => TYPE_STYLE[t] || TYPE_STYLE.custom;
-
-const COMMITTEE_TYPE_ITEMS = Object.entries(TYPE_STYLE).map(([value, { label }]) => ({ value, label }));
+const COMMITTEE_TYPE_ITEMS = ['board', 'risk_committee', 'audit_committee', 'compliance_committee', 'it_steering', 'custom'].map((value) => ({ value, label: committeeTypeLabel(value, 'long') }));
 const MEETING_TYPE_ITEMS = [
   { value: 'regular', label: 'Regular' },
   { value: 'special', label: 'Special' },
@@ -134,99 +61,69 @@ const AGENDA_TYPE_ITEMS = [
   { value: 'discussion', label: 'Discussion' },
   { value: 'approval', label: 'Approval' },
   { value: 'information', label: 'Information' },
-  { value: 'action_review', label: 'Action Review' },
+  { value: 'action_review', label: 'Action review' },
 ];
 const FREQUENCY_OPTIONS = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'annually', label: 'Annually' },
-  { value: 'ad_hoc', label: 'Ad Hoc' },
+  { value: 'ad_hoc', label: 'Ad hoc' },
 ];
 
-// ── date helpers ─────────────────────────────────────────────────────────────
-function fmtDate(iso?: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-function relDays(iso?: string | null): { label: string; tone: 'ok' | 'soon' | 'over' } | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const days = Math.round((d.getTime() - Date.now()) / 86400000);
-  if (days < 0) return { label: `${Math.abs(days)}d overdue`, tone: 'over' };
-  if (days === 0) return { label: 'today', tone: 'soon' };
-  if (days <= 7) return { label: `in ${days}d`, tone: 'soon' };
-  return { label: `in ${days}d`, tone: 'ok' };
-}
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function monthLabel(key: string): string {
-  const [, m] = key.split('-');
-  return MONTH_ABBR[(parseInt(m, 10) || 1) - 1] || key;
-}
+const monthLabel = (key: string): string => MONTH_ABBR[(parseInt(key.split('-')[1], 10) || 1) - 1] || key;
+const short = (name: string): string => truncate(name, 60).text;
+const SUB_HEAD = 'text-ds-label text-ds-fg-muted';
+const PAGE_SIZES = [10, 25, 50];
 
 export default function CommitteesDashboardPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
   const canDelete = hasPermission('governance:committees:delete');
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [perfOpen, setPerfOpen] = useState(false);
-
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [committeeModalOpen, setCommitteeModalOpen] = useState(false);
   const [meetingModalOpen, setMeetingModalOpen] = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortState>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
-  // ── data ──
-  const { data: overview, isLoading } = useQuery({
+  // ── data (the same keys and requests as ever) ──
+  const overviewQ = useQuery({
     queryKey: ['committee-overview'],
-    queryFn: async () => {
-      const res = await committeeApi.getOverview();
-      return res.data as Overview;
-    },
+    queryFn: async () => (await committeeApi.getOverview()).data as Overview,
   });
+  const overview = overviewQ.data;
 
-  // Right-panel action list — for the selected committee, else the overdue set.
-  const { data: panelActions = [] } = useQuery({
+  // the right-hand list: the selected committee's actions, else the overdue ones; `total` is the API's, the list is what it sent (capped at 100)
+  const panelActionsQ = useQuery({
     queryKey: ['committee-panel-actions', selectedId],
     queryFn: async () => {
-      const res = await committeeApi.getActions(
-        selectedId ? { committee_id: selectedId } : { overdue_only: true },
-      );
-      const payload = res.data as unknown;
-      const items = Array.isArray(payload)
-        ? payload
-        : (((payload as { items?: unknown[] })?.items || []) as unknown[]);
-      return (items as any[]).map((a) => ({
-        id: a.id, title: a.title, status: a.status, action_type: a.action_type,
-        due_date: a.due_date, committee_name: a.committee_name,
-        assigned_to_name: a.assigned_to_name || a.assignee_name || '',
-      })) as ActionRow[];
+      const res = await committeeApi.getActions(selectedId ? { committee_id: selectedId } : { overdue_only: true });
+      const { items, total } = listOf<Record<string, any>>(res.data);
+      return {
+        total,
+        items: items.map((a) => ({
+          id: a.id, title: a.title, status: a.status, is_overdue: a.is_overdue, due_date: a.due_date, committee_name: a.committee_name,
+          assigned_to_name: a.assigned_to_name || a.assignee_name || '',
+        })) as ActionRow[],
+      };
     },
-    enabled: !isLoading,
+    enabled: !overviewQ.isLoading,
   });
 
-  // Selected committee's own upcoming meetings — fetched per-committee rather
-  // than filtering the overview's globally-truncated top-6 list (which could
-  // otherwise hide a committee's real meetings and contradict its tile).
-  const { data: panelMeetings = [] } = useQuery({
+  // the selected committee's own upcoming meetings, fetched per committee rather than cut from the overview's top six
+  const panelMeetingsQ = useQuery({
     queryKey: ['committee-panel-meetings', selectedId],
     enabled: !!selectedId,
     queryFn: async () => {
-      const res = await committeeApi.getMeetings(selectedId as number);
-      const payload = res.data as unknown;
-      const items = Array.isArray(payload)
-        ? payload
-        : (((payload as { items?: unknown[] })?.items || []) as unknown[]);
-      const nowMs = Date.now();
-      return (items as any[])
-        .filter((m) => m.scheduled_date && new Date(m.scheduled_date).getTime() >= nowMs && m.status !== 'cancelled')
-        .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
-        .map((m) => ({
-          id: m.id, title: m.title, committee_id: selectedId as number,
-          committee_name: null, scheduled_date: m.scheduled_date, status: m.status,
-        })) as OverviewMeeting[];
+      const { items } = listOf<Record<string, any>>((await committeeApi.getMeetings(selectedId as number)).data);
+      return upcomingMeetings(items.map((m) => ({
+        id: m.id, title: m.title, committee_id: selectedId as number, committee_name: null, scheduled_date: m.scheduled_date, status: m.status,
+      })) as OverviewMeeting[]);
     },
   });
 
@@ -235,279 +132,292 @@ export default function CommitteesDashboardPage() {
     queryFn: async () => ((await assetsApi.getTenantUsers()).data || []) as TenantUserOption[],
   });
 
-  const committees = overview?.committees ?? [];
-  const selected = useMemo(
-    () => committees.find((c) => c.id === selectedId) ?? null,
-    [committees, selectedId],
-  );
+  const committees = useMemo(() => overview?.committees ?? [], [overview]);
+  const selected = useMemo(() => committees.find((c) => c.id === selectedId) ?? null, [committees, selectedId]);
   const userItems = useMemo(
     () => tenantUsers.map((u) => ({ value: String(u.id), label: u.display_name || u.email || `User ${u.id}`, subLabel: u.email })),
     [tenantUsers],
   );
-  const committeeItems = useMemo(
-    () => committees.map((c) => ({ value: String(c.id), label: c.name })),
-    [committees],
-  );
+  const committeeItems = useMemo(() => committees.map((c) => ({ value: String(c.id), label: c.name })), [committees]);
 
-  // If the selected committee vanishes from a refetch (e.g. deleted elsewhere),
-  // clear the selection so the context panel can't desync into a stale mode.
+  // a selected committee that is gone after a refetch (deleted elsewhere) clears the selection, so the panel cannot show a stale one
   useEffect(() => {
-    if (selectedId != null && committees.length && !committees.some((c) => c.id === selectedId)) {
-      setSelectedId(null);
-    }
+    if (selectedId != null && committees.length && !committees.some((c) => c.id === selectedId)) setSelectedId(null);
   }, [committees, selectedId]);
 
-  // ── mutations ──
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => committeeApi.deleteCommittee(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['committee-overview'] });
-      setSelectedId(null);
-    },
-    onError: (err: any) => {
-      setPageError(err?.response?.data?.detail || 'Failed to delete committee. Please try again.');
-    },
-  });
+  // ── the table: search, sort, page (all of the committees are already here: the overview sends every one) ──
+  const rows = useMemo(() => {
+    const found = committees.filter((c) => matchesCommittee(c, search));
+    return sortRows(found, sort, (c, key) => (key === 'next' ? parseUtc(c.next_meeting_date) : c.name));
+  }, [committees, search, sort]);
+  const range = pageRange(page, pageSize, rows.length);
+  const pageRows = rows.slice(range.from === 0 ? 0 : range.from - 1, range.to);
 
-  if (isLoading) {
+  // ── the delete: the server's hard delete, asked in a dialog that says what goes with it ──
+  const del = useReportedMutation({
+    mutationFn: (c: OverviewCommittee) => committeeApi.deleteCommittee(c.id),
+    success: (_r, c) => `Deleted ${short(c.name)}`,
+    failure: "Couldn't delete the committee",
+    invalidate: [['committee-overview']],
+    onSuccess: () => setSelectedId(null),
+  });
+  const askDelete = async (c: OverviewCommittee) => {
+    const plan = deleteCommitteePlan(short(c.name));
+    if (await confirm({ title: plan.title, message: plan.message, confirmLabel: plan.confirmLabel, tone: 'danger' })) del.mutate(c);
+  };
+
+  if (overviewQ.isLoading) {
     return (
-      <div className="space-y-5">
-        <div className="skeleton h-8 w-64" />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          {[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-24 rounded-xl" />)}
+      <div className="space-y-[16px]" aria-busy="true">
+        <PageHeader variant="page" title={routeFor('/governance/committees')?.label ?? 'Committees'} />
+        <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-3 xl:grid-cols-6">
+          {[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-[104px]" />)}
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="skeleton h-96 rounded-xl lg:col-span-2" />
-          <div className="skeleton h-96 rounded-xl" />
+        <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
+          <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px] lg:col-span-2"><SkeletonLines lines={6} label="Loading committees" /></div>
+          <div className="rounded-ds-card border border-ds-border bg-ds-surface p-[16px]"><SkeletonLines lines={5} label="Loading the selected committee" /></div>
         </div>
       </div>
     );
   }
 
-  const k = overview?.kpis;
-  const isEmpty = (k?.total_committees ?? 0) === 0;
+  const title = routeFor('/governance/committees')?.label ?? 'Committees';
+  if (overviewQ.isError || !overview) {
+    return (
+      <div className="space-y-[16px]">
+        <PageHeader variant="page" title={title} />
+        <ErrorState title="Couldn't load the committees" message={errorMessage(overviewQ.error)} onRetry={() => { void overviewQ.refetch(); }} />
+      </div>
+    );
+  }
+
+  const k = overview.kpis;
+  const isEmpty = k.total_committees === 0;
+  const performance = performanceReading(k.performance);
+  const actionsDone = actionsDoneReading(k);
+  const overdue = overdueReading(k);
+  const attendance = attendanceReading(k);
+  const inactive = committees.filter((c) => !c.is_active).length;
+
+  // Four columns, so the table fits the two-thirds it has beside the panel at 1280px: the type and the member count sit under the name (and are lines of the
+  // card below 768px).
+  const columns: RegisterColumn<OverviewCommittee>[] = [
+    {
+      key: 'name', header: 'Committee', isRowHeader: true, sortable: true,
+      cell: (c) => (
+        <>
+          <Link href={`/governance/committees/${c.id}`} title={c.name} className="line-clamp-2 break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{c.name}</Link>
+          <span className="block text-ds-label font-normal text-ds-fg-muted">{committeeTypeLabel(c.committee_type)} · {formatCount(c.members_count)} {c.members_count === 1 ? 'member' : 'members'}</span>
+        </>
+      ),
+    },
+    {
+      key: 'next', header: 'Next meeting', sortable: true, width: 'w-[132px]', card: 'meta',
+      cell: (c) => (c.next_meeting_date
+        ? (<><span className="whitespace-nowrap">{meetingDay(c.next_meeting_date)}</span><span className="block text-ds-label text-ds-fg-muted">{meetingRelative(c.next_meeting_date)}</span></>)
+        : <span className="text-ds-fg-muted">None scheduled</span>),
+    },
+    {
+      key: 'actions', header: 'Actions', width: 'w-[148px]', card: 'meta',
+      cell: (c) => (c.total_actions === 0
+        ? <span className="text-ds-fg-muted">No actions</span>
+        : (
+          <span className="flex flex-wrap items-center gap-[4px]">
+            {c.overdue_actions > 0 && <StatusPill size="sm" tone="danger" label={`${formatCount(c.overdue_actions)} overdue`} />}
+            {c.open_actions + c.in_progress_actions > 0 && <StatusPill size="sm" tone="pending" label={`${formatCount(c.open_actions + c.in_progress_actions)} open`} />}
+            {c.completed_actions > 0 && <StatusPill size="sm" tone="success" label={`${formatCount(c.completed_actions)} done`} />}
+          </span>
+        )),
+    },
+    { key: 'status', header: 'Status', width: 'w-[96px]', card: 'meta', cell: (c) => <CommitteeActivity size="sm" active={c.is_active} /> },
+  ];
 
   return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Board &amp; Committee Management</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Where every committee stands right now — at a glance.</p>
-        </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <Link href="/governance/committees/actions" className="btn-secondary btn-sm gap-1.5">
-            <ClipboardList className="h-4 w-4" /> All Actions
-          </Link>
-          {canCreate && (
-            <>
-              <button onClick={() => setMeetingModalOpen(true)} className="btn-secondary btn-sm gap-1.5">
-                <CalendarPlus className="h-4 w-4" /> New Meeting
-              </button>
-              <button onClick={() => setCommitteeModalOpen(true)} className="btn-primary btn-sm gap-1.5">
-                <Plus className="h-4 w-4" /> New Committee
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {pageError && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
-          <span>{pageError}</span>
-          <button onClick={() => setPageError(null)} className="text-rose-400 hover:text-rose-700"><X size={16} /></button>
-        </div>
-      )}
+    <div className="space-y-[16px]">
+      <PageHeader
+        variant="page"
+        title={title}
+        info="Where every committee stands right now: its meetings, open actions and performance."
+        meta={isEmpty ? undefined : `${formatCount(k.total_committees)} ${k.total_committees === 1 ? 'committee' : 'committees'}`}
+        actions={(
+          <>
+            <Button href="/governance/committees/actions" leftIcon={<ClipboardList aria-hidden />}>All actions</Button>
+            {canCreate && (
+              <>
+                <Button leftIcon={<CalendarPlus aria-hidden />} onClick={() => setMeetingModalOpen(true)} disabled={isEmpty}>New meeting</Button>
+                <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setCommitteeModalOpen(true)}>New committee</Button>
+              </>
+            )}
+          </>
+        )}
+      />
 
       {isEmpty ? (
-        <EmptyModule canCreate={canCreate} onCreate={() => setCommitteeModalOpen(true)} />
+        <EmptyState
+          kind="firstUse"
+          icon={Users}
+          title="No committees yet"
+          description="Create a committee to track its meetings, oversight actions and performance."
+          action={canCreate ? <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setCommitteeModalOpen(true)}>Create the first committee</Button> : undefined}
+        />
       ) : (
         <>
-          {/* ── KPI strip — performance ring first, formulas one click away ── */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-            <button
-              type="button"
-              onClick={() => setPerfOpen(true)}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</p>
-                  {k!.performance?.grade && (
-                    <span className={`mt-1.5 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(k!.performance.score).pill}`}>
-                      {k!.performance.grade}
-                    </span>
-                  )}
-                </div>
-                <ScoreRing score={k!.performance?.score ?? null} size={52} />
-              </div>
-            </button>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Committees</p>
-                <Users className="h-4 w-4 text-violet-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{k!.active_committees}</p>
-              <p className="mt-1 text-[11px] text-slate-400">{k!.total_committees} total · {k!.charters_active} active charters</p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Meetings</p>
-                <Calendar className="h-4 w-4 text-blue-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{k!.meetings_upcoming}</p>
-              <p className="mt-1 text-[11px] text-slate-400">upcoming · {k!.meetings_this_quarter} this quarter</p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Actions Done</p>
-                <CheckSquare className="h-4 w-4 text-emerald-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-emerald-600">{k!.actions.pct_done}%</p>
-              <div className="mt-2 h-1.5 rounded-full bg-slate-100">
-                <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${Math.min(100, k!.actions.pct_done)}%` }} />
-              </div>
-              <p className="mt-1.5 text-[11px] text-slate-400">{k!.actions.completed}/{k!.actions.total} done</p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overdue</p>
-                <AlertTriangle className={`h-4 w-4 ${k!.actions.overdue > 0 ? 'text-rose-500' : 'text-slate-300'}`} />
-              </div>
-              <p className={`mt-1 text-2xl font-bold ${k!.actions.overdue > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{k!.actions.overdue}</p>
-              <p className="mt-1 text-[11px] text-slate-400">{k!.actions.open + k!.actions.in_progress} actions still open</p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Attendance</p>
-                <UserCheck className="h-4 w-4 text-blue-500" />
-              </div>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
-                {k!.avg_attendance_pct != null ? `${Math.round(k!.avg_attendance_pct)}%` : '—'}
-              </p>
-              <div className="mt-2 h-1.5 rounded-full bg-slate-100">
-                <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${Math.min(100, k!.avg_attendance_pct ?? 0)}%` }} />
-              </div>
-              <p className="mt-1.5 text-[11px] text-slate-400">
-                {k!.quorum_meetings ? `quorum met in ${k!.quorum_met}/${k!.quorum_meetings}` : 'no meeting data yet'}
-              </p>
-            </div>
+          {/* ── the six numbers: each says what it rests on ── */}
+          <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-3 xl:grid-cols-6">
+            <StatTile
+              label="Performance"
+              icon={TrendingUp}
+              value={performance.score == null ? null : String(Math.round(performance.score))}
+              why={performance.why}
+              visual={performance.score == null ? undefined : (
+                <>
+                  <ScoreRing score={performance.score} size={52} />
+                  {performance.grade && <StatusPill tone={gradeTone(performance.grade)} label={performance.grade.charAt(0).toUpperCase() + performance.grade.slice(1)} />}
+                </>
+              )}
+              note={performance.note && (
+                <span className="inline-flex items-center gap-[4px]">{performance.note}<InfoTip text={performance.why} label="Which measures have no data" /></span>
+              )}
+              action={<Button variant="link" size="sm" onClick={() => setPerfOpen(true)}>How it is calculated</Button>}
+            />
+            <StatTile
+              label="Committees"
+              icon={Users}
+              value={formatCount(k.active_committees)}
+              note={`${formatCount(k.total_committees)} total · ${formatCount(k.charters_active)} active ${k.charters_active === 1 ? 'charter' : 'charters'}`}
+            />
+            <StatTile
+              label="Meetings"
+              icon={Calendar}
+              value={formatCount(k.meetings_upcoming)}
+              note={`upcoming · ${formatCount(k.meetings_this_quarter)} this quarter`}
+            />
+            <StatTile
+              label="Actions done"
+              icon={CheckSquare}
+              value={actionsDone.value}
+              why={actionsDone.why}
+              tone="success"
+              bar={actionsDone.value === null ? null : k.actions.pct_done}
+              note={actionsDone.note}
+            />
+            <StatTile
+              label="Overdue"
+              icon={AlertTriangle}
+              value={overdue.value}
+              why={overdue.why}
+              tone={k.actions.overdue > 0 ? 'danger' : 'default'}
+              note={overdue.note}
+            />
+            <StatTile
+              label="Attendance"
+              icon={UserCheck}
+              value={attendance.value}
+              why={attendance.why}
+              bar={attendance.value === null ? null : k.avg_attendance_pct}
+              note={attendance.note}
+            />
           </div>
 
-          {/* ── Master–detail: committee tiles (left) ↔ sticky context (right) ── */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <section className="lg:col-span-2">
-              <div className="card p-0">
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                  <h2 className="text-sm font-semibold text-slate-800">Committees</h2>
-                  <span className="text-xs text-slate-400">Select one to see its meetings &amp; actions →</span>
-                </div>
-                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2">
-                  {committees.map((c) => (
-                    <CommitteeTile
-                      key={c.id}
-                      c={c}
-                      selected={c.id === selectedId}
-                      onSelect={() => setSelectedId(c.id === selectedId ? null : c.id)}
+          {/* ── the committees (left) and the selected one's meetings and actions (right) ── */}
+          <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-3">
+            <div className="min-w-0 lg:col-span-2">
+              <SectionCard
+                id="committees"
+                title="Committees"
+                info="Select a committee to see its upcoming meetings and its actions beside the list. Its name opens it."
+                meta={inactive > 0 ? `${formatCount(committees.length)} · ${formatCount(inactive)} inactive` : formatCount(committees.length)}
+                actions={(
+                  <TextInput
+                    type="search"
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                    placeholder="Search committees"
+                    aria-label="Search committees"
+                    leftAdornment={<Search aria-hidden />}
+                    className="w-[220px] max-w-full"
+                  />
+                )}
+              >
+                <RegisterTable<OverviewCommittee>
+                  caption="Committees"
+                  columns={columns}
+                  rows={pageRows}
+                  getRowId={(c) => c.id}
+                  sort={sort}
+                  onSortChange={(next) => { setSort(next); setPage(1); }}
+                  selectedId={selectedId}
+                  onRowActivate={(c) => setSelectedId(c.id === selectedId ? null : c.id)}
+                  cardTitle={(c) => (
+                    <>
+                      <Link href={`/governance/committees/${c.id}`} title={c.name} className="break-words font-[600] text-ds-fg hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">{c.name}</Link>
+                      <span className="block text-ds-label font-normal text-ds-fg-muted">{committeeTypeLabel(c.committee_type)} · {formatCount(c.members_count)} {c.members_count === 1 ? 'member' : 'members'}</span>
+                    </>
+                  )}
+                  empty={(
+                    <EmptyState
+                      kind="noMatches"
+                      bare
+                      title="No committee matches"
+                      description={`Nothing named or typed “${truncate(search.trim(), 40).text}”.`}
+                      onClearFilters={() => { setSearch(''); setPage(1); }}
                     />
-                  ))}
-                </div>
-              </div>
-            </section>
+                  )}
+                  footer={rows.length > PAGE_SIZES[0] ? (
+                    <Pager
+                      page={range.page}
+                      pageSize={pageSize}
+                      total={rows.length}
+                      onPage={setPage}
+                      onPageSize={(n) => { setPageSize(n); setPage(1); }}
+                      pageSizes={PAGE_SIZES}
+                      noun="committees"
+                    />
+                  ) : undefined}
+                />
+              </SectionCard>
+            </div>
 
-            {/* Sticky context panel — the anti-scroll fix: pick a committee on the
-                left and its detail stays pinned here while you scan the list. */}
-            <aside className="lg:col-span-1">
+            <aside className="min-w-0 lg:col-span-1">
               <div className="lg:sticky lg:top-4">
                 <ContextPanel
                   selected={selected}
-                  meetings={selected ? panelMeetings : overview!.upcoming_meetings}
-                  actions={panelActions}
+                  meetings={selected ? panelMeetingsQ : null}
+                  allMeetings={overview.upcoming_meetings}
+                  actions={panelActionsQ}
                   canDelete={canDelete}
-                  deleting={deleteMutation.isPending}
-                  onDelete={(id) => {
-                    const name = committees.find((c) => c.id === id)?.name;
-                    if (
-                      confirm(
-                        `Delete “${name || 'this committee'}”? This removes the committee and cannot be undone.`,
-                      )
-                    ) {
-                      deleteMutation.mutate(id);
-                    }
-                  }}
+                  deleting={del.isPending}
+                  onDelete={askDelete}
                   onClear={() => setSelectedId(null)}
                 />
               </div>
             </aside>
           </div>
 
-          {/* ── Progress over time + Top performers (side by side) ── */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ProgressChart data={overview!.progress_over_time} />
-            <TopPerformers rows={overview!.top_performers} />
+          {/* ── six months, and who closes the most ── */}
+          <div className="grid grid-cols-1 gap-[16px] lg:grid-cols-2">
+            <ProgressChart data={overview.progress_over_time} held={meetingsHeldReading(k)} />
+            <TopPerformers rows={overview.top_performers} />
           </div>
 
           <AnimatedModal
             isOpen={perfOpen}
             onClose={() => setPerfOpen(false)}
             size="lg"
-            title="Committee Performance"
-            subtitle="Weighted mean of the five committee formulas — same score as the Governance overview"
+            title="Committee performance"
+            subtitle="Weighted mean of five formulas: the same score as the Governance overview"
           >
-            {k!.performance && (
-              <div className="p-5">
-                <div className="mb-4 flex items-center gap-4 rounded-xl bg-slate-50 p-4">
-                  <ScoreRing score={k!.performance.score} size={72} />
-                  <div className="min-w-0">
-                    {k!.performance.grade && (
-                      <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(k!.performance.score).pill}`}>
-                        {k!.performance.grade}
-                      </span>
-                    )}
-                    <p className="mt-1.5 text-xs leading-5 text-slate-500">
-                      Each row shows its weight, count, and the exact formula behind the number.
-                      Metrics with no data are excluded and the remaining weights re-normalize.
-                    </p>
-                  </div>
-                </div>
-                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                  {k!.performance.metrics.map((m) => (
-                    <MetricRow key={m.key} metric={m} />
-                  ))}
-                </div>
-                {k!.performance.score != null && (
-                  <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
-                    <p className="text-[11px] leading-5 text-slate-600">
-                      <span className="font-semibold text-slate-700">Score</span>{' = '}
-                      {k!.performance.metrics
-                        .filter((m) => m.score != null)
-                        .map((m) => `${Math.round(m.score as number)}×${Math.round(m.weight * 100)}%`)
-                        .join(' + ')}
-                      {' = '}
-                      <span className="font-bold text-slate-800">{Math.round(k!.performance.score)}</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <PerformanceDetail kpis={k} />
           </AnimatedModal>
         </>
       )}
 
-      {/* ── Create Committee ── */}
       <CreateCommitteePanel
         open={committeeModalOpen}
         onClose={() => setCommitteeModalOpen(false)}
         userItems={userItems}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['committee-overview'] })}
       />
-
-      {/* ── Create Meeting (one-screen guided flow) ── */}
       <CreateMeetingPanel
         open={meetingModalOpen}
         onClose={() => setMeetingModalOpen(false)}
@@ -515,408 +425,335 @@ export default function CommitteesDashboardPage() {
         defaultCommitteeId={selectedId}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['committee-overview'] })}
       />
+      {confirmDialog}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KPI tile
+// Performance: each measure, its weight, its count and the exact formula, or why it has no data
 // ─────────────────────────────────────────────────────────────────────────────
-const TONE: Record<string, string> = {
-  primary: 'text-primary-600', info: 'text-slate-500', success: 'text-emerald-600',
-  danger: 'text-rose-600', warning: 'text-amber-600', muted: 'text-slate-400',
-};
-// ─────────────────────────────────────────────────────────────────────────────
-// Committee tile (master list item)
-// ─────────────────────────────────────────────────────────────────────────────
-function CommitteeTile({ c, selected, onSelect }: {
-  c: OverviewCommittee; selected: boolean; onSelect: () => void;
-}) {
-  const st = typeStyle(c.committee_type);
-  const next = relDays(c.next_meeting_date);
-  // At-a-glance health dot: grey=inactive, red=overdue, amber=open work, green=on track.
-  const rag = !c.is_active
-    ? 'bg-slate-300'
-    : c.overdue_actions > 0
-      ? 'bg-rose-500'
-      : c.open_actions + c.in_progress_actions > 0
-        ? 'bg-amber-500'
-        : 'bg-emerald-500';
-  const ragTitle = !c.is_active
-    ? 'Inactive'
-    : c.overdue_actions > 0
-      ? 'Has overdue actions'
-      : c.open_actions + c.in_progress_actions > 0
-        ? 'Open actions in progress'
-        : 'On track';
+function MeasureRow({ m }: { m: OverviewMetric }) {
+  const has = measureHasData(m);
+  const band = scoreBand(m.score);
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`flex flex-col gap-2 bg-white p-3.5 text-left transition-colors hover:bg-slate-50 ${
-        selected ? 'ring-2 ring-inset ring-primary-500' : ''
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className={`h-2 w-2 flex-shrink-0 rounded-full ${rag}`} title={ragTitle} />
-          <span className="truncate text-sm font-semibold text-slate-900">{c.name}</span>
+    <li className="px-[16px] py-[12px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px]">
+        <span className="min-w-0 text-ds-body font-medium text-ds-fg">
+          {m.label}
+          <span className="ml-[8px] text-ds-label font-normal text-ds-fg-muted">weight {Math.round(m.weight * 100)}%</span>
         </span>
-        <span className="flex flex-shrink-0 items-center gap-1">
-          {!c.is_active && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Inactive</span>
-          )}
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>{st.label}</span>
+        <span className="flex items-baseline gap-[8px]">
+          {has && <span className="text-ds-label tabular-nums text-ds-fg-muted">{formatCount(m.numerator)} of {formatCount(m.denominator)}</span>}
+          {has ? <span className="text-ds-body font-[600] tabular-nums text-ds-fg">{formatPercent(m.score)}</span> : <span className="text-ds-body text-ds-fg-muted">{NOT_RECORDED}</span>}
         </span>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-        <span className="inline-flex items-center gap-1"><Users size={12} /> {c.members_count}</span>
-        <span className="inline-flex items-center gap-1">
-          <Calendar size={12} />
-          {c.next_meeting_date ? fmtDate(c.next_meeting_date) : 'No meeting scheduled'}
-          {next && (
-            <span className={next.tone === 'over' ? 'text-rose-600' : next.tone === 'soon' ? 'text-amber-600' : 'text-slate-400'}>
-              ({next.label})
-            </span>
-          )}
-        </span>
+      <div aria-hidden className="mt-[8px] h-[8px] overflow-hidden rounded-full bg-ds-border">
+        {has && <div className="h-full rounded-full" style={{ width: `${Math.max(m.score === 0 ? 3 : 0, Math.min(100, m.score as number))}%`, background: band.hex }} />}
       </div>
-      <div className="flex items-center gap-1.5">
-        {c.overdue_actions > 0 && (
-          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700">{c.overdue_actions} overdue</span>
-        )}
-        {c.open_actions + c.in_progress_actions > 0 && (
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">{c.open_actions + c.in_progress_actions} open</span>
-        )}
-        {c.completed_actions > 0 && (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">{c.completed_actions} done</span>
-        )}
-        {c.total_actions === 0 && <span className="text-[11px] text-slate-400">No actions</span>}
-      </div>
-    </button>
+      <p className="mt-[6px] text-ds-label font-normal text-ds-fg-muted">{has ? `= ${m.formula}` : measureReason(m)}</p>
+    </li>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Context panel (sticky right — meetings + actions for selection)
-// ─────────────────────────────────────────────────────────────────────────────
-function ContextPanel({ selected, meetings, actions, canDelete, deleting, onDelete, onClear }: {
-  selected: OverviewCommittee | null;
-  meetings: OverviewMeeting[];
-  actions: ActionRow[];
-  canDelete?: boolean;
-  deleting?: boolean;
-  onDelete?: (id: number) => void;
-  onClear: () => void;
-}) {
-  // `meetings` is already committee-scoped by the parent when a committee is
-  // selected (fetched per-committee), so no further filtering is needed here.
-  const shownMeetings = meetings;
+function PerformanceDetail({ kpis }: { kpis: Overview['kpis'] }) {
+  const perf = performanceReading(kpis.performance);
+  const metrics = kpis.performance?.metrics ?? [];
+  if (!kpis.performance) return <p className="p-[20px] text-ds-body text-ds-fg-muted">{NOT_RECORDED}</p>;
   return (
-    <div className="card p-0">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <div className="space-y-[16px] p-[20px]">
+      <div className="flex items-center gap-[16px] rounded-ds-card border border-ds-border bg-ds-surface-subtle p-[16px]">
+        {perf.score == null ? <span className="text-ds-body text-ds-fg-muted">{NOT_RECORDED}</span> : <ScoreRing score={perf.score} size={72} />}
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-slate-800">
-            {selected ? selected.name : 'All committees'}
-          </h2>
-          <p className="text-xs text-slate-400">{selected ? 'Meetings & action items' : 'Upcoming & needs attention'}</p>
+          {perf.grade && perf.score != null && <StatusPill tone={gradeTone(perf.grade)} label={perf.grade.charAt(0).toUpperCase() + perf.grade.slice(1)} />}
+          <p className="mt-[6px] text-ds-label font-normal text-ds-fg-muted">
+            {perf.score == null ? perf.why : `${perf.note || 'Every measure has data.'} A measure with no data is left out and the weights of the others are re-scaled.`}
+          </p>
         </div>
-        {selected ? (
-          <div className="flex items-center gap-1">
-            <Link href={`/governance/committees/${selected.id}`} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-primary-600" title="Open committee">
-              <ArrowUpRight size={16} />
-            </Link>
-            {canDelete && onDelete && (
-              <button
-                type="button"
-                onClick={() => onDelete(selected.id)}
-                disabled={deleting}
-                className="rounded-md p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                title="Delete committee"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-            <button onClick={onClear} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" title="Clear selection">
-              <X size={16} />
-            </button>
-          </div>
-        ) : null}
       </div>
-
-      {/* Upcoming meetings */}
-      <div className="border-b border-slate-100 px-4 py-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Upcoming meetings</p>
-        {shownMeetings.length === 0 ? (
-          <p className="text-xs text-slate-400">No meetings scheduled yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {shownMeetings.slice(0, 5).map((m) => (
-              <li key={m.id}>
-                <Link href={`/governance/committees/meetings/${m.id}`} className="group flex items-start justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-slate-800 group-hover:text-primary-600">{m.title}</span>
-                    {!selected && m.committee_name && <span className="block truncate text-[11px] text-slate-400">{m.committee_name}</span>}
-                  </span>
-                  <span className="flex-shrink-0 text-xs text-slate-500">{fmtDate(m.scheduled_date)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Action items */}
-      <div className="px-4 py-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {selected ? 'Action items' : 'Needs attention (overdue)'}
+      <ul className="divide-y divide-ds-border rounded-ds-card border border-ds-border">
+        {metrics.map((m) => <MeasureRow key={m.key} m={m} />)}
+      </ul>
+      {perf.score != null && (
+        <p className="rounded-ds-card border border-ds-border bg-ds-surface-subtle px-[14px] py-[10px] text-ds-label font-normal text-ds-fg-body">
+          <span className="font-[600]">Score</span> = {metrics.filter((m) => m.score != null).map((m) => `${Math.round(m.score as number)}×${Math.round(m.weight * 100)}%`).join(' + ')} = <span className="font-[600]">{Math.round(perf.score)}</span>
         </p>
-        {actions.length === 0 ? (
-          <p className="text-xs text-slate-400">{selected ? 'No action items for this committee.' : 'Nothing overdue — nice.'}</p>
-        ) : (
-          <ul className="space-y-2.5">
-            {actions.slice(0, 8).map((a) => {
-              const rd = relDays(a.due_date);
-              return (
-                <li key={a.id} className="flex items-start justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-slate-800">{a.title}</span>
-                    <span className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-400">
-                      {a.assigned_to_name || 'Unassigned'}
-                      {a.due_date && (
-                        <span className={rd?.tone === 'over' ? 'text-rose-600' : rd?.tone === 'soon' ? 'text-amber-600' : ''}>
-                          · {fmtDate(a.due_date)}{rd ? ` (${rd.label})` : ''}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                  <StatusBadge status={a.status} size="sm" showIcon={false} />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Progress over time (minimal inline bar chart)
-// ─────────────────────────────────────────────────────────────────────────────
-function ProgressChart({ data }: { data: OverviewMonth[] }) {
-  const anyActivity = data.some((d) => d.actions_completed > 0 || d.meetings_held > 0);
-  return (
-    <div className="card">
-      <div className="mb-3 flex items-center gap-2">
-        <TrendingUp size={16} className="text-primary-600" />
-        <h2 className="text-sm font-semibold text-slate-800">Progress over time</h2>
-        <span className="ml-auto text-xs text-slate-400">organisation-wide · last 6 months</span>
-      </div>
-      {!anyActivity ? (
-        <p className="py-4 text-center text-xs text-slate-400">No meetings or completed actions recorded yet.</p>
-      ) : (
-        <div className="h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={data.map((d) => ({
-                month: monthLabel(d.month),
-                'Meetings held': d.meetings_held,
-                'Actions completed': d.actions_completed,
-              }))}
-              margin={{ top: 8, right: 12, left: -14, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="committeeMeetings" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="committeeActions" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="2 2" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <RTooltip
-                contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: '#1e293b' }}
-              />
-              <Area type="monotone" dataKey="Meetings held" stroke="#3b82f6" strokeWidth={2}
-                    fill="url(#committeeMeetings)" dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />
-              <Area type="monotone" dataKey="Actions completed" stroke="#10b981" strokeWidth={2}
-                    fill="url(#committeeActions)" dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
       )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Context panel: the selected committee's upcoming meetings and actions (else: what is coming and what is late)
+// ─────────────────────────────────────────────────────────────────────────────
+function ContextPanel({ selected, meetings, allMeetings, actions, canDelete, deleting, onDelete, onClear }: {
+  selected: OverviewCommittee | null;
+  meetings: { data?: OverviewMeeting[]; isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown } | null;
+  allMeetings: OverviewMeeting[];
+  actions: { data?: { items: ActionRow[]; total: number }; isLoading: boolean; isError: boolean; error: unknown; refetch: () => unknown };
+  canDelete?: boolean;
+  deleting?: boolean;
+  onDelete: (c: OverviewCommittee) => void;
+  onClear: () => void;
+}) {
+  const shownMeetings = selected ? (meetings?.data ?? []) : allMeetings;
+  const MEETINGS_SHOWN = 5;
+  const ACTIONS_SHOWN = 8;
+  const actionItems = actions.data?.items ?? [];
+  const actionTotal = actions.data?.total ?? 0;
+  return (
+    <SectionCard
+      id="committee-context"
+      title={selected ? short(selected.name) : 'All committees'}
+      info={selected ? 'The selected committee: its next meetings and its actions.' : 'The next meetings and the overdue actions of every committee. Select a committee to narrow it down.'}
+      actions={selected ? (
+        <>
+          <Button href={`/governance/committees/${selected.id}`} variant="link" size="sm" rightIcon={<ArrowUpRight aria-hidden />}>Open committee</Button>
+          {canDelete && <IconButton label={`Delete ${short(selected.name)}`} disabled={deleting} onClick={() => onDelete(selected)}><Trash2 aria-hidden /></IconButton>}
+          <IconButton label="Clear selection" onClick={onClear}><X aria-hidden /></IconButton>
+        </>
+      ) : undefined}
+    >
+      <div className="space-y-[16px]">
+        <div>
+          <p className={SUB_HEAD}>Upcoming meetings</p>
+          {selected && meetings?.isLoading ? (
+            <div className="mt-[8px]"><SkeletonLines lines={2} label="Loading meetings" /></div>
+          ) : selected && meetings?.isError ? (
+            <ErrorState compact title="Couldn't load the meetings" message={errorMessage(meetings.error)} onRetry={() => { void meetings.refetch(); }} />
+          ) : shownMeetings.length === 0 ? (
+            <p className="mt-[8px] text-ds-body text-ds-fg-muted">No meetings scheduled yet.</p>
+          ) : (
+            <>
+              <ul className="mt-[8px] space-y-[10px]">
+                {shownMeetings.slice(0, MEETINGS_SHOWN).map((m) => (
+                  <li key={m.id}>
+                    <Link href={`/governance/committees/meetings/${m.id}`} className="group flex items-start justify-between gap-[8px] rounded-ds-control focus-visible:outline-none focus-visible:shadow-ds-ring">
+                      <span className="min-w-0">
+                        <span className="line-clamp-2 break-words text-ds-body text-ds-fg group-hover:underline" title={m.title}>{m.title}</span>
+                        {!selected && m.committee_name && <span className="block truncate text-ds-label font-normal text-ds-fg-muted">{m.committee_name}</span>}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-ds-label font-normal text-ds-fg-muted">{meetingDay(m.scheduled_date)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {shownMeetings.length > MEETINGS_SHOWN && selected && (
+                <p className="mt-[8px] text-ds-body">
+                  <Button href={`/governance/committees/${selected.id}?tab=meetings`} variant="link" size="sm">+{formatCount(shownMeetings.length - MEETINGS_SHOWN)} more meetings</Button>
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div>
+          <p className={SUB_HEAD}>{selected ? 'Actions' : 'Needs attention (overdue)'}</p>
+          {actions.isLoading ? (
+            <div className="mt-[8px]"><SkeletonLines lines={3} label="Loading actions" /></div>
+          ) : actions.isError ? (
+            <ErrorState compact title="Couldn't load the actions" message={errorMessage(actions.error)} onRetry={() => { void actions.refetch(); }} />
+          ) : actionItems.length === 0 ? (
+            <p className="mt-[8px] text-ds-body text-ds-fg-muted">{selected ? 'No actions for this committee.' : 'Nothing is overdue.'}</p>
+          ) : (
+            <>
+              <ul className="mt-[8px] space-y-[12px]">
+                {actionItems.slice(0, ACTIONS_SHOWN).map((a) => (
+                  <li key={a.id} className="flex items-start justify-between gap-[8px]">
+                    <span className="min-w-0">
+                      <span className="line-clamp-2 break-words text-ds-body text-ds-fg" title={a.title}>{a.title}</span>
+                      <span className="mt-[2px] flex flex-wrap items-center gap-x-[8px] text-ds-label font-normal text-ds-fg-muted">
+                        <PersonChip name={a.assigned_to_name} size={20} />
+                        {a.due_date && (
+                          <span className={isOverdueAction(a) ? 'text-ds-danger' : undefined}>Due {dueDay(a.due_date)} · {dueRelative(a.due_date)}</span>
+                        )}
+                      </span>
+                    </span>
+                    <ActionStatusPills size="sm" action={a} />
+                  </li>
+                ))}
+              </ul>
+              {actionTotal > ACTIONS_SHOWN && (
+                <p className="mt-[8px] text-ds-label font-normal text-ds-fg-muted">
+                  {ACTIONS_SHOWN} of {formatCount(actionTotal)} ·{' '}
+                  <Link href="/governance/committees/actions" className="text-ds-primary-text hover:underline focus-visible:outline-none focus-visible:shadow-ds-ring">All actions</Link>
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Progress over time: actions completed per month; "meetings held" only while any meeting is marked completed
+// ─────────────────────────────────────────────────────────────────────────────
+function ProgressChart({ data, held }: { data: OverviewMonth[]; held: { recorded: boolean; why: string } }) {
+  const anyActivity = data.some((d) => d.actions_completed > 0 || (held.recorded && d.meetings_held > 0));
+  const rows = data.map((d) => ({ month: monthLabel(d.month), 'Meetings held': d.meetings_held, 'Actions completed': d.actions_completed }));
+  return (
+    <SectionCard
+      id="progress"
+      title="Progress over time"
+      meta="Organisation-wide, last 6 months"
+      actions={!held.recorded ? <span className="inline-flex items-center gap-[4px] text-ds-body text-ds-fg-muted">Meetings held: {NOT_RECORDED}<InfoTip text={held.why} label="Why meetings held is not recorded" /></span> : undefined}
+    >
+      {!anyActivity ? (
+        <p className="py-[16px] text-center text-ds-body text-ds-fg-muted">{held.recorded ? 'No meetings or completed actions recorded yet.' : 'No completed actions recorded yet.'}</p>
+      ) : (
+        <>
+          <div aria-hidden="true" className="h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={rows} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke="#e5e8ec" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#586472' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#586472' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <RTooltip contentStyle={{ fontSize: 12, border: '1px solid #d1d7df', borderRadius: 8, color: '#1a1a1a' }} />
+                {held.recorded && <Area type="monotone" dataKey="Meetings held" stroke={TONE.progress.dot} strokeWidth={2} fill={TONE.progress.tint} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />}
+                <Area type="monotone" dataKey="Actions completed" stroke={TONE.success.dot} strokeWidth={2} fill={TONE.success.tint} dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          {/* the same numbers for a screen reader: the chart is a picture of this table */}
+          <table className="sr-only">
+            <caption>Progress over time, last 6 months</caption>
+            <thead><tr><th scope="col">Month</th>{held.recorded && <th scope="col">Meetings held</th>}<th scope="col">Actions completed</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.month}><th scope="row">{r.month}</th>{held.recorded && <td>{r['Meetings held']}</td>}<td>{r['Actions completed']}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-[8px] flex flex-wrap items-center gap-x-[16px] gap-y-[4px] text-ds-label font-normal text-ds-fg-muted">
+            <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[8px] w-[8px] rounded-full" style={{ background: TONE.success.dot }} />Actions completed</span>
+            {held.recorded && <span className="inline-flex items-center gap-[6px]"><span aria-hidden className="h-[8px] w-[8px] rounded-full" style={{ background: TONE.progress.dot }} />Meetings held</span>}
+          </p>
+        </>
+      )}
+    </SectionCard>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Top performers
 // ─────────────────────────────────────────────────────────────────────────────
-function TopPerformers({ rows }: { rows: OverviewPerformer[] }) {
+function TopPerformers({ rows }: { rows: Overview['top_performers'] }) {
   return (
-    <div className="card">
-      <div className="mb-3 flex items-center gap-2">
-        <Trophy size={16} className="text-amber-500" />
-        <h2 className="text-sm font-semibold text-slate-800">Top performers</h2>
-        <span className="ml-auto text-xs text-slate-400">action completion</span>
-      </div>
+    <SectionCard id="top-performers" title="Top performers" meta="By action completion" actions={<Trophy aria-hidden className="h-[16px] w-[16px] text-ds-fg-muted" strokeWidth={1.75} />}>
       {rows.length === 0 ? (
-        <p className="py-4 text-center text-xs text-slate-400">No action assignments yet.</p>
+        <p className="py-[16px] text-center text-ds-body text-ds-fg-muted">No action assignments yet.</p>
       ) : (
-        <ul className="space-y-3">
+        <ol className="space-y-[12px]">
           {rows.map((r, i) => (
-            <li key={r.user_id} className="flex items-center gap-3">
-              <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-              }`}>{i + 1}</span>
+            <li key={r.user_id} className="flex items-start gap-[12px]">
+              <span aria-hidden className="mt-[2px] grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full bg-ds-surface-hover text-ds-label tabular-nums text-ds-fg-body">{i + 1}</span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-slate-800">{r.name}</span>
-                  <span className="flex-shrink-0 text-xs font-semibold text-slate-700">{r.completion_pct}%</span>
+                <div className="flex items-center justify-between gap-[8px]">
+                  <PersonChip name={r.name} size={24} />
+                  <span className="shrink-0 text-ds-body font-[600] tabular-nums text-ds-fg">{formatPercent(r.completion_pct)}</span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${r.completion_pct}%` }} />
-                </div>
-                <span className="mt-0.5 block text-[11px] text-slate-400">
-                  {r.completed}/{r.assigned} done · {r.on_time} on time
-                </span>
+                <div aria-hidden className="mt-[6px] h-[6px] overflow-hidden rounded-full bg-ds-border"><div className="h-full rounded-full bg-ds-primary" style={{ width: `${Math.min(100, r.completion_pct)}%` }} /></div>
+                <span className="mt-[4px] block text-ds-label font-normal text-ds-fg-muted">{formatCount(r.completed)} of {formatCount(r.assigned)} done · {formatCount(r.on_time)} on time</span>
               </div>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
-    </div>
+    </SectionCard>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Empty module state
+// New committee (drawer)
 // ─────────────────────────────────────────────────────────────────────────────
-function EmptyModule({ canCreate, onCreate }: { canCreate: boolean; onCreate: () => void }) {
-  return (
-    <div className="card flex flex-col items-center justify-center py-10 text-center">
-      <Users className="mb-2 h-8 w-8 text-slate-300" />
-      <h3 className="text-base font-semibold text-slate-800">No committees yet</h3>
-      <p className="mt-1 max-w-sm text-sm text-slate-500">
-        Create your first committee to start tracking meetings, oversight actions and board performance.
-      </p>
-      {canCreate && (
-        <button onClick={onCreate} className="btn-primary mt-4 gap-1.5">
-          <Plus className="h-4 w-4" /> Create first committee
-        </button>
-      )}
-    </div>
-  );
-}
+const NEW_COMMITTEE = { name: '', description: '', committee_type: 'custom', chair_id: '', secretary_id: '', meeting_frequency: 'quarterly' };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Create Committee slide-over
-// ─────────────────────────────────────────────────────────────────────────────
 function CreateCommitteePanel({ open, onClose, userItems, onSaved }: {
   open: boolean; onClose: () => void;
   userItems: { value: string; label: string; subLabel?: string }[];
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState({
-    name: '', description: '', committee_type: 'custom',
-    chair_id: '', secretary_id: '', meeting_frequency: 'quarterly',
-  });
-  const mut = useMutation({
+  const [form, setForm] = useState(NEW_COMMITTEE);
+  const create = useReportedMutation({
     mutationFn: (data: Record<string, unknown>) => committeeApi.createCommittee(data),
-    onSuccess: () => {
-      onSaved(); onClose();
-      setForm({ name: '', description: '', committee_type: 'custom', chair_id: '', secretary_id: '', meeting_frequency: 'quarterly' });
-    },
+    success: (_r, data) => `Committee ${short(String(data.name))} created`,
+    failure: "Couldn't create the committee",
+    retryable: false,                                                   // a create is not safe to repeat blindly: the drawer stays open to try again
+    onSuccess: () => { onSaved(); onClose(); setForm(NEW_COMMITTEE); },
   });
+  const close = () => { create.reset(); onClose(); };
+  const set = (patch: Partial<typeof NEW_COMMITTEE>) => setForm((f) => ({ ...f, ...patch }));
   return (
     <RightSlidePanel
       isOpen={open}
-      onClose={onClose}
+      onClose={close}
       title="New committee"
-      footer={
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-          <button type="submit" form="create-committee-form" disabled={mut.isPending || !form.name.trim()} className="btn-primary">
-            {mut.isPending ? 'Creating…' : 'Create committee'}
-          </button>
-        </div>
-      }
+      dirty={formChanged(NEW_COMMITTEE, form)}
+      footer={<DrawerFooter onCancel={close} form="create-committee-form" pending={create.isPending} label="Create committee" pendingLabel="Creating…" disabled={!form.name.trim()} />}
     >
       <form
         id="create-committee-form"
         onSubmit={(e) => {
           e.preventDefault();
-          mut.mutate({
-            ...form,
-            chair_id: form.chair_id ? parseInt(form.chair_id) : null,
-            secretary_id: form.secretary_id ? parseInt(form.secretary_id) : null,
-          });
+          create.mutate({ ...form, chair_id: form.chair_id ? parseInt(form.chair_id, 10) : null, secretary_id: form.secretary_id ? parseInt(form.secretary_id, 10) : null });
         }}
-        className="space-y-4"
+        className="flex flex-col gap-[16px]"
       >
-        {mut.isError && (
-          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            Couldn’t create the committee. Please check the fields and try again.
-          </div>
-        )}
-        <Field label="Committee name" required>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input w-full" required />
-        </Field>
-        <Field label="Description">
-          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input w-full" rows={2} />
-        </Field>
-        <Field label="Type">
-          <MultiSelectDropdown title="Type" items={COMMITTEE_TYPE_ITEMS} selectedValues={[form.committee_type]}
-            onApply={(v) => setForm({ ...form, committee_type: v[0] || 'custom' })} multiSelect={false} triggerVariant="input" />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Chair">
+        {create.isError && <FormProblem message={errorMessage(create.error, 'The committee could not be created.')} />}
+        <FormField label="Committee name" required>
+          <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} maxLength={255} required />
+        </FormField>
+        <FormField label="Description" optional>
+          <Textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} />
+        </FormField>
+        <FormField label="Type">
+          <Select value={form.committee_type} onChange={(e) => set({ committee_type: e.target.value })}>
+            {COMMITTEE_TYPE_ITEMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </Select>
+        </FormField>
+        <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+          <PickerField label="Chair" optional>
             <MultiSelectDropdown title="Chair" items={userItems} selectedValues={form.chair_id ? [form.chair_id] : []}
-              onApply={(v) => setForm({ ...form, chair_id: v[0] || '' })} multiSelect={false} triggerVariant="input" forceSearch placeholder="Select" />
-          </Field>
-          <Field label="Secretary">
+              onApply={(v) => set({ chair_id: v[0] || '' })} multiSelect={false} autoApply triggerVariant="input" forceSearch placeholder="Select" size="sm" triggerClassName="w-full" />
+          </PickerField>
+          <PickerField label="Secretary" optional>
             <MultiSelectDropdown title="Secretary" items={userItems} selectedValues={form.secretary_id ? [form.secretary_id] : []}
-              onApply={(v) => setForm({ ...form, secretary_id: v[0] || '' })} multiSelect={false} triggerVariant="input" forceSearch placeholder="Select" />
-          </Field>
+              onApply={(v) => set({ secretary_id: v[0] || '' })} multiSelect={false} autoApply triggerVariant="input" forceSearch placeholder="Select" size="sm" triggerClassName="w-full" />
+          </PickerField>
         </div>
-        <Field label="Meeting frequency">
-          <MultiSelectDropdown title="Frequency" items={FREQUENCY_OPTIONS} selectedValues={[form.meeting_frequency]}
-            onApply={(v) => setForm({ ...form, meeting_frequency: v[0] || 'quarterly' })} multiSelect={false} triggerVariant="input" />
-        </Field>
+        <FormField label="Meeting frequency">
+          <Select value={form.meeting_frequency} onChange={(e) => set({ meeting_frequency: e.target.value })}>
+            {FREQUENCY_OPTIONS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+          </Select>
+        </FormField>
       </form>
     </RightSlidePanel>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Create Meeting slide-over — one screen: details + inline agenda items
+// New meeting (drawer): one screen, details and an inline agenda
 // ─────────────────────────────────────────────────────────────────────────────
 interface AgendaDraft { title: string; item_type: string }
+const NEW_MEETING = { committee_id: '', title: '', meeting_type: 'regular', scheduled_date: '', location: '', virtual_link: '', quorum_required: '' };
+
 function CreateMeetingPanel({ open, onClose, committeeItems, defaultCommitteeId, onSaved }: {
   open: boolean; onClose: () => void;
   committeeItems: { value: string; label: string }[];
   defaultCommitteeId: number | null;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState({
-    committee_id: defaultCommitteeId ? String(defaultCommitteeId) : '',
-    title: '', meeting_type: 'regular', scheduled_date: '',
-    location: '', virtual_link: '', quorum_required: '',
-  });
+  const blank = { ...NEW_MEETING, committee_id: defaultCommitteeId ? String(defaultCommitteeId) : '' };
+  const [form, setForm] = useState(blank);
   const [agenda, setAgenda] = useState<AgendaDraft[]>([]);
   const [agendaDraft, setAgendaDraft] = useState<AgendaDraft>({ title: '', item_type: 'discussion' });
-  // Remember the meeting once created so a retry (after an agenda item failed)
-  // never persists a SECOND meeting. Cleared on open / reset.
+  // the meeting once created, so a retry after an agenda item failed never makes a SECOND meeting (cleared on open and on reset)
   const [createdMeetingId, setCreatedMeetingId] = useState<number | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
 
-  // Sync the pre-selected committee whenever the panel (re)opens — the initial
-  // useState initializer only ran once at mount, when nothing was selected yet.
+  // the committee that was selected when the drawer opens is the one pre-chosen (the first useState ran at mount, when nothing was selected yet)
   useEffect(() => {
     if (open) {
       setForm((f) => ({ ...f, committee_id: defaultCommitteeId ? String(defaultCommitteeId) : f.committee_id }));
@@ -926,165 +763,141 @@ function CreateMeetingPanel({ open, onClose, committeeItems, defaultCommitteeId,
   }, [open, defaultCommitteeId]);
 
   const reset = () => {
-    setForm({ committee_id: defaultCommitteeId ? String(defaultCommitteeId) : '', title: '', meeting_type: 'regular', scheduled_date: '', location: '', virtual_link: '', quorum_required: '' });
+    setForm({ ...NEW_MEETING, committee_id: defaultCommitteeId ? String(defaultCommitteeId) : '' });
     setAgenda([]);
     setAgendaDraft({ title: '', item_type: 'discussion' });
     setCreatedMeetingId(null);
     setWarn(null);
   };
+  const addAgendaItem = () => {
+    const title = agendaDraft.title.trim();
+    if (!title) return;
+    setAgenda([...agenda, { ...agendaDraft, title }]);
+    setAgendaDraft({ title: '', item_type: agendaDraft.item_type });
+  };
 
-  const mut = useMutation({
+  const create = useReportedMutation({
     mutationFn: async () => {
       setWarn(null);
       const committeeId = parseInt(form.committee_id, 10);
-      // Create the meeting only once — on a retry reuse the id so we never
-      // persist a duplicate meeting.
       let meetingId = createdMeetingId;
       if (meetingId == null) {
-        const payload: Record<string, unknown> = {
-          title: form.title.trim(),
-          meeting_type: form.meeting_type,
-          scheduled_date: new Date(form.scheduled_date).toISOString(),
-        };
+        const payload: Record<string, unknown> = { title: form.title.trim(), meeting_type: form.meeting_type, scheduled_date: new Date(form.scheduled_date).toISOString() };
         if (form.location.trim()) payload.location = form.location.trim();
         if (form.virtual_link.trim()) payload.virtual_link = form.virtual_link.trim();
         if (form.quorum_required) payload.quorum_required = parseInt(form.quorum_required, 10);
         const res = await committeeApi.createMeeting(committeeId, payload);
-        meetingId = (res.data as any)?.id ?? null;
+        meetingId = (res.data as { id?: number })?.id ?? null;
         setCreatedMeetingId(meetingId);
       }
-      // Persist inline agenda items — genuinely best-effort: a failed item is
-      // collected, not thrown, so one bad row can't abort the whole save.
+      // the inline agenda items are best effort: a failed one is collected, not thrown, so one bad row cannot undo the meeting
       const failed: AgendaDraft[] = [];
       if (meetingId != null) {
         for (let i = 0; i < agenda.length; i++) {
           try {
-            await committeeApi.addAgendaItem(meetingId, {
-              title: agenda[i].title, item_type: agenda[i].item_type, item_number: i + 1,
-            });
+            await committeeApi.addAgendaItem(meetingId, { title: agenda[i].title, item_type: agenda[i].item_type, item_number: i + 1 });
           } catch {
             failed.push(agenda[i]);
           }
         }
       }
-      return { failed };
+      return { failed, title: form.title.trim() };
     },
+    success: ({ failed, title }) => (failed.length
+      ? { title: `Meeting ${short(title)} scheduled`, message: `${failed.length} agenda ${failed.length === 1 ? 'item' : 'items'} could not be added. They are still in the form: add them again.` }
+      : `Meeting ${short(title)} scheduled`),
+    failure: "Couldn't schedule the meeting",
+    retryable: false,
     onSuccess: ({ failed }) => {
       onSaved();
       if (failed.length) {
-        // Meeting saved, but some agenda items didn't — keep the panel open with
-        // only the failed items so the user can retry (no duplicate meeting).
+        // the meeting is saved, some agenda items are not: the drawer stays open with only those, so they can be added again without a second meeting
         setAgenda(failed);
-        setWarn(`Meeting saved. ${failed.length} agenda item(s) couldn't be added — you can retry them.`);
+        setWarn(`Meeting saved. ${failed.length} agenda ${failed.length === 1 ? 'item' : 'items'} couldn't be added: you can add them again.`);
       } else {
         onClose();
         reset();
       }
     },
-    onError: () => {
-      // createMeeting itself failed (nothing persisted) — safe to retry as-is.
-      setCreatedMeetingId(null);
-    },
+    onError: () => setCreatedMeetingId(null),                              // the meeting itself failed (nothing was saved): safe to try as it is
   });
-
-  const canSubmit = form.committee_id && form.title.trim() && form.scheduled_date;
+  const close = () => { create.reset(); onClose(); };
+  const set = (patch: Partial<typeof NEW_MEETING>) => setForm((f) => ({ ...f, ...patch }));
+  const canSubmit = Boolean(form.committee_id && form.title.trim() && form.scheduled_date);
 
   return (
     <RightSlidePanel
       isOpen={open}
-      onClose={onClose}
+      onClose={close}
       title="New meeting"
-      subtitle="Schedule a meeting and outline its agenda in one step."
-      footer={
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-          <button type="submit" form="create-meeting-form" disabled={mut.isPending || !canSubmit} className="btn-primary">
-            {mut.isPending ? 'Scheduling…' : 'Schedule meeting'}
-          </button>
-        </div>
-      }
+      dirty={formChanged(blank, form) || agenda.length > 0 || Boolean(agendaDraft.title.trim())}
+      footer={<DrawerFooter onCancel={close} form="create-meeting-form" pending={create.isPending} label="Schedule meeting" pendingLabel="Scheduling…" disabled={!canSubmit} />}
     >
-      <form id="create-meeting-form" onSubmit={(e) => { e.preventDefault(); if (canSubmit) mut.mutate(); }} className="space-y-4">
-        {mut.isError && (
-          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            Couldn’t schedule the meeting. Please check the fields and try again.
-          </div>
-        )}
-        {warn && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">{warn}</div>
-        )}
-        <Field label="Committee" required>
-          <MultiSelectDropdown title="Committee" items={committeeItems} selectedValues={form.committee_id ? [form.committee_id] : []}
-            onApply={(v) => setForm({ ...form, committee_id: v[0] || '' })} multiSelect={false} triggerVariant="input" forceSearch placeholder="Select committee" />
-        </Field>
-        <Field label="Meeting title" required>
-          <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input w-full" placeholder="e.g. Q1 Risk Review" required />
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Date & time" required>
-            <input type="datetime-local" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} className="input w-full" required />
-          </Field>
-          <Field label="Type">
-            <MultiSelectDropdown title="Type" items={MEETING_TYPE_ITEMS} selectedValues={[form.meeting_type]}
-              onApply={(v) => setForm({ ...form, meeting_type: v[0] || 'regular' })} multiSelect={false} triggerVariant="input" />
-          </Field>
+      <form id="create-meeting-form" onSubmit={(e) => { e.preventDefault(); if (canSubmit) create.mutate(); }} className="flex flex-col gap-[16px]">
+        {create.isError && <FormProblem message={errorMessage(create.error, 'The meeting could not be scheduled.')} />}
+        {warn && <p role="status" className="rounded-ds-control border border-ds-border bg-ds-warning-soft px-[12px] py-[8px] text-ds-body text-ds-fg">{warn}</p>}
+        <FormField label="Committee" required>
+          <Select value={form.committee_id} onChange={(e) => set({ committee_id: e.target.value })} placeholder="Select committee" required>
+            {committeeItems.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </Select>
+        </FormField>
+        <FormField label="Meeting title" required>
+          <TextInput value={form.title} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. Q1 Risk Review" maxLength={500} required />
+        </FormField>
+        <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+          <FormField label="Date & time" required>
+            <TextInput type="datetime-local" value={form.scheduled_date} onChange={(e) => set({ scheduled_date: e.target.value })} required />
+          </FormField>
+          <FormField label="Type">
+            <Select value={form.meeting_type} onChange={(e) => set({ meeting_type: e.target.value })}>
+              {MEETING_TYPE_ITEMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </Select>
+          </FormField>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Location"><input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="input w-full" placeholder="Boardroom / online" /></Field>
-          <Field label="Quorum required"><input type="number" min={0} value={form.quorum_required} onChange={(e) => setForm({ ...form, quorum_required: e.target.value })} className="input w-full" placeholder="e.g. 5" /></Field>
+        <div className="grid grid-cols-1 gap-[16px] sm:grid-cols-2">
+          <FormField label="Location" optional>
+            <TextInput value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="Boardroom / online" maxLength={500} />
+          </FormField>
+          <FormField label="Quorum required" optional>
+            <TextInput type="number" min={0} value={form.quorum_required} onChange={(e) => set({ quorum_required: e.target.value })} placeholder="e.g. 5" />
+          </FormField>
         </div>
-        <Field label="Virtual link"><input value={form.virtual_link} onChange={(e) => setForm({ ...form, virtual_link: e.target.value })} className="input w-full" placeholder="https://…" /></Field>
+        <FormField label="Virtual link" optional>
+          <TextInput value={form.virtual_link} onChange={(e) => set({ virtual_link: e.target.value })} placeholder="https://…" maxLength={1000} />
+        </FormField>
 
-        {/* Inline agenda */}
-        <div>
-          <label className="label">Agenda items <span className="font-normal text-slate-400">(optional)</span></label>
+        <fieldset className="min-w-0">
+          <legend className="text-ds-label text-ds-fg">Agenda items <span className="font-normal text-ds-fg-muted">(optional)</span></legend>
           {agenda.length > 0 && (
-            <ul className="mb-2 space-y-1.5">
+            <ul className="mt-[8px] space-y-[6px]">
               {agenda.map((a, idx) => (
-                <li key={idx} className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                  <span className="min-w-0 truncate text-sm text-slate-700">
-                    <span className="mr-1.5 text-xs text-slate-400">{idx + 1}.</span>{a.title}
-                    <span className="ml-2 rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-500">{AGENDA_TYPE_ITEMS.find((t) => t.value === a.item_type)?.label}</span>
+                <li key={idx} className="flex items-center justify-between gap-[8px] rounded-ds-control border border-ds-border bg-ds-surface-subtle px-[10px] py-[6px]">
+                  <span className="min-w-0 break-words text-ds-body text-ds-fg-body">
+                    <span className="mr-[6px] text-ds-label text-ds-fg-muted">{idx + 1}.</span>{a.title}
+                    <span className="ml-[8px] text-ds-label font-normal text-ds-fg-muted">{AGENDA_TYPE_ITEMS.find((t) => t.value === a.item_type)?.label}</span>
                   </span>
-                  <button type="button" onClick={() => setAgenda(agenda.filter((_, i) => i !== idx))} className="text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+                  <IconButton label={`Remove agenda item ${idx + 1}`} onClick={() => setAgenda(agenda.filter((_, i) => i !== idx))}><Trash2 aria-hidden /></IconButton>
                 </li>
               ))}
             </ul>
           )}
-          <div className="flex items-center gap-2">
-            <input
+          <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
+            <TextInput
               value={agendaDraft.title}
               onChange={(e) => setAgendaDraft({ ...agendaDraft, title: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && agendaDraft.title.trim()) {
-                  e.preventDefault();
-                  setAgenda([...agenda, { ...agendaDraft, title: agendaDraft.title.trim() }]);
-                  setAgendaDraft({ title: '', item_type: agendaDraft.item_type });
-                }
-              }}
-              className="input flex-1"
-              placeholder="Add agenda item + Enter"
+              onKeyDown={(e) => { if (e.key === 'Enter' && agendaDraft.title.trim()) { e.preventDefault(); addAgendaItem(); } }}
+              placeholder="Add an agenda item, then Enter"
+              aria-label="Agenda item title"
+              maxLength={500}
+              className="min-w-[160px] flex-1"
             />
-            <select value={agendaDraft.item_type} onChange={(e) => setAgendaDraft({ ...agendaDraft, item_type: e.target.value })} className="input w-32">
+            <Select aria-label="Agenda item type" value={agendaDraft.item_type} onChange={(e) => setAgendaDraft({ ...agendaDraft, item_type: e.target.value })} className="w-[140px]">
               {AGENDA_TYPE_ITEMS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <button
-              type="button"
-              onClick={() => { if (agendaDraft.title.trim()) { setAgenda([...agenda, { ...agendaDraft, title: agendaDraft.title.trim() }]); setAgendaDraft({ title: '', item_type: agendaDraft.item_type }); } }}
-              className="btn-secondary btn-sm"
-            ><Plus size={14} /></button>
+            </Select>
+            <IconButton label="Add agenda item" variant="secondary" onClick={addAgendaItem} disabled={!agendaDraft.title.trim()}><Plus aria-hidden /></IconButton>
           </div>
-        </div>
+        </fieldset>
       </form>
     </RightSlidePanel>
-  );
-}
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}{required && <span className="text-rose-500"> *</span>}</label>
-      {children}
-    </div>
   );
 }

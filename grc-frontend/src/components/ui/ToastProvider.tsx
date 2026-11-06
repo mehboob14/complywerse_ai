@@ -1,13 +1,18 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { ToastContainer, type ToastData, type ToastType } from './Toast';
+import { ToastContainer, type ToastAction, type ToastData, type ToastType } from './Toast';
+import { keepToasts } from './toastLogic';
+import { detailText } from '@/lib/apiError';
 
 interface ToastOptions {
   title: string;
   message?: string;
   type?: ToastType;
+  /** ms before it goes by itself (default 5000); 0 keeps it until someone dismisses it */
   duration?: number;
+  /** a button on the toast ("Retry"); clicking it runs it and dismisses the toast */
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
@@ -45,18 +50,15 @@ export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
     const newToast: ToastData = {
       id,
       title: options.title,
-      message: options.message,
+      // a server's `detail` passed on as it came (a 422 list, an object) is read out, not rendered as an object (a blank app)
+      message: options.message == null || typeof options.message === 'string' ? options.message : detailText(options.message),
       type: options.type || 'info',
       duration: options.duration ?? 5000,
+      action: options.action,
     };
 
-    setToasts((prev) => {
-      const updated = [...prev, newToast];
-      if (updated.length > maxToasts) {
-        return updated.slice(-maxToasts);
-      }
-      return updated;
-    });
+    // too many: the oldest goes, but a toast that stays until dismissed (an error nobody has read) outlives one that goes by itself
+    setToasts((prev) => keepToasts([...prev, newToast], maxToasts));
 
     return id;
   }, [maxToasts, suppressToasts]);

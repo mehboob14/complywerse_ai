@@ -22,8 +22,9 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -64,6 +65,41 @@ def transport_for_observation(obs: DiscoveryObservation) -> Optional[str]:
     return None
 
 
+# Login preference when a host answers on several: a real host login beats a
+# read-only one. WinRM/SSH give a full credentialed collect; WMI is the Windows
+# fallback when WinRM is off; SNMP is read-only device data.
+LOGIN_METHOD_ORDER = ("winrm", "ssh", "wmi", "snmp")
+
+
+def login_methods_from(ports, evidence=None) -> list:
+    """The login methods a set of open ports + evidence imply, best-first.
+    Pulled out so a MULTI-NIC host (one machine, several interfaces) can be
+    judged on the UNION of every NIC's ports, not one interface at a time."""
+    try:
+        pset = {int(p) for p in (ports or [])}
+    except (TypeError, ValueError):
+        pset = set()
+    ev = [str(e).lower() for e in (evidence or [])]
+    found = []
+    if pset & {5985, 5986}:
+        found.append("winrm")
+    if 22 in pset:
+        found.append("ssh")
+    if 135 in pset:
+        found.append("wmi")
+    if 161 in pset or any("snmp" in e for e in ev):
+        found.append("snmp")
+    return [m for m in LOGIN_METHOD_ORDER if m in found]
+
+
+def login_methods_for_observation(obs: DiscoveryObservation) -> list:
+    """Which login methods this device accepts, from what the sweep SAW — WinRM
+    (5985/6), SSH (22), WMI/DCOM (135) or SNMP (161 / an SNMP fingerprint).
+    Best-first; empty = no login service answered."""
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    return login_methods_from(raw.get("open_ports"), raw.get("evidence"))
+
+
 def agentless_port_state(obs: DiscoveryObservation, transport: str) -> str:
     """'open' | 'closed' | 'unknown' — is the port the collector will dial
     actually listening?
@@ -82,7 +118,7 @@ def agentless_port_state(obs: DiscoveryObservation, transport: str) -> str:
     raw = obs.raw if isinstance(obs.raw, dict) else {}
     probed = raw.get("probed_ports")
     open_ports = raw.get("open_ports") or []
-    wanted = (5985, 5986) if transport == "windows" else (22,)
+    wanted = (135,) if transport == "wmi" else ((5985, 5986) if transport == "windows" else (22,))
     if not probed or not any(p in probed for p in wanted):
         return "unknown"
     return "open" if any(p in open_ports for p in wanted) else "closed"
@@ -146,22 +182,38 @@ def typed_credentials_dict(kind: str, ip: str, port: int, username: str,
     return d
 
 
-def live_port_open(ip: Optional[str], ports, timeout: float = 2.0) -> bool:
+# Same budget the discovery sweep uses (executor._PROBE_TIMEOUT). The live
+# re-check MUST be at least as patient as the sweep that recorded the port open,
+# or a WinRM host the sweep saw at 2.5s over a VPN/IPsec tunnel fails this
+# "try anyway" re-check as "service not reachable" — the exact false negative.
+# Kept on the same DISCOVERY_PROBE_TIMEOUT knob so cranking it fixes BOTH paths.
+_LIVE_PORT_TIMEOUT = float(os.getenv("DISCOVERY_PROBE_TIMEOUT", "2.5"))
+
+
+def live_port_open(ip: Optional[str], ports, timeout: float = _LIVE_PORT_TIMEOUT) -> bool:
     """Fresh TCP check of the login port RIGHT NOW — overrides the (possibly stale)
     sweep result. This is what makes "try anyway" real: a box whose WinRM the sweep
     marked closed but that has since been enabled will connect, and a box that's
-    truly off fails in ~2s (not a 65s WinRM handshake timeout), reported as
-    'unreachable' — a connection error, never a bad-password lockout.
+    truly off fails in a probe-timeout or two (not a 65s WinRM handshake timeout),
+    reported as 'unreachable' — a connection error, never a bad-password lockout.
     """
     import socket
     if not ip:
+        logger.warning("live_port_open: no IP given (ports=%s) -> not reachable", list(ports))
         return False
+    errs = []
     for p in ports:
         try:
             with socket.create_connection((str(ip), int(p)), timeout=timeout):
+                logger.info("live_port_open: %s:%s OPEN (timeout=%.1fs)", ip, p, timeout)
                 return True
-        except OSError:
+        except OSError as e:  # diagnostic: name the exact reason each port failed
+            errs.append(f"{p}={type(e).__name__}:{e}")
             continue
+    # ponytail: diagnostic WARNING (always visible) — refused/timed-out=service off or firewalled,
+    # 'no route'/'unreachable'=vantage can't reach this LAN (needs a collector on-net, not a timeout bump)
+    logger.warning("live_port_open: %s NOT reachable on %s (timeout=%.1fs) [%s]",
+                   ip, list(ports), timeout, "; ".join(errs))
     return False
 
 
@@ -268,51 +320,65 @@ def link_orphan_vulns_to_asset(db: Session, asset) -> int:
         return 0
 
 
+def _resolve_or_create_asset(db: Session, obs: DiscoveryObservation) -> Tuple[ITAsset, bool]:
+    """Link this observation to an EXISTING asset when identity resolution finds
+    exactly one confident match; otherwise create a fresh one. Returns
+    (asset, created). Prevents promote from blind-creating a duplicate for a host
+    already in inventory under a different identity form (a sibling observation
+    promoted first, a manual asset, or richer identity). A single candidate is
+    required — an ambiguous multi-match creates a new row rather than guess."""
+    from grc.modules.asset_discovery.services.resolver import (
+        _create_from, _candidates, _merge_into,
+    )
+    _tier, ids = _candidates(db, obs.tenant_id, obs)
+    if len(ids) == 1:
+        existing = db.get(ITAsset, ids[0])
+        if existing is not None:
+            _merge_into(db, existing, obs)
+            return existing, False
+    return _create_from(db, obs.tenant_id, obs), True
+
+
 def promote_observation(db: Session, obs: DiscoveryObservation,
                         profile: CredentialProfile, transport: str) -> ITAsset:
     """Authenticate to an unclaimed device and, ONLY on success, make it an asset.
 
-    This is the discovery→inventory gate. The asset row is created first because
-    collect_host writes onto one, but if the collect raises (bad credentials,
-    unreachable, wrong transport) the row is removed again, so a failed attempt
-    leaves inventory exactly as it was. Nothing enters IT Asset Inventory without
-    a successful authenticated read behind it.
+    This is the discovery→inventory gate. A new asset row is created first (or an
+    existing matching one is reused) because collect_host writes onto one, but if
+    the collect raises (bad credentials, unreachable, wrong transport) a
+    newly-created row is removed again, so a failed attempt leaves inventory
+    exactly as it was. Nothing enters IT Asset Inventory without a successful
+    authenticated read behind it.
     """
-    from grc.modules.asset_discovery.services.resolver import _create_from
-
-    asset = _create_from(db, obs.tenant_id, obs)
-    # Network segment IS machine-derived — it is the scope the sweep found this
-    # device in. Leaving it blank and calling it "manual only" was wrong: the
-    # campaign already knows which subnet answered.
-    raw = obs.raw if isinstance(obs.raw, dict) else {}
-    scope = raw.get("scope")
-    if scope and not getattr(asset, "network_segment", None):
-        asset.network_segment = str(scope)[:100]
-
-    # Exposure is derivable from the address, so don't make the operator type
-    # it. Set at creation only — a later re-collect must never overwrite a
-    # human's answer, and this value moves criticality by +2.5.
-    #
-    # Both columns are written together on purpose: `internet_facing` feeds
-    # criticality and the asset page while `is_internet_facing` feeds risk
-    # posture, and nothing keeps them in sync. Setting one and not the other is
-    # how the two scores end up disagreeing about the same fact.
-    exposed = infer_internet_facing(asset.ip_address)
-    if exposed is not None:
-        asset.internet_facing = exposed
-        if hasattr(asset, "is_internet_facing"):
-            asset.is_internet_facing = exposed
+    asset, created = _resolve_or_create_asset(db, obs)
+    if created:
+        # These are set at CREATION only — a re-link onto an existing asset must
+        # not overwrite its curated network_segment / exposure.
+        # Network segment IS machine-derived: the scope the sweep found it in.
+        raw = obs.raw if isinstance(obs.raw, dict) else {}
+        scope = raw.get("scope")
+        if scope and not getattr(asset, "network_segment", None):
+            asset.network_segment = str(scope)[:100]
+        # Exposure is derivable from the address. Both columns are written
+        # together on purpose: internet_facing feeds criticality, is_internet_facing
+        # feeds risk posture, and nothing keeps them in sync.
+        exposed = infer_internet_facing(asset.ip_address)
+        if exposed is not None:
+            asset.internet_facing = exposed
+            if hasattr(asset, "is_internet_facing"):
+                asset.is_internet_facing = exposed
     db.flush()
     try:
         collect_host(db, asset, profile, transport)
     except Exception:
-        # Undo the speculative row — no half-born assets.
-        db.delete(asset)
-        db.flush()
+        # Undo ONLY a row we created this call — never delete a pre-existing asset.
+        if created:
+            db.delete(asset)
+            db.flush()
         raise
-    obs.resolution = "created"
+    obs.resolution = "created" if created else "merged"
     obs.resolved_asset_id = asset.id
-    obs.resolution_note = f"credential '{profile.name}' succeeded — promoted to asset #{asset.id}"
+    obs.resolution_note = f"credential '{profile.name}' succeeded — {'promoted to' if created else 'linked to existing'} asset #{asset.id}"
     # Retro-link any scanner findings imported before this host existed.
     link_orphan_vulns_to_asset(db, asset)
     db.flush()
@@ -358,20 +424,53 @@ def _cidr_match(ip: Optional[str], cidrs: Optional[List[str]]) -> bool:
     return False
 
 
+def _best_prefix(ip: Optional[str], cidrs: List[str]) -> Optional[int]:
+    """Longest prefix length among `cidrs` that actually contains `ip`, else None."""
+    try:
+        addr = ipaddress.ip_address(ip)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return None
+    best = None
+    for c in cidrs:
+        try:
+            net = ipaddress.ip_network(c, strict=False)
+        except ValueError:
+            continue
+        if addr in net and (best is None or net.prefixlen > best):
+            best = net.prefixlen
+    return best
+
+
 def select_credential(db: Session, tenant_id: int, ip: Optional[str],
                       transport: str) -> Optional[CredentialProfile]:
-    """The highest-priority active credential of the right kind whose
-    applicability covers this host."""
+    """The best active credential of the right kind for this host. A credential
+    scoped to a subnet that COVERS the host wins over a tenant-wide (no-CIDR)
+    one, most-specific first — otherwise a broad domain account would be tried
+    against hosts that have their own dedicated login, and repeated wrong-account
+    logins can trip domain lockout. Falls back to the tenant-wide login only when
+    no scoped credential covers the host."""
     kind = "winrm" if transport == "windows" else "ssh"
     candidates = db.query(CredentialProfile).filter(
         CredentialProfile.tenant_id == tenant_id,
         CredentialProfile.kind == kind,
         CredentialProfile.is_active.is_(True),
     ).order_by(CredentialProfile.priority, CredentialProfile.id).all()
+    scoped: List[Tuple[int, CredentialProfile]] = []
+    tenant_wide: Optional[CredentialProfile] = None
     for c in candidates:
-        if _cidr_match(ip, c.applies_to_cidrs):
-            return c
-    return None
+        cidrs = c.applies_to_cidrs or []
+        if not cidrs:
+            if tenant_wide is None:
+                tenant_wide = c
+            continue
+        plen = _best_prefix(ip, cidrs)
+        if plen is not None:
+            scoped.append((plen, c))
+    if scoped:
+        # priority first (lower = stronger), then most-specific prefix, then id
+        scoped.sort(key=lambda t: (t[1].priority, -t[0], t[1].id))
+        return scoped[0][1]
+    return tenant_wide
 
 
 def winrm_port_for(ip: Optional[str], explicit: Optional[int] = None) -> int:
@@ -396,6 +495,14 @@ def _credentials_dict(profile: CredentialProfile, ip: str, transport: str) -> Di
     """Build the dict shape collect_windows / collect_linux expect from a stored
     profile. The secret is decrypted here and nowhere else."""
     secret = decrypt_secret(profile.secret_encrypted)
+    if transport == "wmi":
+        # WMI (DCOM) reuses the Windows login; impacket takes domain separately.
+        return {
+            "wmi_host": ip,
+            "wmi_username": profile.username,
+            "wmi_password": secret,
+            "wmi_domain": profile.domain or "",
+        }
     if transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
         port = winrm_port_for(ip, profile.port)
@@ -435,8 +542,13 @@ def _ensure_integration_connection(db: Session, asset: ITAsset,
     host = asset.host_name or asset.ip_address
     if not host:
         return
-    itype = "windows_winrm" if transport == "windows" else "linux_ssh"
-    if transport == "windows":
+    # A WMI host is a Windows host reached over DCOM; register it as a Windows
+    # connection (135) so the login is reusable and CIS can attempt it.
+    itype = "windows_wmi" if transport == "wmi" else ("windows_winrm" if transport == "windows" else "linux_ssh")
+    if transport == "wmi":
+        user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
+        port = 135
+    elif transport == "windows":
         user = f"{profile.domain}\\{profile.username}" if profile.domain else profile.username
         port = winrm_port_for(asset.ip_address, profile.port)
     else:
@@ -480,19 +592,19 @@ def promote_observation_typed(db: Session, obs: DiscoveryObservation,
     ONLY on success, promote it to a typed asset carrying that kind's OWN deep
     inventory (platform_kind + platform_properties). Same gate as the host path:
     a failed connect deletes the speculative row — nothing half-born."""
-    from grc.modules.asset_discovery.services.resolver import _create_from
     from grc.modules.asset_discovery.services.platform_collectors import collect_platform
 
-    asset = _create_from(db, obs.tenant_id, obs)
-    raw = obs.raw if isinstance(obs.raw, dict) else {}
-    scope = raw.get("scope")
-    if scope and not getattr(asset, "network_segment", None):
-        asset.network_segment = str(scope)[:100]
-    exposed = infer_internet_facing(asset.ip_address)
-    if exposed is not None:
-        asset.internet_facing = exposed
-        if hasattr(asset, "is_internet_facing"):
-            asset.is_internet_facing = exposed
+    asset, created = _resolve_or_create_asset(db, obs)
+    if created:
+        raw = obs.raw if isinstance(obs.raw, dict) else {}
+        scope = raw.get("scope")
+        if scope and not getattr(asset, "network_segment", None):
+            asset.network_segment = str(scope)[:100]
+        exposed = infer_internet_facing(asset.ip_address)
+        if exposed is not None:
+            asset.internet_facing = exposed
+            if hasattr(asset, "is_internet_facing"):
+                asset.is_internet_facing = exposed
     db.flush()
     try:
         result = collect_platform(integration_type, creds)
@@ -507,10 +619,11 @@ def promote_observation_typed(db: Session, obs: DiscoveryObservation,
         asset.last_seen_at = datetime.utcnow()
         asset.last_seen_source = "agentless"
     except Exception:
-        db.delete(asset)
-        db.flush()
+        if created:
+            db.delete(asset)
+            db.flush()
         raise
-    obs.resolution = "created"
+    obs.resolution = "created" if created else "merged"
     obs.resolved_asset_id = asset.id
     obs.resolution_note = f"connected as {kind} — promoted to typed asset #{asset.id}"
     link_orphan_vulns_to_asset(db, asset)
@@ -591,7 +704,13 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     if not ip:
         raise RuntimeError("asset has no ip_address to probe")
     creds = _credentials_dict(profile, ip, transport)
-    raw, hardware = collect_windows(creds) if transport == "windows" else collect_linux(creds)
+    if transport == "windows":
+        raw, hardware = collect_windows(creds)
+    elif transport == "wmi":
+        from grc.modules.compliance_plugins.services.agentless_inventory import collect_windows_wmi
+        raw, hardware = collect_windows_wmi(creds)
+    else:
+        raw, hardware = collect_linux(creds)
 
     # Auto-discovered hardware (vCPU / RAM / disk / OEM / serial / fqdn / mac) —
     # fill blanks, never clobber a curated value.

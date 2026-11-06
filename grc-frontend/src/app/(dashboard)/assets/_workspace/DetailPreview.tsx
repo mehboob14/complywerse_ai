@@ -278,7 +278,7 @@ export function DetailPreview({
                 v={<span className="inline-flex items-center gap-1.5"><InitialsAvatar name={primaryOwner} size="sm" /> {primaryOwner}</span>}
               />
             )}
-            {owningTeam && <OwnershipRow k="Owning team" v={owningTeam} />}
+            {owningTeam && <OwnershipRow k="Owning department" v={owningTeam} />}
             {businessOwner && <OwnershipRow k="Business owner" v={businessOwner} />}
             {dataClass && <OwnershipRow k="Data classification" v={<span className="capitalize">{dataClass}</span>} />}
           </div>

@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import os
 import time
@@ -15,6 +16,18 @@ DEFAULT_TIMEOUT = 30
 MAX_RETRIES = 3
 RETRY_BACKOFF = 1.0
 RATE_LIMIT_SLEEP = 1.0
+
+# Nessus API keys are regenerated on every Nessus reinstall/reset — the stored
+# pair then 401s forever. A username+password login (POST /session) survives
+# that, so it is the automatic fallback; without one the operator must act.
+NESSUS_401_HELP = (
+    "Nessus rejected the API keys (401 Authorization required) — Nessus resets its API keys when it is "
+    "reinstalled or reset. Regenerate them in Nessus → Settings → My Account → API Keys and update this "
+    "connection (Integrations → Vulnerability scanners → edit → Access key / Secret key, or the "
+    "<PREFIX>_ACCESS_KEY / <PREFIX>_SECRET_KEY env vars in backend/.env for the connection's env prefix). "
+    "To make this survive future key resets, also store the Nessus username + password on the connection "
+    "(<PREFIX>_USERNAME / <PREFIX>_PASSWORD) — the adapter then logs in with a session token automatically."
+)
 
 
 class NessusAdapter(BaseAdapter):
@@ -92,24 +105,38 @@ class NessusAdapter(BaseAdapter):
         return s
 
     def _ensure_token(self):
-        if self._token:
+        # No API keys configured: log in up front. With keys, login only happens
+        # as the 401 fallback in _request (keys are the cheaper, stateless path).
+        if self._token or "X-ApiKeys" in self.session.headers:
             return
-        if not self._username or not self._password:
-            return
-        if "X-ApiKeys" in self.session.headers:
-            return
+        self._login()
+
+    def _login(self) -> bool:
+        """POST /session with the stored username/password and switch this session
+        to X-Cookie token auth. Returns False (no exception) when there is no
+        username/password or the login fails, so callers can fall through to a
+        clear error. Called at most once per request on a 401, so an expired
+        token simply re-logs in on its next request. Secrets are never logged."""
+        if not (self._username and self._password):
+            return False
         try:
-            url = f"{self.base_url}/session"
-            resp = self.session.post(url, json={
+            resp = self.session.post(self._url("/session"), json={
                 "username": self._username,
                 "password": self._password,
             }, timeout=DEFAULT_TIMEOUT)
             resp.raise_for_status()
-            self._token = resp.json().get("token")
-            if self._token:
-                self.session.headers["X-Cookie"] = f"token={self._token}"
-        except Exception as e:
-            logger.error(f"Nessus session login failed: {e}")
+            token = (resp.json() or {}).get("token")
+        except Exception as e:  # noqa: BLE001
+            logger.error("Nessus session login failed for user %r: %s", self._username, str(e)[:200])
+            return False
+        if not token:
+            return False
+        self._token = token
+        # The keys were rejected (or absent): the token is the auth from here on.
+        # Sending both makes Nessus prefer the (dead) keys.
+        self.session.headers.pop("X-ApiKeys", None)
+        self.session.headers["X-Cookie"] = f"token={token}"
+        return True
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
@@ -128,6 +155,15 @@ class NessusAdapter(BaseAdapter):
                 logger.warning(f"Rate limited on {path}, sleeping {retry_after}s")
                 time.sleep(retry_after)
                 resp = self.session.request(method, url, params=params, json=json_body, timeout=timeout)
+
+            if resp.status_code == 401:
+                # Stale API keys (Nessus reset them) or an expired session token:
+                # log in with username/password if we have one and retry once.
+                if self._login():
+                    logger.warning("Nessus returned 401 on %s %s — re-authenticated via session login, retrying", method, path)
+                    resp = self.session.request(method, url, params=params, json=json_body, timeout=timeout)
+                if resp.status_code == 401:
+                    raise requests.exceptions.HTTPError(NESSUS_401_HELP, response=resp)
 
             resp.raise_for_status()
             # Nessus returns 200 with an EMPTY body on several write endpoints
@@ -193,7 +229,7 @@ class NessusAdapter(BaseAdapter):
         except requests.exceptions.HTTPError as e:
             status = getattr(e.response, "status_code", None)
             if status == 401:
-                return ConnectionTestResult(success=False, message="Authentication failed — check API keys or credentials")
+                return ConnectionTestResult(success=False, message=NESSUS_401_HELP)
             if status == 403:
                 return ConnectionTestResult(success=False, message="Access forbidden — check API key permissions")
             return ConnectionTestResult(success=False, message=f"HTTP {status} from scanner")
@@ -452,10 +488,12 @@ class NessusAdapter(BaseAdapter):
         if scan_contexts:
             return self._get_vulns_from_scan_contexts(scan_contexts)
 
-        lookup_key = hostname or ip_address
-        if lookup_key:
-            return self._get_vulns_by_host_lookup(lookup_key)
-
+        # A scan launched by IP records the host under its IP (hostname=<ip>, host-ip=None), so a
+        # hostname-only lookup misses it and returns 0 after a real scan. Try hostname, then IP.
+        for key in [k for k in (hostname, ip_address) if k]:
+            res = self._get_vulns_by_host_lookup(key)
+            if res:
+                return res
         return []
 
     def _get_vulns_by_host_lookup(self, host_key: str) -> List[Dict[str, Any]]:
@@ -779,7 +817,380 @@ class NessusAdapter(BaseAdapter):
         data = self._get("/policies")
         return data.get("policies") or []
 
+    def get_scan_templates(self) -> List[Dict[str, Any]]:
+        """Nessus's BUILT-IN scan templates (Basic Network Scan, Advanced Scan,
+        …) via /editor/scan/templates. These exist even on a Nessus with zero
+        saved user policies, so they're the fallback for resolving the template
+        uuid a scan-create requires. Best-effort: [] if the endpoint errors."""
+        try:
+            data = self._get("/editor/scan/templates")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Failed to list Nessus scan templates: {e}")
+            return []
+        return (data or {}).get("templates") or []
+
     def export_scan(self, scan_id: str, format: str = "nessus") -> Dict[str, Any]:
         payload = {"format": format}
         data = self._post(f"/scans/{scan_id}/export", json_body=payload)
         return data
+
+    @staticmethod
+    def _local_windows_domain(target_host: str) -> str:
+        """Domain to use for a Windows credential that carries NO domain. A local
+        account authenticated over SMB needs a domain or Nessus guesses (and then
+        skips local checks): use the target's short hostname when the target is a
+        name, else "." (the SMB "authenticate against the local SAM" convention).
+        text_targets may be a comma list — take the first token."""
+        t = (target_host or "").split(",")[0].strip()
+        if not t:
+            return "."
+        try:
+            ipaddress.ip_address(t)
+            return "."          # an IP tells us nothing about the NetBIOS name
+        except ValueError:
+            return t.split(".")[0] or "."   # short hostname, e.g. DESKTOP-AB from DESKTOP-AB.corp.local
+
+    @staticmethod
+    def _nessus_credentials(credentials: List[Dict[str, Any]], target_host: str = "") -> Optional[Dict[str, Any]]:
+        """Shape a normalized scan-level credential list into the Nessus
+        scan-create ``settings.credentials`` block (Host → Windows / SSH).
+
+        Input is the list ``create_scan(credentials=...)`` takes:
+        ``[{"type":"windows","username","password","domain"},
+           {"type":"ssh","username","password","private_key"}]``.
+        SSH prefers a private key when present, else password. Returns None
+        when nothing usable so the caller sends an unauthenticated scan.
+
+        ``target_host`` (the scan target) is used to fill a Windows credential's
+        domain when the caller left it empty, so a LOCAL account authenticates
+        over SMB instead of Nessus guessing the domain and silently skipping
+        local checks (root cause of the "5 info findings" credentialed scan).
+
+        Verified live (Nessus 10.12 / scanner build 20038): every entry in the
+        ``add.Host.Windows`` / ``add.Host.SSH`` lists becomes its own credential
+        instance, in list order (the order Nessus tries them in), and the
+        instances read back from /editor/scan/{id}. Tenable.io spells its
+        credential JSON differently — re-verify there.
+        """
+        windows, ssh, communities = [], [], []
+        for c in credentials or []:
+            ctype = str(c.get("type") or "").lower()
+            if ctype == "snmp":
+                # SNMP v1/v2c authenticates with a community string, no username —
+                # Nessus category "Plaintext Authentication" -> "SNMPv1/v2c"
+                # (verified against the live editor/scan credential schema).
+                comm = c.get("community") or c.get("community_string")
+                if comm and comm not in communities:
+                    communities.append(comm)
+                continue
+            username = c.get("username")
+            if not username:
+                continue
+            if ctype == "windows":
+                entry = {"auth_method": "Password", "username": username, "password": c.get("password") or ""}
+                # No domain on the credential -> a local account: give it the target's
+                # short hostname (or ".") so SMB local checks authenticate.
+                entry["domain"] = c.get("domain") or NessusAdapter._local_windows_domain(target_host)
+                windows.append(entry)
+            elif ctype == "ssh":
+                if c.get("private_key"):
+                    entry = {"auth_method": "public key", "username": username, "private_key": c["private_key"]}
+                else:
+                    entry = {"auth_method": "password", "username": username, "password": c.get("password") or ""}
+                ssh.append(entry)
+        host: Dict[str, Any] = {}
+        if windows:
+            host["Windows"] = windows
+        if ssh:
+            host["SSH"] = ssh
+        add: Dict[str, Any] = {}
+        if host:
+            add["Host"] = host
+        if communities:
+            add["Plaintext Authentication"] = {"SNMPv1/v2c": [{"community_string": cs} for cs in communities]}
+        return {"add": add} if add else None
+
+    def _scan_body(self, name: str, text_targets: str, policy_id=None, folder_id=None,
+                   credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Build the shared ``{"uuid", "settings"}`` body for scan create/update.
+
+        Nessus requires a template ``uuid``. Resolution order: the chosen
+        ``policy_id``'s policy → any saved policy (a network-scan one first) →
+        Nessus's BUILT-IN scan templates (so a scanner with zero saved policies
+        still works). ``settings.policy_id`` is only sent when we actually resolved
+        a saved policy — a built-in template is not a policy. ``credentials``
+        (optional) is folded into ``settings.credentials`` for an authenticated
+        scan. Secrets are never logged.
+        """
+        self.assert_ready()
+        policies = self.get_policies()
+
+        def _uuid(p: Dict[str, Any]) -> str:
+            return str(p.get("template_uuid") or p.get("uuid") or "")
+
+        def _networkish(name: str) -> bool:
+            return any(w in name.lower() for w in ("basic network", "network", "basic", "advanced"))
+
+        template_uuid = ""
+        settings_policy_id = None  # only set when a real saved policy is used
+        templates = None  # fetched lazily (a network call) only when needed
+
+        def _get_templates() -> List[Dict[str, Any]]:
+            nonlocal templates
+            if templates is None:
+                templates = self.get_scan_templates()
+            return templates
+
+        # 1) the explicit choice — a saved policy id, or a built-in template uuid
+        if policy_id is not None:
+            p = next((p for p in policies if str(p.get("id")) == str(policy_id) and _uuid(p)), None)
+            if p:
+                template_uuid, settings_policy_id = _uuid(p), policy_id
+            else:
+                t = next((t for t in _get_templates() if str(t.get("uuid")) == str(policy_id)), None)
+                if t:
+                    template_uuid = str(t.get("uuid"))  # a template, not a policy
+        # 2) any saved policy — a network-scan-looking one first, else the first
+        if not template_uuid and policies:
+            p = (next((p for p in policies if _uuid(p) and _networkish(str(p.get("name", "")))), None)
+                 or next((p for p in policies if _uuid(p)), None))
+            if p:
+                template_uuid, settings_policy_id = _uuid(p), p.get("id")
+        # 3) a built-in scan template (Basic Network Scan …) — no policy needed
+        if not template_uuid:
+            t = (next((t for t in _get_templates() if t.get("uuid")
+                       and _networkish(f"{t.get('name', '')} {t.get('title', '')}")), None)
+                 or next((t for t in _get_templates() if t.get("uuid")), None))
+            if t:
+                template_uuid = str(t.get("uuid"))  # a template, not a policy
+        if not template_uuid:
+            raise ValueError("Cannot create Nessus scan: this Nessus exposes no saved policy and no built-in scan template (check it is licensed and initialised).")
+
+        settings: Dict[str, Any] = {"name": name, "text_targets": text_targets, "enabled": False}
+        if settings_policy_id is not None:
+            settings["policy_id"] = settings_policy_id
+        if folder_id is not None:
+            settings["folder_id"] = folder_id
+        body: Dict[str, Any] = {"uuid": template_uuid, "settings": settings}
+        if credentials:
+            cred_block = self._nessus_credentials(credentials, text_targets)
+            if cred_block:
+                # Nessus expects `credentials` at the TOP LEVEL of the POST /scans
+                # body (sibling of uuid/settings) — NOT nested under settings.
+                # Nesting it silently produces an UNAUTHENTICATED scan.
+                body["credentials"] = cred_block
+        return body
+
+    def assert_ready(self) -> None:
+        """Refuse a scan write while Nessus is still initialising / compiling its
+        plugin set (GET /server/status reports anything but "ready"): a scan
+        launched then runs against a partial plugin set and quietly comes back
+        with a handful of findings. Best-effort — an unreadable status endpoint
+        does not block (the 412 path in _scan_write_error covers that case)."""
+        try:
+            st = self._get("/server/status", timeout=10) or {}
+        except Exception:  # noqa: BLE001
+            return
+        status = str(st.get("status") or "").lower()
+        if status and status != "ready":
+            det = st.get("detailed_status") or {}
+            feed, engine = det.get("feed_status") or {}, det.get("engine_status") or {}
+            raise ValueError(
+                f"Nessus is not ready to scan (status={status}, plugin feed={feed.get('status')} "
+                f"{feed.get('progress')}%, engine={engine.get('status')} {engine.get('progress')}%) — it is "
+                "still initialising / compiling plugins; retry once it reports ready.")
+
+    def _credential_instance_ids(self, scan_id) -> List[int]:
+        """Ids of the credential instances currently attached to a scan, read from
+        /editor/scan/{id} (credentials.data[].types[].instances[].id). [] on error."""
+        try:
+            data = (self._get(f"/editor/scan/{scan_id}") or {}).get("credentials") or {}
+            return [inst["id"] for cat in (data.get("data") or []) for typ in (cat.get("types") or [])
+                    for inst in (typ.get("instances") or []) if inst.get("id") is not None]
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Could not read credential instances of scan {scan_id}: {e}")
+            return []
+
+    def _scan_write_error(self, e: Exception) -> ValueError:
+        """Turn a broken-read / connection failure on a scan write into an
+        actionable error. A scanner answers scan-create/launch with
+        ``412 {"error":"API is not available"}`` but truncates the body, so
+        ``requests`` surfaces only a cryptic IncompleteRead. Two real causes:
+        Nessus ESSENTIALS (free) genuinely blocks the scan-write API; on any
+        other edition (Professional, or a Tenable.sc-managed scanner — both of
+        which DO accept API scan creation) this message is almost always the
+        scanner still starting up / compiling its plugin set, i.e. transient.
+        Also flag a stale plugin feed, which silently makes results miss CVEs."""
+        props: Dict[str, Any] = {}
+        try:
+            props = self._get("/server/properties") or {}
+        except Exception:  # noqa: BLE001
+            pass
+        edition = str(props.get("nessus_type") or "")
+        plugin_set = str(props.get("loaded_plugin_set") or "")
+
+        # A stale plugin feed is the quiet killer: the scan "works" but scores
+        # against years-old plugins. Compute the feed age from the plugin set.
+        stale_note = ""
+        try:
+            from datetime import datetime, timezone
+            if len(plugin_set) >= 8:
+                fed = datetime.strptime(plugin_set[:8], "%Y%m%d").replace(tzinfo=timezone.utc)
+                days = (datetime.now(timezone.utc) - fed).days
+                if days > 60:
+                    stale_note = (f" Also: this scanner's plugin feed is ~{days} days old "
+                                  f"(last {fed.date()}), so any findings would miss everything newer — "
+                                  "update the plugin feed before trusting results.")
+        except Exception:  # noqa: BLE001
+            pass
+
+        if "essential" in edition.lower():
+            return ValueError(
+                "This scanner is Nessus Essentials, which blocks scan creation over the "
+                'API (Nessus replies "API is not available"). Managed Scanning needs '
+                "Nessus Professional. Or run the scan in the Nessus app and use "
+                '"Connect their scanner" to pull the findings in.' + stale_note)
+        msg = str(e).lower()
+        if "412" in msg or "api is not available" in msg or "incompleteread" in msg or "incomplete read" in msg:
+            return ValueError(
+                'Nessus replied "API is not available". On a Professional or Tenable.sc-managed scanner this is '
+                "almost always the scanner still starting up or compiling its plugin set — wait a minute and "
+                "retry; scan creation works once it's ready." + stale_note)
+        return ValueError(f"Nessus refused the scan operation: {str(e)[:200]}" + stale_note)
+
+    def create_scan(self, name: str, text_targets: str, policy_id=None, folder_id=None,
+                    credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Create an on-demand (not auto-launching) scan; return the created scan dict.
+
+        The response nests the new scan under ``scan`` — we surface its ``id``/
+        ``uuid`` at the top level so callers can read ``result["id"]`` directly.
+        When ``credentials`` is given Nessus logs into the target hosts
+        (authenticated scan); when absent it behaves as an unauthenticated
+        network scan.
+        """
+        body = self._scan_body(name, text_targets, policy_id, folder_id, credentials)
+        try:
+            data = self._post("/scans", json_body=body)
+        except requests.exceptions.HTTPError as e:
+            # 412 is the Nessus Essentials "scan API disabled" signature — give the
+            # friendly message; let other HTTP errors surface their real reason.
+            if getattr(e.response, "status_code", None) == 412:
+                raise self._scan_write_error(e) from e
+            raise
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as e:
+            raise self._scan_write_error(e) from e
+        self._debug_shape("create_scan.response", data)
+        scan = data.get("scan") if isinstance(data, dict) else None
+        if isinstance(scan, dict) and "id" not in data:
+            data = {**data, "id": scan.get("id"), "uuid": scan.get("uuid")}
+        return data
+
+    def update_scan(self, scan_id, name: str, text_targets: str, policy_id=None, folder_id=None,
+                    credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Re-configure an EXISTING scan in place (PUT /scans/{id}), then the
+        caller re-launches it. Reusing the same scan_id is what makes the
+        verified-fixed auto-close loop work: the closure engine proves a finding
+        is gone by re-running the SAME scan that last reported it (a fresh scan
+        id each time would leave the old scan forever reporting the fixed
+        finding, so nothing ever closes). Same body as create_scan.
+
+        Credentials are REPLACED, not appended: PUT with ``credentials.add``
+        alone piles a fresh instance onto the ones already on the scan (verified
+        live), so every re-run would add a copy and a stale/wrong login from an
+        earlier run would keep being tried. The attached instances are read
+        back and sent in ``credentials.delete`` so the scan carries exactly the
+        credentials resolved for this run."""
+        body = self._scan_body(name, text_targets, policy_id, folder_id, credentials)
+        old = self._credential_instance_ids(scan_id)
+        if old:
+            body.setdefault("credentials", {})["delete"] = old
+        try:
+            return self._put(f"/scans/{scan_id}", json_body=body)
+        except requests.exceptions.HTTPError as e:
+            if getattr(e.response, "status_code", None) == 412:
+                raise self._scan_write_error(e) from e
+            raise
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as e:
+            raise self._scan_write_error(e) from e
+
+    def launch_scan(self, scan_id) -> str:
+        """Launch a scan; return the run's ``scan_uuid`` ("" if absent)."""
+        data = self._post(f"/scans/{scan_id}/launch")
+        return str((data or {}).get("scan_uuid") or "")
+
+    def get_scan_status(self, scan_id) -> str:
+        """Current run status (running/completed/canceled/aborted/empty/paused),
+        lowercased; "unknown" on failure. Reads ``info.status`` from
+        /scans/{id} directly — NOT via the cached get_scan_detail, which would
+        pin the first polled status for the life of the adapter."""
+        try:
+            detail = self._get(f"/scans/{scan_id}") or {}
+            return str((detail.get("info") or {}).get("status") or "").lower() or "unknown"
+        except Exception as e:
+            logger.warning(f"Failed to get scan {scan_id} status: {e}")
+            return "unknown"
+
+    def stop_scan(self, scan_id) -> bool:
+        """Best-effort stop; True on success, False on any error (never raises)."""
+        try:
+            self._post(f"/scans/{scan_id}/stop")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to stop scan {scan_id}: {e}")
+            return False
+
+
+if __name__ == "__main__":
+    # Self-check of the 401 path against a stub Nessus: stale API keys + a stored
+    # username/password -> automatic /session login and retry; keys only -> the
+    # actionable error. No real scanner needed. Run from backend/ with .env loaded
+    # (the package import needs SESSION_SECRET):
+    #   python -m grc.modules.integrations.adapters.nessus_adapter
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class _StubNessus(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, body):
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(body).encode())
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            if self.path == "/session" and body == {"username": "u", "password": "p"}:
+                return self._send(200, {"token": "tok"})
+            self._send(401, {"error": "Invalid Credentials"})
+
+        def do_GET(self):
+            if self.headers.get("X-Cookie") == "token=tok":
+                return self._send(200, {"scans": [{"id": 1, "status": "completed"}]})
+            self._send(401, {"error": "Authorization required"})
+
+    srv = HTTPServer(("127.0.0.1", 0), _StubNessus)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+    stale = {"access_key": "old", "secret_key": "old"}
+    ok = NessusAdapter("http://127.0.0.1", port, {**stale, "username": "u", "password": "p"})
+    assert [s["id"] for s in ok.get_scans()] == [1], "fallback login did not recover"
+    assert "X-ApiKeys" not in ok.session.headers and ok.session.headers.get("X-Cookie") == "token=tok"
+    try:
+        NessusAdapter("http://127.0.0.1", port, stale).get_scans()
+        raise AssertionError("keys-only adapter should have raised")
+    except requests.exceptions.HTTPError as e:
+        assert e.response.status_code == 401 and "Regenerate them in Nessus" in str(e), e
+    srv.shutdown()
+
+    # Local-account domain fill: no domain -> target short-hostname (or "." for an IP); explicit kept.
+    assert NessusAdapter._local_windows_domain("192.168.1.10") == "."
+    assert NessusAdapter._local_windows_domain("DESKTOP-AB.corp.local") == "DESKTOP-AB"
+    _w = NessusAdapter._nessus_credentials([{"type": "windows", "username": "a", "password": "x"}], "10.0.0.1")
+    assert _w["add"]["Host"]["Windows"][0]["domain"] == "."
+    _w2 = NessusAdapter._nessus_credentials([{"type": "windows", "username": "a", "password": "x", "domain": "CORP"}], "10.0.0.1")
+    assert _w2["add"]["Host"]["Windows"][0]["domain"] == "CORP"
+    print("nessus_adapter 401-fallback + domain-fill self-check OK")

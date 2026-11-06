@@ -19,8 +19,29 @@ import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+import { ControlStatusPill, CustomBadge } from '@/components/soc2/ui';
 import QuantificationTab from './_components/QuantificationTab';
+import LinkFrameworkRequirementModal from './_components/LinkFrameworkRequirementModal';
 import type { ReactNode } from 'react';
+
+/** Normalized / SCF bridge row as returned on risk detail (Stage E fields optional). */
+type LinkedNcControl = {
+  id: number;
+  control_id: number;
+  code: string;
+  name: string;
+  control_status?: string | null;
+  custom?: boolean;
+  scf_id?: string | null;
+};
+
+/** Picker row may include SCF/custom codes when the normalized-controls API returns them. */
+type PickerNormalizedControl = NormalizedControl & {
+  scf_id?: string | null;
+  code?: string | null;
+  source?: string | null;
+  custom?: boolean;
+};
 
 interface RiskDetailData {
   id: number;
@@ -44,8 +65,18 @@ interface RiskDetailData {
   review_date?: string;
   created_at: string;
   updated_at: string;
-  linked_controls: Array<{id: number; control_id: number; code: string; name: string}>;
+  linked_controls: LinkedNcControl[];
+  linked_internal_controls?: Array<{
+    id: number;
+    name?: string;
+    title?: string;
+    status?: string;
+    link_id: number;
+    control_id?: string;
+  }>;
   linked_framework_controls: Array<{id: number; framework_control_id: number; code: string; name: string; mitigation_effectiveness?: string; notes?: string}>;
+  /** Controls of the organisation's installed frameworks (UAE IA, ...): from the Risk Library or the Link Framework Control panel. */
+  linked_framework_requirements?: Array<{id: number; framework_id: number; framework_name: string | null; parsed_control_id: number; code: string; title: string | null; domain: string | null; mitigation_effectiveness?: string; notes?: string | null}>;
   linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
   linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;
   linked_governance: Array<{id: number; governance_objective_id: number; name: string; impact_level: string}>;
@@ -102,6 +133,7 @@ export default function RiskDetailPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLinkFrameworkControlModal, setShowLinkFrameworkControlModal] = useState(false);
+  const [showLinkRequirementModal, setShowLinkRequirementModal] = useState(false);
   const [showLinkGovernanceModal, setShowLinkGovernanceModal] = useState(false);
   const [sessionLinkedInternalIds, setSessionLinkedInternalIds] = useState<number[]>([]);
 
@@ -118,6 +150,13 @@ export default function RiskDetailPage() {
       setTreatmentPlan(risk.treatment_plan);
     }
   }, [risk?.treatment_plan]);
+
+  // Drop optimistic session IDs once the detail API includes them.
+  useEffect(() => {
+    const apiIds = new Set((risk?.linked_internal_controls || []).map((c) => Number(c.id)));
+    if (apiIds.size === 0) return;
+    setSessionLinkedInternalIds((prev) => prev.filter((id) => !apiIds.has(id)));
+  }, [risk?.linked_internal_controls]);
 
   const { data: allControls } = useQuery({
     queryKey: ['all-normalized-controls'],
@@ -177,7 +216,7 @@ export default function RiskDetailPage() {
   const { data: allDocuments } = useQuery({
     queryKey: ['all-governance-documents-for-risk-link'],
     queryFn: async () => {
-      const response = await governanceApi.getDocuments({ limit: 500 });
+      const response = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
       const data: any = response.data;
       return Array.isArray(data) ? data : (data?.items || []);
     },
@@ -225,7 +264,22 @@ export default function RiskDetailPage() {
     },
   });
 
+  const unlinkInternalControlMutation = useMutation({
+    mutationFn: ({ controlId, linkId }: { controlId: number; linkId: number }) =>
+      ermApi.internalControls.unlinkRisk(controlId, linkId),
+    onSuccess: (_data, { controlId }) => {
+      setSessionLinkedInternalIds((prev) => prev.filter((id) => id !== controlId));
+      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+      queryClient.invalidateQueries({ queryKey: ['all-internal-controls-for-risk-link'] });
+    },
+  });
+
   const unlinkSessionInternalControl = (controlId: number) => {
+    const persisted = (risk?.linked_internal_controls || []).find((c) => Number(c.id) === controlId);
+    if (persisted?.link_id) {
+      unlinkInternalControlMutation.mutate({ controlId, linkId: persisted.link_id });
+      return;
+    }
     setSessionLinkedInternalIds((prev) => prev.filter((id) => id !== controlId));
   };
 
@@ -247,6 +301,13 @@ export default function RiskDetailPage() {
 
   const unlinkFrameworkControlMutation = useMutation({
     mutationFn: (linkId: number) => risksApi.unlinkFrameworkControl(riskId, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+    },
+  });
+
+  const unlinkRequirementMutation = useMutation({
+    mutationFn: (linkId: number) => risksApi.unlinkRequirement(riskId, linkId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
     },
@@ -384,7 +445,7 @@ export default function RiskDetailPage() {
   const tabs: { id: TabType; label: string; icon: React.ElementType; count?: number }[] = [
     { id: 'details', label: 'Overview', icon: ClipboardCheck },
     { id: 'treatment', label: 'Treatment', icon: Activity },
-    { id: 'controls', label: 'Controls', icon: Shield, count: (risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) },
+    { id: 'controls', label: 'Controls', icon: Shield, count: (risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) + (risk.linked_framework_requirements?.length || 0) },
     { id: 'assets', label: 'Assets', icon: Building2, count: risk.linked_assets?.length || 0 },
     { id: 'evidence', label: 'Evidence', icon: FileText, count: risk.linked_evidence?.length || 0 },
     { id: 'governance', label: 'Documents', icon: Target, count: (risk.linked_governance?.length || 0) + (linkedDocuments?.length || 0) },
@@ -470,7 +531,7 @@ export default function RiskDetailPage() {
               onEdit={() => router.push(`/erm/risks/list?edit=${risk.id}`)}
               onTreatment={() => { setActiveTab('treatment'); setIsEditingTreatment(true); }}
               onDelete={() => setShowDeleteConfirm(true)}
-              controlCount={(risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0)}
+              controlCount={(risk.linked_controls?.length || 0) + (risk.linked_framework_controls?.length || 0) + (risk.linked_framework_requirements?.length || 0)}
               assetCount={risk.linked_assets?.length || 0}
               evidenceCount={risk.linked_evidence?.length || 0}
             />
@@ -549,10 +610,17 @@ export default function RiskDetailPage() {
                 onLinkControl={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
                 onLinkInternalControl={(controlId) => linkInternalControlMutation.mutate(controlId)}
                 onLinkFrameworkControl={() => setShowLinkFrameworkControlModal(true)}
+                onLinkRequirement={() => setShowLinkRequirementModal(true)}
                 onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
                 onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                onUnlinkRequirement={(linkId) => unlinkRequirementMutation.mutate(linkId)}
                 onUnlinkSessionInternalControl={unlinkSessionInternalControl}
-                isUnlinking={unlinkControlMutation.isPending || unlinkFrameworkControlMutation.isPending}
+                isUnlinking={
+                  unlinkControlMutation.isPending ||
+                  unlinkFrameworkControlMutation.isPending ||
+                  unlinkRequirementMutation.isPending ||
+                  unlinkInternalControlMutation.isPending
+                }
                 canEdit={canEdit}
                 canDelete={canDelete}
               />
@@ -620,6 +688,18 @@ export default function RiskDetailPage() {
         isLinking={linkFrameworkControlMutation.isPending}
         linkedControlIds={risk.linked_framework_controls?.map(c => c.framework_control_id) || []}
         allFrameworkControls={allFrameworkControls || []}
+      />
+
+      <LinkFrameworkRequirementModal
+        isOpen={showLinkRequirementModal}
+        riskId={riskId}
+        linkedControlIds={risk.linked_framework_requirements?.map((c) => c.parsed_control_id) || []}
+        preferredFrameworkId={risk.linked_framework_requirements?.[0]?.framework_id}
+        onClose={() => setShowLinkRequirementModal(false)}
+        onLinked={() => {
+          queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
+          setShowLinkRequirementModal(false);
+        }}
       />
 
       <LinkGovernanceModal
@@ -981,22 +1061,26 @@ function ControlsTab({
   onLinkControl,
   onLinkInternalControl,
   onLinkFrameworkControl,
+  onLinkRequirement,
   onUnlinkControl,
   onUnlinkFrameworkControl,
+  onUnlinkRequirement,
   onUnlinkSessionInternalControl,
   isUnlinking,
   canEdit,
   canDelete,
 }: {
   risk: RiskDetailData;
-  allControls: NormalizedControl[];
+  allControls: PickerNormalizedControl[];
   allInternalControls: any[];
   sessionLinkedInternalIds: number[];
   onLinkControl: (controlId: number) => void;
   onLinkInternalControl: (controlId: number) => void;
   onLinkFrameworkControl: () => void;
+  onLinkRequirement: () => void;
   onUnlinkControl: (linkId: number) => void;
   onUnlinkFrameworkControl: (linkId: number) => void;
+  onUnlinkRequirement: (linkId: number) => void;
   onUnlinkSessionInternalControl: (controlId: number) => void;
   isUnlinking: boolean;
   canEdit: boolean;
@@ -1008,15 +1092,23 @@ function ControlsTab({
   };
 
   const linkedControlIds = risk.linked_controls?.map(c => c.control_id) || [];
+  const apiLinkedInternal = risk.linked_internal_controls || [];
+  const apiLinkedInternalIds = apiLinkedInternal.map((c) => Number(c.id));
+  const linkedInternalIdSet = new Set([...apiLinkedInternalIds, ...sessionLinkedInternalIds]);
   const normalizedItems = allControls
     .filter(c => !linkedControlIds.includes(Number(c.id)))
-    .map(c => ({
-      value: `n-${c.id}`,
-      label: c.name || `Control ${c.internal_id || c.id}`,
-      subLabel: c.internal_id ? `Normalized • ${c.internal_id}` : 'Normalized',
-    }));
+    .map(c => {
+      const scfOrCode = c.scf_id || c.code || c.internal_id || null;
+      const isCustom = !!(c.custom || c.source === 'custom');
+      const kind = isCustom ? 'Custom' : scfOrCode ? 'SCF' : 'Normalized';
+      return {
+        value: `n-${c.id}`,
+        label: c.name || `Control ${scfOrCode || c.id}`,
+        subLabel: scfOrCode ? `${kind} • ${scfOrCode}` : kind,
+      };
+    });
   const internalItems = (allInternalControls || [])
-    .filter((c: any) => !sessionLinkedInternalIds.includes(Number(c.id)))
+    .filter((c: any) => !linkedInternalIdSet.has(Number(c.id)))
     .map((c: any) => ({
       value: `i-${c.id}`,
       label: c.name || c.title || `Control #${c.id}`,
@@ -1025,8 +1117,13 @@ function ControlsTab({
   const combinedControlItems = [...internalItems, ...normalizedItems];
 
   const sessionLinkedInternalControls = (allInternalControls || []).filter((c: any) =>
-    sessionLinkedInternalIds.includes(Number(c.id))
+    sessionLinkedInternalIds.includes(Number(c.id)) && !apiLinkedInternalIds.includes(Number(c.id))
   );
+
+  const ncHref = (control: LinkedNcControl) =>
+    control.scf_id
+      ? `/automation/soc2-controls/${encodeURIComponent(control.scf_id)}`
+      : `/control-library/${control.control_id}`;
 
   return (
     <div className="space-y-4">
@@ -1036,6 +1133,15 @@ function ControlsTab({
           Internal Controls
         </h3>
         <div className="flex gap-2 flex-wrap">
+          {canEdit && (
+            <button
+              type="button"
+              onClick={onLinkRequirement}
+              className="flex items-center gap-2 rounded-lg border border-primary-600 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-50"
+            >
+              Link Framework Control
+            </button>
+          )}
           {canEdit && (
             <InlineLinkPicker
               triggerLabel="Link Internal Control"
@@ -1055,10 +1161,31 @@ function ControlsTab({
         </div>
       </div>
 
-      {((risk.linked_controls && risk.linked_controls.length > 0) || sessionLinkedInternalControls.length > 0) && (
+      {((risk.linked_controls && risk.linked_controls.length > 0) ||
+        apiLinkedInternal.length > 0 ||
+        sessionLinkedInternalControls.length > 0) && (
         <div>
           <h4 className="mb-2 text-xs font-medium text-slate-600">Internal Controls</h4>
           <div className="space-y-2">
+            {apiLinkedInternal.map((control) => (
+              <LinkEntityRow
+                key={`api-i-${control.link_id}`}
+                href={`/erm/internal-controls/${control.id}`}
+                icon={Shield}
+                title={control.name || control.title || `Control #${control.id}`}
+                subtitle={
+                  <>
+                    <span>{control.control_id || `IC-${control.id}`}</span>
+                    {control.status && (
+                      <span className="ml-2 text-slate-500">· {control.status}</span>
+                    )}
+                  </>
+                }
+                onUnlink={() => onUnlinkSessionInternalControl(Number(control.id))}
+                canDelete={canDelete}
+                isUnlinking={isUnlinking}
+              />
+            ))}
             {sessionLinkedInternalControls.map((control: any) => (
               <LinkEntityRow
                 key={`session-i-${control.id}`}
@@ -1074,15 +1201,28 @@ function ControlsTab({
             {(risk.linked_controls || []).map((control) => (
               <LinkEntityRow
                 key={control.id}
-                href={`/control-library/${control.control_id}`}
+                href={ncHref(control)}
                 icon={Shield}
                 title={control.name}
-                subtitle={control.code}
+                badge={(
+                  <>
+                    {control.custom && <CustomBadge />}
+                    {control.control_status && (
+                      <ControlStatusPill status={control.control_status} />
+                    )}
+                  </>
+                )}
+                subtitle={control.scf_id || control.code}
                 onUnlink={() => onUnlinkControl(control.id)}
                 canDelete={canDelete}
                 isUnlinking={isUnlinking}
               />
             ))}
+            {(risk.linked_controls || []).length > 0 && (
+              <p className="text-[11px] text-slate-400">
+                Control status is an indicator — residual score is unchanged.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -1115,8 +1255,39 @@ function ControlsTab({
         </div>
       )}
 
+      {risk.linked_framework_requirements && risk.linked_framework_requirements.length > 0 && (
+        <div>
+          <h4 className="mb-2 text-xs font-medium text-slate-600">Framework Requirements</h4>
+          <div className="space-y-2">
+            {risk.linked_framework_requirements.map((control) => (
+              <LinkEntityRow
+                key={`fr-${control.id}`}
+                icon={Shield}
+                title={control.title || control.code}
+                subtitle={
+                  <>
+                    <span>{control.framework_name ? `${control.framework_name} · ` : ''}{control.code}</span>
+                    {control.mitigation_effectiveness && (
+                      <span className={`ml-2 ${getMitigationColor(control.mitigation_effectiveness)}`}>
+                        · {control.mitigation_effectiveness}
+                      </span>
+                    )}
+                    {control.notes && <span className="ml-2 text-slate-500">· {control.notes}</span>}
+                  </>
+                }
+                onUnlink={() => onUnlinkRequirement(control.id)}
+                canDelete={canEdit}
+                isUnlinking={isUnlinking}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {(!risk.linked_controls || risk.linked_controls.length === 0) &&
        (!risk.linked_framework_controls || risk.linked_framework_controls.length === 0) &&
+       (!risk.linked_framework_requirements || risk.linked_framework_requirements.length === 0) &&
+       apiLinkedInternal.length === 0 &&
        sessionLinkedInternalControls.length === 0 && (
         <EmptyLinkState icon={Shield} title="No controls linked" hint="Link controls to track mitigation measures" />
       )}

@@ -27,6 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ....services.licence_guard import is_restricted_control
 from ....models import (
     NormalizationRun, NormalizedControl, NormalizedControlLink,
     CommonControlGroup, CommonControlGroupMapping, ParsedFrameworkControl,
@@ -45,6 +46,13 @@ def _baseline_view(db: Session, base: NormalizationRun) -> Dict[str, Any]:
     groups = db.query(CommonControlGroup).filter(CommonControlGroup.run_id == base.id).all()
     gid_domain = {g.id: (g.domain or g.name or "Other / Uncategorized") for g in groups}
     ncs = db.query(NormalizedControl).filter(NormalizedControl.run_id == base.id).all()
+    if any(is_restricted_control(nc) for nc in ncs):
+        # Every caller of this view is the AI absorption pipeline, which sends the
+        # base's domain names and control names to the model as classification
+        # targets. SCF's are SCF content (CC BY-ND). Refusing here also stops
+        # `commit` copying another 1,534 SCF rows into a newer run that would
+        # become the baseline and leak again on the next absorption.
+        raise RuntimeError("Your control library is the Secure Controls Framework, and its licence doesn't allow its control names or text to be sent to an AI model, so AI framework absorption isn't available for it.")
     # set-name -> domain (master list the new framework is classified onto)
     set_domain: Dict[str, str] = {}
     for nc in ncs:

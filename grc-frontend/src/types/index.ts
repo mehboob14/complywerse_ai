@@ -237,6 +237,8 @@ export interface Risk {
   register_type?: string;
   ubl_fields?: Record<string, unknown>;
   template_fields?: Record<string, unknown>;
+  /** The tenant's own fields (Custom fields tab). */
+  custom_values?: Record<string, unknown> | null;
   business_owner_id?: number;
   business_owner?: { id: number; email: string; full_name?: string };
   affected_department_ids?: number[];
@@ -252,6 +254,16 @@ export interface Risk {
   residual_score?: number;
   risk_appetite?: string;
   status: RiskStatus;
+  /** What a person set (critical / high / medium / low); empty means "from the score". */
+  priority?: string | null;
+  /** What the SLA follows: `priority`, else the band the score falls in. */
+  effective_priority?: string | null;
+  /** Where the risk stands against the Risk Register SLA (list endpoint only). */
+  sla?: {
+    state: 'on_track' | 'due_soon' | 'breached' | 'paused' | 'closed' | 'no_due_date';
+    days_overdue: number | null; due_in_days: number | null; target_days: number | null;
+    implied_due_date: boolean; escalated: boolean;
+  } | null;
   treatment_plan?: string;
   owner_id?: number;
   owner_name?: string;
@@ -272,7 +284,15 @@ export interface Risk {
 }
 
 export interface RiskDetail extends Risk {
-  linked_controls: Array<{id: number; control_id: number; code: string; name: string}>;
+  linked_controls: Array<{
+    id: number;
+    control_id: number;
+    code: string;
+    name: string;
+    control_status?: string | null;
+    custom?: boolean;
+    scf_id?: string | null;
+  }>;
   linked_framework_controls: Array<{id: number; framework_control_id: number; code: string; name: string; mitigation_effectiveness?: string; notes?: string; control_ref?: string; title?: string}>;
   linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
   linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;
@@ -448,7 +468,17 @@ export interface ITAsset {
 }
 
 export interface AssetDetail extends ITAsset {
-  linked_controls: Array<{id: number; code: string; title: string}>;
+  linked_controls: Array<{
+    id: number;
+    control_id?: number;
+    code: string;
+    name?: string;
+    title?: string;
+    scf_id?: string | null;
+    custom?: boolean;
+    control_status?: string | null;
+    check_status?: string | null;
+  }>;
   linked_framework_controls: Array<{id: number; control_ref: string; title: string; framework_name: string}>;
   linked_risks: Array<{id: number; title: string; risk_score: number}>;
   linked_evidence: Array<{id: number; name: string; status: string}>;
@@ -483,6 +513,7 @@ export interface CertificationJourney {
     regulatory_authority?: string | null;
     adoption_approach?: string[];
   };
+  control_structure?: ControlStructure | null;
   name: string;
   target_date?: string;
   started_at: string;
@@ -597,6 +628,60 @@ export interface ControlEvidence {
   // Set when this control-evidence row points back at a row in the
   // central evidence library (used to deep-link to `/evidence/{id}`).
   linked_evidence_id?: number;
+  // The sub-control (a framework with `control_structure`, e.g. UAE IA) this file was attached to; null or absent: the control as a whole.
+  sub_control_code?: string | null;
+}
+
+// A printed point under a sub-control ("a.", "•"), as deep as the standard prints them.
+export interface PointNode {
+  label: string;
+  text: string;
+  points?: PointNode[];
+}
+
+// One sub-control of a control. `criterion_index` is the key into the control's `criteria_status` (null: nothing to tick).
+// `evidence` holds the titles of the control's evidence items that evidence it; the items themselves are the control's own
+// `evidence_requirements` (looked up by title).
+export interface SubControlNode {
+  code: string;
+  number: number;
+  text: string;
+  lead_in: string | null;
+  criterion_index: number | null;
+  met: boolean | null;
+  consideration: boolean;
+  points: PointNode[];
+  evidence: string[];
+  evidence_requirements?: EvidenceRequirement[];
+  // Who owns this sub-control: the same two fields as the control's own, kept per sub-control code.
+  assigned_user_ids?: number[];
+  assignees?: Array<{ id: number; display_name: string; email: string }>;
+}
+
+// `GET /certifications/{id}` → `control_structure`: the standard's families and sub-families (objective, indicators, threats).
+export interface ControlStructureFamily {
+  id: string;
+  name: string;
+  kind?: string;
+  objective?: string;
+  performance_indicators?: string[];
+}
+
+export interface ControlStructureSubfamily {
+  id: string;
+  family: string;
+  name: string;
+  objective?: string;
+  performance_indicators?: string[];
+  automation_guidance?: string;
+  threats?: string[];
+}
+
+export interface ControlStructure {
+  version: number;
+  source?: string;
+  families: ControlStructureFamily[];
+  subfamilies: ControlStructureSubfamily[];
 }
 
 export interface CertificationControl {
@@ -631,6 +716,15 @@ export interface CertificationControl {
   // Assessment criteria (spec sub-points) + per-criterion met/not-met state.
   assessment_criteria?: string[];
   criteria_status?: Record<string, boolean>;
+  // The standard's own hierarchy (frameworks whose journey carries `control_structure`, e.g. UAE IA): the sub-family a control
+  // sits in, its implementation priority and applicability, and its sub-controls with their evidence.
+  parent_section?: string | null;
+  priority_tier?: string | null;
+  applicability?: string | null;
+  control_types?: string[];
+  implementation_guidance?: string | null;
+  control_evidence?: string[];
+  sub_control_tree?: SubControlNode[] | null;
   sub_controls: SubControlWithEvidence[];
   evidence_requirements: EvidenceRequirement[];
   evidence_recommendations?: string[];

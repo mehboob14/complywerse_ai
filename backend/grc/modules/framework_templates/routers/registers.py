@@ -292,6 +292,8 @@ def create_entry(
 ):
     _validate_type(register_type)
     tid = _tenant_id(user, db)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.owner_id])
     max_seq = db.query(FrameworkRegisterEntry).filter(
         FrameworkRegisterEntry.tenant_id == tid,
         FrameworkRegisterEntry.journey_id == journey_id,
@@ -329,6 +331,8 @@ def update_entry(
     ).first()
     if not e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.owner_id], kept=[e.owner_id])
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(e, k, v)
     db.commit()

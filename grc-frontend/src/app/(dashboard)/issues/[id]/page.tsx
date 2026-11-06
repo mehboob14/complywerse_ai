@@ -15,6 +15,7 @@ import {
 import { apiClient, issuesApi } from '@/lib/api';
 import { InlineLinkPicker } from '@/components/ui';
 import { SeverityChip, StateChip, SourceChip, formatDate, timeAgo } from '../_components/shared';
+import { RegisterPanel } from '@/components/audit-register/RegisterPanel';
 
 interface IssueDetail {
   id: number;
@@ -233,6 +234,9 @@ export default function IssueDetailPage() {
           popup — keeps the record short instead of one long scroll. */}
       <div className="space-y-4">
         <OverviewTab data={data} />
+
+        {/* Renders only when this issue came from the client's register workbook. */}
+        <RegisterPanel issueId={issueId} />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {([
@@ -1175,6 +1179,17 @@ const ACTIVITY_META: Record<
   linked:            { label: 'Linked a related item',   icon: ExternalLink,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   unlinked:          { label: 'Unlinked a related item', icon: ExternalLink,   tone: 'bg-slate-50 text-slate-700 border-slate-200' },
   action_promoted_to_task: { label: 'Promoted action to task', icon: Rocket,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  // Audit Issue Register
+  register_created:       { label: 'Added to the audit register',       icon: Plus,          tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  register_edit:          { label: 'Edited register columns',          icon: ListChecks,    tone: 'bg-slate-50 text-slate-700 border-slate-200' },
+  register_deleted:       { label: 'Deleted from the register',        icon: Trash2,        tone: 'bg-rose-50 text-rose-700 border-rose-200' },
+  register_restored:      { label: 'Restored to the register',         icon: Rocket,        tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  validation_submitted:   { label: 'Submitted for validation',         icon: ClipboardList, tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  validation_decision:    { label: 'Recorded the validation decision', icon: ShieldCheck,   tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  extension_requested:    { label: 'Requested an extension',           icon: ActivityIcon,  tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+  extension_decided:      { label: 'Audit Committee decided the extension', icon: CheckCircle2, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+  extension_regulator_notified: { label: 'Recorded the regulator was told', icon: ExternalLink, tone: 'bg-slate-50 text-slate-700 border-slate-200' },
+  regulator_status:       { label: 'Changed the regulator status',     icon: ActivityIcon,  tone: 'bg-primary-50 text-primary-700 border-primary-200' },
 };
 
 function activityMeta(type: string) {
@@ -1237,6 +1252,22 @@ function renderPayloadDetails(type: string, payload: Record<string, unknown> | n
     | undefined;
   if (reasonLike) {
     return <p className="mt-1 text-[11px] text-slate-600 italic">“{reasonLike}”</p>;
+  }
+
+  // Added to the audit register by hand: how many columns, and which AI drafted.
+  if (type === 'register_created') {
+    const filledCount = Array.isArray(payload.fields) ? payload.fields.length : 0;
+    const drafted = Array.isArray(payload.ai_fields) ? (payload.ai_fields as string[]) : [];
+    return (
+      <p className="mt-1 text-[11px] text-slate-600">
+        {filledCount} column{filledCount === 1 ? '' : 's'} filled in
+        {drafted.length > 0 && (
+          <span className="text-primary-700">
+            {' · '}drafted by AI Assist and accepted: {drafted.map((f) => f.replace(/_/g, ' ')).join(', ')}
+          </span>
+        )}
+      </p>
+    );
   }
 
   // Link / unlink — denormalised name + ref

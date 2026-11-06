@@ -26,6 +26,9 @@ import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getTenantSlug } from '@/lib/api';
+import { useAutoGrow } from '@/lib/useAutoGrow';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 interface Source {
   rank: number;
@@ -143,7 +146,12 @@ const SUGGESTED_PROMPTS = [
   },
 ];
 
-export default function ComplyChatPage() {
+// opened without Dashboard > ComplyChat > view (the top bar shows ComplyChat to the same people): the no-access page
+export default function GuardedComplyChatPage() {
+  return <PermissionGuard required={navPermissions('/complychat')}><ComplyChatPage /></PermissionGuard>;
+}
+
+function ComplyChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>(() => loadStoredConversations());
   const [activeConversationId, setActiveConversationId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
@@ -170,12 +178,7 @@ export default function ComplyChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-    }
-  }, [inputMessage]);
+  useAutoGrow(textareaRef, inputMessage);
 
   useEffect(() => {
     if (!activeConversationId && conversations.length > 0) {
@@ -918,7 +921,7 @@ export default function ComplyChatPage() {
                   placeholder="Ask about controls, evidence, risks, or upload files for analysis..."
                   rows={1}
                   className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-11 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 scrollbar-thin"
-                  style={{ minHeight: '42px', maxHeight: '132px' }}
+                  style={{ minHeight: '42px' }}
                 />
                 <button
                   type="submit"

@@ -69,7 +69,7 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 export default function PivotChart({
-  result, kind, measureIdx, colDomain, animate = true, options,
+  result, kind, measureIdx, colDomain, animate = true, options, onSelect,
 }: {
   result: PivotResult;
   kind: ChartKind;
@@ -78,6 +78,11 @@ export default function PivotChart({
   rowDomain?: string[];  // kept for callers; colour is by shown order now
   animate?: boolean;
   options?: { legend?: boolean; labels?: boolean };
+  /** Drill-through: the category the viewer clicked. Wired for the shapes with
+   *  one unambiguous category per mark (bars, lines, areas, pie, donut).
+   *  Treemap, radar, scatter and heatmap don't call it — a click there doesn't
+   *  name a single row value, and guessing one would drill to the wrong rows. */
+  onSelect?: (category: string) => void;
 }) {
   const { nodes, colKeys, hasCol, measures } = result;
   const m = measures[measureIdx];
@@ -127,6 +132,8 @@ export default function PivotChart({
     return frame(
       <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
         <Pie data={slices} dataKey="value" nameKey="name" innerRadius={kind === 'donut' ? '52%' : 0} outerRadius="80%"
+          onClick={onSelect ? (d: { name?: string }) => { if (d?.name && d.name !== 'Other') onSelect(d.name); } : undefined}
+          className={onSelect ? 'cursor-pointer' : undefined}
           paddingAngle={kind === 'donut' ? 2 : 0} stroke={INK.surface} strokeWidth={2} isAnimationActive={animate}
           label={labels ? (p: { name?: string; value?: number }) => `${p.name}: ${fmt(p.value)}` : undefined} labelLine={labels}>
           {slices.map((s, i) => <Cell key={s.name} fill={folded && i === slices.length - 1 ? OTHER : SERIES[i % SERIES.length]} />)}
@@ -248,7 +255,20 @@ export default function PivotChart({
     ? <XAxis type="number" {...AXIS} height={28} tickFormatter={percent ? (v: number) => `${Math.round(v * 100)}%` : undefined} />
     : <YAxis {...AXIS} width={percent ? 46 : 52} tickFormatter={percent ? (v: number) => `${Math.round(v * 100)}%` : undefined} />;
 
-  const common = { data, margin: { top: 8, right: 12, left: 0, bottom: 4 }, ...(percent ? { stackOffset: 'expand' as const } : {}) };
+  const common = {
+    data,
+    margin: { top: 8, right: 12, left: 0, bottom: 4 },
+    ...(percent ? { stackOffset: 'expand' as const } : {}),
+    ...(onSelect
+      ? {
+          onClick: (state: { activeLabel?: string | number }) => {
+            const label = state?.activeLabel;
+            if (label != null && label !== '') onSelect(String(label));
+          },
+          className: 'cursor-pointer',
+        }
+      : {}),
+  };
   const grid = <CartesianGrid vertical={horizontal} horizontal={!horizontal} stroke={INK.grid} />;
   const tip = <Tooltip {...TOOLTIP} cursor={isBar ? { fill: 'rgba(15,23,42,0.04)' } : undefined} formatter={(v) => fmt(v)} />;
   const leg = legend && keys.length > 1 ? <Legend {...LEGEND} /> : null;

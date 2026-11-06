@@ -59,7 +59,10 @@ from ..models import (
 from .auth_router import (
     SECRET_KEY as APP_SIGNING_SECRET,
     ALGORITHM,
+    SOURCE_SSO,
     create_access_token,
+    has_tenant_permission,
+    is_platform_account,
     set_auth_cookie,
     _resolve_cookie_domain,
 )
@@ -73,7 +76,6 @@ router = APIRouter(prefix="/sso", tags=["SSO / Identity Providers"])
 entra_router = APIRouter(prefix="/auth/entra", tags=["SSO / Identity Providers"])
 
 PROVIDER_ENTRA = "entra_id"
-SOURCE_SSO = "sso"
 SCOPE = "openid profile email User.Read"
 APP_SCOPE = "https://graph.microsoft.com/.default"
 
@@ -168,10 +170,7 @@ def _require_admin(
     cookie_token: Optional[str],
     authz: Optional[str],
 ) -> GRCUser:
-    """Mirror admin_router.check_permission: primary-contact bypass +
-    Administrator role bypass, otherwise admin:integrations_sso:manage."""
-    from ..models import Permission, RolePermission  # local import (cycle)
-
+    """An administrator (auth_router.is_tenant_admin), otherwise admin:integrations_sso:manage."""
     token = _resolve_token(cookie_token, authz)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -186,29 +185,7 @@ def _require_admin(
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
 
-    tenant_row = tenant_db.query(Tenant).first()
-    if (
-        tenant_row
-        and tenant_row.primary_contact_email
-        and user.email
-        and tenant_row.primary_contact_email.lower() == user.email.lower()
-    ):
-        return user
-
-    role_ids = [ur.role_id for ur in tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-    if not role_ids:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
-    if tenant_db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first():
-        return user
-
-    perm = tenant_db.query(Permission).filter(Permission.name == "admin:integrations_sso:manage").first()
-    if not perm:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    if not tenant_db.query(RolePermission).filter(
-        RolePermission.role_id.in_(role_ids),
-        RolePermission.permission_id == perm.id,
-    ).first():
+    if not has_tenant_permission(tenant_db, user, "admin:integrations_sso:manage"):
         raise HTTPException(status_code=403, detail="Permission denied")
     return user
 
@@ -590,6 +567,8 @@ def _upsert_user_from_claims(
     if email:
         user = tenant_db.query(GRCUser).filter(GRCUser.email == email).first()
         if user:
+            if not is_platform_account(tenant_db, user):
+                return None         # an account an access-review connector imported stays in Access Reviews: never adopted by email
             user.external_provider = PROVIDER_ENTRA
             user.external_id = oid
             user.last_login = datetime.utcnow()
@@ -616,6 +595,14 @@ def _upsert_user_from_claims(
     tenant_db.add(new_user)
     tenant_db.flush()
     return new_user
+
+
+def _imported_by_email(tenant_db: Session, claims: Dict[str, Any]) -> bool:
+    """The sign-in was refused because its email names an account an access-review connector imported (never adopted
+    automatically): the login page then says an administrator can create the user (admin create_user adopts the account)."""
+    email = (claims.get("email") or claims.get("preferred_username") or "").lower().strip()
+    user = tenant_db.query(GRCUser).filter(GRCUser.email == email).first() if email else None
+    return user is not None and not is_platform_account(tenant_db, user)
 
 
 # ---------------------------------------------------------------------------
@@ -1196,7 +1183,8 @@ def sso_callback(
 
             user = _upsert_user_from_claims(tenant_db=tenant_db, claims=claims, config=cfg)
             if not user:
-                return _login_redirect(request, "sso_not_provisioned", target_tenant_slug)
+                refused = "sso_imported_account" if _imported_by_email(tenant_db, claims) else "sso_not_provisioned"
+                return _login_redirect(request, refused, target_tenant_slug)
 
             tenant_row = tenant_db.query(Tenant).first()
             try:

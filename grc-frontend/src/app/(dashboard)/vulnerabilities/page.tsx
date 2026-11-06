@@ -1001,7 +1001,7 @@ export default function VulnerabilitiesPage() {
   }
 
   return (
-    <div className="-m-4 lg:-m-5">
+    <div className="-m-4 lg:-m-5 h-full flex flex-col">
       {/* Redesign: no page-tab bar (the mock has none) — the register below is the
           whole page. Overview → /vulnerabilities/dashboard; Departments / SLA are
           rail items in the register. The former Overview/Departments/SLA branches
@@ -1010,7 +1010,7 @@ export default function VulnerabilitiesPage() {
       {/* Tab Content */}
       {shownTab === 'vulnerabilities' && (
       <>
-      <div className="px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
+      <div className="px-3 sm:px-6 py-3 bg-[var(--color-subtle)] flex-1 min-h-0 flex flex-col">
         {/* CTEM scope banner — this list is filtered to ONE scope's machines.
             Names the scope, counts the rows, and offers the way back. */}
         {ctemScopeId && (
@@ -1039,6 +1039,7 @@ export default function VulnerabilitiesPage() {
         {/* The Vulnerabilities workspace — KPI strip + toolbar (search /
             Status / Severity / Show-closed / register-type / view-switch /
             Template / Bulk-Upload / Add) + Register⇄Workbench. */}
+        <div className="flex-1 min-h-0">
         <VulnsWorkspace
           vulns={vulnerabilities ?? []}
           filteredVulns={filteredVulnerabilities}
@@ -1084,6 +1085,7 @@ export default function VulnerabilitiesPage() {
           bulkUploadState={bulkUploadState}
           bulkUploadMsg={bulkUploadMsg}
         />
+        </div>
 
         {/* legacy inline toolbar + table removed — superseded by VulnsWorkspace */}
       </div>

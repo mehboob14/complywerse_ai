@@ -262,6 +262,7 @@ def build_view(vuln, asset, *, control_coverage: Optional[float] = None,
         "asset": {
             "id": getattr(asset, "id", None),
             "name": getattr(asset, "name", None),
+            "asset_type": getattr(asset, "asset_type", None),
             "internet_facing": _asset_exposed(asset),
             "criticality": getattr(asset, "criticality", None),
             "environment": getattr(asset, "environment", None),

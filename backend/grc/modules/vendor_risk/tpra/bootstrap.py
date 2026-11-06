@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import TPRARiskDomain, TPRATieringConfig
 from ....models._41_tpra_lifecycle_models import TPRA_RISK_DOMAINS
-from .stages import DEFAULT_CADENCE_DAYS
+from .stages import DEFAULT_CADENCE_DAYS, DEFAULT_REMEDIATION_SLA_DAYS, reviewers_by_tier_for, skip_matrix_for
 
 # Canonical, configurable inputs to the inherent-risk tiering engine. Factors are
 # each scored 0..4; the weighted sum is normalized to 0..100 and bucketed by the
@@ -32,6 +33,37 @@ DEFAULT_TIERING_CONFIG = {
         "medium": 25.0,
     },
     "cadence_days": dict(DEFAULT_CADENCE_DAYS),
+    # Days to fix a finding by severity, the stages each tier skips and the roster roles each tier needs as
+    # reviewers (tpra/policy.py). Assessments keep what they were tiered under (service.policy_snapshot).
+    "remediation_days": dict(DEFAULT_REMEDIATION_SLA_DAYS),
+    "skip_matrix": skip_matrix_for(),
+    "required_reviewers": reviewers_by_tier_for(),
+    # When the reminder sweep tells people about a date, and whom it escalates to.
+    # One notice when the window opens, then one every repeat period once overdue:
+    # a weekly rhythm, not daily nagging.
+    "reminder_policy": {
+        "enabled": True,
+        "remind_before_days": 14,
+        "repeat_every_days": 7,
+        "escalate_after_days": 14,
+        "escalate_to": [],          # ["role:<role name>", "user:<id>"]
+        # New verified alerts at or above this severity are emailed to the
+        # supplier's owner and these people; a weekly digest of suppliers
+        # waiting on onboarding review goes to the digest people on the day given.
+        "alert_min_severity": "high",
+        "alert_notify": [],
+        "digest_to": [],
+        "digest_weekday": 0,        # Monday
+    },
+    # What a "Partial" answer is worth, 0..1. Frozen into each questionnaire
+    # version when it is sent, so changing it never rescores old answers.
+    "scoring_policy": {"partial_credit": 0.5},
+    # What each tier asks for; empty means tier_policy.DEFAULT_TIER_POLICY.
+    "tier_policy": {},
+    # Outside-in feeds that reach out to the internet are off until a tenant turns them on.
+    "monitoring_policy": {"adverse_media": False, "outside_in": False},
+    # The tenant's own onboarding questions, factors and evidence types (tpra/customisation.py).
+    "customisation": {},
 }
 
 
@@ -77,7 +109,11 @@ def ensure_tpra_tenant_defaults(db: Session, tenant_id: int) -> dict:
         config_created = True
 
     if created_domains or config_created:
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:        # a request running at the same moment (a page asks for several things at once) seeded them first
+            db.rollback()
+            return {"domains_created": 0, "config_created": False}
     return {"domains_created": created_domains, "config_created": config_created}
 
 
@@ -98,4 +134,16 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "weights": row.weights or DEFAULT_TIERING_CONFIG["weights"],
         "thresholds": row.thresholds or DEFAULT_TIERING_CONFIG["thresholds"],
         "cadence_days": row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"],
+        "remediation_days": {**DEFAULT_REMEDIATION_SLA_DAYS, **(getattr(row, "remediation_days", None) or {})},
+        "skip_matrix": skip_matrix_for(getattr(row, "skip_matrix", None)),
+        "required_reviewers": reviewers_by_tier_for(getattr(row, "required_reviewers", None)),
+        "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"],
+                            **(getattr(row, "reminder_policy", None) or {})},
+        "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"],
+                           **(getattr(row, "scoring_policy", None) or {})},
+        "tier_policy": getattr(row, "tier_policy", None) or {},
+        "monitoring_policy": {**DEFAULT_TIERING_CONFIG["monitoring_policy"],
+                              **(getattr(row, "monitoring_policy", None) or {})},
+        "quantification": getattr(row, "quantification", None) or {},
+        "customisation": getattr(row, "customisation", None) or {},
     }

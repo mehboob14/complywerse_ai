@@ -36,14 +36,29 @@ class ComplianceAssessmentDocument(Base):
     # AI suggests it from the asset profile; user can override. Filters which
     # requirements apply to that asset.
     asset_levels = Column(JSON, default=dict)
+    # Scoping and initiation of the Cyber Security assessments (features/cyber-assessment-scoping.md). All NULL on a workbook that was uploaded and on
+    # every assessment that predates this: those are the QUESTIONNAIRE a new assessment is made from (the newest of its format), not an assessment of
+    # an application or a function. An assessment made from it has a scope_model, a phase and the items copied without their answers.
+    scope_model = Column(String(16), nullable=True)      # asset | process (the kind of subject; follows the format)
+    phase = Column(String(24), nullable=True)            # scoping | in_progress
+    template_id = Column(Integer, nullable=True)         # the questionnaire assessment it was made from
+    owner_id = Column(Integer, nullable=True)            # who runs it (accountable for the assessment, not for the asset)
+    primary_asset_id = Column(Integer, nullable=True)    # the application assessed (asset assessments)
+    scope = Column(JSON, default=dict)                   # what is assessed and how, who takes part (services/assessments scoping.py)
+    scope_snapshot = Column(JSON, nullable=True)         # the scope and the facts of its assets as they were when the questions opened
+    subject_summary = Column(Text, nullable=True)          # the scope in a paragraph, with no person named: what the AI advice reads
+    started_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     
     tenant = relationship("Tenant", back_populates="compliance_assessment_docs")
     creator = relationship("GRCUser")
-    items = relationship("ComplianceAssessmentDocumentItem", back_populates="assessment", cascade="all, delete-orphan")
-    
+    # In file order. Without an ORDER BY Postgres hands rows back in physical order, and saving
+    # one (an assignee, a status) rewrites it, so it jumped to the end of the list under the cursor.
+    items = relationship("ComplianceAssessmentDocumentItem", back_populates="assessment", cascade="all, delete-orphan",
+                         order_by="ComplianceAssessmentDocumentItem.id")
+
     __table_args__ = (
         Index("ix_compliance_assessment_doc_tenant", "tenant_id"),
         Index("ix_compliance_assessment_doc_type", "assessment_type"),
@@ -98,6 +113,11 @@ class ComplianceAssessmentDocumentItem(Base):
     # or compliance_status=complied), so aging/closure math has a real date.
     target_date = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
+    # Who the item is assigned to: any number of people and/or teams, as
+    # [{"type": "user" | "team", "id": n}]. Names are looked up when read (see
+    # services/assessment_assignees.py). responsible_party stays the free text
+    # a workbook may carry.
+    assignees = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

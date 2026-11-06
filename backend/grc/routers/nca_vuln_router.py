@@ -285,6 +285,8 @@ def create_entry(
     user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(user, db)
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.owner_user_id])
     entry = NcaVulnEntry(
         tenant_id=tenant_id,
         vuln_identifier=_next_identifier(tenant_id, db),
@@ -336,6 +338,8 @@ def update_entry(
     ).first()
     if not entry:
         raise HTTPException(status_code=404, detail="NCA vulnerability entry not found")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.owner_user_id], kept=[entry.owner_user_id])
 
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(entry, k, v)

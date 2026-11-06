@@ -202,13 +202,21 @@ def get_control_ai_recommendations(
 ):
     """Generate AI-powered test procedures and evidence requirements for a control."""
     try:
+        # The prompt is built from the stored control, not from text in the request.
+        # The body was trusted as-is, so any client could post arbitrary text —
+        # including SCF control text shown on the automation pages — straight into
+        # a prompt. Parsed framework controls are never SCF rows. The body's text
+        # fields are kept only so existing callers don't break.
+        control = get_framework_control_or_404(request.control_id, get_user_tenants(current_user, db), db)
+        framework_name = db.query(UploadedFramework.name).filter(
+            UploadedFramework.id == control.uploaded_framework_id).scalar()
         client = get_openai_client()
         
         prompt = AI_RECOMMENDATION_PROMPT.format(
             control_id=request.control_id,
-            control_title=request.control_title,
-            control_description=request.control_description or "Not provided",
-            framework_name=request.framework_name or "General compliance framework"
+            control_title=control.title or "",
+            control_description=control.description or "Not provided",
+            framework_name=framework_name or "General compliance framework"
         )
         
         response = client.chat.completions.create(
@@ -350,6 +358,8 @@ def promote_control_risk(
             due = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
         except ValueError:
             due = None
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.owner_id, request.business_owner_id])
 
     risk = Risk(
         tenant_id=tenant_id,
@@ -418,6 +428,48 @@ def list_controls(
     
     controls = query.offset(skip).limit(limit).all()
     return controls
+
+
+@router.get("/normalized")
+def list_normalized_controls_for_picker(
+    skip: int = 0,
+    limit: int = 5000,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Picker payload for risk detail / FE ``all-normalized-controls``.
+
+    Includes SCF bridge + tenant custom NCs. ``control_status`` is Decision-4
+    indicator only (never used to recalc residual).
+    """
+    from grc.modules.scf.risk_links import control_status_indicator
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    q = db.query(NormalizedControl).filter(
+        or_(
+            NormalizedControl.source == "scf",
+            and_(
+                NormalizedControl.source == "custom",
+                NormalizedControl.tenant_id == tenant_id,
+                NormalizedControl.retired_at.is_(None),
+            ),
+        )
+    )
+    rows = q.order_by(NormalizedControl.code).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": nc.id,
+            "code": nc.code,
+            "name": nc.name,
+            "statement": nc.statement,
+            "scf_id": nc.scf_id,
+            "source": nc.source,
+            "custom": nc.source == "custom",
+            "control_status": control_status_indicator(db, nc, tenant_id=tenant_id),
+            "control_status_indicator": True,
+        }
+        for nc in rows
+    ]
 
 
 @router.post("", response_model=NormalizedControlResponse, status_code=status.HTTP_201_CREATED)
@@ -1034,6 +1086,8 @@ def update_framework_control_ownership(
                 GRCUser.id.in_(clean), GRCUser.is_active == True
             ).all()}
             clean = [uid for uid in clean if uid in valid]
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, clean, kept=record.assigned_user_ids or [])
         record.assigned_user_ids = clean
 
     db.commit()

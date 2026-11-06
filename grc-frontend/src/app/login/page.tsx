@@ -111,6 +111,7 @@ export default function LoginPage() {
     if (ssoErr) {
       const map: Record<string, string> = {
         sso_not_provisioned: "Your Microsoft account isn't allowed to sign in to this organization. Contact your administrator.",
+        sso_imported_account: 'Your account came in through Access Reviews, so it cannot sign in yet. An administrator can create your user with this email in Administration > User Management; then sign in again.',
         sso_state_mismatch: 'Sign-in expired or was tampered with. Please try again.',
         sso_state_expired: 'Sign-in expired. Please try again.',
         sso_invalid_callback: 'Microsoft sign-in failed (invalid callback).',

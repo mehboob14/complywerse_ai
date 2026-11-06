@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useEffect, useState } from 'react';
 import { Lock, Shield } from 'lucide-react';
 import { adminApi } from '@/lib/api';
@@ -42,7 +43,7 @@ export default function PasswordPolicyPage() {
       setDraft(r.data as Policy);
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        detailText((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
         (err as { message?: string })?.message ||
         'Failed to load password policy';
       setError(msg);
@@ -80,7 +81,7 @@ export default function PasswordPolicyPage() {
       setOkMessage('Password & session policy updated successfully.');
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        detailText((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
         (err as { message?: string })?.message ||
         'Failed to save policy';
       setError(msg);

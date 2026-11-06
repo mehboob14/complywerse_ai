@@ -109,6 +109,7 @@ def _map_db_account(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "terminated": False,
         # superuser / member-of roles are the entitlements
         "entitlements": (["DB Superuser"] if raw.get("rolsuper") else []) + _ents(raw.get("memberof")),
+        "is_person": False,          # an account, not somebody to assign work to
     }
 
 

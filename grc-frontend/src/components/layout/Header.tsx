@@ -1,18 +1,34 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, Menu, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
+import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
+import { usePermissions } from '@/hooks/usePermissions';
+import { ownHeadingSection, routeFor, subtitleFor, titleFor } from '@/lib/navRegistry';
+import { parseUtc } from '@/lib/serverTime';
+import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
+import { navPermissions } from './navAccess';
+import { MAIN_MENU_ID, useShellMenu } from './ShellMenu';
+import { readCollapsed, writeCollapsed } from './shellMode';
+
+const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise',
+  decide: 'A proposed change to decide on', revise: 'Your change was not accepted' };
+// a dropdown item that opens what it is about (a link: Tab, Enter)
+const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
+// the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
+const DROPDOWN = 'fixed inset-x-3 top-14 z-50 rounded-lg border border-gray-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2';
 
 const navIconProps = {
   size: 18,
   strokeWidth: 1.5,
 };
 
+// The top-bar title of every page that is not a Governance page (those are named by the navigation registry, lib/navRegistry.ts)
 const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: string }> = {
   '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization', section: 'Cybersecurity Assurance' },
   '/vulnerabilities/dashboard': { title: 'Vulnerability Dashboard', subtitle: 'Real-time security posture' },
@@ -23,20 +39,12 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/dashboard': { title: 'Performance Overview' },
   '/cyber-security': { title: 'Cyber Security', subtitle: 'Application security and security-operations maturity assessments' },
   '/nca': { title: 'NCA', subtitle: 'National Cybersecurity Authority — DCC, registers and audit plan' },
-  '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture' },
-  '/governance/documents': { title: 'Documents', subtitle: 'Policy and document lifecycle management' },
-  '/governance/documents/attestation': { title: 'Attestation', subtitle: 'Document acknowledgment campaigns' },
-  '/governance/attestations': { title: 'Attestation', subtitle: 'Document acknowledgment campaigns' },
-  '/governance/mappings': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/approvals': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/exceptions': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/reviews': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
-  '/governance/workflows': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/evidence': { title: 'Evidence Management' },
   '/frameworks': { title: 'Frameworks' },
   '/controls': { title: 'Control Catalog' },
   '/erm': { title: 'Enterprise Risk Management', subtitle: 'Comprehensive risk identification, assessment, and monitoring' },
   '/erm/risks': { title: 'Risk Register' },
+  '/erm/risk-library': { title: 'Risk Library', subtitle: 'Risks listed in a standard, ready for your register' },
   '/erm/risk-assessments': { title: 'Risk Assessments', subtitle: 'Manage and track risk assessment activities' },
   '/erm/rcsa/templates': { title: 'RCSA Templates', subtitle: 'Upload and download RCSA templates' },
   '/erm/analytics': { title: 'Advanced Risk Analytics', subtitle: 'Comprehensive risk analysis tools for enterprise risk intelligence' },
@@ -51,16 +59,19 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/control-library': { title: 'Control Library' },
   '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
   '/auditor-portal/statutory-audit': { title: 'Statutory Audit', subtitle: 'Register and track regulator requirements and audit observations' },
+  '/auditor-portal/issue-register': { title: 'Issue Register', section: 'Auditor Portal' },
   '/assets': { title: 'IT Asset Inventory', subtitle: 'Manage and track IT assets with CIA ratings and valuations.', section: 'Cybersecurity Assurance' },
   '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.', section: 'Cybersecurity Assurance' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
   '/tasks': { title: 'Task Board' },
-  '/reports': { title: 'Reports', subtitle: 'Explore datasets, build and share reports' },
-  '/reports/saved': { title: 'Saved Reports', subtitle: 'Manage, share and organize your report library' },
+  '/reports': { title: 'Quick export', subtitle: 'Module → columns → download' },
+  '/reports/saved': { title: 'Saved exports', subtitle: 'Reopen what you saved' },
+  '/reports/analytics': { title: 'Analytics', subtitle: 'Cross-module dashboards' },
+  '/reports/trends': { title: 'Trends', subtitle: 'KPI history across every module' },
+  '/reports/dashboards': { title: 'Dashboards', subtitle: 'Saved reports, side by side' },
   '/admin': { title: 'Administration' },
-  '/is-projects': { title: 'IS Projects', subtitle: 'Track and manage information security projects across the organization' },
 };
 
 export default function Header() {
@@ -69,6 +80,9 @@ export default function Header() {
   const queryClient = useQueryClient();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userButtonRef = useRef<HTMLButtonElement>(null);
+  const { open: menuOpen, setOpen: setMenuOpen } = useShellMenu();
+  const dropdownIds = { approvals: useId(), notifications: useId(), user: useId() };
 
   const { data: me } = useQuery({
     queryKey: ['current-user'],
@@ -88,9 +102,11 @@ export default function Header() {
 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const notifButtonRef = useRef<HTMLButtonElement>(null);
 
   const [approvalsOpen, setApprovalsOpen] = useState(false);
   const approvalsRef = useRef<HTMLDivElement>(null);
+  const approvalsButtonRef = useRef<HTMLButtonElement>(null);
   const [chatQ, setChatQ] = useState('');
 
   const submitChat = (e?: React.FormEvent) => {
@@ -108,13 +124,13 @@ export default function Header() {
     enabled: !!currentUser,
   });
 
-  const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string}> =
+  const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string; link?: string | null; url?: string | null}> =
     notifData?.items ?? [];
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Pending compliance approvals — surfaced as a top-bar quick-action so it's
   // visible from anywhere (it used to be a Compliance sidebar row).
-  const { data: pendingApprovalsData } = useQuery({
+  const { data: pendingApprovalsData, refetch: refetchApprovals } = useQuery({
     queryKey: ['header-pending-approvals'],
     queryFn: () => apiClient.get('/compliance/assessments/pending-approvals').then((r) => r.data),
     refetchInterval: 60000,
@@ -126,20 +142,45 @@ export default function Header() {
   }> = Array.isArray(pendingApprovalsData?.pending_approvals)
     ? pendingApprovalsData.pending_approvals
     : Array.isArray(pendingApprovalsData) ? pendingApprovalsData : [];
-  const pendingApprovalCount = pendingApprovalItems.length;
+  // Documents waiting for the person to review, approve or acknowledge (same query and key as My Approvals)
+  const { data: docRequests, refetch: refetchDocRequests } = useQuery({
+    queryKey: ['my-document-requests'],
+    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
+      enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean; proposal_id?: number | null }>;
+    },
+    refetchInterval: 60000,
+    enabled: !!currentUser,
+  });
+  const docRequestItems = docRequests?.enabled ? docRequests.items ?? [] : [];
+  const perms = usePermissions();
+  const canSeeGovernance = perms.hasPermission('governance:policies:*');
+  // the top bar's own links, each shown to the people its page lets in (as the sidebar's entries are)
+  const canAskComplyChat = perms.hasAnyPermission(navPermissions('/complychat'));
+  const canSeeUsers = perms.hasAnyPermission(navPermissions('/users'));
+  const canSeeAssessments = perms.hasPermission('compliance:assessments:*');
+  const pendingApprovalCount = pendingApprovalItems.length + docRequestItems.length;
+
+  // shown as read at once (row and badge), then told to the server; the refetch corrects it if that failed
+  const showRead = (id?: number) => {
+    void queryClient.cancelQueries({ queryKey: ['workflow-notifications'] });     // a poll already on its way would show it unread again
+    queryClient.setQueryData(['workflow-notifications'], (old: any) => (Array.isArray(old?.items)
+      ? { ...old, items: old.items.map((n: any) => (id === undefined || n.id === id ? { ...n, is_read: true } : n)) } : old));
+  };
 
   const markAllRead = async () => {
+    showRead();
     try {
       await apiClient.post('/workflow-engine/notifications/in-app/read-all');
-      refetchNotifs();
     } catch {/* ignore */}
+    refetchNotifs();
   };
 
   const markOneRead = async (id: number) => {
+    showRead(id);
     try {
       await apiClient.post(`/workflow-engine/notifications/in-app/${id}/read`);
-      refetchNotifs();
     } catch {/* ignore */}
+    refetchNotifs();
   };
 
   const timeAgo = (iso: string) => {
@@ -167,13 +208,36 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Escape closes an open dropdown, and gives focus back to its button when focus was inside it
+  useEffect(() => {
+    if (!approvalsOpen && !notifOpen && !isUserMenuOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const dropdowns = [
+        { open: approvalsOpen, close: () => setApprovalsOpen(false), wrap: approvalsRef, button: approvalsButtonRef },
+        { open: notifOpen, close: () => setNotifOpen(false), wrap: notifRef, button: notifButtonRef },
+        { open: isUserMenuOpen, close: () => setIsUserMenuOpen(false), wrap: userMenuRef, button: userButtonRef },
+      ];
+      dropdowns.forEach(({ open, close, wrap, button }) => {
+        if (!open) return;
+        close();
+        if (wrap.current?.contains(document.activeElement)) button.current?.focus();
+      });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [approvalsOpen, notifOpen, isUserMenuOpen]);
+
   const handleLogout = async () => {
     try {
       await apiClient.post('/auth/logout');
     } catch (error) {
       console.error('Logout failed:', error);
     }
+    // the collapsed sidebar is a preference of this browser, not of the session: it survives signing out
+    const collapsedSidebar = readCollapsed();
     localStorage.clear();
+    writeCollapsed(collapsedSidebar);
     sessionStorage.clear(); // Clear permission cache so next user gets fresh permissions
     queryClient.clear();
     setIsUserMenuOpen(false);
@@ -183,9 +247,27 @@ export default function Header() {
 
   return (
     <header className="top-nav flex h-12 items-center justify-between px-4 lg:px-5">
-      <div className="flex-1 min-w-0 px-1">
+      {/* Below lg the menu is the off-canvas drawer (Sidebar.tsx); from lg there is the sidebar, or on a middle-width window the rail's own button. */}
+      <button
+        type="button"
+        onClick={(e) => { e.currentTarget.focus({ preventScroll: true }); setMenuOpen(true); }}
+        aria-label="Open menu"
+        aria-haspopup="dialog"
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? MAIN_MENU_ID : undefined}
+        className="-ml-1 mr-1 inline-flex min-h-ds-control min-w-[var(--ds-control-h)] flex-shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] lg:hidden"
+      >
+        <Menu size={20} strokeWidth={1.75} />
+      </button>
+      <div className="flex flex-1 min-w-0 self-stretch items-center px-1">
         {(() => {
-          const info = PAGE_TITLES[pathname ?? ''];
+          // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
+          // they are the library's, so someone only asked about a document (no library right) gets none
+          // (the owner of a department who holds no governance right gets the two tabs made for them: the library and its overview)
+          if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : perms.headsDepartment ? <DocumentsTabs ownerOnly /> : null;
+          // a Governance page is named by the registry, whatever page it is; every other page still reads PAGE_TITLES
+          const named = routeFor(pathname)?.area === 'governance' ? titleFor(pathname) : undefined;
+          const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: ownHeadingSection(pathname) } : PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
           if (!info && /^\/assets\/[^/]+$/.test(pathname ?? '')) {
@@ -194,6 +276,14 @@ export default function Header() {
                 <span className="font-medium text-[var(--color-muted)] truncate">Cybersecurity Assurance</span>
                 <span className="text-[var(--color-muted)]">/</span>
                 <Link href="/assets" className="font-semibold text-[var(--color-text)]">IT Asset Inventory</Link>
+              </div>
+            );
+          }
+          // An assessment of the Cyber Security module, or one type's questionnaire, names itself in the body: the bar says which module it belongs to.
+          if (!info && /^\/cyber-security\/(assessments|questionnaires)\/[^/]+$/.test(pathname ?? '')) {
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <Link href="/cyber-security" className="font-semibold text-[var(--color-text)]">Cyber Security</Link>
               </div>
             );
           }
@@ -221,22 +311,32 @@ export default function Header() {
         })()}
       </div>
 
-      <div className="ml-3 flex items-center gap-2.5">
+      <div className="ml-2 flex items-center gap-1.5 sm:ml-3 sm:gap-2.5">
         {/* ComplyChat — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
-        <form onSubmit={submitChat} className="relative hidden md:block">
-          <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
-          <input
-            value={chatQ}
-            onChange={(e) => setChatQ(e.target.value)}
-            placeholder="Ask ComplyChat anything…"
-            aria-label="Ask ComplyChat"
-            className="h-8 w-64 rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30"
-          />
-          <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
-            <ChevronRight size={14} />
-          </button>
-        </form>
+        {canAskComplyChat && (
+          <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
+            <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
+            <input
+              value={chatQ}
+              onChange={(e) => setChatQ(e.target.value)}
+              placeholder="Ask ComplyChat anything…"
+              aria-label="Ask ComplyChat"
+              className={`h-8 ${inDocumentsArea(pathname) ? 'w-44 2xl:w-64' : 'w-64'} rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30`}
+            />
+            <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
+              <ChevronRight size={14} />
+            </button>
+          </form>
+        )}
+        {/* where the input is not shown (below md; in the Documents area, which needs the room for its tabs, below lg) ComplyChat is an icon.
+            It opens what the input opens when it is submitted empty: the chat. */}
+        {canAskComplyChat && (
+          <Link href="/complychat" aria-label="Ask ComplyChat" title="Ask ComplyChat"
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${inDocumentsArea(pathname) ? 'lg:hidden' : 'md:hidden'}`}>
+            <Sparkles size={18} strokeWidth={1.75} />
+          </Link>
+        )}
 
         {/* Issues moved into the sidebar "Issue & Incident Management" module. */}
 
@@ -246,21 +346,29 @@ export default function Header() {
         {/* Pending compliance approvals — opens a dropdown (not a page). */}
         <div className="relative" ref={approvalsRef}>
           <button
+            ref={approvalsButtonRef}
             type="button"
-            onClick={() => setApprovalsOpen((p) => !p)}
+            onClick={() => {
+              // opened: the list as it is now (an item done a moment ago is gone)
+              if (!approvalsOpen) { refetchApprovals(); refetchDocRequests(); }
+              setApprovalsOpen(!approvalsOpen);
+            }}
             title="Pending approvals"
             aria-label="Pending approvals"
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+            aria-haspopup="dialog"
+            aria-expanded={approvalsOpen}
+            aria-controls={approvalsOpen ? dropdownIds.approvals : undefined}
+            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
           >
             <ClipboardCheck size={18} strokeWidth={1.75} />
             {pendingApprovalCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white leading-none">
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#b45309] px-[4px] text-[12px] font-bold text-white leading-none">
                 {pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}
               </span>
             )}
           </button>
           {approvalsOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-96 rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div id={dropdownIds.approvals} role="dialog" aria-label="Pending approvals" className={`${DROPDOWN} sm:w-96`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Pending Approvals</span>
                 {pendingApprovalCount > 0 && (
@@ -268,39 +376,67 @@ export default function Header() {
                 )}
               </div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-                {pendingApprovalItems.length === 0 ? (
+                {docRequestItems.slice(0, 12).map((it) => (
+                  <Link
+                    key={`doc-${it.id}`}
+                    href={docRequestHref(it)}
+                    onClick={() => setApprovalsOpen(false)}
+                    className={ITEM_LINK}
+                  >
+                    <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium leading-snug truncate text-[#1f2933]">{it.title}</p>
+                      <p className={`mt-0.5 ${it.overdue ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
+                        {DOC_ASK[it.kind] || it.kind}
+                        {it.due_date ? ` · due ${parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) ?? ''}` : ''}
+                        {it.overdue ? ' · overdue' : ''}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
+                  </Link>
+                ))}
+                {pendingApprovalCount === 0 ? (
                   <div className="px-4 py-6 text-center text-xs text-gray-400">Nothing awaiting your approval.</div>
                 ) : (
                   pendingApprovalItems.slice(0, 12).map((item) => (
                     <Link
                       key={item.id}
-                      href="/compliance/assessments/approvals"
+                      href={assessmentApprovalHref(item)}
                       onClick={() => setApprovalsOpen(false)}
-                      className="flex gap-3 px-4 py-3 text-xs hover:bg-amber-50/60"
+                      className={ITEM_LINK}
                     >
                       <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium leading-snug truncate text-gray-800">
+                        <p className="font-medium leading-snug truncate text-[#1f2933]">
                           {item.assessment_name || item.evidence_name || item.control_description || `Item #${item.item_number ?? item.id}`}
                         </p>
                         {(item.control_description || item.evidence_name) && (
-                          <p className="mt-0.5 text-gray-500 leading-snug truncate">{item.control_description || item.evidence_name}</p>
+                          <p className="mt-0.5 text-[#26323d] leading-snug truncate">{item.control_description || item.evidence_name}</p>
                         )}
-                        <p className="mt-0.5 text-gray-400">
+                        <p className="mt-0.5 text-[#586472]">
                           {item.status ? String(item.status).replace(/_/g, ' ') : 'pending'}{item.submitted_at ? ` · ${timeAgo(item.submitted_at)}` : ''}
                         </p>
                       </div>
+                      <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
                     </Link>
                   ))
                 )}
               </div>
-              <Link
-                href="/compliance/assessments/approvals"
-                onClick={() => setApprovalsOpen(false)}
-                className="block border-t border-gray-100 px-4 py-2.5 text-center text-xs font-medium text-blue-600 hover:bg-gray-50"
-              >
-                Open approvals queue →
-              </Link>
+              {/* without governance or assessment access each item above still opens; the pages are theirs only with access */}
+              {(canSeeGovernance || canSeeAssessments) && (
+                <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
+                  {canSeeGovernance && (
+                    <Link href="/governance/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                      My Approvals →
+                    </Link>
+                  )}
+                  {canSeeAssessments && (
+                    <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                      Assessment approvals →
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -308,22 +444,29 @@ export default function Header() {
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
           <button
+            ref={notifButtonRef}
             type="button"
-            onClick={() => setNotifOpen((p) => !p)}
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+            onClick={() => {
+              if (!notifOpen) refetchNotifs();
+              setNotifOpen(!notifOpen);
+            }}
+            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
             aria-label="Notifications"
+            aria-haspopup="dialog"
+            aria-expanded={notifOpen}
+            aria-controls={notifOpen ? dropdownIds.notifications : undefined}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
-                {unreadCount}
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#b42318] px-[4px] text-[12px] font-bold text-white leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div id={dropdownIds.notifications} role="dialog" aria-label="Notifications" className={`${DROPDOWN} sm:w-80`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Notifications</span>
                 <div className="flex items-center gap-2">
@@ -339,24 +482,45 @@ export default function Header() {
                 {notifications.length === 0 ? (
                   <div className="px-4 py-6 text-center text-xs text-gray-400">No notifications</div>
                 ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`flex gap-3 px-4 py-3 text-xs cursor-pointer ${!n.is_read ? 'bg-blue-50' : 'bg-white'}`}
-                      onClick={() => !n.is_read && markOneRead(n.id)}
-                    >
-                      <span className={`mt-0.5 h-2 w-2 flex-shrink-0 rounded-full ${
-                        n.notification_type === 'error' ? 'bg-red-500' :
-                        n.notification_type === 'warning' ? 'bg-yellow-500' :
-                        n.notification_type === 'success' ? 'bg-green-500' : 'bg-blue-500'
-                      } ${n.is_read ? 'opacity-30' : ''}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium leading-snug truncate ${!n.is_read ? 'text-gray-800' : 'text-gray-500'}`}>{n.subject}</p>
-                        {n.message && <p className="mt-0.5 text-gray-500 leading-snug">{n.message}</p>}
-                        <p className="mt-0.5 text-gray-400">{timeAgo(n.created_at)}</p>
+                  notifications.map((n) => {
+                    // opens what it is about (only a page of the app); nothing to open: plain text
+                    const href = notificationHref(n);
+                    const body = (
+                      <>
+                        <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                          n.notification_type === 'error' ? 'bg-red-500' :
+                          n.notification_type === 'warning' ? 'bg-yellow-500' :
+                          n.notification_type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+                        } ${n.is_read ? 'opacity-30' : ''}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium leading-snug truncate ${!n.is_read ? 'text-[#1f2933]' : 'text-[#586472]'}`}>{n.subject}</p>
+                          {n.message && <p className="mt-0.5 text-[#586472] leading-snug">{n.message}</p>}
+                          <p className="mt-0.5 text-[#7b8794]">{timeAgo(n.created_at)}</p>
+                        </div>
+                      </>
+                    );
+                    return href ? (
+                      <Link
+                        key={n.id}
+                        href={href}
+                        onClick={() => { if (!n.is_read) markOneRead(n.id); setNotifOpen(false); }}
+                        className={`${ITEM_LINK} ${!n.is_read ? 'bg-blue-50' : ''}`}
+                      >
+                        {body}
+                        <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
+                      </Link>
+                    ) : (
+                      <div key={n.id} className={`flex gap-3 px-4 py-3 text-xs ${!n.is_read ? 'bg-blue-50' : ''}`}>
+                        {body}
+                        {!n.is_read && (
+                          <button type="button" onClick={() => markOneRead(n.id)}
+                            className="h-fit flex-shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                            Mark read
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -366,23 +530,26 @@ export default function Header() {
         {/* User avatar + menu */}
         <div className="relative" ref={userMenuRef}>
           <button
+            ref={userButtonRef}
             type="button"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
-            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
             aria-label="User menu"
+            aria-haspopup="dialog"
             aria-expanded={isUserMenuOpen}
+            aria-controls={isUserMenuOpen ? dropdownIds.user : undefined}
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">
               {initials}
             </span>
             <ChevronDown
               size={14}
-              className={`text-[var(--color-text-muted)] transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`}
+              className={`hidden text-[var(--color-text-muted)] transition-transform sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`}
             />
           </button>
 
           {isUserMenuOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+            <div id={dropdownIds.user} role="dialog" aria-label="Account" className="absolute right-0 z-50 mt-2 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
               <div className="border-b border-[var(--color-border)] px-3 py-2.5">
                 <p className="text-sm font-semibold text-[var(--color-text)]">{displayName}</p>
                 {userEmail && (
@@ -392,17 +559,19 @@ export default function Header() {
               </div>
 
               <div className="py-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    router.push('/users');
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
-                >
-                  <Users size={16} className="text-[var(--color-text-muted)]" />
-                  Users
-                </button>
+                {canSeeUsers && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      router.push('/users');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+                  >
+                    <Users size={16} className="text-[var(--color-text-muted)]" />
+                    Users
+                  </button>
+                )}
 
                 {isAdmin && (
                   <button

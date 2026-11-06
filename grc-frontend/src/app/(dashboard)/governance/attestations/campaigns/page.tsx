@@ -206,6 +206,7 @@ export default function AttestationCampaignsPage() {
       start_date: new Date(formData.get('start_date') as string).toISOString(),
       due_date: new Date(formData.get('end_date') as string).toISOString(),
       requires_evidence: formData.get('requires_evidence') === 'on',
+      requires_signature: formData.get('requires_signature') === 'on',
       target_type: formTargetType,
       linked_document_id: formLinkedDocId || undefined,
     };
@@ -700,6 +701,17 @@ export default function AttestationCampaignsPage() {
               />
               <label htmlFor="requires_evidence" className="text-sm text-gray-700">
                 Require evidence upload from users
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="requires_signature"
+                id="requires_signature"
+                className="rounded border-gray-300 bg-white text-primary-500 focus:ring-primary-500"
+              />
+              <label htmlFor="requires_signature" className="text-sm text-gray-700">
+                Require an electronic signature (users sign with their mouse, finger or pen; otherwise signing is optional)
               </label>
             </div>
 

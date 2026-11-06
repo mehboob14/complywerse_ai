@@ -96,6 +96,13 @@ export const CONTROL_STATUS: Record<string, { label: string; cls: string; dot: s
   collection_failed: { label: 'Not collected', cls: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
   running: { label: 'Running', cls: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
   not_run: { label: 'Not run', cls: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
+  // Automatable, but the tenant runs none of the systems that would prove it.
+  // Distinct from "not run": there is nothing to run until something is connected.
+  connect_one: { label: 'Connect a source', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+  // SCF says a machine could assess this and no check reaches it yet. That is a
+  // gap in what we have built, not a property of the control, so it must not be
+  // filed under Manual alongside board oversight and staff training.
+  unbound: { label: 'No check yet', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200', dot: 'bg-cyan-500' },
   manual: { label: 'Manual', cls: 'bg-slate-100 text-slate-500 border-slate-200', dot: 'bg-slate-400' },
 };
 
@@ -125,8 +132,13 @@ export interface LinkedCheck {
   severity: string | null;
   seeded: boolean;
   source?: string;
+  /** Stage G — SCF ao_id / scf_id tokens this check covers (when bound). */
+  covers?: string[] | Record<string, string[]>;
   last_run: { status: string; started_at?: string | null; result_summary?: string | null } | null;
 }
+
+/** How this control's automated status was resolved (Stage G). */
+export type BindingSource = 'covers' | 'soc2_fallback' | 'none';
 export interface Soc2Control {
   control_id: string;
   title: string;
@@ -179,6 +191,10 @@ function paletteFor(fw: string): string {
   for (let i = 0; i < fw.length; i++) h = (h * 31 + fw.charCodeAt(i)) >>> 0;
   return BADGE_PALETTE[h % BADGE_PALETTE.length];
 }
+/** The categorical colour a framework is drawn in, for dots and accents. */
+export function frameworkColor(fw: string): string {
+  return FRAMEWORK_COLOR[fw] || paletteFor(fw);
+}
 function prettyFw(fw: string): string {
   return fw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -215,4 +231,23 @@ export interface CommonControl {
   checks_count: number;
   overall_status: string;
   checks: LinkedCheck[];
+  owner_user_id?: number | null;
+  owner_name?: string | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[] | null;
+  next_due_at?: string | null;
+  ownership_status?: 'unowned' | 'ok' | 'overdue' | string | null;
+  /** Tenant-authored control (Stage D); false/undefined = SCF catalogue row. */
+  custom?: boolean;
+  /** Stage G — whether status comes from SCF covers bindings or SOC 2 fallback. */
+  binding_source?: BindingSource;
+}
+
+/** Compact badge for tenant-authored rows in the common-controls list/detail. */
+export function CustomBadge() {
+  return (
+    <span className="inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800">
+      Custom
+    </span>
+  );
 }

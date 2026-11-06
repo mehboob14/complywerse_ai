@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { vendorRiskApi } from '@/lib/api';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
@@ -27,10 +27,14 @@ import {
   Star,
   Paperclip,
   FileText,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
+import { QuestionEvidence, QuestionReview, ReviewBar, ReviewersStrip, type ReviewableResponse } from './_review';
+import { sectionKey, sectionLabel } from '../../_lib/reviewsApi';
+import { owesEvidence, type RuleQuestion } from '@/components/vendor-risk/SupplierQuestionnaire';
 
 interface Assessment {
   id: number;
@@ -59,15 +63,17 @@ interface Assessment {
   questionnaire_responses?: QuestionnaireResponse[];
 }
 
-interface TemplateQuestion {
+interface TemplateQuestion extends Omit<RuleQuestion, 'options'> {
   id: string;
   text: string;
-  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating';
+  type: 'text' | 'yes_no' | 'multiple_choice' | 'rating' | 'file';
   required: boolean;
   evidence_required: boolean;
   weight: number;
   options?: string[];
   category?: string;
+  section?: string;
+  domain?: string;
 }
 
 interface EvidenceFile {
@@ -80,7 +86,7 @@ interface EvidenceFile {
   file_path?: string | null;
 }
 
-interface QuestionnaireResponse {
+interface QuestionnaireResponse extends ReviewableResponse {
   id: number;
   respondent_name: string | null;
   respondent_email: string | null;
@@ -116,6 +122,11 @@ const getStatusPill = (status: string) => {
     submitted: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     reviewed: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     approved: 'bg-green-50 text-green-700 border-green-200',
+    // questionnaire review states
+    pending: 'bg-gray-50 text-gray-700 border-gray-200',
+    under_review: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    returned: 'bg-amber-50 text-amber-800 border-amber-200',
+    accepted: 'bg-green-50 text-green-700 border-green-200',
   };
   return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
@@ -174,6 +185,117 @@ const getQuestionCategory = (q: TemplateQuestion, assessmentType?: string): stri
 
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+type AiSuggestion = { finding?: string; title?: string; description?: string; severity?: string; category?: string };
+const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+const SEV_CLS: Record<string, string> = {
+  critical: 'bg-red-50 text-red-700 border-red-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-amber-50 text-amber-800 border-amber-200',
+  low: 'bg-slate-50 text-slate-600 border-slate-200',
+};
+
+/** What the AI suggested, kept apart from the analyst's own findings above.
+ *
+ *  A suggestion is not a finding: governed findings gate the lifecycle, feed the
+ *  risk register and — when critical — suspend an onboarded vendor. So a person
+ *  raises each one deliberately, choosing its severity.
+ */
+function AiSuggestions({ assessmentId, items, canRaise }: {
+  assessmentId: number;
+  items: unknown[];
+  canRaise: boolean;
+}) {
+  const qc = useQueryClient();
+  const [raised, setRaised] = useState<Record<number, boolean>>({});
+  const [severity, setSeverity] = useState<Record<number, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const raise = useMutation({
+    mutationFn: async ({ index, item }: { index: number; item: AiSuggestion }) => {
+      const text = item.finding || item.title || item.description || 'AI-suggested finding';
+      const sev = severity[index] || (SEVERITIES as readonly string[]).find((x) => x === (item.severity || '').toLowerCase()) || 'medium';
+      if (sev === 'critical' && !confirm('A critical finding suspends an onboarded vendor until it is resolved. Raise it as critical?')) {
+        return null;
+      }
+      await tpraApi.createFinding(assessmentId, {
+        title: text.slice(0, 255),
+        severity: sev,
+        domain: 'cybersecurity',
+        description: [item.description && item.description !== text ? item.description : null,
+          item.category ? `Area: ${item.category}` : null, 'Raised from an AI suggestion.']
+          .filter(Boolean).join(' · '),
+      });
+      return index;
+    },
+    onSuccess: (index) => {
+      if (index === null) return;
+      setError(null);
+      setRaised((r) => ({ ...r, [index]: true }));
+      qc.invalidateQueries({ queryKey: ['assessment', assessmentId] });
+    },
+    onError: (e: unknown) => {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Could not raise that finding.');
+    },
+  });
+
+  const list = (Array.isArray(items) ? items : []).filter((x) => x && typeof x === 'object') as AiSuggestion[];
+  if (list.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-violet-200 p-3 sm:p-4">
+      <div className="mb-1 flex items-center gap-1.5">
+        <Sparkles className="h-4 w-4 text-violet-600" />
+        <h3 className="text-sm font-semibold text-slate-900">AI suggestions ({list.length})</h3>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Not findings yet. Raise the ones you agree with — they then gate the lifecycle and reach the risk register.
+      </p>
+      {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+      <ul className="space-y-2">
+        {list.map((item, index) => {
+          const text = item.finding || item.title || item.description || 'Suggestion';
+          const suggested = (item.severity || 'medium').toLowerCase();
+          const chosen = severity[index] || suggested;
+          return (
+            <li key={index} className="rounded-lg border border-slate-200 px-3 py-2">
+              <div className="flex flex-wrap items-start gap-2">
+                <span className={`mt-0.5 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${SEV_CLS[suggested] || SEV_CLS.medium}`}>
+                  {suggested}
+                </span>
+                <span className="min-w-0 flex-1 text-sm text-slate-700">{text}</span>
+                {raised[index] ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Raised
+                  </span>
+                ) : canRaise ? (
+                  <span className="flex items-center gap-1.5">
+                    <select
+                      aria-label="Severity"
+                      value={chosen}
+                      onChange={(e) => setSeverity((s) => ({ ...s, [index]: e.target.value }))}
+                      className="rounded border border-slate-300 px-1.5 py-1 text-xs"
+                    >
+                      {SEVERITIES.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                    <button
+                      onClick={() => raise.mutate({ index, item })}
+                      disabled={raise.isPending}
+                      className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-60"
+                    >
+                      Raise as finding
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -193,6 +315,8 @@ export default function AssessmentDetailPage() {
   const [scoreResult, setScoreResult] = useState<{ inherent_score: number; residual_score: number; risk_rating: string } | null>(null);
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit');
+  // Per questionnaire: only these questions (a reviewer's own sections), or all.
+  const [only, setOnly] = useState<Record<number, string[] | null>>({});
 
   // â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -624,6 +748,12 @@ export default function AssessmentDetailPage() {
             )}
           </div>
 
+          <AiSuggestions
+            assessmentId={assessmentId}
+            items={(assessment as { ai_findings?: unknown[] }).ai_findings || []}
+            canRaise={canEdit && !isApproved}
+          />
+
           {/* Recommendations */}
           <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <div className="flex items-center justify-between mb-4">
@@ -716,11 +846,19 @@ export default function AssessmentDetailPage() {
               const questions = qr.questions || [];
               const qrResponses = qr.responses || {};
               const qrEvidence = qr.evidence || {};
-              const answeredCount = questions.filter((q) => qrResponses[q.id] !== undefined && qrResponses[q.id] !== '').length;
-              const evidenceRequired = questions.filter((q) => q.evidence_required).length;
-              const evidenceProvided = questions.filter((q) => q.evidence_required && qrEvidence[q.id]?.length > 0).length;
+              // Evidence linked to a question: the vendor's file, or library evidence attached to it.
+              const hasEvidence = (key: string) => (qrEvidence[key]?.length || 0) + (qr.library_evidence?.[key]?.length || 0) > 0;
+              const isAnsweredQ = (q: TemplateQuestion) => (q.type === 'file' ? hasEvidence(q.id)
+                : qrResponses[q.id] !== undefined && qrResponses[q.id] !== '');
+              const owes = (q: TemplateQuestion) => q.type === 'file' || owesEvidence(q, String(qrResponses[q.id] ?? ''));
+              const answeredCount = questions.filter(isAnsweredQ).length;
+              const evidenceRequired = questions.filter(owes).length;
+              const evidenceProvided = questions.filter((q) => owes(q) && hasEvidence(q.id)).length;
+              const shownKeys = only[qr.id];
+              // Grouped by section, as the reviewers take them (the server's rule).
               const groupedQuestions = questions.reduce((acc, q, idx) => {
-                const category = getQuestionCategory(q, assessment.assessment_type);
+                if (shownKeys && !shownKeys.includes(String(q.id))) return acc;
+                const category = sectionLabel(sectionKey(q));
                 if (!acc[category]) acc[category] = [];
                 acc[category].push({ question: q, index: idx });
                 return acc;
@@ -745,7 +883,7 @@ export default function AssessmentDetailPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusPill(qr.status)}`}>
-                          {qr.status}
+                          {qr.status.replace('_', ' ')}
                         </span>
                         {qr.submitted_at && (
                           <span className="text-xs text-gray-400">
@@ -770,6 +908,9 @@ export default function AssessmentDetailPage() {
                         </div>
                       </div>
                     )}
+                    <ReviewBar qr={qr} assessmentId={assessmentId} canEdit={canEdit} />
+                    <ReviewersStrip qr={qr} canEdit={canEdit} filtered={!!shownKeys}
+                      onFilter={(keys) => setOnly((prev) => ({ ...prev, [qr.id]: keys }))} />
                   </div>
 
                   {/* Questions + Answers */}
@@ -785,7 +926,7 @@ export default function AssessmentDetailPage() {
                           {rows.map(({ question: q, index: idx }) => {
                             const answer = qrResponses[q.id];
                             const qEvFiles = qrEvidence[q.id] || [];
-                            const isAnswered = answer !== undefined && answer !== '';
+                            const isAnswered = isAnsweredQ(q);
 
                             return (
                               <div key={`${category}-${q.id}-${idx}`} className="px-5 py-4 border-b border-gray-50 last:border-b-0">
@@ -798,22 +939,25 @@ export default function AssessmentDetailPage() {
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                                       <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded capitalize">{q.type.replace('_', '/')}</span>
                                       {q.weight > 3 && <span className="text-xs text-gray-400">Weight: {q.weight}/5</span>}
-                                      {q.evidence_required && (
-                                        <span className={`text-xs flex items-center gap-0.5 ${qEvFiles.length > 0 ? 'text-green-600' : 'text-orange-500'}`}>
+                                      {owes(q) && (
+                                        <span className={`text-xs flex items-center gap-0.5 ${hasEvidence(q.id) ? 'text-green-600' : 'text-orange-500'}`}>
                                           <Paperclip className="h-3 w-3" />
-                                          {qEvFiles.length > 0 ? 'Evidence provided' : 'Evidence required'}
+                                          {hasEvidence(q.id) ? 'Evidence provided' : 'Evidence required'}
                                         </span>
                                       )}
                                     </div>
 
                                     <div className="mt-2">
-                                      {!isAnswered ? (
+                                      {q.type === 'file' ? (
+                                        !isAnswered && <p className="text-sm text-gray-300 italic">No file sent</p>
+                                      ) : !isAnswered ? (
                                         <p className="text-sm text-gray-300 italic">No answer provided</p>
                                       ) : q.type === 'yes_no' ? (
                                         <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                                          String(answer).toLowerCase() === 'yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                          ({ yes: 'bg-green-100 text-green-700', partial: 'bg-amber-100 text-amber-800', 'n-a': 'bg-gray-100 text-gray-600' } as Record<string, string>)[String(answer).toLowerCase()]
+                                            || 'bg-red-100 text-red-700'
                                         }`}>
-                                          {String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
+                                          {String(answer).toLowerCase() === 'n-a' ? 'Not applicable' : String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
                                         </span>
                                       ) : q.type === 'rating' ? (
                                         <div className="flex items-center gap-0.5">
@@ -854,6 +998,8 @@ export default function AssessmentDetailPage() {
                                         ))}
                                       </div>
                                     )}
+                                    <QuestionEvidence qr={qr} questionKey={String(q.id)} assessmentId={assessmentId} canEdit={canEdit} />
+                                    <QuestionReview qr={qr} questionKey={String(q.id)} assessmentId={assessmentId} canEdit={canEdit} />
                                   </div>
                                 </div>
                               </div>
@@ -988,6 +1134,10 @@ export default function AssessmentDetailPage() {
                   {approveMutation.isError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 p-2 rounded-lg">
                       {(approveMutation.error as any)?.response?.data?.detail || 'Failed to approve assessment.'}
+                      {(approveMutation.error as any)?.response?.status === 409 && (
+                        <Link href={`/vendor-risk/vendors/${assessment.vendor_id}?stage=approval`}
+                          className="ml-1 font-medium underline">Open Approval</Link>
+                      )}
                     </div>
                   )}
                   <button

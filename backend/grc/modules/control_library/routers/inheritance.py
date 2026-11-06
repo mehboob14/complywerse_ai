@@ -16,6 +16,7 @@ from ....models import (
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.licence_guard import exclude_restricted, is_restricted_control
 
 router = APIRouter(prefix="/inheritance", tags=["Control Library - Inheritance"])
 
@@ -191,8 +192,11 @@ def serialize_inheritance(inheritance: ControlInheritance, db: Session) -> dict:
 
 
 def get_control_text(control_type: str, control_id: int, db: Session) -> Optional[str]:
+    """Control text for the inheritance prompt, its only caller."""
     if control_type == "normalized":
         control = db.query(NormalizedControl).filter(NormalizedControl.id == control_id).first()
+        if control and is_restricted_control(control):
+            raise HTTPException(status_code=422, detail="Your control library is the Secure Controls Framework, and its licence doesn't allow its control names or text to be sent to an AI model, so AI inheritance analysis isn't available for SCF controls.")
         if control:
             return f"Code: {control.code}\nName: {control.name}\nStatement: {control.statement or ''}\nObjective: {control.objective or ''}"
     elif control_type == "framework":
@@ -511,7 +515,7 @@ def analyze_inheritance(
     target_control_text = get_control_text(request.control_type, request.control_id, db)
     target_control_details = get_control_details(request.control_type, request.control_id, db)
     
-    normalized_controls = db.query(NormalizedControl).limit(30).all()
+    normalized_controls = exclude_restricted(db.query(NormalizedControl), NormalizedControl).limit(30).all()
     framework_controls = db.query(FrameworkControl).limit(30).all()
     
     controls_list = []

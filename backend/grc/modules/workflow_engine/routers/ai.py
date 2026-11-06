@@ -82,10 +82,12 @@ def _get_ai_frameworks(db: Session) -> list[Framework]:
 def _get_ai_tenant_users(db: Session, tenant_id: int | None) -> list[GRCUser]:
     if not tenant_id:
         return []
-    # Per-tenant DB: every active grc_users row belongs to this tenant.
+    # Per-tenant DB: every active grc_users row belongs to this tenant (accounts an access review imported are not people).
+    from ....routers.auth_router import platform_account
+
     return (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())
         .order_by(GRCUser.display_name.asc(), GRCUser.username.asc())
         .limit(200)
         .all()

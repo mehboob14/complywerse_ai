@@ -111,6 +111,16 @@ PERMISSION_MATRIX = [
                 "name": "gap_analysis",
                 "display_name": "Gap Analysis",
                 "actions": ["view", "create", "edit"]
+            },
+            {
+                "name": "controls",
+                "display_name": "Controls",
+                "actions": ["view", "assign", "approve"]
+            },
+            {
+                "name": "artifacts",
+                "display_name": "Artifacts",
+                "actions": ["view", "approve"]
             }
         ]
     },
@@ -218,6 +228,11 @@ PERMISSION_MATRIX = [
                 "name": "regulatory_changes",
                 "display_name": "Regulatory Changes",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "settings",
+                "display_name": "Governance Settings",
+                "actions": ["view", "edit"]
             }
         ]
     },
@@ -280,11 +295,6 @@ PERMISSION_MATRIX = [
             {
                 "name": "framework_library",
                 "display_name": "Framework Library",
-                "actions": ["view", "create", "edit", "delete"]
-            },
-            {
-                "name": "framework_upload",
-                "display_name": "Framework Upload",
                 "actions": ["view", "create", "edit", "delete"]
             },
             {
@@ -357,7 +367,7 @@ PERMISSION_MATRIX = [
         "submodules": [
             {
                 "name": "organization",
-                "display_name": "Organization Profile",
+                "display_name": "Organization Profile & Departments",
                 "actions": ["view", "edit"]
             },
             {
@@ -379,6 +389,11 @@ PERMISSION_MATRIX = [
                 "name": "audit_logs",
                 "display_name": "Audit Logs",
                 "actions": ["view"]
+            },
+            {
+                "name": "ai_governance",
+                "display_name": "AI Governance",
+                "actions": ["view", "payloads"]
             },
             {
                 "name": "settings",
@@ -441,7 +456,8 @@ PERMISSION_MATRIX = [
             {
                 "name": "tasks",
                 "display_name": "Task Board",
-                "actions": ["view", "create", "edit", "delete"]
+                # view_all: see everyone's tasks (services/task_visibility); without it a person sees the tasks they take part in
+                "actions": ["view", "create", "edit", "delete", "view_all"]
             },
             {
                 "name": "reports",
@@ -477,7 +493,11 @@ PERMISSION_MATRIX = [
         "submodules": [
             {
                 "name": "issues",
-                "display_name": "Issues, CAPA, Links & Audit Log",
+                # Also the Audit Issue Register: view = read it; create =
+                # Audit Services (import, edit, validate, decide extensions,
+                # mappings, reminders); edit = owners (submit for validation,
+                # request an extension); delete = delete/restore findings.
+                "display_name": "Issues, CAPA, Audit Register, Links & Audit Log",
                 "actions": ["view", "create", "edit", "delete"]
             }
         ]
@@ -490,6 +510,12 @@ PERMISSION_MATRIX = [
                 "name": "vendors",
                 "display_name": "Vendors",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                # create = raise a request for a new supplier; review = pick it up or turn it down
+                "name": "intake",
+                "display_name": "Onboarding Requests",
+                "actions": ["view", "create", "review"]
             },
             {
                 "name": "assessments",
@@ -512,9 +538,10 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete"]
             },
             {
+                # approve = record the decision; edit = chase an approval's conditions to closure
                 "name": "approvals",
                 "display_name": "Approval Decisions",
-                "actions": ["view", "approve"]
+                "actions": ["view", "approve", "edit"]
             },
             {
                 "name": "monitoring",
@@ -525,6 +552,12 @@ PERMISSION_MATRIX = [
                 "name": "templates",
                 "display_name": "Questionnaire Templates",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                # edit = tiering, reminders and monitoring settings, supplier fields, concentration aliases, examiner links
+                "name": "config",
+                "display_name": "Settings & Examiner Links",
+                "actions": ["view", "edit"]
             }
         ]
     }

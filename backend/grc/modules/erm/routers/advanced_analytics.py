@@ -1,4 +1,6 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import is_restricted_control
+from ....services.ai_gateway.field_policies import ai_view
 
 from typing import List, Optional
 import os
@@ -189,8 +191,8 @@ def get_bowtie_analysis(
         if ctrl:
             control_data = BowTieControl(
                 id=ctrl.id,
-                name=ctrl.title or ctrl.description or f"Control {ctrl.id}",
-                code=ctrl.control_code if hasattr(ctrl, 'control_code') else None,
+                name=ctrl.name or ctrl.statement or f"Control {ctrl.id}",
+                code=getattr(ctrl, "code", None),
                 effectiveness="effective"
             )
             if len(preventive_controls) <= len(mitigating_controls):
@@ -759,11 +761,13 @@ def generate_bowtie_ai_narrative(
     impact_labels_map = {1: "Insignificant", 2: "Minor", 3: "Moderate", 4: "Major", 5: "Catastrophic"}
     likelihood_labels_map = {1: "Rare", 2: "Unlikely", 3: "Possible", 4: "Likely", 5: "Almost Certain"}
 
+    r = ai_view(risk, "erm.bowtie_narrative")           # what the field policy lets this prompt carry
     threats_info = []
     incidents = risk.incidents or []
     if incidents:
         for inc in incidents:
-            threats_info.append({"title": inc.title, "severity": getattr(inc, 'severity', None)})
+            i = ai_view(inc, "erm.bowtie_narrative")
+            threats_info.append({"title": i["title"], "severity": i["severity"]})
     else:
         threats_info.append({"title": f"Potential {risk.risk_category or 'operational'} threat", "category": risk.risk_category})
 
@@ -772,7 +776,11 @@ def generate_bowtie_ai_narrative(
     for link in (risk.control_links or []):
         ctrl = link.normalized_control
         if ctrl:
-            ctrl_data = {"name": ctrl.title or ctrl.description or f"Control {ctrl.id}", "code": getattr(ctrl, 'control_code', None)}
+            ctrl_data = {
+                "name": ctrl.name or ctrl.statement or f"Control {ctrl.id}",
+                "code": getattr(ctrl, "code", None),
+                "_restricted": is_restricted_control(ctrl),
+            }
             if len(preventive_controls_info) <= len(mitigating_controls_info):
                 preventive_controls_info.append(ctrl_data)
             else:
@@ -791,23 +799,36 @@ def generate_bowtie_ai_narrative(
     if not consequences_info:
         consequences_info.append("Business impact")
 
+    def _for_model(items):
+        # SCF control names and codes are SCF content (CC BY-ND, no AI derivatives).
+        # The model still learns how many controls sit on each side of the bow-tie;
+        # the offline fallback narrative below keeps the real names, since no model
+        # is involved there.
+        out = []
+        for item in items:
+            if item.get("_restricted"):
+                out.append({"name": "Linked control (wording withheld: licensed text)", "code": None})
+            else:
+                out.append({k: v for k, v in item.items() if k != "_restricted"})
+        return out
+
     prompt = f"""You are a senior risk management analyst. Analyze the following bow-tie risk data and generate a comprehensive plain-English narrative explaining the full causal chain.
 
 Risk Event:
-- Title: {risk.title}
-- Description: {risk.description or 'No description provided'}
-- Category: {risk.risk_category or 'Unspecified'}
-- Inherent Score: {risk.inherent_score or 'N/A'} (Likelihood: {likelihood_labels_map.get(risk.inherent_likelihood, 'N/A')}, Impact: {impact_labels_map.get(risk.inherent_impact, 'N/A')})
-- Residual Score: {risk.residual_score or 'N/A'} (Likelihood: {likelihood_labels_map.get(risk.residual_likelihood, 'N/A')}, Impact: {impact_labels_map.get(risk.residual_impact, 'N/A')})
+- Title: {r['title']}
+- Description: {r['description'] or 'No description provided'}
+- Category: {r['risk_category'] or 'Unspecified'}
+- Inherent Score: {r['inherent_score'] or 'N/A'} (Likelihood: {likelihood_labels_map.get(r['inherent_likelihood'], 'N/A')}, Impact: {impact_labels_map.get(r['inherent_impact'], 'N/A')})
+- Residual Score: {r['residual_score'] or 'N/A'} (Likelihood: {likelihood_labels_map.get(r['residual_likelihood'], 'N/A')}, Impact: {impact_labels_map.get(r['residual_impact'], 'N/A')})
 
 Threats/Causes ({len(threats_info)}):
 {json.dumps(threats_info, indent=2)}
 
 Preventive Controls ({len(preventive_controls_info)}):
-{json.dumps(preventive_controls_info, indent=2)}
+{json.dumps(_for_model(preventive_controls_info), indent=2)}
 
 Mitigating Controls ({len(mitigating_controls_info)}):
-{json.dumps(mitigating_controls_info, indent=2)}
+{json.dumps(_for_model(mitigating_controls_info), indent=2)}
 
 Potential Consequences:
 {json.dumps(consequences_info, indent=2)}

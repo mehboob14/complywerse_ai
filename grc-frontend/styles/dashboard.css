@@ -1,0 +1,74 @@
+/* Dashboard surfaces. Tokens from docs/design/enterprise-saas.md.
+   Amounts and scores also follow docs/design/fintech-dashboard.md:
+   tabular figures, right-aligned, sign plus color, never truncated.
+   Scoped to .dash so the rest of the app keeps its current theme. */
+
+.dash {
+  --dash-primary: #2563eb;
+  --dash-primary-hover: #1d4ed8;
+  --dash-primary-light: #eff6ff;
+  --dash-bg: #fafafa;
+  --dash-surface: #ffffff;
+  --dash-surface-2: #f5f5f5;
+  --dash-border: #e5e7eb;
+  --dash-border-strong: #d1d5db;
+  --dash-text: #111827;
+  --dash-text-2: #4b5563;
+  --dash-muted: #9ca3af;
+  --dash-success: #059669;
+  --dash-success-light: #ecfdf5;
+  --dash-warning: #d97706;
+  --dash-warning-light: #fffbeb;
+  --dash-error: #dc2626;
+  --dash-error-light: #fef2f2;
+  --dash-positive: #1a7f37;
+  --dash-positive-light: #dafbe1;
+  --dash-negative: #cf222e;
+  --dash-negative-light: #ffebe9;
+  --dash-chart-1: #2563eb;
+  --dash-chart-2: #7c3aed;
+  --dash-chart-3: #059669;
+  --dash-chart-4: #d97706;
+  --dash-chart-5: #dc2626;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--dash-text-2);
+  background: var(--dash-bg);
+}
+
+.dash-card {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.dash-card:hover {
+  border-color: var(--dash-border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.dash-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dash-muted);
+}
+
+.dash-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dash-pos { color: var(--dash-positive); }
+.dash-neg { color: var(--dash-negative); }

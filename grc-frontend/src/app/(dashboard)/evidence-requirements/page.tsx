@@ -43,11 +43,11 @@ interface EvidenceRequirement {
   sample_evidence: string;
   collection_guidance: string;
   collection_frequency: string;
-  retention_period: string;
+  retention_period: string | null;
   priority: string;
   is_mandatory: boolean;
   status: string;
-  ai_confidence: number;
+  ai_confidence: number | null;
   ai_reasoning?: string;
   created_at: string;
   submitted_at: string | null;
@@ -224,8 +224,15 @@ export default function EvidenceRequirementsPage() {
       if (priorityFilter) params.priority = priorityFilter;
       if (typeFilter) params.evidence_type = typeFilter;
       
-      const response = await apiClient.get(`/framework-upload/parser/${selectedFramework}/evidence-requirements`, { params });
-      return response.data as EvidenceRequirementsResponse;
+      const url = `/framework-upload/parser/${selectedFramework}/evidence-requirements`;
+      const data = (await apiClient.get(url, { params })).data as EvidenceRequirementsResponse;
+      // The API returns at most 500 rows a page: fetch the rest (UAE IA has 860).
+      while (data.requirements.length < data.total) {
+        const next = (await apiClient.get(url, { params: { ...params, skip: data.requirements.length } })).data as EvidenceRequirementsResponse;
+        if (!next.requirements.length) break;
+        data.requirements.push(...next.requirements);
+      }
+      return data;
     },
     enabled: !!selectedFramework,
   });
@@ -596,19 +603,23 @@ export default function EvidenceRequirementsPage() {
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">Collection Frequency</h4>
                                 <p className="text-sm text-slate-900">{req.collection_frequency || 'Not specified'}</p>
                               </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">Retention Period</h4>
-                                <p className="text-sm text-slate-900">{req.retention_period || 'Not specified'}</p>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600 mb-1">AI Confidence</h4>
-                                <p className={`text-sm font-medium ${
-                                  req.ai_confidence >= 0.8 ? 'text-emerald-600' :
-                                  req.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
-                                }`}>
-                                  {Math.round((req.ai_confidence || 0) * 100)}%
-                                </p>
-                              </div>
+                              {req.retention_period != null && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-slate-600 mb-1">Retention Period</h4>
+                                  <p className="text-sm text-slate-900">{req.retention_period || 'Not specified'}</p>
+                                </div>
+                              )}
+                              {req.ai_confidence != null && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-slate-600 mb-1">AI Confidence</h4>
+                                  <p className={`text-sm font-medium ${
+                                    req.ai_confidence >= 0.8 ? 'text-emerald-600' :
+                                    req.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
+                                  }`}>
+                                    {Math.round((req.ai_confidence || 0) * 100)}%
+                                  </p>
+                                </div>
+                              )}
                               <div>
                                 <h4 className="text-sm font-medium text-slate-600 mb-1">Mandatory</h4>
                                 <p className={`text-sm font-medium ${req.is_mandatory ? 'text-rose-600' : 'text-slate-600'}`}>

@@ -62,16 +62,16 @@ VECTOR_SEMANTIC_TERMS = (
 )
 # IMPORTANT: Terms for the retired Audit Management product module.
 # These route to the deprecated_audit response instead of SQL generation.
+# Audit findings, recommendations, reports, action plans, follow-up and the
+# committee pack are live again in the Audit Issue Register (Auditor Portal),
+# so only what stayed retired is listed.
 AUDIT_QUERY_TERMS: tuple = (
-    "audit finding", "audit findings", "audit plan", "audit plans",
+    "audit plan", "audit plans",
     "audit engagement", "audit engagements", "audit workpaper", "workpaper",
     "workpapers", "audit workpapers", "pbc list", "prepared by client",
-    "qaip", "audit quality", "audit maturity", "audit recommendation",
-    "audit recommendations", "audit universe", "auditable entity",
-    "audit board pack", "board pack", "audit follow up", "audit follow-up",
-    "audit management", "audit action plan", "audit template",
-    "audit finding theme", "audit report opinion",
-    "audit report", "audit reports",
+    "qaip", "audit quality", "audit maturity",
+    "audit universe", "auditable entity",
+    "audit management", "audit template", "audit report opinion",
 )
 GRC_RELEVANT_TERMS = (
     # Platform modules
@@ -1164,7 +1164,7 @@ try:
     from grc_sql_agent import (
         detect_query_type, generate_sql_query, validate_sql, format_query_results,
         validate_columns_in_sql, get_fallback_data_for_question, generate_answer_from_fallback_data,
-        fetch_table_schema_from_db, load_full_database_schema
+        fetch_table_schema_from_db, load_full_database_schema, drop_secret_columns
     )  # type: ignore
     SQL_AGENT_ENABLED = True
     logger.info("[YES] SQL Agent loaded successfully (ChromaDB disabled)")
@@ -1345,6 +1345,37 @@ def _sql_failure_answer(question: str) -> str:
         f"I could not complete this data query reliably: \"{question.strip()}\".\n"
         "No generated sample data is shown. Please try simpler wording or a narrower filter."
     )
+
+
+# Governance documents for someone outside the document library (governance/permissions.can_read_library): no document or
+# statement hits, no SQL over the document tables. ponytail: a source-type and table-name match, and ComplyChat ignores every other
+# module's rights too; a per-module rights review is its own task.
+_DOCUMENT_SOURCES = ("governance_document", "policy_statement")
+_DOCUMENT_TABLES = re.compile(r"\bgrc_(?:governance_document|document_|policy_statement|policy_gap|policy_attestation|studio_)", re.IGNORECASE)
+
+
+def _readable_hits(hits: List[Dict[str, Any]], library: bool) -> List[Dict[str, Any]]:
+    if library:
+        return hits
+    return [h for h in hits if not str((h.get("payload") or {}).get("source_type") or "").startswith(_DOCUMENT_SOURCES)]
+
+
+def _own_chat_uploads_only(hits: List[Dict[str, Any]], uploaded_files: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Qdrant indexes chat uploads per tenant, so a file one person dropped into chat
+    can surface in another person's answer. Keep a chat_upload hit only when it is one
+    of THIS session's own uploaded files; every other source type is untouched."""
+    own_ids = {str(f.get("id")) for f in (uploaded_files or []) if f.get("id")}
+    kept: List[Dict[str, Any]] = []
+    for h in hits:
+        payload = h.get("payload") or {}
+        if str(payload.get("source_type") or "") == "chat_upload" and str(payload.get("source_id") or "") not in own_ids:
+            continue
+        kept.append(h)
+    return kept
+
+
+def _touches_documents(sql: str) -> bool:
+    return bool(_DOCUMENT_TABLES.search(sql or ""))
 
 
 # ============================================================================
@@ -2652,6 +2683,7 @@ def try_qdrant_rag_answer(
     context_summary: str,
     uploaded_context: str,
     uploaded_files: Optional[List[Dict[str, Any]]] = None,
+    library: bool = True,
 ) -> Optional[Tuple[str, List[ChatSource]]]:
     if request_mode in {"framework_progress", "evidence_gaps"}:
         return None
@@ -2725,6 +2757,8 @@ def try_qdrant_rag_answer(
             limit=8,
             source_types=None,
         )
+    hits = _readable_hits(hits, library)
+    hits = _own_chat_uploads_only(hits, uploaded_files)
     if not hits:
         return None
 
@@ -2877,6 +2911,8 @@ async def ask_compliance_question(
             )
 
         tenant_ids = get_user_tenants(current_user, db)
+        from ..governance.permissions import can_read_library
+        library = can_read_library(db, current_user)
 
         if _is_policy_count_question(request.message):
             answer = _policy_count_answer(db, tenant_ids)
@@ -2931,6 +2967,7 @@ async def ask_compliance_question(
                 context_summary=context_summary,
                 uploaded_context=uploaded_context,
                 uploaded_files=uploaded_files,
+                library=library,
             )
         if vector_rag_result is not None:
             answer, vector_sources = vector_rag_result
@@ -3090,7 +3127,7 @@ Generate new SQL using ONLY the column names listed above.
                         limit=request.limit
                     )
                 
-                if retry_result and retry_result.get('sql'):
+                if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']):
                     logger.info(f"[YES] RETRY SUCCESSFUL: New SQL generated")
                     sql_query = retry_result['sql']
                     sql_result = retry_result
@@ -3127,6 +3164,13 @@ Generate new SQL using ONLY the column names listed above.
                     current_offset=0
                 )
         
+        if not library and _touches_documents(sql_query):
+            logger.info("[SAFE-FAIL] SQL over governance documents for someone outside the document library")
+            answer = _sql_failure_answer(request.message)
+            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
+            return ChatResponse(answer=answer, sources=[], framework_filter=request.framework, timestamp=datetime.utcnow().isoformat(),
+                                has_more=False, total_count=0, current_offset=0)
+
         # [SEARCH] STEP 3: Execute SQL query
         logger.info(f"[SEARCH] Executing SQL: {sql_query[:200]}...")
         
@@ -3153,8 +3197,8 @@ Generate new SQL using ONLY the column names listed above.
             result = db.execute(text(sql_query))
             rows = result.fetchall()
             
-            # Convert rows to dicts
-            data_list = [dict(row._mapping) for row in rows]
+            # Convert rows to dicts, without any secret (a wildcard select names no secret column)
+            data_list = drop_secret_columns([dict(row._mapping) for row in rows])
             logger.info(f"[YES] SQL returned {len(data_list)} rows (Total: {total_count}, Offset: {request.offset})")
             
             # Check if more results available
@@ -3278,7 +3322,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             limit=request.limit
                         )
                     
-                    if retry_result and retry_result.get('sql'):
+                    if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']) and (library or not _touches_documents(retry_result['sql'])):
                         retry_sql = retry_result['sql']
                         logger.info(f"[REFRESH] RETRY SQL: {retry_sql[:150]}...")
                         
@@ -3286,7 +3330,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             # Try executing retry query
                             retry_exec = db.execute(text(retry_sql))
                             retry_rows = retry_exec.fetchall()
-                            retry_data = [dict(row._mapping) for row in retry_rows]
+                            retry_data = drop_secret_columns([dict(row._mapping) for row in retry_rows])
                             
                             logger.info(f"[YES] RETRY SUCCESSFUL: {len(retry_data)} rows")
                             

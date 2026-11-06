@@ -380,7 +380,6 @@ export default function CompliancePluginDetailPage() {
                 <th className="text-left py-1">Target</th>
                 <th className="text-left py-1">Triggered</th>
                 <th className="text-left py-1">Duration</th>
-                <th className="text-left py-1">Evidence hash</th>
                 <th className="text-left py-1">Summary</th>
               </tr>
             </thead>
@@ -415,8 +414,15 @@ export default function CompliancePluginDetailPage() {
                     )}
                   </td>
                   <td className="py-1.5 text-xs text-gray-600">{r.duration_ms != null ? `${r.duration_ms} ms` : '—'}</td>
-                  <td className="py-1.5 text-xs font-mono text-gray-600" title={r.evidence_hash ?? ''}>{r.evidence_hash ? r.evidence_hash.slice(0, 12) + '…' : '—'}</td>
-                  <td className="py-1.5 text-xs text-gray-700 max-w-md">{r.result_summary || r.error_message || '—'}</td>
+                  <td className="py-1.5 text-xs text-gray-700 max-w-md">
+                    {r.result_summary || r.error_message || '—'}
+                    {r.evidence_hash && (
+                      <details className="mt-1 text-gray-500">
+                        <summary className="cursor-pointer hover:text-blue-600">Evidence record</summary>
+                        <div className="mt-1 break-all font-mono">{r.evidence_hash}</div>
+                      </details>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

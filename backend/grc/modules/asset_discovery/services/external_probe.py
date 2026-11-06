@@ -163,14 +163,21 @@ def _set_cookies(resp) -> List[str]:
 
 
 def _cookie_flags(cookies: List[str]) -> Dict[str, bool]:
+    # Check the cookie's ATTRIBUTE list, not a substring over the whole header —
+    # a cookie NAMED "secure_session" must not be credited with the Secure flag.
+    # Attributes are ';'-separated; the first segment is name=value, so skip it.
     if not cookies:
         return {}
-    blob = " ".join(cookies).lower()
-    return {
-        "secure": "secure" in blob,
-        "httponly": "httponly" in blob,
-        "samesite": "samesite" in blob,
-    }
+    flags = {"secure": False, "httponly": False, "samesite": False}
+    for ck in cookies:
+        for attr in [a.strip().lower() for a in str(ck).split(";")[1:]]:
+            if attr == "secure":
+                flags["secure"] = True
+            elif attr == "httponly":
+                flags["httponly"] = True
+            elif attr == "samesite" or attr.startswith("samesite="):
+                flags["samesite"] = True
+    return flags
 
 
 def _probe_tls(fqdn: str, facts: Dict[str, Any]) -> None:
@@ -280,10 +287,18 @@ def _probe_dns(fqdn: str, facts: Dict[str, Any]) -> None:
     facts["spf"] = next((t for t in txt if "v=spf1" in t.lower()), None)
     dmarc = q("_dmarc." + fqdn, "TXT", record=False)
     facts["dmarc"] = next((t for t in dmarc if "v=dmarc1" in t.lower()), None)
-    dkim = q("default._domainkey." + fqdn, "TXT", record=False)
-    facts["dkim"] = next(
-        (t for t in dkim if "v=dkim1" in t.lower() or "k=rsa" in t.lower()), None
-    ) or (dkim[0] if dkim else None)
+    # DKIM lives under a per-provider selector, not always "default" — Google
+    # publishes at google._domainkey, M365 at selector1/2, etc. Probe the common
+    # ones and treat any hit as present, so a correctly-configured domain isn't
+    # falsely scored "no DKIM". (Passive selector discovery can't be exhaustive.)
+    facts["dkim"] = None
+    for _sel in ("default", "google", "selector1", "selector2", "k1", "s1", "mail", "dkim"):
+        _recs = q(f"{_sel}._domainkey.{fqdn}", "TXT", record=False)
+        _hit = next((t for t in _recs if "v=dkim1" in t.lower() or "k=rsa" in t.lower()), None) \
+            or (_recs[0] if _recs else None)
+        if _hit:
+            facts["dkim"] = _hit
+            break
     facts["caa"] = q(fqdn, "CAA")
     facts["dns_records"] = records
 
@@ -499,8 +514,12 @@ def _probe_ct_subdomains(fqdn: str, facts: Dict[str, Any]) -> None:
 # Do NOT add either without an authorization gate.
 
 
-def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
+def probe_asset(fqdn: str, ip: Optional[str] = None, *, extras: bool = True) -> dict:
     """Touch one external host and return a FLAT dict of its EASM parameters.
+
+    `extras=False` skips the registration, location and certificate-log lookups
+    (reverse DNS, MTA-STS, RDAP, GeoIP, CT subdomains) for callers that only need
+    the host's own HTTP, TLS and DNS answers — a supplier scan looks at many hosts.
 
     NEVER raises: an unreachable host, a hostile server, a broken cert — all come
     back as recorded facts. HTTP is tried on 443 then 80 (first responder wins);
@@ -530,7 +549,7 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
         "whois_status": None, "whois_nameservers": None,
         "asn": None, "asn_org": None, "ip_network": None, "ip_region": None,
         "subdomains": None,
-        "set_cookies": [], "cdn_waf": None,
+        "set_cookies": [], "cdn_waf": None, "technologies": [],
         "probed_at": datetime.utcnow().isoformat() + "Z",
     }
     if not fqdn:
@@ -560,13 +579,21 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
         facts["set_cookies"] = _set_cookies(resp)
         facts["cdn_waf"] = _cdn_waf(resp.headers)
         try:
-            facts["title"] = _extract_title((resp.text or "")[:MAX_TITLE_SCAN])
+            head = (resp.text or "")[:MAX_TITLE_SCAN]
         except Exception:
-            facts["title"] = None
+            head = ""
+        facts["title"] = _extract_title(head)
+        try:
+            from .web_tech import detect
+            facts["technologies"] = detect(resp.headers, facts["set_cookies"], head, str(resp.url))
+        except Exception:  # noqa: BLE001 — fingerprinting is extra, never the reason a probe fails
+            facts["technologies"] = []
         break
 
     _probe_tls(fqdn, facts)
     _probe_dns(fqdn, facts)
+    if not extras:
+        return facts
     _probe_reverse_dns(facts)       # needs facts["ip"] / dns_a from above
     _probe_mta_sts(fqdn, facts)
     _probe_rdap_domain(fqdn, facts)
@@ -610,9 +637,12 @@ def compute_health_score(facts: Dict[str, Any], *, cve_count: int = 0,
         "cdn": "CDN / WAF",
     }
 
-    # 1) TLS (0.20)
+    # 1) TLS (0.20). Only grade TLS as a failure when a cert was actually seen,
+    # or the host is LIVE on the web and its TLS failed — a bare closed/unresolvable
+    # :443 on a non-web host (mail-only, dead subdomain from an old cert) must not
+    # score a phantom "no valid certificate" F.
     tls_err = facts.get("tls_error")
-    if facts.get("tls_not_after") or tls_err:
+    if facts.get("tls_not_after") or (tls_err and live):
         s = 1.0
         detail: List[str] = []
         if tls_err or not facts.get("tls_not_after"):
@@ -720,8 +750,10 @@ def compute_health_score(facts: Dict[str, Any], *, cve_count: int = 0,
     if cdn:
         comps["cdn"] = {"score": 1.0, "weight": 0.15, "detail": str(cdn)}
 
-    reachable = (live or bool(facts.get("tls_not_after")) or bool(facts.get("tls_error"))
-                 or bool(facts.get("dns_a")))
+    # A bare :443 connection failure (tls_error) is NOT a gradable signal on its
+    # own — otherwise a non-web / non-resolving name gets forced to a grade
+    # instead of being left ungraded.
+    reachable = (live or bool(facts.get("tls_not_after")) or bool(facts.get("dns_a")))
     if not reachable:
         return {"score": None, "grade": None, "components": comps,
                 "reason": "unreachable — no signals to grade"}

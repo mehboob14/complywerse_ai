@@ -2,9 +2,9 @@
 
 // Stage 04 — Questionnaire & Evidence, framed correctly: the VENDOR completes the
 // questionnaire and uploads evidence via the sent portal link; the analyst REVIEWS
-// here. Shows each issued questionnaire's status + the vendor's submitted answers,
-// with copy/open-link so the analyst can (re)share the link. Internal evidence
-// attachment stays as a fallback for offline vendors.
+// here. Shows each issued questionnaire's status, its reviewers per section, and the
+// vendor's submitted answers, with copy/open-link so the analyst can (re)share the
+// link. Internal evidence attachment stays as a fallback for offline vendors.
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -14,13 +14,17 @@ import {
   Send, User, AlertCircle,
 } from 'lucide-react';
 import { vendorRiskApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
+import { absoluteLink, portalApi } from '../../../_lib/portalApi';
+import { ReviewersStrip } from '../../../assessments/[id]/_review';
 import EvidencePanel from './EvidencePanel';
 
 interface QResponse {
   id: number; vendor_id: number; assessment_id: number | null; template_id: number | null;
   respondent_name: string | null; respondent_email: string | null;
-  responses: Record<string, unknown>; status: string; token: string;
+  // No token on personal links: the contact's link opens it.
+  responses: Record<string, unknown>; status: string; token: string | null; contact_id?: number | null;
   expires_at: string | null; submitted_at: string | null; created_at: string;
 }
 
@@ -48,7 +52,10 @@ function isExpired(r: QResponse): boolean {
 
 export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { vendorId: number; assessmentId: number }) {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canReview = hasPermission('vendor_risk:assessments:edit') || hasPermission('erm:risks:edit');
   const [open, setOpen] = useState<number | null>(null);
+  const [only, setOnly] = useState<Record<number, string[] | null>>({});     // a reviewer's own sections
 
   const { data, isLoading } = useQuery({
     queryKey: ['tpra-questionnaire-responses', assessmentId],
@@ -58,9 +65,14 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
 
   const portalLink = (token: string) =>
     `${typeof window !== 'undefined' ? window.location.origin : ''}/vendor-risk/questionnaires/${token}`;
-  const copyLink = async (token: string) => {
-    try { await navigator.clipboard.writeText(portalLink(token)); toast({ type: 'success', title: 'Link copied', message: 'Share it with the vendor contact.' }); }
-    catch { toast({ type: 'error', title: 'Could not copy' }); }
+  // A questionnaire's own link (sent before personal links), or a fresh personal link for its contact.
+  const copyLink = async (r: QResponse) => {
+    try {
+      const link = r.token ? portalLink(r.token) : `${absoluteLink((await portalApi.issueLink(
+        vendorId, r.contact_id as number, { send_email: false })).data.link)}?q=${r.id}`;
+      await navigator.clipboard.writeText(link);
+      toast({ type: 'success', title: 'Link copied', message: 'Share it with the vendor contact.' });
+    } catch { toast({ type: 'error', title: 'Could not copy' }); }
   };
 
   const anyWaiting = responses.some((r) => r.status !== 'submitted' && !isExpired(r));
@@ -97,7 +109,7 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
             const expired = isExpired(r);
             const status = expired ? 'expired' : r.status;
             const answered = Object.values(r.responses || {}).filter((v) => v !== null && v !== undefined && v !== '').length;
-            const entries = Object.entries(r.responses || {});
+            const entries = Object.entries(r.responses || {}).filter(([qid]) => !only[r.id] || only[r.id]!.includes(qid));
             return (
               <div key={r.id} className="rounded-xl border border-gray-200 bg-white">
                 <div className="flex items-start gap-3 p-3">
@@ -116,13 +128,21 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
                     </p>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-1">
-                    <button onClick={() => copyLink(r.token)} title="Copy vendor link" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Copy className="h-3.5 w-3.5" /></button>
-                    <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><ExternalLink className="h-3.5 w-3.5" /></a>
+                    {(r.token || (r.contact_id && ['pending', 'in_progress', 'returned'].includes(r.status))) && (
+                      <button onClick={() => copyLink(r)} title="Copy vendor link" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><Copy className="h-3.5 w-3.5" /></button>
+                    )}
+                    {r.token && (
+                      <a href={portalLink(r.token)} target="_blank" rel="noreferrer" title="Open portal" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"><ExternalLink className="h-3.5 w-3.5" /></a>
+                    )}
                   </div>
                 </div>
 
                 {open === r.id && (
                   <div className="border-t border-gray-100 p-3">
+                    <div className="mb-3">
+                      <ReviewersStrip qr={r} canEdit={canReview} filtered={!!only[r.id]}
+                        onFilter={(keys) => setOnly((prev) => ({ ...prev, [r.id]: keys }))} />
+                    </div>
                     {r.status !== 'submitted' && (
                       <p className="mb-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"><AlertCircle className="h-3 w-3" /> Not yet submitted — answers may be incomplete.</p>
                     )}
@@ -138,7 +158,8 @@ export default function QuestionnaireReviewPanel({ vendorId, assessmentId }: { v
                         ))}
                       </div>
                     )}
-                    <Link href="/vendor-risk/questionnaires" className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
+                    <Link href={`/vendor-risk/assessments/${assessmentId}?tab=questionnaire`}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
                       Full review &amp; vendor evidence <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>

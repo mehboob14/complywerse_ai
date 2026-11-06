@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { aiRiskAssessmentApi, type AIRiskEntry, type AIRiskEvidence } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import {
   Bot, Plus, Upload, Download, Search, Sparkles, ChevronRight,
   Edit2, Trash2, X, AlertTriangle, CheckCircle2, Loader2, Link2,
@@ -842,7 +843,7 @@ function AISection({
           )}
           <div className="text-[10px] text-slate-500">
             Generated {entry.ai_generated_at ? new Date(entry.ai_generated_at).toLocaleString() : ''}
-            {entry.ai_model && <span className="ml-1">· model {entry.ai_model}</span>}
+            {entry.ai_model && <span className="ml-1">· {entry.ai_model === 'rules.v1' ? 'rule-based suggestion' : 'AI-generated'}</span>}
           </div>
         </div>
       )}
@@ -920,6 +921,7 @@ function EvidenceSection({
                   {it.evidence_type && <span>{it.evidence_type}</span>}
                   {it.uploaded_at && <span>uploaded {new Date(it.uploaded_at).toLocaleDateString()}</span>}
                   <span className="rounded-full bg-emerald-50 px-1.5 py-px text-emerald-700">{it.relationship_type}</span>
+                  <EvidenceMaturity evidenceId={it.evidence_id} />
                 </div>
               </div>
               {it.link_id && (

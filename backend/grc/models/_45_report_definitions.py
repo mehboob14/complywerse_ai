@@ -26,6 +26,13 @@ class ReportDefinition(Base):
 
     slug = Column(String(64), nullable=False, index=True)
     name = Column(String(255), nullable=False)
+    # 'report' (the default) or 'dashboard'. A dashboard is a set of tiles that
+    # each reference a saved report, so it is the same thing this table already
+    # stores — an open JSON spec owned by a user and optionally shared — and
+    # reusing the row gets tenant isolation, ownership and sharing for free.
+    kind = Column(String(16), default="report", nullable=True, index=True)
+    # Empty for a dashboard: it draws on whatever its tiles reference rather
+    # than being bound to one register.
     dataset = Column(String(64), nullable=False, index=True)
     spec = Column(JSON, default=dict)
 

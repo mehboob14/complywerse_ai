@@ -1,8 +1,8 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 
 from ....models import (
@@ -13,6 +13,9 @@ from ....models import (
     ParsedFrameworkControl, NormalizedControl, NormalizedControlLink, UploadedFramework,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from .. import permissions
+from ..permissions import require_doc_changer, require_doc_reader, require_library_reader
+from ..statement_auto_map import framework_scope
 
 router = APIRouter(prefix="/mappings", tags=["Governance - Mappings"])
 
@@ -81,6 +84,31 @@ def get_document_or_404(document_id: int, user_tenants: List[int], db: Session) 
             detail="Document not found"
         )
     return document
+
+
+# the right to change the record a document is linked to (the risk page asks risks:risk_register:edit, the risk list erm:risks:edit)
+_LINK_RIGHTS = {
+    "control": ("controls:control_library:edit",),
+    "risk": ("risks:risk_register:edit", "erm:risks:edit"),
+    "regulatory": ("compliance:frameworks:edit",),
+    "asset": ("assets:asset_inventory:edit",),
+}
+LINK_REFUSED = ("Only the document's owner, its author, someone allowed to edit documents or someone allowed to change the "
+                "linked record can change this document's links.")
+
+
+def ensure_may_link(db: Session, user: GRCUser, document: GovernanceDocument, kind: str) -> None:
+    """Link a document to a record or take the link off: who may change the document, or who may change that kind of record
+    (wildcards count, as in the menu) when they may read the document or it has a version in force."""
+    if permissions.can_edit(db, user, document):
+        return
+    from ....routers.reporting_router import _satisfies, _user_perm_names
+
+    granted = _user_perm_names(user, db)
+    if not any(_satisfies(granted, r) for r in _LINK_RIGHTS[kind]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=LINK_REFUSED)
+    if not permissions.in_force_number(document):
+        permissions.ensure_reader(db, user, document)
 
 
 def _recommended_controls_for_document(
@@ -255,7 +283,7 @@ def _recommended_controls_for_document(
     return out
 
 
-@router.get("/document/{document_id}")
+@router.get("/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_document_mappings(
     document_id: int,
     db: Session = Depends(get_db),
@@ -264,14 +292,13 @@ def get_document_mappings(
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(document_id, user_tenants, db)
 
-    # Scope the AI recommendations to the document's OWN frameworks — the union of
-    # its in-scope (applicable_framework_ids) and referenced (framework_ids) sets —
-    # so the Mappings tab never surfaces the whole tenant catalog. Empty union → the
-    # helper returns nothing (the UI shows the "set applicable frameworks" prompt).
-    doc_fw_ids = sorted(
-        {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
-        | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
-    )
+    # Scope the AI recommendations to the document's OWN frameworks (applicable ∪
+    # linked ∪ any picked on its Mappings tab), so the tab never surfaces the whole
+    # tenant catalog. Empty → the helper returns nothing (the UI asks for frameworks).
+    scope = framework_scope(document)
+    doc_fw_ids = scope["all"]
+    fw_names = {fid: name for fid, name in db.query(UploadedFramework.id, UploadedFramework.name)
+                .filter(UploadedFramework.id.in_(doc_fw_ids)).all()} if doc_fw_ids else {}
 
     control_links = db.query(InternalControl).filter(
         InternalControl.tenant_id.in_(user_tenants),
@@ -346,10 +373,13 @@ def get_document_mappings(
         "recommended_controls": _recommended_controls_for_document(db, document_id, user_tenants, fw_ids=doc_fw_ids),
         # The framework scope actually applied (for the UI's "in-scope frameworks" header + empty state).
         "framework_scope_ids": doc_fw_ids,
+        # Where each came from: applicable / linked at creation, extra = picked on the Mappings tab.
+        "framework_scope": {k: [{"id": fid, "name": fw_names.get(fid, f"Framework #{fid}")} for fid in scope[k]]
+                            for k in ("applicable", "linked", "extra")},
     }
 
 
-@router.get("/document/{document_id}/coverage")
+@router.get("/document/{document_id}/coverage", dependencies=[Depends(require_doc_reader)])
 def get_document_control_coverage(
     document_id: int,
     framework_ids: Optional[str] = Query(
@@ -371,12 +401,9 @@ def get_document_control_coverage(
     if framework_ids:
         fw_ids = [int(x) for x in framework_ids.split(",") if x.strip().lstrip("-").isdigit()]
     else:
-        # Default to the UNION of the document's in-scope (applicable) and
-        # referenced (citation) frameworks — the same scope the Mappings tab uses.
-        fw_ids = sorted(
-            {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
-            | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
-        )
+        # Default to the same scope the Mappings tab uses: applicable ∪ linked ∪
+        # any picked on the Mappings tab.
+        fw_ids = framework_scope(document)["all"]
 
     recommended = _recommended_controls_for_document(db, document_id, user_tenants)
     mapped_all = [r for r in recommended if r.get("is_linked")]
@@ -448,13 +475,123 @@ def get_document_control_coverage(
     }
 
 
+class MappingRun(BaseModel):
+    # Frameworks to map against beyond the document's applicable and linked ones.
+    extra_framework_ids: List[int] = []
+
+
+_RUN_NAMESPACE = "statement_auto_map"
+_RUN_STALE_SECONDS = 1800          # the run's own lock expires then too
+
+
+def _run_state(request: Request, document_id: int) -> dict:
+    """The document's mapping run as the background job last wrote it. A run
+    still 'queued' or 'running' after the job's lock has expired belongs to a
+    worker that died, and counts as idle."""
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if not tenant_slug:
+        return {"status": "idle"}
+    from ....job_status import get_status
+
+    state = get_status(tenant_slug, _RUN_NAMESPACE, document_id, default={}) or {"status": "idle"}
+    if state.get("status") in ("queued", "running"):
+        try:
+            age = (datetime.utcnow() - datetime.fromisoformat(state.get("updated_at") or "")).total_seconds()
+        except ValueError:
+            age = _RUN_STALE_SECONDS + 1
+        if age > _RUN_STALE_SECONDS:
+            return {"status": "idle", "stale_cleared": True}
+    if state.get("error"):
+        from .policy_parser import public_job_error
+
+        state = {**state, "error": public_job_error(state["error"])}
+    return state
+
+
+@router.post("/document/{document_id}/run", dependencies=[Depends(require_doc_changer)])
+def run_document_mapping(
+    document_id: int,
+    body: MappingRun,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Map the document's statements against its frameworks: the applicable and
+    linked ones it was created with, plus any others picked here. The extra ones
+    are kept on the document, so later runs, re-parses and the Mappings tab use
+    them too. Runs in the background; poll run-status. Links a person confirmed
+    survive the re-run."""
+    from ..statement_auto_map import _ai_available, auto_map_document
+
+    user_tenants = get_user_tenants(current_user, db)
+    document = get_document_or_404(document_id, user_tenants, db)
+    if _run_state(request, document_id).get("status") in ("queued", "running"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Mapping is already running for this document. Wait for it to finish.")
+
+    wanted = sorted({int(x) for x in body.extra_framework_ids})
+    if wanted:
+        found = {fid for (fid,) in db.query(UploadedFramework.id).filter(
+            UploadedFramework.id.in_(wanted),
+            or_(UploadedFramework.tenant_id.is_(None), UploadedFramework.tenant_id.in_(user_tenants)),
+        ).all()}
+        if set(wanted) - found:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"Unknown framework id(s): {sorted(set(wanted) - found)}")
+    own = framework_scope(document)
+    document.mapping_framework_ids = sorted(set(wanted) - set(own["applicable"]) - set(own["linked"]))
+    scope = framework_scope(document)
+    if not scope["all"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Pick at least one framework to map this document against.")
+    statements = db.query(func.count(PolicyStatement.id)).filter(
+        PolicyStatement.document_id == document_id,
+        PolicyStatement.tenant_id.in_(user_tenants),
+        PolicyStatement.status == "active",
+    ).scalar() or 0
+    if not statements:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This document has no statements yet. Parse it on the Statements tab "
+                                   "first; mapping works on its statements.")
+    if not _ai_available():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Mapping needs the AI service, and no AI key is configured on this server.")
+    db.commit()
+
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if not tenant_slug:                      # no tenant context (a direct call): map inline
+        return {"status": "completed", "framework_scope_ids": scope["all"], **auto_map_document(db, document_id)}
+    from ....job_status import set_status
+    from ....tasks.governance import dispatch_auto_map
+
+    set_status(tenant_slug, _RUN_NAMESPACE, document_id, {
+        "status": "queued", "updated_at": datetime.utcnow().isoformat(), "statements": statements,
+        "framework_scope_ids": scope["all"], "message": f"Mapping {statements} statement(s)",
+    })
+    task_id = dispatch_auto_map(tenant_slug, document_id)
+    return {"status": "queued", "task_id": task_id, "statements": statements, "framework_scope_ids": scope["all"]}
+
+
+@router.get("/document/{document_id}/run-status", dependencies=[Depends(require_doc_reader)])
+def document_mapping_run_status(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Where the document's latest mapping run stands: idle, queued, running,
+    completed (with its counts), skipped or failed."""
+    get_document_or_404(document_id, get_user_tenants(current_user, db), db)
+    return _run_state(request, document_id)
+
+
 class RecommendedControlLink(BaseModel):
     control_kind: str
     control_code: Optional[str] = None
     link: bool = True  # True = confirm/lock the mapping; False = unlink/unlock
 
 
-@router.post("/document/{document_id}/recommended-controls/link")
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_changer)])
 def link_recommended_control(
     document_id: int,
     body: RecommendedControlLink,
@@ -510,7 +647,8 @@ def link_document_to_control(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "control")
+
     control = db.query(InternalControl).filter(
         InternalControl.id == link_data.internal_control_id,
         InternalControl.tenant_id.in_(user_tenants)
@@ -538,6 +676,8 @@ def link_document_to_control(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Control is already linked to '{existing_title}'"
             )
+        if existing_document is not None:             # moving it takes the link off the other document
+            ensure_may_link(db, current_user, existing_document, "control")
 
     relinked_from_document_id = None
     if control.source_document_id and control.source_document_id != link_data.document_id:
@@ -584,6 +724,7 @@ def unlink_document_from_control(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
+    ensure_may_link(db, current_user, document, "control")
 
     control.source_document_id = None
     control.updated_at = datetime.utcnow()
@@ -599,7 +740,8 @@ def link_document_to_risk(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "risk")
+
     risk = db.query(Risk).filter(
         Risk.id == link_data.risk_id,
         Risk.tenant_id.in_(user_tenants)
@@ -661,13 +803,14 @@ def unlink_document_from_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Risk link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "risk")
+
     db.delete(link)
     db.commit()
     return None
@@ -681,7 +824,8 @@ def link_document_to_regulatory(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "regulatory")
+
     framework = None
     framework_control = None
     
@@ -758,13 +902,14 @@ def unlink_document_from_regulatory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Regulatory link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "regulatory")
+
     db.delete(link)
     db.commit()
     return None
@@ -778,7 +923,8 @@ def link_document_to_asset(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "asset")
+
     asset = db.query(ITAsset).filter(
         ITAsset.id == link_data.asset_id,
         ITAsset.tenant_id.in_(user_tenants)
@@ -841,13 +987,14 @@ def unlink_document_from_asset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "asset")
+
     db.delete(link)
     db.commit()
     return None
@@ -1063,7 +1210,7 @@ def get_documents_by_framework(
     }
 
 
-@router.get("/statistics")
+@router.get("/statistics", dependencies=[Depends(require_library_reader)])
 def get_mapping_statistics(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),

@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, select
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
@@ -22,6 +23,14 @@ from ....models import (
     DocumentApprovalStep, DocumentAuditLog, DocumentAnnotation, GRCUser,
     Tenant, PolicyStatement, InternalControl, ParsedFrameworkControl,
     UploadedFramework, CertificationJourney, PolicyReviewHistory, get_db
+)
+from ....models import (
+    AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
+    DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
+    DocumentSignature, DocumentSignoffAssignment, DocumentObligation, DocumentWorkflowAction, DocumentWorkflowInstance,
+    DocumentRouteHold, DocumentRouteStage, DocumentChangeProposal,
+    ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
+    PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping, StudioSession,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..action_logger import log_governance_action
@@ -33,6 +42,9 @@ from ..ai_drafting import (
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+from .. import doc_lifecycle  # noqa: E402
+from .. import permissions  # noqa: E402
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
 os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
@@ -141,6 +153,7 @@ class GovernanceDocumentUpdate(BaseModel):
     # Edit metadata (not a document column) — the "why" for a content edit,
     # captured into the version snapshot + audit trail.
     change_reason: Optional[str] = None
+    message: Optional[str] = None           # the same "why" by its other name (a proposed change: proposals.py)
     tags: Optional[List[str]] = None
 
 
@@ -220,6 +233,7 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
         "classification": doc.classification,
         "parent_document_id": doc.parent_document_id,
         "current_version": doc.current_version,
+        "version_in_force": permissions.in_force_number(doc),
         "status": doc.status,
         "owner_id": doc.owner_id,
         "owner_name": doc.owner.display_name if doc.owner else None,
@@ -276,6 +290,28 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
     return result
 
 
+def _in_force_for(db: Session, user: GRCUser, sees_every_draft: bool):
+    """For a list: per document, the version row in force this person reads instead of it (None: the document itself). The rights
+    are read once by the caller (``sees_every_draft``: ``visible_filter`` gave None); only a document not published now that holds
+    a newer number than the one published last is looked at, for its owner, its author and its sign-off (``permissions.sees_draft``
+    without the rights part)."""
+    def row_of(doc: GovernanceDocument):
+        last = permissions.published_last(doc)
+        if (sees_every_draft or doc.status == "published" or not last or last == doc.current_version
+                or user.id in (doc.owner_id, doc.author_id) or permissions.participant(db, user, doc.id)):
+            return None
+        return permissions.in_force_row(db, doc)
+    return row_of
+
+
+def _serve_in_force(result: dict, row: Optional[GovernanceDocumentVersion]) -> dict:
+    """A serialized document with the text and the file of the version in force ``row`` (when the person reads that one)."""
+    if row is not None:
+        result.update(content=row.content, file_name=row.file_name, file_size=row.file_size, file_type=row.file_type,
+                      has_file=bool(row.file_path))
+    return result
+
+
 @router.get("")
 def list_documents(
     tenant_id: Optional[int] = None,
@@ -291,16 +327,29 @@ def list_documents(
     sort_order: str = "desc",
     skip: int = 0,
     limit: int = 100,
+    brief: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """The documents the person may read, with their text. ``brief=1`` is the list for pickers in other modules (linking a risk,
+    an issue, evidence or another document): only ``id``, ``title``, ``doc_type``, ``status`` and ``current_version`` (the number
+    the person reads), no text, file or description; for someone outside the library it holds the documents in force as well as
+    their own and those they are asked about, for a library reader what the library shows them."""
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"items": [], "total": 0, "skip": skip, "limit": limit}
-    
+
     query = db.query(GovernanceDocument).options(
         joinedload(GovernanceDocument.owner)
     ).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    # only what the person may read (in the body, not a dependency: the six type lists below call this function)
+    visible = permissions.visible_filter(db, current_user)
+    if brief and visible is not None and not permissions.can_read_library(db, current_user):
+        visible = or_(GovernanceDocument.published_version.isnot(None), GovernanceDocument.status == "published", visible)
+    if visible is not None:
+        query = query.filter(visible)
+    if brief:                                   # a picker never offers an archived document (withdrawn: D29), to anyone
+        query = query.filter(or_(GovernanceDocument.status.is_(None), GovernanceDocument.status != "archived"))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -338,9 +387,17 @@ def list_documents(
         query = query.order_by(sort_column.desc())
     
     documents = query.offset(skip).limit(limit).all()
-    
+    in_force = _in_force_for(db, current_user, visible is None)
+    if brief:
+        def item(doc):
+            row = in_force(doc)
+            return {"id": doc.id, "title": doc.title, "doc_type": doc.doc_type, "status": doc.status,
+                    "current_version": row.version_number if row is not None else doc.current_version,
+                    "document_code": doc.document_code, "parent_document_id": doc.parent_document_id, "tags": doc.tags or []}
+        return {"items": [item(doc) for doc in documents], "total": total, "skip": skip, "limit": limit}
+
     return {
-        "items": [serialize_document(doc, db) for doc in documents],
+        "items": [_serve_in_force(serialize_document(doc, db), in_force(doc)) for doc in documents],
         "total": total,
         "skip": skip,
         "limit": limit
@@ -363,6 +420,29 @@ def _resolve_tenant_slug_for_autoparse(tenant_id: int) -> Optional[str]:
     except Exception:
         logger.warning("Could not resolve tenant slug for tenant_id=%s", tenant_id, exc_info=True)
         return None
+
+
+def _check_department(db: Session, tenant_id: int, department_id: Optional[int], current: Optional[int] = None) -> None:
+    """The department a document is filed under exists in the organisation; choosing another one means an active one (a document
+    may keep the department it has after that was deactivated)."""
+    from ....models import GRCDepartment
+
+    if department_id is None or department_id == current:
+        return
+    department = db.get(GRCDepartment, int(department_id))
+    if department is None or department.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen does not exist.")
+    if department.is_active is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen is not active.")
+
+
+def _department_name(db: Session, department_id: Optional[int]) -> str:
+    from ....models import GRCDepartment
+
+    if department_id is None:
+        return "none"
+    department = db.get(GRCDepartment, int(department_id))
+    return department.name if department is not None else f"#{department_id}"
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -399,7 +479,11 @@ def create_document(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent document not found"
             )
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [document.owner_id, document.author_id])
+    _check_department(db, tenant_id, document.department_id)
+
     db_document = GovernanceDocument(
         tenant_id=tenant_id,
         document_code=document.document_code,
@@ -426,8 +510,15 @@ def create_document(
         status="draft",
         current_version="1.0"
     )
+    from ..doc_details import schedule
+    schedule(db_document)
     db.add(db_document)
     db.flush()
+    # its first version from the start, as a document made in the AI Studio has, so its history and changes count from 1.0
+    db.add(GovernanceDocumentVersion(
+        document_id=db_document.id, version_number="1.0", change_type="major", title=db_document.title, content=db_document.content,
+        change_summary="Initial version", status="current", created_by=current_user.id,
+    ))
     
     create_audit_log(
         db=db,
@@ -577,7 +668,7 @@ def get_framework_documents(
     )
 
 
-@router.get("/hierarchy")
+@router.get("/hierarchy", dependencies=[Depends(permissions.require_library_reader)])
 def get_document_hierarchy(
     tenant_id: Optional[int] = None,
     parent_id: Optional[int] = None,
@@ -588,33 +679,63 @@ def get_document_hierarchy(
     if not user_tenants:
         return []
     
+    visible = permissions.visible_filter(db, current_user)
+    in_force = _in_force_for(db, current_user, visible is None)
     query = db.query(GovernanceDocument).options(
         joinedload(GovernanceDocument.owner)
     ).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    if visible is not None:
+        query = query.filter(visible)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceDocument.tenant_id == tenant_id)
     
     if parent_id is None:
-        query = query.filter(GovernanceDocument.parent_document_id.is_(None))
+        top = GovernanceDocument.parent_document_id.is_(None)
+        if visible is not None:                 # a document under one the person may not see (a draft, an archived one): at the top
+            seen = select(GovernanceDocument.id).where(visible).correlate(None)
+            top = or_(top, GovernanceDocument.parent_document_id.notin_(seen))
+        query = query.filter(top)
     else:
         query = query.filter(GovernanceDocument.parent_document_id == parent_id)
     
     documents = query.order_by(GovernanceDocument.doc_type, GovernanceDocument.title).all()
-    
+
+    # each document's versions for the tree, base first: one query of columns only (never the versions' content)
+    from .. import change_chain
+    V = GovernanceDocumentVersion
+    rows = (db.query(V.id, V.document_id, V.version_number, V.change_type, V.status, V.created_at, V.created_by,
+                     V.change_reason, V.change_summary, V.file_path)
+            .join(GovernanceDocument, GovernanceDocument.id == V.document_id)
+            .filter(GovernanceDocument.tenant_id.in_(user_tenants))
+            .order_by(V.created_at.asc(), V.id.asc()).all())
+    names = change_chain._names(db, [r.created_by for r in rows])
+    versions_of: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        vs = versions_of.setdefault(r.document_id, [])
+        if vs and vs[-1]["number"] == r.version_number:      # a snapshot that repeats the number before it (the gap fix's pre-fix copy)
+            continue
+        vs.append({"id": r.id, "number": r.version_number, "kind": r.change_type, "current": r.status == "current",
+                   "at": r.created_at.isoformat() if r.created_at else None, "by": names.get(r.created_by),
+                   "reason": (r.change_reason or "")[:300], "summary": (r.change_summary or "")[:200], "has_file": bool(r.file_path)})
+
     def build_hierarchy(doc):
-        result = serialize_document(doc, db)
+        row = in_force(doc)
+        result = _serve_in_force(serialize_document(doc, db), row)
+        vs = [v for v in versions_of.get(doc.id, []) if row is None or v["id"] <= row.id]   # never the newer version's card
+        result["version_count"] = len(vs)
+        result["versions"] = vs if len(vs) <= 6 else [vs[0]] + vs[-5:]       # the base and the newest five
         children = db.query(GovernanceDocument).filter(
-            GovernanceDocument.parent_document_id == doc.id
-        ).all()
+            GovernanceDocument.parent_document_id == doc.id, *([visible] if visible is not None else [])
+        ).order_by(GovernanceDocument.doc_type, GovernanceDocument.title, GovernanceDocument.id).all()
         result["children"] = [build_hierarchy(child) for child in children]
         return result
     
     return [build_hierarchy(doc) for doc in documents]
 
 
-@router.get("/reviews/upcoming")
+@router.get("/reviews/upcoming", dependencies=[Depends(permissions.require_library_reader)])
 def get_upcoming_reviews(
     days: int = 90,
     db: Session = Depends(get_db),
@@ -623,12 +744,14 @@ def get_upcoming_reviews(
     user_tenants = get_user_tenants(current_user, db)
     now = datetime.utcnow()
     cutoff = now + timedelta(days=days)
+    visible = permissions.visible_filter(db, current_user)
     
     documents = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
         GovernanceDocument.next_review_date != None,
         GovernanceDocument.next_review_date <= cutoff,
-        GovernanceDocument.status != "retired"
+        GovernanceDocument.status != "retired",
+        *([visible] if visible is not None else [])
     ).order_by(GovernanceDocument.next_review_date.asc()).all()
     
     results = []
@@ -665,7 +788,7 @@ def get_upcoming_reviews(
     }
 
 
-@router.get("/{document_id}")
+@router.get("/{document_id}", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -693,7 +816,22 @@ def get_document(
         )
     
     result = serialize_document(document, db)
-    
+    # while a new version is on its way the published one stays in force: whoever may not change, publish or sign off the
+    # document reads that one (its text, file and number; the newer one is only named), everyone else the newest
+    in_force = permissions.in_force_row(db, document)
+    row = in_force if in_force is not None and not permissions.sees_draft(db, current_user, document) else None
+    result["in_force_version_id"] = in_force.id if in_force is not None else None
+    if row is not None:
+        _serve_in_force(result, row)
+        result["current_version"] = row.version_number
+        result["newer_version"] = {"number": document.current_version, "status": document.status}
+    if document.status == "archived":           # when and by whom, for the document's banner (the newest change to archived)
+        A = DocumentAuditLog
+        last = (db.query(A).filter(A.document_id == document.id, or_(A.action == "archived", and_(A.field_changed == "status", A.new_value == "archived")))
+                .order_by(A.performed_at.desc(), A.id.desc()).first())
+        result["archived_at"] = last.performed_at.isoformat() if last is not None and last.performed_at else None
+        result["archived_by_name"] = last.user.display_name if last is not None and last.user else None
+
     result["versions"] = [
         {
             "id": v.id,
@@ -709,7 +847,7 @@ def get_document(
             "approved_by": v.approved_by,
             "approved_at": v.approved_at.isoformat() if v.approved_at else None,
         }
-        for v in document.versions
+        for v in document.versions if row is None or v.id <= row.id
     ]
     
     result["reviewers"] = [
@@ -753,9 +891,10 @@ def get_document(
             "doc_type": document.parent_document.doc_type,
         }
     
+    visible = permissions.visible_filter(db, current_user)
     child_documents = db.query(GovernanceDocument).filter(
-        GovernanceDocument.parent_document_id == document_id
-    ).all()
+        GovernanceDocument.parent_document_id == document_id, *([visible] if visible is not None else [])
+    ).order_by(GovernanceDocument.id).all()
     result["child_documents"] = [
         {
             "id": c.id,
@@ -769,18 +908,49 @@ def get_document(
     return result
 
 
+def _fold_change(db: Session, document: GovernanceDocument, row, held_text, new_text, user_id: int, kind: str, reason) -> None:
+    """Keep on ``row`` (a version that takes one more change) who made each change it holds (see ``change_chain.fold``)."""
+    from .. import change_chain as C, doc_version
+
+    try:
+        before = doc_version.before_pending(db, document, row)
+        names = {u.id: (u.display_name or u.username) for u in db.query(GRCUser).filter(GRCUser.id.in_({user_id, row.created_by} - {None}))}
+        folded = C.fold(C.version_text(before) if before is not None else "", held_text or "", new_text or "",
+                        row.change_set if isinstance(row.change_set, dict) else None, kind=kind, by=names.get(user_id, ""), by_id=user_id,
+                        at=datetime.utcnow().isoformat(), version=row.version_number, reason=reason or "",
+                        held_by=names.get(row.created_by, ""), held_by_id=row.created_by,
+                        held_at=row.created_at.isoformat() if row.created_at else None)
+        if folded is not None:
+            row.change_set = folded
+    except Exception:       # noqa: BLE001 - the chain is derived from the texts when this is missing
+        logger.warning("could not record who made the change to version %s of document %s", row.version_number, document.id, exc_info=True)
+
+
 def _snapshot_content_version(
     db: Session, document: GovernanceDocument, *, old_content, old_title, old_version,
-    change_type: str, change_reason, user_id: int,
+    change_type: str, change_reason, user_id: int, summary: Optional[str] = None,
 ) -> str:
     """Snapshot document content into version history. Assumes document.content
     already holds the NEW content. Preserves the original as a baseline on the
     first edit, supersedes the prior current, inserts a new current, and bumps
-    document.current_version. Returns the new version number."""
+    document.current_version: the major number for a "major" change, else the
+    minor one. Every change makes its own version, and the ones before it are
+    kept (the user, 2026-10-21); only a sign-off stamp makes no number. Returns
+    the new version number."""
     from .versions import increment_version
+
+    permissions.ensure_not_archived(document)          # every text change of a document passes here
     existing = db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document.id
     ).count()
+    if existing and change_type == "signoff":
+        # a sign-off stamp is not a new version: it is written into the version being signed (the user's rule, 2026-10-17)
+        stamped = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == document.id,
+                                                             GovernanceDocumentVersion.status == "current").order_by(GovernanceDocumentVersion.id.desc()).first()
+        if stamped is not None:
+            _fold_change(db, document, stamped, old_content, document.content, user_id, "signoff", change_reason)
+            stamped.content, stamped.title = document.content, document.title
+            return document.current_version or old_version
     if existing == 0:
         db.add(GovernanceDocumentVersion(
             document_id=document.id, version_number=old_version, change_type="baseline",
@@ -792,10 +962,10 @@ def _snapshot_content_version(
             GovernanceDocumentVersion.document_id == document.id,
             GovernanceDocumentVersion.status == "current",
         ).update({"status": "superseded"})
-    new_version_number = increment_version(old_version, "minor")
+    new_version_number = increment_version(old_version, "major" if change_type == "major" else "minor")
     db.add(GovernanceDocumentVersion(
         document_id=document.id, version_number=new_version_number, change_type=change_type,
-        title=document.title, content=document.content, change_summary=f"{change_type} update".strip(),
+        title=document.title, content=document.content, change_summary=summary or f"{change_type} update".strip(),
         change_reason=change_reason, status="current", created_by=user_id, created_at=datetime.utcnow(),
     ))
     document.current_version = new_version_number
@@ -871,7 +1041,7 @@ def _patch_signoff_content(content: Optional[str], signoffs: list, control_field
     return "\n".join(out)
 
 
-@router.put("/{document_id}")
+@router.put("/{document_id}", dependencies=[Depends(permissions.require_doc_editor)])
 def update_document(
     document_id: int,
     document_update: GovernanceDocumentUpdate,
@@ -890,20 +1060,46 @@ def update_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # its text and its details: restored first
     
     update_data = document_update.model_dump(exclude_unset=True)
+    if "status" in update_data and update_data["status"] == document.status:
+        update_data.pop("status")       # not a status change: an edit of a published text is reviewed again (changed_after_review)
+    if update_data.get("status") in ("approved", "published"):
+        permissions.ensure_publisher(db, current_user)
+    if update_data.get("parent_document_id") is not None and update_data["parent_document_id"] != document.parent_document_id:
+        from ..doc_details import check_details
+        try:
+            check_details(db, parent_document_id=update_data["parent_document_id"], document_id=document.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "author_id") if update_data.get(k) != getattr(document, k)])
+    if "department_id" in update_data:
+        _check_department(db, document.tenant_id, update_data["department_id"], current=document.department_id)
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
-    change_reason = update_data.pop("change_reason", None)
+    change_reason = update_data.pop("change_reason", None) or update_data.pop("message", None)
+    update_data.pop("message", None)
 
     # Capture prior state BEFORE mutating so we can snapshot + audit it.
     old_content = document.content
     old_title = document.title
     old_version = document.current_version or "1.0"
+    old_status = document.status
     content_changing = (
         "content" in update_data
         and (update_data.get("content") or "") != (old_content or "")
     )
+    from .. import proposals
+
+    proposal = None
+    if content_changing and proposals.required(db, current_user, document):
+        # the text waits for the owner (or author) to accept it; the details sent with it are saved now, as they always are
+        proposal = proposals.propose(db, document, current_user, source="edit", message=change_reason,
+                                     content=update_data.pop("content"), payload={"change_reason": change_reason})
+        content_changing = False
 
     changed_fields = []
     for field, new_value in update_data.items():
@@ -917,24 +1113,8 @@ def update_document(
     # Content edit → version snapshot (mirrors the statement edit→snapshot→history
     # pattern) so document body is fully versioned + restorable with who/when/why.
     if content_changing:
-        _snapshot_content_version(
-            db, document, old_content=old_content, old_title=old_title,
-            old_version=old_version, change_type="minor", change_reason=change_reason,
-            user_id=current_user.id,
-        )
-
-    def _preview(v):
-        s = "" if v is None else str(v)
-        return (s[:2000] + "…") if len(s) > 2000 else s
-
-    # Rich audit: content edits capture old/new (+ reason); metadata edits log names.
-    if content_changing:
-        create_audit_log(
-            db=db, document_id=document_id, tenant_id=document.tenant_id,
-            user_id=current_user.id, action="content_edited", field_changed="content",
-            old_value=_preview(old_content), new_value=_preview(document.content),
-            action_details=change_reason or "Document content edited",
-        )
+        _content_edited(db, document, current_user.id, old_content=old_content, old_title=old_title, old_version=old_version,
+                        old_status=old_status, change_reason=change_reason, reviewed_again="status" not in update_data)
     non_content = [c for c in changed_fields if c["field"] != "content"]
     if non_content:
         create_audit_log(
@@ -942,11 +1122,62 @@ def update_document(
             user_id=current_user.id, action="updated",
             action_details=f"Updated fields: {', '.join(c['field'] for c in non_content)}",
         )
+    moved = next((c for c in changed_fields if c["field"] == "department_id"), None)
+    if moved is not None:           # its own entry in the Change log (governance/change_chain.py: "Department changed")
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id, user_id=current_user.id, action="department_changed",
+            action_details=(f"Department changed from {_department_name(db, moved['old_value'])} "
+                            f"to {_department_name(db, moved['new_value'])}"),
+            field_changed="department_id",
+            old_value=str(moved["old_value"]) if moved["old_value"] is not None else None,
+            new_value=str(moved["new_value"]) if moved["new_value"] is not None else None,
+        )
 
     db.commit()
     db.refresh(document)
 
-    return serialize_document(document, db)
+    out = serialize_document(document, db)
+    return {**out, **proposals.answer(db, proposal, current_user, document)} if proposal is not None else out
+
+
+def _preview(v):
+    s = "" if v is None else str(v)
+    return (s[:2000] + "…") if len(s) > 2000 else s
+
+
+def _content_edited(db: Session, document: GovernanceDocument, user_id: int, *, old_content, old_title, old_version, old_status,
+                    change_reason, reviewed_again: bool = True) -> None:
+    """``document.content`` holds an edited text (PUT): its next version, reviewed again (approved or published, or while in review),
+    and the history row with the text before and after. Does not commit."""
+    from ..doc_version import decide, summary_of
+
+    decision = decide(old_content or "", document.content or "", title=document.title)
+    _snapshot_content_version(
+        db, document, old_content=old_content, old_title=old_title,
+        old_version=old_version, change_type=decision["change"], change_reason=change_reason,
+        user_id=user_id, summary=summary_of("Content edited", decision),
+    )
+    if reviewed_again:                        # the new text is reviewed again, as an AI Studio save is
+        doc_lifecycle.changed_after_review(db, document, old_status, user_id,
+                                           f"Content edited (version {document.current_version}), so it needs approving again")
+    if document.status == "published":       # published and edited in one request: the new number is the one in force
+        document.published_version = document.current_version
+    # Rich audit: content edits capture old/new (+ reason)
+    create_audit_log(
+        db=db, document_id=document.id, tenant_id=document.tenant_id,
+        user_id=user_id, action="content_edited", field_changed="content",
+        old_value=_preview(old_content), new_value=_preview(document.content),
+        action_details=change_reason or "Document content edited",
+    )
+
+
+def apply_content_edit(db: Session, document: GovernanceDocument, user: GRCUser, content: Optional[str], change_reason) -> None:
+    """A text edit someone proposed, accepted (proposals.py): as PUT writes it, by them. Does not commit."""
+    permissions.ensure_not_archived(document)
+    old_content, old_title, old_version, old_status = document.content, document.title, document.current_version or "1.0", document.status
+    document.content, document.updated_at = content, datetime.utcnow()
+    _content_edited(db, document, user.id, old_content=old_content, old_title=old_title, old_version=old_version,
+                    old_status=old_status, change_reason=change_reason)
 
 
 class SignoffEntry(BaseModel):
@@ -968,7 +1199,7 @@ class DocumentSignoffRequest(BaseModel):
     mark_approved: bool = False
 
 
-@router.post("/{document_id}/signoff")
+@router.post("/{document_id}/signoff", dependencies=[Depends(permissions.require_doc_editor)])
 def signoff_document(
     document_id: int,
     body: DocumentSignoffRequest,
@@ -988,6 +1219,7 @@ def signoff_document(
     ).first()
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    permissions.ensure_not_archived(document)
 
     old_content = document.content
     old_title = document.title
@@ -1016,6 +1248,7 @@ def signoff_document(
         except (ValueError, TypeError):
             pass
     if body.mark_approved:
+        permissions.ensure_publisher(db, current_user)          # recording an approval by hand needs the publish right
         document.approved_by = current_user.id
         document.approved_at = datetime.utcnow()
 
@@ -1029,6 +1262,8 @@ def signoff_document(
             old_version=old_version, change_type="signoff", change_reason=reason,
             user_id=current_user.id,
         )
+        if document.status == "published":       # the stamp is a new number of the published text: the one in force
+            document.published_version = document.current_version
     document.updated_at = datetime.utcnow()
     create_audit_log(
         db=db, document_id=document_id, tenant_id=document.tenant_id,
@@ -1040,7 +1275,92 @@ def signoff_document(
     return serialize_document(document, db)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+# Deleting a document. Its ORM cascade already removes versions, reviewers,
+# approval steps, audit logs, control/risk/regulatory/asset links, the workflow
+# instance and the statements (with their compliance records, evidence links and
+# versions). Every other row that points at the document or at those rows is
+# listed here: a row that exists only for this document goes with it, and a
+# record that merely links to it is kept and unlinked, the way unlinking a
+# control from a document already works (mappings.py). Without this, deleting a
+# parsed document failed on its statements' control mappings.
+# tests/test_governance_document_delete.py fails when a new table points at any
+# of these rows without being listed.
+_DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
+    StatementControlMapping.statement_id,
+    IssueGovernanceLink.governance_document_id,
+    IssueGovernanceLink.policy_statement_id,
+    PolicyGapFinding.document_id,
+    PolicyGapFinding.analysis_run_id,
+    PolicyGapAnalysisRun.document_id,
+    DocumentAttestationAcknowledgment.campaign_id,
+    DocumentAttestationRecipient.campaign_id,
+    DocumentAttestationCampaign.document_id,
+    PolicyAttestation.document_id,
+    DocumentSignature.document_id,
+    ElectronicSignature.document_id,
+    DocumentSignoffAssignment.document_id,
+    DocumentRouteStage.document_id,
+    DocumentRouteHold.document_id,
+    DocumentChangeProposal.document_id,
+    DocumentObligation.document_id,
+    DocumentAnnotation.document_id,
+    PolicyReviewHistory.document_id,
+    AuditObservationDocumentLink.document_id,
+    DocumentWorkflowAction.instance_id,
+)
+_UNLINK_FROM_DOCUMENT = (
+    InternalControl.source_document_id,
+    InternalControl.source_statement_id,
+    PolicyGapFinding.applied_statement_id,
+    PolicyGapFinding.applied_version_id,
+    PolicyAttestation.parent_attestation_id,
+    PolicyAttestation.document_version_id,
+    DocumentSignature.version_id,
+    PolicyException.document_id,
+    AttestationCampaign.linked_document_id,
+    RegulatoryImplementationTask.linked_policy_id,
+    MeetingAgendaItem.linked_document_id,
+    OversightAction.linked_policy_id,
+    BcmPlan.document_ref_id,
+    BcmRecoveryStrategy.activation_procedure_ref,
+    StudioSession.document_id,  # the AI Studio draft, its chat and versions stay; it can be moved to the library again
+    DocumentChangeProposal.statement_id,  # (the proposals go with the document)
+)
+
+
+def _clear_document_references(db: Session, document_id: int) -> None:
+    """Delete or unlink every row that would stop ``document_id`` from being deleted."""
+    def ids(model):
+        return select(model.id).where(model.document_id == document_id)
+
+    owned = {  # table -> ids of its rows that go with the document
+        GovernanceDocument.__tablename__: [document_id],
+        PolicyStatement.__tablename__: ids(PolicyStatement),
+        GovernanceDocumentVersion.__tablename__: ids(GovernanceDocumentVersion),
+        PolicyGapAnalysisRun.__tablename__: ids(PolicyGapAnalysisRun),
+        PolicyAttestation.__tablename__: ids(PolicyAttestation),
+        DocumentAttestationCampaign.__tablename__: ids(DocumentAttestationCampaign),
+        DocumentWorkflowInstance.__tablename__: ids(DocumentWorkflowInstance),
+    }
+
+    def rows(column):
+        target = next(iter(column.expression.foreign_keys)).column.table.name
+        return db.query(column.class_).filter(column.in_(owned[target]))
+
+    # the tasks that mirror this document's approvals and acknowledgements go with it
+    from ....models import CriticalTask
+    obligations = select(DocumentObligation.id).where(DocumentObligation.document_id == document_id)
+    for task in db.query(CriticalTask).filter(CriticalTask.source_module == "document_lifecycle",
+                                              CriticalTask.source_entity_id.in_(obligations)).all():
+        db.delete(task)
+    db.flush()
+    for column in _UNLINK_FROM_DOCUMENT:
+        rows(column).update({column: None}, synchronize_session=False)
+    for column in _DELETE_WITH_DOCUMENT:
+        rows(column).delete(synchronize_session=False)
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(permissions.require_doc_deleter)])
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1069,15 +1389,22 @@ def delete_document(
             detail=f"Cannot delete document with {child_count} child documents. Delete or reassign child documents first."
         )
     
-    db.query(InternalControl).filter(InternalControl.source_document_id == document_id).delete()
-    
+    _clear_document_references(db, document_id)
     db.delete(document)
-    db.commit()
-    
+    try:
+        db.commit()
+    except IntegrityError as exc:  # a reference the lists above do not know about yet
+        db.rollback()
+        table = getattr(getattr(exc.orig, "diag", None), "table_name", None) or "another record"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This document is still referenced by {table.removeprefix('grc_').replace('_', ' ')}; remove that link first.",
+        )
+
     return None
 
 
-@router.get("/{document_id}/review-history")
+@router.get("/{document_id}/review-history", dependencies=[Depends(permissions.require_doc_reader)])
 def get_review_history(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1122,7 +1449,7 @@ class CompleteReviewRequest(BaseModel):
     outcome: str = "no_changes"
 
 
-@router.post("/{document_id}/start-review")
+@router.post("/{document_id}/start-review", dependencies=[Depends(permissions.require_doc_editor)])
 def start_review(
     document_id: int,
     request_body: Optional[StartReviewRequest] = None,
@@ -1137,6 +1464,7 @@ def start_review(
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    permissions.ensure_not_archived(document)          # a periodic review moves its review dates: restored first
     
     review_type = request_body.review_type if request_body else "periodic"
     
@@ -1164,7 +1492,7 @@ def start_review(
     }
 
 
-@router.post("/{document_id}/complete-review")
+@router.post("/{document_id}/complete-review", dependencies=[Depends(permissions.require_doc_editor)])
 def complete_review(
     document_id: int,
     request_body: CompleteReviewRequest,
@@ -1179,6 +1507,7 @@ def complete_review(
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    permissions.ensure_not_archived(document)          # recording a review sets its next review date: restored first
     
     review = db.query(PolicyReviewHistory).filter(
         PolicyReviewHistory.document_id == document_id,
@@ -1237,6 +1566,16 @@ def complete_review(
     }
 
 
+# a status a bulk change may not set: each has its own way, with its signatures and its hooks
+_SENT = "A document goes to review and approval with Send for review, from the document itself, so its reviewers and approvers are asked."
+BULK_STATUS_REFUSED = {
+    "approved": "A document is approved by its approvers signing it in its review, not by a bulk change.",
+    "published": "An approved document is published with Publish.",
+    "pending_review": _SENT,
+    "pending_approval": _SENT,
+}
+
+
 @router.post("/bulk-update-status")
 def bulk_update_status(
     bulk_update: BulkStatusUpdate,
@@ -1251,6 +1590,8 @@ def bulk_update_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
+    if bulk_update.status in BULK_STATUS_REFUSED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=BULK_STATUS_REFUSED[bulk_update.status])
     
     documents = db.query(GovernanceDocument).filter(
         GovernanceDocument.id.in_(bulk_update.document_ids),
@@ -1263,6 +1604,9 @@ def bulk_update_status(
             detail="No documents found"
         )
     
+    permissions.ensure_all_editable(db, current_user, documents)
+    if bulk_update.status != "archived":            # out of the archive only by Restore (a draft, reviewed and approved again)
+        permissions.ensure_none_archived(documents)
     updated_count = 0
     for doc in documents:
         old_status = doc.status
@@ -1280,6 +1624,8 @@ def bulk_update_status(
             old_value=old_status,
             new_value=bulk_update.status
         )
+        db.flush()
+        doc_lifecycle.on_status_changed(db, doc, old_status, bulk_update.status, current_user.id)
         updated_count += 1
     
     db.commit()
@@ -1309,11 +1655,15 @@ def bulk_archive(
             detail="No documents found"
         )
     
+    permissions.ensure_all_editable(db, current_user, documents)
     archived_count = 0
     for doc in documents:
         old_status = doc.status
+        if old_status == "archived":            # already archived: its history and the date it was archived stay as they are
+            continue
         doc.status = "archived"
         doc.updated_at = datetime.utcnow()
+        doc_lifecycle.on_status_changed(db, doc, old_status, "archived", current_user.id)
         
         create_audit_log(
             db=db,
@@ -1355,6 +1705,11 @@ def bulk_assign_owner(
             detail="No documents found"
         )
 
+    permissions.ensure_all_editable(db, current_user, documents)
+    permissions.ensure_none_archived(documents)
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [bulk_request.owner_id])
     updated_count = 0
     for doc in documents:
         old_owner = doc.owner_id
@@ -1401,6 +1756,8 @@ def bulk_set_review_date(
             detail="No documents found"
         )
 
+    permissions.ensure_all_editable(db, current_user, documents)
+    permissions.ensure_none_archived(documents)
     updated_count = 0
     for doc in documents:
         old_review_date = doc.next_review_date
@@ -1449,30 +1806,15 @@ def bulk_publish(
             detail="No documents found"
         )
 
+    permissions.ensure_publisher(db, current_user)
+    permissions.ensure_none_archived(documents)
     published_count = 0
     skipped_count = 0
     for doc in documents:
         if doc.status != "approved":
             skipped_count += 1
             continue
-
-        old_status = doc.status
-        doc.status = "published"
-        doc.published_by = current_user.id
-        doc.published_at = datetime.utcnow()
-        doc.updated_at = datetime.utcnow()
-
-        create_audit_log(
-            db=db,
-            document_id=doc.id,
-            tenant_id=doc.tenant_id,
-            user_id=current_user.id,
-            action="published",
-            action_details=f"Document published by {current_user.display_name}",
-            field_changed="status",
-            old_value=old_status,
-            new_value="published"
-        )
+        publish(db, doc, current_user.id, f"Document published by {current_user.display_name}")
         published_count += 1
 
     db.commit()
@@ -1484,7 +1826,7 @@ def bulk_publish(
     }
 
 
-@router.put("/{document_id}/status")
+@router.put("/{document_id}/status", dependencies=[Depends(permissions.require_doc_editor)])
 def update_document_status(
     document_id: int,
     body: dict,
@@ -1499,6 +1841,8 @@ def update_document_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
+    if new_status in ("approved", "published"):               # approving or publishing by hand skips the sign-off
+        permissions.ensure_publisher(db, current_user)
 
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == document_id,
@@ -1510,6 +1854,8 @@ def update_document_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    if new_status != "archived":                # out of the archive only by Restore
+        permissions.ensure_not_archived(document)
 
     old_status = document.status
     document.status = new_status
@@ -1518,7 +1864,7 @@ def update_document_status(
     if new_status == "published":
         document.published_by = current_user.id
         document.published_at = datetime.utcnow()
-
+    db.flush()
     create_audit_log(
         db=db,
         document_id=document_id,
@@ -1530,6 +1876,7 @@ def update_document_status(
         old_value=old_status,
         new_value=new_status
     )
+    doc_lifecycle.on_status_changed(db, document, old_status, new_status, current_user.id)     # after: its own row (nobody to sign) is the last
 
     # When the document reaches an approved/published state, any gap-remediation
     # clauses applied to it (left in_progress pending sign-off) are now formally
@@ -1555,7 +1902,37 @@ def update_document_status(
     return serialize_document(document, db)
 
 
-@router.post("/{document_id}/publish")
+@router.post("/{document_id}/restore")
+def restore_document(
+    document: GovernanceDocument = Depends(permissions.require_doc_editor),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """An archived document back as a draft (documents are archived, never deleted: D29), by whoever may change it. Nothing comes
+    back in force: it is reviewed, approved and published again. No version is made; its next change makes the next one."""
+    if document.status != "archived":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an archived document can be restored.")
+    document.status = "draft"
+    document.updated_at = datetime.utcnow()
+    db.flush()
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="restored",
+        action_details="Restored from the archive: it is a draft again",
+        field_changed="status",
+        old_value="archived",
+        new_value="draft"
+    )
+    doc_lifecycle.on_status_changed(db, document, "archived", "draft", current_user.id)
+    db.commit()
+    db.refresh(document)
+    return serialize_document(document, db)
+
+
+@router.post("/{document_id}/publish", dependencies=[Depends(permissions.require_doc_publisher)])
 def publish_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1575,37 +1952,34 @@ def publish_document(
             detail="Document not found"
         )
     
-    if document.status != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only approved documents can be published. Current status: {document.status}"
-        )
-    
-    old_status = document.status
-    document.status = "published"
-    document.published_by = current_user.id
-    document.published_at = datetime.utcnow()
-    document.updated_at = datetime.utcnow()
-    
-    create_audit_log(
-        db=db,
-        document_id=document_id,
-        tenant_id=document.tenant_id,
-        user_id=current_user.id,
-        action="published",
-        action_details=f"Document published by {current_user.display_name}",
-        field_changed="status",
-        old_value=old_status,
-        new_value="published"
-    )
-    
+    try:
+        publish(db, document, current_user.id, f"Document published by {current_user.display_name}")
+    except ValueError as refused:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(refused))
+
     db.commit()
     db.refresh(document)
     
     return serialize_document(document, db)
 
 
-@router.get("/{document_id}/audit-logs")
+def publish(db: Session, document: GovernanceDocument, by: int, details: str) -> None:
+    """Publish an approved document - the one way the Publish button, bulk Publish and a workflow's publish action go: the status
+    hooks (the version in force, everyone asked to acknowledge it) and the document's audit row. The caller checks who may, and
+    commits. ValueError when the document is not approved."""
+    if document.status != "approved":
+        raise ValueError(f"Only approved documents can be published. Current status: {document.status}")
+    old_status = document.status
+    document.status = "published"
+    document.published_by = by
+    document.published_at = document.updated_at = datetime.utcnow()
+    db.flush()                      # tenant sessions do not autoflush: the hooks below read what was just set (PITFALLS 74)
+    doc_lifecycle.on_status_changed(db, document, old_status, "published", by)
+    create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=by, action="published",
+                     action_details=details, field_changed="status", old_value=old_status, new_value="published")
+
+
+@router.get("/{document_id}/audit-logs", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document_audit_logs(
     document_id: int,
     skip: int = 0,
@@ -1631,6 +2005,8 @@ def get_document_audit_logs(
     ).filter(
         DocumentAuditLog.document_id == document_id
     ).order_by(DocumentAuditLog.performed_at.desc()).offset(skip).limit(limit).all()
+    # the text before and after an edit is the newest version's: not for someone who reads the version in force
+    hide = not permissions.sees_draft(db, current_user, document)
     
     return [
         {
@@ -1638,8 +2014,8 @@ def get_document_audit_logs(
             "action": log.action,
             "action_details": log.action_details,
             "field_changed": log.field_changed,
-            "old_value": log.old_value,
-            "new_value": log.new_value,
+            "old_value": None if hide and log.field_changed == "content" else log.old_value,
+            "new_value": None if hide and log.field_changed == "content" else log.new_value,
             "performed_by": log.performed_by,
             "performer_name": log.user.display_name if log.user else None,
             "performed_at": log.performed_at.isoformat() if log.performed_at else None,
@@ -1649,17 +2025,20 @@ def get_document_audit_logs(
     ]
 
 
-@router.post("/{document_id}/upload-file")
+@router.post("/{document_id}/upload-file", dependencies=[Depends(permissions.require_doc_editor)])
 async def upload_document_file(
     document_id: int,
     file: UploadFile = File(...),
     change_summary: Optional[str] = Form(None),
     change_reason: Optional[str] = Form(None),
     create_new_version: bool = Form(True),
+    message: Optional[str] = Form(None),            # the why by its other name (a proposed change: proposals.py)
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Upload a file (PDF, Word, Excel) for an existing governance document"""
+    """Upload a file (PDF, Word, Excel) for an existing governance document. From anyone but its owner or author it waits for them
+    (proposals.py): the file is kept beside the library's, the document keeps its own."""
+    change_reason = change_reason or message
     user_tenants = get_user_tenants(current_user, db)
     
     document = db.query(GovernanceDocument).filter(
@@ -1672,6 +2051,7 @@ async def upload_document_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)
     
     if not file.filename:
         raise HTTPException(
@@ -1686,89 +2066,32 @@ async def upload_document_file(
             detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
         )
     
+    from .. import proposals
+
+    proposing = proposals.required(db, current_user, document)
+    if proposing and not ((change_reason or "").strip() or (change_summary or "").strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=proposals.MESSAGE_REQUIRED)
+
     unique_id = str(uuid.uuid4())
     safe_filename = f"{unique_id}_{file.filename}"
     file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
-    
+
     content = await file.read()
     file_size = len(content)
-    
+
     with open(file_path, "wb") as f:
         f.write(content)
-    
-    old_file_name = document.file_name
-    
-    current_ver = document.current_version or "1.0"
-    if create_new_version and document.file_name:
-        try:
-            version_parts = current_ver.split('.')
-            major = int(version_parts[0]) if version_parts else 1
-            minor = int(version_parts[1]) if len(version_parts) > 1 else 0
-            new_version = f"{major}.{minor + 1}"
-        except (ValueError, IndexError):
-            new_version = "1.1"
-        
-        existing_versions = db.query(GovernanceDocumentVersion).filter(
-            GovernanceDocumentVersion.document_id == document_id,
-            GovernanceDocumentVersion.status == "current"
-        ).all()
-        for v in existing_versions:
-            v.status = "superseded"
-        
-        version = GovernanceDocumentVersion(
-            document_id=document_id,
-            version_number=new_version,
-            change_type="minor",
-            title=document.title,
-            content=document.content,
-            file_name=file.filename,
-            file_path=file_path,
-            file_size=file_size,
-            file_type=file_ext,
-            change_summary=change_summary or f"File updated: {file.filename}",
-            change_reason=change_reason,
-            status="current",
-            created_by=current_user.id
-        )
-        db.add(version)
-        document.current_version = new_version
-    
-    document.file_name = file.filename
-    document.file_path = file_path
-    document.file_size = file_size
-    document.file_type = file_ext
-    document.updated_at = datetime.utcnow()
-    
-    create_audit_log(
-        db=db,
-        document_id=document.id,
-        tenant_id=document.tenant_id,
-        user_id=current_user.id,
-        action="file_uploaded",
-        action_details=f"File uploaded: {file.filename} ({file_size} bytes)",
-        field_changed="file_name",
-        old_value=old_file_name,
-        new_value=file.filename
-    )
-    
-    # Log the action for review
-    log_governance_action(
-        db=db,
-        tenant_id=document.tenant_id,
-        action_type="document_file_uploaded",
-        action_description=f"File uploaded to document: '{document.title}' - {file.filename}",
-        entity_type="governance_document",
-        action_user_id=current_user.id,
-        entity_id=document.id,
-        action_metadata={
-            "document_code": document.document_code,
-            "doc_type": document.doc_type,
-            "file_name": file.filename,
-            "file_size": file_size,
-            "version": document.current_version
-        }
-    )
-    
+
+    if proposing:           # the new file waits for the owner (or author) to accept it; the document keeps its own file
+        proposal = proposals.propose(
+            db, document, current_user, source="file", message=change_reason or change_summary,
+            file={"path": file_path, "name": file.filename, "type": file_ext, "size": file_size},
+            payload={"change_summary": change_summary, "change_reason": change_reason, "create_new_version": create_new_version})
+        db.commit()
+        db.refresh(document)
+        return {"document": serialize_document(document, db), **proposals.answer(db, proposal, current_user, document)}
+
+    attach_file(db, document, current_user, file_path, file.filename, file_size, file_ext, change_summary, change_reason, create_new_version)
     db.commit()
     db.refresh(document)
 
@@ -1788,14 +2111,125 @@ async def upload_document_file(
     }
 
 
-@router.get("/{document_id}/download-file")
+def attach_file(db: Session, document: GovernanceDocument, current_user: GRCUser, file_path: str, filename: str, file_size: int,
+                file_ext: str, change_summary: Optional[str], change_reason: Optional[str], create_new_version: bool = True) -> None:
+    """The file at ``file_path`` (saved beside the library's files) becomes the document's file: a new version, or the same version's
+    file when it is not in force and no new version was asked for; reviewed again as every new version is. Upload a file, and an
+    accepted proposal of one (proposals.py). Does not commit."""
+    permissions.ensure_not_archived(document)
+    document_id = document.id
+    old_file_name = document.file_name
+    old_status = document.status
+
+    current_ver = document.current_version or "1.0"
+    V = GovernanceDocumentVersion
+    current_row = (db.query(V).filter(V.document_id == document_id, V.version_number == current_ver)
+                   .order_by(V.id.desc()).first())
+    # the version in force (or published last) is never written over: a file for it is a new version, whatever the form asked
+    if (create_new_version and document.file_name) or current_ver in (permissions.in_force_number(document), permissions.published_last(document)):
+        from .. import doc_version
+        new_version, change_type, decided = doc_version.for_new_file(
+            current_ver, document.file_path, document.file_name, file_path, filename,
+            old_content=document.content, title=document.title)
+        if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
+            db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
+                     content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
+                     file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
+                     created_by=current_user.id))
+        elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
+            current_row.file_name, current_row.file_path = document.file_name, document.file_path
+            current_row.file_size, current_row.file_type = document.file_size, document.file_type
+
+        existing_versions = db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document_id,
+            GovernanceDocumentVersion.status == "current"
+        ).all()
+        for v in existing_versions:
+            v.status = "superseded"
+
+        version = GovernanceDocumentVersion(
+            document_id=document_id,
+            version_number=new_version,
+            change_type=change_type,
+            title=document.title,
+            content=document.content,
+            file_name=filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_ext,
+            change_summary=change_summary or f"File updated: {filename}. {decided}",
+            change_reason=change_reason,
+            status="current",
+            created_by=current_user.id
+        )
+        db.add(version)
+        document.current_version = new_version
+    else:       # the same version with another file: the row of that version holds it (made when there is none)
+        if current_row is None:
+            db.query(V).filter(V.document_id == document_id, V.status == "current").update({"status": "superseded"})
+            current_row = V(document_id=document_id, version_number=current_ver, change_type="major", title=document.title,
+                            content=document.content, change_summary=change_summary or f"File uploaded: {filename}",
+                            change_reason=change_reason, status="current", created_by=current_user.id)
+            db.add(current_row)
+        current_row.file_name, current_row.file_path, current_row.file_size, current_row.file_type = filename, file_path, file_size, file_ext
+    
+    document.file_name = filename
+    document.file_path = file_path
+    document.file_size = file_size
+    document.file_type = file_ext
+    document.updated_at = datetime.utcnow()
+    # a new file is a new version: a reviewed document is reviewed again from the start, as every other new version is
+    doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
+                                       f"A new file was uploaded (version {document.current_version}), so it needs approving again")
+    
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="file_uploaded",
+        action_details=f"File uploaded: {filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status, document),
+        field_changed="file_name",
+        old_value=old_file_name,
+        new_value=filename
+    )
+    
+    # Log the action for review
+    log_governance_action(
+        db=db,
+        tenant_id=document.tenant_id,
+        action_type="document_file_uploaded",
+        action_description=f"File uploaded to document: '{document.title}' - {filename}",
+        entity_type="governance_document",
+        action_user_id=current_user.id,
+        entity_id=document.id,
+        action_metadata={
+            "document_code": document.document_code,
+            "doc_type": document.doc_type,
+            "file_name": filename,
+            "file_size": file_size,
+            "version": document.current_version
+        }
+    )
+
+
+PLAIN_FILE = {"X-Controlled-Copy": "false"}         # what download-file says of every answer that is not a controlled copy: the file as it is, or an error
+
+
+@router.get("/{document_id}/download-file", dependencies=[Depends(permissions.require_doc_reader)])
 def download_document_file(
     document_id: int,
     version_id: Optional[int] = None,
+    with_record: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Download the attached file for a governance document"""
+    """Download the attached file for a governance document.
+
+    ``with_record`` returns it as a controlled copy: a Word file or a PDF with the document control pages (Document Description,
+    Review and Approval, Revision and Approval History: approval_record.py) inside it, after its cover - the header
+    ``X-Controlled-Copy: true``. Any other file, or one that cannot be extended, comes as it is, and every other answer says
+    ``X-Controlled-Copy: false``. With ``version_id`` the pages are that version's. The stored file is never modified."""
     user_tenants = get_user_tenants(current_user, db)
     
     document = db.query(GovernanceDocument).filter(
@@ -1806,8 +2240,10 @@ def download_document_file(
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
+            detail="Document not found",
+            headers=PLAIN_FILE
         )
+    in_force = permissions.version_for(db, current_user, document)      # someone who reads the version in force: its file
     
     if version_id:
         version = db.query(GovernanceDocumentVersion).filter(
@@ -1815,42 +2251,58 @@ def download_document_file(
             GovernanceDocumentVersion.document_id == document_id
         ).first()
         
-        if not version:
+        if not version or (in_force is not None and version.id > in_force.id):     # never a newer version than the one in force
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Version not found"
+                detail="Version not found",
+                headers=PLAIN_FILE
             )
         
         if not version.file_path or not os.path.exists(version.file_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="File not found for this version"
+                detail="File not found for this version",
+                headers=PLAIN_FILE
             )
         
+        if with_record:
+            from .approval_record import download_with_record
+
+            return download_with_record(db, current_user, document, version, ALLOWED_FILE_TYPES, version=version.version_number,
+                                        fallback=f"document_{document_id}_v{version.version_number}")
         return FileResponse(
             path=version.file_path,
             filename=version.file_name or f"document_{document_id}_v{version.version_number}",
-            media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream")
+            media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream"),
+            headers=PLAIN_FILE
         )
+    src = in_force or document
     
-    if not document.file_path or not os.path.exists(document.file_path):
+    if not src.file_path or not os.path.exists(src.file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No file attached to this document"
+            detail="No file attached to this document",
+            headers=PLAIN_FILE
         )
     
+    if with_record:
+        from .approval_record import download_with_record
+
+        return download_with_record(db, current_user, document, src, ALLOWED_FILE_TYPES, fallback=f"document_{document_id}")
     return FileResponse(
-        path=document.file_path,
-        filename=document.file_name or f"document_{document_id}",
-        media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+        path=src.file_path,
+        filename=src.file_name or f"document_{document_id}",
+        media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream"),
+        headers=PLAIN_FILE
     )
 
 
-@router.get("/{document_id}/export")
+@router.get("/{document_id}/export", dependencies=[Depends(permissions.require_doc_reader)])
 def export_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    with_record: bool = False,
 ):
     """Download any governance document.
 
@@ -1859,6 +2311,12 @@ def export_document(
     markdown ``content`` is rendered to a PDF (via the shared artifact
     exporter) so that content-only / AI-drafted documents are downloadable
     too.
+
+    ``with_record`` puts the document control pages (approval_record.py: Document Description, Review and Approval, Revision and
+    Approval History) in the document - a Word file or a PDF after its cover, a document the platform holds the text of at the places
+    of its own sections (controlled_copy.py) - so what compliance hands an auditor carries who approved it. A file of another kind is
+    served unchanged with the header ``X-Approval-Record: separate`` (its pages are then a file of their own,
+    ``/approval-record/export``). The stored file is never modified. Without it, nothing is different.
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -1873,30 +2331,79 @@ def export_document(
             detail="Document not found"
         )
 
+    src = permissions.version_for(db, current_user, document) or document      # the version in force, for who reads that one
     # Prefer the native uploaded file when present on disk.
-    if document.file_path and os.path.exists(document.file_path):
+    if src.file_path and os.path.exists(src.file_path):
+        if with_record:
+            from .approval_record import file_with_record
+
+            return file_with_record(db, current_user, document, src, ALLOWED_FILE_TYPES)
         return FileResponse(
-            path=document.file_path,
-            filename=document.file_name or f"document_{document_id}",
-            media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+            path=src.file_path,
+            filename=src.file_name or f"document_{document_id}",
+            media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream")
         )
 
     # Content-only document: render its markdown content to a PDF.
-    if document.content:
+    if src.content:
         from grc.routers._artifact_export import build_export  # local import: heavy libs
         title = document.title or "document"
-        data, media_type, ext = build_export("pdf", title=title, content=document.content or "")
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())[:80] or "document"
+        merged = None
+        if with_record:
+            from .approval_record import pdf_with_record
+
+            # the PDF with the control pages in the places of its own sections; None: it could not be made, the PDF is served as it is
+            merged = pdf_with_record(db, current_user, document, src.content or "", title)
+        if merged is None:
+            data, media_type, ext = build_export("pdf", title=title, content=src.content or "")
+            headers = {"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+            if with_record:
+                headers["X-Approval-Record"] = "separate"
+        else:
+            data, media_type, ext = merged, "application/pdf", "pdf"
+            headers = {"Content-Disposition": f'attachment; filename="{safe_name}-with-approval-record.{ext}"'}
         return StreamingResponse(
             io.BytesIO(data),
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+            headers=headers
         )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Document has no file or content to export"
     )
+
+
+READ_DETAILS_MAX_BYTES = 50 * 1024 * 1024
+
+
+@router.post("/read-details")
+def read_document_details(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """What a file says about the document it holds (title, type, description, classification, owner, department, review cycle,
+    dates), to fill in the form before it is uploaded. Saves nothing: the file is read from a temporary copy that is deleted.
+    Not async: the reading (and Comply Agent, up to doc_details.AI_SECONDS) runs on a worker thread, not the event loop."""
+    import tempfile
+    from ..doc_details import read
+
+    data = file.file.read(READ_DETAILS_MAX_BYTES + 1)
+    if len(data) > READ_DETAILS_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 50MB")
+    name = os.path.basename(file.filename or "document")
+    fd, path = tempfile.mkstemp(suffix=os.path.splitext(name)[1].lower()[:10])
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        return read(path, name, db)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            logger.warning("could not delete the temporary copy %s", path)
 
 
 @router.post("/upload-with-file", status_code=status.HTTP_201_CREATED)
@@ -1914,6 +2421,14 @@ async def create_document_with_file(
     # consistently supported across FastAPI versions and front-end
     # FormData encoders. Parsed below; safe if absent or malformed.
     framework_ids: Optional[str] = Form(None),
+    # The frameworks it is audited against, the same JSON form; defaults to the
+    # linked ones, as creating a document does.
+    applicable_framework_ids: Optional[str] = Form(None),
+    department_id: Optional[int] = Form(None),
+    review_cycle_months: int = Form(12),
+    effective_date: Optional[datetime] = Form(None),
+    next_review_date: Optional[datetime] = Form(None),          # effective date (or today) + the review cycle when not given
+    parent_document_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1940,9 +2455,18 @@ async def create_document_with_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
         )
+    if parent_document_id and not db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == parent_document_id, GovernanceDocument.tenant_id == tenant_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found")
+    from ..doc_details import check_details
+
+    try:
+        check_details(db, owner_id=owner_id, department_id=department_id, review_cycle_months=review_cycle_months)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     
     unique_id = str(uuid.uuid4())
-    safe_filename = f"{unique_id}_{file.filename}"
+    safe_filename = f"{unique_id}_{os.path.basename(file.filename.replace(chr(92), '/'))}"     # no folders from the upload's name
     file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
     
     content = await file.read()
@@ -1954,14 +2478,17 @@ async def create_document_with_file(
     # Decode framework_ids JSON if the client supplied any. Tolerant of
     # missing / malformed input — the upload still succeeds, the doc
     # just isn't framework-tagged in that case.
-    parsed_framework_ids: List[int] = []
-    if framework_ids:
+    def _ids(value: Optional[str]) -> List[int]:
         try:
-            raw = json.loads(framework_ids)
-            if isinstance(raw, list):
-                parsed_framework_ids = [int(v) for v in raw if v is not None]
+            raw = json.loads(value) if value else []
+            return [int(v) for v in raw if v is not None] if isinstance(raw, list) else []
         except (json.JSONDecodeError, TypeError, ValueError):
-            parsed_framework_ids = []
+            return []
+
+    parsed_framework_ids = _ids(framework_ids)
+    parsed_applicable_ids = _ids(applicable_framework_ids) or parsed_framework_ids
+    from ..doc_version import detect, first_summary
+    start_version, found_in = detect(file_path, file.filename)
 
     document = GovernanceDocument(
         tenant_id=tenant_id,
@@ -1972,27 +2499,35 @@ async def create_document_with_file(
         classification=classification,
         owner_id=owner_id or current_user.id,
         author_id=current_user.id,
+        department_id=department_id,
+        parent_document_id=parent_document_id,
+        review_cycle_months=review_cycle_months,
+        effective_date=effective_date,
+        next_review_date=next_review_date,
         file_name=file.filename,
         file_path=file_path,
         file_size=file_size,
         file_type=file_ext,
         status="draft",
-        current_version="1.0",
+        current_version=start_version,
         framework_ids=parsed_framework_ids,
+        applicable_framework_ids=parsed_applicable_ids,
     )
+    from ..doc_details import schedule
+    schedule(document)
     db.add(document)
     db.flush()
-    
+
     version = GovernanceDocumentVersion(
         document_id=document.id,
-        version_number="1.0",
+        version_number=start_version,
         change_type="major",
         title=title,
         file_name=file.filename,
         file_path=file_path,
         file_size=file_size,
         file_type=file_ext,
-        change_summary="Initial version",
+        change_summary=first_summary(start_version, found_in),
         status="current",
         created_by=current_user.id
     )
@@ -2233,251 +2768,6 @@ def get_document_depth_instruction(doc_type: str) -> dict:
         ],
         "statement_style": "Write policy requirements as atomic statements, each addressing a single obligation, and decompose them into numbered clauses where needed."
     }
-
-
-def generate_policy_with_openai(
-    doc_type: str,
-    title: str,
-    controls_context: str,
-    domain_context: List[str],
-    regulatory_scope: List[str],
-    description: Optional[str],
-    include_sections: Optional[List[str]],
-    parent_document_context: Optional[str],
-) -> dict:
-    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI integration not configured"
-        )
-    
-    client = OpenAI(
-        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
-    )
-    
-    doc_type_labels = {
-        "policy": "Policy",
-        "standard": "Standard", 
-        "procedure": "Procedure",
-        "guideline": "Guideline"
-    }
-    doc_label = doc_type_labels.get(doc_type, "Policy")
-    depth_instruction = get_document_depth_instruction(doc_type)
-    
-    sections_instruction = ""
-    if include_sections:
-        sections_instruction = f"\n\nThe document MUST include these specific sections: {', '.join(include_sections)}"
-    
-    regulatory_context = ""
-    if regulatory_scope:
-        regulatory_context = f"\n\nThis document should align with the following regulatory frameworks: {', '.join(regulatory_scope)}"
-
-    domain_summary_context = ""
-    if domain_context:
-        domain_summary_context = (
-            "\n\nPrimary governance domains that must be covered in a structured way: "
-            + ", ".join(domain_context)
-        )
-    
-    description_context = ""
-    if description:
-        description_context = f"\n\nAdditional requirements: {description}"
-
-    parent_context = ""
-    if parent_document_context:
-        parent_context = (
-            "\n\nParent document context (mandatory reference baseline):\n"
-            f"{parent_document_context}\n"
-            "- Reuse the parent document's intent, terminology, and control objectives.\n"
-            "- Keep this new document subordinate and implementation-focused relative to the parent.\n"
-        )
-
-    framework_option_context = ""
-    if controls_context:
-        framework_option_context = (
-            "\n\nFramework-based drafting mode:\n"
-            "- Maintain explicit traceability to cited control references where feasible.\n"
-            "- Reflect domain obligations from framework context in structure and clause wording."
-        )
-    else:
-        framework_option_context = (
-            "\n\nBest-practice drafting mode (no framework references selected):\n"
-            "- Produce a comprehensive document using banking/financial-institution security governance best practices.\n"
-            "- Include practical and auditable controls suitable for regulated banks.\n"
-            "- Use risk-based language, segregation of duties, approval governance, monitoring, evidence retention, and exception handling."
-        )
-    
-    prompt = f"""You are an expert governance and compliance consultant for banking and financial institutions. Generate a professional, mature, enterprise-grade {doc_label} document titled "{title}".
-
-{controls_context}
-{parent_context}
-{framework_option_context}
-{regulatory_context}
-{domain_summary_context}
-{description_context}
-{sections_instruction}
-
-Document authoring requirements:
-- Use an {depth_instruction['template_name']} structure.
-- Minimum length: {depth_instruction['minimum_words']} words. Do not produce a short summary.
-- The document must read like a real enterprise artifact, not generic guidance.
-- The document must be general and reusable. Refer only to "the organization", "management", "personnel", "functions", or specific roles. Do not invent company names or environment-specific facts.
-- Use numbered headings and numbered sub-clauses.
-- {depth_instruction['statement_style']}
-- Tie each major section back to the relevant framework obligations and control themes.
-- Include implementation depth, governance detail, review expectations, evidence expectations, and exception handling.
-- Avoid placeholders, vague statements, and one-line sections.
-- Every substantive section must contain enough depth to be operationally useful. Do not produce shallow sections.
-- Policy and standard sections should contain multiple atomic obligations, each expressed as one requirement per clause.
-- Procedure sections must be written as detailed operational steps with role ownership, triggers, prerequisites, inputs, outputs, records, evidence, escalation points, and exception handling.
-- Use clause hierarchy such as 7, 7.1, 7.1.1 when the topic requires decomposition.
-- Include document control elements such as owner, approver, effective date, review frequency, and version control guidance in a general ISO-style format.
-- Include monitoring, metrics, non-compliance handling, issue escalation, and periodic review expectations.
-- If multiple governance domains are implicated, create domain-specific sub-sections instead of collapsing them into a generic section.
-- Ensure the output is materially longer than two pages of text when rendered.
-
-Minimum content expectations by document type:
-- Policy: at least 12 atomic policy clauses across the relevant domains, with clear governance and enforcement language.
-- Standard: at least 12 mandatory standard requirements with prescriptive wording and measurable expectations.
-- Procedure: at least 10 ordered procedural steps plus supporting roles, records, approvals, and escalation subsections.
-- Guideline: detailed practice guidance, examples, recommended methods, and implementation notes across the relevant domains.
-
-Required section outline:
-{chr(10).join(f'- {section}' for section in depth_instruction['section_outline'])}
-
-Document quality requirements:
-- Policy and standard clauses must be prescriptive and auditable.
-- Procedure content must include roles, step sequence, inputs, outputs, records, and escalation points.
-- If this is a Procedure and a parent Policy exists, map procedure steps clearly to policy intent and control obligations.
-- If this is a Guideline, include practical implementation examples and explicit placeholders for screenshots where helpful, e.g., "[Screenshot: Admin console setting path]".
-- When a topic requires hierarchy, break it into clauses, sub-clauses, and bullet lists.
-- If frameworks imply multiple domains, reflect that in the structure rather than collapsing everything into generic text.
-- Suggested section content must be substantial; avoid one-line summaries.
-- The generated content and suggested sections must be consistent with each other.
-
-Return a JSON object with:
-{{
-  "generated_content": "The full document content in markdown format",
-  "suggested_title": "The recommended document title",
-  "suggested_sections": [
-    {{"heading": "1. Purpose", "content": "Section content..."}},
-    {{"heading": "2. Scope", "content": "Section content..."}},
-    {{"heading": "3. {doc_label} Statements", "content": "Section content..."}},
-    {{"heading": "4. Roles and Responsibilities", "content": "Section content..."}},
-    {{"heading": "5. Compliance", "content": "Section content..."}},
-    {{"heading": "6. Review and Updates", "content": "Section content..."}}
-  ],
-  "framework_alignment": [
-    {{"framework": "Framework Name", "controls": ["Control ID 1", "Control ID 2"]}}
-  ]
-}}"""
-
-    try:
-        # Use the same env-driven model as the async drafting pipeline so a
-        # single setting (`OPENAI_DRAFT_MODEL` in .env) drives both paths.
-        # Default to GPT-5; GPT-5 currently rejects custom temperature, so
-        # we omit it on that family and rely on the default.
-        _legacy_model = os.environ.get("OPENAI_DRAFT_MODEL", "gpt-5")
-        # Layer enterprise SME craft onto the prompt and system message — the
-        # legacy generator was previously a single-shot call with a vague
-        # "expert consultant" system message that produced generic output.
-        # We inject the doc-type-specific drafting craft block + banking
-        # reality block so the legacy path produces work matching the
-        # multi-stage pipeline's quality bar.
-        from ..ai_drafting.enterprise_craft import (
-            SME_SYSTEM_ADDENDUM,
-            enterprise_drafting_block,
-        )
-        _craft_block = enterprise_drafting_block(doc_type)
-        _system_msg = (
-            "You are an expert governance and compliance consultant that "
-            "creates mature ISO-aligned governance documents for enterprise "
-            "organizations. Always respond with valid JSON. Never return "
-            "brief or generic output."
-            + SME_SYSTEM_ADDENDUM
-        )
-        _user_msg = prompt + "\n\n" + _craft_block + (
-            "\n\nFinal reminder: replace every generic governance verb "
-            "(`ensure`, `make sure`, `consider`, `where possible`, `as "
-            "appropriate`) with a prescriptive verb and a named owner. "
-            "Output must read like a real bank's policy library — not a "
-            "SaaS startup blog."
-        )
-        # GPT-5 / o-series are reasoning models — `max_completion_tokens`
-        # has to cover BOTH hidden reasoning AND visible output. 12k was OK
-        # on gpt-4o (no reasoning trace); for GPT-5 we double it so a long
-        # policy body doesn't get cut to empty after the model finishes
-        # thinking. Reasoning models also reject custom `temperature`.
-        _is_reasoning = _legacy_model.lower().startswith(("gpt-5", "o1", "o3", "o4"))
-        _legacy_kwargs: Dict[str, Any] = {
-            "model": _legacy_model,
-            "messages": [
-                {"role": "system", "content": _system_msg},
-                {"role": "user", "content": _user_msg},
-            ],
-            "response_format": {"type": "json_object"},
-            "max_completion_tokens": 24000 if _is_reasoning else 12000,
-        }
-
-        def _call(kwargs: Dict[str, Any]):
-            resp = client.chat.completions.create(**kwargs)
-            txt = resp.choices[0].message.content
-            return resp, txt
-
-        try:
-            response, result_text = _call(_legacy_kwargs)
-        except Exception as primary_exc:  # noqa: BLE001
-            logger.warning("Legacy generator primary model %r failed: %s", _legacy_model, primary_exc)
-            response, result_text = None, None
-
-        # Auto-fallback when the primary returns empty content (GPT-5 ate the
-        # whole budget on reasoning) or raises. Falls back to gpt-4o so the
-        # user still gets a real document instead of an empty-body stub.
-        if not result_text:
-            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", get_openai_model())
-            if _fallback_model and _fallback_model != _legacy_model:
-                logger.info(
-                    "Legacy generator falling back from %r to %r after empty primary output",
-                    _legacy_model, _fallback_model,
-                )
-                _fallback_kwargs = dict(_legacy_kwargs)
-                _fallback_kwargs["model"] = _fallback_model
-                _fallback_kwargs["temperature"] = 0.4  # gpt-4o accepts this
-                _fallback_kwargs["max_completion_tokens"] = 12000
-                try:
-                    response, result_text = _call(_fallback_kwargs)
-                except Exception as fb_exc:  # noqa: BLE001
-                    logger.exception("Legacy generator fallback %r also failed: %s", _fallback_model, fb_exc)
-
-        if not result_text:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=(
-                    "OpenAI returned empty content from both the primary model "
-                    f"({_legacy_model}) and the fallback. Check the API key "
-                    "billing/quota, OPENAI_DRAFT_MODEL value, and server logs."
-                ),
-            )
-        result = json.loads(result_text)
-        return result
-    
-    except json.JSONDecodeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to parse OpenAI response: {str(e)}"
-        )
-    except Exception as e:
-        error_msg = str(e)
-        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="Cloud budget exceeded. Please upgrade your plan."
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OpenAI API error: {error_msg}"
-        )
 
 
 def _normalize_doc_title(s: str) -> str:
@@ -3144,17 +3434,20 @@ def generate_policy_ai_draft(
 
     # Validate parent document up-front so the user gets immediate
     # feedback rather than a failed job 60s later.
+    parent_content = None
     if request.parent_document_id:
         user_tenants = get_user_tenants(current_user, db)
-        parent_exists = db.query(GovernanceDocument.id).filter(
+        parent = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == request.parent_document_id,
             GovernanceDocument.tenant_id.in_(user_tenants),
         ).first()
-        if not parent_exists:
+        if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent document not found",
             )
+        permissions.ensure_reader(db, current_user, parent)      # its text goes into the prompt: only for who may read it
+        parent_content = (permissions.version_for(db, current_user, parent) or parent).content     # as the person reads it
 
     from ....tasks.ai_drafting import create_job
 
@@ -3167,6 +3460,7 @@ def generate_policy_ai_draft(
         "description": request.description,
         "framework_ids": request.framework_ids or [],
         "parent_document_id": request.parent_document_id,
+        "parent_content": parent_content,           # tasks/ai_drafting drafts from this text, not the parent's newest
         "include_sections": request.include_sections or [],
     }
     job_id = create_job(
@@ -3236,7 +3530,7 @@ class CompareWithDocumentBody(BaseModel):
     target_document_id: int
 
 
-@router.post("/{document_id}/compare-with-document")
+@router.post("/{document_id}/compare-with-document", dependencies=[Depends(permissions.require_doc_reader)])
 def compare_with_document(
     document_id: int,
     body: CompareWithDocumentBody,
@@ -3267,11 +3561,14 @@ def compare_with_document(
     if not target:
         raise HTTPException(status_code=404, detail="Target document not found")
 
+    permissions.ensure_reader(db, current_user, target)
+
     if source.id == target.id:
         raise HTTPException(status_code=400, detail="Cannot compare a document with itself")
 
-    source_content = (source.content or "").strip() or "(empty document)"
-    target_content = (target.content or "").strip() or "(empty document)"
+    # each side as this person reads it: the version in force, for someone who may not see a newer one
+    source_content = ((permissions.version_for(db, current_user, source) or source).content or "").strip() or "(empty document)"
+    target_content = ((permissions.version_for(db, current_user, target) or target).content or "").strip() or "(empty document)"
 
     gap_analysis = None
     if AI_INTEGRATIONS_OPENAI_API_KEY:
@@ -3332,7 +3629,7 @@ Return strict JSON with keys:
     }
 
 
-@router.get("/{document_id}/view-html")
+@router.get("/{document_id}/view-html", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document_html(
     document_id: int,
     db: Session = Depends(get_db),
@@ -3348,16 +3645,17 @@ def get_document_html(
     
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    src = permissions.version_for(db, current_user, document) or document      # the version in force, for who reads that one
     
     # If document has a file, always prefer file-based conversion (better HTML)
-    if document.file_path and os.path.exists(document.file_path):
+    if src.file_path and os.path.exists(src.file_path):
         html_content = ""
-        file_type = document.file_type or ""
+        file_type = src.file_type or ""
         
         try:
             if file_type == "pdf":
                 from PyPDF2 import PdfReader
-                reader = PdfReader(document.file_path)
+                reader = PdfReader(src.file_path)
                 sections = []
                 for i, page in enumerate(reader.pages):
                     page_text = page.extract_text()
@@ -3380,7 +3678,7 @@ def get_document_html(
             
             elif file_type in ("docx", "doc"):
                 from docx import Document as DocxDocument
-                doc = DocxDocument(document.file_path)
+                doc = DocxDocument(src.file_path)
                 parts = []
                 for para in doc.paragraphs:
                     text = para.text.strip()
@@ -3428,8 +3726,8 @@ def get_document_html(
         except HTTPException:
             raise
         except Exception as e:
-            if document.content:
-                lines = document.content.split('\n')
+            if src.content:
+                lines = src.content.split('\n')
                 html_parts = []
                 for line in lines:
                     stripped = line.strip()
@@ -3441,7 +3739,7 @@ def get_document_html(
                     "title": document.title,
                     "content_type": "html",
                     "html": "".join(html_parts),
-                    "file_type": document.file_type
+                    "file_type": src.file_type
                 }
             raise HTTPException(status_code=500, detail=f"Error converting document: {str(e)}")
         
@@ -3454,8 +3752,8 @@ def get_document_html(
         }
     
     # Fall back to content field if no file
-    if document.content:
-        lines = document.content.split('\n')
+    if src.content:
+        lines = src.content.split('\n')
         html_parts = []
         for line in lines:
             stripped = line.strip()
@@ -3472,7 +3770,7 @@ def get_document_html(
             "title": document.title,
             "content_type": "html",
             "html": "".join(html_parts),
-            "file_type": document.file_type
+            "file_type": src.file_type
         }
 
     raise HTTPException(status_code=404, detail="Document file not found")
@@ -3530,7 +3828,7 @@ def _assert_doc_access(document_id: int, user_tenants: List[int], db: Session) -
     return doc
 
 
-@router.get("/{document_id}/annotations")
+@router.get("/{document_id}/annotations", dependencies=[Depends(permissions.require_doc_reader)])
 def list_document_annotations(
     document_id: int,
     db: Session = Depends(get_db),
@@ -3548,10 +3846,13 @@ def list_document_annotations(
     return {
         "annotations": [_serialize_annotation(a, user_lookup) for a in rows],
         "total": len(rows),
+        # who is reading, and whether they may resolve other people's remarks (their own they edit, resolve and delete)
+        "me": current_user.id,
+        "can_moderate": permissions.may_moderate(db, current_user, doc),
     }
 
 
-@router.post("/{document_id}/annotations", status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/annotations", status_code=status.HTTP_201_CREATED, dependencies=[Depends(permissions.require_doc_reader)])
 def create_document_annotation(
     document_id: int,
     payload: AnnotationCreateRequest,
@@ -3560,6 +3861,7 @@ def create_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = DocumentAnnotation(
         tenant_id=doc.tenant_id,
         document_id=doc.id,
@@ -3575,7 +3877,7 @@ def create_document_annotation(
     return _serialize_annotation(annotation, {current_user.id: current_user})
 
 
-@router.put("/{document_id}/annotations/{annotation_id}")
+@router.put("/{document_id}/annotations/{annotation_id}", dependencies=[Depends(permissions.require_doc_reader)])
 def update_document_annotation(
     document_id: int,
     annotation_id: int,
@@ -3585,6 +3887,7 @@ def update_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = db.query(DocumentAnnotation).filter(
         DocumentAnnotation.id == annotation_id,
         DocumentAnnotation.document_id == doc.id,
@@ -3592,13 +3895,14 @@ def update_document_annotation(
     ).first()
     if not annotation:
         raise HTTPException(status_code=404, detail="Annotation not found.")
-    # Comment edits restricted to the author; status can be flipped by
-    # any tenant member (so a different reviewer can mark resolved).
+    # its words are its author's; resolving it is also for the document's editors, auditors and sign-off people
     if payload.comment is not None:
         if annotation.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Only the author can edit this remark.")
         annotation.comment = payload.comment.strip()
     if payload.status is not None:
+        if annotation.user_id != current_user.id and not permissions.may_moderate(db, current_user, doc):
+            raise HTTPException(status_code=403, detail=permissions.MODERATE_REFUSED)
         annotation.status = payload.status
     db.commit()
     db.refresh(annotation)
@@ -3606,7 +3910,8 @@ def update_document_annotation(
     return _serialize_annotation(annotation, {annotation.user_id: user} if user else {})
 
 
-@router.delete("/{document_id}/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT,
+               dependencies=[Depends(permissions.require_doc_reader)])
 def delete_document_annotation(
     document_id: int,
     annotation_id: int,
@@ -3615,6 +3920,7 @@ def delete_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = db.query(DocumentAnnotation).filter(
         DocumentAnnotation.id == annotation_id,
         DocumentAnnotation.document_id == doc.id,

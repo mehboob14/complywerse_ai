@@ -1,7 +1,8 @@
 'use client';
 
 import { AlertCircle, CheckCircle, Loader2, Play, RefreshCw, Sparkles, X, Zap } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 import { AISuggestion } from './types';
 
 type Props = {
@@ -32,6 +33,8 @@ export function AIPanel({
   hasSelectedWorkflow,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('create');
+  const promptBox = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(promptBox, aiPrompt);
   const canGenerate = !!aiPrompt.trim();
 
   const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -104,7 +107,8 @@ export function AIPanel({
                 </button>
               </div>
               <textarea
-                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none h-28 bg-gray-50"
+                ref={promptBox}
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none min-h-28 bg-gray-50"
                 placeholder="e.g., When a new vulnerability is detected with critical severity, assign it to the security team, wait for acknowledgment approval, then escalate to management if not resolved in 48 hours"
                 value={aiPrompt}
                 onChange={(e) => onPromptChange(e.target.value)}

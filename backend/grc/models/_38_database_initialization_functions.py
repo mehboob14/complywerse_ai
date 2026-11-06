@@ -14,6 +14,9 @@ def init_master_db():
     from ..db import ensure_master_database
     ensure_master_database()
     Tenant.__table__.create(bind=engine, checkfirst=True)
+    # When the platform clock last queued each scheduled job (services/platform_clock.py).
+    from ._61_platform_clock import ScheduledJobRun
+    ScheduledJobRun.__table__.create(bind=engine, checkfirst=True)
 
 
 def create_tenant_schema(tenant_engine):
@@ -38,6 +41,7 @@ def init_grc_db():
 # `ALTER TABLE`. The self-heal is idempotent and memoized per engine, so the
 # overhead is a single set lookup after the first call.
 from fastapi import HTTPException as _HTTPException, Request as _Request, status as _status
+import builtins as _builtins     # the star imports above bring the control-exception model in as "Exception": catch Python's
 
 
 def get_db(request: _Request):
@@ -52,12 +56,12 @@ def get_db(request: _Request):
         try:
             from ..services.ai_usage import bind_tenant
             bind_tenant(slug)  # attribute this request's tenant for AI-usage capture
-        except Exception:
+        except _builtins.Exception:
             pass
         try:
             from ..modules.compliance.schema_migrations import ensure_assigned_column
             ensure_assigned_column(db)
-        except Exception:
+        except _builtins.Exception:
             # Self-heal failures should never block a request.
             pass
         yield db

@@ -221,7 +221,9 @@ from ....schemas import (
     RCSADashboardSummary, RCSAFindingsBySeverity, RCSABUProgress, RCSAAISuggestionResponse,
     EvidenceRecommendation, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, is_platform_account,
+                                     refuse_imported_accounts)
+from ....services import evidence_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
 
@@ -1388,8 +1390,8 @@ def activate_campaign(
                     business_unit_id=bu.id,
                     # Assign the team lead as the default assessor so the
                     # campaign immediately has an owner; tenants can
-                    # reassign per-assessment afterwards.
-                    assessor_id=team.lead_user_id,
+                    # reassign per-assessment afterwards (not a lead an access review imported).
+                    assessor_id=team.lead_user_id if is_platform_account(db, team.lead) else None,
                 )
                 db.add(assessment)
         else:
@@ -1500,6 +1502,7 @@ def assign_business_units(
     if not db_campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     
+    refuse_imported_accounts(db, (request.assessor_ids or {}).values())
     created_count = 0
     for bu_id in request.business_unit_ids:
         existing = db.query(RCSAAssessment).filter(
@@ -1545,35 +1548,12 @@ def list_assessments(
         return []
 
     # Default visibility: non-admin users only see assessments they're
-    # assigned to. Tenant admins (Administrator role, primary contact,
-    # or superadmin) keep seeing every row. Frontends can override
+    # assigned to. Tenant admins (auth_router.is_tenant_admin) keep
+    # seeing every row. Frontends can override
     # either way by passing `mine=true` or `mine=false` explicitly —
     # backwards-compatible with any caller that already sets the flag.
     if mine is None:
-        from ....models import UserRole, Role, Tenant as _Tenant
-        is_admin = bool(getattr(current_user, "is_superadmin", False))
-        if not is_admin:
-            role_ids = [
-                ur.role_id for ur in db.query(UserRole).filter(
-                    UserRole.user_id == current_user.id
-                ).all()
-            ]
-            if role_ids:
-                role_names = {
-                    r.name for r in db.query(Role).filter(Role.id.in_(role_ids)).all()
-                }
-                if "Administrator" in role_names:
-                    is_admin = True
-            if not is_admin:
-                primary_email = (
-                    db.query(_Tenant.primary_contact_email)
-                    .filter(_Tenant.id.in_(user_tenants))
-                    .first()
-                )
-                if primary_email and primary_email[0] and current_user.email \
-                        and primary_email[0].lower() == current_user.email.lower():
-                    is_admin = True
-        mine = not is_admin
+        mine = not is_tenant_admin(db, current_user)
 
     query = db.query(RCSAAssessment).options(
         joinedload(RCSAAssessment.business_unit),
@@ -2139,6 +2119,7 @@ def create_approval_workflow(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    refuse_imported_accounts(db, [tier.approver_user_id for tier in workflow.tiers])
     db_workflow = RCSAApprovalWorkflow(
         tenant_id=tenant_id,
         name=workflow.name,
@@ -2444,6 +2425,7 @@ def delegate_approval(
     delegate_user = db.query(GRCUser).filter(GRCUser.id == action.delegate_to_user_id).first()
     if not delegate_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegate user not found")
+    refuse_imported_accounts(db, [action.delegate_to_user_id])
     
     history = RCSAApprovalHistory(
         assessment_id=assessment_id,
@@ -2545,6 +2527,7 @@ def create_finding(
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
     
+    refuse_imported_accounts(db, [finding.remediation_owner_id])
     db_finding = RCSAFinding(
         tenant_id=assessment.tenant_id,
         assessment_id=assessment_id,
@@ -2604,6 +2587,7 @@ def update_finding(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
     
     update_data = finding.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("remediation_owner_id")], kept=[db_finding.remediation_owner_id])
     
     if "status" in update_data and update_data["status"] == "closed":
         db_finding.closed_at = datetime.utcnow()
@@ -3097,6 +3081,7 @@ async def upload_rcsa_evidence(
     )
     db.add(evidence_link)
     db.commit()
+    evidence_review.rate_upload(db, evidence, current_user.id)
     
     return {
         "id": evidence.id,

@@ -1,0 +1,883 @@
+'use client';
+
+/**
+ * A governance document as people read it (Word as Word lays it out, a PDF, Markdown with '+ Draft' on the documents it refers to,
+ * otherwise cleaned HTML), with its version history, the typed-name sign-off and document control fields, and its details. Used
+ * by the AI Studio's document view (variant 'studio': the document at full height, its newest changes marked when it opens, or
+ * an earlier version read as it was) and by the classic document page.
+ * The document control pages (Document Description, review and approval, Revision History) are PART of what is shown: in its own
+ * sections for a platform document (ControlledMarkdown), inserted after the cover in a Word or PDF file (fileQ); under it, for the
+ * screen, ControlActions. None of them is a card of its own.
+ */
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { governanceApi } from '@/lib/api';
+import { saveBlob } from '@/lib/studio/api';
+import { documentChainApi } from '@/lib/documentChain';
+import { controlledCopy, controlledFileKey, recordStamp } from '@/lib/controlPages';
+import { useToast } from '@/components/ui/ToastProvider';
+import { RightSlidePanel } from '@/components/ui';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { Button, Checkbox, ErrorState, FormField, Select, SkeletonLines, TextInput, useNotify, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { calendarDay, dateTime } from '../_view/docDates';
+import RichTextEditor from '../_RichTextEditor';
+import { SIGNOFF_STATUS } from '../_SignoffControl';
+import TrackedChanges, { SinceApproved } from './_TrackedChanges';
+import { ControlActions, ControlledMarkdown } from './ControlPages';
+import { ProposeNote, proposedWords, useProposedAnswer, useRefreshAfterProposal } from './_ProposalsView';
+import { proposedOf, sendLabel } from '@/lib/proposals';
+import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
+import { versionGroups } from '../_workspace/library';
+import WordView from '@/components/governance/WordView';
+import { useRouter } from 'next/navigation';
+import {
+  FileText, Loader2, Download, GitCompare, RotateCcw, User, Clock, CheckCircle, Info, History, Pencil, Maximize2, Save,
+} from 'lucide-react';
+
+/** A DAY stored as a DateTime (the classic page's effective date and next review): "12 Nov 2026", the same in every time zone; "—" when there is none. */
+export const formatDate = (dateStr: string | null | undefined) => calendarDay(dateStr);
+
+const sanitizeDocumentHtml = (html: string | null | undefined) => {
+  if (!html) return '';
+
+  return html.replace(/\sstyle=(['"])(.*?)\1/gi, (_match, quote, styleValue) => {
+    const cleanedStyle = String(styleValue)
+      .replace(/(^|;)\s*(color|background|background-color|opacity|-webkit-text-fill-color|text-fill-color|filter|mix-blend-mode|text-shadow)\s*:[^;]*;?/gi, '$1')
+      .replace(/;;+/g, ';')
+      .replace(/^\s*;|;\s*$/g, '')
+      .trim();
+
+    return cleanedStyle ? ` style=${quote}${cleanedStyle}${quote}` : '';
+  });
+};
+
+// Pulls the items from any heading whose title matches a "related documents"
+// / "references" pattern. Returns a Map<normalized-text, {raw, doc_type}> so
+// the markdown renderer can look up each <li> and decide whether to inject
+// a "+ Draft" button without re-parsing on every render.
+type ReferenceEntry = { raw: string; doc_type: 'policy' | 'standard' | 'procedure' | 'guideline' };
+const REFERENCE_HEADING_PATTERN = /(related\s+documents(?:\s+and\s+references)?|normative\s+references|references|supporting\s+documents)/i;
+
+const inferDocType = (title: string): ReferenceEntry['doc_type'] => {
+  const t = title.toLowerCase();
+  if (/\bstandard(s)?\b/.test(t)) return 'standard';
+  if (/\bprocedure(s)?\b/.test(t)) return 'procedure';
+  if (/\b(guideline|guide|playbook|handbook|manual)\b/.test(t)) return 'guideline';
+  return 'policy';
+};
+
+const cleanReferenceLine = (text: string): string => {
+  // Strip markdown emphasis, link syntax, leading clause numbers, and
+  // trailing punctuation / version suffixes so each of these:
+  //   "**Information Classification Standard** v1.0 —"
+  //   "11.2.1 Information Classification Standard."
+  //   "11.2.5 Secure SDLC Standard (including secure coding, code review)."
+  // all reduce to: "Information Classification Standard" / "Secure SDLC Standard".
+  let out = text
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim();
+  // Leading clause number — "11.2.1 ", "5. ", "A.3 ", "(11.2) ".
+  out = out.replace(/^\(?(?:[A-Z]\.?\d+(?:\.\d+)*|\d+(?:\.\d+)+|\d+\.)\)?\s+/, '').trim();
+  // Drop a trailing parenthetical or "— description" so we keep just the name.
+  out = out.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s*[—–-]\s+.+$/, '').trim();
+  // Trailing punctuation.
+  out = out.replace(/[.,;:]+$/, '').trim();
+  return out;
+};
+
+const extractReferenceEntries = (raw: string): Map<string, ReferenceEntry> => {
+  const out = new Map<string, ReferenceEntry>();
+  if (!raw) return out;
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  let inSection = false;
+  let sectionLevel = 0;
+  for (const line of lines) {
+    const headingMatch = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const titleRaw = headingMatch[2].replace(/^\d+(\.\d+)*\s+/, '').trim();
+      if (REFERENCE_HEADING_PATTERN.test(titleRaw)) {
+        inSection = true;
+        sectionLevel = level;
+      } else if (inSection && level <= sectionLevel) {
+        inSection = false;
+      }
+      continue;
+    }
+    if (!inSection) continue;
+    // Match bullets (`- foo`), simple numbered list items (`1. foo`), AND
+    // numbered clause paragraphs (`11.2.1 Information Classification
+    // Standard.`) which is how the AI-drafting scaffold lays them out.
+    let candidate: string | null = null;
+    const bulletMatch = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+?)\s*$/);
+    if (bulletMatch) {
+      candidate = bulletMatch[1];
+    } else {
+      const clauseMatch = line.match(/^\s*(?:\d+(?:\.\d+)+|\d+\.\d+)\s+(.+?)\s*$/);
+      if (clauseMatch) candidate = clauseMatch[1];
+    }
+    if (!candidate) continue;
+    const cleaned = cleanReferenceLine(candidate);
+    // Filter: a reference document name is short-ish, not a sentence, and
+    // not obviously a regulation citation like "ISO/IEC 27001:2022" which
+    // already exists outside the platform. Reject sentences that read like
+    // a clause body ("The CISO shall …") rather than a document name.
+    if (cleaned.length < 4 || cleaned.length > 140) continue;
+    if (/^\s*(see|refer|note|e\.g\.|i\.e\.)\b/i.test(cleaned)) continue;
+    if (/\b(shall|must|will|should|may)\b/i.test(cleaned)) continue;
+    out.set(cleaned.toLowerCase(), { raw: cleaned, doc_type: inferDocType(cleaned) });
+  }
+  return out;
+};
+
+// Flatten a ReactMarkdown <li>'s children prop into a plain string so we
+// can match it against the pre-extracted reference set. Handles nested
+// elements that come through as JSX (e.g. <strong>, <em>) by recursing.
+const childrenToText = (node: React.ReactNode): string => {
+  if (node === null || node === undefined) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(childrenToText).join('');
+  if (typeof node === 'object') {
+    const maybeElement = node as { props?: { children?: React.ReactNode } };
+    if (maybeElement.props) return childrenToText(maybeElement.props.children);
+  }
+  return '';
+};
+
+// Document CONTENT version history — timeline + diff + restore, mirroring the
+// statement version modal but for the whole document body (item #3a).
+export function DocumentVersionHistoryPanel({
+  documentId, isOpen, onClose, onRestored, onCompare, canRestore = true, status, proposeTo = null,
+}: {
+  documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void;
+  /** people who may not change the document see the versions and their files, without Restore */
+  canRestore?: boolean;
+  /** the document's status: restoring an approved or published document sends it back to review (Restore says so first) */
+  status?: string;
+  /** organisations with the change chain: compare a version with the document as it is now in the tracked-changes view (files too) */
+  onCompare?: (versionId: number) => void;
+  /** the person is not its owner or author: a restore goes to this person (the owner) to accept, with a message they read */
+  proposeTo?: string | null;
+}) {
+  const notify = useNotify();
+  const refreshAfterProposal = useRefreshAfterProposal();
+  const [fetching, setFetching] = useState<number | null>(null);
+  const downloadFile = async (v: any) => {
+    setFetching(v.id);
+    try {
+      const { blob, filename } = await documentChainApi.versionFile(documentId, v.id, v.file_name || 'document', v.version_number);
+      saveBlob(blob, filename);
+    } catch (e) {
+      notify.error(e, { title: `Could not download the file of version ${v.version_number}`, retry: () => { void downloadFile(v); } });
+    } finally {
+      setFetching(null);
+    }
+  };
+  const [compareId, setCompareId] = useState<number | null>(null);
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['document-versions', documentId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await governanceApi.getDocumentVersions(documentId);
+      const d: any = res.data;
+      return (Array.isArray(d) ? d : d?.items || []) as any[];
+    },
+  });
+  const versions = data || [];
+  const currentRow = versions.find((v) => v.status === 'current') || versions[0];
+
+  const diffQuery = useQuery({
+    queryKey: ['document-version-diff', documentId, compareId, currentRow?.id],
+    enabled: isOpen && !!compareId && !!currentRow?.id && compareId !== currentRow?.id,
+    queryFn: async () => (await governanceApi.compareDocumentVersions(compareId as number, currentRow.id)).data as any,
+  });
+
+  // Restore asks first: why (kept with the new version), and that an approved document goes back to review
+  const [restoring, setRestoring] = useState<{ id: number; why: string } | null>(null);
+  // restoring makes a new version each time: reported after the server answered, no Retry; for a person who is not the owner or author it becomes a proposal
+  // (the server's sentence says so and the document is as it was)
+  const rollbackMutation = useReportedMutation({
+    mutationFn: async (r: { id: number; why: string }) => governanceApi.rollbackDocumentVersion(documentId, r.id, r.why),
+    success: (res) => proposedWords(res?.data, proposeTo ?? undefined)
+      ?? { title: 'Restored', message: 'The selected version is the document again, as a new version; the versions after it are kept.' },
+    failure: 'Not restored',
+    retryable: false,
+    onSuccess: (res) => { setRestoring(null); if (proposedOf(res?.data)) { refreshAfterProposal(); return; } refetch(); onRestored(); },
+  });
+
+  const changeColors: Record<string, string> = {
+    baseline: 'bg-slate-100 text-slate-600',
+    major: 'bg-rose-100 text-rose-700',
+    minor: 'bg-primary-100 text-primary-700',
+    patch: 'bg-emerald-100 text-emerald-700',
+    signoff: 'bg-primary-50 text-primary-700',
+  };
+
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Version History" widthClassName="w-[560px]" dirty={!!restoring?.why.trim()}>
+      {isLoading ? (
+        <SkeletonLines lines={6} label="Loading the versions" />
+      ) : isError && !data ? (
+        // a failed read is not "no version history yet"
+        <ErrorState title="Couldn't load the version history" message={errorMessage(error)} onRetry={() => { void refetch(); }} />
+      ) : versions.length === 0 ? (
+        <p className="text-sm text-slate-500 py-6 text-center">No version history yet. Edits to the document content will appear here.</p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">{versions.length} version{versions.length !== 1 ? 's' : ''} · newest first. Restore reverts the content to that version (creating a new version, so nothing is lost).</p>
+          {versions.map((v) => {
+            const isCurrent = v.id === currentRow?.id;
+            return (
+              <div key={v.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900">v{v.version_number}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${changeColors[v.change_type] || 'bg-slate-100 text-slate-600'}`}>{v.change_type}</span>
+                    {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">current</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {v.has_file && (
+                      <Button size="sm" leftIcon={<Download aria-hidden />} loading={fetching === v.id} title={`Download ${v.file_name || 'the file'} of this version`} onClick={() => downloadFile(v)}>File</Button>
+                    )}
+                    {!isCurrent && currentRow && onCompare && (
+                      <Button size="sm" leftIcon={<GitCompare aria-hidden />} title="See the document as it is now, with what changed since this version marked" onClick={() => onCompare(v.id)}>Compare</Button>
+                    )}
+                    {!isCurrent && currentRow && !onCompare && (
+                      <Button size="sm" leftIcon={<GitCompare aria-hidden />} aria-expanded={compareId === v.id} onClick={() => setCompareId(compareId === v.id ? null : v.id)}>{compareId === v.id ? 'Hide diff' : 'Diff'}</Button>
+                    )}
+                    {!isCurrent && canRestore && (
+                      <Button size="sm" leftIcon={<RotateCcw aria-hidden />} disabled={rollbackMutation.isPending || restoring?.id === v.id} onClick={() => setRestoring({ id: v.id, why: '' })}>Restore</Button>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
+                  <User className="h-3 w-3" />{v.creator_name || 'Unknown'}
+                  <Clock className="h-3 w-3 ml-1" aria-hidden />{v.created_at ? dateTime(v.created_at) : ''}
+                </div>
+                {v.has_file && v.file_name && <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><FileText className="h-3 w-3" /> {v.file_name}</p>}
+                {v.change_summary && v.change_summary !== v.change_reason && <p className="mt-1 text-xs text-slate-600">{v.change_summary}</p>}
+                {v.change_reason && <p className="mt-1 text-xs text-slate-600 italic">“{v.change_reason}”</p>}
+                {restoring && restoring.id === v.id && (
+                  <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5" role="alertdialog" aria-label={`Restore version ${v.version_number}`}>
+                    <p className="text-xs text-amber-950">
+                      Version {v.version_number} becomes the document again, as a new version; the versions after it are kept.
+                      {['approved', 'published'].includes(status ?? '') ? ' It is approved, so it goes back to review.' : ''}
+                    </p>
+                    {proposeTo ? (
+                      <div className="mt-2">
+                        <ProposeNote id={`restore-why-${v.id}`} decider={proposeTo} value={restoring.why} autoFocus placeholder="e.g. The last edit was made in error"
+                          onChange={(why) => setRestoring({ id: v.id, why })} />
+                      </div>
+                    ) : (
+                      <FormField label="Why" optional className="mt-2">
+                        <TextInput type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
+                          onChange={(e) => setRestoring({ id: v.id, why: e.target.value })} />
+                      </FormField>
+                    )}
+                    <div className="mt-2 flex justify-end gap-2">
+                      <Button size="sm" onClick={() => setRestoring(null)}>Cancel</Button>
+                      <Button size="sm" variant="primary" leftIcon={<RotateCcw aria-hidden />} loading={rollbackMutation.isPending} disabled={!!proposeTo && !restoring.why.trim()}
+                        onClick={() => rollbackMutation.mutate(restoring)}>
+                        {proposeTo ? sendLabel(proposeTo) : 'Restore'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {compareId === v.id && (
+                  <div className="mt-2 rounded-md bg-slate-50 border border-slate-200 p-2">
+                    {diffQuery.isLoading ? (
+                      <p className="text-xs text-slate-400">Computing diff…</p>
+                    ) : diffQuery.data ? (
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs font-mono text-slate-700">
+                        {(diffQuery.data.diff || diffQuery.data.text_diff || `+${diffQuery.data.additions ?? 0} additions · -${diffQuery.data.deletions ?? 0} deletions`)}
+                      </pre>
+                    ) : (
+                      <p className="text-xs text-slate-400">No differences.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </RightSlidePanel>
+  );
+}
+
+// Sign-off / fill-placeholders panel (item #3b): fill approver name/designation/
+// date into the Approval Signoff table and refresh the document-control header,
+// applied to the content as a versioned, audited edit.
+export function DocumentSignoffPanel({
+  documentId, isOpen, onClose, onDone,
+}: { documentId: number; isOpen: boolean; onClose: () => void; onDone: () => void }) {
+  const [rows, setRows] = useState<Array<{ role: string; name: string; designation: string; date: string }>>([
+    { role: 'Prepared by', name: '', designation: '', date: '' },
+    { role: 'Reviewed by', name: '', designation: '', date: '' },
+    { role: 'Approved by', name: '', designation: '', date: '' },
+  ]);
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [version, setVersion] = useState('');
+  const [nextReview, setNextReview] = useState('');
+  const [markApproved, setMarkApproved] = useState(false);
+
+  const setRow = (i: number, patch: Partial<{ role: string; name: string; designation: string; date: string }>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  // the details become a new version of the document (audited): reported after the server answered, with its words when it refuses; no Retry
+  const mutation = useReportedMutation({
+    mutationFn: async () => governanceApi.signoffDocument(documentId, {
+      signoffs: rows.filter((r) => r.role.trim() && (r.name.trim() || r.date.trim() || r.designation.trim())),
+      effective_date: effectiveDate || undefined,
+      version: version || undefined,
+      next_review_date: nextReview || undefined,
+      mark_approved: markApproved,
+    }),
+    success: { title: 'Signed off', message: 'Approval details applied to the document (versioned + audited).' },
+    failure: 'Sign-off failed',
+    fallback: 'Could not apply the sign-off.',
+    retryable: false,
+    onSuccess: () => { onDone(); onClose(); },
+  });
+  const typed = rows.some((r) => r.name.trim() || r.designation.trim() || r.date.trim()) || !!effectiveDate || !!version.trim() || !!nextReview || markApproved;
+
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Sign-off & Document Control" widthClassName="w-[560px]" dirty={typed}>
+      <div className="space-y-5">
+        <p className="text-xs text-slate-500">
+          Fill in approver details and document-control fields. These replace the placeholders in the
+          Approval Signoff and Document Description tables — recorded as a new version in the audit trail.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Approval Signoff</p>
+          <div className="space-y-3">
+            {rows.map((r, i) => (
+              <div key={i} className="rounded-lg border border-slate-200 p-3 space-y-2">
+                <TextInput value={r.role} onChange={(e) => setRow(i, { role: e.target.value })} placeholder="Role (e.g. Approved by)" aria-label="Role" />
+                <div className="grid grid-cols-2 gap-2">
+                  <TextInput value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" aria-label={`${r.role || 'Signer'}: name`} />
+                  <TextInput value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" aria-label={`${r.role || 'Signer'}: designation`} />
+                </div>
+                <TextInput type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} aria-label={`${r.role || 'Signer'}: date`} />
+              </div>
+            ))}
+            <Button variant="link" size="sm" onClick={() => setRows((prev) => [...prev, { role: '', name: '', designation: '', date: '' }])}>+ Add approver row</Button>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Document Control</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <FormField label="Effective date"><TextInput type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} /></FormField>
+            <FormField label="Version"><TextInput value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" /></FormField>
+            <FormField label="Next review"><TextInput type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} /></FormField>
+          </div>
+          <div className="mt-3">
+            <Checkbox checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} label="Also mark the document as approved (records approver + timestamp)" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" leftIcon={<CheckCircle aria-hidden />} loading={mutation.isPending} onClick={() => mutation.mutate()}>Apply Sign-off</Button>
+        </div>
+      </div>
+    </RightSlidePanel>
+  );
+}
+
+// Document metadata / description / tags — moved off the page into a slide
+// panel so the document itself gets the full width. Opened via the "Details"
+// button in the content header.
+export function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Document Details" widthClassName="w-[420px]">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Metadata</h3>
+          <div className="space-y-2.5">
+            <MetadataRow label="Type" value={docType.label} />
+            <MetadataRow label="Classification" value={doc.classification || '-'} />
+            <MetadataRow label="Version" value={doc.current_version || '1.0'} />
+            <MetadataRow label="Owner" value={doc.owner_name || '-'} />
+            <MetadataRow label="Effective Date" value={formatDate(doc.effective_date)} />
+            <MetadataRow label="Next Review" value={formatDate(doc.next_review_date)} />
+            <MetadataRow label="Review Cycle" value={`${doc.review_cycle_months || 12} months`} />
+            {doc.file_name && <MetadataRow label="File" value={doc.file_name} />}
+            {doc.file_size && <MetadataRow label="File Size" value={`${(doc.file_size / 1024).toFixed(1)} KB`} />}
+          </div>
+        </div>
+        {doc.description && (
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Description</h3>
+            <p className="text-sm text-slate-700">{doc.description}</p>
+          </div>
+        )}
+        {doc.tags?.length > 0 && (
+          <div className="border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Tags</h3>
+            <div className="flex flex-wrap gap-2">
+              {doc.tags.map((tag: string) => (
+                <span key={tag} className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs text-slate-900">{tag}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </RightSlidePanel>
+  );
+}
+
+export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, htmlFailed, onRetryHtml, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion, onOpenChangeLog }: any) {
+  // htmlFailed: the server's words when the cleaned text could not be read (and nothing else shows the document), onRetryHtml reads it again
+  // variant 'studio': the AI Studio's document view draws the document at full height; its actions are in the view's top bar
+  const studio = variant === 'studio';
+  // reading ({id, number}): an earlier version shown as it was, its file as Word or the PDF draws it, else its text
+  const versionQ = useQuery({ queryKey: ['document-version', reading?.id], queryFn: () => documentChainApi.version(reading.id), enabled: !!reading, staleTime: 60_000 });
+  const shown: any = reading ? versionQ.data : doc;
+  // Detect if doc.content is markdown (AI-generated docs always are).
+  // Markdown rendering + normalization is delegated to
+  // GovernanceDocumentMarkdown — see _src/components/governance/_ for the
+  // normalization pipeline (heading-space, GFM table-separator inject,
+  // orphan-bullet merge, blank-line collapse). Keeping it in one place is
+  // how the doc viewer and the NCA preview stay visually identical.
+  const rawContent: string = shown?.content || '';
+  // an earlier version's text is drawn as Markdown even when it does not look like it (raw HTML in it is shown as text, never run)
+  const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent) || (!!reading && !!rawContent.trim());
+  const renderedHtml = useMemo(() => (reading ? '' : sanitizeDocumentHtml(htmlContent?.html)), [htmlContent?.html, reading]);
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Inline content editing + version history (item #3a). Editing is gated to
+  // markdown, non-file-backed docs so we never corrupt an HTML/uploaded doc.
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSignoff, setShowSignoff] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showFullViewer, setShowFullViewer] = useState(false);
+  const canEdit = isMarkdown && !doc?.has_file && canTakeBack;      // canTakeBack: this person may change the document
+  // organisations with the document life cycle can see the document with its changes marked, and take one back. The AI Studio's
+  // view opens with them marked when the newest version changed the text (since the last approved version, else the one before).
+  // The document shows as it is until the chain answers (not retried: a failing chain only leaves the changes unmarked)
+  const chainQ = useQuery({ queryKey: ['document-chain', doc?.id], queryFn: () => documentChainApi.chain(doc.id), enabled: studio && !!chainOn && !!doc?.id, staleTime: 15_000, retry: false });
+  // ackedVersion (studio): the version the person last acknowledged when they are asked again (null: none; undefined: not known
+  // yet); the view then opens on the changes since that version
+  const opening = useMemo(() => {
+    if (!chainQ.data?.enabled) return null;
+    const acked = ackBaseline(chainQ.data.versions, ackedVersion);
+    return acked != null ? { id: acked, approved: false } : openingBaseline(chainQ.data.versions, chainQ.data.events);
+  }, [chainQ.data, ackedVersion]);
+  const ackKnown = !studio || ackedVersion !== undefined;
+  // the baseline the view opened with, kept: a refetch of the chain (after a take back) must not move a baseline the person picked
+  const firstOpening = useRef<number | null>(null);
+  if (firstOpening.current == null && opening && ackKnown) firstOpening.current = opening.id;
+  // picked: the person switched them on or off themselves (null: not yet)
+  const [picked, setPicked] = useState<boolean | null>(trackedRange ? true : null);
+  // the document itself first; its changes are shown when the person asks for them (Tracked changes, See them marked)
+  const tracking = !reading && (picked ?? false);
+  const deciding = false;
+  const [sinceRange, setSinceRange] = useState<{ from: number; to: number | null } | null>(null);
+  useEffect(() => { if (trackedRange) { setPicked(true); setSinceRange(null); } }, [trackedRange]);
+
+  // The file shown: the document's own, or the file of the version being read, WITH the document control pages the platform inserts
+  // after the cover (?with_record=true), so they are part of what is seen. If that cannot be made, the file as stored (`inside`: false).
+  const fetchFile = async (): Promise<{ blob: Blob; inside: boolean | null }> => {
+    if (reading) {
+      const name = shown?.file_name || 'document';
+      try {
+        const r = await documentChainApi.versionFile(doc.id, reading.id, name, reading.number, { withRecord: true });
+        return { blob: r.blob, inside: r.controlled };
+      } catch {
+        return { blob: (await documentChainApi.versionFile(doc.id, reading.id, name, reading.number)).blob, inside: false };
+      }
+    }
+    const asBlob = (data: unknown) => (data instanceof Blob ? data : new Blob([data as BlobPart]));
+    try {
+      const res = await governanceApi.downloadDocumentFile(doc.id, { withRecord: true });
+      return { blob: asBlob(res.data), inside: controlledCopy(res.headers) };
+    } catch {
+      return { blob: asBlob((await governanceApi.downloadDocumentFile(doc.id)).data), inside: false };
+    }
+  };
+
+  // If the document is a file-backed PDF, render the *exact* original file in
+  // an iframe rather than the markdown/HTML re-parse (which distorts tables,
+  // spacing and page layout). Fetch it once as a blob → object URL and revoke
+  // on unmount so we don't leak. Non-PDF files (docx/xlsx) fall through to the
+  // parsed view below, since browsers can't render those inline.
+  const isPdfFile = !!shown?.has_file && (
+    String(shown?.file_type || '').toLowerCase() === 'pdf' || /\.pdf$/i.test(String(shown?.file_name || ''))
+  );
+  // A Word file is drawn as Word draws it (docx-preview): its own numbering (1.3.1.1, I., a.), headings, tables where they are,
+  // headers and footers. The old text conversion below stays as the fallback when it cannot be drawn.
+  const isWordFile = !!shown?.has_file && !isPdfFile && (
+    String(shown?.file_type || '').toLowerCase() === 'docx' || /\.docx$/i.test(String(shown?.file_name || ''))
+  );
+  // One query for both: its key starts with the document's own ('governance-document'), so every refresh of the document (a signature,
+  // a submit, a publish, an edit of its details) makes the file again with the pages as they are now; the version read and a stamp of the
+  // record are in the key. A file is made on the server each time, so it is kept only while it is shown (gcTime 0) and never refetched on focus.
+  const fileQ = useQuery({
+    queryKey: controlledFileKey(doc?.id, reading?.id, recordStamp(doc)),
+    queryFn: fetchFile,
+    enabled: (isPdfFile || isWordFile) && !!doc?.id,
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
+  const shownFile = fileQ.data?.blob ?? null;
+  const pdfError = isPdfFile && fileQ.isError;
+  const wordError = isWordFile && fileQ.isError;
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isPdfFile || !shownFile) { setPdfUrl(null); return; }
+    const url = URL.createObjectURL(shownFile.type === 'application/pdf' ? shownFile : new Blob([shownFile], { type: 'application/pdf' }));
+    setPdfUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [isPdfFile, shownFile]);
+
+  const openEditor = () => { startEdit(); setShowFullViewer(true); };
+  const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
+
+  const handledAsProposal = useProposedAnswer();
+  const saveContentMutation = useMutation({
+    mutationFn: async () =>
+      governanceApi.editDocumentContent(doc.id, { content: editContent, change_reason: editReason || undefined }),
+    onSuccess: (res) => {
+      // not the owner or author: the edit waits for the owner's decision (the server's sentence says so); the document is as it was
+      if (handledAsProposal(res?.data)) { setEditing(false); setEditReason(''); return; }
+      queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
+      queryClient.invalidateQueries({ queryKey: ['document-versions', doc.id] });
+      setEditing(false);
+      setEditReason('');
+      toast({ type: 'success', title: 'Saved', message: 'Content updated — a new version was recorded in the audit trail.' });
+    },
+    onError: () => toast({ type: 'error', title: 'Save failed', message: 'Could not save the document content.' }),
+  });
+
+  const startEdit = () => { setEditContent(rawContent); setEditReason(''); setEditing(true); };
+
+  // Pre-compute the set of bullet items that live inside any
+  // "Related Documents and References" / "Normative References" / "References"
+  // section. The <li> renderer below uses this to decide whether the bullet
+  // should sprout a single-click "+ Draft" button.
+  const referenceItems = useMemo(() => extractReferenceEntries(rawContent), [rawContent]);
+
+  // Single-click handler — jumps to /governance/documents with prefill query
+  // params. The listing page reads these on mount and opens the AI Draft
+  // modal pre-populated so the operator stays in the existing draft flow
+  // (review AI output, accept, save) without retyping the title.
+  //
+  // Two UX guarantees baked in:
+  //   1. The reference's parent (THIS document) is pre-selected in the
+  //      modal's parent-document picker, so the new draft inherits the
+  //      hierarchy automatically.
+  //   2. If the operator cancels the draft, they land back on THIS document
+  //      page at the same scroll offset they left — `aiDraftReturn` carries
+  //      the return path and sessionStorage carries the scroll Y so a
+  //      session-state hop doesn't lose their place.
+  const handleDraftReference = (entry: ReferenceEntry, parentTitle: string) => {
+    const params = new URLSearchParams({
+      aiDraftTitle: entry.raw,
+      aiDraftType: entry.doc_type,
+    });
+    if (parentTitle) {
+      params.set('aiDraftDescription', `Referenced from "${parentTitle}".`);
+    }
+    if (doc?.id) {
+      params.set('aiDraftParentId', String(doc.id));
+      const returnPath = `/governance/documents/${doc.id}`;
+      params.set('aiDraftReturn', returnPath);
+      try {
+        sessionStorage.setItem(`gov-doc-scroll-${doc.id}`, String(window.scrollY));
+      } catch {
+        // sessionStorage can be disabled in private/embedded contexts —
+        // we still navigate, the user just loses scroll position.
+      }
+    }
+    // Propagate the parent doc's framework linkage so the new draft
+    // inherits the same compliance scope automatically. The listing page
+    // parses this back into prefill.framework_ids → AI Draft's
+    // multi-select. Operator can still tweak inside the modal.
+    const parentFrameworkIds: number[] = Array.isArray((doc as { framework_ids?: number[] } | undefined)?.framework_ids)
+      ? ((doc as { framework_ids?: number[] }).framework_ids as number[]).filter((n) => Number.isFinite(n))
+      : [];
+    if (parentFrameworkIds.length > 0) {
+      params.set('aiDraftFrameworkIds', parentFrameworkIds.join(','));
+    }
+    const frameworkHint = parentFrameworkIds.length > 0
+      ? ` Framework${parentFrameworkIds.length === 1 ? '' : 's'} auto-selected from parent.`
+      : '';
+    toast({
+      type: 'info',
+      title: 'Opening AI Draft',
+      message: `Pre-filling "${entry.raw}" for drafting. Parent set to "${parentTitle}".${frameworkHint}`,
+    });
+    router.push(`/governance/documents?${params.toString()}`);
+  };
+
+  // The read-only document body (markdown / sanitized HTML / empty), rendered
+  // both as the collapsed inline preview and inside the full-view popup.
+  const renderReadBody = (full = false) => (
+    reading && versionQ.isLoading ? (
+      <SkeletonLines lines={8} label="Loading the version" />
+    ) : reading && !shown ? (
+      <p className="py-10 text-center text-sm text-rose-700" role="alert">Version {reading.number} could not be read. {errorMessage(versionQ.error)}</p>
+    ) : tracking && chainOn ? (
+      <TrackedChanges documentId={doc.id} status={doc.status} initial={sinceRange ?? trackedRange ?? (firstOpening.current != null ? { from: firstOpening.current, to: null } : null)} canTakeBack={canTakeBack}
+        onChanged={() => { for (const key of ['governance-document', 'document-access']) queryClient.invalidateQueries({ queryKey: [key] }); }} />
+    ) : isPdfFile ? (
+      pdfError ? (
+        <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
+          <FileText className="h-12 w-12" />
+          <p className="text-sm text-slate-700">Couldn&rsquo;t load the file preview.</p>
+          <p className="text-sm text-slate-600">{reading ? 'Use File on its card in Versions to download it.' : studio ? 'Use Download, Original file as stored, at the top to open it.' : <>Use &ldquo;Download File&rdquo; above to view it.</>}</p>
+        </div>
+      ) : pdfUrl ? (
+        <iframe
+          src={pdfUrl}
+          title={shown?.file_name || doc?.title || 'Document'}
+          className={`w-full rounded-lg border border-slate-200 bg-white ${full || studio ? 'h-[calc(100vh-9rem)] min-h-[420px]' : 'h-[340px]'}`}
+        />
+      ) : (
+        <SkeletonLines lines={8} label="Loading the file" />
+      )
+    ) : isWordFile && !wordError ? (
+      <WordView file={shownFile} height={full || studio ? undefined : 340} label={shown?.file_name || doc?.title || 'Document'} />
+    ) : htmlLoading && !reading ? (
+      <SkeletonLines lines={8} label="Loading the document" />
+    ) : htmlFailed && !reading && !isMarkdown ? (
+      // the cleaned text could not be read: that is not "no viewable content"
+      <ErrorState title="Couldn't read the document" message={htmlFailed} onRetry={onRetryHtml} />
+    ) : isMarkdown ? (
+      // the document with its control pages where its own sections are; the document as it is until they are here (an earlier version: its own pages)
+      <ControlledMarkdown
+        documentId={doc?.id}
+        version={reading ? reading.number : null}
+        stamp={reading ? null : doc?.current_version}
+        content={rawContent}
+        references={referenceItems}
+        onDraftReference={canTakeBack && !reading ? handleDraftReference : undefined}
+        parentTitle={doc?.title || ''}
+        cleanReferenceLine={cleanReferenceLine}
+      />
+    ) : renderedHtml ? (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: `
+          .document-viewer-html, .document-viewer-html * {
+            color: #111827 !important; -webkit-text-fill-color: #111827 !important;
+            opacity: 1 !important; filter: none !important; mix-blend-mode: normal !important;
+            text-shadow: none !important; background: transparent !important;
+          }
+          .document-viewer-html h1, .document-viewer-html h2, .document-viewer-html h3,
+          .document-viewer-html h4, .document-viewer-html h5, .document-viewer-html h6,
+          .document-viewer-html strong, .document-viewer-html b {
+            color: #000000 !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;
+          }
+          .document-viewer-html a, .document-viewer-html a * {
+            color: #2563eb !important; -webkit-text-fill-color: #2563eb !important;
+          }
+        `}} />
+        <div className="document-viewer-html text-[15px] leading-7 text-slate-900" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+      </>
+    ) : (
+      <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
+        <FileText className="h-12 w-12" />
+        <p className="text-sm text-slate-700">No viewable content available</p>
+        {shown?.has_file && <p className="text-sm text-slate-600">Download the file to view its contents{reading ? ' (File on its card in Versions)' : ''}</p>}
+      </div>
+    )
+  );
+
+  const editorBody = (
+    <div className="space-y-3">
+      <RichTextEditor value={editContent} onChange={setEditContent} minHeight={460} />
+      <div>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Change reason <span className="font-normal text-slate-400">(recorded in the audit trail)</span></label>
+        <input
+          value={editReason}
+          onChange={(e) => setEditReason(e.target.value)}
+          placeholder="What did you change and why…"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        />
+      </div>
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-slate-100 bg-white pt-3">
+        <button onClick={() => setEditing(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
+        <button
+          onClick={() => saveContentMutation.mutate()}
+          disabled={saveContentMutation.isPending || editContent === rawContent}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+        >
+          {saveContentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Version
+        </button>
+      </div>
+    </div>
+  );
+
+  // the control pages are part of the document (in its sections, or inside its file); under it, for the screen, a line says where they come
+  // from and offers them alone as a PDF. It is left out while the Tracked changes show, which are the stored text without the pages.
+  const showActions = !!doc?.id && !(tracking && chainOn);
+  const actions = showActions ? (
+    <ControlActions documentId={doc.id} title={doc.title} version={reading ? reading.number : null} currentVersion={doc.current_version}
+      inside={isPdfFile || isWordFile ? fileQ.data?.inside ?? null : null} onOpenChangeLog={onOpenChangeLog} />
+  ) : null;
+
+  if (studio) {
+    return (
+      <div className="space-y-3">
+        {reading && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5" role="status">
+            <span className="min-w-0 flex-1 text-sm text-amber-950">
+              {reading.id === doc?.in_force_version_id
+                ? <><span className="font-semibold">Reading v{reading.number}</span>, the published version in force. The current version is v{doc?.current_version || '1.0'}{SIGNOFF_STATUS[doc?.status] ? `, ${SIGNOFF_STATUS[doc.status].label.toLowerCase()}` : ''}.</>
+                : <><span className="font-semibold">Reading v{reading.number}</span> - not the current version (v{doc?.current_version || '1.0'}).</>}
+            </span>
+            <Button onClick={onStopReading}>Back to the current version</Button>
+          </div>
+        )}
+        {chainOn && !reading && !tracking && !deciding && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
+        {chainOn && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {(chainQ.data?.versions?.length ?? 0) > 1 && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                Version
+                <Select value={reading?.id ? String(reading.id) : 'current'} aria-label="Read a version of the document" className="w-[14rem]"
+                  onChange={(e) => {
+                    const pick = e.target.value;
+                    if (pick === 'current') { onStopReading?.(); return; }
+                    const v = chainQ.data?.versions.find((x: any) => String(x.id) === pick);
+                    if (v) { setPicked(false); onRead?.({ id: v.id, number: v.number }); }
+                  }}
+                  >
+                  <option value="current">v{doc?.current_version || '1.0'} (current)</option>
+                  {/* every earlier version, each major with its minor versions, newest first (the newest row is the current one) */}
+                  {versionGroups([...(chainQ.data?.versions ?? [])].slice(0, -1).reverse()).map((g) => (
+                    <optgroup key={g.head.id} label={`Version ${g.major}`}>
+                      {[...g.minors, g.head].map((v: any) => (
+                        <option key={v.id} value={String(v.id)}>v{v.number}{v.kind === 'baseline' || v.origin === 'initial' ? ' (the original)' : ''}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </Select>
+              </label>
+            )}
+            {!reading && <Button leftIcon={<GitCompare aria-hidden />} variant={tracking ? 'primary' : 'secondary'} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
+              onClick={() => { setPicked(!tracking); setSinceRange(null); }}>{tracking ? 'Hide changes' : 'Show changes'}</Button>}
+          </div>
+        )}
+        <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-8">{renderReadBody(true)}</div>
+        {/* (a sibling of the card, never inside the Word view's shadow root or the PDF's frame; it follows the version read) */}
+        {actions}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Full-document popup — scrollable read/edit surface (a kit dialog: focus in, Tab wraps, Escape, focus back; an edited text asks before it is thrown away) */}
+      <AnimatedModal isOpen={showFullViewer} onClose={closeFullViewer} size="3xl" title={doc?.title || 'Document'} dirty={editing && editContent !== rawContent}
+        headerAccessory={(
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Info className="h-3.5 w-3.5" aria-hidden /> Details</button>
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><History className="h-3.5 w-3.5" aria-hidden /> History</button>
+            {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><CheckCircle className="h-3.5 w-3.5" aria-hidden /> Sign-off</button>}
+            {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5" aria-hidden /> Edit</button>}
+          </div>
+        )}>
+        <div className="px-6 py-5">
+          {editing ? editorBody : renderReadBody(true)}
+        </div>
+      </AnimatedModal>
+      {doc?.id && (
+        <DocumentVersionHistoryPanel
+          documentId={doc.id}
+          isOpen={showHistory}
+          onClose={() => setShowHistory(false)}
+          onRestored={() => {
+            for (const key of ['governance-document', 'document-chain', 'document-chain-redline', 'document-lifecycle']) queryClient.invalidateQueries({ queryKey: [key] });
+          }}
+          onCompare={chainOn ? (versionId) => { setShowHistory(false); setSinceRange({ from: versionId, to: null }); setPicked(true); } : undefined}
+          canRestore={canTakeBack}
+          status={doc.status}
+        />
+      )}
+      {doc?.id && (
+        <DocumentSignoffPanel
+          documentId={doc.id}
+          isOpen={showSignoff}
+          onClose={() => setShowSignoff(false)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
+            queryClient.invalidateQueries({ queryKey: ['document-versions', doc.id] });
+          }}
+        />
+      )}
+      <DocumentDetailsPanel doc={doc} docType={docType} isOpen={showDetails} onClose={() => setShowDetails(false)} />
+      {chainOn && !tracking && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
+      <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
+        <div className="border-b border-slate-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
+          <h3 className="font-medium text-slate-900">Document Content</h3>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+              <Info className="h-3.5 w-3.5" /> Details
+            </button>
+            {chainOn && (
+              <button onClick={() => setPicked(!tracking)} aria-pressed={tracking} title="Show the document with its changes marked, who made each, and take one back"
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                <GitCompare className="h-3.5 w-3.5" /> Tracked changes
+              </button>
+            )}
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+              <History className="h-3.5 w-3.5" /> History
+            </button>
+            {canEdit && (
+              <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                <CheckCircle className="h-3.5 w-3.5" /> Sign-off
+              </button>
+            )}
+            {canEdit && (
+              <button onClick={openEditor} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+            )}
+            <button onClick={() => setShowFullViewer(true)} className="inline-flex items-center gap-1 rounded-md border border-primary-300 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100">
+              <Maximize2 className="h-3.5 w-3.5" /> Open full
+            </button>
+          </div>
+        </div>
+        {/* Collapsed, non-scrollable preview — click "Open full" for the whole doc. */}
+        <div className="p-6">
+          <div className={tracking && chainOn ? 'relative' : 'relative max-h-[360px] overflow-hidden'}>
+            {renderReadBody()}
+            {!(tracking && chainOn) && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />}
+          </div>
+          <div className="mt-2 flex justify-center border-t border-slate-100 pt-3">
+            <button
+              onClick={() => setShowFullViewer(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Maximize2 className="h-4 w-4" /> Read full document
+            </button>
+          </div>
+        </div>
+      </div>
+      {actions}
+    </div>
+  );
+}
+
+export function MetadataRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-slate-600">{label}</span>
+      <span className="text-slate-900 capitalize">{value}</span>
+    </div>
+  );
+}

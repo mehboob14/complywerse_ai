@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { backendGrcBase } from '@/lib/backendUrl';
+import { proxyBody } from '@/lib/proxyReply';
 
 export const maxDuration = 900;
 export const dynamic = 'force-dynamic';
-
-/** Resolve backend base including /grc whether or not BACKEND_URL already has it. */
-function backendGrcBase(): string {
-  const raw = (
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    'http://127.0.0.1:4000/grc'
-  ).replace(/\/$/, '');
-  if (raw.endsWith('/grc')) return raw;
-  return `${raw}/grc`;
-}
 
 /**
  * Long-running PDF text extraction + AI observation drafting. Next.js rewrite
@@ -60,16 +51,8 @@ export async function POST(request: NextRequest) {
       `[Statutory Audit Upload-Parse] Upstream ${response.status} in ${Date.now() - started}ms`,
     );
 
-    const contentType = response.headers.get('content-type') || '';
-    let data: unknown;
-    if (contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      data = {
-        detail: text.slice(0, 500) || `Upstream returned ${response.status}`,
-      };
-    }
+    // a plain-text error is not JSON: one plain sentence, the backend's status
+    const data = proxyBody(await response.text(), 'The observations could not be read from the file now. Try again in a minute.');
 
     return NextResponse.json(data, { status: response.status });
   } catch (error: unknown) {

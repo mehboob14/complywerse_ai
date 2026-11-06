@@ -48,6 +48,9 @@ class GovernanceDocument(Base):
     # controls per framework). Distinct from framework_ids (drafting citation
     # scope) so a doc can be audited against frameworks beyond what it cited.
     applicable_framework_ids = Column(JSON, default=[])
+    # Further UploadedFramework ids its statements are mapped against, picked on
+    # the document's Mappings tab (beyond the applicable and linked ones).
+    mapping_framework_ids = Column(JSON, default=[])
     tags = Column(JSON, default=[])
     
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
@@ -58,6 +61,23 @@ class GovernanceDocument(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # when the current sign-off round began: signatures given before it no longer count (a changed document is signed again).
+    # Set by _new_signoff_round below whenever the status goes to review or approval from anything else.
+    signoff_round_at = Column(DateTime, nullable=True)
+    # the stage of its approval route it is at while in review or approval (modules/governance/routes.py); None: by its status
+    route_stage = Column(Integer, nullable=True)
+    # when everyone was asked to acknowledge it (published with the life cycle on): only then are people who join later asked too
+    acks_everyone_at = Column(DateTime, nullable=True)
+    # the version published last: it stays in force while a newer one is on its way (modules/governance/permissions.in_force_number).
+    # Set by _stamp_published below whenever the document is published.
+    published_version = Column(String(50), nullable=True)
+    # the version published last, never cleared (a withdrawal clears only published_version): whoever does not see drafts reads it
+    # whenever the document is not published now and holds a newer number (permissions.in_force_row). Set by _remember_published.
+    last_published_version = Column(String(50), nullable=True)
+    # the hashes of the parts of its text its statements reflect (modules/governance/statement_reparse.py): a new version is read
+    # again only where its parts differ from these
+    statement_parts = Column(JSON, nullable=True)
+
     tenant = relationship("Tenant", back_populates="governance_documents")
     owner = relationship("GRCUser", back_populates="owned_gov_documents", foreign_keys=[owner_id])
     author = relationship("GRCUser", foreign_keys=[author_id])
@@ -86,6 +106,85 @@ class GovernanceDocument(Base):
     )
 
 
+
+from sqlalchemy import event as _event  # noqa: E402
+
+_PENDING_SIGNOFF = ("pending_review", "pending_approval")
+
+
+@_event.listens_for(GovernanceDocument.status, "set", active_history=True)
+def _new_signoff_round(doc, value, old, _initiator):
+    """Going to review or approval from any other status, by any path (Send, a save over an approved document, take-back,
+    restore, a status set by hand, the older approvals engine, a gap fix), starts a new sign-off round: the signatures given
+    before it no longer count (routers/document_signoff._signatures), so the same people sign the changed document again. Going
+    back from approval to review starts one too (the reviewers who signed are asked again)."""
+    if (value in _PENDING_SIGNOFF and old not in _PENDING_SIGNOFF) or (value == "pending_review" and old == "pending_approval"):
+        doc.signoff_round_at = datetime.utcnow()
+        doc.route_stage = None          # a route of its own starts at its first stage (whoever sets the status may set it after)
+
+
+@_event.listens_for(GovernanceDocument.status, "set")
+def _stamp_published(doc, value, _old, _initiator):
+    """Published by any path (Publish, bulk publish, a status set by hand, the older approvals engines, a workflow): that version is
+    the one in force until the next publication. A version not set yet is the column's default, 1.0."""
+    if value == "published":
+        doc.published_version = doc.current_version or "1.0"
+    elif value in ("archived", "expired", "exception_applied"):        # withdrawn: nothing is in force; reviving it starts clean
+        doc.published_version = None
+
+
+@_event.listens_for(GovernanceDocument.published_version, "set")
+def _remember_published(doc, value, _old, _initiator):
+    """Every number put in force (a publication by any path, or a new number of the published text) is the version published last;
+    it stays when a withdrawal clears what is in force, so a once-published document never serves newer, unapproved text."""
+    if value:
+        doc.last_published_version = value
+
+
+from sqlalchemy.orm import Session as _Session  # noqa: E402
+
+_TEXT_CHANGED = "statement_reparse_documents"      # session.info: the documents whose text or file this transaction changed
+
+
+@_event.listens_for(GovernanceDocument.content, "set")
+@_event.listens_for(GovernanceDocument.file_path, "set")
+def _note_text_change(doc, value, old, _initiator):
+    """A new text or file, by any path (a save, a new file version, a restore, a write-back, a workflow): its statements follow it once
+    the change is committed (``_statements_follow`` below). A document being created is parsed by its create path instead. An old
+    value that was not loaded counts as a change (no query here); the job then finds every part the same and asks no AI."""
+    if value == old:
+        return
+    from sqlalchemy import inspect as _inspect
+
+    state = _inspect(doc)
+    if state.persistent and state.session is not None and state.identity:
+        state.session.info.setdefault(_TEXT_CHANGED, set()).add(state.identity[0])
+
+
+@_event.listens_for(_Session, "after_commit")
+def _statements_follow(session):
+    """One update of the statements per document whose text the commit changed, on real tenant sessions only (they carry their
+    tenant's slug: never a test's, never the master database). Never raises into the request."""
+    ids = session.info.pop(_TEXT_CHANGED, None)
+    slug = session.info.get("tenant_slug")
+    if not ids or not slug:
+        return
+    try:
+        from ..modules.governance.statement_reparse import start
+
+        start(slug, sorted(ids), session)
+    except Exception:       # noqa: BLE001 - the change is saved; its statements catch up with the next one
+        import logging
+
+        logging.getLogger(__name__).warning("statements of documents %s were not updated", sorted(ids), exc_info=True)
+
+
+@_event.listens_for(_Session, "after_soft_rollback")
+def _forget_text_change(session, previous_transaction):
+    if not getattr(previous_transaction, "nested", False):        # rolled back: nothing changed
+        session.info.pop(_TEXT_CHANGED, None)
+
+
 class GovernanceDocumentVersion(Base):
     """Full version history with change tracking"""
     __tablename__ = "grc_governance_document_versions"
@@ -106,6 +205,10 @@ class GovernanceDocumentVersion(Base):
     
     change_summary = Column(Text, nullable=True)
     change_reason = Column(Text, nullable=True)
+    # What this version changed against the one before it, from -> to, with who/what each change came from (the AI's
+    # request and the sources it relied on, a person's edit, a revert). Written by the AI Studio and by a revert; a
+    # version without it is compared with its predecessor when the change chain is read (modules/governance/change_chain.py).
+    change_set = Column(JSON, nullable=True)
     
     status = Column(String(50), default="current")  # current, superseded, archived
     
@@ -514,6 +617,8 @@ class DocumentSignoffAssignment(Base):
     role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
     target_type = Column(String(10), nullable=False)  # user | role | team
     target_id = Column(Integer, nullable=False)       # user id / role id / team id
+    stage_position = Column(Integer, nullable=True)   # the route stage (grc_document_route_stages) it belongs to; None: the default route
+    position = Column(Integer, nullable=True)         # its turn within that stage when people are asked one after another
     added_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     added_at = Column(DateTime, default=datetime.utcnow)
 
@@ -537,6 +642,8 @@ class DocumentSignature(Base):
     role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
     role_label = Column(String(100), nullable=True)   # Approval Signoff tier label patched into content
     decision = Column(String(20), default="signed")   # signed | rejected
+    stage_position = Column(Integer, nullable=True)   # the route stage it was given at (None: before routes, by role_type)
+    on_behalf_of = Column(Integer, ForeignKey("grc_users.id"), nullable=True)    # signed for this person, who delegated it
     signature_text = Column(String(255), nullable=True)  # typed name of record
     comment = Column(Text, nullable=True)
     signed_at = Column(DateTime, default=datetime.utcnow)

@@ -86,7 +86,7 @@ async function loadInternalControls(): Promise<EntityOption[]> {
 }
 
 async function loadGovernanceDocuments(): Promise<EntityOption[]> {
-  const r = await governanceApi.getDocuments({ limit: 500 });
+  const r = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
   const items = (Array.isArray(r.data) ? r.data : (r.data as { items?: unknown[] })?.items) ?? [];
   return (items as Array<Record<string, unknown>>).map((x) => ({
     id: Number(x.id),
@@ -97,7 +97,11 @@ async function loadGovernanceDocuments(): Promise<EntityOption[]> {
 }
 
 async function loadPolicyStatements(): Promise<EntityOption[]> {
-  const r = await complianceApi.statements.getAll();
+  // the statements of the documents the person may read; a refusal is an empty list (the picker's empty line says why)
+  const r = await complianceApi.statements.getAll().catch((e) => {
+    if (e?.response?.status === 403) return { data: [] };
+    throw e;
+  });
   const items = (Array.isArray(r.data) ? r.data : (r.data as { items?: unknown[] })?.items) ?? [];
   return (items as Array<Record<string, unknown>>).map((x) => ({
     id: Number(x.id),
@@ -447,6 +451,7 @@ export function IssueForm({ open, onClose, presetSource, presetFields, onCreated
                     value={linkedStatements}
                     onChange={setLinkedStatements}
                     placeholder="Pick statements…"
+                    emptyMessage="No statements: they come from the documents you may open."
                     icon={FileText}
                   />
                 </LinkRow>

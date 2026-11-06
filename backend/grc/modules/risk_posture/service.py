@@ -24,7 +24,7 @@ Weights (default — tunable later via tenant settings):
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, String
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -182,6 +182,19 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
             (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
             CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
             CompliancePlugin.enabled.is_(True),
+            # Match the scanner's eligibility EXACTLY (compliance_plugins scan_all):
+            # exclude TODO placeholders and unauthored auto-pass stubs so the
+            # posture denominator equals the rules the scanner actually runs.
+            # Without this the posture counted the full benchmark (incl. never-
+            # runnable rules) -> phantom "never-scanned" + stale errors, so its
+            # pass% disagreed with the CIS card.
+            ~cast(CompliancePlugin.check_definition, String).ilike("%TODO%"),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind": "any"%'),
+            ~cast(CompliancePlugin.check_definition, String).ilike('%"kind":"any"%'),
+            # Manual / attestation rules are never auto pass/fail — the scanner
+            # skips them, so counting them here only added stale-errored ghosts
+            # (497 rules incl. manual vs the 408 the scanner runs).
+            CompliancePlugin.runner_type != "manual",
         )
         .all()
     )
@@ -264,28 +277,36 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     # (passed + failed + errored + never_scanned == total) instead of silently going
     # missing, and folded into the coverage gap below so they aren't dropped from the
     # score.
-    errored = len(latest) - passed - failed
+    errored = sum(1 for s in latest.values() if s == "error")
+    # skipped / running / pending etc. are NOT pass, fail, or a hard error — they
+    # are not-applicable (oscap "notapplicable" for rules that don't apply to this
+    # host, e.g. desktop rules on a headless server) or not-yet-evaluated. They
+    # must drop out entirely, NOT be lumped into `errored`. The old
+    # `errored = len(latest) - passed - failed` counted 60 skipped + 10 orphaned
+    # "running" rows as errors ("70 errored" when only 2 rules truly errored).
+    skipped = len(latest) - passed - failed - errored
     never_scanned = total - len(latest)
     scanned = passed + failed
-    pass_rate = round(passed / total * 100, 1)
+    # Pass rate = passed / evaluated (passed+failed) — the standard CIS score,
+    # excluding never-scanned/errored/not-applicable. Same basis as the CIS card.
+    pass_rate = round(passed / scanned * 100, 1) if scanned else None
     if scanned == 0:
-        # Rules exist and runs exist, but every one errored — nothing passed and
-        # nothing failed. `score = 0.0` is the BEST possible gap, so an entirely
-        # broken scan scored as a flawless asset, at full dimension weight, while
-        # the card above it showed a 0% pass rate. Nothing was measured here, so
-        # the coverage penalty is total: this is maximum uncertainty, not
-        # maximum health.
+        # Rules exist and runs exist, but every one errored / was n/a — nothing
+        # passed and nothing failed. score = 0.0 would read as a flawless asset
+        # at full weight; instead treat it as maximum uncertainty.
         score = 1.0
     else:
         scanned_gap = failed / scanned
-        # never_scanned AND errored are both "not effectively measured" — treat both
-        # as coverage gap (uncertainty), rather than ignoring the errored ones.
-        coverage_penalty = (never_scanned + errored) / total
+        # Coverage gap = rules we couldn't measure (errored + never-run) over the
+        # measurable universe. Not-applicable (skipped) rules are excluded — they
+        # can't be hardened, so they neither help nor hurt.
+        measurable = passed + failed + errored + never_scanned
+        coverage_penalty = (never_scanned + errored) / measurable if measurable else 0.0
         score = 0.8 * scanned_gap + 0.2 * coverage_penalty
 
     return {
         "score": round(score, 4), "known": True,
-        "passed": passed, "failed": failed, "errored": errored,
+        "passed": passed, "failed": failed, "errored": errored, "skipped": skipped,
         "never_scanned": never_scanned, "total": total, "pass_rate": pass_rate,
     }
 
@@ -822,7 +843,7 @@ def _easm_cve_counts(asset: ITAsset, ep: Dict[str, Any], db=None) -> Tuple[int, 
         return cve, kev
 
 
-def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str, Any]:
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Risk posture for an EXTERNAL asset. Health is an input, not the inverse."""
     health = ep.get("health") or {}
     hscore = health.get("score")
@@ -876,6 +897,19 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str,
         components["business"] = {
             "score": round(biz, 4), "weight": 0.15, "known": True,
             "label": _EASM_RISK_LABELS["business"], "detail": detail,
+        }
+
+    if sub_rollup and sub_rollup.get("weakest_score") is not None:
+        # Subdomains as a REAL weighted component — the ring, the rows and the
+        # total all reconcile, and the domain's children visibly move the score.
+        components["subdomains"] = {
+            "score": round(float(sub_rollup["weakest_score"]) / 100.0, 4),
+            "weight": 0.25, "known": True,
+            "label": "Subdomain exposure",
+            "detail": (
+                f"{sub_rollup['count']} subdomains · worst {sub_rollup['weakest']} "
+                f"({sub_rollup['weakest_score']}) · {sub_rollup['total_cve']} findings across the domain"
+            ),
         }
 
     weights = {k: c["weight"] for k, c in components.items()}
@@ -936,6 +970,84 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str,
     }
 
 
+def _external_subdomain_ids(db, tenant_id: int, parent_id: int) -> List[int]:
+    """IDs of the assets linked to this parent by a DNS `subdomain_of` edge."""
+    from grc.models import AssetRelationship
+    rows = (
+        db.query(AssetRelationship.source_asset_id)
+        .filter(
+            AssetRelationship.tenant_id == tenant_id,
+            AssetRelationship.target_asset_id == parent_id,
+            AssetRelationship.relationship_type == "subdomain_of",
+        )
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _external_subdomain_rollup(db, tenant_id: int, parent: ITAsset) -> Optional[Dict[str, Any]]:
+    """Domain rollup for a parent domain (e.g. liztek.ca): worst subdomain score
+    + findings summed across the whole domain (parent + subs).
+
+    Fed into _compute_easm_risk as a real weighted component ("Subdomain
+    exposure"), so the parent's ring, breakdown rows and total all reconcile —
+    subdomains visibly move the score instead of overriding it. Each subdomain
+    keeps its own score. Cost is flat regardless of subdomain count: subs are
+    loaded once, finding-counts come from two grouped queries, and each sub's
+    score is computed with db=None (no per-subdomain query).
+    """
+    if db is None:
+        return None
+    sub_ids = _external_subdomain_ids(db, tenant_id, parent.id)
+    if not sub_ids:
+        return None  # leaf asset / no children
+
+    subs = db.query(ITAsset).filter(
+        ITAsset.id.in_(sub_ids), ITAsset.tenant_id == tenant_id,
+    ).all()
+    all_ids = [parent.id] + [s.id for s in subs]
+
+    from grc.models import Vulnerability, VulnerabilityAssetLink
+    cve_by = dict(
+        db.query(VulnerabilityAssetLink.asset_id, func.count())
+        .filter(VulnerabilityAssetLink.asset_id.in_(all_ids))
+        .group_by(VulnerabilityAssetLink.asset_id).all()
+    )
+    kev_by = dict(
+        db.query(VulnerabilityAssetLink.asset_id, func.count())
+        .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
+        .filter(
+            VulnerabilityAssetLink.asset_id.in_(all_ids),
+            Vulnerability.kev_flag.is_(True),
+        )
+        .group_by(VulnerabilityAssetLink.asset_id).all()
+    )
+
+    worst_score, worst_name, probed = -1.0, None, 0
+    total_cve = int(cve_by.get(parent.id, 0))
+    total_kev = int(kev_by.get(parent.id, 0))
+
+    for s in subs:
+        pp = getattr(s, "platform_properties", None)
+        ep = dict((pp.get("external_probe") or {}) if isinstance(pp, dict) else {})
+        ep["cve_count"] = int(cve_by.get(s.id, 0))
+        ep["kev_count"] = int(kev_by.get(s.id, 0))
+        total_cve += ep["cve_count"]
+        total_kev += ep["kev_count"]
+        sc = _compute_easm_risk(s, ep, db=None).get("score")
+        if isinstance(sc, (int, float)):
+            probed += 1
+            if sc > worst_score:
+                worst_score, worst_name = float(sc), s.name
+
+    return {
+        "count": len(subs), "probed": probed,
+        "weakest": worst_name,
+        "weakest_score": round(worst_score, 1) if worst_score >= 0 else None,
+        "total_cve": total_cve, "total_kev": total_kev,
+    }
+
+
 # ─── Public API ─────────────────────────────────────────────────────────────
 
 def compute_asset_risk(
@@ -958,7 +1070,12 @@ def compute_asset_risk(
     _pp = getattr(asset, "platform_properties", None)
     _ep = _pp.get("external_probe") if isinstance(_pp, dict) else None
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
-        return _compute_easm_risk(asset, _ep or {}, db=db)
+        # Subdomains feed the parent as a weighted "Subdomain exposure" component.
+        roll = _external_subdomain_rollup(db, tenant_id, asset)
+        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll)
+        if roll:
+            res["subdomain_rollup"] = roll
+        return res
 
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),

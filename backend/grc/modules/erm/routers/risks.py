@@ -1,4 +1,6 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import is_restricted_control
+from ....services.ai_gateway.field_policies import ai_view
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
@@ -25,7 +27,7 @@ from ....models import (
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
     Team, BusinessUnit, Vendor,
-    InternalControl, CertificationJourney, ControlObjective, FrameworkDomain,
+    InternalControl, InternalControlRiskLink, CertificationJourney, ControlObjective, FrameworkDomain,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -35,7 +37,7 @@ from ....schemas import (
     RiskDetailResponse, RiskHeatmapData, MessageResponse,
     RiskMitigationActionCreate, RiskMitigationActionResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ..schema_migrations import ensure_register_labels
 
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
@@ -985,6 +987,30 @@ def _attach_source_labels(db: Session, risks: List[Risk]) -> None:
         r.source_label = f"{name} · finding" if tail.startswith("tpra_finding") else name
 
 
+RISK_PRIORITIES = ("critical", "high", "medium", "low")
+
+
+def _clean_priority(value: Optional[str]) -> Optional[str]:
+    """The priority a person set, lower case; empty or "auto" means "from the score" (stored as null)."""
+    text = (value or "").strip().lower()
+    if text in ("", "auto"):
+        return None
+    if text not in RISK_PRIORITIES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Priority must be one of: auto, {', '.join(RISK_PRIORITIES)}")
+    return text
+
+
+def _attach_sla(db: Session, risks: List[Risk]) -> None:
+    """Where each risk stands against the tenant's Risk Register SLA (Settings tab): the SLA follows the risk's
+    effective priority. Sets a transient `sla` attribute read by RiskResponse."""
+    from ....services.module_settings import get_settings, sla_state
+    settings = {tid: get_settings(db, tid, "risks") for tid in {r.tenant_id for r in risks}}
+    for r in risks:
+        r.sla = sla_state(settings[r.tenant_id], status=r.status, due_date=r.due_date,
+                          priority=r.effective_priority, opened_at=r.created_at)
+
+
 @router.get("", response_model=List[RiskResponse])
 def list_risks(
     tenant_id: Optional[int] = None,
@@ -1059,6 +1085,7 @@ def list_risks(
     
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
     _attach_source_labels(db, risks)
+    _attach_sla(db, risks)
     return risks
 
 
@@ -1123,9 +1150,16 @@ def create_risk(
         tenant_id=tenant_id,
         db=db,
     )
+    try:
+        from ....services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "risks", risk.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    refuse_imported_accounts(db, [risk.owner_id, risk.business_owner_id])
 
     db_risk = Risk(
         tenant_id=tenant_id,
+        custom_values=custom_values,
         title=risk.title,
         description=risk.description,
         category=resolved_category,
@@ -1146,6 +1180,7 @@ def create_risk(
         residual_score=residual_score,
         risk_appetite=risk.risk_appetite,
         status=risk.status or "open",
+        priority=_clean_priority(risk.priority),
         treatment_plan=risk.treatment_plan,
         root_cause=getattr(risk, "root_cause", None),
         consequences=getattr(risk, "consequences", None),
@@ -1475,13 +1510,43 @@ def get_risk_detail(
         )
     
     linked_controls = []
+    from grc.modules.scf.risk_links import control_status_indicator
     for link in risk.control_links:
         if link.normalized_control:
+            nc = link.normalized_control
             linked_controls.append({
                 "id": link.id,
-                "control_id": link.normalized_control.id,
-                "code": link.normalized_control.code,
-                "name": link.normalized_control.name
+                "control_id": nc.id,
+                "code": nc.code,
+                "name": nc.name,
+                "scf_id": nc.scf_id,
+                "source": nc.source,
+                "custom": nc.source == "custom",
+                "control_status": control_status_indicator(db, nc, tenant_id=risk.tenant_id),
+                # Decision 4: indicator only — residual is NOT auto-updated
+                "control_status_indicator": True,
+            })
+
+    linked_internal_controls = []
+    internal_links = (
+        db.query(InternalControlRiskLink)
+        .join(InternalControl, InternalControl.id == InternalControlRiskLink.control_id)
+        .filter(
+            InternalControlRiskLink.risk_id == risk_id,
+            InternalControl.tenant_id.in_(user_tenants),
+        )
+        .all()
+    )
+    for link in internal_links:
+        ctrl = link.control
+        if ctrl:
+            linked_internal_controls.append({
+                "id": ctrl.id,
+                "name": ctrl.name,
+                "title": ctrl.name,
+                "status": ctrl.status,
+                "link_id": link.id,
+                "control_id": ctrl.control_id,
             })
     
     linked_framework_controls = []
@@ -1496,6 +1561,9 @@ def get_risk_detail(
                 "notes": link.notes
             })
     
+    from ..services.risk_framework_requirements import serialize_links as _requirement_links
+    linked_framework_requirements = _requirement_links(risk)
+
     linked_assets = []
     for link in risk.asset_links:
         if link.asset:
@@ -1552,7 +1620,9 @@ def get_risk_detail(
         "created_at": risk.created_at.isoformat(),
         "updated_at": risk.updated_at.isoformat(),
         "linked_controls": linked_controls,
+        "linked_internal_controls": linked_internal_controls,
         "linked_framework_controls": linked_framework_controls,
+        "linked_framework_requirements": linked_framework_requirements,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,
         "linked_governance": linked_governance
@@ -1630,6 +1700,8 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("business_owner_id")],
+                             kept=[risk.owner_id, risk.business_owner_id])
     target_register_type = update_data.get("register_type", risk.register_type)
     is_target_ubl = is_ubl_template_register_type(target_register_type)
 
@@ -1667,6 +1739,16 @@ def update_risk(
             update_data.get("risk_category", risk.risk_category)
         )
         update_data["risk_category"] = update_data["category"]
+
+    if "custom_values" in update_data:
+        try:
+            from ....services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, risk.tenant_id, "risks", update_data["custom_values"], risk.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if "priority" in update_data:
+        update_data["priority"] = _clean_priority(update_data["priority"])
 
     # team_id is a transient mapping field — resolve it to a real
     # business_unit_id and don't try to setattr it onto the ORM model
@@ -2889,6 +2971,7 @@ def create_risk_mitigation_action(
     risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
     if not risk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    refuse_imported_accounts(db, [data.owner_id])
     action = RiskMitigationAction(
         risk_id=risk_id,
         title=data.title,
@@ -3035,26 +3118,33 @@ def generate_ai_treatment_plan(
 
     linked_controls = []
     for link in risk.control_links:
-        if link.normalized_control:
-            linked_controls.append(f"{link.normalized_control.code}: {link.normalized_control.name}")
+        nc = link.normalized_control
+        if nc:
+            # An SCF control is named by a placeholder, not skipped: dropping it would
+            # tell the model the risk has no controls and the plan would recommend
+            # building ones that exist. Its name and code are SCF content (CC BY-ND).
+            linked_controls.append(
+                f"Linked control {nc.id} (wording withheld: licensed text)" if is_restricted_control(nc)
+                else f"{nc.code}: {nc.name}")
     for link in risk.framework_control_links:
         if link.framework_control:
             linked_controls.append(f"{link.framework_control.code}: {link.framework_control.name}")
 
     controls_text = "\n".join(f"- {c}" for c in linked_controls) if linked_controls else "No controls currently linked."
 
+    v = ai_view(risk, "erm.risk_treatment_plan")        # what the field policy lets this prompt carry
     prompt = f"""You are an enterprise risk management expert. Generate a detailed, actionable treatment plan for the following risk.
 
-Risk Title: {risk.title}
-Description: {risk.description or 'N/A'}
-Category: {risk.risk_category or risk.category or 'N/A'}
-Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}/5
-Inherent Impact: {risk.inherent_impact or 'N/A'}/5
-Inherent Score: {risk.inherent_score or 'N/A'}
-Residual Likelihood: {risk.residual_likelihood or 'N/A'}/5
-Residual Impact: {risk.residual_impact or 'N/A'}/5
-Residual Score: {risk.residual_score or 'N/A'}
-Current Status: {risk.status or 'N/A'}
+Risk Title: {v['title']}
+Description: {v['description'] or 'N/A'}
+Category: {v['risk_category'] or v['category'] or 'N/A'}
+Inherent Likelihood: {v['inherent_likelihood'] or 'N/A'}/5
+Inherent Impact: {v['inherent_impact'] or 'N/A'}/5
+Inherent Score: {v['inherent_score'] or 'N/A'}
+Residual Likelihood: {v['residual_likelihood'] or 'N/A'}/5
+Residual Impact: {v['residual_impact'] or 'N/A'}/5
+Residual Score: {v['residual_score'] or 'N/A'}
+Current Status: {v['status'] or 'N/A'}
 
 Linked Controls:
 {controls_text}

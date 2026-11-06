@@ -6,7 +6,7 @@ from ._05_vulnerability_management_schemas import *  # noqa: F401,F403
 
 class GRCDepartmentCreate(BaseModel):
     name: str
-    code: str
+    code: Optional[str] = None      # made from the name when left out (services/org_departments.unique_code)
     description: Optional[str] = None
     parent_department_id: Optional[int] = None
     department_head_user_id: Optional[int] = None

@@ -46,6 +46,7 @@ import {
   GovernanceDashboard,
   AssetType,
 } from '@/types';
+import type { ExceptionRule, PreviewAnswer, RulePayload, RulesAnswer, TypesAnswer } from './exceptionRules';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
@@ -267,6 +268,13 @@ export const risksApi = {
   updateTreatment: (id: number, plan: string) => apiClient.post(`/risks/${id}/treatment`, { treatment_plan: plan }),
   linkFrameworkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-framework-control`, data),
   unlinkFrameworkControl: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-framework-control/${linkId}`),
+  // Controls of the frameworks this organisation has installed (UAE IA, ...): the register's Controls tab and the Risk Library link to these.
+  requirementFrameworks: () => apiClient.get<{ items: Array<{ id: number; name: string; slug: string | null; version: string | null; controls: number }> }>('/erm/framework-requirements/frameworks'),
+  searchRequirements: (params: { framework_id: number; q?: string; skip?: number; limit?: number }) =>
+    apiClient.get<{ items: Array<{ id: number; code: string; title: string; domain: string | null; category: string | null; priority_level: string | null; is_mandatory: boolean }>; total: number }>('/erm/framework-requirements', { params }),
+  linkRequirements: (id: number, data: { framework_id: number; control_ids: number[]; mitigation_effectiveness: string; notes?: string }) =>
+    apiClient.post(`/erm/risks/${id}/framework-requirements`, data),
+  unlinkRequirement: (id: number, linkId: number) => apiClient.delete(`/erm/risks/${id}/framework-requirements/${linkId}`),
   linkGovernance: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/link-governance`, data),
   unlinkGovernance: (id: number, linkId: number) => apiClient.delete(`/risks/${id}/link-governance/${linkId}`),
   linkControl: (id: number, data: Record<string, unknown>) => apiClient.post(`/risks/${id}/controls`, data),
@@ -285,6 +293,15 @@ export const risksApi = {
   },
 };
 
+/** A document as GET /governance/documents/{id} serves it. While a new version of a published document is on its way, the published
+ *  one stays in force: `version_in_force` and `in_force_version_id` name it (for everyone); someone who reads that one gets its text,
+ *  file and number, and `newer_version` names the version on its way. */
+export type ServedDocument = GovernanceDocument & {
+  version_in_force?: string | null;
+  in_force_version_id?: number | null;
+  newer_version?: { number: string; status: string } | null;
+};
+
 export const governanceApi = {
   getObjectives: () => apiClient.get<GovernanceObjective[]>('/governance/objectives'),
   getObjectiveById: (id: string) => apiClient.get<GovernanceObjective>(`/governance/objectives/${id}`),
@@ -300,9 +317,19 @@ export const governanceApi = {
 
   getDocuments: (params?: { doc_type?: string; status?: string; owner_id?: number; search?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
     apiClient.get<GovernanceDocument[]>('/governance/documents', { params }),
+  /** The documents a picker offers, without their text (`brief=1`; people without a governance right get the ones in force).
+   *  The rows: an array, or `{ items }`. A backend that refuses `brief` (400/422) answers the full list instead. */
+  getDocumentsBrief: async (params?: { sort_by?: string; sort_order?: string; skip?: number; limit?: number }) => {
+    try {
+      return await apiClient.get('/governance/documents', { params: { ...params, brief: 1 } });
+    } catch (e: any) {
+      if (![400, 422].includes(e?.response?.status)) throw e;
+      return apiClient.get('/governance/documents', { params });
+    }
+  },
   getDocumentHierarchy: (params?: { tenant_id?: number; parent_id?: number }) =>
     apiClient.get('/governance/documents/hierarchy', { params }),
-  getDocument: (id: number) => apiClient.get<GovernanceDocument>(`/governance/documents/${id}`),
+  getDocument: (id: number) => apiClient.get<ServedDocument>(`/governance/documents/${id}`),
   createDocument: (data: Partial<GovernanceDocument>) =>
     apiClient.post<GovernanceDocument>('/governance/documents', data),
   updateDocument: (id: number, data: Partial<GovernanceDocument>) =>
@@ -319,8 +346,9 @@ export const governanceApi = {
   // Diff two content versions (version ROW ids) + restore a prior version.
   compareDocumentVersions: (versionAId: number, versionBId: number) =>
     apiClient.get(`/governance/versions/compare/${versionAId}/${versionBId}`),
-  rollbackDocumentVersion: (documentId: number, versionId: number) =>
-    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, {}),
+  // the reason is also the message the owner reads when the restore becomes a proposed change (lib/proposals.ts)
+  rollbackDocumentVersion: (documentId: number, versionId: number, reason?: string) =>
+    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, reason?.trim() ? { rollback_reason: reason.trim(), message: reason.trim() } : {}),
   // Edit document body content with a version snapshot + audit ("why").
   editDocumentContent: (documentId: number, data: { content: string; change_reason?: string }) =>
     apiClient.put(`/governance/documents/${documentId}`, data),
@@ -341,12 +369,26 @@ export const governanceApi = {
   }) => apiClient.put(`/governance/documents/${documentId}/signoff/participants`, data),
   sendDocumentForReview: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/send-for-review`, {}),
-  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string }) =>
+  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string; signature_image?: string; version?: string; round_at?: string | null }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
-  rejectDocumentSignoff: (documentId: number, data: { comment: string }) =>
+  rejectDocumentSignoff: (documentId: number, data: { comment: string; version?: string; round_at?: string | null }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
+  // ── the approval route: its stages, and changes asked for, resubmitted, delegated or withdrawn (governance/routes.py) ──
+  setSignoffRoute: (documentId: number, data: { stages: import('./approvalRoutes').RouteStageIn[] }) =>
+    apiClient.put(`/governance/documents/${documentId}/signoff/route`, data),
+  requestSignoffChanges: (documentId: number, data: { comment: string; version?: string; round_at?: string | null }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/request-changes`, data),
+  resubmitSignoff: (documentId: number, data: { note?: string; major?: boolean }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/resubmit`, data),
+  withdrawSignoff: (documentId: number, data: { reason?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/withdraw`, data),
+  delegateSignoff: (documentId: number, data: { user_id: number; note?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/delegate`, data),
   getMySignoffPending: () =>
     apiClient.get('/governance/documents/signoff/my-pending'),
+  /** who can review or approve a document: people, roles (not connector-made) and teams; anyone signed in may ask */
+  getSignoffTargets: () =>
+    apiClient.get<import('./signoffTargets').SignoffTargets>('/governance/documents/signoff/targets'),
   getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/pending', { params }),
   getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),
@@ -377,41 +419,48 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/upload-file`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  downloadDocumentFile: (documentId: number) =>
+  // The uploaded file as stored. `withRecord`: with the document control pages inserted after the cover (Word, PDF); the header
+  // X-Controlled-Copy says whether that could be done (lib/controlPages.ts).
+  downloadDocumentFile: (documentId: number, opts?: { withRecord?: boolean }) =>
     apiClient.get(`/governance/documents/${documentId}/download-file`, {
       responseType: 'blob',
+      ...(opts?.withRecord ? { params: { with_record: true } } : {}),
     }),
   // Download any document: the uploaded file when present, else a PDF rendered
   // from the document's markdown content. Works for content-only (AI-drafted) docs.
-  exportDocument: (documentId: number) =>
+  // `withRecord`: with the document control pages (a platform document: a PDF with them where its own sections are; Word, PDF: inserted after
+  // the cover); a file type that cannot carry them answers X-Approval-Record: separate (lib/approvalRecord.ts).
+  exportDocument: (documentId: number, opts?: { withRecord?: boolean }) =>
     apiClient.get(`/governance/documents/${documentId}/export`, {
       responseType: 'blob',
+      ...(opts?.withRecord ? { params: { with_record: true } } : {}),
     }),
+  /** A platform document cut where its own sections are, with the pages the platform fills them with (documents/[id]/ControlPages.tsx); `version`: an earlier one ("1.1"). */
+  controlledContent: (documentId: number, version?: string | null) =>
+    apiClient.get<import('./approvalRecord').ControlledContent>(`/governance/documents/${documentId}/controlled-content`, { params: version ? { version } : undefined }),
   parsePolicy: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/parse-policy`, {}, {
       timeout: 900000, // 15 minutes for large document parsing
     }),
   getDocumentPolicyStatements: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/policy-statements`),
-  addStatement: (documentId: number, data: any) => {
-    console.log('[API] addStatement called with:', { documentId, data });
-    return apiClient.post(`/governance/documents/${documentId}/statements`, data).then(res => {
-      console.log('[API] addStatement response:', res);
-      return res;
-    });
-  },
+  addStatement: (documentId: number, data: any) =>
+    apiClient.post(`/governance/documents/${documentId}/statements`, data),
   updateStatement: (documentId: number, statementId: number, data: any) =>
     apiClient.put(`/governance/documents/${documentId}/statements/${statementId}`, data),
-  deleteStatement: (documentId: number, statementId: number) =>
-    apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`),
+  // `reason`: why, for the owner when the removal becomes a proposed change (lib/proposals.ts)
+  deleteStatement: (documentId: number, statementId: number, reason?: string) =>
+    apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`,
+      reason?.trim() ? { data: { change_reason: reason.trim(), message: reason.trim() } } : undefined),
   getDocumentViewHtml: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/view-html`),
   getStatementVersions: (documentId: number, statementId: number) =>
     apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/versions`),
   getStatementDiff: (documentId: number, statementId: number, versionA: number, versionB: number) =>
     apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/diff`, { params: { version_a: versionA, version_b: versionB } }),
-  rollbackStatement: (documentId: number, statementId: number, versionId: number) =>
-    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`, { version_id: versionId }),
+  rollbackStatement: (documentId: number, statementId: number, versionId: number, reason?: string) =>
+    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`,
+      { version_id: versionId, ...(reason?.trim() ? { change_reason: reason.trim(), message: reason.trim() } : {}) }),
   getReparseProposals: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/reparse-proposals`),
   applyReparseProposals: (documentId: number, decisions: Array<{index: number, action: string}>) =>
@@ -444,7 +493,7 @@ export const governanceApi = {
     apiClient.delete(`/governance/workflows/templates/${id}`),
   createWorkflowStep: (templateId: number, data: { name: string; description?: string; sequence: number; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
     apiClient.post(`/governance/workflows/templates/${templateId}/steps`, data),
-  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number }) =>
+  updateWorkflowStep: (templateId: number, stepId: number, data: { name?: string; description?: string; step_type?: string; approval_mode?: string; is_required?: boolean; timeout_days?: number | null }) =>
     apiClient.put(`/governance/workflows/templates/${templateId}/steps/${stepId}`, data),
   deleteWorkflowStep: (templateId: number, stepId: number) =>
     apiClient.delete(`/governance/workflows/templates/${templateId}/steps/${stepId}`),
@@ -458,6 +507,12 @@ export const governanceApi = {
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
   getDocumentMappings: (documentId: number) =>
     apiClient.get(`/governance/mappings/document/${documentId}`),
+  // Map the document's statements against its applicable + linked frameworks and
+  // any others picked on its Mappings tab (kept on the document). Background job.
+  runDocumentMapping: (documentId: number, extraFrameworkIds: number[]) =>
+    apiClient.post(`/governance/mappings/document/${documentId}/run`, { extra_framework_ids: extraFrameworkIds }),
+  getDocumentMappingRunStatus: (documentId: number) =>
+    apiClient.get(`/governance/mappings/document/${documentId}/run-status`),
   // Control coverage of a document vs its applicable frameworks: per-framework
   // mapped / recommended / missing (gap) controls.
   getDocumentCoverage: (documentId: number, frameworkIds?: number[]) =>
@@ -570,7 +625,8 @@ export const governanceApi = {
     apiClient.get(`/governance/gap-analysis/export/${documentId}`, { responseType: 'blob' }),
   updateGapFinding: (findingId: number, data: Record<string, any>) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}`, data),
-  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string }) =>
+  // `message`: why, for the owner when taking an applied fix back out becomes a proposed change (lib/proposals.ts)
+  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string; message?: string }) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}/override`, data),
   acceptGapRisk: (findingId: number, data: { justification: string; expiry_date?: string }) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}/accept-risk`, {
@@ -591,6 +647,8 @@ export const governanceApi = {
       current_text?: string | null;
       section_heading?: string;
       change_reason?: string;
+      /** why, for the owner when the fix becomes a proposed change (lib/proposals.ts) */
+      message?: string;
     }
   ) =>
     apiClient.post(`/governance/gap-analysis/findings/${findingId}/apply-fix`, data),
@@ -643,6 +701,14 @@ export const policyExceptionApi = {
     apiClient.post(`/governance/policy-exceptions/${id}/reject`, data),
   revoke: (id: number, data?: { reason?: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/revoke`, data || {}),
+  // Under an approval rule (Governance > Settings > Exception approvals; exceptionRulesApi below): the person asked at the open step sends it back to
+  // its requester with what has to change; its requester (or someone who may edit exceptions) takes it back to a draft; the ones waiting for me now;
+  // every round of its approval (who decided what at which step).
+  requestChanges: (id: number, data: { comment: string }) =>
+    apiClient.post(`/governance/policy-exceptions/${id}/request-changes`, data),
+  withdraw: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/withdraw`),
+  waitingForMe: () => apiClient.get('/governance/policy-exceptions/waiting-for-me'),
+  getApproval: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/approval`),
   getComments: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/comments`),
   addComment: (id: number, data: { comment: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/comments`, data),
@@ -654,6 +720,21 @@ export const policyExceptionApi = {
   // Real posture-over-time trend from the snapshot history layer.
   getTrend: (metric = 'exception_risk_posture', days = 180) =>
     apiClient.get('/enriched-dashboard/metric-trend', { params: { metric, days } }),
+};
+
+// Governance > Settings > Exception approvals: who reviews and approves a policy exception, per department. Anyone with a governance right reads the
+// rules; writing (and the tester) needs governance:settings:edit. The server's 400 sentences are said as they are. Shapes: lib/exceptionRules.ts.
+export const exceptionRulesApi = {
+  list: () => apiClient.get<RulesAnswer>('/governance/exception-approval-rules'),
+  create: (data: RulePayload) => apiClient.post<ExceptionRule>('/governance/exception-approval-rules', data),
+  update: (id: number, data: RulePayload) => apiClient.put<ExceptionRule>(`/governance/exception-approval-rules/${id}`, data),
+  remove: (id: number) => apiClient.delete<{ message: string; id: number }>(`/governance/exception-approval-rules/${id}`),
+  /** which rule an exception like this would follow, and who each step would ask */
+  preview: (data: { department_id: number | null; priority: string | null; doc_type: string | null; exception_type?: string | null }) =>
+    apiClient.post<PreviewAnswer>('/governance/exception-approval-rules/preview', data),
+  /** the organisation's exception types (anyone signed in reads them; setting them needs governance:settings:edit) */
+  types: () => apiClient.get<TypesAnswer>('/governance/exception-approval-rules/types'),
+  setTypes: (types: Array<{ value?: string; label: string; archived?: boolean }>) => apiClient.put<TypesAnswer>('/governance/exception-approval-rules/types', { types }),
 };
 
 export const documentsApi = {
@@ -1124,6 +1205,11 @@ export const certificationsApi = {
 
   assignControl: (journeyId: number, controlId: number, userIds: number[]) =>
     apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/assign`, {
+      assigned_user_ids: userIds,
+    }),
+  // The owners of one sub-control (a framework with `control_structure`); the code is the sub-control's, e.g. "M1.1.1.2".
+  assignSubControl: (journeyId: number, controlId: number, code: string, userIds: number[]) =>
+    apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/sub-controls/${encodeURIComponent(code)}/assign`, {
       assigned_user_ids: userIds,
     }),
   getTenantUsers: () =>
@@ -2214,13 +2300,17 @@ export const vendorRiskApi = {
     search?: string;
     vendor_type?: string;
     data_access_level?: string;
+    include_archived?: boolean;   // archived suppliers are left out unless asked for
+    include_requests?: boolean;   // so are requests not yet in review, and turned-down ones
     skip?: number;
     limit?: number;
   }) => apiClient.get('/vendor-risk/vendors', { params }),
   createVendor: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/vendors', data),
   getVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}`),
   updateVendor: (vendorId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/vendors/${vendorId}`, data),
+  // Archives the supplier (nothing is deleted); restoreVendor brings it back.
   deleteVendor: (vendorId: number) => apiClient.delete(`/vendor-risk/vendors/${vendorId}`),
+  restoreVendor: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/restore`),
 
   // Assessments
   getAssessments: (params?: {
@@ -2264,11 +2354,48 @@ export const vendorRiskApi = {
     respondent_name?: string;
     respondent_email?: string;
     expires_in_days?: number;
+    due_in_days?: number;
+    certificate_evidence_id?: number;
+    certificate_mode?: 'off' | 'prefill' | 'skip';
   }) => apiClient.post('/vendor-risk/questionnaires/send', data),
   getQuestionnaireResponses: (params?: { vendor_id?: number; assessment_id?: number }) =>
     apiClient.get('/vendor-risk/questionnaire-responses', { params }),
   updateQuestionnaireResponse: (responseId: number, data: { assessment_id?: number }) =>
     apiClient.patch(`/vendor-risk/questionnaire-responses/${responseId}`, data),
+  // Review a submitted questionnaire: per question, then return it or accept it.
+  reviewQuestion: (responseId: number, data: { question_key: string; decision: 'accept' | 'clarify' | 'clear'; note?: string }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/review`, data),
+  returnQuestionnaire: (responseId: number, data?: { due_in_days?: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/return`, data || {}),
+  acceptQuestionnaire: (responseId: number) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/accept`),
+  resendQuestionnaire: (responseId: number, data?: { expires_in_days?: number; due_in_days?: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/resend`, data || {}),
+  // Evidence behind the answers: library records, attached once, reviewed against each question.
+  questionnaireEvidence: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/evidence`),
+  searchEvidenceLibrary: (responseId: number, search: string) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/library`, { params: { search } }),
+  attachQuestionEvidence: (responseId: number, data: { question_key: string; evidence_id: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/evidence`, data),
+  detachQuestionEvidence: (responseId: number, linkId: number) =>
+    apiClient.delete(`/vendor-risk/questionnaire-responses/${responseId}/evidence/${linkId}`),
+  // Offline: the questionnaire as a workbook, and a completed one back in.
+  downloadQuestionnaireWorkbook: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/workbook`, { responseType: 'blob' }),
+  downloadQuestionnairePdf: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/pdf`, { responseType: 'blob' }),
+  importQuestionnaireWorkbook: (responseId: number, file: File, submit: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('submit', submit ? 'true' : 'false');
+    return apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/workbook`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // In-date evidence held for a vendor that can answer questions for it.
+  vendorCertificates: (vendorId: number) =>
+    apiClient.get('/vendor-risk/questionnaires/certificates', { params: { vendor_id: vendorId } }),
 
   // ── TPRA 8-stage lifecycle ──
   getLifecycleStages: () => apiClient.get('/vendor-risk/lifecycle/stages'),
@@ -2299,6 +2426,14 @@ export const vendorRiskApi = {
 // ── TPRA productionized 11-stage lifecycle (normalized) ──────────────────────
 // Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
 // methods above so the new lifecycle UI has a clean, grouped client surface.
+export interface ReportRequest {
+  kind: 'committee_pack' | 'register' | 'vendor_file' | 'ratings_quarter' | 'vendor_summary';
+  period_start?: string;
+  period_end?: string;
+  vendor_id?: number;
+  narrative?: string[];
+}
+
 export const tpraApi = {
   // Program dashboard + analytics
   dashboard: (scope: 'portfolio' | 'mine' = 'portfolio') =>
@@ -2317,8 +2452,11 @@ export const tpraApi = {
   // Lifecycle
   getStages: () => apiClient.get('/vendor-risk/tpra/stages'),
   getBoard: () => apiClient.get('/vendor-risk/tpra/board'),
-  getLifecycle: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`),
-  initLifecycle: (vendorId: number) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, {}),
+  // engagementId: one engagement's lifecycle; omitted, the supplier's General one.
+  getLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`, { params: engagementId ? { engagement_id: engagementId } : {} }),
+  initLifecycle: (vendorId: number, engagementId?: number | null) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, engagementId ? { engagement_id: engagementId } : {}),
   listAssessmentVersions: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/assessments`),
   advance: (assessmentId: number, data?: { note?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/advance`, data || {}),
@@ -2332,7 +2470,7 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-tiering`, data || {}),
   runScoring: (assessmentId: number) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-scoring`, {}),
-  reassess: (vendorId: number, data: { reason: string; assessment_type?: string }) =>
+  reassess: (vendorId: number, data: { reason: string; assessment_type?: string; engagement_id?: number | null }) =>
     apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/reassess`, data),
 
   // Findings + remediation + acceptance
@@ -2367,9 +2505,16 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/upload`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string }) =>
+  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string; requirement?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/link`, data),
   unlinkEvidence: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/evidence-links/${linkId}`),
+  // Stage 4: what the vendor's tier asks for, overriding the tier, tagging evidence.
+  tierRequirements: (assessmentId: number) =>
+    apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/tier-requirements`),
+  overrideTier: (assessmentId: number, data: { tier: string; justification: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/tier-override`, data),
+  tagEvidence: (linkId: number, requirement: string | null) =>
+    apiClient.patch(`/vendor-risk/tpra/evidence-links/${linkId}`, { requirement }),
 
   // Contracts + obligations
   listContracts: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/contracts`),
@@ -2387,7 +2532,11 @@ export const tpraApi = {
 
   // Approvals (append-only)
   listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
-  createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
+  listApprovers: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvers`),
+  createApproval: (assessmentId: number, data: {
+    decision: string; rationale?: string;
+    conditions?: Array<string | { text: string; owner_id?: number | null; due_date?: string | null }>;
+  }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
   resolveCondition: (approvalId: number, conditionId: string, data: { status?: 'open' | 'closed'; owner_id?: number; due_date?: string }) =>
     apiClient.patch(`/vendor-risk/tpra/approvals/${approvalId}/conditions/${conditionId}`, data),
@@ -2411,11 +2560,26 @@ export const tpraApi = {
     apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
   // Admin / Settings — program config (tiering weights, thresholds, cadence)
   getConfig: () => apiClient.get('/vendor-risk/tpra/config'),
-  saveConfig: (data: { weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number> }) =>
+  configDirectory: () => apiClient.get('/vendor-risk/tpra/config/directory'),
+  saveConfig: (data: {
+    weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
+    reminder_policy?: object; scoring_policy?: { partial_credit: number }; tier_policy?: object;
+    monitoring_policy?: { adverse_media?: boolean; outside_in?: boolean }; quantification?: object;
+  }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>
     apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/audit`, { params: { limit } }),
   getCoverage: () => apiClient.get('/vendor-risk/tpra/coverage'),
+  // Attention queue — what needs somebody today, computed from current data
+  attention: (params?: { scope?: 'portfolio' | 'mine'; view?: 'open' | 'snoozed' | 'closed' }) =>
+    apiClient.get('/vendor-risk/tpra/attention', { params: params || {} }),
+  attentionHistory: (item: { condition: string; record_type: string; record_id: number }) =>
+    apiClient.get('/vendor-risk/tpra/attention/history', { params: item }),
+  attentionAct: (data: {
+    condition: string; record_type: string; record_id: number;
+    action: 'note' | 'assign' | 'snooze' | 'unsnooze' | 'close' | 'reopen';
+    text?: string; until?: string; assignee_id?: number | null;
+  }) => apiClient.post('/vendor-risk/tpra/attention/act', data),
 
   // Monitoring signals
   listSignals: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/signals`),
@@ -2424,6 +2588,190 @@ export const tpraApi = {
   updateSignal: (signalId: number, data: Record<string, unknown>) =>
     apiClient.put(`/vendor-risk/tpra/signals/${signalId}`, data),
   deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
+  // Stage 5: outside-in monitoring — a signal as a finding, ruling one out, feeds, ratings.
+  raiseSignalFinding: (signalId: number) => apiClient.post(`/vendor-risk/tpra/signals/${signalId}/raise-finding`),
+  rejectSignal: (signalId: number, reason?: string) =>
+    apiClient.post(`/vendor-risk/tpra/signals/${signalId}/reject`, { reason }),
+  monitoringProviders: () => apiClient.get('/vendor-risk/tpra/monitoring/providers'),
+  // Stage 6: the vendor graph — what depends on a vendor, fourth parties, concentration.
+  vendorImpact: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/impact`),
+  linkTargets: (type: 'asset' | 'bia_process', search: string) =>
+    apiClient.get('/vendor-risk/tpra/link-targets', { params: { type, search } }),
+  addVendorLinks: (vendorId: number, data: { target_type: 'asset' | 'bia_process'; target_ids: number[]; relation?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/links`, data),
+  removeVendorLink: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/vendor-links/${linkId}`),
+  addFourthParty: (vendorId: number, data: { name: string; service?: string; data_shared?: string[]; location?: string; critical?: boolean }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/fourth-parties`, data),
+  removeFourthParty: (id: number) => apiClient.delete(`/vendor-risk/tpra/fourth-parties/${id}`),
+  watchProduct: (vendorId: number, data: { name: string; cpe_vendor?: string; cpe_product?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/products`, data),
+  unwatchProduct: (id: number) => apiClient.delete(`/vendor-risk/tpra/vendor-products/${id}`),
+  concentration: (minVendors = 2) => apiClient.get('/vendor-risk/tpra/concentration', { params: { min_vendors: minVendors } }),
+  sharedVulnerabilities: (days = 90) => apiClient.get('/vendor-risk/tpra/concentration/vulnerabilities', { params: { days } }),
+  platformAliases: () => apiClient.get('/vendor-risk/tpra/platform-aliases'),
+  addPlatformAlias: (data: { alias: string; platform?: string; excluded?: boolean }) =>
+    apiClient.post('/vendor-risk/tpra/platform-aliases', data),
+  removePlatformAlias: (id: number) => apiClient.delete(`/vendor-risk/tpra/platform-aliases/${id}`),
+  reportMeasures: (days = 365) => apiClient.get('/vendor-risk/tpra/reports/measures', { params: { days } }),
+  previewReport: (params: ReportRequest) => apiClient.get('/vendor-risk/tpra/reports/preview', { params }),
+  listReports: () => apiClient.get('/vendor-risk/tpra/reports'),
+  createReport: (data: ReportRequest) => apiClient.post('/vendor-risk/tpra/reports', data),
+  getReport: (id: number) => apiClient.get(`/vendor-risk/tpra/reports/${id}`),
+  approveReport: (id: number) => apiClient.post(`/vendor-risk/tpra/reports/${id}/approve`),
+  deleteReport: (id: number) => apiClient.delete(`/vendor-risk/tpra/reports/${id}`),
+  shareReport: (id: number, days: number) => apiClient.post(`/vendor-risk/tpra/reports/${id}/share`, { days }),
+  revokeReportShare: (id: number) => apiClient.delete(`/vendor-risk/tpra/reports/${id}/share`),
+  examinerReport: (token: string) => apiClient.get(`/vendor-risk/tpra/examiner/${encodeURIComponent(token)}`),
+  vendorExposure: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/exposure`),
+  portfolioExposure: (top = 10) => apiClient.get('/vendor-risk/tpra/exposure', { params: { top } }),
+  quantificationHistory: () => apiClient.get('/vendor-risk/tpra/quantification/history'),
+  shadowSuppliers: (limit = 100) => apiClient.get('/vendor-risk/tpra/shadow-suppliers', { params: { limit } }),
+  vendorRatings: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/ratings`),
+  importRatings: (form: FormData) => apiClient.post('/vendor-risk/tpra/ratings/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+};
+
+// ── Onboarding requests, procurement's view and bulk vendor import (tpra/onboarding.py).
+export interface IntakeBody {
+  vendor?: Record<string, unknown>;
+  answers?: Record<string, unknown>;
+  justifications?: Record<string, string>;
+}
+
+export const vendorOnboardingApi = {
+  questions: () => apiClient.get('/vendor-risk/intake/questions'),
+  people: () => apiClient.get('/vendor-risk/intake/people'),
+  preview: (answers: Record<string, unknown>) => apiClient.post('/vendor-risk/intake/preview', { answers }),
+  requests: (params?: { status?: string; scope?: 'all' | 'mine'; search?: string }) =>
+    apiClient.get('/vendor-risk/intake/requests', { params: params || {} }),
+  createRequest: (data: { name: string; website?: string }) => apiClient.post('/vendor-risk/intake/requests', data),
+  intake: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/intake`),
+  saveIntake: (vendorId: number, body: IntakeBody) => apiClient.put(`/vendor-risk/vendors/${vendorId}/intake`, body),
+  submit: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/submit`),
+  startReview: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/review`),
+  reject: (vendorId: number, reason: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/reject`, { reason }),
+  sendBack: (vendorId: number, reason: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/return`, { reason }),
+  procurement: () => apiClient.get('/vendor-risk/intake/procurement'),
+  importTemplate: () => apiClient.get('/vendor-risk/vendors/import/template', { responseType: 'blob' }),
+  importVendors: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post('/vendor-risk/vendors/import', form, {
+      params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // Yearly stakeholder check-ins (tpra/checkins.py).
+  checkins: (params?: { scope?: 'all' | 'mine'; search?: string }) =>
+    apiClient.get('/vendor-risk/checkins', { params: params || {} }),
+  checkinHistory: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/checkins`),
+  checkIn: (vendorId: number, data: {
+    still_owner: boolean; new_owner_id?: number | null; changed: boolean; change_notes?: string;
+    contact_current: boolean;
+    contact?: { primary_contact_name?: string; primary_contact_email?: string; primary_contact_phone?: string };
+  }) => apiClient.post(`/vendor-risk/vendors/${vendorId}/checkins`, data),
+};
+
+// Every supplier contract, the ones needing a decision first (tpra/contracts.py).
+// Create/update/delete and obligations stay on the lifecycle routes.
+export const vendorContractsApi = {
+  list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/contracts', { params: params || {} }),
+  get: (id: number) => apiClient.get(`/vendor-risk/contracts/${id}`),
+  create: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/contracts`, data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/tpra/contracts/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/vendor-risk/tpra/contracts/${id}`),
+  renew: (id: number, data: { renewal_date?: string; expiry_date?: string; annual_value?: number; note?: string }) =>
+    apiClient.post(`/vendor-risk/contracts/${id}/renew`, data),
+  attachFile: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(`/vendor-risk/contracts/${id}/file`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  readTerms: (id: number) => apiClient.post(`/vendor-risk/contracts/${id}/read-terms`, {}, { timeout: 180000 }),
+};
+
+// Each supplier's websites and domains as the internet sees them (tpra/outside_in.py).
+export const vendorSecurityApi = {
+  portfolio: () => apiClient.get('/vendor-risk/outside-in'),
+  vendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/outside-in`),
+  scan: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/outside-in/scan`),
+  setDomains: (vendorId: number, domains: string[]) => apiClient.put(`/vendor-risk/vendors/${vendorId}/domains`, { domains }),
+  waive: (vendorId: number, data: { finding_key: string; host?: string | null; reason: string; expires_on: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/outside-in/waivers`, data),
+  revokeWaiver: (waiverId: number) => apiClient.delete(`/vendor-risk/outside-in/waivers/${waiverId}`),
+};
+
+// Which suppliers run what, and which show a vulnerability (tpra/technology.py).
+export const vendorTechApi = {
+  catalogue: (params?: { q?: string; category?: string }) => apiClient.get('/vendor-risk/technologies', { params: params || {} }),
+  whoRuns: (name: string) => apiClient.get('/vendor-risk/technologies/vendors', { params: { name } }),
+  whoShows: (id: string) => apiClient.get('/vendor-risk/technologies/cve', { params: { id } }),
+};
+
+// Breach, adverse-media and vulnerability alerts worked like cases (tpra/alerts.py).
+export const vendorAlertsApi = {
+  board: (params?: { status?: string; type?: string }) => apiClient.get('/vendor-risk/alerts', { params: params || {} }),
+  get: (id: number) => apiClient.get(`/vendor-risk/alerts/${id}`),
+  move: (id: number, data: { status: string; note?: string; raise_finding?: boolean }) =>
+    apiClient.post(`/vendor-risk/alerts/${id}/move`, data),
+  research: (id: number) => apiClient.post(`/vendor-risk/alerts/${id}/research`, {}, { timeout: 180000 }),
+};
+
+// Software in use that no one has assessed (tpra/shadow_saas.py).
+// Our own domains in public code, and EU VAT numbers checked with VIES (tpra/leaks.py, tpra/vat.py).
+export const vendorLeaksApi = {
+  own: () => apiClient.get('/vendor-risk/leaks/own'),
+  decide: (id: number, data: { status: 'new' | 'confirmed' | 'dismissed'; note?: string }) =>
+    apiClient.post(`/vendor-risk/leaks/own/${id}`, data),
+  checkVat: (vendorId: number, vatNumber: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/vat`, { vat_number: vatNumber }, { timeout: 30000 }),
+};
+
+// FAIR analyses of supplier loss scenarios (tpra/fair.py).
+export const vendorFairApi = {
+  list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/fair', { params: params || {} }),
+  overview: () => apiClient.get('/vendor-risk/fair/overview'),
+  writeUp: (id: number) => apiClient.post(`/vendor-risk/fair/${id}/write-up`),
+  prefill: (vendorId: number, effect: string) => apiClient.get(`/vendor-risk/vendors/${vendorId}/fair/prefill`, { params: { effect } }),
+  create: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/fair', data),
+  get: (id: number) => apiClient.get(`/vendor-risk/fair/${id}`),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/fair/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/vendor-risk/fair/${id}`),
+  exportOne: (id: number) => apiClient.get(`/vendor-risk/fair/${id}/export.csv`, { responseType: 'blob' }),
+  exportAll: () => apiClient.get('/vendor-risk/fair/export.csv', { responseType: 'blob' }),
+  template: () => apiClient.get('/vendor-risk/fair/import/template', { responseType: 'blob' }),
+  importFile: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post('/vendor-risk/fair/import', form, { params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+};
+
+// A supplier on a few printable pages, with its NIST CSF 2.0 profile (tpra/summary.py).
+export const vendorSummaryApi = {
+  get: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/summary`),
+  narrative: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/summary/narrative`, {}, { timeout: 180000 }),
+};
+
+// The emails third-party risk sends, in the tenant's own words (tpra/emails.py).
+export const vendorEmailsApi = {
+  list: () => apiClient.get('/vendor-risk/email-templates'),
+  preview: (key: string, data: { subject: string; body: string }) => apiClient.post(`/vendor-risk/email-templates/${key}/preview`, data),
+  save: (key: string, data: { subject: string; body: string }) => apiClient.put(`/vendor-risk/email-templates/${key}`, data),
+  reset: (key: string) => apiClient.delete(`/vendor-risk/email-templates/${key}`),
+  test: (key: string) => apiClient.post(`/vendor-risk/email-templates/${key}/test`),
+};
+
+// A supplier's action plan: dated to-dos, and planned sends, check-ins and reassessments (tpra/action_plans.py).
+export const vendorActionsApi = {
+  forVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/actions`),
+  all: (params?: { scope?: 'all' | 'mine'; state?: 'open' | 'due' | 'failed' | 'done' | 'all' }) =>
+    apiClient.get('/vendor-risk/actions', { params: params || {} }),
+  plan: (vendorId: number, data: Record<string, unknown>) => apiClient.post(`/vendor-risk/vendors/${vendorId}/actions`, data),
+  change: (id: number, data: Record<string, unknown>) => apiClient.patch(`/vendor-risk/actions/${id}`, data),
 };
 
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
@@ -2434,6 +2782,8 @@ export const artifactsApi = {
   get: (id: number) => apiClient.get(`/artifacts/${id}`),
   create: (data: Record<string, unknown>) => apiClient.post('/artifacts', data),
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/artifacts/${id}`, data),
+  assign: (id: number, userId: number) =>
+    apiClient.post(`/artifacts/${id}/assign`, null, { params: { user_id: userId } }),
   remove: (id: number) => apiClient.delete(`/artifacts/${id}`),
   export: (id: number, fmt: string) => apiClient.get(`/artifacts/${id}/export`, { params: { fmt }, responseType: 'blob' }),
   catalogContent: (artifactId: string, frameworkKey: string) =>
@@ -2456,75 +2806,6 @@ export const aiRecommendationsApi = {
     model?: string;
   }) => apiClient.post('/ai-recommendations', data),
   remove: (id: number) => apiClient.delete(`/ai-recommendations/${id}`),
-};
-
-export const frameworkUploadApi = {
-  uploadFramework: (formData: FormData) => 
-    apiClient.post('/framework-upload/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
-  getFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
-    apiClient.get('/framework-upload/upload', { params }),
-  getFramework: (id: number) => 
-    apiClient.get(`/framework-upload/upload/${id}`),
-  deleteFramework: (id: number) => 
-    apiClient.delete(`/framework-upload/upload/${id}`),
-  extractText: (id: number) => 
-    apiClient.post(`/framework-upload/upload/${id}/extract-text`),
-  parseFramework: (id: number) => 
-    apiClient.post(`/framework-upload/parser/${id}/parse`),
-  getParsedControls: (frameworkId: number, params?: { status?: string; category?: string; search?: string; skip?: number; limit?: number }) => 
-    apiClient.get(`/framework-upload/parser/${frameworkId}/controls`, { params }),
-  updateControl: (id: number, data: Record<string, unknown>) => 
-    apiClient.put(`/framework-upload/parser/controls/${id}`, data),
-  verifyControl: (id: number) => 
-    apiClient.post(`/framework-upload/parser/controls/${id}/verify`),
-  analyzeAlignment: (frameworkId: number) => 
-    apiClient.post(`/framework-upload/alignment/${frameworkId}/analyze`),
-  getAlignments: (frameworkId: number, params?: { alignment_type?: string; is_verified?: boolean; skip?: number; limit?: number }) => 
-    apiClient.get(`/framework-upload/alignment/${frameworkId}`, { params }),
-  getAlignmentSummary: (frameworkId: number) => 
-    apiClient.get(`/framework-upload/alignment/summary/${frameworkId}`),
-  confirmAlignment: (alignmentId: number) => 
-    apiClient.post(`/framework-upload/alignment/${alignmentId}/confirm`),
-  updateAlignment: (alignmentId: number, data: { alignment_type?: string; normalized_control_id?: number; framework_control_id?: number; match_reason?: string }) => 
-    apiClient.put(`/framework-upload/alignment/${alignmentId}`, data),
-  createNewControls: (frameworkId: number) => 
-    apiClient.post(`/framework-upload/alignment/${frameworkId}/create-new-controls`),
-  listFrameworks: (params?: { status?: string; search?: string; skip?: number; limit?: number }) => 
-    apiClient.get('/framework-upload/upload', { params }),
-  createAssessment: (data: { uploaded_framework_id: number; name: string; description?: string; target_completion_date?: string }) => 
-    apiClient.post('/framework-upload/assessment', data),
-  getAssessments: (params?: { uploaded_framework_id?: number; status?: string; skip?: number; limit?: number }) => 
-    apiClient.get('/framework-upload/assessment', { params }),
-  getAssessment: (id: number) => 
-    apiClient.get(`/framework-upload/assessment/${id}`),
-  getAssessmentItems: (assessmentId: number, params?: { status?: string; skip?: number; limit?: number }) => 
-    apiClient.get(`/framework-upload/assessment/${assessmentId}/items`, { params }),
-  updateAssessmentItem: (id: number, data: Record<string, unknown>) => 
-    apiClient.put(`/framework-upload/assessment/items/${id}`, data),
-  getAssessmentDashboard: (id: number) => 
-    apiClient.get(`/framework-upload/assessment/${id}/dashboard`),
-  uploadEvidence: (itemId: number, formData: FormData) => 
-    apiClient.post(`/framework-upload/evidence/item/${itemId}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
-  getItemEvidence: (itemId: number) => 
-    apiClient.get(`/framework-upload/evidence/item/${itemId}`),
-  getEvidenceTypes: () => 
-    apiClient.get('/framework-upload/evidence/types'),
-  updateAssessment: (id: number, data: Record<string, unknown>) => 
-    apiClient.put(`/framework-upload/assessment/${id}`, data),
-  createRemediation: (itemId: number, data: { title: string; description?: string; priority?: string; due_date?: string; owner_id?: number; estimated_effort?: string }) => 
-    apiClient.post(`/framework-upload/assessment/items/${itemId}/remediation`, data),
-  getRemediations: (itemId: number) => 
-    apiClient.get(`/framework-upload/assessment/items/${itemId}/remediation`),
-  getPublishStatus: (frameworkId: number) => 
-    apiClient.get(`/framework-upload/publish/${frameworkId}/status`),
-  publishFramework: (frameworkId: number, data: { short_code: string; regulator?: string; jurisdiction?: string; region?: string; is_mandatory?: boolean; enforcement_type?: string }) => 
-    apiClient.post(`/framework-upload/publish/${frameworkId}`, data),
-  unpublishFramework: (frameworkId: number) => 
-    apiClient.delete(`/framework-upload/publish/${frameworkId}/unpublish`),
 };
 
 export const complianceApi = {
@@ -3074,14 +3355,25 @@ export const regulatoryApi = {
     apiClient.get('/governance/regulatory-changes/changes', { params }),
   getChange: (id: number) => apiClient.get(`/governance/regulatory-changes/changes/${id}`),
   createChange: (data: Record<string, unknown>) => apiClient.post('/governance/regulatory-changes/changes', data),
+  // What the upload form can fill in from the file itself (regulator, reference, title) — nothing saved.
+  identifyChangeDocument: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/governance/regulatory-changes/changes/identify', fd, {
+      headers: { 'Content-Type': undefined },
+      timeout: 60 * 1000,
+    });
+  },
   uploadChangeDocument: (
     file: File,
-    opts?: { source?: string; title_hint?: string },
+    // title_locked: the person typed the title, so the circular's own title doesn't replace it.
+    opts?: { source?: string; title_hint?: string; title_locked?: boolean },
   ) => {
     const fd = new FormData();
     fd.append('file', file);
     if (opts?.source) fd.append('source', opts.source);
     if (opts?.title_hint) fd.append('title_hint', opts.title_hint);
+    if (opts?.title_locked) fd.append('title_locked', 'true');
     return apiClient.post('/governance/regulatory-changes/changes/upload', fd, {
       // Let axios set multipart boundary; default JSON Content-Type must be cleared.
       headers: { 'Content-Type': undefined },
@@ -3109,6 +3401,26 @@ export const regulatoryApi = {
   }),
   getClosureReadiness: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/closure-readiness`),
   closeChange: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/close`),
+  // What the circular requires, clause by clause (regulatory_engine).
+  getObligations: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/obligations`),
+  addObligation: (changeId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/governance/regulatory-changes/changes/${changeId}/obligations`, data),
+  updateObligation: (id: number, data: Record<string, unknown>) =>
+    apiClient.patch(`/governance/regulatory-changes/obligations/${id}`, data),
+  deleteObligation: (id: number) => apiClient.delete(`/governance/regulatory-changes/obligations/${id}`),
+  // Obligations linked to platform records (controls first) — regulatory_links.py.
+  getLinks: (changeId: number, targetType?: string) =>
+    apiClient.get(`/governance/regulatory-changes/changes/${changeId}/links`, { params: targetType ? { target_type: targetType } : {} }),
+  suggestControls: (changeId: number) =>
+    apiClient.post(`/governance/regulatory-changes/changes/${changeId}/suggest-controls`, undefined, { timeout: 10 * 60 * 1000 }),
+  decideLink: (id: number, status: 'confirmed' | 'rejected' | 'proposed') =>
+    apiClient.patch(`/governance/regulatory-changes/links/${id}`, { status }),
+  addLink: (obligationId: number, data: { target_type: string; target_id: number; rationale?: string }) =>
+    apiClient.post(`/governance/regulatory-changes/obligations/${obligationId}/links`, data),
+  removeLink: (id: number) => apiClient.delete(`/governance/regulatory-changes/links/${id}`),
+  searchControls: (q: string) => apiClient.get('/governance/regulatory-changes/control-search', { params: { q } }),
+  linksFor: (params: { target_type: string; target_id?: number; target_ref?: string }) =>
+    apiClient.get('/governance/regulatory-changes/links/for', { params }),
 };
 
 export const rcsaApi = {
@@ -3492,7 +3804,9 @@ export const cloudConnectorsApi = {
 };
 
 // ── Teams (admin) ────────────────────────────────────────────────────────────
-// Tenant-scoped org teams used by the asset ownership-chain dropdown.
+// A department's linked picker record, which the asset, risk, assessment and stage-owner pickers read (the old team routes: the list
+// answers with the departments' names). Writes to a team that belongs to a department are refused - Administration → Departments
+// (departmentsApi below) is where they are made.
 
 export interface Team {
   id: number;
@@ -3534,6 +3848,83 @@ export const teamsApi = {
     apiClient.patch<TeamMember>(`/admin/teams/${teamId}/members/${memberId}`, data),
   removeMember: (teamId: number, memberId: number) =>
     apiClient.delete(`/admin/teams/${teamId}/members/${memberId}`),
+};
+
+// ── Departments (admin) ──────────────────────────────────────────────────────
+// The one list of departments (Administration → Departments): the document, sign-off, asset, assessment, stage-owner and risk
+// pickers all read it (the old team routes above return each department's linked picker record). A person belongs to a department
+// by hand, as its lead (`head`) or by holding one of its roles.
+
+export interface DepartmentRole { id: number; name: string }
+export interface Department {
+  id: number;
+  tenant_id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  parent_department_id: number | null;
+  parent_department_name: string | null;
+  department_head_user_id: number | null;
+  department_head_name: string | null;
+  is_active: boolean;
+  roles: DepartmentRole[];
+  member_count: number;
+  manual_member_count: number;
+  team_id: number | null;
+  /** its non-archived documents the signed-in person may read (Governance → Settings shows it) */
+  document_count?: number;
+  /** the same for it and everything under it (the department tree, D57) */
+  document_count_total?: number;
+  /** 1 = a top department, 2 = under one, 3 = the deepest the tree goes */
+  level?: number;
+  /** what the organisation calls that level ("Department", "Sub-department", "Unit" until it says otherwise) */
+  level_label?: string;
+  /** the names from the top department down to this one */
+  path?: string[];
+  /** departments directly under it, switched off ones included */
+  child_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+/** What the organisation calls the levels of its department tree, top first. */
+export interface DepartmentLevels { labels: string[]; defaults: string[]; max_depth: number }
+export type DepartmentMemberRole = 'lead' | 'member' | 'viewer';
+export interface DepartmentMember {
+  user_id: number;
+  name: string;
+  email: string;
+  designation: string | null;
+  how: Array<'head' | 'manual' | 'role'>;
+  member_role: DepartmentMemberRole | null;
+  via_roles: string[];
+  added_at: string | null;
+}
+export interface DepartmentDetail extends Department {
+  members: DepartmentMember[];
+  sub_departments: Array<{ id: number; name: string; code: string; is_active: boolean }>;
+}
+export interface DepartmentRoleOption { id: number; name: string; user_count: number }
+
+export const departmentsApi = {
+  list: (includeInactive = false) =>
+    apiClient.get<Department[]>('/admin/departments', { params: { include_inactive: includeInactive } }),
+  get: (id: number) => apiClient.get<DepartmentDetail>(`/admin/departments/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post<Department>('/admin/departments', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.patch<Department>(`/admin/departments/${id}`, data),
+  /** switches it off: the department and what points at it (documents) stay */
+  deactivate: (id: number) => apiClient.delete<{ message: string; id: number }>(`/admin/departments/${id}`),
+  setRoles: (id: number, roleIds: number[]) =>
+    apiClient.put<DepartmentDetail>(`/admin/departments/${id}/roles`, { role_ids: roleIds }),
+  roleOptions: () => apiClient.get<DepartmentRoleOption[]>('/admin/departments/role-options'),
+  /** the names of the three levels (anyone signed in reads them) */
+  levels: () => apiClient.get<DepartmentLevels>('/admin/departments/levels'),
+  /** name the levels, top first; a blank name is its default (needs admin:organization:edit) */
+  setLevels: (labels: string[]) => apiClient.put<DepartmentLevels>('/admin/departments/levels', { labels }),
+  addMember: (id: number, data: { user_id: number; role: DepartmentMemberRole }) =>
+    apiClient.post<DepartmentMember>(`/admin/departments/${id}/members`, data),
+  updateMember: (id: number, userId: number, data: { role: DepartmentMemberRole }) =>
+    apiClient.patch<DepartmentMember>(`/admin/departments/${id}/members/${userId}`, data),
+  removeMember: (id: number, userId: number) => apiClient.delete(`/admin/departments/${id}/members/${userId}`),
 };
 
 // ── Phase 4: Software identifier (CPE / PURL) inventory per asset ───────────
@@ -3671,6 +4062,11 @@ export const enrichedDashboardApi = {
   getRegulatoryFeedAnalysis: () => apiClient.get('/enriched-dashboard/regulatory/feed-analysis'),
 };
 
+/** Electronic signatures kept with sign-offs and acknowledgements: who signed, the fingerprints, and whether the seal still holds. */
+export const esignApi = {
+  get: (id: number) => apiClient.get(`/governance/esignatures/${id}`),
+};
+
 export const attestationApi = {
   getCampaigns: (params?: { status?: string }) => apiClient.get('/governance/attestation-campaigns/campaigns', { params }),
   getCampaign: (id: number) => apiClient.get(`/governance/attestation-campaigns/campaigns/${id}`),
@@ -3781,7 +4177,7 @@ export const committeeApi = {
   },
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
   createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
-  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),
+  getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean; skip?: number; limit?: number }) => apiClient.get('/governance/committees/actions', { params }),
   updateAction: (actionId: number, data: any) => apiClient.patch(`/governance/committees/actions/${actionId}`, data),
   aiRewordActionText: (formData: FormData) =>
     apiClient.post('/governance/committees/actions/ai/reword', formData, {
@@ -4306,9 +4702,9 @@ export const adminApi = {
   getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
   getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),
 
-  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) =>
+  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; submodule?: string; user_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/admin/audit-logs', { params }),
-  getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; date_presets: string[] }>('/admin/audit-logs/filters'),
+  getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; submodules?: Record<string, string[]>; date_presets: string[] }>('/admin/audit-logs/filters'),
   // v2 audit-AI: lazily generate (or fetch cached) a human-readable summary
   // for one audit-log row. Set force=true to bypass the server-side cache and
   // re-generate. Backend caches the result on the row's `changes.ai_summary`.
@@ -4626,6 +5022,116 @@ export type IssueCreateLinkages = {
     control_id: number;
   }>;
   linked_task_ids?: number[];
+};
+
+/** The client's audit register workbook: preview, import, and the register itself. */
+export const auditRegisterApi = {
+  preview: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/issue-management/issues/audit-register/preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000,
+    });
+  },
+  import: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/issue-management/issues/audit-register/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 900000,
+    });
+  },
+  rows: (source?: string, deleted?: boolean) =>
+    apiClient.get('/issue-management/issues/audit-register/rows', {
+      params: { ...(source ? { source } : {}), ...(deleted ? { deleted: true } : {}) },
+    }),
+  downloadTemplate: () =>
+    apiClient.get('/issue-management/issues/audit-register/template', { responseType: 'blob', timeout: 120000 }),
+  deleteFinding: (issueId: number, reason: string) =>
+    apiClient.delete(`/issue-management/issues/audit-register/findings/${issueId}`, { data: { reason } }),
+  restoreFinding: (issueId: number) =>
+    apiClient.post(`/issue-management/issues/audit-register/findings/${issueId}/restore`),
+  imports: () => apiClient.get('/issue-management/issues/audit-register/imports'),
+  summary: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/summary', { params: month ? { month } : {} }),
+  profile: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/profile/${issueId}`),
+  editProfile: (issueId: number, changes: Record<string, unknown>) =>
+    apiClient.patch(`/issue-management/issues/audit-register/profile/${issueId}`, { changes }),
+  options: () => apiClient.get('/issue-management/issues/audit-register/options'),
+  relink: () => apiClient.post('/issue-management/issues/audit-register/relink'),
+  suggestions: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/suggestions/${issueId}`, { timeout: 120000 }),
+  findingsFor: (kind: 'asset' | 'vulnerability', recordId: number) =>
+    apiClient.get('/issue-management/issues/audit-register/findings-for', { params: { kind, record_id: recordId } }),
+  // Adding a finding by hand, on one of their sheets.
+  templates: () => apiClient.get('/issue-management/issues/audit-register/templates'),
+  addFinding: (template: string, values: Record<string, unknown>, reportId?: number | null, aiFields?: string[]) =>
+    apiClient.post('/issue-management/issues/audit-register/findings', {
+      template, values, report_id: reportId || undefined, ai_fields: aiFields?.length ? aiFields : undefined,
+    }),
+  // AI Assist: values for the empty columns of a finding being added. Saves nothing.
+  assist: (template: string, values: Record<string, unknown>, reportId?: number | null) =>
+    apiClient.post('/issue-management/issues/audit-register/assist', { template, values, report_id: reportId || undefined }),
+  status: () => apiClient.get('/issue-management/issues/audit-register/status'),
+  // The monthly pack (their SUMMARY sheet) and the reports view.
+  pack: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/pack', { params: month ? { month } : {} }),
+  exportPack: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/pack/export', {
+      params: month ? { month } : {}, responseType: 'blob', timeout: 120000,
+    }),
+  reports: () => apiClient.get('/issue-management/issues/audit-register/reports'),
+  // Validation: owner submits, Audit Services decide.
+  validation: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/validation/${issueId}`),
+  submitValidation: (issueId: number, note: string, files: File[]) => {
+    const fd = new FormData();
+    fd.append('note', note);
+    files.forEach((f) => fd.append('files', f));
+    return apiClient.post(`/issue-management/issues/audit-register/validation/${issueId}/submit`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000,
+    });
+  },
+  decideValidation: (issueId: number, result: 'pass' | 'more_info' | 'fail', reason: string) =>
+    apiClient.post(`/issue-management/issues/audit-register/validation/${issueId}/decide`, { result, reason }),
+  // Extensions, decided by the Audit Committee.
+  extensions: (issueId?: number) =>
+    apiClient.get('/issue-management/issues/audit-register/extensions', { params: issueId ? { issue_id: issueId } : {} }),
+  extensionMeetings: () => apiClient.get('/issue-management/issues/audit-register/extensions/meetings'),
+  requestExtension: (issueId: number, body: { requested_date: string; reason: string; meeting_id?: number }) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/${issueId}`, body),
+  decideExtension: (requestId: number, body: { approve: boolean; notes?: string; regulator_notified_on?: string }) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/decide/${requestId}`, body),
+  regulatorNotice: (requestId: number, date: string) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/regulator-notice/${requestId}`, { date }),
+  // Reminders and the regulator's word on an MRA.
+  previewReminders: () => apiClient.get('/issue-management/issues/audit-register/reminders'),
+  sendReminders: (email: boolean) =>
+    apiClient.post('/issue-management/issues/audit-register/reminders', { email }),
+  setRegulatorStatus: (issueId: number, status: string) =>
+    apiClient.patch(`/issue-management/issues/audit-register/regulator-status/${issueId}`, { status }),
+  // Mappings: workbook owner names → users, LOBs → business units.
+  ownerMappings: () => apiClient.get('/issue-management/issues/audit-register/mappings/owners'),
+  setOwnerMapping: (name: string, userId: number | null) =>
+    apiClient.put('/issue-management/issues/audit-register/mappings/owners', { name, user_id: userId }),
+  lobMappings: () => apiClient.get('/issue-management/issues/audit-register/mappings/lobs'),
+  setLobMapping: (name: string, body: { business_unit_id?: number | null; create?: boolean }) =>
+    apiClient.put('/issue-management/issues/audit-register/mappings/lobs', { name, ...body }),
+  // Settings: SLAs per status, dropdown lists, audit reports and exams, numbering.
+  settings: () => apiClient.get('/issue-management/issues/audit-register/settings'),
+  saveSettings: (patch: Record<string, unknown>) =>
+    apiClient.put('/issue-management/issues/audit-register/settings', patch),
+  reportCatalog: () => apiClient.get('/issue-management/issues/audit-register/report-catalog'),
+  addReport: (source: string, values: Record<string, unknown>) =>
+    apiClient.post('/issue-management/issues/audit-register/report-catalog', { ...values, source }),
+  updateReport: (id: number, values: Record<string, unknown>) =>
+    apiClient.put(`/issue-management/issues/audit-register/report-catalog/${id}`, values),
+  deleteReport: (id: number) =>
+    apiClient.delete(`/issue-management/issues/audit-register/report-catalog/${id}`),
+  nextReference: (template: string, reportKey?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/next-reference', {
+      params: { template, report_key: reportKey || undefined },
+    }),
 };
 
 export const issuesApi = {
@@ -4988,6 +5494,15 @@ export const compliancePluginsApi = {
     apiClient.get('/compliance-plugins/classification-stats'),
 };
 
+/** Metabase Analytics surface under Reports › Analytics. */
+export const reportingMetabaseApi = {
+  status: () => apiClient.get('/reporting/metabase/status'),
+  sso: (body?: { return_to?: string; groups?: string[] }) =>
+    apiClient.post('/reporting/metabase/sso', body || { return_to: '/' }),
+  ensureViews: () => apiClient.post('/reporting/metabase/ensure-views'),
+  embedDashboard: (key: string) => apiClient.get(`/reporting/metabase/embed/${encodeURIComponent(key)}`),
+};
+
 /** SOC 2 quantitative controls + AWS automated checks (additive). */
 // Automation frameworks: SOC 2 / ISO 27001 / GDPR share one automated-check
 // engine (all run/collector/seed/connection calls hit /automation/soc2/*); only
@@ -4999,8 +5514,18 @@ export const automationApi = {
   listControls: (framework: AutomationFramework = 'soc2') =>
     apiClient.get(`/automation/${framework}/controls`),
   // Unified common control library — one control set, each mapped to requirements
-  // across SOC 2 / ISO 27001 / GDPR.
-  listCommonControls: () => apiClient.get('/automation/common/controls'),
+  // across SOC 2 / ISO 27001 / GDPR. scope=in_scope (default) filters to the
+  // tenant's SCF scope; scope=all returns the full catalogue.
+  listCommonControls: (opts?: {
+    scope?: 'in_scope' | 'all';
+    ownership?: 'unowned' | 'mine' | 'overdue';
+  }) =>
+    apiClient.get('/automation/common/controls', {
+      params: {
+        scope: opts?.scope ?? 'in_scope',
+        ...(opts?.ownership ? { ownership: opts.ownership } : {}),
+      },
+    }),
   // One control with its framework requirements resolved to real text +
   // provenance, so a reviewer can trace any row back to its source library.
   getCommonControl: (code: string) =>
@@ -5011,7 +5536,129 @@ export const automationApi = {
     apiClient.get('/automation/common/coverage', { params: framework ? { framework } : undefined }),
   // Library, automation, crosswalk, evidence and assurance aggregates for the
   // common control library — each answered by the system that actually holds it.
-  getCommonOverview: () => apiClient.get('/automation/common/overview'),
+  getCommonOverview: (opts?: { scope?: 'in_scope' | 'all' }) =>
+    apiClient.get('/automation/common/overview', {
+      params: { scope: opts?.scope ?? 'in_scope' },
+    }),
+  // Evidence a person attached to a control — the manual and hybrid half no
+  // collector produces. Upload goes through the evidence module (storage,
+  // validation, versioning, OCR); linking records which control it evidences.
+  listControlEvidence: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/evidence`),
+  uploadEvidenceItem: (form: FormData) =>
+    apiClient.post('/evidence-mgmt/items/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  linkControlEvidence: (code: string, evidenceId: number,
+    body: { coverage_type: 'full' | 'partial' | 'supporting'; note?: string }) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/evidence/${evidenceId}`, body),
+  // What will be tested for a control, how, and whether each test applies to this
+  // organisation: one entry per assessment objective.
+  getControlTestPlan: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/test-plan`),
+  // Assurance tab: which required artifacts are satisfied, the automated results
+  // behind them, and the control's testing record (Control Workbench rows).
+  getControlAssurance: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance`),
+  // Library items that may satisfy each required artifact, with the reason.
+  getAssuranceSuggestions: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance/suggestions`),
+  linkAssuranceEvidence: (code: string, body: {
+    evidence_id: number; artifact_name?: string | null;
+    coverage_type?: 'full' | 'partial' | 'supporting'; note?: string;
+  }) => apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/evidence`, body),
+  unlinkAssuranceEvidence: (code: string, mappingId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/evidence/${mappingId}`),
+  // SCF SCR-CMM 0–5: the level the control operates at and the level it should reach. null clears.
+  setControlMaturity: (code: string, body: { cmm_actual?: number | null; cmm_target?: number | null }) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/maturity`, body),
+  // Testing record: procedures tied to SCF objectives, sampled tests, sign-off.
+  /** Every recorded test on the tenant's common controls (Reports: Control Tests). */
+  listControlTests: () => apiClient.get('/automation/common/assurance/tests'),
+  getAssuranceTesting: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance/testing`),
+  scaffoldProcedures: (code: string) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/scaffold`),
+  /** Get AI Recommendation; `replace` regenerates steps nobody has worked on. */
+  suggestProcedures: (code: string, replace = false) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/suggest`, null,
+      { params: { replace } }),
+  // The Controls catalog's actions: details, a recorded test, a correction to one.
+  updateTestingDetails: (code: string, body: { priority?: string; implementation_status?: string; is_key_control?: boolean; frequency?: string }) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/details`, body),
+  recordTest: (code: string, body: {
+    test_type: 'design' | 'operating'; result: string; sample_size?: number | null;
+    exceptions_found?: number; findings?: string; frequency?: string;
+  }) => apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/record`, body),
+  editTest: (code: string, id: number, body: {
+    test_type?: string; result?: string; sample_size?: number | null; exceptions_found?: number; findings?: string;
+  }) => apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}`, body),
+  addProcedure: (code: string, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures`, body),
+  updateProcedure: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}`, body),
+  moveProcedure: (code: string, id: number, direction: -1 | 1) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}/move`, null,
+      { params: { direction } }),
+  deleteProcedure: (code: string, id: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}`),
+  startTest: (code: string, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests`, body),
+  recordSample: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/samples/${id}`, body),
+  concludeTest: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/conclude`, body),
+  reopenTest: (code: string, id: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/reopen`),
+  signOffTest: (code: string, id: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/review`),
+  deleteTest: (code: string, id: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}`),
+  // This control's deliverables as real catalogue items plus the tenant's working
+  // copies, so the Frameworks artifact modals can be reused unchanged.
+  listControlArtifacts: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/artifacts`),
+  // Live risk-register links for a common control. SCF catalogue risk/threat
+  // codes come back as scf_prompts only — never as register rows.
+  // Cross-module record links (risks, assets, evidence, documents, statements,
+  // vulnerabilities, issues, vendors, projects, tasks, internal controls).
+  listLinkTypes: () =>
+    apiClient.get<{ types: { key: string; label: string; plural: string; url: string }[] }>(
+      '/automation/common/link-types'),
+  searchLinkTargets: (type: string, q?: string, limit = 20) =>
+    apiClient.get<{ type: string; items: ControlRecordLink[] }>(
+      '/automation/common/link-targets',
+      { params: { type, q: q || undefined, limit } }),
+  listControlLinks: (code: string) =>
+    apiClient.get<{ scf_id: string; items: ControlRecordLink[] }>(
+      `/automation/common/controls/${encodeURIComponent(code)}/links`),
+  linkControlRecord: (code: string, body: { type: string; record_id: number; note?: string }) =>
+    apiClient.post<ControlRecordLink & { created: boolean }>(
+      `/automation/common/controls/${encodeURIComponent(code)}/links`, body),
+  unlinkControlRecord: (code: string, type: string, recordId: number) =>
+    apiClient.delete(
+      `/automation/common/controls/${encodeURIComponent(code)}/links/${type}/${recordId}`),
+  listControlRisks: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/risks`),
+  linkControlRisk: (code: string, riskId: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/risks`, { risk_id: riskId }),
+  unlinkControlRisk: (code: string, linkId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/risks/${linkId}`),
+  createControlRisk: (code: string, body: {
+    title: string;
+    description?: string;
+    category?: string;
+    inherent_likelihood?: number;
+    inherent_impact?: number;
+  }) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/risks/new`, body),
+  // Live asset inventory links for a common control (Stage F).
+  listControlAssets: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assets`),
+  linkControlAsset: (code: string, assetId: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assets`, { asset_id: assetId }),
+  unlinkControlAsset: (code: string, linkId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assets/${linkId}`),
   // Mappings a reviewer should look at, worst first — lowest confidence, then
   // fan-out, then material controls. Rows already ruled on never come back.
   getMappingReviewQueue: (params?: { framework?: string; limit?: number }) =>
@@ -5043,10 +5690,388 @@ export const automationApi = {
   listCollectors: () => apiClient.get('/automation/soc2/collectors'),
   // Full connector universe: wired connectors + Steampipe discovery catalog.
   listCatalog: () => apiClient.get('/automation/soc2/catalog'),
-  connectCollector: (provider: string, body: { token: string; domain?: string; email?: string; access_key_id?: string; region?: string }) =>
+  connectCollector: (provider: string, body: { token: string; secret2?: string; domain?: string; email?: string; access_key_id?: string; region?: string }) =>
     apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
+  // How to connect a collector, its form fields, every test it runs and every call it makes.
+  getCollectorDetails: (provider: string) => apiClient.get(`/automation/soc2/collectors/${provider}/details`),
   testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),
   runCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/run`),
+};
+
+/** SCF scope & applicability — frameworks catalog, default scope, recompute. */
+export type ScfFramework = {
+  slug: string;
+  label: string;
+  scf_keys?: string[];
+  expected?: number | null;
+  file?: string | null;
+};
+
+export type ScfScope = {
+  id: number;
+  tenant_id?: number;
+  name?: string;
+  framework_slugs: string[];
+  framework_obligations: Record<string, string>;
+  baseline_keys?: string[];
+  esp_level: number;
+  firm_size: number | null;
+  has_facilities: boolean;
+  processes_personal_data: boolean;
+  target_cmm?: number | null;
+  scope_statement?: string | null;
+  business_unit_ids?: unknown[];
+  locations?: unknown[];
+  is_default?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  hint?: string;
+};
+
+export type ScfScopeUpdateBody = {
+  framework_slugs?: string[];
+  framework_obligations?: Record<string, string>;
+  esp_level?: number;
+  firm_size?: number | null;
+  has_facilities?: boolean;
+  processes_personal_data?: boolean;
+  target_cmm?: number | null;
+  scope_statement?: string | null;
+  locations?: unknown[];
+  business_unit_ids?: unknown[];
+};
+
+export type ScfOwnershipBody = {
+  owner_user_id?: number | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[];
+};
+
+export type ScfBulkOwnershipBody = {
+  scf_ids?: string[];
+  domain?: string | null;
+  owner_user_id: number;
+  assigned_user_ids?: number[];
+};
+
+export type ScfHistoryEntry = {
+  id?: number;
+  action?: string;
+  actor_name?: string | null;
+  actor_id?: number | null;
+  summary?: string | null;
+  created_at?: string | null;
+  resource_name?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+};
+
+export type ScfMyWorkItem = {
+  scf_id?: string;
+  control_id?: string;
+  name?: string | null;
+  title?: string | null;
+  next_due_at?: string | null;
+  status?: string | null;
+  overall_status?: string | null;
+  owner_user_id?: number | null;
+  [key: string]: unknown;
+};
+
+export type ScfMyWork = {
+  controls?: ScfMyWorkItem[];
+  na_reviews?: ScfMyWorkItem[];
+  overdue?: ScfMyWorkItem[];
+  artifacts?: Array<{
+    id?: number;
+    name?: string | null;
+    status?: string | null;
+    scf_id?: string | null;
+    control_ref?: string | null;
+    [key: string]: unknown;
+  }>;
+  failing?: ScfMyWorkItem[];
+};
+
+/** Tenant-authored custom control (Stage D) — own statement, never SCF prose. */
+export type ScfCustomControl = {
+  code: string;
+  name?: string | null;
+  statement?: string | null;
+  domain?: string | null;
+  pptdf?: string | null;
+  conformity_cadence?: string | null;
+  control_sub_type?: string | null;
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+  /** Stage G — connector check ids whose results drive this control's status. */
+  bound_check_ids?: string[];
+  custom?: boolean;
+  retired_at?: string | null;
+  [key: string]: unknown;
+};
+
+/** An evidence item the author says this control produces. */
+export type AuthoredEvidence = {
+  name: string;
+  description?: string | null;
+  collection_method?: 'manual' | 'automated' | 'hybrid';
+  filetype?: string | null;
+  mandatory?: boolean;
+};
+
+/** Register fields carried over from the ERM internal-control register. */
+export type CustomControlProfile = {
+  category?: string | null;
+  sub_category?: string | null;
+  control_type?: string | null;
+  operating_frequency?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  backup_owner_id?: number | null;
+  backup_owner_name?: string | null;
+  regulatory_source?: string | null;
+  effective_date?: string | null;
+  review_date?: string | null;
+  lifecycle_status?: string | null;
+  submitted_by?: number | null;
+  submitted_by_name?: string | null;
+  submitted_at?: string | null;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  decision_comment?: string | null;
+};
+
+/** Records of any module a control can be linked to. */
+export type ControlRecordLink = {
+  type: string;
+  type_label: string;
+  id: number;
+  label: string;
+  code?: string | null;
+  subtitle?: string | null;
+  status?: string | null;
+  url: string;
+  link_id?: number;
+  note?: string | null;
+  created_at?: string | null;
+};
+
+export type ScfCustomControlWriteBody = {
+  name?: string;
+  statement?: string | null;
+  domain?: string | null;
+  pptdf?: string | null;
+  conformity_cadence?: string | null;
+  control_sub_type?: string | null;
+  objective?: string | null;
+  implementation_guidance?: string | null;
+  testing_guidance?: string | null;
+  recommended_evidence?: AuthoredEvidence[];
+  category?: string | null;
+  sub_category?: string | null;
+  control_type?: string | null;
+  operating_frequency?: string | null;
+  department_id?: number | null;
+  backup_owner_id?: number | null;
+  regulatory_source?: string | null;
+  effective_date?: string | null;
+  review_date?: string | null;
+  owner_user_id?: number | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[];
+  priority?: string | null;
+  is_key_control?: boolean;
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+  /** {"risk": [1, 2], "asset": [7]} — written into each module's own link table. */
+  links?: Record<string, number[]>;
+};
+
+export type ScfCustomControlCreateBody = ScfCustomControlWriteBody & {
+  /** Omit to have the server allocate the next CTL-0001 style ID. */
+  code?: string;
+  name: string;
+  lifecycle_status?: string;
+};
+
+export type ScfCustomControlUpdateBody = ScfCustomControlWriteBody;
+
+export type CustomControlOptions = {
+  categories: { value: string; sub_categories: string[] }[];
+  control_types: string[];
+  control_sub_types: string[];
+  operating_frequencies: string[];
+  conformity_cadences: string[];
+  pptdf: string[];
+  priorities: string[];
+  lifecycle_statuses: string[];
+  lifecycle_actions: Record<string, { from: string[]; to: string }>;
+  departments: { id: number; name: string }[];
+  link_types: { key: string; label: string; plural: string; url: string }[];
+  /** What an unnamed control would be called (CTL-0001 style). */
+  next_code?: string;
+  /** SCF catalogue domain names. */
+  domains?: string[];
+  /** Frameworks, regulatory publications and internal documents a control can cite. */
+  regulatory_sources?: { value: string; label: string; group: string; detail?: string | null }[];
+};
+
+export type ScfControlHit = { scf_id: string; name: string | null; domain: string | null };
+
+export type ScfCustomControlMappingsBody = {
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+};
+
+/** Stage H — per-framework coverage roll-up (conformity is INDICATIVE). */
+export type ScfFrameworkStatus = {
+  framework_slug: string;
+  label: string;
+  applicable_count: number;
+  not_assessed_count: number;
+  controls_with_checks: number;
+  automation_coverage_pct: number;
+  evidence_coverage_pct: number;
+  indicative_conformity_pct: number;
+  indicative?: boolean;
+  conformity_basis?: string;
+};
+
+export type ScfAssuranceSummary = {
+  scope_id: number;
+  frameworks: ScfFrameworkStatus[];
+};
+
+export type ScfAuditPeriod = {
+  id: number;
+  tenant_id?: number;
+  scope_id: number;
+  name: string;
+  framework_slug?: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  release_id?: number | null;
+  status: string;
+  frozen_at?: string | null;
+  frozen_by?: number | null;
+  has_soa_snapshot?: boolean;
+  created_at?: string | null;
+  soa_snapshot?: Record<string, unknown> | null;
+};
+
+export type ScfAuditPeriodCreateBody = {
+  name: string;
+  period_start: string;
+  period_end: string;
+  framework_slug?: string | null;
+  scope_id?: number | null;
+};
+
+export type ScfParityChecklist = {
+  decision?: number;
+  note?: string;
+  stages?: Array<{
+    stage: string;
+    name: string;
+    present: boolean;
+    features?: string[];
+  }>;
+};
+
+export const scfApi = {
+  listFrameworks: () => apiClient.get<{ frameworks: ScfFramework[] }>('/scf/frameworks'),
+  getDefaultScope: () => apiClient.get<ScfScope>('/scf/scopes/default'),
+  updateScope: (id: number, body: ScfScopeUpdateBody) =>
+    apiClient.put<ScfScope>(`/scf/scopes/${id}`, body),
+  recompute: (id: number, commit = false) =>
+    apiClient.post(`/scf/scopes/${id}/recompute`, null, { params: { commit } }),
+  /** What applying these answers would change, without saving them. */
+  previewScope: (id: number, body: ScfScopeUpdateBody) =>
+    apiClient.post(`/scf/scopes/${id}/preview`, body),
+  setOwnership: (scopeId: number, scfId: string, body: ScfOwnershipBody) =>
+    apiClient.put(`/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/ownership`, body),
+  bulkOwnership: (scopeId: number, body: ScfBulkOwnershipBody) =>
+    apiClient.post(`/scf/scopes/${scopeId}/ownership/bulk`, body),
+  getControlHistory: (scopeId: number, scfId: string) =>
+    apiClient.get<{ items?: ScfHistoryEntry[]; events?: ScfHistoryEntry[] } | ScfHistoryEntry[]>(
+      `/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/history`,
+    ),
+  myWork: () => apiClient.get<ScfMyWork>('/scf/my-work'),
+
+  // Stage D — tenant custom controls (blank authored fields; no SCF copy/AI).
+  listCustomControls: () =>
+    apiClient.get<{ controls?: ScfCustomControl[] } | ScfCustomControl[]>('/scf/custom-controls'),
+  getCustomControl: (code: string) =>
+    apiClient.get<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}`),
+  createCustomControl: (body: ScfCustomControlCreateBody) =>
+    apiClient.post<ScfCustomControl>('/scf/custom-controls', body),
+  updateCustomControl: (code: string, body: ScfCustomControlUpdateBody) =>
+    apiClient.put<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}`, body),
+  retireCustomControl: (code: string) =>
+    apiClient.post<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}/retire`),
+  getCustomControlOptions: () =>
+    apiClient.get<CustomControlOptions>('/scf/custom-controls/options'),
+  /** SCF controls by id or name (q), or resolve specific ids. Names shown as published. */
+  controlFields: (code: string) =>
+    apiClient.get<{ custom_values: Record<string, unknown> }>(`/scf/controls/${encodeURIComponent(code)}/fields`),
+  saveControlFields: (code: string, custom_values?: Record<string, unknown>) =>
+    apiClient.put<{ custom_values: Record<string, unknown> }>(
+      `/scf/controls/${encodeURIComponent(code)}/fields`,
+      { custom_values: custom_values || {} },
+    ),
+  searchControls: (params: { q?: string; ids?: string[]; limit?: number }) =>
+    apiClient.get<{ items: ScfControlHit[] }>('/scf/controls/search', {
+      params: { q: params.q || undefined, ids: params.ids?.length ? params.ids.join(',') : undefined, limit: params.limit },
+    }),
+  setCustomControlLifecycle: (code: string, body: { action: string; comment?: string }) =>
+    apiClient.post<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/lifecycle`, body,
+    ),
+  updateCustomControlMappings: (code: string, body: ScfCustomControlMappingsBody) =>
+    apiClient.put<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/mappings`,
+      body,
+    ),
+  /** Stage G — attach connector check ids; status then comes from those checks' results. */
+  setCustomControlChecks: (code: string, body: { check_ids: string[] }) =>
+    apiClient.put<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/checks`,
+      body,
+    ),
+
+  // Stage H — assurance roll-ups, audit periods, SoA export, Decision 6 parity.
+  getAssuranceSummary: (scopeId?: number) =>
+    apiClient.get<ScfAssuranceSummary>('/scf/assurance/summary', {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  getFrameworkStatus: (slug: string, scopeId?: number) =>
+    apiClient.get<ScfFrameworkStatus>(`/scf/frameworks/${encodeURIComponent(slug)}/status`, {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  listAuditPeriods: (scopeId?: number) =>
+    apiClient.get<{ periods: ScfAuditPeriod[] }>('/scf/audit-periods', {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  createAuditPeriod: (body: ScfAuditPeriodCreateBody) =>
+    apiClient.post<ScfAuditPeriod>('/scf/audit-periods', body),
+  freezeAuditPeriod: (id: number) =>
+    apiClient.post<ScfAuditPeriod>(`/scf/audit-periods/${id}/freeze`),
+  closeAuditPeriod: (id: number) =>
+    apiClient.post<ScfAuditPeriod>(`/scf/audit-periods/${id}/close`),
+  getSoa: (
+    scopeId: number,
+    opts: { format: 'json' | 'oscal' | 'xlsx'; periodId?: number },
+  ) => {
+    const params: Record<string, string | number> = { format: opts.format };
+    if (opts.periodId != null) params.period_id = opts.periodId;
+    if (opts.format === 'xlsx') {
+      return apiClient.get(`/scf/scopes/${scopeId}/soa`, { params, responseType: 'blob' });
+    }
+    return apiClient.get(`/scf/scopes/${scopeId}/soa`, { params });
+  },
+  getParityChecklist: () => apiClient.get<ScfParityChecklist>('/scf/parity'),
 };
 
 // ─── CIS Phase 3 agent installer + scan-push helpers ─────────────────────

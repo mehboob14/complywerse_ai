@@ -5,6 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { useToast } from '@/components/ui/ToastProvider';
+import { canDeleteTask, dayOf, isDocumentTask, momentDayOf, momentOf, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -54,6 +58,10 @@ interface CriticalTaskDetail {
   description: string | null;
   source: string;
   source_module: string | null;
+  /** Set when the task mirrors an implementation task of a regulatory change. */
+  linked_regulatory_change_id?: number | null;
+  /** Set on a task made by a document review, approval or acknowledgement request. */
+  document_request?: DocumentRequest | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -140,9 +148,10 @@ export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const canEdit = hasPermission('tasks:task_management:edit');
   const canDelete = hasPermission('tasks:task_management:delete');
+  const meId = useMyUserId();
   const taskId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'comments' | 'evidence' | 'history'>('details');
@@ -159,6 +168,8 @@ export default function TaskDetailPage() {
   const [aiRootCause, setAiRootCause] = useState<Record<string, unknown> | null>(null);
   const [aiDescription, setAiDescription] = useState<Record<string, unknown> | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     criticalTasksApi.getTenantUsers().then(r => setUsers(r.data || [])).catch(() => setUsers([]));
@@ -242,7 +253,15 @@ export default function TaskDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => criticalTasksApi.delete(taskId),
-    onSuccess: () => router.push('/tasks'),
+    onSuccess: () => {
+      setConfirmDelete(false);
+      toast({ type: 'success', title: 'Task deleted' });
+      router.push('/tasks');
+    },
+    onError: (e: unknown) => {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast({ type: 'error', title: 'Not deleted', message: typeof detail === 'string' ? detail : 'The task could not be deleted. Try again.' });
+    },
   });
 
   const commentMutation = useMutation({
@@ -349,7 +368,8 @@ export default function TaskDetailPage() {
     if (!payload.source_entity_type) payload.source_entity_type = null;
     if (!payload.due_date) payload.due_date = null;
     if (!payload.evidence_notes) payload.evidence_notes = null;
-    updateMutation.mutate(payload);
+    // a document request's task: who, when and its link follow the request and are not sent
+    updateMutation.mutate(task ? withoutLocked(task, payload) : payload);
   };
 
   if (isLoading) {
@@ -369,7 +389,20 @@ export default function TaskDetailPage() {
     );
   }
 
-  const allowedTransitions = VALID_TRANSITIONS[task.status] || [];
+  // a document request's task: completed by doing the step in the document (its card's button), deleted by administrators only
+  const docTask = isDocumentTask(task);
+  const allowedTransitions = docTask ? [] : VALID_TRANSITIONS[task.status] || [];
+  const canDeleteThis = canDeleteTask(task, { isAdmin, hasDeleteRight: canDelete });
+  const description = docTask ? plainDescription(task.description) : task.description;
+  // a document task's details in plain words (its source module and record ids are the platform's, not the person's)
+  const req = task.document_request;
+  const docFacts: [string, string][] | null = docTask ? [
+    ['Document', req?.document_title || '—'],
+    ['Version', req?.version || '—'],
+    ['Requested by', task.created_by?.display_name || task.created_by?.username || '—'],
+    ['Due', dayOf(req?.due_date ?? task.due_date) ?? '—'],
+    ['Category', task.category],
+  ] : null;
 
   return (
     <div className="space-y-6 text-[var(--color-text)]">
@@ -389,7 +422,7 @@ export default function TaskDetailPage() {
           </div>
           <p className="text-sm text-[var(--color-muted)] mt-1">
             Task #{task.id} · {task.source} · {task.category}
-            {task.source_module && <span className="text-primary-700/70"> · via {task.source_module}</span>}
+            {task.source_module && <span className="text-primary-700/70"> · via {docTask ? 'a document request' : task.source_module.replace(/_/g, ' ')}</span>}
             {task.escalation_level > 0 && <span className="text-rose-600"> · Escalation Level {task.escalation_level}</span>}
           </p>
           {/* v2 Issue Management — when this task was promoted from a CAPA
@@ -403,8 +436,20 @@ export default function TaskDetailPage() {
               Linked Issue #{(task as { linked_issue_id?: number }).linked_issue_id} ↗
             </a>
           )}
+          {/* A task on a regulatory change: edits here show there, and there, here. */}
+          {task.linked_regulatory_change_id && (
+            <a
+              href={`/governance/regulatory-changes/${task.linked_regulatory_change_id}?tab=tasks`}
+              className="mt-2 inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+              title="This task is part of a regulatory change; its status, people and dates stay in step with it"
+            >
+              Regulatory change #{task.linked_regulatory_change_id} ↗
+            </a>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {/* a document task's description is the request's own words: no AI root cause or description */}
+          {!docTask && <>
           <button onClick={handleAiRootCause} disabled={aiLoading === 'root-cause'}
             className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'root-cause' ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} Root Cause
@@ -413,33 +458,52 @@ export default function TaskDetailPage() {
             className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'description' ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />} AI Description
           </button>
+          </>}
           {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Pencil size={14} /> Edit
           </button>}
-          {canDelete && <button onClick={() => { if (confirm('Delete this task?')) deleteMutation.mutate(); }}
+          {canDeleteThis && <button onClick={() => setConfirmDelete(true)}
             className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Trash2 size={14} /> Delete
           </button>}
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <AnimatedModal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this task?" size="md" footer={(
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setConfirmDelete(false)} className="cw-btn-secondary rounded-lg px-3 py-1.5 text-sm">Cancel</button>
+          <button type="button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}
+            className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm disabled:opacity-60">
+            {deleteMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Delete
+          </button>
+        </div>
+      )}>
+        <p className="px-5 py-4 text-sm text-[#26323d]">
+          {docTask ? 'The request in the document stays; only this task is removed.' : `"${task.title}" and its sub-tasks and comments are removed.`}
+        </p>
+      </AnimatedModal>
+
+      {docTask && <DocumentTaskCard request={task.document_request} meId={meId} />}
+
+      <div className={`grid gap-4 ${task.reviewer ? 'grid-cols-4' : 'grid-cols-3'}`}>
         <div className={`rounded-lg border p-3 ${SLA_COLORS[task.sla_status] || ''}`}>
           <div className="text-xs font-medium opacity-70">SLA Status</div>
           <div className="text-lg font-semibold">{task.sla_status}</div>
-          {task.due_date && <div className="text-xs opacity-70 mt-1">Due: {new Date(task.due_date).toLocaleDateString()}</div>}
+          {task.due_date && <div className="text-xs opacity-70 mt-1">Due {dayOf(task.due_date) ?? '—'}</div>}
         </div>
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Owner</div>
           <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.assigned_owner?.display_name || task.assigned_owner?.username || 'Unassigned'}</div>
         </div>
+        {task.reviewer && (
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Reviewer</div>
-          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.reviewer?.display_name || task.reviewer?.username || 'None'}</div>
+          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.reviewer.display_name || task.reviewer.username}</div>
         </div>
+        )}
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Created</div>
-          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.created_at ? new Date(task.created_at).toLocaleDateString() : '—'}</div>
+          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{momentDayOf(task.created_at) ?? '—'}</div>
           <div className="text-xs text-[var(--color-muted)] mt-0.5">by {task.created_by?.display_name || task.created_by?.username || 'System'}</div>
         </div>
       </div>
@@ -476,7 +540,7 @@ export default function TaskDetailPage() {
           </div>
           {task.approved_by && task.approved_at && (
             <p className="text-xs text-[var(--color-muted)] mb-3">
-              {task.approval_status === 'Approved' ? 'Approved' : 'Reviewed'} by {task.approved_by.display_name || task.approved_by.username} on {new Date(task.approved_at).toLocaleString()}
+              {task.approval_status === 'Approved' ? 'Approved' : 'Reviewed'} by {task.approved_by.display_name || task.approved_by.username} on {momentOf(task.approved_at)}
             </p>
           )}
           <div className="flex items-center gap-2">
@@ -535,9 +599,19 @@ export default function TaskDetailPage() {
         <div className="cw-card p-6 space-y-4">
           <div>
             <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Description</h3>
-            <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{task.description || 'No description provided.'}</p>
+            <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{description || 'No description provided.'}</p>
           </div>
           <div className="grid grid-cols-2 gap-6">
+            {docFacts ? (
+            <div>
+              <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Document request</h3>
+              <dl className="space-y-2 text-sm">
+                {docFacts.map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-4"><dt className="text-[var(--color-muted)]">{label}</dt><dd className="text-right text-[var(--color-text)]">{value}</dd></div>
+                ))}
+              </dl>
+            </div>
+            ) : (
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Task Information</h3>
               <dl className="space-y-2 text-sm">
@@ -550,6 +624,8 @@ export default function TaskDetailPage() {
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Escalation Level</dt><dd className="text-[var(--color-text)]">{task.escalation_level}</dd></div>
               </dl>
             </div>
+            )}
+            {!docTask && (
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Linked Entities</h3>
               <dl className="space-y-2 text-sm">
@@ -559,13 +635,14 @@ export default function TaskDetailPage() {
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Vulnerability</dt><dd className="text-[var(--color-text)]">{task.linked_vulnerability_id ? `#${task.linked_vulnerability_id}` : '—'}</dd></div>
               </dl>
             </div>
+            )}
           </div>
           {(task.completed_at || task.verified_at) && (
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Completion</h3>
               <dl className="space-y-2 text-sm">
-                {task.completed_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Completed At</dt><dd className="text-[var(--color-text)]">{new Date(task.completed_at).toLocaleString()}</dd></div>}
-                {task.verified_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Verified At</dt><dd className="text-[var(--color-text)]">{new Date(task.verified_at).toLocaleString()}</dd></div>}
+                {task.completed_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Completed At</dt><dd className="text-[var(--color-text)]">{momentOf(task.completed_at)}</dd></div>}
+                {task.verified_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Verified At</dt><dd className="text-[var(--color-text)]">{momentOf(task.verified_at)}</dd></div>}
               </dl>
             </div>
           )}
@@ -600,7 +677,7 @@ export default function TaskDetailPage() {
                     {st.title}
                   </span>
                   {st.assigned_owner && <span className="text-xs text-[var(--color-muted)]">{st.assigned_owner.display_name || st.assigned_owner.username}</span>}
-                  {st.due_date && <span className="text-xs text-[var(--color-muted)]">{new Date(st.due_date).toLocaleDateString()}</span>}
+                  {st.due_date && <span className="text-xs text-[var(--color-muted)]">{dayOf(st.due_date)}</span>}
                   {canDelete && <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-rose-600">
                     <Trash2 size={14} />
                   </button>}
@@ -632,7 +709,7 @@ export default function TaskDetailPage() {
                 <div key={c.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-[var(--color-text)]">{c.user?.display_name || c.user?.username || 'Unknown'}</span>
-                    <span className="text-xs text-[var(--color-muted)]">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</span>
+                    <span className="text-xs text-[var(--color-muted)]">{momentOf(c.created_at) ?? ''}</span>
                   </div>
                   <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{c.content}</p>
                 </div>
@@ -673,7 +750,7 @@ export default function TaskDetailPage() {
                       </p>
                     )}
                     <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                      {h.user?.display_name || h.user?.username || 'System'} · {h.created_at ? new Date(h.created_at).toLocaleString() : ''}
+                      {h.user?.display_name || h.user?.username || 'System'} · {momentOf(h.created_at) ?? ''}
                     </p>
                   </div>
                 </div>
@@ -797,7 +874,7 @@ export default function TaskDetailPage() {
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source</label>
                   <select value={(editForm.source as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, source: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
-                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {withCurrent(SOURCES, editForm.source).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
@@ -811,7 +888,7 @@ export default function TaskDetailPage() {
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
                   <select value={(editForm.category as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {withCurrent(CATEGORIES, editForm.category).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
@@ -823,6 +900,7 @@ export default function TaskDetailPage() {
                     <option value="Medium">Medium</option><option value="Low">Low</option>
                   </select>
                 </div>
+                {!docTask && <>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Module</label>
                   <select value={(editForm.source_module as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, source_module: e.target.value }))}
@@ -841,6 +919,14 @@ export default function TaskDetailPage() {
                     <option value="compliance_gap">Compliance Gap</option>
                   </select>
                 </div>
+                </>}
+                {docTask ? (
+                  <div className="col-span-2 rounded-lg border border-[#d5dbe1] bg-[#f4f6f8] px-3 py-2 text-[13px] text-[#26323d]">
+                    Owner: <b className="font-semibold">{task.assigned_owner?.display_name || task.assigned_owner?.username || 'the person asked'}</b>
+                    {' · '}Due: <b className="font-semibold">{dayOf(task.due_date) ?? 'no date'}</b>.
+                    {' '}They follow the request in the document and cannot be changed here.
+                  </div>
+                ) : (
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Owner</label>
                   <select value={(editForm.assigned_owner_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, assigned_owner_id: e.target.value }))}
@@ -849,6 +935,7 @@ export default function TaskDetailPage() {
                     {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
                   </select>
                 </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Reviewer</label>
                   <select value={(editForm.reviewer_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, reviewer_id: e.target.value }))}
@@ -857,11 +944,13 @@ export default function TaskDetailPage() {
                     {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
                   </select>
                 </div>
+                {!docTask && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Due Date</label>
                   <input type="date" value={(editForm.due_date as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm" />
                 </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">SLA Days</label>
                   <input type="number" value={(editForm.sla_days as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, sla_days: e.target.value }))}

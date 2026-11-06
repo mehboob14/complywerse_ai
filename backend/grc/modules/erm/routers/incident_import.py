@@ -149,9 +149,11 @@ async def upload_incidents_file(
     if not rows:
         raise HTTPException(status_code=400, detail="No data rows found in file")
 
+    from ....routers.auth_router import platform_account
+
     email_to_id = {
         (getattr(u, "email", None) or "").strip().lower(): u.id
-        for u in db.query(GRCUser).all()
+        for u in db.query(GRCUser).filter(platform_account()).all()     # not accounts an access review imported
         if getattr(u, "email", None)
     }
     risks = db.query(Risk).filter(Risk.tenant_id == tenant_id).all()

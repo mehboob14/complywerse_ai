@@ -5,8 +5,7 @@
 // `module:submodule:action` grammar, same wildcards, same admin bypass) so a
 // dataset appears in Reports if, and only if, its module would appear in the nav.
 //
-// (The Sidebar keeps its own copy of this logic inline; it is a large,
-// frequently-touched component, so it isn't refactored onto this hook here —
+// (The Sidebar's copy of these rules is in components/layout/navAccess.ts —
 // if you change the rules, change both.)
 
 import { useEffect, useState } from 'react';
@@ -26,12 +25,15 @@ export interface Perms {
   authenticated: boolean;
   /** True when the user holds any of `required` (or when nothing is required). */
   can: (required?: string[]) => boolean;
+  /** A dataset shows when the user may open its module and the tenant has its feature. */
+  canUse: (dataset: { permissions?: string[]; feature?: string }) => boolean;
 }
 
 export function usePermissions(): Perms {
   const [granted, setGranted] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [features, setFeatures] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export function usePermissions(): Perms {
         if (!alive) return;
         if (data?.authenticated && data.user) {
           setAuthenticated(true);
+          setFeatures(Array.isArray(data.tenant?.features) ? data.tenant.features : []);
           const perms: string[] = (data.user.permissions || [])
             .filter((p: unknown) => typeof p === 'string')
             .map((p: string) => normalizePerm(p));
@@ -85,5 +88,8 @@ export function usePermissions(): Perms {
     return required.some(matches);
   };
 
-  return { loaded, isAdmin, authenticated, can };
+  const canUse = (dataset: { permissions?: string[]; feature?: string }): boolean =>
+    can(dataset.permissions) && (!dataset.feature || features.includes(dataset.feature));
+
+  return { loaded, isAdmin, authenticated, can, canUse };
 }

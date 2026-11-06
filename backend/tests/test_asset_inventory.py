@@ -64,6 +64,41 @@ def test_itam_parity_column_is_still_on_the_model(column):
     assert column in _asset_model_columns()
 
 
+# The whitelist above only guards the 14 columns one audit happened to look at.
+# `known_ips`, `origin_source` and `dns_aliases` shipped later with no entry and
+# nothing failed until a report query hit an older tenant and took down the
+# whole Asset Inventory dataset. So the check is now exhaustive by default:
+# every ITAsset column must either carry a migration entry or be named here as
+# part of the table's original shape. Adding a column to the model fails this
+# test until the author makes that choice deliberately.
+ORIGINAL_ASSET_COLUMNS = {
+    "id", "tenant_id", "name", "description", "asset_type", "owner_id",
+    "owner_name", "custodian", "host_name", "ip_address", "criticality",
+    "confidentiality_rating", "integrity_rating", "availability_rating",
+    "valuation", "vendor", "location", "status", "cde_environment",
+    "created_at",
+}
+
+
+def test_every_asset_column_is_migrated_or_original():
+    unguarded = _asset_model_columns() - _asset_migration_columns() - ORIGINAL_ASSET_COLUMNS
+    assert not unguarded, (
+        f"ITAsset columns with no _COLUMN_ADDS entry: {sorted(unguarded)}. "
+        f"Base.metadata.create_all never adds a column to an existing table, so "
+        f"every tenant DB older than the column raises UndefinedColumn on every "
+        f"asset query — SQLAlchemy SELECTs all mapped columns. Add a "
+        f"_COLUMN_ADDS tuple, or add the name to ORIGINAL_ASSET_COLUMNS if it "
+        f"really did ship with the table."
+    )
+
+
+def test_original_asset_columns_are_still_on_the_model():
+    """A renamed column left in ORIGINAL_ASSET_COLUMNS would silently re-open
+    the exemption for whatever replaced it."""
+    stale = ORIGINAL_ASSET_COLUMNS - _asset_model_columns()
+    assert not stale, f"ORIGINAL_ASSET_COLUMNS names columns not on ITAsset: {sorted(stale)}"
+
+
 def test_migration_entries_name_real_asset_columns():
     """A typo in a _COLUMN_ADDS tuple creates a stray column that no ORM
     attribute maps to — the ALTER succeeds and the real column stays missing,

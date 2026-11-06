@@ -68,12 +68,25 @@ def generate(
     # two concurrent runs were proven to collide on the unique (finding, control)
     # constraint and kill each other.
     from ....models import AiControlProposalRun
+    from datetime import datetime, timedelta
     active = db.query(AiControlProposalRun).filter(
         AiControlProposalRun.tenant_id == tenant_id,
         AiControlProposalRun.finished_at.is_(None)).first()
     if active is not None:
-        return {"status": "running", "run_id": active.run_id,
-                "message": "A mapping run is already in progress — its progress shows below."}
+        # Auto-expire a stale/abandoned run. A hard-killed or hung worker never
+        # reaches generate_proposals' crash handler, so its "running" row would
+        # otherwise block every future validate run forever. After 15 min with no
+        # completion, treat it as dead, close it, and let this run proceed.
+        started = getattr(active, "started_at", None)
+        if started is not None and started.tzinfo is not None:
+            started = started.replace(tzinfo=None)
+        if started is not None and (datetime.utcnow() - started) > timedelta(minutes=15):
+            active.error = "auto-expired: no completion after 15 min (worker likely died)"
+            active.finished_at = datetime.utcnow()
+            db.commit()
+        else:
+            return {"status": "running", "run_id": active.run_id,
+                    "message": "A mapping run is already in progress — its progress shows below."}
     vuln_ids = _scope_vuln_ids(db, tenant_id, ctem_scope_id)
     user_id = current_user.id
     slug = getattr(request.state, "tenant_slug", None)

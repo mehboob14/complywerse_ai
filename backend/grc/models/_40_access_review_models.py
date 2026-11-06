@@ -29,6 +29,9 @@ class AccessReviewCampaign(Base):
 
     # user_access | privileged_access | terminated_access
     review_type = Column(String(40), nullable=False, default="user_access")
+    # One connected source (a grc_user_roles.source tag, e.g. "digitalocean"),
+    # so a review of one system doesn't sample the whole directory. NULL = all.
+    source = Column(String(32), nullable=True)
     # draft | population_built | sampled | in_review | completed | archived
     status = Column(String(30), nullable=False, default="draft")
 
@@ -38,6 +41,20 @@ class AccessReviewCampaign(Base):
     requested_sample_size = Column(Integer, default=25)
     # {"include_admins": bool, "include_terminated": bool, "departments": [..]}
     risk_filters = Column(JSON, default=dict)
+
+    # Which rules it runs: every rule enabled in the library ("enabled"), the
+    # runnable rules that evidence one framework ("framework", `rule_framework` a
+    # crosswalk source slug), or a set a person picked ("custom", `rule_ids`).
+    # `rules_run` freezes what actually ran, so a later change to the library
+    # never rewrites a review's results.
+    rule_scope = Column(String(20), nullable=True, default="enabled")
+    rule_framework = Column(String(120), nullable=True)
+    rule_ids = Column(JSON, nullable=True)
+    rules_run = Column(JSON, nullable=True)
+    # What each rule found, frozen when the checks ran: per rule its result
+    # (pass | fail | not_applicable | not_run), how many it tested, and for a
+    # connector rule the resources that failed. Empty on reviews run before this.
+    rule_results = Column(JSON, nullable=True)
 
     # Audit period the review covers
     period_start = Column(Date, nullable=True)
@@ -103,6 +120,9 @@ class AccessReviewItem(Base):
     department = Column(String(255), nullable=True)
     designation = Column(String(255), nullable=True)
     roles_snapshot = Column(JSON, default=list)  # list of role names
+    # The same access, with the system each grant came from:
+    # [{"name": "DigitalOcean: SSH root access to droplets", "source": "digitalocean"}]
+    access_snapshot = Column(JSON, default=list)
     mfa_enabled = Column(Boolean, nullable=True)
     account_enabled = Column(Boolean, nullable=True)
     last_sign_in = Column(DateTime, nullable=True)
@@ -187,6 +207,9 @@ class AccessReviewFinding(Base):
     sod_rule_id = Column(
         Integer, ForeignKey("grc_sod_rules.id", ondelete="SET NULL"), nullable=True
     )
+    # The catalog rule that raised it ('AUTH-01'), so a review can say which
+    # rules passed as well as which failed.
+    rule_id = Column(String(40), nullable=True, index=True)
 
     # open | remediated | accepted_risk | false_positive
     status = Column(String(20), nullable=False, default="open")

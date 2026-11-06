@@ -5,10 +5,11 @@
  * Token in the URL identifies the campaign; tenant via subdomain or ?tenant_slug=.
  * Email must match the campaign creator's organization domain.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import { governanceApi, getTenantSlug } from '@/lib/api';
+import SignaturePad from '@/components/governance/SignaturePad';
 
 type PublicPayload = {
   campaign: {
@@ -31,106 +32,6 @@ type PublicPayload = {
     file_name?: string | null;
   };
 };
-
-function SignaturePad({
-  onChange,
-}: {
-  onChange: (dataUrl: string | null) => void;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawing = useRef(false);
-  const hasInk = useRef(false);
-
-  const resize = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const parent = canvas.parentElement;
-    const w = parent?.clientWidth || 480;
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = w * ratio;
-    canvas.height = 160 * ratio;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = '160px';
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, 160);
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    hasInk.current = false;
-    onChange(null);
-  }, [onChange]);
-
-  useEffect(() => {
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [resize]);
-
-  const pos = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    if ('touches' in e) {
-      const t = e.touches[0];
-      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
-    }
-    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
-  };
-
-  const start = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    drawing.current = true;
-    const p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  };
-
-  const move = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!drawing.current) return;
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    const p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    hasInk.current = true;
-    onChange(canvasRef.current!.toDataURL('image/png'));
-  };
-
-  const end = () => {
-    drawing.current = false;
-  };
-
-  const clear = () => {
-    resize();
-  };
-
-  return (
-    <div>
-      <div className="overflow-hidden rounded-lg border border-slate-300 bg-white touch-none">
-        <canvas
-          ref={canvasRef}
-          className="block w-full cursor-crosshair"
-          onMouseDown={start}
-          onMouseMove={move}
-          onMouseUp={end}
-          onMouseLeave={end}
-          onTouchStart={start}
-          onTouchMove={move}
-          onTouchEnd={end}
-        />
-      </div>
-      <button type="button" onClick={clear} className="mt-1.5 text-xs text-slate-500 hover:text-slate-800">
-        Clear signature
-      </button>
-    </div>
-  );
-}
 
 export default function PublicAttestPage() {
   const params = useParams();
@@ -209,7 +110,9 @@ export default function PublicAttestPage() {
         },
         tenantSlug,
       );
-      setDone({ message: (res.data as any)?.message || 'Thank you — your acknowledgment has been recorded.' });
+      setDone({
+        message: (res.data as any)?.message || 'Thank you — your acknowledgment has been recorded.',
+      });
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       setSubmitError(typeof detail === 'string' ? detail : 'Could not submit acknowledgment. Try again.');
@@ -346,8 +249,11 @@ export default function PublicAttestPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Digital signature</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Electronic signature</label>
               <SignaturePad onChange={setSignature} />
+              <p className="mt-1 text-xs text-slate-500">
+                Draw it with your mouse, finger or pen. It is kept with your acknowledgment, with the time and your IP address.
+              </p>
             </div>
             {submitError && <p className="text-sm text-rose-600">{submitError}</p>}
             <button

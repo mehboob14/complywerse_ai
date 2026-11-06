@@ -23,6 +23,7 @@ from ....models import (
     TPRAEvidenceLink, TPRASharedAssessment,
 )
 from . import service
+from .portal import sealed_token
 
 PACKAGE_FORMAT = "tpra-shared-assessment/v1"
 
@@ -112,7 +113,7 @@ def import_into_assessment(
         template_id=target.template_id or template_id,
         respondent_name=(f"Imported from exchange ({source_label})")[:255],
         responses=responses, status="submitted", submitted_at=datetime.utcnow(),
-        token=uuid.uuid4().hex,
+        token=sealed_token(),            # never a link: the buyer's own import
     )
     db.add(qr)
     db.flush()

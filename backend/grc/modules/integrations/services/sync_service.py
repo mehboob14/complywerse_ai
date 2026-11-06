@@ -162,7 +162,11 @@ class SyncService:
         tenant_id: int,
         triggered_by_user_id: Optional[int] = None,
         sync_type: str = "manual",
+        only_targets: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        """only_targets: when set (a list of IPs/CIDRs), the vulnerability sync is
+        SCOPED to just those hosts — used by a hosted (Flow 1) scan so it brings in
+        ONLY the target it scanned, not every other scan sitting on the scanner."""
         connection = db.query(IntegrationConnection).filter(
             IntegrationConnection.id == connection_id,
             IntegrationConnection.tenant_id == tenant_id,
@@ -194,7 +198,7 @@ class SyncService:
 
         try:
             synced_assets = SyncService._sync_assets(db, adapter, connection, tenant_id, stats)
-            SyncService._sync_vulnerabilities(db, adapter, connection, tenant_id, stats, synced_assets=synced_assets)
+            SyncService._sync_vulnerabilities(db, adapter, connection, tenant_id, stats, synced_assets=synced_assets, only_targets=only_targets)
             SyncService._sync_scans(db, adapter, connection, tenant_id, stats)
 
             # ── Auto-enrich CVE-bearing vulns (NVD CWE + EPSS + KEV) ──────────
@@ -572,7 +576,38 @@ class SyncService:
         tenant_id: int,
         stats: Dict[str, Any],
         synced_assets: Optional[List[Dict[str, Any]]] = None,
+        only_targets: Optional[List[str]] = None,
     ):
+        # Scope: when a hosted scan passes only_targets, we process ONLY those
+        # hosts' findings — so scanning one asset doesn't drag in every other scan
+        # already sitting on the scanner. Parse the IPs/CIDRs once.
+        import ipaddress as _ipa
+        _nets: List[Any] = []
+        _plain: set = set()
+        for t in (only_targets or []):
+            t = (t or "").strip()
+            if not t:
+                continue
+            try:
+                _nets.append(_ipa.ip_network(t, strict=False))
+            except ValueError:
+                _plain.add(t.lower())
+
+        def _host_in_scope(ip: str, host_name: str) -> bool:
+            if not only_targets:
+                return True   # unscoped = whole connection (manual/full sync)
+            ipx = (ip or "").strip()
+            if ipx.lower() in _plain or (host_name or "").strip().lower() in _plain:
+                return True
+            if ipx:
+                try:
+                    addr = _ipa.ip_address(ipx)
+                    if any(addr in n for n in _nets):
+                        return True
+                except ValueError:
+                    pass
+            return False
+
         transformer = get_transformer(connection.integration_type)
         integration_type = (connection.integration_type or "nexpose").lower()
         is_nessus = integration_type in ("nessus", "tenable")
@@ -633,6 +668,11 @@ class SyncService:
                 "fetch_failed": False,
                 "degraded": False,
             }
+            # Hosted-scan scoping: skip any host that isn't a scan target, so it
+            # gets NO findings AND is never touched by the closure engine (an
+            # out-of-scope host must not be read here as "fixed").
+            if not _host_in_scope(host_ctx["ip_address"], host_ctx["host_name"]):
+                continue
             host_contexts.append(host_ctx)
             # Enrich the finding identity with the host's REAL fingerprint (NetBIOS
             # name + MAC) from the credentialed per-host detail. The host list often

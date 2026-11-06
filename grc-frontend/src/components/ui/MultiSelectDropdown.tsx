@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
+import { initialsOf } from '@/lib/people';
 
 export interface MultiSelectDropdownItem {
   value: string;
@@ -41,6 +42,16 @@ export interface MultiSelectDropdownProps {
   dropdownClassName?: string;
   listClassName?: string;
   showSelectionInTrigger?: boolean;
+  /** Render the initials circle for items with a subLabel (people). Off for plain option lists. */
+  showAvatars?: boolean;
+  /** Greyed-out trigger that does not open. */
+  disabled?: boolean;
+  /** Offer "+ Add “typed text”" when the search matches no item exactly. */
+  onCreate?: (text: string) => void;
+  /** The trigger names every selected item ("Bilal, Role · Approvers") instead of "2 selected". */
+  namesInTrigger?: boolean;
+  /** A slim pill: just the title while nothing is chosen ("Type"), then "Type · Policy" or "Type · 2"; no count badge. */
+  compact?: boolean;
 }
 
 const sizeStyles = {
@@ -67,20 +78,12 @@ export function MultiSelectDropdown({
   dropdownClassName,
   listClassName,
   showSelectionInTrigger = true,
+  showAvatars = true,
+  disabled = false,
+  onCreate,
+  namesInTrigger = false,
+  compact = false,
 }: MultiSelectDropdownProps) {
-  const getInitials = (text: string) => {
-    const cleaned = text.trim();
-    if (!cleaned) return 'U';
-
-    const words = cleaned.split(/\s+/).filter(Boolean);
-    if (words.length >= 2) {
-      return `${words[0][0]}${words[1][0]}`.toUpperCase();
-    }
-
-    const compact = cleaned.replace(/[^a-zA-Z0-9]/g, '');
-    return compact.slice(0, 2).toUpperCase() || 'U';
-  };
-
   const [isOpen, setIsOpen] = useState(false);
   const [draftValues, setDraftValues] = useState<string[]>(selectedValues);
   const [query, setQuery] = useState('');
@@ -114,6 +117,22 @@ export function MultiSelectDropdown({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selectedValues]);
+
+  // Escape closes the open list and nothing else, wherever focus is (a click on the list's padding leaves it on <body>, where the
+  // list's own key handler never saw it and the dialog around the picker closed instead): caught before anything else hears it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      setQuery('');
+      triggerRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -172,29 +191,28 @@ export function MultiSelectDropdown({
     });
   }, [items, query]);
 
+  const typed = query.trim();
+  const canCreate = Boolean(onCreate && typed
+    && !items.some((item) => item.label.toLowerCase() === typed.toLowerCase()));
+
   const hasAppliedFilter = selectedValues.length > 0;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
 
+  // the choice is worked out first and reported once: a state updater may run twice (React does so while it renders in
+  // development), and one reporting from inside it attached a framework twice
   const toggleDraftValue = (value: string) => {
     if (!multiSelect) {
-      setDraftValues((current) => {
-        const next = current[0] === value ? [] : [value];
-        onApply(next);
-        // Single-select: commit + close so the picker feels instant.
-        setIsOpen(false);
-        setQuery('');
-        return next;
-      });
+      const next = draftValues[0] === value ? [] : [value];
+      setDraftValues(next);
+      onApply(next);
+      // Single-select: commit + close so the picker feels instant.
+      setIsOpen(false);
+      setQuery('');
       return;
     }
-
-    setDraftValues((current) => {
-      const next = current.includes(value)
-        ? current.filter((entry) => entry !== value)
-        : [...current, value];
-      onApply(next);
-      return next;
-    });
+    const next = draftValues.includes(value) ? draftValues.filter((entry) => entry !== value) : [...draftValues, value];
+    setDraftValues(next);
+    onApply(next);
   };
 
   // Suppress unused-prop warning. autoApply is always-on now; prop kept for compatibility.
@@ -204,8 +222,8 @@ export function MultiSelectDropdown({
     if (selectedLabels.length === 0) {
       return placeholder || title;
     }
-    if (selectedLabels.length === 1) {
-      return selectedLabels[0];
+    if (selectedLabels.length === 1 || namesInTrigger) {
+      return selectedLabels.join(', ');
     }
     return `${selectedLabels.length} selected`;
   })();
@@ -215,7 +233,11 @@ export function MultiSelectDropdown({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => { if (!disabled) setIsOpen((current) => !current); }}
+        disabled={disabled}
+        aria-label={triggerVariant === 'input' ? `${title}: ${triggerLabel}` : undefined}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         className={clsx(
           'inline-flex items-center gap-2 rounded-full border bg-white px-3 text-left text-slate-900 transition-colors',
           sizeStyles[size],
@@ -224,6 +246,7 @@ export function MultiSelectDropdown({
             : 'border-slate-300 hover:border-slate-400',
           triggerVariant === 'input' && 'rounded-lg',
           triggerVariant !== 'input' && 'whitespace-nowrap',
+          disabled && 'cursor-not-allowed bg-slate-50 opacity-60',
           triggerClassName
         )}
       >
@@ -231,14 +254,16 @@ export function MultiSelectDropdown({
           <span className="min-w-0 flex-1 truncate text-slate-700">{triggerLabel}</span>
         ) : (
           <>
-            <span className="text-slate-900">{title}:</span>
-            {showSelectionInTrigger && (
-              <span className="min-w-0 flex-1 truncate text-slate-600">{triggerLabel}</span>
+            <span className="text-slate-900">{compact ? title : `${title}:`}</span>
+            {showSelectionInTrigger && (!compact || hasAppliedFilter) && (
+              <span className="min-w-0 flex-1 truncate text-slate-600">
+                {compact ? `· ${selectedLabels.length === 1 ? selectedLabels[0] : selectedLabels.length}` : triggerLabel}
+              </span>
             )}
           </>
         )}
 
-        {hasAppliedFilter && (
+        {!compact && hasAppliedFilter && (multiSelect || triggerVariant !== 'input') && (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-[11px] font-medium text-primary-700">
             {selectedValues.length}
           </span>
@@ -285,13 +310,22 @@ export function MultiSelectDropdown({
           <div
             className={clsx('scrollbar-primary-thin max-h-64 overflow-auto overflow-x-auto p-2', listClassName)}
           >
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => { onCreate?.(typed); setIsOpen(false); setQuery(''); }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-medium text-primary-700 hover:bg-primary-50"
+              >
+                + Add “{typed}”
+              </button>
+            )}
             {filteredItems.length === 0 ? (
-              <div className="px-2 py-3 text-sm text-slate-500">No items found</div>
+              !canCreate && <div className="px-2 py-3 text-sm text-slate-500">No items found</div>
             ) : (
               filteredItems.map((item) => {
                 const checked = draftSet.has(item.value);
-                const hasAvatar = Boolean(item.avatarInitials || item.subLabel);
-                const initials = item.avatarInitials || getInitials(item.label);
+                const hasAvatar = showAvatars && Boolean(item.avatarInitials || item.subLabel);
+                const initials = item.avatarInitials || initialsOf(item.label);
                 const handleClick = () => {
                   if (item.disabled) return;
                   toggleDraftValue(item.value);

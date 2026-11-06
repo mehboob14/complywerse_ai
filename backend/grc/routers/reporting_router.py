@@ -27,24 +27,33 @@ frontend dataset).
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, String, and_, func, or_
+from sqlalchemy import Boolean, String, and_, false, func, or_, true
 from sqlalchemy.orm import Session
 
 from ..models import (
     CriticalTask, Evidence, GovernanceDocument, GRCUser, InternalControl, Issue, ITAsset,
-    MetricSnapshot, MetricTarget, Permission, ReportDefinition, Risk, Role,
-    RolePermission, Tenant, UserRole, Vendor, Vulnerability, get_db,
+    MetricSnapshot, MetricTarget, ReportDefinition, Risk, Tenant, Vendor, Vulnerability, get_db,
 )
 from ..services import metric_catalog, metric_snapshots
-from ..services import report_linkages
-from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth
+from ..services import report_linkages, report_open_catalog
+from .auth_router import (
+    get_user_primary_tenant, get_user_tenants, is_tenant_admin, require_auth, require_tenant_permission, tenant_permission_names,
+)
 
 router = APIRouter(prefix="/reporting", tags=["Reporting Engine"])
+
+# Reports' own rights (Administration > Roles > Reports & Analytics): saved reports and dashboards need reports:reports or
+# reports:dashboards, Analytics (Metabase) reports:analytics, a trend snapshot any of the three. Queries, aggregates, linkages
+# and trends already check the right of each dataset's own module (_user_can), so they are left as they are.
+_SAVED = [Depends(require_tenant_permission("reports:reports:view", "reports:dashboards:view"))]
+_ANALYTICS = [Depends(require_tenant_permission("reports:analytics:view"))]
+_ANY_REPORTS = [Depends(require_tenant_permission("reports:reports:view", "reports:dashboards:view", "reports:analytics:view"))]
 
 MAX_LIMIT = 500
 
@@ -292,22 +301,7 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
 def _user_perm_names(user: Any, db: Session) -> set:
     """The permission strings granted to a user, or {'*:*:*'} for admins /
     primary contact — mirrors how /auth/me resolves permissions."""
-    tenant = db.query(Tenant).first()
-    if tenant and getattr(tenant, "primary_contact_email", None) and user.email \
-            and tenant.primary_contact_email.lower() == user.email.lower():
-        return {"*:*:*"}
-    role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-    if not role_ids:
-        return set()
-    if db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first():
-        return {"*:*:*"}
-    perms = (
-        db.query(Permission)
-        .join(RolePermission, RolePermission.permission_id == Permission.id)
-        .filter(RolePermission.role_id.in_(role_ids))
-        .all()
-    )
-    return {p.name for p in perms if p.name}
+    return {"*:*:*"} if is_tenant_admin(db, user) else tenant_permission_names(db, user)
 
 
 def _satisfies(granted: set, required: str) -> bool:
@@ -396,8 +390,21 @@ def _apply_query_filters(
     body_filters: List[FilterSpec],
     logic: str,
     search: Optional[str],
+    db: Optional[Session] = None,
+    dataset_key: Optional[str] = None,
+    user: Any = None,
 ):
     """Shared WHERE builder for /query and /aggregate. Returns (query, skipped_filters)."""
+    if dataset_key == "tasks" and user is not None and db is not None:
+        # the tasks the person may see, as on their Task Board (services/task_visibility)
+        from ..services import task_visibility
+        q = task_visibility.visible(db, user, q)
+    if dataset_key == "gov_documents" and user is not None and db is not None:
+        # the documents a person may read, as every other list of documents (never-published drafts stay with who may see them)
+        from ..modules.governance import permissions as doc_permissions
+        visible = doc_permissions.visible_filter(db, user)
+        if visible is not None:
+            q = q.filter(visible)
     if search:
         term = f"%{search.strip()}%"
         search_cols = [c for c in (_col(model, name) for name in spec.search) if c is not None]
@@ -408,7 +415,7 @@ def _apply_query_filters(
     skipped_filters: List[Dict[str, Any]] = []
     for spec_f in body_filters:
         kind = spec.filterable.get(spec_f.col, "text")
-        cond, skip_reason = _build_condition(model, spec_f, kind)
+        cond, skip_reason = _build_condition(model, spec_f, kind, db=db, dataset_key=dataset_key)
         if cond is not None:
             conditions.append(cond)
         elif skip_reason:
@@ -448,7 +455,62 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return None
 
 
-def _build_condition(model: Any, spec: FilterSpec, kind: str):
+def _parse_multi_values(val: Any) -> List[str]:
+    """Decode multi-select filter values (JSON array, ``|``-joined, or scalar)."""
+    if val is None:
+        return []
+    if isinstance(val, (list, tuple)):
+        return [str(x).strip() for x in val if str(x).strip()]
+    s = str(val).strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    if "|" in s:
+        return [p.strip() for p in s.split("|") if p.strip()]
+    return [s]
+
+
+# Sentinel matching the frontend EMPTY_TOKEN — blank / unassigned facet pick.
+_EMPTY_TOKEN = "__EMPTY__"
+
+
+def _link_presence_condition(model: Any, spec: FilterSpec, db: Session, dataset_key: str):
+    """`linkpresence_<target>` + linked/notlinked as a real WHERE clause.
+
+    The browser can only judge "is this row linked" from enriched rows it has
+    already downloaded, so a gap filter used to be capped at whatever the build
+    pass fetched (5,000 rows) and quietly reported every row past that as
+    unlinked. Resolving the linked id set in SQL makes it exact over the whole
+    register and lets the answer paginate like any other filter.
+    """
+    target = spec.col[len("linkpresence_"):]
+    pk = _col(model, "id")
+    if not target or pk is None:
+        return None, "unknown_column"
+    linked = report_open_catalog.linked_base_ids(db, dataset_key, target)
+    if linked is None:
+        return None, "unsupported_operator"   # no join edge — let the client try
+    if not linked:
+        # Nothing is linked: "not linked" is everything, "linked" is nothing.
+        # Expressed as a literal so an empty IN () never becomes a SQL error.
+        return (true() if spec.op == "notlinked" else false()), None
+    ids = list(linked)
+    return (pk.notin_(ids) if spec.op == "notlinked" else pk.in_(ids)), None
+
+
+def _build_condition(
+    model: Any,
+    spec: FilterSpec,
+    kind: str,
+    db: Optional[Session] = None,
+    dataset_key: Optional[str] = None,
+):
     """Translate one filter condition into a SQLAlchemy expression.
 
     Returns ``(condition_or_None, skip_reason_or_None)``. `skip_reason` is only
@@ -457,15 +519,18 @@ def _build_condition(model: Any, spec: FilterSpec, kind: str):
     value) so the caller can surface it as a `warnings.skipped_filters` entry.
     The common "no value typed yet" case stays silent, exactly like before.
     """
+    op = spec.op
+
+    # Cross-module link presence resolves through the report linkage graph, not
+    # a column on this table — so it is handled before the column lookup.
+    if op in ("linked", "notlinked"):
+        if db is not None and dataset_key and spec.col.startswith("linkpresence_"):
+            return _link_presence_condition(model, spec, db, dataset_key)
+        return None, "unsupported_operator"
+
     col = _col(model, spec.col)
     if col is None:
         return None, "unknown_column"
-    op = spec.op
-
-    # Cross-module linkage filters (linked/notlinked) are a client-side
-    # (report-builder) concept — server mode has no join graph here yet.
-    if op in ("linked", "notlinked"):
-        return None, "unsupported_operator"
 
     # Emptiness — only string columns have a meaningful "" case; on date/number/
     # boolean columns `col == ""` would be a Postgres type error, so use NULL only.
@@ -506,13 +571,51 @@ def _build_condition(model: Any, spec: FilterSpec, kind: str):
     # Boolean-backed badge columns (kev_flag, internet_facing): coerce truthy text
     # (func.lower / ilike on a boolean column is a Postgres type error).
     if isinstance(col.type, Boolean):
+        if op in ("in", "notin"):
+            parts = _parse_multi_values(val)
+            names = [p for p in parts if p != _EMPTY_TOKEN]
+            if not names:
+                return None, "invalid_value"
+            # Match if ANY selected token is truthy-equivalent to the column.
+            wants_true = any(
+                str(p).strip().lower() in ("1", "true", "yes", "y", "on") for p in names
+            )
+            wants_false = any(
+                str(p).strip().lower() in ("0", "false", "no", "n", "off") for p in names
+            )
+            clauses = []
+            if wants_true:
+                clauses.append(col.is_(True))
+            if wants_false:
+                clauses.append(or_(col.is_(False), col.is_(None)))
+            if not clauses:
+                return None, "invalid_value"
+            expr = or_(*clauses)
+            return (~expr if op == "notin" else expr), None
         if op not in ("eq", "neq"):
             return None, "unsupported_operator"
         truthy = str(val).strip().lower() in ("1", "true", "yes", "y", "on")
         expr = col.is_(True) if truthy else or_(col.is_(False), col.is_(None))
         return (~expr if op == "neq" else expr), None
 
-    # text / badge
+    # text / badge — including multi-select facets
+    if op in ("in", "notin"):
+        parts = _parse_multi_values(val)
+        if not parts:
+            return None, None
+        wants_empty = _EMPTY_TOKEN in parts
+        names = [p for p in parts if p != _EMPTY_TOKEN]
+        is_text = isinstance(col.type, String)
+        clauses = []
+        if names:
+            clauses.append(or_(*[_norm_col(col) == _norm_literal(n) for n in names]))
+        if wants_empty:
+            clauses.append(or_(col.is_(None), col == "") if is_text else col.is_(None))
+        if not clauses:
+            return None, "invalid_value"
+        expr = or_(*clauses)
+        return (~expr if op == "notin" else expr), None
+
     s = str(val)
     if op == "eq":
         return _norm_col(col) == _norm_literal(s), None
@@ -579,6 +682,7 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
 
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
+        db=db, dataset_key=body.dataset, user=user,
     )
 
     total = q.count()
@@ -744,6 +848,7 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
     q = db.query(*select_exprs).select_from(model)
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
+        db=db, dataset_key=body.dataset, user=user,
     )
     if group_cols:
         q = q.group_by(*group_cols)
@@ -780,7 +885,10 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
             col = _col(model, field) if field else None
             g_exprs.append(_agg_sql(mm["fn"], col).label(mm["alias"]))
         gq = db.query(*g_exprs).select_from(model)
-        gq, _ = _apply_query_filters(gq, model, spec, body.filters, body.logic, body.search)
+        gq, _ = _apply_query_filters(
+            gq, model, spec, body.filters, body.logic, body.search,
+            db=db, dataset_key=body.dataset, user=user,
+        )
         g_row = gq.one()
         g_map = g_row._mapping if hasattr(g_row, "_mapping") else None
         for i, mm in enumerate(measure_meta):
@@ -890,15 +998,21 @@ def _ensure_report_table(db: Session) -> None:
 class ReportDefIn(BaseModel):
     slug: str
     name: str
-    dataset: str
+    # A dashboard draws on its tiles' reports, so it carries no dataset.
+    dataset: str = ""
+    kind: str = "report"
     spec: Dict[str, Any] = Field(default_factory=dict)
     is_shared: bool = False
+
+
+_KINDS = frozenset({"report", "dashboard"})
 
 
 def _report_out(r: ReportDefinition, user_id: Optional[int]) -> Dict[str, Any]:
     return {
         "slug": r.slug,
         "name": r.name,
+        "kind": getattr(r, "kind", None) or "report",
         "dataset": r.dataset,
         "spec": r.spec or {},
         "is_shared": bool(r.is_shared),
@@ -907,20 +1021,44 @@ def _report_out(r: ReportDefinition, user_id: Optional[int]) -> Dict[str, Any]:
     }
 
 
-@router.get("/reports")
-def list_reports(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
-    """Reports the caller can see: their own, plus anything shared in the tenant."""
+def _kind_filter(kind: str):
+    """Rows written before `kind` existed have NULL, and they are all reports —
+    so a plain `kind == 'report'` would hide every report saved to date."""
+    if kind == "report":
+        return or_(ReportDefinition.kind.is_(None), ReportDefinition.kind == "report")
+    return ReportDefinition.kind == kind
+
+
+@router.get("/reports", dependencies=_SAVED)
+def list_reports(
+    kind: str = "report",
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Reports the caller can see: their own, plus anything shared in the tenant.
+
+    `kind` selects reports or dashboards — they share this table because a
+    dashboard is the same kind of object (an owned, shareable JSON spec).
+    """
     _ensure_report_table(db)
+    if kind not in _KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown kind '{kind}'.",
+        )
     rows = (
         db.query(ReportDefinition)
-        .filter(or_(ReportDefinition.created_by == user.id, ReportDefinition.is_shared.is_(True)))
+        .filter(
+            or_(ReportDefinition.created_by == user.id, ReportDefinition.is_shared.is_(True)),
+            _kind_filter(kind),
+        )
         .order_by(ReportDefinition.updated_at.desc())
         .all()
     )
     return {"reports": [_report_out(r, user.id) for r in rows]}
 
 
-@router.get("/reports/{slug}")
+@router.get("/reports/{slug}", dependencies=_SAVED)
 def get_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Fetch one saved report by slug (own or shared-in-tenant)."""
     _ensure_report_table(db)
@@ -941,7 +1079,7 @@ def get_report(slug: str, db: Session = Depends(get_db), user=Depends(require_au
     return _report_out(shared, user.id)
 
 
-@router.post("/reports")
+@router.post("/reports", dependencies=_SAVED)
 def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Create or update one of the caller's own reports (keyed by slug).
 
@@ -964,6 +1102,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
         db.add(row)
 
     row.name = body.name
+    row.kind = body.kind if body.kind in _KINDS else "report"
     row.dataset = body.dataset
     row.spec = body.spec
     row.is_shared = body.is_shared
@@ -972,7 +1111,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
     return _report_out(row, user.id)
 
 
-@router.delete("/reports/{slug}")
+@router.delete("/reports/{slug}", dependencies=_SAVED)
 def delete_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Delete one of the caller's own reports. Shared reports owned by someone
     else are not the caller's to remove."""
@@ -1267,10 +1406,189 @@ def reset_target(metric: str, dimension: str = "overall", dimension_value: str =
     return {"ok": True, "metric": metric, "target": m.target, "warn": m.warn, "critical": m.critical}
 
 
-@router.post("/trends/snapshot")
+@router.post("/trends/snapshot", dependencies=_ANY_REPORTS)
 def capture_snapshot(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Capture today's cross-module snapshot on demand (idempotent per day) so a
     user doesn't have to wait for the nightly sweep to see a fresh point."""
     tenant_id = _tenant_id(user, db)
     written = metric_snapshots.write_daily(db, tenant_id)
     return {"written": written, "as_of": date.today().isoformat()}
+
+
+# ─── Metabase Analytics (Reports › Analytics) ───────────────────────────────
+
+class MetabaseSsoBody(BaseModel):
+    return_to: str = Field("/", description="Metabase path after SSO, e.g. /collection/root")
+    groups: Optional[List[str]] = None
+
+
+@router.get("/metabase/status", dependencies=_ANALYTICS)
+def metabase_status(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Frontend probe: is Metabase configured, embed mode, semantic views present."""
+    from ..services import metabase_sso
+    from ..services.reporting_semantic_layer import list_reporting_view_catalog
+
+    views_ok: List[str] = []
+    try:
+        bind = db.get_bind()
+        engine = getattr(bind, "engine", bind)
+        from sqlalchemy import text as _text
+        rows = engine.connect().execute(
+            _text(
+                "SELECT table_name FROM information_schema.views "
+                "WHERE table_schema = 'public' AND table_name LIKE 'reporting_%'"
+            )
+        ).fetchall()
+        views_ok = [r[0] for r in rows]
+    except Exception:
+        views_ok = []
+
+    return {
+        "configured": metabase_sso.metabase_enabled(),
+        "site_url": metabase_sso.metabase_site_url() or None,
+        "embed_enabled": metabase_sso.metabase_embed_enabled(),
+        "jwt_sso": metabase_sso.jwt_sso_configured(),
+        "static_embed": metabase_sso.static_embed_configured(),
+        "mode": metabase_sso.metabase_mode(),
+        "reporting_views": views_ok,
+        "view_catalog": list_reporting_view_catalog(),
+        "starter_dashboards": metabase_sso.starter_dashboard_catalog(),
+        "subscriptions": {
+            "owner": "metabase",
+            "requires": ["smtp_configured_in_metabase"],
+            "hint": (
+                "Metabase Admin → Settings → Email (local: Mailhog on :8025 via "
+                "deploy/metabase compose). Then dashboard → Sharing → Subscriptions."
+            ),
+            "mailhog_ui": "http://127.0.0.1:8025",
+            "configure_script": "deploy/metabase/configure_smtp.py",
+        },
+        "licence_note": (
+            "JWT SSO requires Metabase Pro (set METABASE_PRO_JWT=1). "
+            "OSS uses open_link or static embeds."
+        ),
+    }
+
+
+@router.post("/metabase/sso", dependencies=_ANALYTICS)
+def metabase_sso_url(
+    request: Request,
+    body: MetabaseSsoBody,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Return a Metabase entry URL (Pro JWT SSO, or OSS open_link fallback)."""
+    from ..services import metabase_sso
+
+    if not metabase_sso.metabase_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metabase is not configured. Set METABASE_SITE_URL on the backend.",
+        )
+
+    # Prefer the active request tenant (subdomain / X-Tenant-Slug); fall back
+    # to the singleton Tenant row on this DB. get_user_tenants returns ids only.
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        tenant = getattr(request.state, "tenant", None)
+        if isinstance(tenant, dict):
+            slug = tenant.get("slug")
+    if not slug:
+        row = db.query(Tenant).first()
+        slug = getattr(row, "slug", None) if row else None
+
+    groups = body.groups or ["compliverse_analyst"]
+    if slug:
+        groups = list({*groups, f"tenant_{slug}"})
+    if getattr(user, "is_superuser", False) or getattr(user, "is_platform_admin", False):
+        groups = list({*groups, "compliverse_admin"})
+
+    mode = metabase_sso.metabase_mode()
+    try:
+        if metabase_sso.jwt_sso_configured():
+            token = metabase_sso.mint_sso_token(
+                email=user.email,
+                display_name=getattr(user, "display_name", None) or user.username,
+                groups=groups,
+                tenant_slug=slug,
+            )
+            url = metabase_sso.sso_login_url(token, return_to=body.return_to or "/")
+            mode = "embed" if metabase_sso.metabase_embed_enabled() else "sso_link"
+        else:
+            # OSS: deep-link into Metabase (user logs in once in that tab).
+            url = metabase_sso.open_site_url(body.return_to or "/")
+            mode = "open_link"
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to build Metabase entry URL: {exc}",
+        ) from exc
+
+    return {
+        "url": url,
+        "expires_in": 300 if mode in ("sso_link", "embed") else None,
+        "tenant_slug": slug,
+        "mode": mode,
+    }
+
+
+@router.get("/metabase/embed/{dashboard_key}", dependencies=_ANALYTICS)
+def metabase_embed_dashboard(
+    dashboard_key: str,
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Mint a short-lived static embed URL for a curated starter dashboard."""
+    from ..services import metabase_sso
+
+    if not metabase_sso.static_embed_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Static embedding is not configured. "
+                "Set METABASE_SITE_URL, METABASE_EMBEDDING_SECRET_KEY, METABASE_EMBED_ENABLED=1."
+            ),
+        )
+
+    catalog = {d["key"]: d for d in metabase_sso.starter_dashboard_catalog()}
+    entry = catalog.get(dashboard_key)
+    if not entry or not entry.get("metabase_dashboard_id"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown or unmapped starter dashboard '{dashboard_key}'.",
+        )
+
+    try:
+        url = metabase_sso.mint_static_embed_url(
+            resource_type="dashboard",
+            resource_id=int(entry["metabase_dashboard_id"]),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to mint embed URL: {exc}",
+        ) from exc
+
+    return {
+        "key": dashboard_key,
+        "title": entry.get("title"),
+        "url": url,
+        "expires_in": 600,
+        "metabase_dashboard_id": entry["metabase_dashboard_id"],
+    }
+
+
+@router.post("/metabase/ensure-views", status_code=200, dependencies=_ANALYTICS)
+def metabase_ensure_views(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Admin/analyst helper: (re)create reporting_* views on this tenant DB."""
+    from ..services.reporting_semantic_layer import ensure_reporting_views
+
+    bind = db.get_bind()
+    engine = getattr(bind, "engine", bind)
+    applied = ensure_reporting_views(engine)
+    return {"ok": True, "applied": applied}

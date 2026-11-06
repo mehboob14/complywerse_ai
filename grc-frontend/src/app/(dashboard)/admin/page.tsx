@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug, PlugZap } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
-import TeamsAdminPage from './teams/page';
+import DepartmentsAdminPage from './departments/page';
 import AuditLogsPage from './audit-logs/page';
 import PasswordPolicyPage from './password-policy/page';
 import CloudConnectorsAdminPage from './cloud-connectors/page';
@@ -16,31 +16,40 @@ import IntegrationsConnectionsPage from '../integrations/connections/page';
 import WorkflowEnginePage from '../workflow-engine/page';
 import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'teams' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'workflow' | 'audit';
+type AdminTab = 'company' | 'users' | 'roles' | 'departments' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'evidence-collectors' | 'identity' | 'workflow' | 'audit';
 
 const VALID_ADMIN_TABS = new Set<AdminTab>([
-  'company','users','roles','teams','password-policy','integrations',
+  'company','users','roles','departments','password-policy','integrations',
   'cloud-connectors','connectors','evidence-collectors','identity','workflow','audit',
 ]);
 
+const tabOf = (asked: string | null | undefined): AdminTab | null => {
+  const raw = asked === 'teams' ? 'departments' : asked;      // ?tab=teams: teams are departments now (old links and bookmarks)
+  return raw && VALID_ADMIN_TABS.has(raw as AdminTab) ? (raw as AdminTab) : null;
+};
+
 export default function AdminPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   // Sidebar Administration popover deep-links via ?tab=<id>. Default
   // landing stays 'company' when no/invalid param is given — preserves
   // existing behavior for anyone hitting /admin without a query string.
-  const initialTab = (() => {
-    const raw = searchParams?.get('tab');
-    if (raw && VALID_ADMIN_TABS.has(raw as AdminTab)) return raw as AdminTab;
-    return 'company';
-  })();
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<AdminTab>(tabOf(searchParams?.get('tab')) ?? 'company');
+  // a sidebar link to another tab while this page is open changes ?tab= without remounting the page: follow it
+  useEffect(() => {
+    const asked = tabOf(searchParams?.get('tab'));
+    if (asked) setActiveTab(asked);
+  }, [searchParams]);
+  // the address always names the tab on show, so the same sidebar link works again after a tab was picked by hand
+  const choose = (id: AdminTab) => { setActiveTab(id); router.replace(`${pathname ?? ''}?tab=${id}`, { scroll: false }); };
 
   const adminTabs: { id: AdminTab; label: string; icon: typeof Building2 }[] = [
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'roles', label: 'Role Management', icon: ShieldCheck },
-    // Org teams — used as owning_team dropdown on assets + future ownership chains.
-    { id: 'teams', label: 'Teams', icon: UsersRound },
+    // Org departments — the one list the document, sign-off, asset, assessment and risk pickers read.
+    { id: 'departments', label: 'Departments', icon: UsersRound },
     // Password & session policy — controls complexity, lockout, and idle timeout.
     { id: 'password-policy', label: 'Password Policy', icon: Lock },
     { id: 'integrations', label: 'Integrations', icon: Bot },
@@ -65,7 +74,7 @@ export default function AdminPage() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveTab(id)}
+                onClick={() => choose(id)}
                 className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
                     ? 'border-primary-600 text-primary-700'
@@ -84,7 +93,7 @@ export default function AdminPage() {
         {activeTab === 'company' && <OrganizationProfilePage />}
         {activeTab === 'users' && <UsersManagementPage />}
         {activeTab === 'roles' && <RolesManagementPage />}
-        {activeTab === 'teams' && <TeamsAdminPage />}
+        {activeTab === 'departments' && <DepartmentsAdminPage />}
         {activeTab === 'password-policy' && <PasswordPolicyPage />}
         {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
         {activeTab === 'cloud-connectors' && <CloudConnectorsAdminPage />}

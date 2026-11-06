@@ -15,16 +15,17 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import {
   LayoutDashboard, Shield, Bug, Smartphone, BarChart3, Radar,
-  AlertTriangle, Activity, ArrowRight, ArrowLeft, ShieldCheck, TrendingUp, ClipboardList,
+  AlertTriangle, Activity, ArrowRight, ArrowLeft, ShieldCheck, TrendingUp, ClipboardList, BookOpen,
 } from 'lucide-react';
-import ASVSAssessmentTab from '@/components/compliance/ASVSAssessmentTab';
-import OwaspTestingTab from '@/components/compliance/OwaspTestingTab';
-import MobileAppSecurityTab from '@/components/compliance/MobileAppSecurityTab';
-import MaturityAssessmentTab from '@/components/compliance/MaturityAssessmentTab';
+import AssessmentTypePage from '@/components/compliance/scoping/AssessmentTypePage';
+import InFlightList from '@/components/compliance/scoping/InFlightList';
+import { countedForOverview } from '@/components/compliance/scoping/scopingModel';
+import type { AssessmentRow } from '@/components/compliance/scoping/scopingApi';
+import NistLibraryTab from '@/components/compliance/NistLibraryTab';
 
 type TabKey =
   | 'overview' | 'asvs' | 'owasp_testing' | 'cs_mobile'
-  | 'cs_csir' | 'cs_cti' | 'cs_incident' | 'cs_itsecops';
+  | 'cs_csir' | 'cs_cti' | 'cs_incident' | 'cs_itsecops' | 'nist_library';
 type DrillKind = 'gaps' | 'coverage' | 'compliant' | 'started';
 
 type Feature = { key: TabKey; label: string; icon: React.ElementType; group: string; format: string };
@@ -42,27 +43,16 @@ const FEATURES: Feature[] = [
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   ...FEATURES.map((f) => ({ key: f.key, label: f.label, icon: f.icon })),
+  { key: 'nist_library', label: 'NIST library', icon: BookOpen },
 ];
 const VALID = new Set<TabKey>(TABS.map((t) => t.key));
 
+// Each assessment type opens on its own page (what to have ready, the questionnaire, the assessments already made from it, and Start); the questionnaire
+// tab itself is one click away on /cyber-security/questionnaires/<type>.
 function renderFeature(tab: TabKey): React.ReactNode {
-  switch (tab) {
-    case 'asvs': return <ASVSAssessmentTab />;
-    case 'owasp_testing': return <OwaspTestingTab />;
-    case 'cs_mobile': return <MobileAppSecurityTab />;
-    case 'cs_csir': return <MaturityAssessmentTab format="csir_maturity" />;
-    case 'cs_cti': return <MaturityAssessmentTab format="cti_maturity" />;
-    case 'cs_incident': return <MaturityAssessmentTab format="incident_maturity" />;
-    case 'cs_itsecops': return <MaturityAssessmentTab format="itsecops_maturity" />;
-    default: return null;
-  }
-}
-
-interface RawAssessment {
-  id: number; name: string; assessment_format?: string; status: string;
-  overall_score: number | null; total_items: number | null;
-  complied_count: number | null; partially_complied_count: number | null;
-  not_complied_count: number | null; in_progress_count: number | null; na_count: number | null;
+  if (tab === 'nist_library') return <NistLibraryTab />;
+  const feature = FEATURES.find((f) => f.key === tab);
+  return feature ? <AssessmentTypePage format={feature.format} /> : null;
 }
 
 interface Row {
@@ -84,40 +74,37 @@ const STATUS_SEGMENTS: { key: keyof Row; label: string; color: string }[] = [
 
 // Shared query + row computation (react-query caches by key, so the dashboard
 // and every drill-down view reuse one fetch).
-function useCyberRows(): { rows: Row[]; isLoading: boolean } {
+function useCyberRows(): { rows: Row[]; isLoading: boolean; all: AssessmentRow[] } {
   const { data, isLoading } = useQuery({
     queryKey: ['cyber-security-assessments'],
     queryFn: async () => {
-      const r = await apiClient.get('/compliance/assessments', { params: { skip: 0, limit: 100 } });
-      return (r.data?.assessments ?? r.data ?? []) as RawAssessment[];
+      // an assessment is made per application or function, so a type can hold many: the list is longer than it was
+      const r = await apiClient.get('/compliance/assessments', { params: { skip: 0, limit: 500 } });
+      return (r.data?.assessments ?? r.data ?? []) as AssessmentRow[];
     },
   });
 
-  const byFormat = new Map<string, RawAssessment>();
-  for (const a of data ?? []) {
-    if (a.assessment_format && FEATURES.some((f) => f.format === a.assessment_format)) {
-      const prev = byFormat.get(a.assessment_format);
-      if (!prev || (a.total_items ?? 0) > (prev.total_items ?? 0)) byFormat.set(a.assessment_format, a);
-    }
-  }
-
   const rows: Row[] = FEATURES.map((f) => {
-    const a = byFormat.get(f.format);
-    const complied = a?.complied_count || 0;
-    const partial = a?.partially_complied_count || 0;
-    const notc = a?.not_complied_count || 0;
-    const inprog = a?.in_progress_count || 0;
-    const na = a?.na_count || 0;
-    const total = a?.total_items || complied + partial + notc + inprog + na;
+    // every assessment of the type that counts (started ones; the questionnaire only until one starts, or when it was answered): their numbers add up
+    const mine = countedForOverview((data ?? []).filter((a) => a.assessment_format === f.format));
+    const sum = (pick: (a: AssessmentRow) => number | null) => mine.reduce((s, a) => s + (pick(a) || 0), 0);
+    const complied = sum((a) => a.complied_count);
+    const partial = sum((a) => a.partially_complied_count);
+    const notc = sum((a) => a.not_complied_count);
+    const inprog = sum((a) => a.in_progress_count);
+    const na = sum((a) => a.na_count);
+    const total = sum((a) => a.total_items) || complied + partial + notc + inprog + na;
     const assessed = complied + partial + notc + na;
+    const scored = mine.filter((a) => a.overall_score != null);
+    const weight = scored.reduce((s, a) => s + Math.max(1, a.total_items ?? 1), 0);
     return {
-      f, started: !!a, total, assessed, complied, partial, notc, inprog, na,
-      score: Math.round(a?.overall_score ?? 0),
+      f, started: mine.length > 0, total, assessed, complied, partial, notc, inprog, na,
+      score: weight ? Math.round(scored.reduce((s, a) => s + (a.overall_score as number) * Math.max(1, a.total_items ?? 1), 0) / weight) : 0,
       coverage: total > 0 ? Math.round((assessed / total) * 100) : 0,
       gaps: notc + inprog,
     };
   });
-  return { rows, isLoading };
+  return { rows, isLoading, all: data ?? [] };
 }
 
 function Kpi({ label, value, sub, icon: Icon, onClick, hint }: {
@@ -149,7 +136,7 @@ function Kpi({ label, value, sub, icon: Icon, onClick, hint }: {
 }
 
 function OverviewDashboard({ onDrill, onOpen }: { onDrill: (k: DrillKind) => void; onOpen: (t: TabKey) => void }) {
-  const { rows, isLoading } = useCyberRows();
+  const { rows, isLoading, all } = useCyberRows();
 
   const started = rows.filter((r) => r.started).length;
   const totItems = rows.reduce((s, r) => s + r.total, 0);
@@ -192,6 +179,9 @@ function OverviewDashboard({ onDrill, onOpen }: { onDrill: (k: DrillKind) => voi
         <Kpi label="Compliant" value={`${compliantPct}%`} sub={`${totComplied} of assessed controls`} icon={ShieldCheck} hint="Break down" onClick={() => onDrill('compliant')} />
         <Kpi label="Open gaps" value={totGaps} sub="Not complied + in progress" icon={AlertTriangle} hint="Break down" onClick={() => onDrill('gaps')} />
       </div>
+
+      {/* ── Assessments made for an application or function that are still being scoped or answered ── */}
+      <InFlightList rows={all} />
 
       {/* ── Aggregate control-status mix across every assessment ── */}
       {statusTotal > 0 && (

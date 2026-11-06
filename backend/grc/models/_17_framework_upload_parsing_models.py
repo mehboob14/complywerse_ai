@@ -2,6 +2,10 @@ from ._16_certification_journey_models import *  # noqa: F401,F403
 
 # =============================================================================
 # 15. Framework Upload & Parsing Models
+#
+# The in-app upload feature (upload, AI parse, parsed-control review, alignment, publish, framework assessments)
+# was removed. These tables stay: they ARE the framework library (frameworks already uploaded, and those loaded by
+# scripts/batch_parse_frameworks.py) that journeys, evidence links, governance mappings and the dashboards read.
 # =============================================================================
 
 class UploadedFramework(Base):
@@ -11,6 +15,9 @@ class UploadedFramework(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
+    # Stable product slug matching seed_data/scf/crosswalk_registry.json (e.g. 'soc2').
+    # Nullable for legacy rows; backfilled when frameworks are re-seeded or scoped.
+    slug = Column(String(64), nullable=True, index=True)
     description = Column(Text, nullable=True)
     file_name = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
@@ -116,6 +123,9 @@ class ParsedFrameworkControl(Base):
     # scoring: all must be met for 100%). Empty list = single-statement spec
     # (the requirement itself is the one binary check). List of strings.
     assessment_criteria = Column(JSON, default=list)
+    # What a framework carries that the columns above have no place for. UAE IA: the priority tier P1-P4, applicability, control
+    # types, implementation guidance, and the standard's own sub-controls (nested points, evidence). NULL for frameworks without any.
+    native_attributes = Column(JSON, nullable=True)
 
     section_number = Column(String(50), nullable=True)
     parent_section = Column(String(255), nullable=True)

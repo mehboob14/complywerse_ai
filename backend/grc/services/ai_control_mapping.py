@@ -37,6 +37,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from .ai_gateway.field_policies import ai_view
+
 logger = logging.getLogger(__name__)
 
 PROMPT_VERSION = "p6-ctx-2.0"
@@ -92,6 +94,11 @@ def load_corpus(db: Session, tenant_id: Optional[int]) -> List[Dict[str, Any]]:
                  NormalizedControl.domain, NormalizedControl.statement)
     if run is not None:
         q = q.filter(NormalizedControl.run_id == run)
+    # The corpus is read by the model in full, statements included. SCF rows
+    # carry licensed text (CC BY-ND, no AI derivatives), and with no baseline
+    # run the unfiltered query above is every SCF control in the tenant.
+    from .licence_guard import exclude_restricted
+    q = exclude_restricted(q, NormalizedControl)
     corpus: List[Dict[str, Any]] = [
         {"kind": "normalized_control", "ref_id": r.id, "code": r.code or "", "title": r.name or "",
          "domain": r.domain or "", "framework": "Unified Control Library",
@@ -194,15 +201,16 @@ Hard rules:
 
 
 def _vuln_context(vuln, *, cwe_name: Optional[str], nvd_description: Optional[str]) -> str:
+    v = ai_view(vuln, "vulnerabilities.control_proposals", model="Vulnerability")   # what the field policy lets this prompt carry
     return f"""FINDING
-  title: {getattr(vuln, 'title', '') or ''}
-  cve_id: {getattr(vuln, 'cve_id', None) or 'none'}
-  cwe: {getattr(vuln, 'cwe_id', None) or 'none'} — {cwe_name or 'unknown'}
-  cvss_vector: {getattr(vuln, 'cvss_vector', None) or 'none'}
-  severity: {getattr(vuln, 'severity', None) or 'unknown'}
-  scanner_description: {(getattr(vuln, 'description', None) or '')[:1200]}
+  title: {v['title'] or ''}
+  cve_id: {v['cve_id'] or 'none'}
+  cwe: {v['cwe_id'] or 'none'} — {cwe_name or 'unknown'}
+  cvss_vector: {v['cvss_vector'] or 'none'}
+  severity: {v['severity'] or 'unknown'}
+  scanner_description: {v['description'] or ''}
   cve_description (NVD): {(nvd_description or 'n/a')[:800]}
-  epss: {getattr(vuln, 'epss_score', None) if getattr(vuln, 'epss_score', None) is not None else 'n/a'}   in_kev: {bool(getattr(vuln, 'kev_flag', False))}"""
+  epss: {v['epss_score'] if v['epss_score'] is not None else 'n/a'}   in_kev: {bool(v['kev_flag'])}"""
 
 
 def build_judge_prompt(vuln, candidates: List[Dict[str, Any]], *, cwe_name: Optional[str],
@@ -236,8 +244,10 @@ def _scan_chapter(client, model: str, context: str, chapter: List[Dict[str, Any]
                   k: int, total: int) -> List[int]:
     """One chapter of round 1. Retries once; raises on second failure — a
     silently-skipped chapter would hide part of the library."""
-    user = f"{context}\n\nCHAPTER {k}/{total} OF THE CONTROL LIBRARY (id | code | title | domain | statement)\n" + \
-           "\n".join(_line(c) for c in chapter)
+    # The library chapter comes first and the finding last: the chapter is the same for every finding, so the provider's
+    # prompt cache can reuse it (it matches from the start of the prompt); the finding is the only part that changes.
+    user = f"CHAPTER {k}/{total} OF THE CONTROL LIBRARY (id | code | title | domain | statement)\n" + \
+           "\n".join(_line(c) for c in chapter) + f"\n\n{context}"
     own_ids = {c["id"] for c in chapter}
     last_err: Optional[Exception] = None
     for _ in range(2):

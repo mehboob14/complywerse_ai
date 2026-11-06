@@ -176,7 +176,7 @@ export default function ComplianceTab({ data }: { data: UnifiedDashboard }) {
           ) : (
             <ChartEmptyState
               title="No frameworks yet"
-              description="Upload regulatory frameworks to track compliance coverage"
+              description="Compliance coverage appears once regulatory frameworks are in the library"
               icon={<Shield className="h-8 w-8" style={{ color: 'var(--color-muted)' }} />}
             />
           )}

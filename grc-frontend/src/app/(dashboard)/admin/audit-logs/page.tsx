@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { detailText } from '@/lib/apiError';
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,6 +16,11 @@ interface AuditLogEntry {
   action: string;
   resource_type: string;
   resource_id: number | null;
+  // The sidebar module / page the action belongs to (backend feature_map), and
+  // what was done in the workflow builder's words ("Edit Risk").
+  module?: string | null;
+  submodule?: string | null;
+  feature?: string | null;
   description: string;
   details: Record<string, unknown>;
   method?: string;
@@ -120,6 +126,10 @@ const MODULE_LABELS: Record<string, string> = {
   // Issue Management — URL prefix `/issue-management/...` from the
   // issue_management module routers.
   'issue-management': 'Issue Management',
+  // Audit Issue Register — its own rows (resource_type) and its requests
+  // under /issue-management/issues/audit-register (see deriveModuleContext).
+  'audit-register': 'Audit Register',
+  'audit-register-import': 'Audit Register',
   // Criticality Assessments — `/criticality-assessments/...` for the
   // ISCA + IACA endpoints under Asset Management.
   'criticality-assessments': 'Criticality Assessments',
@@ -132,6 +142,18 @@ const MODULE_LABELS: Record<string, string> = {
   // Compliance Agents — `/agents/...` (enrollment, installer downloads,
   // results push, revoke, scan-now-push).
   agents: 'Compliance Agents',
+  // Controls Automation — `/automation/...` and `/scf/...` requests, and the
+  // business events it writes (testing, evidence, maturity, scope, collectors).
+  automation: 'Controls Automation',
+  scf: 'Controls Automation',
+  controls_automation: 'Controls Automation',
+  control_testing: 'Controls Automation',
+  control_evidence: 'Controls Automation',
+  control_maturity: 'Controls Automation',
+  scf_control_state: 'Controls Automation',
+  scf_scope: 'Controls Automation',
+  scf_audit_period: 'Controls Automation',
+  evidence_collector: 'Evidence Collectors',
 };
 
 const SUBMODULE_LABELS: Record<string, string> = {
@@ -256,6 +278,15 @@ const SUBMODULE_LABELS: Record<string, string> = {
   // Connections under compliance-plugins
   connections: 'Connections',
   'connections-scope': 'Connection Scope',
+  // Controls Automation
+  'soc2-controls': 'Common Controls',
+  common: 'Common Controls',
+  soc2: 'Automated Checks',
+  scopes: 'Scope',
+  'custom-controls': 'Custom Controls',
+  'audit-periods': 'Audit Periods',
+  assurance: 'Assurance',
+  'my-work': 'My Work',
 };
 
 const SUB_ENTITY_MODULES = new Set([
@@ -267,6 +298,7 @@ const SUB_ENTITY_MODULES = new Set([
   // CIS additions — all three modules nest resources under the
   // top-level URL prefix (e.g. /compliance-plugins/runs/...).
   'compliance-plugins', 'connect-wizard', 'agents',
+  'automation', 'scf',
 ]);
 
 function titleCase(s: string): string {
@@ -279,12 +311,19 @@ function titleCase(s: string): string {
 }
 
 function deriveModuleContext(log: AuditLogEntry): { module: string; submodule: string | null } {
+  if (log.module) {
+    const sub = log.submodule && log.submodule !== log.module ? log.submodule : null;
+    return { module: log.module, submodule: sub };
+  }
   const path = log.path || '';
   const normalized = path.replace(/^\/grc/, '').replace(/^\//, '');
   const parts = normalized.split('/').filter(Boolean);
   if (parts.length === 0) {
     const fallback = log.resource_type ? MODULE_LABELS[log.resource_type] || titleCase(log.resource_type) : 'System';
     return { module: fallback, submodule: null };
+  }
+  if (normalized.startsWith('issue-management/issues/audit-register')) {
+    return { module: MODULE_LABELS['audit-register'], submodule: null };
   }
   const moduleKey = parts[0];
   const moduleLabel = MODULE_LABELS[moduleKey] || titleCase(moduleKey);
@@ -324,6 +363,75 @@ function enrichDescription(log: AuditLogEntry): string {
   return `${base} — in ${moduleLabel}`;
 }
 
+// What the request committed to the database (backend audit_changes).
+type DbChangeRecord = {
+  op: 'created' | 'updated' | 'deleted';
+  table: string;
+  id?: number | string | Array<number | string> | null;
+  name?: string;
+  fields?: Record<string, unknown>;
+};
+
+const OP_STYLE: Record<DbChangeRecord['op'], string> = {
+  created: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  updated: 'bg-sky-50 text-sky-700 border-sky-200',
+  deleted: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
+function showValue(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  return typeof v === 'string' ? v : JSON.stringify(v);
+}
+
+function WhatChanged({ changes }: { changes: { records?: DbChangeRecord[]; more?: number } }) {
+  const records = changes.records || [];
+  return (
+    <div className="space-y-2">
+      {records.map((rec, i) => {
+        const fields = Object.entries(rec.fields || {});
+        const ident = Array.isArray(rec.id) ? rec.id.join(', ') : rec.id;
+        return (
+          <div key={i} className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-1.5">
+              <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${OP_STYLE[rec.op] || OP_STYLE.updated}`}>
+                {rec.op}
+              </span>
+              <span className="font-mono text-xs text-slate-500">{rec.table}{ident != null ? ` #${ident}` : ''}</span>
+              {rec.name && <span className="truncate text-xs font-medium text-slate-800">{rec.name}</span>}
+            </div>
+            {fields.length > 0 && (
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-slate-50">
+                  {fields.map(([field, value]) => {
+                    const pair = rec.op === 'updated' && Array.isArray(value) && value.length === 2;
+                    return (
+                      <tr key={field} className="align-top">
+                        <td className="w-40 px-3 py-1 font-mono text-slate-500">{field}</td>
+                        {pair ? (
+                          <td className="px-3 py-1 break-words">
+                            <span className="text-rose-700 line-through decoration-rose-300">{showValue((value as unknown[])[0])}</span>
+                            <span className="mx-1.5 text-slate-400">→</span>
+                            <span className="text-emerald-700">{showValue((value as unknown[])[1])}</span>
+                          </td>
+                        ) : (
+                          <td className="px-3 py-1 text-slate-800 break-words">{showValue(value)}</td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+      {(changes.more || 0) > 0 && (
+        <p className="text-xs text-slate-500">…and {changes.more} more record{changes.more === 1 ? '' : 's'} changed in the same request.</p>
+      )}
+    </div>
+  );
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-3 py-1.5 border-b border-slate-100 last:border-0">
@@ -343,16 +451,18 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(0);
   const [actionFilter, setActionFilter] = useState('all');
   const [moduleFilter, setModuleFilter] = useState('all');
+  const [submoduleFilter, setSubmoduleFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [availableModules, setAvailableModules] = useState<string[]>([]);
+  const [availableSubmodules, setAvailableSubmodules] = useState<Record<string, string[]>>({});
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const limit = 50;
 
   useEffect(() => { fetchFilters(); }, []);
-  useEffect(() => { fetchLogs(); }, [page, actionFilter, moduleFilter, dateFilter]);
+  useEffect(() => { fetchLogs(); }, [page, actionFilter, moduleFilter, submoduleFilter, dateFilter]);
 
   // v2 audit-AI: when the user opens a row, lazily fetch the AI summary
   // (cached server-side after first generation). Patches the row in the list
@@ -406,9 +516,11 @@ export default function AuditLogsPage() {
       const res = await adminApi.getAuditLogFilters();
       setAvailableActions(res.data.actions || []);
       setAvailableModules(res.data.modules || []);
+      setAvailableSubmodules(res.data.submodules || {});
     } catch {
       setAvailableActions([]);
       setAvailableModules([]);
+      setAvailableSubmodules({});
     }
   };
 
@@ -421,6 +533,7 @@ export default function AuditLogsPage() {
         offset: page * limit,
         action: actionFilter !== 'all' ? actionFilter : undefined,
         module: moduleFilter !== 'all' ? moduleFilter : undefined,
+        submodule: moduleFilter !== 'all' && submoduleFilter !== 'all' ? submoduleFilter : undefined,
         start_date: (dr as Record<string, string>).start_date,
         end_date: (dr as Record<string, string>).end_date,
       });
@@ -428,7 +541,7 @@ export default function AuditLogsPage() {
       setTotal(res.data.total);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } };
-      setError(e.response?.data?.detail || 'Failed to load audit logs');
+      setError(detailText(e.response?.data?.detail) || 'Failed to load audit logs');
     } finally {
       setLoading(false);
     }
@@ -522,6 +635,7 @@ export default function AuditLogsPage() {
     const req = (selectedLog.details?.request as Record<string, unknown> | null) ?? {};
     const hasPayload = req && Object.keys(req).length > 0;
     const statusCode = selectedLog.status_code ?? 0;
+    const dbChanges = selectedLog.details?.db_changes as { records?: DbChangeRecord[]; more?: number } | undefined;
 
     return (
       <div
@@ -602,6 +716,7 @@ export default function AuditLogsPage() {
                     <>
                       <DetailRow label="Module" value={ctx.module || '—'} />
                       {ctx.submodule && <DetailRow label="Sub-module" value={ctx.submodule} />}
+                      {selectedLog.feature && <DetailRow label="Function" value={selectedLog.feature} />}
                     </>
                   );
                 })()}
@@ -616,6 +731,14 @@ export default function AuditLogsPage() {
                 {selectedLog.resource_id && <DetailRow label="Record ID" value={`#${selectedLog.resource_id}`} />}
               </div>
             </section>
+
+            {/* Records the request saved, old → new */}
+            {dbChanges && ((dbChanges.records?.length || 0) > 0 || (dbChanges.more || 0) > 0) && (
+              <section>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">What changed</p>
+                <WhatChanged changes={dbChanges} />
+              </section>
+            )}
 
             {/* Technical */}
             <section>
@@ -679,6 +802,8 @@ export default function AuditLogsPage() {
 
   const actionItems  = availableActions.map((a) => ({ value: a, label: ACTION_CFG[a]?.label ?? a }));
   const moduleItems  = availableModules.map((m) => ({ value: m, label: m }));
+  const submoduleItems = (moduleFilter !== 'all' ? availableSubmodules[moduleFilter] || [] : [])
+    .map((s) => ({ value: s, label: s }));
   const dateItems    = [
     { value: 'today',         label: 'Today' },
     { value: 'last_7_days',   label: 'Last 7 days' },
@@ -719,12 +844,24 @@ export default function AuditLogsPage() {
           title="Module"
           items={moduleItems}
           selectedValues={moduleFilter !== 'all' ? [moduleFilter] : []}
-          onApply={handleSingleApply(setModuleFilter)}
+          onApply={(values: string[]) => { setPage(0); setSubmoduleFilter('all'); setModuleFilter(values[0] || 'all'); }}
           multiSelect={false}
           autoApply
           placeholder="All Modules"
           size="md"
         />
+        {submoduleItems.length > 0 && (
+          <MultiSelectDropdown
+            title="Sub-module"
+            items={submoduleItems}
+            selectedValues={submoduleFilter !== 'all' ? [submoduleFilter] : []}
+            onApply={handleSingleApply(setSubmoduleFilter)}
+            multiSelect={false}
+            autoApply
+            placeholder="All Sub-modules"
+            size="md"
+          />
+        )}
         <MultiSelectDropdown
           title="Date"
           items={dateItems}
@@ -738,7 +875,7 @@ export default function AuditLogsPage() {
         {(actionFilter !== 'all' || moduleFilter !== 'all' || dateFilter !== 'all') && (
           <button
             type="button"
-            onClick={() => { setActionFilter('all'); setModuleFilter('all'); setDateFilter('all'); setPage(0); }}
+            onClick={() => { setActionFilter('all'); setModuleFilter('all'); setSubmoduleFilter('all'); setDateFilter('all'); setPage(0); }}
             className="text-xs text-slate-500 hover:text-slate-900 underline"
           >
             Clear filters

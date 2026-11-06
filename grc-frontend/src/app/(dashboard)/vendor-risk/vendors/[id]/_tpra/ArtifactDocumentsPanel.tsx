@@ -16,6 +16,7 @@ import { RightSlidePanel } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
+import { listOptions, useModuleSettings } from '@/components/settings/CustomFields';
 
 interface TenantArtifact {
   id: number; name: string; artifact_type: string; stage: string | null; status: string;
@@ -25,6 +26,7 @@ interface TenantArtifact {
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
 const labelCls = 'mb-1 block text-xs font-medium text-gray-700';
+// The shipped types; the organisation's own list comes from Settings (module "vendors", list "document_type").
 const TYPES = ['Document', 'Policy', 'Procedure', 'Form', 'Register', 'Agreement', 'Report', 'Plan', 'Attestation'];
 const STATUSES = ['draft', 'in_review', 'approved', 'archived'];
 const DOC_FORMATS = ['docx', 'pdf', 'md'];
@@ -213,6 +215,7 @@ function ArtifactEditor({
   onClose: () => void; onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const { data: fieldSettings } = useModuleSettings('vendors');
   const [form, setForm] = useState({
     name: artifact?.name || seedName || '',
     artifact_type: artifact?.artifact_type || 'Document',
@@ -266,7 +269,8 @@ function ArtifactEditor({
           <div>
             <label className={labelCls}>Type</label>
             <select className={inputCls} value={form.artifact_type} onChange={(e) => setForm({ ...form, artifact_type: e.target.value })}>
-              {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {listOptions(fieldSettings, 'document_type', form.artifact_type, TYPES.map((t) => ({ value: t, label: t })))
+                .map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div>

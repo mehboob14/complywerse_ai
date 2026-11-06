@@ -253,7 +253,9 @@ def user_options(
     _p: bool = Depends(require_tenant_permission("bcm:plans:view")),
 ):
     _tenant(current_user, db)  # authorize; users are per-tenant-DB (no tenant_id column)
-    q = db.query(GRCUser).filter(GRCUser.is_active == True)  # noqa: E712
+    from ....routers.auth_router import platform_account
+
+    q = db.query(GRCUser).filter(GRCUser.is_active == True, platform_account())  # noqa: E712
     if search:
         like = f"%{search}%"
         q = q.filter((GRCUser.display_name.ilike(like)) | (GRCUser.email.ilike(like)))

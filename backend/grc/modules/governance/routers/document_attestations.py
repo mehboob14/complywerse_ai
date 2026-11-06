@@ -33,6 +33,8 @@ from ....models import (
 )
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 from ....rich_audit import write_rich_audit_log
+from ....services import esign
+from ..permissions import edit_filter, ensure_editor, in_force_number, in_force_row, require_library_reader
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,16 @@ def _ensure_tables(db: Session) -> None:
                 _ensured_engines.add(eid)
         except Exception:
             pass
+
+
+KEEP_SIGNED = ("People have acknowledged this campaign, so it is not deleted: every signed acknowledgement is kept. "
+               "Close it instead - closing stops the link and keeps every record.")
+
+
+def _manages(db: Session, user: GRCUser):
+    """Who may create, change, close or delete a document's campaigns: whoever may change the document (permissions.can_edit)."""
+    everyone = edit_filter(db, user) is None
+    return lambda doc: doc is not None and (everyone or user.id in (doc.owner_id, doc.author_id))
 
 
 def _tenant_ids(user: GRCUser, db: Session) -> List[int]:
@@ -228,7 +240,7 @@ def _signature_data_url(a: DocumentAttestationAcknowledgment) -> Optional[str]:
     return None
 
 
-def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int) -> dict:
+def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int, signed: Optional[dict] = None) -> dict:
     preview = _signature_data_url(a)
     return {
         "id": a.id,
@@ -237,6 +249,8 @@ def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int) -> di
         "designation": a.designation,
         "acknowledged_at": _iso(a.acknowledged_at),
         "has_signature": bool(preview or a.signature_data or a.signature_path),
+        "esign_id": signed["id"] if signed else None,          # the sealed record of the drawn signature
+        "esign_fingerprint": signed["image_sha256"][:16] if signed else None,
         "signature_data_url": preview,
         "signature_url": (
             f"/api/governance/document-attestations/campaigns/{campaign_id}"
@@ -252,15 +266,19 @@ def _serialize_campaign(
     campaign: DocumentAttestationCampaign,
     request: Optional[Request] = None,
     *,
+    manages=None,
     with_acks: bool = False,
     tenant_slug: Optional[str] = None,
 ) -> dict:
     prog = _progress(db, campaign)
+    doc = campaign.document
     data = {
+        "can_manage": bool(manages and manages(doc)),     # may change, close or delete it (_manages; the server refuses the others)
         "id": campaign.id,
         "document_id": campaign.document_id,
-        "document_title": getattr(campaign.document, "title", None),
-        "document_version": getattr(campaign.document, "current_version", None),
+        "document_title": getattr(doc, "title", None),
+        # the version people attest to: the one in force while a newer one is on its way
+        "document_version": (in_force_number(doc) or doc.current_version) if doc is not None else None,
         "document_status": getattr(campaign.document, "status", None),
         "name": campaign.name,
         "message": campaign.message,
@@ -280,35 +298,38 @@ def _serialize_campaign(
             key=lambda a: a.acknowledged_at or datetime.min,
             reverse=True,
         )
-        data["acknowledgments"] = [_serialize_ack(a, campaign.id) for a in acks]
+        signed = esign.summaries(db, "doc_attestation_ack", [a.id for a in acks])
+        data["acknowledgments"] = [_serialize_ack(a, campaign.id, signed.get(a.id)) for a in acks]
     return data
 
 
-def _doc_content_preview(doc: GovernanceDocument) -> Dict[str, Any]:
-    """Return content safe for the public viewer."""
+def _doc_content_preview(doc: GovernanceDocument, row: Any = None) -> Dict[str, Any]:
+    """Return content safe for the public viewer: the document's, or the version row ``row`` (the version in force while a newer
+    one is in review; a row has no description or type, those stay the document's)."""
+    src = row or doc
     html = None
-    text_content = doc.content
-    if doc.file_path and os.path.exists(doc.file_path):
-        file_type = (doc.file_type or "").lower()
+    text_content = src.content
+    if src.file_path and os.path.exists(src.file_path):
+        file_type = (src.file_type or "").lower()
         try:
-            if file_type == "pdf" or (doc.file_name or "").lower().endswith(".pdf"):
+            if file_type == "pdf" or (src.file_name or "").lower().endswith(".pdf"):
                 from PyPDF2 import PdfReader
 
-                reader = PdfReader(doc.file_path)
+                reader = PdfReader(src.file_path)
                 parts = []
                 for i, page in enumerate(reader.pages[:40]):
                     t = page.extract_text() or ""
                     if t.strip():
                         parts.append(f"<h3>Page {i + 1}</h3><pre style='white-space:pre-wrap'>{_escape(t)}</pre>")
                 html = "\n".join(parts) if parts else None
-            elif file_type in {"docx", "doc"} or (doc.file_name or "").lower().endswith((".docx", ".doc")):
+            elif file_type in {"docx", "doc"} or (src.file_name or "").lower().endswith((".docx", ".doc")):
                 from docx import Document as DocxDocument
 
-                d = DocxDocument(doc.file_path)
+                d = DocxDocument(src.file_path)
                 parts = [f"<p>{_escape(p.text)}</p>" for p in d.paragraphs if p.text.strip()]
                 html = "\n".join(parts) if parts else None
-            elif file_type in {"txt", "md"} or (doc.file_name or "").lower().endswith((".txt", ".md")):
-                with open(doc.file_path, "r", encoding="utf-8", errors="replace") as f:
+            elif file_type in {"txt", "md"} or (src.file_name or "").lower().endswith((".txt", ".md")):
+                with open(src.file_path, "r", encoding="utf-8", errors="replace") as f:
                     text_content = f.read()
         except Exception as e:
             logger.warning("public doc preview extract failed: %s", e)
@@ -319,10 +340,10 @@ def _doc_content_preview(doc: GovernanceDocument) -> Dict[str, Any]:
     return {
         "title": doc.title,
         "description": doc.description,
-        "version": doc.current_version,
+        "version": row.version_number if row is not None else doc.current_version,
         "doc_type": doc.doc_type,
-        "has_file": bool(doc.file_path),
-        "file_name": doc.file_name,
+        "has_file": bool(src.file_path),
+        "file_name": src.file_name,
         "html": html,
         "content": text_content if not html else None,
     }
@@ -392,7 +413,7 @@ class PublicAckSubmit(BaseModel):
 
 # ── Authenticated routes ─────────────────────────────────────────────────────
 
-@router.get("/coverage-map")
+@router.get("/coverage-map", dependencies=[Depends(require_library_reader)])
 def coverage_map(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -421,16 +442,18 @@ def coverage_map(
             chosen[c.document_id] = c
 
     coverage: Dict[str, Any] = {}
+    counts: Dict[str, Any] = {}
     for doc_id, camp in chosen.items():
         prog = _progress(db, camp)
         if prog["attestation_percent"] is None:
             continue
         coverage[str(doc_id)] = prog["attestation_percent"]
+        counts[str(doc_id)] = {"done": prog["acknowledgment_count"], "total": prog["active_domain_users"]}     # "4 of 5" beside the %
 
-    return {"coverage": coverage}
+    return {"coverage": coverage, "counts": counts}
 
 
-@router.get("/campaigns")
+@router.get("/campaigns", dependencies=[Depends(require_library_reader)])
 def list_campaigns(
     request: Request,
     document_id: Optional[int] = None,
@@ -449,13 +472,19 @@ def list_campaigns(
         q = q.filter(DocumentAttestationCampaign.status == status_filter)
     rows = q.order_by(DocumentAttestationCampaign.created_at.desc()).limit(200).all()
     slug = getattr(request.state, "tenant_slug", None)
+    manages = _manages(db, current_user)
+    mine = edit_filter(db, current_user)
+    attestable = db.query(GovernanceDocument.id).filter(GovernanceDocument.tenant_id.in_(tenant_ids),
+                                                        GovernanceDocument.status == "published",
+                                                        *([mine] if mine is not None else []))
     return {
-        "items": [_serialize_campaign(db, c, request, tenant_slug=slug) for c in rows],
+        "items": [_serialize_campaign(db, c, request, manages=manages, tenant_slug=slug) for c in rows],
         "count": len(rows),
+        "can_create_for": sorted(i for (i,) in attestable),     # the published documents the person may start a campaign for
     }
 
 
-@router.post("/campaigns", status_code=status.HTTP_201_CREATED)
+@router.post("/campaigns", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_library_reader)])
 def create_campaign(
     body: CampaignCreate,
     request: Request,
@@ -473,6 +502,7 @@ def create_campaign(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    ensure_editor(db, current_user, doc)            # a document's campaigns are for whoever may change the document
     if (doc.status or "").lower() != "published":
         raise HTTPException(
             status_code=400,
@@ -526,10 +556,10 @@ def create_campaign(
     db.commit()
     db.refresh(camp)
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
-@router.get("/campaigns/{campaign_id}")
+@router.get("/campaigns/{campaign_id}", dependencies=[Depends(require_library_reader)])
 def get_campaign(
     campaign_id: int,
     request: Request,
@@ -549,10 +579,10 @@ def get_campaign(
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
-@router.patch("/campaigns/{campaign_id}")
+@router.patch("/campaigns/{campaign_id}", dependencies=[Depends(require_library_reader)])
 def update_campaign(
     campaign_id: int,
     body: CampaignUpdate,
@@ -572,6 +602,7 @@ def update_campaign(
     )
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    ensure_editor(db, current_user, camp.document)          # changing or closing it: whoever may change the document
 
     if body.name is not None:
         camp.name = body.name[:255]
@@ -603,10 +634,10 @@ def update_campaign(
     db.commit()
     db.refresh(camp)
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
-@router.get("/campaigns/{campaign_id}/acknowledgments/{ack_id}/signature")
+@router.get("/campaigns/{campaign_id}/acknowledgments/{ack_id}/signature", dependencies=[Depends(require_library_reader)])
 def get_acknowledgment_signature(
     campaign_id: int,
     ack_id: int,
@@ -641,7 +672,7 @@ def get_acknowledgment_signature(
     raise HTTPException(status_code=404, detail="Signature file not found")
 
 
-@router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_library_reader)])
 def delete_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
@@ -659,6 +690,9 @@ def delete_campaign(
     )
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    ensure_editor(db, current_user, camp.document)
+    if _ack_count(db, camp.id):                             # signed acknowledgements are records: never deleted with it
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=KEEP_SIGNED)
     db.delete(camp)
     db.commit()
     return None
@@ -701,7 +735,7 @@ def public_get_by_token(
             "acknowledgment_count": prog["acknowledgment_count"],
             "attestation_percent": prog["attestation_percent"],
         },
-        "document": _doc_content_preview(doc),
+        "document": _doc_content_preview(doc, in_force_row(db, doc)),      # outside signers read the version in force
         "tenant_slug": getattr(request.state, "tenant_slug", None),
     }
 
@@ -751,6 +785,7 @@ def public_acknowledge(
             ),
         )
 
+    esign.image_from_data_url(body.signature_data)      # checked before anything is written
     stored_ref, sig_path = _save_signature(body.signature_data, camp.id)
     ip = request.client.host if request.client else None
     ua = (request.headers.get("user-agent") or "")[:500]
@@ -787,6 +822,16 @@ def public_acknowledge(
         db.add(ack)
         db.flush()
 
+    # The same signature as a sealed record of its own: signing again adds a row, the first is never overwritten. It seals the
+    # version in force, the one the public page showed.
+    row = in_force_row(db, camp.document) if camp.document is not None else None
+    esig = esign.record(
+        db, tenant_id=camp.tenant_id, record_type="doc_attestation_ack", record_id=ack.id,
+        signature_image=body.signature_data, meaning=f"Acknowledged: {camp.name}", signer_name=name,
+        signer_email=email, signer_title=designation, document=camp.document,
+        document_version=row.version_number if row is not None else None,
+        content_sha256=esign.document_fingerprint(row or camp.document), request=request,
+    )
     db.commit()
     db.refresh(camp)
     prog = _progress(db, camp)
@@ -795,4 +840,5 @@ def public_acknowledge(
         "message": "Thank you — your acknowledgment has been recorded.",
         "progress": prog,
         "acknowledgment_id": ack.id,
+        "signature_fingerprint": esig.image_sha256[:16],
     }

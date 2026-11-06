@@ -14,7 +14,7 @@ from ....models import (
     ControlObjective, FrameworkDomain, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, ControlImplementation,
     ImplementationEvidence, CertificationJourney,
-    ComplianceAssessmentDocumentItem, AssessmentItemEvidence,
+    ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem, AssessmentItemEvidence,
     AssessmentEvidenceApprovalWorkflow
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -40,6 +40,25 @@ class AIClauseLinkCreate(BaseModel):
     clause_reference: Optional[str] = None
     confidence: Optional[float] = None
     matching_rationale: Optional[str] = None
+
+
+@router.get("/common-control-options")
+def list_common_control_options(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Every common (SCF) control this organisation can link evidence to, for the manual picker.
+
+    `available-controls` returns the first 50 alphabetically and does not scope by tenant, so a picker
+    built on it could never reach most of the 1,534 controls. `scf_id` is the id people know and the key
+    the Assurance link endpoint takes ("IAC-01"); `code` is the table's own ("SCF-IAC-01").
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    rows = (db.query(NormalizedControl.id, NormalizedControl.scf_id, NormalizedControl.code, NormalizedControl.name)
+            .filter(NormalizedControl.scf_id.isnot(None),     # the catalogue and the tenant's own; legacy rows have none
+                    or_(NormalizedControl.tenant_id.is_(None), NormalizedControl.tenant_id.in_(user_tenants)))
+            .order_by(NormalizedControl.scf_id.asc()).all())
+    return {"controls": [{"id": r.id, "scf_id": r.scf_id, "code": r.code, "name": r.name} for r in rows]}
 
 
 @router.get("/available-controls")
@@ -123,11 +142,16 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
         "framework_control_id": mapping.framework_control_id,
         "parsed_control_id": mapping.parsed_control_id,
         "uploaded_framework_id": mapping.uploaded_framework_id,
+        # The artifact a file was linked as, how fully, and whether it is a test sample (cannot be unlinked here).
+        "clause_reference": mapping.clause_reference,
+        "coverage_type": mapping.coverage_type,
+        "is_locked": bool(mapping.is_locked),
     }
     
     if mapping.normalized_control:
         result["normalized_control"] = {
             "id": mapping.normalized_control.id,
+            "scf_id": mapping.normalized_control.scf_id,
             "code": mapping.normalized_control.code,
             "name": mapping.normalized_control.name,
             "statement": mapping.normalized_control.statement,
@@ -176,6 +200,38 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
     return result
 
 
+def _requirements_fulfilled(db: Session, tenant_id: int, scf_ids: List[str]) -> dict:
+    """What each common control discharges, in the frameworks this tenant is assessed against.
+
+    The set the control's own page lists (`requirement_codes_for_control`, custom controls included),
+    as {key, label, codes} per framework, so a linked control can say what the evidence it carries
+    is worth without a request per control. Empty when no framework is in scope.
+    """
+    if not scf_ids:
+        return {}
+    from ...automation import router as automation          # imported here: that module pulls in a great deal
+    from ...scf.scope_service import ensure_default_scope
+    from ....models import SCFRelease
+
+    try:
+        scope = ensure_default_scope(db, tenant_id)
+    except RuntimeError:                                     # the SCF catalogue is not provisioned for this tenant
+        return {}
+    frameworks = automation._scope_frameworks(scope)
+    release = (db.query(SCFRelease)
+               .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True)).first())
+    if release is None or not frameworks:
+        return {}
+    suppressed, retargets = automation._mapping_reviews(db, tenant_id)
+    found = automation.requirement_codes_for_controls(
+        db, tenant_id, release.id, scf_ids, [f["key"] for f in frameworks], suppressed, retargets)
+    return {
+        sid: [{"key": f["key"], "label": f["label"], "codes": sorted(found[sid][f["key"]], key=automation._natural)}
+              for f in frameworks if found.get(sid, {}).get(f["key"])]
+        for sid in scf_ids
+    }
+
+
 @router.get("/{evidence_id}/controls")
 def get_evidence_controls(
     evidence_id: int,
@@ -210,13 +266,18 @@ def get_evidence_controls(
     
     by_framework = {}
     normalized_controls = []
-    
+    # Mappings that resolve to neither a common control nor a framework control: the count includes
+    # them, so they are listed too instead of leaving a number with nothing behind it.
+    unresolved = []
+
     for mapping in mappings:
         serialized = serialize_control_mapping(mapping)
-        
+        placed = False
+
         if mapping.normalized_control:
             normalized_controls.append(serialized)
-        
+            placed = True
+
         if mapping.framework_control:
             fc = mapping.framework_control
             if fc.objective and fc.objective.domain and fc.objective.domain.framework:
@@ -230,6 +291,7 @@ def get_evidence_controls(
                         "controls": []
                     }
                 by_framework[fw_key]["controls"].append(serialized)
+                placed = True
 
         elif mapping.parsed_control and mapping.parsed_control.uploaded_framework:
             fw = mapping.parsed_control.uploaded_framework
@@ -242,13 +304,31 @@ def get_evidence_controls(
                     "controls": []
                 }
             by_framework[fw_key]["controls"].append(serialized)
-    
+            placed = True
+
+        if not placed:
+            serialized["control_code"] = mapping.control_code
+            serialized["framework_name"] = mapping.framework_name
+            serialized["clause_reference"] = mapping.clause_reference
+            unresolved.append(serialized)
+
+    # Each common control with the framework requirements it fulfils. An enrichment: the list must
+    # still load, and count, if it cannot be worked out.
+    try:
+        fulfils = _requirements_fulfilled(db, evidence.tenant_id, sorted(
+            {m["normalized_control"]["scf_id"] for m in normalized_controls if m["normalized_control"].get("scf_id")}))
+        for m in normalized_controls:
+            m["normalized_control"]["requirements"] = fulfils.get(m["normalized_control"].get("scf_id"), [])
+    except Exception:  # noqa: BLE001
+        logger.exception("could not work out the requirements the controls linked to evidence %s fulfil", evidence_id)
+
     return {
         "evidence_id": evidence_id,
         "evidence_name": evidence.name,
         "total_mappings": len(mappings),
         "normalized_controls": normalized_controls,
-        "by_framework": list(by_framework.values())
+        "by_framework": list(by_framework.values()),
+        "unresolved": unresolved,
     }
 
 
@@ -337,6 +417,7 @@ def link_evidence_to_controls(
             framework_control_id=link.framework_control_id,
             parsed_control_id=link.parsed_control_id,
             uploaded_framework_id=link.uploaded_framework_id or (parsed_control.uploaded_framework_id if parsed_control else None),
+            created_by_ai=False,  # user-chosen link; the column defaults to True
         )
         db.add(mapping)
         db.flush()
@@ -421,6 +502,12 @@ def unlink_evidence_from_control(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control mapping not found"
+        )
+    if mapping.is_locked:
+        # A test sample: the control's own testing record depends on it (as the Assurance tab says).
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This file is a test sample; remove it from its test procedure instead.",
         )
     
     db.delete(mapping)
@@ -655,7 +742,7 @@ def link_evidence_from_ai_suggestion(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Could not match AI control '{link_data.control_id}' (clause '{link_data.clause_reference}') "
-                f"in framework '{framework.name}'. Please verify the framework upload and run AI assessment again."
+                f"in framework '{framework.name}'. Please verify the framework's controls and run AI assessment again."
             )
         )
 
@@ -776,7 +863,11 @@ def link_evidence_from_ai_suggestion(
         original_ref_lower = (control.original_reference or "").strip().lower()
 
         # Match by item_number == control_id OR item_number == original_reference
-        matching_items = db.query(ComplianceAssessmentDocumentItem).filter(
+        matching_items = db.query(ComplianceAssessmentDocumentItem).join(
+            ComplianceAssessmentDocument, ComplianceAssessmentDocument.id == ComplianceAssessmentDocumentItem.assessment_id,
+        ).filter(
+            # an assessment of one application or function is given its evidence on purpose: one application's file must not count for another's
+            ComplianceAssessmentDocument.scope_model.is_(None),
             ComplianceAssessmentDocumentItem.tenant_id == evidence.tenant_id,
             or_(
                 func.lower(ComplianceAssessmentDocumentItem.item_number) == control_id_lower,

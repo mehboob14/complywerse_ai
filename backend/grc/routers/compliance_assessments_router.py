@@ -7,9 +7,9 @@ import json
 import re
 import logging
 import traceback
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
@@ -26,10 +26,17 @@ from ..models import (
     ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem,
     AssessmentEvidenceApprovalWorkflow, AssessmentEvidenceApprovalTier,
     AssessmentItemEvidence, AssessmentEvidenceApprovalHistory,
-    Evidence, GRCUser, Tenant, get_db,
+    Evidence, GRCUser, ITAsset, Tenant, get_db,
     EvidenceControlMapping, ParsedFrameworkControl, ComplianceSlaPolicy
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import (
+    require_auth, get_user_tenants, get_user_primary_tenant,
+    is_tenant_admin, has_tenant_permission, platform_role_ids,
+)
+from ..services.assessment_assignees import (
+    clean as clean_assignees, label as assignee_label, lists_for as assignee_lists, missing as missing_assignees,
+)
+from ..services.ai_gateway.field_policies import ai_view
 
 router = APIRouter(prefix="/compliance/assessments", tags=["Compliance Assessments"])
 
@@ -51,32 +58,6 @@ CIS_WS2012R2_CONTROLS_JSON = os.path.abspath(
         "CIS_WS2012R2_Controls.json",
     )
 )
-
-EVIDENCE_RECOMMENDATION_PROMPT = """Analyze this assessment item/control requirement and recommend what specific evidence would demonstrate compliance or completion.
-
-Assessment: {assessment_name}
-Assessment Type: {assessment_type}
-Item Reference: {item_number}
-Area/Domain: {area_domain}
-Control/Requirement: {control_description}
-Current Status: {compliance_status}
-Gaps Identified: {gaps_identified}
-
-Based on this requirement, provide specific evidence recommendations in JSON format:
-{{
-    "recommendations": [
-        {{
-            "evidence_type": "<specific type e.g., Policy Document, Audit Log, Screenshot, Report>",
-            "description": "<detailed description of what this evidence should contain>",
-            "priority": "<high|medium|low>",
-            "example_files": ["<example1.pdf>", "<example2.xlsx>"]
-        }}
-    ],
-    "summary": "<brief summary of why these evidence types are appropriate>"
-}}
-
-Provide 2-5 relevant evidence types prioritized by importance."""
-
 
 class WorkflowCreate(BaseModel):
     name: str
@@ -3942,6 +3923,7 @@ def get_remediation_plan(
     rows = q.order_by(
         ComplianceAssessmentDocument.id, ComplianceAssessmentDocumentItem.id
     ).all()
+    assignees = assignee_lists(db, [item for item, _ in rows])
 
     items = []
     counts = {"open": 0, "in_progress": 0, "closed": 0}
@@ -3951,6 +3933,7 @@ def get_remediation_plan(
         counts[rem_status] = counts.get(rem_status, 0) + 1
         items.append({
             "id": item.id,
+            "assignees": assignees[item.id],
             "assessment_id": doc.id,
             "assessment_name": doc.name,
             "assessment_format": doc.assessment_format,
@@ -4060,6 +4043,10 @@ def list_assessments(
     status_filter: Optional[str] = None,
     source: Optional[str] = None,
     assessment_format: Optional[str] = None,
+    scope_model: Optional[str] = Query(None, description="asset or process: the assessments made for one application or function; none: only the questionnaires (documents with no scope)"),
+    phase: Optional[str] = Query(None, description="scoping or in_progress"),
+    owner_id: Optional[int] = None,
+    asset_id: Optional[int] = Query(None, description="the assessments whose primary application is this asset"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -4096,6 +4083,17 @@ def list_assessments(
     if source:
         query = query.filter(ComplianceAssessmentDocument.source == source)
     
+    if scope_model == "none":
+        query = query.filter(ComplianceAssessmentDocument.scope_model.is_(None))
+    elif scope_model:
+        query = query.filter(ComplianceAssessmentDocument.scope_model == scope_model)
+    if phase:
+        query = query.filter(ComplianceAssessmentDocument.phase == phase)
+    if owner_id:
+        query = query.filter(ComplianceAssessmentDocument.owner_id == owner_id)
+    if asset_id:
+        query = query.filter(ComplianceAssessmentDocument.primary_asset_id == asset_id)
+
     total = query.count()
     summary_assessments = query.all()
     assessments = query.order_by(ComplianceAssessmentDocument.created_at.desc()).offset(skip).limit(limit).all()
@@ -4133,6 +4131,11 @@ def list_assessments(
             except Exception:
                 continue
     
+    people = {uid: (display or username) for uid, display, username in db.query(GRCUser.id, GRCUser.display_name, GRCUser.username).filter(
+        GRCUser.id.in_({a.owner_id for a in assessments if a.owner_id} or {0}))}
+    subjects = {aid: name for aid, name in db.query(ITAsset.id, ITAsset.name).filter(
+        ITAsset.id.in_({a.primary_asset_id for a in assessments if a.primary_asset_id} or {0}))}
+
     return {
         "assessments": [
             {
@@ -4152,6 +4155,14 @@ def list_assessments(
                 "not_complied_count": a.not_complied_count,
                 "in_progress_count": a.in_progress_count,
                 "na_count": a.na_count,
+                "scope_model": a.scope_model,
+                "phase": a.phase,
+                "template_id": a.template_id,
+                "owner_id": a.owner_id,
+                "owner_name": people.get(a.owner_id),
+                "primary_asset_id": a.primary_asset_id,
+                "primary_asset_name": subjects.get(a.primary_asset_id),
+                "started_at": a.started_at.isoformat() if a.started_at else None,
                 "created_at": a.created_at.isoformat(),
                 "updated_at": a.updated_at.isoformat() if a.updated_at else None
             }
@@ -4213,6 +4224,8 @@ def create_workflow(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == tenant_id,
@@ -4323,6 +4336,10 @@ def update_workflow(
     if not workflow:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers or []],
+                             kept=[uid for (uid,) in db.query(AssessmentEvidenceApprovalTier.approver_user_id).filter(
+                                 AssessmentEvidenceApprovalTier.workflow_id == workflow_id)])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == workflow.tenant_id,
@@ -4401,6 +4418,22 @@ def delete_workflow(
     return None
 
 
+def _is_tier_approver(db, user, workflow, current_tier, my_role_ids=None) -> bool:
+    """True when `user` is the approver configured for `current_tier` of `workflow`:
+    the named user, or a member (through a platform-given role) of the named role."""
+    if workflow is None:
+        return False
+    tier = next((t for t in workflow.tiers if t.tier_order == current_tier), None)
+    if tier is None:
+        return False
+    if tier.approver_type == "user" and tier.approver_user_id == user.id:
+        return True
+    if tier.approver_type == "role" and tier.approver_role_id is not None:
+        role_ids = my_role_ids if my_role_ids is not None else set(platform_role_ids(db, user))
+        return tier.approver_role_id in role_ids
+    return False
+
+
 @router.get("/pending-approvals")
 def get_pending_approvals(
     db: Session = Depends(get_db),
@@ -4417,20 +4450,21 @@ def get_pending_approvals(
         AssessmentItemEvidence.status.in_(["pending_review", "pending_tier_1", "pending_tier_2", "pending_tier_3"])
     ).all()
     
+    # Who sees everything on the approvals page: administrators and the role that
+    # runs it (compliance:assessments:edit). Everyone else sees only the items they
+    # are the current-tier approver for — the header lists this endpoint to all.
+    is_admin = is_tenant_admin(db, current_user)
+    is_editor = has_tenant_permission(db, current_user, "compliance:assessments:edit")
+    sees_all = is_admin or is_editor
+    my_role_ids = set(platform_role_ids(db, current_user))
+
     result = []
     for item in pending_items:
-        can_approve = False
-        if item.workflow:
-            current_tier_obj = None
-            for tier in item.workflow.tiers:
-                if tier.tier_order == item.current_tier:
-                    current_tier_obj = tier
-                    break
-            
-            if current_tier_obj:
-                if current_tier_obj.approver_type == "user" and current_tier_obj.approver_user_id == current_user.id:
-                    can_approve = True
-        
+        tier_approver = _is_tier_approver(db, current_user, item.workflow, item.current_tier, my_role_ids)
+        if not (sees_all or tier_approver):
+            continue
+        can_approve = sees_all or tier_approver
+
         result.append({
             "id": item.id,
             "evidence_id": item.evidence_id,
@@ -4472,9 +4506,26 @@ def perform_approval_action(
     
     if not evidence_link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
-    
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.delegated_to])
+
     action = request.action.lower()
-    
+
+    # Approving / rejecting / returning is restricted to the current tier's approver
+    # (named user or a member of the named role), administrators, and the role that
+    # runs the approvals page (compliance:assessments:edit). 'submit' stays open —
+    # it is how the person who attached the evidence sends it for review.
+    if action in ("approve", "reject", "return"):
+        if not (
+            is_tenant_admin(db, current_user)
+            or has_tenant_permission(db, current_user, "compliance:assessments:edit")
+            or _is_tier_approver(db, current_user, evidence_link.workflow, evidence_link.current_tier or 1)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only this tier's approver can approve, reject or return this evidence.",
+            )
+
     if action == "submit":
         evidence_link.status = "pending_review"
         evidence_link.current_tier = 1
@@ -4732,6 +4783,8 @@ def update_assessment_xlsx_data(
         if "remarks" in sent_fields:
             row["remarks"] = (request.remarks or "").strip() or None
         if "assigned_to_id" in sent_fields:
+            from .auth_router import refuse_imported_accounts
+            refuse_imported_accounts(db, [request.assigned_to_id], kept=[row.get("assigned_to_id")])
             row["assigned_to_id"] = request.assigned_to_id
         if "assigned_to_name" in sent_fields:
             row["assigned_to_name"] = (request.assigned_to_name or "").strip() or None
@@ -5055,9 +5108,14 @@ def get_assessments_overview(
     cats: dict = {}
     sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
     unmapped = 0  # recognized (non-excluded) assessments with no family scorer
+    # A questionnaire nobody answered is the template of its type, not an assessment: once one made from it has started it is no row of the board (it would
+    # count every question as open for ever). An answered one is an assessment of its own, as it was before assessments were made per application.
+    started_from = {d.assessment_format for d in docs if d.scope_model and d.phase != "scoping"}
     for d in docs:
         fmt = getattr(d, "assessment_format", "standard") or "standard"
-        if fmt in EXCLUDED_FORMATS:
+        if fmt in EXCLUDED_FORMATS or d.phase == "scoping":      # a draft being scoped has no questions yet: it is not on the board
+            continue
+        if not d.scope_model and fmt in started_from and not (d.complied_count or d.partially_complied_count or d.not_complied_count or d.na_count):
             continue
         items = db.query(_Item).filter(_Item.assessment_id == d.id).all()
         ev = {}
@@ -5176,6 +5234,22 @@ def kpi_live_metrics(
     return {"as_of": now.isoformat(), "metrics": metrics}
 
 
+@router.get("/nist-library")
+def get_nist_library(current_user: GRCUser = Depends(require_auth)):
+    """The NIST publications and official templates the AI evidence advice cites, with the Cyber Security
+    assessments each serves, and the NIST documents in the artifacts catalog that download as Word or PDF.
+    Declared before /{assessment_id}, which would otherwise take the path."""
+    from ..services.assessment_evidence_ai import nist_catalog, nist_library
+
+    lib = nist_library()
+    publications = [{
+        **{k: v for k, v in pub.items() if k != "templates"},
+        "templates": [{**{k: tpl[k] for k in ("name", "url", "format", "note") if tpl.get(k)},
+                       "drafts_follow": bool(tpl.get("outline"))} for tpl in pub.get("templates") or []],
+    } for pub in lib["publications"]]
+    return {"note": lib.get("note"), "publications": publications, "catalog": list(nist_catalog())}
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
@@ -5213,6 +5287,7 @@ def get_assessment(
             .all()
         ):
             evidence_counts[row[0]] = row[1]
+    assignees = assignee_lists(db, assessment.items)
 
     items_by_domain = {}
     for item in assessment.items:
@@ -5221,6 +5296,7 @@ def get_assessment(
             items_by_domain[domain] = []
         items_by_domain[domain].append({
             "evidence_count": evidence_counts.get(item.id, 0),
+            "assignees": assignees[item.id],
             "id": item.id,
             "item_number": item.item_number,
             "area_domain": item.area_domain,
@@ -5266,12 +5342,19 @@ def get_assessment(
         "notes": assessment.notes,
         "linked_asset_ids": getattr(assessment, "linked_asset_ids", None) or [],
         "asset_levels": getattr(assessment, "asset_levels", None) or {},
+        "scope_model": assessment.scope_model,
+        "phase": assessment.phase,
+        "template_id": assessment.template_id,
+        "owner_id": assessment.owner_id,
+        "primary_asset_id": assessment.primary_asset_id,
+        "started_at": assessment.started_at.isoformat() if assessment.started_at else None,
         "created_at": assessment.created_at.isoformat(),
         "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,
         "items": [
             {
                 "id": item.id,
                 "evidence_count": evidence_counts.get(item.id, 0),
+                "assignees": assignees[item.id],
                 "item_number": item.item_number,
                 "area_domain": item.area_domain,
                 "control_description": item.control_description,
@@ -5555,6 +5638,47 @@ def update_assessment_item(
     }
 
 
+class _Assignee(BaseModel):
+    type: Literal["user", "team"]
+    id: int
+
+
+class _AssigneesRequest(BaseModel):
+    assignees: List[_Assignee] = []
+
+
+@router.put("/items/{item_id}/assignees")
+def set_item_assignees(
+    item_id: int,
+    payload: _AssigneesRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Assign an item to any number of people and/or teams (empty list = unassigned)."""
+    user_tenants = get_user_tenants(current_user, db)
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+
+    wanted = clean_assignees([a.model_dump() for a in payload.assignees])
+    # Only the ones being added need to exist: someone deactivated since they were
+    # assigned stays on the item until a person removes them.
+    unknown = missing_assignees(db, [a for a in wanted if a not in clean_assignees(item.assignees)])
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Pick people and teams from this workspace's lists.")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [a["id"] for a in wanted if a["type"] == "user"],
+                             kept=[a["id"] for a in clean_assignees(item.assignees) if a["type"] == "user"])
+    item.assignees = wanted
+    item.updated_at = datetime.utcnow()
+    db.commit()
+    return {"assignees": assignee_lists(db, [item])[item.id]}
+
+
 # ── Item add / delete ────────────────────────────────────────────────────────
 # Bring add/delete CRUD to parity with criticality assessments. Works for every
 # compliance assessment type since they all share ComplianceAssessmentDocumentItem
@@ -5758,7 +5882,7 @@ def export_assessment(
     headers = [
         "Item #", "Area/Domain", "Control Description", "Compliance Status",
         "Gaps Identified", "Proposed Solution", "Responsible Party",
-        "Timeline", "Priority", "Evidence Reference", "Remarks"
+        "Timeline", "Priority", "Evidence Reference", "Remarks", "Assigned To"
     ]
     ws.append(headers)
     
@@ -5767,6 +5891,7 @@ def export_assessment(
         cell.fill = openpyxl.styles.PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
     
+    assignees = assignee_lists(db, assessment.items)
     for item in assessment.items:
         ws.append([
             item.item_number,
@@ -5779,7 +5904,8 @@ def export_assessment(
             item.timeline,
             item.priority,
             item.evidence_reference,
-            item.remarks
+            item.remarks,
+            assignee_label(assignees[item.id]),
         ])
     
     for col_idx in range(1, len(headers) + 1):
@@ -6147,7 +6273,8 @@ def get_item_evidence(
     # That feature creates EvidenceControlMapping entries (ParsedFrameworkControl → Evidence)
     # which are separate from AssessmentItemEvidence. We match them here by comparing the
     # assessment item's item_number against the parsed control's control_id / original_reference.
-    if item.item_number:
+    # An assessment of one application or function is given its evidence on purpose: the same item number in another assessment is not proof here.
+    if item.item_number and not getattr(item.assessment, "scope_model", None):
         item_number_lower = item.item_number.strip().lower()
         framework_links = (
             db.query(EvidenceControlMapping)
@@ -6190,6 +6317,14 @@ def get_item_evidence(
                 "confidence_score": mapping.confidence_score,
                 "matching_rationale": mapping.matching_rationale,
             })
+
+    # What each file proves about THIS item, as the review left it.
+    from ..services.evidence_quality import for_evidence
+
+    verdicts = for_evidence(db, item.tenant_id, [row["evidence_id"] for row in result],
+                            _item_quality_target(item))
+    for row in result:
+        row["quality"] = verdicts.get(row["evidence_id"])
 
     return {
         "item_id": item_id,
@@ -6270,6 +6405,9 @@ def link_existing_item_evidence(
     db.commit()
     db.refresh(evidence_link)
 
+    # A file linked from the library was never judged against this item either.
+    _review_evidence_against_item(db, evidence.id, item)
+
     return {
         "id": evidence_link.id,
         "evidence_id": evidence.id,
@@ -6282,8 +6420,78 @@ def link_existing_item_evidence(
         "current_tier": evidence_link.current_tier,
         "approval_status": evidence_link.status,
         "already_linked": False,
+        "quality_pending": True,
         "message": "Evidence linked successfully"
     }
+
+
+def _item_quality_target(item: ComplianceAssessmentDocumentItem):
+    """What this item asks of its evidence, for the quality review."""
+    from ..services.evidence_quality import QualityTarget
+
+    where = " / ".join(x for x in (item.area_domain, item.subdomain_name) if x)
+    return QualityTarget(
+        kind="assessment_item",
+        ref=str(item.id),
+        label=" — ".join(x for x in (item.item_number, where) if x) or f"Item {item.id}",
+        requirement=item.control_description or "",
+        guidance=item.remarks or "",
+    )
+
+
+def _review_evidence_against_item(db: Session, evidence_id: int,
+                                  item: ComplianceAssessmentDocumentItem) -> None:
+    """Extract the file's text, then review it against this item — in a thread,
+    so an upload is never held up by its own review, nor failed by it."""
+    import threading
+
+    from ..models import Tenant
+    from ..modules.evidence.routers.evidence import process_evidence_background
+
+    slug = db.query(Tenant.slug).filter(Tenant.id == item.tenant_id).scalar()
+    if not slug:
+        logger.warning("No tenant slug for item %s; evidence %s not reviewed", item.id, evidence_id)
+        return
+    threading.Thread(target=process_evidence_background,
+                     args=(evidence_id, slug, _item_quality_target(item)),
+                     daemon=True).start()
+
+
+@router.post("/{assessment_id}/items/{item_id}/evidence/{evidence_id}/quality")
+def recheck_item_evidence_quality(
+    assessment_id: int,
+    item_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Review one file against this item again, and wait for the answer."""
+    user_tenants = get_user_tenants(current_user, db)
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id, Evidence.tenant_id == item.tenant_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    if not (evidence.ocr_content or "").strip():
+        try:
+            from ..modules.evidence.routers.ocr import process_evidence_ocr
+
+            process_evidence_ocr(evidence, db)
+        except Exception:
+            logger.exception("OCR failed for evidence %s before its quality review", evidence_id)
+
+    from ..services.evidence_quality import check_and_save, out
+
+    row = check_and_save(db, item.tenant_id, evidence, _item_quality_target(item),
+                         user_id=current_user.id, force=True)
+    return {"item_id": item_id, "evidence_id": evidence_id, "quality": out(row)}
 
 
 @router.post("/{assessment_id}/items/{item_id}/evidence/upload")
@@ -6354,7 +6562,9 @@ async def upload_item_evidence(
     db.add(evidence_link)
     db.commit()
     db.refresh(evidence_link)
-    
+
+    _review_evidence_against_item(db, evidence.id, item)
+
     return {
         "id": evidence_link.id,
         "evidence_id": evidence.id,
@@ -6365,6 +6575,7 @@ async def upload_item_evidence(
         "workflow_id": evidence_link.workflow_id,
         "current_tier": evidence_link.current_tier,
         "approval_status": evidence_link.status,
+        "quality_pending": True,
         "message": "Evidence uploaded successfully"
     }
 
@@ -6388,55 +6599,41 @@ def generate_ai_recommendation(
     
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
-    
+
+    # What evidence proves the item, how to collect it, and which records in the
+    # Evidence library already fit (services/assessment_evidence_ai).
+    from ..services.assessment_evidence_ai import AIEmptyAnswer, AIUnavailable, recommend_evidence
+    from ..services.licence_guard import LicenceRestrictedContent
+
     try:
-        client = get_openai_client()
-        
-        assessment = item.assessment
-        prompt = EVIDENCE_RECOMMENDATION_PROMPT.format(
-            assessment_name=assessment.name if assessment else "Unknown",
-            assessment_type=assessment.assessment_type if assessment else "Unknown",
-            item_number=item.item_number or "N/A",
-            area_domain=item.area_domain or "General",
-            control_description=item.control_description or "No description",
-            compliance_status=item.compliance_status or "Unknown",
-            gaps_identified=item.gaps_identified or "None specified"
-        )
-        
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a compliance expert recommending evidence for assessment items. Respond only with valid JSON."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=2000,
-            temperature=0.3
-        )
-        
-        result = parse_ai_response(response.choices[0].message.content or '{"recommendations": []}')
-        
-        item.ai_evidence_recommendation = json.dumps(result)
-        item.ai_recommendation_generated_at = datetime.utcnow()
-        db.commit()
-        
-        return {
-            "item_id": item_id,
-            "assessment_id": assessment_id,
-            "recommendation": result,
-            "generated_at": item.ai_recommendation_generated_at.isoformat()
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI recommendation generation failed: {str(e)}"
-        )
+        result = recommend_evidence(db, item)
+    except AIUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except AIEmptyAnswer as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+    except LicenceRestrictedContent:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="This item's text is licence-restricted control wording, so it was not "
+                                   "sent to the AI.")
+    except Exception as exc:  # provider down, timeout, auth, rate limit
+        logging.getLogger(__name__).warning("AI evidence recommendation failed for item %s", item_id, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=f"The AI service did not answer ({type(exc).__name__}). Try again.")
+
+    from ..services.assessment_evidence_ai import loads as _stored
+    drafts = _stored(item.ai_evidence_recommendation).get("drafts")
+    if drafts:
+        result["drafts"] = drafts                        # documents drafted earlier outlive a regenerate
+    item.ai_evidence_recommendation = json.dumps(result)
+    item.ai_recommendation_generated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "item_id": item_id,
+        "assessment_id": assessment_id,
+        "recommendation": result,
+        "generated_at": item.ai_recommendation_generated_at.isoformat()
+    }
 
 
 @router.post("/{assessment_id}/items/{item_id}/ai-assess")
@@ -6461,7 +6658,8 @@ def ai_assess_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
     try:
         client = get_openai_client()
-        kv = _parse_remarks_kv(item.remarks)
+        v = ai_view(item, "assessments.assess_item")        # what the field policy lets this prompt carry
+        kv = _parse_remarks_kv(v["remarks"])
         prompt = (
             "You are a Saudi PDPL (Personal Data Protection Law) compliance assessor. "
             "For the control below, produce STRICT JSON with exactly these keys:\n"
@@ -6477,9 +6675,9 @@ def ai_assess_item(
             "  priority    — one of: low, medium, high, critical\n"
             "  suggested_maturity — integer 0-5 (0=Absent,1=Initial,2=Developing,3=Defined,"
             "4=Managed,5=Optimised): a conservative starting estimate of likely current maturity\n\n"
-            f"Domain: {item.area_domain or 'General'}\n"
+            f"Domain: {v['area_domain'] or 'General'}\n"
             f"PDPL Reference: {kv.get('pdpl ref') or 'N/A'}\n"
-            f"Control: {item.control_description or ''}\n"
+            f"Control: {v['control_description'] or ''}\n"
             f"Assessment question: {kv.get('q') or ''}\n"
         )
         gap_text = (gap or "").strip()
@@ -6491,17 +6689,21 @@ def ai_assess_item(
                 "invent a different gap). Make `remediation` a concrete, step-by-step action that "
                 "directly closes THIS gap, and set `risk_rating`/`priority` consistent with it.\n"
             )
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=800,
-            temperature=0.3,
-        )
-        result = parse_ai_response(response.choices[0].message.content or "{}")
+        messages = [
+            {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
+            {"role": "user", "content": prompt},
+        ]
+        for _attempt in range(3):       # a model now and then answers nothing (its whole budget spent thinking), or is cut off
+            response = client.chat.completions.create(
+                model=get_openai_model(), messages=messages, response_format={"type": "json_object"},
+                max_tokens=2500, temperature=0.3,
+            )
+            result = parse_ai_response(response.choices[0].message.content or "{}")
+            if result.get("how_to_assess") or result.get("evidence_examples") or result.get("remediation"):
+                break
+        else:                           # say so rather than hand back a draft with every field empty
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                                detail="The AI's answer came back empty or cut off, so nothing was drafted. Try again.")
         return {
             "item_id": item_id,
             "assessment_id": assessment_id,
@@ -6544,6 +6746,11 @@ def get_ai_recommendation(
     if item.ai_evidence_recommendation:
         try:
             recommendation = json.loads(item.ai_evidence_recommendation)
+            if isinstance(recommendation, dict):
+                recommendation.pop("model", None)  # the page says "AI", never the model
+                if isinstance(recommendation.get("drafts"), dict):
+                    from ..services.assessment_evidence_ai import draft_view
+                    recommendation["drafts"] = {k: draft_view(v) for k, v in recommendation["drafts"].items()}
         except json.JSONDecodeError:
             recommendation = {"raw": item.ai_evidence_recommendation}
     
@@ -6553,3 +6760,119 @@ def get_ai_recommendation(
         "recommendation": recommendation,
         "generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None
     }
+
+
+def _ai_item(db: Session, current_user: GRCUser, assessment_id: int, item_id: int) -> ComplianceAssessmentDocumentItem:
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(get_user_tenants(current_user, db)),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+    return item
+
+
+class AIDraftStart(BaseModel):
+    title: str
+
+
+class AIDraftSaved(BaseModel):
+    document_id: int
+
+
+@router.post("/{assessment_id}/items/{item_id}/ai-drafts", status_code=status.HTTP_202_ACCEPTED)
+def start_ai_draft(
+    assessment_id: int,
+    item_id: int,
+    body: AIDraftStart,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Draft one of the item's recommended documents with AI, structured on the NIST guidance the
+    recommendation named. It runs in the background; the GET above shows its progress and the result."""
+    from .. import audit_logger
+    from ..services import assessment_evidence_ai as advisor
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    data = advisor.loads(item.ai_evidence_recommendation)
+    key = advisor.draft_key(body.title)
+    rec = next((r for r in data.get("recommendations") or []
+                if isinstance(r, dict) and r.get("document") and advisor.draft_key(r.get("evidence_type")) == key), None)
+    if rec is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="That document isn't among this item's recommendations. Get recommendations first.")
+    drafts = dict(data.get("drafts") or {})
+    if (advisor.draft_view(drafts.get(key)) or {}).get("status") == "drafting":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document is already being drafted.")
+    if not advisor._configured_key():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="AI isn't set up on this server: no AI key is configured.")
+    tenant_slug = audit_logger._resolve_tenant_slug(request, item.tenant_id)
+    if not tenant_slug:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Couldn't tell which organisation this item belongs to.")
+    drafts[key] = {"title": rec.get("evidence_type"), "kind": rec.get("document"), "status": "drafting",
+                   "started_at": datetime.utcnow().isoformat(), "error": None}
+    data["drafts"] = drafts
+    item.ai_evidence_recommendation = json.dumps(data)
+    db.commit()
+    advisor.start_draft(tenant_slug, item.id, key, current_user.id)
+    return {"key": key, "status": "drafting"}
+
+
+@router.get("/{assessment_id}/items/{item_id}/ai-drafts/{key}/export")
+def export_ai_draft(
+    assessment_id: int,
+    item_id: int,
+    key: str,
+    fmt: str = Query("docx", description="docx | pdf | md"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A drafted document as a Word, PDF or Markdown file."""
+    from ._artifact_export import build_export
+    from ..services.assessment_evidence_ai import loads
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    draft = (loads(item.ai_evidence_recommendation).get("drafts") or {}).get(key) or {}
+    if draft.get("status") != "ready" or not draft.get("content"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That draft isn't ready.")
+    if fmt not in ("docx", "pdf", "md"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use docx, pdf or md.")
+    title = draft.get("title") or "Document"
+    body, media, ext = build_export(fmt, title=title, content=draft["content"], content_format="markdown")
+    name = re.sub(r"[^A-Za-z0-9 _.-]+", "", title).strip() or "document"
+    return StreamingResponse(io.BytesIO(body), media_type=media,
+                             headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
+
+
+@router.patch("/{assessment_id}/items/{item_id}/ai-drafts/{key}")
+def record_ai_draft_document(
+    assessment_id: int,
+    item_id: int,
+    key: str,
+    body: AIDraftSaved,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Remember the Governance document a draft was saved as. The page saves it through
+    POST /governance/documents itself, so that module's audit trail and workflows run as usual."""
+    from ..models import GovernanceDocument
+    from ..services.assessment_evidence_ai import loads
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == body.document_id,
+                                              GovernanceDocument.tenant_id == item.tenant_id).first()
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Governance document not found")
+    data = loads(item.ai_evidence_recommendation)
+    drafts = dict(data.get("drafts") or {})
+    if key not in drafts:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    drafts[key] = {**drafts[key], "document_id": doc.id}
+    data["drafts"] = drafts
+    item.ai_evidence_recommendation = json.dumps(data)
+    db.commit()
+    return {"key": key, "document_id": doc.id}

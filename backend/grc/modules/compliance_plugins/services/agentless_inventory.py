@@ -110,6 +110,7 @@ try {
     serial_number = "$($bios.SerialNumber)"
     assigned_user = "$($cs.UserName)"
     fqdn          = "$fqdn"
+    host_name     = "$($cs.Name)"
     primary_mac   = "$($net.MACAddress)"
   }
 } catch {}
@@ -290,6 +291,92 @@ def collect_windows(credentials: dict, timeout: int = 60) -> tuple[list[dict[str
         raise RuntimeError(f"WinRM inventory probe failed (rc={r.status_code}): {err}")
     out = (r.std_out or b"").decode("utf-8", errors="replace")
     return _parse_windows(out), _parse_hardware_windows(out)
+
+
+def collect_windows_wmi(credentials: dict, timeout: int = 60) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Windows inventory over WMI (DCOM/RPC) — an alternative to WinRM for hosts
+    where WinRM is disabled but DCOM (135 + the dynamic RPC range) is reachable.
+    Returns (software, hardware) in the SAME shape as ``collect_windows`` so the
+    rest of the promote/collect pipeline is identical.
+
+    ponytail: this is a version/environment-sensitive DCOM path built from
+    impacket's documented WMI usage — SMOKE-TEST it against a live Windows host
+    before trusting it (impacket over NTLM must reach 135 + the RPC range, and the
+    account needs remote-WMI rights). Software uses Win32_Product, which is the
+    native WMI product class but is slow and misses non-MSI apps — the StdRegProv
+    Uninstall-key enumeration is the richer upgrade path."""
+    try:
+        from impacket.dcerpc.v5.dcomrt import DCOMConnection
+        from impacket.dcerpc.v5.dcom import wmi
+        from impacket.dcerpc.v5.dcom.wmi import CLSID_WbemLevel1Login, IID_IWbemLevel1Login
+        from impacket.dcerpc.v5.dtypes import NULL
+    except ImportError:
+        raise RuntimeError("impacket is not installed on this server (needed for WMI)")
+
+    host = credentials.get("wmi_host")
+    username = credentials.get("wmi_username")
+    password = credentials.get("wmi_password")
+    domain = credentials.get("wmi_domain") or ""
+    if not host or not username or not password:
+        raise RuntimeError("WMI credentials missing (host/username/password)")
+
+    dcom = None
+    try:
+        dcom = DCOMConnection(host, username, password, domain, "", "", None, oxidResolver=True)
+        iInterface = dcom.CoCreateInstanceEx(CLSID_WbemLevel1Login, IID_IWbemLevel1Login)
+        login = wmi.IWbemLevel1Login(iInterface)
+        services = login.NTLMLogin("//./root/cimv2", NULL, NULL)
+        login.RemRelease()
+
+        def _q(wql: str) -> list[dict[str, Any]]:
+            rows: list[dict[str, Any]] = []
+            try:
+                it = services.ExecQuery(wql)
+            except Exception:
+                return rows
+            while True:
+                try:
+                    obj = it.Next(0xffffffff, 1)[0]
+                except Exception:
+                    break
+                props = obj.getProperties()
+                rows.append({k: props[k].get("value") for k in props})
+            return rows
+
+        cs = (_q("SELECT Manufacturer,Model,Name,Domain,NumberOfLogicalProcessors,TotalPhysicalMemory FROM Win32_ComputerSystem") or [{}])[0]
+        os_ = (_q("SELECT Caption,CSName FROM Win32_OperatingSystem") or [{}])[0]
+        bios = (_q("SELECT SerialNumber FROM Win32_BIOS") or [{}])[0]
+        cores = sum(int(r.get("NumberOfCores") or 0) for r in _q("SELECT NumberOfCores FROM Win32_Processor")) or None
+        disk_bytes = sum(int(r.get("Size") or 0) for r in _q("SELECT Size,DriveType FROM Win32_LogicalDisk WHERE DriveType=3"))
+        macs = [r.get("MACAddress") for r in _q("SELECT MACAddress,IPEnabled FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE") if r.get("MACAddress")]
+        mem_bytes = int(cs.get("TotalPhysicalMemory") or 0)
+        _dom = str(cs.get("Domain") or "")
+        raw_hw = {
+            "cpu_cores": cores or (int(cs.get("NumberOfLogicalProcessors")) if cs.get("NumberOfLogicalProcessors") else None),
+            "manufacturer": cs.get("Manufacturer"),
+            "model": cs.get("Model"),
+            "serial_number": bios.get("SerialNumber"),
+            "host_name": os_.get("CSName") or cs.get("Name"),
+            "fqdn": (f"{cs.get('Name')}.{_dom}" if cs.get("Name") and "." in _dom else None),
+            "primary_mac": (macs[0] if macs else None),
+            "memory_gb": (round(mem_bytes / 1024 / 1024 / 1024) or None) if mem_bytes else None,
+            "storage_gb": (round(disk_bytes / 1_000_000_000) or None) if disk_bytes else None,
+        }
+        software = [
+            {"name": r.get("Name"), "version": (r.get("Version") or None), "source": (r.get("Vendor") or "wmi")}
+            for r in _q("SELECT Name,Version,Vendor FROM Win32_Product") if r.get("Name")
+        ]
+        return software, _clean_hw(raw_hw)
+    except RuntimeError:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"WMI collection failed: {str(e)[:200]}")
+    finally:
+        if dcom is not None:
+            try:
+                dcom.disconnect()
+            except Exception:
+                pass
 
 
 def collect_linux(credentials: dict, timeout: int = 30) -> tuple[list[dict[str, Any]], dict[str, Any]]:

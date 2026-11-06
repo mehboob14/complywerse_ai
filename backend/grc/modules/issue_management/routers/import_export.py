@@ -176,7 +176,9 @@ async def upload_issues_file(
         raise HTTPException(status_code=400, detail="No data rows found in file")
 
     # Preload user emails for assignee matching (per-tenant DB — all users here).
-    users = db.query(GRCUser).all()
+    from ....routers.auth_router import platform_account
+
+    users = db.query(GRCUser).filter(platform_account()).all()     # not accounts an access review imported
     email_to_id: Dict[str, int] = {}
     for u in users:
         email = (getattr(u, "email", None) or "").strip().lower()

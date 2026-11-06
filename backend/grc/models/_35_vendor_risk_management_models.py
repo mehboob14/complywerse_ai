@@ -56,6 +56,33 @@ class Vendor(Base):
     active_assessment_id = Column(Integer, nullable=True, index=True)
     # Soft-delete: vendors carry history, so they are never hard-deleted.
     deleted_at = Column(DateTime, nullable=True)
+    # ── Onboarding request (tpra/intake.py) ───────────────────────────────────
+    # The requester's structured intake: {"answers": {...}, "justifications": {...}}.
+    # Null for vendors added directly rather than requested.
+    intake = Column(JSON, nullable=True)
+    # draft → submitted → in_review → approved | rejected; null = never a request.
+    intake_status = Column(String(20), nullable=True, index=True)
+    requested_by = Column(Integer, nullable=True)   # plain id: a second FK to users would make joins ambiguous
+    submitted_at = Column(DateTime, nullable=True)
+    # Who else looks after the relationship, and who else hears about it.
+    stakeholder_ids = Column(JSON, nullable=True)
+    notify_emails = Column(Text, nullable=True)
+    domains = Column(JSON, nullable=True)            # other domains beyond the website, for outside-in scans
+    # The tenant's own fields on a supplier (services/module_settings.py, module "vendors").
+    custom_values = Column(JSON, nullable=True)
+    # An EU VAT number and what VIES last said about it (vendor_risk/tpra/vat.py).
+    vat_number = Column(String(40), nullable=True)
+    vat_check = Column(JSON, nullable=True)
+    # ── What the register slices by (TPRM parity) ─────────────────────────────
+    # Null is "not recorded", not "no". Owners are plain ids (the requested_by precedent): the business owner
+    # stays owner_id.
+    holds_personal_data = Column(Boolean, nullable=True)
+    data_classification = Column(String(20), nullable=True)      # public | internal | confidential | restricted
+    data_location = Column(String(255), nullable=True)
+    systems_in_scope = Column(JSON, nullable=True)               # names of the systems the supplier touches
+    tags = Column(JSON, nullable=True)
+    security_owner_id = Column(Integer, nullable=True)
+    relationship_owner_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -89,6 +116,9 @@ class VendorQuestionnaireTemplate(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Retired, not deleted, once it has been sent: hidden, cannot be sent or edited, restorable (routers/questionnaires.py).
+    archived_at = Column(DateTime, nullable=True)
+    updated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
 
     tenant = relationship("Tenant")
     creator = relationship("GRCUser", foreign_keys=[created_by])
@@ -117,6 +147,11 @@ class VendorAssessment(Base):
     risk_rating = Column(String(20), nullable=True)
     findings = Column(JSON, default=[])
     recommendations = Column(JSON, default=[])
+    # What the AI suggested, kept apart from the analyst's own list above, which it
+    # used to overwrite. A suggestion becomes a governed finding (grc_tpra_findings)
+    # only when a person raises it.
+    ai_findings = Column(JSON, default=list)
+    ai_recommendations = Column(JSON, default=list)
     # Stage 4 — AI gap analysis output (residual vs inherent delta): list of
     # {gap, control_ref, severity, inherent_contribution, residual_after_controls}.
     gap_analysis = Column(JSON, default=list)
@@ -135,6 +170,13 @@ class VendorAssessment(Base):
     # Current stage key (mirrors the latest in-progress TPRAStageInstance).
     current_stage = Column(String(40), default="intake", index=True)
     inherent_tier = Column(String(20), nullable=True)     # critical | high | medium | low
+    # The vendor facts the tier was computed from, to notice when they change,
+    # and a tier set by hand instead: {from, to, computed, justification, by, at}.
+    tiering_basis = Column(JSON, nullable=True)
+    tier_override = Column(JSON, nullable=True)
+    # The tiering config and tier policy this assessment is held to, taken when its
+    # tier was set: {weights, thresholds, cadence_days, tier_policy, at} (tpra/service.py).
+    policy_snapshot = Column(JSON, nullable=True)
     residual_rating = Column(String(20), nullable=True)
     rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
     # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.
@@ -142,6 +184,8 @@ class VendorAssessment(Base):
     # Assessment-level RACI team roster (assign once, reused across all stages):
     # {role_key: user_id} e.g. {"business_owner": 4, "tprm_lead": 7, ...}.
     team_roster = Column(JSON, default=dict)
+    # The engagement this assesses (grc_tpra_engagements); NULL is the General scope.
+    engagement_id = Column(Integer, nullable=True, index=True)
     # Optimistic-concurrency token for edits.
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
@@ -171,13 +215,36 @@ class VendorQuestionnaireResponse(Base):
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
     template_id = Column(Integer, ForeignKey("grc_vendor_questionnaire_templates.id"), nullable=True, index=True)
+    # The frozen version of the template this was sent on (grc_tpra_template_versions).
+    template_version_id = Column(Integer, nullable=True)
     respondent_name = Column(String(255), nullable=True)
     respondent_email = Column(String(255), nullable=True)
     responses = Column(JSON, default={})
     status = Column(String(50), default="pending")
     token = Column(String(255), nullable=False, unique=True, index=True)
-    expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)             # the link stops working
+    due_date = Column(DateTime, nullable=True)               # the answers are due (reminders run on this)
+    last_sent_at = Column(DateTime, nullable=True)           # a resend issues a new link
     submitted_at = Column(DateTime, nullable=True)
+    # The named person who attested to the answers on submitting them.
+    attested_name = Column(String(255), nullable=True)
+    attested_title = Column(String(255), nullable=True)
+    attested_email = Column(String(255), nullable=True)
+    attested_at = Column(DateTime, nullable=True)
+    vendor_comments = Column(JSON, default=dict)             # {question key: the vendor's comment}
+    # The reviewer's call per question: {key: {status: accepted|clarify|answered, note, by, at}}
+    review = Column(JSON, default=dict)
+    accepted_by = Column(Integer, nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+    # A certificate answering the questions its template lets it: off | prefill | skip.
+    certificate_evidence_id = Column(Integer, nullable=True)
+    certificate_mode = Column(String(12), nullable=True)
+    # A follow-up another answer called for: its parent, and the trigger
+    # "<parent>:<question>:<template>" that stops it being sent twice.
+    parent_response_id = Column(Integer, nullable=True)
+    trigger_key = Column(String(200), nullable=True, index=True)
+    # The supplier contact its personal links go to (grc_tpra_vendor_contacts); none on one sent before them.
+    contact_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")
@@ -205,6 +272,8 @@ class VendorQuestionnaireEvidence(Base):
     file_path = Column(String(1000), nullable=False)
     file_type = Column(String(255), nullable=True)
     file_size = Column(Integer, nullable=True)
+    # The evidence-library record the upload became (tpra/questionnaire_evidence.py).
+    evidence_id = Column(Integer, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     response = relationship("VendorQuestionnaireResponse", back_populates="evidence_files")
@@ -224,7 +293,12 @@ class VendorSLARecord(Base):
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     sla_metric = Column(String(255), nullable=False)
     target_value = Column(Float, nullable=True)
-    actual_value = Column(Float, nullable=True)
+    actual_value = Column(Float, nullable=True)          # what was measured
+    # The contract the level is promised in, the unit, and which way is good; with
+    # both values and a direction, is_compliant follows from them (routers/monitoring.py).
+    contract_id = Column(Integer, nullable=True)
+    unit = Column(String(20), nullable=True)
+    direction = Column(String(20), nullable=True)        # higher_is_better | lower_is_better
     measurement_period = Column(String(50), default="monthly")
     is_compliant = Column(Boolean, default=True)
     notes = Column(Text, nullable=True)

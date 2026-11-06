@@ -1,7 +1,9 @@
 import json
+import re
 import time
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -9,7 +11,11 @@ from starlette.responses import Response
 
 from .models import SessionLocal, AuditLog, GRCUser
 from .routers.auth_router import decode_token
+from .rich_audit import brief_data_url, is_sensitive_key
 
+
+# A supplier's personal link is in its path; only the link's hash is kept anywhere.
+PORTAL_TOKEN_IN_PATH = re.compile(r"(/vendor-risk/portal/)(?!request-link(?:/|$))[^/]+")
 
 AUDIT_EXCLUDED_PATH_PREFIXES = (
     "/docs",
@@ -59,7 +65,7 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, dict):
         sanitized: Dict[str, Any] = {}
         for key, nested_value in value.items():
-            if key.lower() in SENSITIVE_KEYS:
+            if is_sensitive_key(key):
                 sanitized[key] = "***"
             else:
                 sanitized[key] = _sanitize_value(nested_value)
@@ -67,7 +73,7 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
+        return brief_data_url(value)
     return str(value)
 
 
@@ -106,10 +112,61 @@ _MODULE_RESOURCE_ALIASES: dict[str, str] = {
     "chatbot": "chatbot",
     "integrations": "integrations",
     "workflow-engine": "workflow",
+    # Controls Automation: common controls, scope, testing, collectors
+    "automation": "controls_automation",
+    "scf": "controls_automation",
 }
 
 
+# The audit register sits three segments deep (/issue-management/issues/
+# audit-register/<route>/<id>), where the positional rules below see every call
+# as a generic "issues" create/update with no id — and fire issue workflows on
+# clicks like "Remind owners". Its routes are named here instead.
+_AUDIT_REGISTER_PREFIX = "issue-management/issues/audit-register"
+_AUDIT_REGISTER_ACTIONS = {
+    ("POST", "preview"): "preview",
+    ("POST", "import"): "import",
+    ("POST", "findings"): "create",
+    ("POST", "assist"): "ai_assist",
+    ("DELETE", "findings"): "delete",
+    ("POST", "findings/restore"): "restore",
+    ("PATCH", "profile"): "update",
+    ("POST", "validation/submit"): "submit_validation",
+    ("POST", "validation/decide"): "decide_validation",
+    ("POST", "extensions"): "request_extension",
+    ("POST", "extensions/decide"): "decide_extension",
+    ("POST", "extensions/regulator-notice"): "regulator_notice",
+    ("PATCH", "regulator-status"): "regulator_status",
+    ("POST", "reminders"): "send_reminders",
+    ("POST", "relink"): "relink",
+    ("PUT", "mappings/owners"): "map_owner",
+    ("PUT", "mappings/lobs"): "map_lob",
+    ("GET", "template"): "download_template",
+    ("GET", "pack/export"): "export_pack",
+    ("PUT", "settings"): "update_settings",
+    ("POST", "report-catalog"): "add_report",
+    ("PUT", "report-catalog"): "update_report",
+    ("DELETE", "report-catalog"): "delete_report",
+}
+
+
+def _audit_register_route(method: str, path: str) -> Optional[tuple[str, Optional[int], str]]:
+    """(resource_type, resource_id, action) for an audit-register URL, else None."""
+    normalized = path.replace("/grc", "", 1).strip("/")
+    if not normalized.startswith(_AUDIT_REGISTER_PREFIX):
+        return None
+    rest = [p for p in normalized[len(_AUDIT_REGISTER_PREFIX):].split("/") if p]
+    ids = [int(p) for p in rest if p.isdigit()]
+    route = "/".join(p for p in rest if not p.isdigit())
+    method = method.upper()
+    action = _AUDIT_REGISTER_ACTIONS.get((method, route)) or ("read" if method == "GET" else method.lower())
+    return "audit-register", (ids[0] if ids else None), action
+
+
 def _extract_resource(path: str) -> tuple[str, Optional[int]]:
+    register = _audit_register_route("GET", path)
+    if register:
+        return register[0], register[1]
     normalized = path.replace("/grc", "", 1).strip("/")
     if not normalized:
         return "system", None
@@ -157,6 +214,10 @@ _KNOWN_SUB_ACTION_VERBS = {
     "ask", "suggest", "reword",
     # Domain
     "measure", "assign", "reassign", "clone", "duplicate", "merge",
+    # Controls Automation: testing, scope and collector actions
+    "conclude", "reopen", "review", "move", "scaffold", "record", "connect", "test", "seed",
+    "lifecycle", "links",
+    "recompute", "preview", "freeze", "close", "retire",
 }
 
 
@@ -207,6 +268,10 @@ def _extract_sub_action(path: str) -> Optional[str]:
 def _action_from_method(method: str, status_code: int, path: str = "") -> str:
     method_upper = method.upper()
     failed_suffix = "_failed" if status_code >= 400 else ""
+
+    register = _audit_register_route(method_upper, path) if path else None
+    if register:
+        return register[2] if register[2] == "read" else f"{register[2]}{failed_suffix}"
 
     # Sub-action detection: prefer accurate verb over generic create/update
     if method_upper in {"POST", "PUT", "PATCH"} and path:
@@ -321,6 +386,22 @@ _HUMAN_VERBS = {
     "natural_language": "Generated workflow from prompt",
     "natural_language_failed": "Failed to generate workflow from prompt",
     "email_config": "Updated email configuration for",
+    "conclude": "Concluded",
+    "reopen": "Reopened",
+    "review": "Reviewed",
+    "move": "Reordered",
+    "scaffold": "Drafted",
+    "record": "Recorded",
+    "connect": "Connected",
+    "test": "Tested",
+    "seed": "Seeded",
+    "recompute": "Recomputed",
+    "preview": "Previewed",
+    "freeze": "Froze",
+    "close": "Closed",
+    "retire": "Retired",
+    "lifecycle": "Changed the status of",
+    "links": "Linked records to",
 }
 
 _HUMAN_RESOURCE = {
@@ -340,6 +421,15 @@ _HUMAN_RESOURCE = {
     "auth": "session",
     "admin": "admin record",
     "chatbot": "chatbot session",
+    "controls_automation": "controls automation record",
+    "control_testing": "control test",
+    "control_evidence": "control evidence",
+    "control_maturity": "control maturity",
+    "evidence_collector": "evidence collector",
+    "scf_scope": "controls scope",
+    "scf_audit_period": "audit period",
+    "scf_control_state": "control",
+    "control_record_link": "control link",
 }
 
 
@@ -444,8 +534,14 @@ def write_audit_log(
     started_at: float,
     request_payload: Optional[Dict[str, Any]] = None,
     response_error: Optional[Any] = None,
+    db_changes: Optional[Dict[str, Any]] = None,
 ) -> None:
     try:
+        # The endpoint already wrote its own readable row (write_rich_audit_log)
+        # and flagged it: a second, generic row for the same action is noise.
+        # Failures are still written, since the endpoint's row rolled back.
+        if getattr(request.state, "audit_recorded", False) and getattr(response, "status_code", 200) < 400:
+            return
         path = request.url.path or ""
         # TenantMiddleware stashes a lightweight DICT on request.state.tenant
         # ({"id":..,"slug":..}) and ALSO sets request.state.tenant_id directly.
@@ -524,10 +620,26 @@ def write_audit_log(
                         resource_name = v.strip()
                         break
 
+            from .feature_map import assessment_format, place
+            from .modules.workflow_engine.services.catalog import ENDPOINT_LABELS
+            from .modules.workflow_engine.services.route_events import endpoint_of
+
+            endpoint = endpoint_of(request.scope)
+            query = dict(request.query_params)
+            module, submodule = place(endpoint, path, db=db, slug=slug, payload=request_payload, query=query)
             details = {
                 "method": method,
-                "path": path,
-                "query": dict(request.query_params),
+                "path": PORTAL_TOKEN_IN_PATH.sub(r"\1***", path),
+                # The function that handled it — the workflow engine raises
+                # that endpoint's own trigger event from this row.
+                "endpoint": endpoint,
+                # The sidebar module and page it belongs to, and what was done
+                # in the workflow builder's words — Audit Logs names and
+                # filters rows by these.
+                "module": module,
+                "submodule": submodule,
+                "feature": ENDPOINT_LABELS.get(endpoint or ""),
+                "query": query,
                 "status_code": status_code,
                 "duration_ms": duration_ms,
                 "user_agent": request.headers.get("user-agent"),
@@ -538,11 +650,18 @@ def write_audit_log(
                 "summary": summary,
                 "resource_name": resource_name,
             }
+            if module == "Assessments":
+                # Which assessment it was, so a workflow can start for one kind only.
+                details["assessment_format"] = assessment_format(db, slug, path, request_payload, query)
             # Capture response error body (e.g. FastAPI's {"detail": "..."}) so the
             # AI summary can surface the real failure reason instead of just the
             # HTTP status code. Only populated when middleware passed it in.
             if response_error is not None:
                 details["response_error"] = _sanitize_value(response_error)
+            # Records the request committed, old → new (audit_changes). A failed
+            # request's writes were rolled back, so it has none to show.
+            if db_changes and status_code < 400:
+                details["db_changes"] = db_changes
 
             log = AuditLog(
                 tenant_id=tenant_id,
@@ -554,6 +673,60 @@ def write_audit_log(
                 ip_address=request.client.host if request.client else None,
             )
             db.add(log)
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        return
+
+
+@contextmanager
+def background_job(tenant_slug: str, job: Any) -> Iterator[None]:
+    """Around a background job (Celery task): what it commits is written to
+    the audit log as one "Background job" row, if it changed anything — the
+    middleware only sees web requests."""
+    from . import audit_changes
+
+    token = audit_changes.start()
+    try:
+        yield
+    finally:
+        changes = audit_changes.finish(token)
+        if changes:
+            write_job_audit_log(tenant_slug, job, changes)
+
+
+def write_job_audit_log(tenant_slug: str, job: Any, db_changes: Dict[str, Any]) -> None:
+    try:
+        from .db import open_tenant_session
+        from .feature_map import JOB_PLACES
+        from .models import Tenant
+        from .modules.workflow_engine.services.catalog import _humanize_slug
+
+        module_path = getattr(job, "__module__", "") or ""
+        name = getattr(job, "__name__", "") or "job"
+        module, submodule = JOB_PLACES.get(module_path, ("Administration", "Background Jobs"))
+        label = _humanize_slug(name)
+        count = len(db_changes.get("records") or []) + int(db_changes.get("more") or 0)
+        db = open_tenant_session(tenant_slug)
+        try:
+            tenant_id = db.query(Tenant.id).filter(Tenant.slug == tenant_slug).scalar() \
+                or db.query(Tenant.id).order_by(Tenant.id).limit(1).scalar()
+            if tenant_id is None:
+                return
+            db.add(AuditLog(
+                tenant_id=tenant_id, user_id=None, action="background_job", resource_type="background_job",
+                changes=_sanitize_value({
+                    "actor_type": "system",
+                    "actor_display": "Background job",
+                    "summary": f"Background job: {label} ({count} record{'' if count == 1 else 's'} changed)",
+                    "module": module,
+                    "submodule": submodule,
+                    "feature": label,
+                    "job": f"{module_path}.{name}",
+                    "db_changes": db_changes,
+                }),
+            ))
             db.commit()
         finally:
             db.close()

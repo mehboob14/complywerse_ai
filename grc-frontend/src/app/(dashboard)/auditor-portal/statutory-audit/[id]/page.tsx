@@ -11,6 +11,7 @@ import {
   AlertCircle, Search,
 } from 'lucide-react';
 import { statutoryAuditApi } from '@/lib/api';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import { AnimatedModal, PageLoader, RightSlidePanel } from '@/components/ui';
 import {
   StatusBadge, PriorityBadge, STATUS_LABEL, TYPE_LABEL, TYPE_OPTIONS, PRIORITY_OPTIONS,
@@ -239,14 +240,17 @@ export default function StatutoryAuditDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => unlinkEvMut.mutate(ev.id)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                      title="Unlink"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <EvidenceMaturity evidenceId={ev.evidence_id} />
+                      <button
+                        type="button"
+                        onClick={() => unlinkEvMut.mutate(ev.id)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        title="Unlink"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </li>
                 );
               })}

@@ -1,4 +1,6 @@
 from ....config import get_openai_model
+import contextlib
+import logging
 import os
 import io
 import csv
@@ -7,7 +9,7 @@ import math
 import re
 import threading
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -24,10 +26,13 @@ from ....models import (
     InternalControl, InternalControlFrameworkLink, DocumentControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
-from .policy_parser import extract_text_from_file, _create_version_snapshot
+from ....services.ai_gateway.errors import AIBlocked
+from .policy_parser import extract_text_from_file, _create_version_snapshot, public_job_error
 from ..action_logger import log_governance_action
+from ..permissions import ensure_editor, ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
+logger = logging.getLogger(__name__)
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -53,6 +58,7 @@ class FindingUpdateRequest(BaseModel):
 class FindingOverrideRequest(BaseModel):
     override_status: str
     override_justification: str
+    message: Optional[str] = None       # a proposed undo's why by its other name (proposals.py); the justification is used first
 
 
 class RiskAcceptanceRequest(BaseModel):
@@ -82,7 +88,8 @@ def analyze_clauses_batch(policy_text: str, clauses: List[dict], framework_name:
 
     client = OpenAI(
         api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL,
+        timeout=180,        # a batch is never silent for ORPHAN_AFTER (3 tries at most, the SDK's default retries)
     )
 
     clauses_text = ""
@@ -172,6 +179,8 @@ Return a JSON object with a "findings" array containing one object per clause.""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse OpenAI response: {str(e)}"
         )
+    except AIBlocked:       # the data-protection guard refused: its message is already written for a person
+        raise
     except Exception as e:
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
@@ -344,14 +353,44 @@ def serialize_finding(finding: PolicyGapFinding, db: Session) -> dict:
     }
 
 
+# A run that waits or runs with no sign of life (the job's beat, else its start, else its creation) for ORPHAN_AFTER is orphaned:
+# its job is gone (the server or the worker restarted, or the job was stopped). The job beats at pickup and after every batch, for
+# each of its runs still running, and one batch is never silent that long (the AI call's timeout). The POST and the job cancel
+# such runs in the database (cancel_orphaned_runs); the pages show them cancelled at once (serialize_run; a GET writes nothing).
+ORPHAN_AFTER = timedelta(minutes=15)
+ORPHANED = "Cancelled automatically: the gap analysis stopped before it finished (the server or the worker restarted). Run it again."
+_UNDER_WAY = ("queued", "running")
+
+
+def is_orphaned(run: PolicyGapAnalysisRun, now: Optional[datetime] = None) -> bool:
+    last = run.updated_at or run.started_at or run.created_at
+    return run.status in _UNDER_WAY and last is not None and last < (now or datetime.utcnow()) - ORPHAN_AFTER
+
+
+def cancel_orphaned_runs(db: Session) -> None:
+    """``is_orphaned`` as one UPDATE over the tenant's runs: failed with ORPHANED (a status the pages know). The caller commits."""
+    R = PolicyGapAnalysisRun
+    now = datetime.utcnow()
+    db.query(R).filter(R.status.in_(_UNDER_WAY), func.coalesce(R.updated_at, R.started_at, R.created_at) < now - ORPHAN_AFTER) \
+        .update({R.status: "failed", R.completed_at: now, R.error_message: ORPHANED}, synchronize_session=False)
+
+
+def _beat(db: Session, run_ids: list) -> None:
+    """The job is alive: each of its runs still running says so, the ones waiting for their turn too. The caller commits."""
+    R = PolicyGapAnalysisRun
+    db.query(R).filter(R.id.in_(list(run_ids or [])), R.status == "running") \
+        .update({R.updated_at: datetime.utcnow()}, synchronize_session=False)
+
+
 def serialize_run(run: PolicyGapAnalysisRun) -> dict:
+    orphaned = is_orphaned(run)
     return {
         "id": run.id,
         "tenant_id": run.tenant_id,
         "document_id": run.document_id,
         "uploaded_framework_id": run.uploaded_framework_id,
         "framework_name": run.framework_name,
-        "status": run.status,
+        "status": "failed" if orphaned else run.status,
         "run_type": run.run_type,
         "total_clauses_analyzed": run.total_clauses_analyzed,
         "fully_compliant_count": run.fully_compliant_count,
@@ -359,24 +398,32 @@ def serialize_run(run: PolicyGapAnalysisRun) -> dict:
         "not_addressed_count": run.not_addressed_count,
         "not_applicable_count": run.not_applicable_count,
         "compliance_percentage": run.compliance_percentage,
-        "ai_model_used": run.ai_model_used,
-        "error_message": run.error_message,
+        "ai_model_used": None,              # kept in the database; the page never shows a model name (the key stays for old readers)
+        "error_message": ORPHANED if orphaned else public_job_error(run.error_message),       # the stored text stays for the logs
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "created_by": run.created_by,
         "clauses_total": getattr(run, "clauses_total", 0) or 0,
         "clauses_processed": getattr(run, "clauses_processed", 0) or 0,
+        "document_version": run.document_version,       # the version it read; None for runs made before it was recorded
     }
 
 
 def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant_slug: str = None):
-    """Body of the gap-analysis job. Takes an open tenant-scoped session."""
+    """Body of the gap-analysis job. Takes an open tenant-scoped session.
+
+    Only runs still running are done: a run cancelled (it stays cancelled, also when that happens while it is done) or finished by
+    an earlier delivery of this job (Celery redelivers after a worker is lost) is left as it is. A run still running is done from
+    its first clause: its findings are written with 'completed', so it has none yet and nothing is duplicated."""
     try:
+        cancel_orphaned_runs(db)        # this job's own runs too, when it comes too late for them: the pages already said cancelled
+        _beat(db, run_ids)
+        db.commit()
         document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
         if not document:
             for run_id in run_ids:
                 run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-                if run:
+                if run and run.status == "running":
                     run.status = "failed"
                     run.error_message = "Document not found"
                     run.completed_at = datetime.utcnow()
@@ -387,7 +434,7 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
         if not policy_text:
             for run_id in run_ids:
                 run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-                if run:
+                if run and run.status == "running":
                     run.status = "failed"
                     run.error_message = "No text could be extracted from the document"
                     run.completed_at = datetime.utcnow()
@@ -396,7 +443,7 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
 
         for run_id in run_ids:
             run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-            if not run:
+            if not run or run.status != "running":
                 continue
 
             try:
@@ -435,15 +482,20 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
                 all_findings_data = []
 
                 for i in range(0, len(clauses), batch_size):
+                    if run.status != "running":         # cancelled meanwhile (read again after each commit): no more AI spent on it
+                        break
                     batch = clauses[i:i + batch_size]
                     batch_for_api = [{"reference": c["reference"], "title": c["title"], "requirement": c["requirement"]} for c in batch]
                     findings_data = analyze_clauses_batch(policy_text, batch_for_api, framework.name, document.title or "")
                     all_findings_data.extend(findings_data)
                     try:
                         run.clauses_processed = min(len(clauses), (run.clauses_processed or 0) + len(batch))
+                        _beat(db, run_ids)
                         db.commit()
                     except Exception:
                         db.rollback()
+                if run.status != "running":
+                    continue
 
                 all_findings_data = post_process_scope_filter(all_findings_data, document.title or "", policy_text)
 
@@ -564,6 +616,8 @@ def run_gap_analysis(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied"
         )
+    ensure_editor(db, current_user, document)
+    ensure_not_archived(document)                      # its gap runs stay as they are until it is restored
 
     policy_text = get_document_text(document)
     if not policy_text or not policy_text.strip():
@@ -595,6 +649,21 @@ def run_gap_analysis(
             detail="No frameworks found to analyze against"
         )
 
+    # The rate limit before any run is made: a refused run leaves nothing behind. It fails open without Redis (optional
+    # locally), and then Celery, whose broker is that Redis, is not tried: the job runs on a thread at once.
+    from ....tasks.base import release_tenant_lock, tenant_rate_limit, RateLimitExceeded
+    try:
+        redis_up = tenant_rate_limit(tenant_slug, bucket="gap_analysis")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
+
+    # the runs nobody works on any more are cancelled (committed with the new runs). With nothing of this document under way, a
+    # lock on its job can only be left by a job that stopped: it would refuse the new run as busy until it expires (30 minutes)
+    cancel_orphaned_runs(db)
+    if not db.query(PolicyGapAnalysisRun.id).filter(PolicyGapAnalysisRun.document_id == document.id,
+                                                    PolicyGapAnalysisRun.status.in_(_UNDER_WAY)).first():
+        release_tenant_lock(tenant_slug, f"gap_analysis:{document.id}")
+
     all_runs = []
 
     for framework in frameworks:
@@ -614,7 +683,8 @@ def run_gap_analysis(
             run_type="manual",
             ai_model_used=get_openai_model(),
             started_at=datetime.utcnow(),
-            created_by=current_user.id
+            created_by=current_user.id,
+            document_version=document.current_version,     # the job reads the newest text (get_document_text)
         )
         db.add(run)
         db.flush()
@@ -625,18 +695,12 @@ def run_gap_analysis(
     run_ids = [r.id for r in all_runs]
     serialized = [serialize_run(r) for r in all_runs]
 
-    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
-    try:
-        tenant_rate_limit(tenant_slug, bucket="gap_analysis")
-    except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
-
     # Same fallback strategy as the parse-policy endpoint — Celery first,
     # in-thread daemon if the broker is unreachable or DISABLE_CELERY_DISPATCH=1.
     import os as _os
     task_id: str
     dispatched_via = "celery"
-    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    force_thread = not redis_up or _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
 
     if not force_thread:
         try:
@@ -644,25 +708,29 @@ def run_gap_analysis(
             async_result = _gap_task.delay(tenant_slug, run_ids, request.document_id, current_user.id)
             task_id = async_result.id
         except Exception as _celery_exc:  # noqa: BLE001
-            print(
-                f"[DISPATCH] gap_analysis → celery FAILED, falling back to thread "
-                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
-                flush=True,
-            )
+            logger.warning("gap_analysis: celery dispatch failed, falling back to a thread (%s: %.140s)",
+                           type(_celery_exc).__name__, _celery_exc)
             force_thread = True
 
     if force_thread:
-        from ....tasks.governance import dispatch_gap_analysis_in_thread
-        task_id = dispatch_gap_analysis_in_thread(
-            tenant_slug, run_ids, request.document_id, current_user.id,
-        )
+        try:
+            from ....tasks.governance import dispatch_gap_analysis_in_thread
+            task_id = dispatch_gap_analysis_in_thread(
+                tenant_slug, run_ids, request.document_id, current_user.id,
+            )
+        except Exception:  # noqa: BLE001
+            # nothing will run them: the runs say so, instead of 'running' for every viewer for ever
+            import logging
+            logging.getLogger(__name__).exception("gap analysis dispatch failed for document %s", request.document_id)
+            for r in all_runs:
+                r.status, r.error_message, r.completed_at = "failed", "The gap analysis could not be started.", datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=503, detail="The gap analysis could not be started now. Try again in a minute.")
         dispatched_via = "thread"
 
-    print(
-        f"[DISPATCH] gap_analysis → {dispatched_via} task_id={task_id} "
-        f"tenant={tenant_slug} doc={request.document_id} runs={len(run_ids)}",
-        flush=True,
-    )
+    with contextlib.suppress(Exception):            # the runs are on their way: a diagnostic never turns that into an error
+        logger.info("gap_analysis dispatched via %s task_id=%s tenant=%s doc=%s runs=%s", dispatched_via, task_id, tenant_slug,
+                    request.document_id, len(run_ids))
 
     return {
         "message": f"Gap analysis queued for {len(all_runs)} framework(s). Check status for results.",
@@ -674,7 +742,7 @@ def run_gap_analysis(
     }
 
 
-@router.get("/runs/{document_id}")
+@router.get("/runs/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_analysis_runs(
     document_id: int,
     db: Session = Depends(get_db),
@@ -698,32 +766,16 @@ def get_analysis_runs(
         PolicyGapAnalysisRun.tenant_id.in_(user_tenants)
     ).order_by(PolicyGapAnalysisRun.started_at.desc()).all()
 
-    # Staleness sweep: a worker that crashed mid-run leaves a row in
-    # status='running' that the UI polls forever. If `started_at` is older
-    # than the threshold, mark it failed so polling can stop and the user
-    # gets a clear error instead of an indefinite spinner.
-    STALE_AFTER_SECONDS = 1800  # 30 minutes
-    now = datetime.utcnow()
-    stale_dirty = False
-    for r in runs:
-        if r.status == "running" and r.started_at:
-            age = (now - r.started_at).total_seconds()
-            if age > STALE_AFTER_SECONDS:
-                r.status = "failed"
-                r.error_message = "Worker did not finish within timeout (stale run cleared)"
-                r.completed_at = now
-                stale_dirty = True
-    if stale_dirty:
-        db.commit()
-
+    # an orphaned run is shown cancelled (serialize_run), so the page stops polling; the next run or job writes it
     return {
         "document_id": document_id,
+        "current_version": document.current_version,      # the page compares each run's `document_version` with it
         "runs": [serialize_run(r) for r in runs],
         "total": len(runs)
     }
 
 
-@router.get("/findings/document/{document_id}")
+@router.get("/findings/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_document_findings(
     document_id: int,
     compliance_status: Optional[str] = None,
@@ -813,6 +865,7 @@ def get_run_findings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis run not found or access denied"
         )
+    require_doc_reader(run.document_id, db, current_user)
 
     query = db.query(PolicyGapFinding).filter(
         PolicyGapFinding.analysis_run_id == run_id
@@ -871,6 +924,7 @@ class ApplyFixRequest(BaseModel):
     current_text: Optional[str] = None
     section_heading: Optional[str] = None
     change_reason: Optional[str] = None  # optional commit-style note for the version row
+    message: Optional[str] = None        # its why by its other name (a proposed fix: proposals.py; else from the finding)
 
 
 def _generate_clause_fix(document: GovernanceDocument, finding: PolicyGapFinding) -> dict:
@@ -895,7 +949,10 @@ def _generate_clause_fix(document: GovernanceDocument, finding: PolicyGapFinding
         base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
     )
 
-    full_content = document.content or ""
+    from .. import change_chain as _chain
+
+    # the text a fix is applied to: the content, or for a document that is its Word or PDF file, the file's text
+    full_content = _chain.document_text(document) or ""
     # Cap to keep the prompt within model budget. Most policies fit; truncated
     # tail is rarely the right place to splice anyway.
     existing_text_excerpt = full_content[:12000]
@@ -1063,6 +1120,8 @@ def generate_finding_fix(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source document not found"
         )
+    ensure_editor(db, current_user, document)
+    ensure_not_archived(document)                      # a fix could not be applied to it
 
     drafted = _generate_clause_fix(document, finding)
     finding.suggested_clause_text = drafted["proposed_text"]
@@ -1085,22 +1144,71 @@ def generate_finding_fix(
     }
 
 
-def _bump_minor_version(current: Optional[str]) -> str:
-    """1.0 → 1.1, 1.9 → 1.10, 2.3 → 2.4. Best-effort — falls back to "1.0"
-    if the existing value isn't a recognisable major.minor pair."""
-    if not current:
-        return "1.0"
-    try:
-        parts = current.strip().split(".")
-        if len(parts) >= 2:
-            major = int(parts[0])
-            minor = int(parts[1])
-            return f"{major}.{minor + 1}"
-        if len(parts) == 1:
-            return f"{int(parts[0])}.1"
-    except (TypeError, ValueError):
-        pass
-    return "1.0"
+def _gap_name(finding: PolicyGapFinding) -> str:
+    return " ".join(p for p in (finding.framework_name, finding.clause_reference) if p) or "a framework clause"
+
+
+def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_text: str, new_text: str, *, change_type: str,
+                origin: str, summary: str, reason: str, done: str, data: Optional[bytes] = None):
+    """Put ``new_text`` into the document as every other save does: its next version, the versions before it kept. A document that
+    is its Word or PDF file gets a new file, as a take back does (a Word file is edited in place, a PDF becomes a Word copy; ``data``:
+    the file already made, an accepted proposal). The version's change set says who made the change. Does not commit. Returns
+    ``(version row, number, notes, is_file)``."""
+    from .. import change_chain as C, doc_lifecycle
+    from .documents import _snapshot_content_version, create_audit_log
+
+    is_file = not (document.content or "").strip()
+    old_version, old_status = document.current_version or "1.0", document.status
+    name = user.display_name or user.username or "A user"
+    notes: List[str] = []
+    if is_file:
+        from ..studio import service as studio
+
+        try:
+            if data is None:
+                data, notes = studio.file_bytes(db, document, new_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The document's file could not be written: {exc}")
+        row, number, _ = studio.write_file_version(db, document, user, data, change_type=change_type, summary=summary, reason=reason, done=done)
+    else:
+        document.content, document.updated_at = new_text, datetime.utcnow()
+        number = _snapshot_content_version(db, document, old_content=old_text, old_title=document.title, old_version=old_version,
+                                           change_type=change_type, change_reason=reason, user_id=user.id, summary=summary)
+        db.flush()
+        row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == document.id,
+                                                          GovernanceDocumentVersion.version_number == number)
+               .order_by(GovernanceDocumentVersion.id.desc()).first())
+        doc_lifecycle.changed_after_review(db, document, old_status, user.id, f"{done} (version {number}), so it needs approving again")
+        create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id, action="content_edited",
+                         field_changed="current_version", old_value=old_version, new_value=number,
+                         action_details=f"{reason}; version {number}" + doc_lifecycle.outcome(old_status, document.status, document))
+    if row is not None:
+        cs = C.build_change_set(old_text, new_text, [], default_kind=origin, by=name, by_id=user.id, at=datetime.utcnow().isoformat())
+        for item in cs["items"]:
+            item["reason"] = reason
+        row.change_set = cs
+    return row, number, notes, is_file
+
+
+def _take_back(text: str, finding: PolicyGapFinding) -> Optional[str]:
+    """``text`` without what this finding's fix put into it, every other change kept: a replaced clause gets its earlier wording
+    back; an added clause goes, with the heading it was added under when that heading holds nothing else. None when the clause
+    is not in the text as it was applied (it was edited since)."""
+    clause = (finding.applied_clause_text or "").strip()
+    # an added clause went in after everything the document held then: its last copy (an earlier one was there already)
+    at = (text.rfind(clause) if finding.replacement_mode != "replace" else text.find(clause)) if clause else -1
+    if at < 0:
+        return None
+    if finding.replacement_mode == "replace":
+        if finding.original_clause_text is None:
+            return None
+        return text[:at] + finding.original_clause_text.rstrip() + text[at + len(clause):]
+    start, rest = at, text[at + len(clause):]
+    head = re.search(r"(?:\A|\n)\n*#{1,6}[ \t][^\n]*\n\s*\Z", text[:at])        # the heading line right above the clause
+    if head and re.match(r"\s*(?:#|\Z)", rest):                                  # ... which holds only this clause
+        start = head.start()
+    left = text[:start].rstrip("\n")
+    return left + ("\n\n" + rest.lstrip("\n") if rest.strip() else "")
 
 
 def _norm_ws(s: Optional[str]) -> str:
@@ -1159,6 +1267,8 @@ def _sync_statement_on_apply(
     Stores applied_statement_id / applied_statement_prev_text on the finding so
     an override/undo can restore (replace) or retract (append) it. Best-effort:
     a failure here is logged but never blocks the document change."""
+    from .policy_parser import log_statement_change
+
     try:
         if mode == "replace" and current_text:
             matched = _find_matching_statement(db, document.id, tenant_ids, current_text)
@@ -1175,7 +1285,12 @@ def _sync_statement_on_apply(
                 matched.statement_text = proposed_text
             matched.document_version_id = new_version.id
             matched.updated_at = datetime.utcnow()
+            # the fix wrote this wording into the document itself: matched to the file again (document sync), not an edit waiting
+            # to be written there
+            matched.source_text = matched.source_start = matched.source_match = None
             finding.applied_statement_id = matched.id
+            log_statement_change(db, matched, user_id, "statement_changed_by_fix", old=finding.applied_statement_prev_text,
+                                 new=matched.statement_text, detail=f"the fix for {_gap_name(finding)}")
         elif mode == "append":
             existing_count = db.query(PolicyStatement).filter(
                 PolicyStatement.document_id == document.id
@@ -1200,8 +1315,10 @@ def _sync_statement_on_apply(
             _create_version_snapshot(db, new_stmt, "gap_remediation", user_id, change_reason=reason)
             finding.applied_statement_id = new_stmt.id
             finding.applied_statement_prev_text = None  # marks a created statement
+            log_statement_change(db, new_stmt, user_id, "statement_changed_by_fix", new=new_stmt.statement_text,
+                                 detail=f"added by the fix for {_gap_name(finding)}")
     except Exception as sync_exc:  # noqa: BLE001
-        print(f"[GAP APPLY] statement sync skipped: {type(sync_exc).__name__}: {sync_exc}", flush=True)
+        logger.warning("gap apply: statement sync skipped: %s: %s", type(sync_exc).__name__, sync_exc)
 
 
 @router.post("/findings/{finding_id}/apply-fix")
@@ -1215,10 +1332,9 @@ def apply_finding_fix(
       - "replace" — splice `proposed_text` in for the verbatim `current_text`
       - "append" — append `proposed_text` under a new section heading
 
-    BEFORE modifying, snapshot the current document content into a
-    `GovernanceDocumentVersion` row (status='superseded') for audit. The
-    document's `current_version` string is bumped (1.0 → 1.1). The finding
-    is marked closed with a link back to the new version row.
+    The change is saved as every other save is: the document's next version (major or minor, as Comply Agent or the rule judges
+    it), the versions before it kept. A document that is its Word or PDF file gets the fix in a new file (a Word file edited in
+    place, a PDF a Word copy). The finding links to that version; Override takes the fix back out on its own (``override_finding``).
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -1254,36 +1370,17 @@ def apply_finding_fix(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source document not found"
         )
+    ensure_editor(db, current_user, document)
+    ensure_not_archived(document)
 
-    original_content = document.content or ""
+    from .. import change_chain as C
+
+    # the text the fix goes into: the content, or for a document that is its Word or PDF file, the file's text
+    original_content = C.document_text(document)
+    if original_content is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="The text of this document's file cannot be read, so the fix cannot be written into it.")
     original_version_label = document.current_version or "1.0"
-    original_status = document.status
-
-    # ---- Snapshot the pre-change document state into a version row. -----
-    # Mark any prior "current" version superseded so only the latest snapshot
-    # holds that status. (We avoid touching version status on file uploads
-    # which already manage their own version lifecycle.)
-    db.query(GovernanceDocumentVersion).filter(
-        GovernanceDocumentVersion.document_id == document.id,
-        GovernanceDocumentVersion.status == "current",
-    ).update({"status": "superseded"}, synchronize_session=False)
-
-    snapshot = GovernanceDocumentVersion(
-        document_id=document.id,
-        version_number=original_version_label,
-        change_type="minor",
-        title=document.title or "",
-        content=original_content,
-        change_summary=(
-            f"Pre-fix snapshot — about to {mode} for gap "
-            f"{finding.framework_name or ''} {finding.clause_reference or ''}".strip()
-        ),
-        change_reason=body.change_reason or None,
-        status="superseded",
-        created_by=current_user.id,
-    )
-    db.add(snapshot)
-    db.flush()  # gives us snapshot.id
 
     # ---- Compute the new content. --------------------------------------
     if mode == "replace":
@@ -1314,40 +1411,79 @@ def apply_finding_fix(
         heading = " — ".join(heading_parts) if heading_parts else "Compliance Update"
         new_content = original_content + f"\n\n## {heading}\n\n{proposed_text}\n"
 
-    # ---- Write the new document state and a "current" version row. -----
-    new_version_label = _bump_minor_version(original_version_label)
-    new_version = GovernanceDocumentVersion(
-        document_id=document.id,
-        version_number=new_version_label,
-        change_type="minor",
-        title=document.title or "",
-        content=new_content,
-        change_summary=(
-            f"Gap remediation ({mode}) for "
-            f"{finding.framework_name or 'framework'} {finding.clause_reference or ''}".strip()
-            + (f" — {finding.clause_title}" if finding.clause_title else "")
-        ),
-        change_reason=body.change_reason or None,
-        status="current",
-        created_by=current_user.id,
-    )
-    db.add(new_version)
-    db.flush()
+    fix = {"mode": mode, "current_text": body.current_text if mode == "replace" else None, "proposed_text": proposed_text,
+           "change_reason": body.change_reason or body.message}
+    from .. import proposals
 
-    document.content = new_content
-    document.current_version = new_version_label
-    # Applying a remediation edits the document, so it must be re-approved:
-    # route it into the approval queue for its assigned reviewer/approver.
-    document.status = "pending_approval"
-    document.updated_at = datetime.utcnow()
+    if proposals.required(db, current_user, document):
+        # the fix waits for the owner (or author) to accept it; the finding stays as it is until then. Its why: the gap analysis's own
+        proposal = proposals.propose(
+            db, document, current_user, source="gap_fix", message=fix["change_reason"], prefill=proposals.gap_justification(finding),
+            content=new_content, file=proposals.file_of(db, document, new_content), finding=finding,
+            payload={**fix, "finding": {"id": finding.id, "clause_reference": finding.clause_reference, "clause_title": finding.clause_title}})
+        db.commit()
+        return {"finding_id": finding.id, "document_id": document.id, "mode": mode, "applied_at": None,
+                "remediation_status": finding.remediation_status, "applied_version_id": None, "applied_version_number": None,
+                "previous_version_number": original_version_label, "compliance_status": finding.compliance_status,
+                "document_status": document.status, "in_place": False, "notes": [], **proposals.answer(db, proposal, current_user, document)}
+    new_version, new_version_label, notes, is_file = apply_fix(db, document, finding, current_user, fix, new_content,
+                                                               user_tenants=user_tenants, original_content=original_content)
+
+    db.commit()
+    if is_file:
+        from ..studio import service as studio
+
+        studio.reanchor(db, document, current_user.id)
+    db.refresh(finding)
+    db.refresh(document)
+
+    return {
+        "finding_id": finding.id,
+        "document_id": document.id,
+        "mode": mode,
+        "applied_at": finding.applied_at.isoformat() if finding.applied_at else None,
+        "remediation_status": finding.remediation_status,
+        "applied_version_id": finding.applied_version_id,
+        "applied_version_number": new_version_label,
+        "previous_version_number": original_version_label,
+        "compliance_status": finding.compliance_status,
+        "document_status": document.status,
+        "in_place": False,               # always false now that every fix makes its own version (kept for older screens)
+        "notes": notes,                  # about the document's file (e.g. a PDF became a Word copy)
+    }
+
+
+def apply_fix(db: Session, document: GovernanceDocument, finding: PolicyGapFinding, user: GRCUser, fix: dict, new_content: str, data=None,
+              user_tenants: Optional[list] = None, original_content: Optional[str] = None):
+    """Write a gap fix (``fix``: mode, current_text, proposed_text, change_reason; ``new_content`` the document with it) as every other
+    save is - the document's next version - and record it on the finding and its statement. Apply fix, and an accepted proposal of
+    one (proposals.py; ``data``: the file it made). Does not commit. Returns ``(version row, number, notes, is_file)``."""
+    from .. import change_chain as C, doc_version
+
+    ensure_not_archived(document)
+    if original_content is None:
+        original_content = C.document_text(document) or ""
+    original_status = document.status
+    mode, proposed_text = fix["mode"], fix["proposed_text"]
+    # ---- Write it as every other save is: the document's next version. ----
+    # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
+    # round, also while in review or approval), as every other new version is; a draft stays a draft.
+    gap = _gap_name(finding)
+    reason = (fix.get("change_reason") or "").strip()[:2000] or f"Gap fix for {gap}"
+    decision = doc_version.decide(original_content, new_content, title=document.title)
+    drafted = proposed_text == (finding.suggested_clause_text or "").strip()        # Comply Agent's draft, as it wrote it
+    new_version, new_version_label, notes, is_file = _write_text(
+        db, document, user, original_content, new_content, change_type=decision["change"], origin="ai" if drafted else "manual",
+        summary=doc_version.summary_of(f"Gap fix ({'clause replaced' if mode == 'replace' else 'clause added'}) for {gap}", decision),
+        reason=reason, done="A gap fix was applied", data=data)
 
     now = datetime.utcnow()
     finding.applied_clause_text = proposed_text
     finding.replacement_mode = mode
-    finding.original_clause_text = body.current_text if mode == "replace" else None
+    finding.original_clause_text = fix.get("current_text") if mode == "replace" else None
     finding.applied_at = now
-    finding.applied_by = current_user.id
-    finding.applied_version_id = new_version.id
+    finding.applied_by = user.id
+    finding.applied_version_id = new_version.id if new_version is not None else None
     finding.applied_prev_status = original_status
     # The clause now lives in the document, so the gap is addressed — flip the
     # compliance status to fully_compliant so the register reflects the fix.
@@ -1363,26 +1499,10 @@ def apply_finding_fix(
     # the AI-matched statement (replace) or add one (append). Best-effort.
     _sync_statement_on_apply(
         db, document, finding, mode,
-        body.current_text if mode == "replace" else None,
-        proposed_text, new_version, current_user.id, user_tenants,
+        fix.get("current_text") if mode == "replace" else None,
+        proposed_text, new_version, user.id, user_tenants or [document.tenant_id],
     )
-
-    db.commit()
-    db.refresh(finding)
-    db.refresh(document)
-
-    return {
-        "finding_id": finding.id,
-        "document_id": document.id,
-        "mode": mode,
-        "applied_at": finding.applied_at.isoformat() if finding.applied_at else None,
-        "remediation_status": finding.remediation_status,
-        "applied_version_id": new_version.id,
-        "applied_version_number": new_version_label,
-        "previous_version_number": original_version_label,
-        "compliance_status": finding.compliance_status,
-        "document_status": document.status,
-    }
+    return new_version, new_version_label, notes, is_file
 
 
 @router.put("/findings/{finding_id}")
@@ -1404,8 +1524,11 @@ def update_finding(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     if update.assigned_owner_id is not None:
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [update.assigned_owner_id], kept=[finding.assigned_owner_id])
         finding.assigned_owner_id = update.assigned_owner_id
     if update.target_remediation_date is not None:
         finding.target_remediation_date = update.target_remediation_date
@@ -1444,6 +1567,7 @@ def override_finding(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     valid_statuses = ["fully_compliant", "partially_compliant", "not_addressed", "not_applicable"]
     if override.override_status not in valid_statuses:
@@ -1452,44 +1576,92 @@ def override_finding(
             detail=f"Invalid override status. Must be one of: {', '.join(valid_statuses)}"
         )
 
-    # If this finding's remediation clause was applied to the document, an
-    # override is an UNDO: roll the document back to the snapshot taken just
-    # before the clause was spliced in, restore its prior status, and clear the
-    # applied audit trail before recording the override.
-    if finding.applied_at and finding.applied_version_id:
-        document = db.query(GovernanceDocument).filter(
-            GovernanceDocument.id == finding.document_id,
-            GovernanceDocument.tenant_id.in_(user_tenants),
-        ).first()
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == finding.document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first() if finding.applied_at else None
+    from .. import proposals
+
+    if document is not None and proposals.required(db, current_user, document):
+        ensure_not_archived(document)
+        from .. import change_chain as C
+
+        old_text = C.document_text(document)
+        new_text = _take_back(old_text, finding) if old_text is not None else None
+        if new_text is not None and new_text != old_text:
+            # taking the fix back out of the document waits for the owner (or author) to accept it, and so does the override
+            proposal = proposals.propose(
+                db, document, current_user, source="gap_undo", message=override.override_justification or override.message, content=new_text,
+                file=proposals.file_of(db, document, new_text), finding=finding,
+                payload={"override_status": override.override_status, "override_justification": override.override_justification,
+                         "finding": {"id": finding.id, "clause_reference": finding.clause_reference, "clause_title": finding.clause_title}})
+            db.commit()
+            return {**serialize_finding(finding, db), "taken_back_version": None, "fix_left_in_document": False,
+                    **proposals.answer(db, proposal, current_user, document)}
+    taken_back, left, refiled = undo_fix(db, document, finding, current_user, override.override_status, override.override_justification,
+                                         user_tenants=user_tenants)
+
+    db.commit()
+    if refiled is not None:
+        from ..studio import service as studio
+
+        studio.reanchor(db, refiled, current_user.id)
+    db.refresh(finding)
+
+    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was taken back);
+    # fix_left_in_document: its fix's clause was changed in the document since, so the document was left as it is
+    return {**serialize_finding(finding, db), "taken_back_version": taken_back, "fix_left_in_document": left}
+
+
+def undo_fix(db: Session, document: Optional[GovernanceDocument], finding: PolicyGapFinding, user: GRCUser, override_status: str,
+             override_justification: Optional[str], *, data=None, user_tenants: Optional[list] = None):
+    """Override a finding. When its remediation clause was applied to the document, it is an UNDO: that fix's text is taken back out
+    of the document, every other change kept, as a take back is saved (the document's next version; ``data``: the file an accepted
+    proposal made), its statement change is reverted, and the applied audit trail is cleared before the override is recorded.
+    Override, and an accepted proposal of one (proposals.py). Does not commit. Returns ``(the version taken back to, the fix was left
+    in the document, the document whose file was replaced)``."""
+    tenants = user_tenants or ([document.tenant_id] if document is not None else [finding.tenant_id])
+    taken_back, refiled, left = None, None, False
+    if finding.applied_at:
         if document:
-            snapshot = db.query(GovernanceDocumentVersion).filter(
-                GovernanceDocumentVersion.document_id == document.id,
-                GovernanceDocumentVersion.id < finding.applied_version_id,
-            ).order_by(GovernanceDocumentVersion.id.desc()).first()
-            applied_version = db.query(GovernanceDocumentVersion).filter(
-                GovernanceDocumentVersion.id == finding.applied_version_id,
-            ).first()
-            if snapshot:
-                document.content = snapshot.content
-                document.current_version = snapshot.version_number
-                snapshot.status = "current"
-            if applied_version:
-                applied_version.status = "reverted"
-            document.status = finding.applied_prev_status or "draft"
-            document.updated_at = datetime.utcnow()
+            ensure_not_archived(document)       # taking the fix back out changes the document
+            from .. import change_chain as C, doc_version
+
+            old_text = C.document_text(document)
+            new_text = _take_back(old_text, finding) if old_text is not None else None
+            if new_text is None:
+                # its clause was changed or removed in the document since: that edit stands, so the document (and the statement
+                # that follows it) is left as it is - the reply says so - and the finding is overridden
+                left = True
+            elif new_text != old_text:
+                gap = _gap_name(finding)
+                why = (override_justification or "").strip()
+                reason = f"Gap fix for {gap} taken back" + (f": {why}" if why else "")
+                _row, taken_back, _notes, is_file = _write_text(
+                    db, document, user, old_text, new_text, change_type=doc_version.by_rule(old_text, new_text), origin="revert",
+                    summary=f"Gap fix for {gap} taken back", reason=reason[:2000], done="A gap fix was taken back", data=data)
+                refiled = document if is_file else None
         # Revert the statement change too: restore the prior text (replace) or
         # retract the statement that was created (append).
-        if finding.applied_statement_id:
+        if finding.applied_statement_id and not left:
             stmt = db.query(PolicyStatement).filter(
                 PolicyStatement.id == finding.applied_statement_id,
-                PolicyStatement.tenant_id.in_(user_tenants),
+                PolicyStatement.tenant_id.in_(tenants),
             ).first()
             if stmt:
+                from .policy_parser import log_statement_change
+
+                fixed = stmt.statement_text
                 if finding.applied_statement_prev_text is not None:
-                    _create_version_snapshot(db, stmt, "gap_remediation_undo", current_user.id)
+                    _create_version_snapshot(db, stmt, "gap_remediation_undo", user.id)
                     stmt.statement_text = finding.applied_statement_prev_text
+                    stmt.source_text = stmt.source_start = stmt.source_match = None     # the document says it again (as above)
+                    log_statement_change(db, stmt, user.id, "statement_fix_undone", old=fixed, new=stmt.statement_text,
+                                         detail=f"the fix for {_gap_name(finding)} taken back")
                 else:
                     stmt.status = "superseded"
+                    log_statement_change(db, stmt, user.id, "statement_fix_undone", old=fixed,
+                                         detail=f"retracted: the fix for {_gap_name(finding)} that added it was taken back")
                 stmt.updated_at = datetime.utcnow()
         finding.applied_at = None
         finding.applied_by = None
@@ -1502,17 +1674,13 @@ def override_finding(
         finding.remediation_status = "open"
 
     finding.is_overridden = True
-    finding.override_status = override.override_status
-    finding.override_justification = override.override_justification
-    finding.overridden_by = current_user.id
+    finding.override_status = override_status
+    finding.override_justification = override_justification
+    finding.overridden_by = user.id
     finding.overridden_at = datetime.utcnow()
-    finding.compliance_status = override.override_status
+    finding.compliance_status = override_status
     finding.updated_at = datetime.utcnow()
-
-    db.commit()
-    db.refresh(finding)
-
-    return serialize_finding(finding, db)
+    return taken_back, left, refiled
 
 
 @router.put("/findings/{finding_id}/accept-risk")
@@ -1534,6 +1702,7 @@ def accept_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     # Update finding with risk acceptance
     finding.risk_accepted = True
@@ -1637,7 +1806,7 @@ def accept_risk(
     return serialize_finding(finding, db)
 
 
-@router.get("/compliance-summary/{document_id}")
+@router.get("/compliance-summary/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_compliance_summary(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1945,7 +2114,7 @@ def _recommend_for_finding(
     return [candidates[0]]
 
 
-@router.get("/document/{document_id}/recommended-controls")
+@router.get("/document/{document_id}/recommended-controls", dependencies=[Depends(require_doc_reader)])
 def get_gap_recommended_controls(
     document_id: int,
     db: Session = Depends(get_db),
@@ -2037,7 +2206,7 @@ class GapRecommendedControlLinkRequest(BaseModel):
     finding_id: Optional[int] = None
 
 
-@router.post("/document/{document_id}/recommended-controls/link")
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_changer)])
 def link_gap_recommended_control(
     document_id: int,
     body: GapRecommendedControlLinkRequest,
@@ -2208,7 +2377,7 @@ def link_gap_recommended_control(
     }
 
 
-@router.get("/export/{document_id}")
+@router.get("/export/{document_id}", dependencies=[Depends(require_doc_reader)])
 def export_findings_csv(
     document_id: int,
     db: Session = Depends(get_db),

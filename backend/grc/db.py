@@ -246,6 +246,32 @@ def _ensure_vulnerability_host_identity(engine: Engine) -> None:
         ))
 
 
+def _ensure_vulnerability_exploit_class(engine: Engine) -> None:
+    """Additive nullable columns for the pentest module's persisted exploitability verdict
+    (exploit_class + exploit_status), classified once at scan-ingest so the pentest assess()
+    hot-path reads a cached class instead of recomputing per finding on every page load.
+    MUST exist before any Vulnerability INSERT: SQLAlchemy emits unset mapped columns as NULL,
+    so an app-wide insert on an un-migrated DB would reference a physical column that isn't there
+    and fail. Existence check first — it's metadata-only (no ACCESS EXCLUSIVE lock), so the
+    already-migrated path never locks grc_vulnerabilities."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if not inspector.has_table("grc_vulnerabilities"):
+        return
+    cols = {c["name"] for c in inspector.get_columns("grc_vulnerabilities")}
+    if {"exploit_class", "exploit_status"} <= cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE grc_vulnerabilities ADD COLUMN IF NOT EXISTS exploit_class VARCHAR(40)"
+        ))
+        conn.execute(text(
+            "ALTER TABLE grc_vulnerabilities ADD COLUMN IF NOT EXISTS exploit_status VARCHAR(30)"
+        ))
+
+
 def _ensure_asset_origin_source(engine: Engine) -> None:
     """Additive column: how an asset was BORN (easm | network_sweep | connect |
     agent | manual). last_seen_source mutates on every sync, so it cannot answer
@@ -422,6 +448,10 @@ def _init_tenant_schema(engine: Engine, slug: str) -> None:
             _ensure_vulnerability_host_identity(engine)
         except Exception:
             logger.exception("vulnerability host_identity ensure failed for slug=%s", slug)
+        try:
+            _ensure_vulnerability_exploit_class(engine)
+        except Exception:
+            logger.exception("vulnerability exploit_class ensure failed for slug=%s", slug)
         try:
             _ensure_asset_origin_source(engine)
         except Exception:

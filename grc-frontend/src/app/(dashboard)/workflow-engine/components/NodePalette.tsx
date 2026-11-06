@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Plus, X, Search, Zap } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { Tooltip } from './Tooltip';
 import { NODE_GROUP_COLORS, PALETTE_DESCRIPTIONS, PaletteItem, isTriggerEligibleAction } from './types';
+import { SidebarTree } from './SidebarTree';
 
 type PaletteGroup = {
   key: string;
@@ -64,8 +65,6 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 
 export function NodePalette({ palette, onDragStart, onAddNode, locked = false }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [moduleCollapsed, setModuleCollapsed] = useState<Record<string, boolean>>({});
-  const [subgroupCollapsed, setSubgroupCollapsed] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
@@ -81,6 +80,7 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
           item.label.toLowerCase().includes(q) ||
           (item.submodule || '').toLowerCase().includes(q) ||
           (item.module || '').toLowerCase().includes(q) ||
+          (item.path || []).some((p) => p.toLowerCase().includes(q)) ||
           (item.description || '').toLowerCase().includes(q))
     ),
   })).filter((g) => g.items.length > 0);
@@ -88,8 +88,6 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
   const totalResults = groups.reduce((sum, g) => sum + g.items.length, 0);
 
   const toggleGroup = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-  const toggleModule = (module: string) => setModuleCollapsed((prev) => ({ ...prev, [module]: !prev[module] }));
-  const toggleSubgroup = (key: string) => setSubgroupCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const handleAddNode = useCallback((item: PaletteItem) => {
     if (locked) return;
@@ -218,108 +216,11 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
                     renderNodeItem(item, pillColor)
                   )}
 
-                  {group.key === 'platform_functions' && (() => {
-                    const PF_MODULE_ORDER = ['Compliance', 'Control Library', 'Evidence', 'Framework Upload', 'Governance', 'Risk Management', 'Vulnerability Management', 'Chatbot', 'General'];
-                    const GOVERNANCE_SUBMODULE_ORDER = [
-                      'Documents', 'Attestations', 'Regulatory Changes', 'Regulatory Feeds', 'Committees',
-                    ];
-                    const RISK_MANAGEMENT_SUBMODULE_ORDER = ['Risk Framework', 'Risk Assessments', 'Risk Register', 'Appetite', 'Mitigation Actions', 'Internal Controls', 'KRIs', 'Incidents', 'Reviews', 'Dependencies', 'RCSA', 'Vendor Risk', 'Advanced Analytics'];
-                    const COMPLIANCE_SUBMODULE_ORDER = ['Frameworks', 'Controls', 'Evidence Requirements', 'Statements', 'Assessments', 'Evidence', 'Control Library'];
-                    const VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER = ['Vulnerabilities', 'Departments', 'Reports', 'SLA Config'];
-                    const SUBMODULE_ORDER: Record<string, string[]> = {
-                      'Governance': GOVERNANCE_SUBMODULE_ORDER,
-                      'Risk Management': RISK_MANAGEMENT_SUBMODULE_ORDER,
-                      'Compliance': COMPLIANCE_SUBMODULE_ORDER,
-                      'Vulnerability Management': VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER,
-                    };
-
-                    const sortSubgroups = (moduleName: string, pairs: [string, PaletteItem[]][]) => {
-                      const order = SUBMODULE_ORDER[moduleName];
-                      if (!order) return pairs;
-                      return [...pairs].sort(([a], [b]) => {
-                        const ai = order.indexOf(a);
-                        const bi = order.indexOf(b);
-                        if (ai !== -1 && bi !== -1) return ai - bi;
-                        if (ai !== -1) return -1;
-                        if (bi !== -1) return 1;
-                        return a.localeCompare(b);
-                      });
-                    };
-
-                    const modules = Array.from(
-                      group.items.reduce((acc, item) => {
-                        const mod = item.module || 'General';
-                        if (mod === 'Internal') return acc;
-                        if (!acc.has(mod)) acc.set(mod, [] as PaletteItem[]);
-                        acc.get(mod)!.push(item);
-                        return acc;
-                      }, new Map<string, PaletteItem[]>())
-                    ).sort(([a], [b]) => {
-                      const ai = PF_MODULE_ORDER.indexOf(a);
-                      const bi = PF_MODULE_ORDER.indexOf(b);
-                      if (ai !== -1 && bi !== -1) return ai - bi;
-                      if (ai !== -1) return -1;
-                      if (bi !== -1) return 1;
-                      return a.localeCompare(b);
-                    });
-
-                    return modules.map(([moduleName, moduleItems]) => {
-                      const isModuleOpen = q !== '' || !moduleCollapsed[moduleName];
-                      const subgroups = sortSubgroups(moduleName, Array.from(
-                        moduleItems.reduce((acc, item) => {
-                          const subgroup = item.submodule || 'General';
-                          if (!acc.has(subgroup)) acc.set(subgroup, [] as PaletteItem[]);
-                          acc.get(subgroup)!.push(item);
-                          return acc;
-                        }, new Map<string, PaletteItem[]>())
-                      ));
-
-                      return (
-                        <div key={moduleName} className="border border-indigo-100 rounded-md overflow-hidden">
-                          <button
-                            onClick={() => toggleModule(moduleName)}
-                            className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                          >
-                            <span className="truncate">{moduleName}</span>
-                            <span className="flex items-center gap-1">
-                              <span className="text-[9px] font-normal opacity-60">({moduleItems.length})</span>
-                              {isModuleOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                            </span>
-                          </button>
-
-                          {isModuleOpen && (
-                            <div className="p-1.5 space-y-1 bg-white">
-                              {subgroups.map(([subgroupName, subgroupItems]) => {
-                                const subgroupKey = `${moduleName}::${subgroupName}`;
-                                const isSubgroupOpen = q !== '' || !subgroupCollapsed[subgroupKey];
-
-                                return (
-                                  <div key={subgroupKey} className="border border-indigo-50 rounded-md overflow-hidden">
-                                    <button
-                                      onClick={() => toggleSubgroup(subgroupKey)}
-                                      className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                                    >
-                                      <span className="truncate">{subgroupName}</span>
-                                      <span className="flex items-center gap-1">
-                                        <span className="text-[9px] font-normal opacity-50">({subgroupItems.length})</span>
-                                        {isSubgroupOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                                      </span>
-                                    </button>
-
-                                    {isSubgroupOpen && (
-                                      <div className="p-1 space-y-1 bg-white">
-                                        {subgroupItems.map((item) => renderNodeItem(item, pillColor))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
+                  {group.key === 'platform_functions' && (
+                    // Module → page → function, as the sidebar lists them.
+                    <SidebarTree dense items={group.items.filter((item) => item.module !== 'Internal')} expanded={q !== ''}
+                      renderItem={(item) => renderNodeItem(item, pillColor)} />
+                  )}
                 </div>
               )}
             </div>

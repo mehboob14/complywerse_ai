@@ -10,7 +10,11 @@ from ....models import (
     WorkflowTemplate, WorkflowStep, WorkflowStepApprover,
     DocumentAuditLog, GRCUser, Role, UserRole, get_db
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import PLATFORM_GRANT, platform_role_ids, require_auth, get_user_tenants
+
+from ..permissions import require_doc_editor as _require_doc_editor  # noqa: E402
+from ..permissions import require_doc_reader as _require_doc_reader  # noqa: E402
+from ..permissions import ensure_not_archived as _ensure_not_archived  # noqa: E402
 
 router = APIRouter(prefix="/documents", tags=["Governance - Document Workflow"])
 
@@ -53,8 +57,7 @@ def create_audit_log(
 
 
 def get_user_role_ids(user: GRCUser, db: Session) -> List[int]:
-    user_roles = db.query(UserRole).filter(UserRole.user_id == user.id).all()
-    return [ur.role_id for ur in user_roles]
+    return platform_role_ids(db, user)
 
 
 def is_user_authorized_approver(
@@ -111,7 +114,7 @@ def check_step_approval_requirements(
                     missing.append(user_obj.display_name if user_obj else f"User {approver.user_id}")
             elif approver.approver_type == "role":
                 role_users = db.query(UserRole.user_id).filter(
-                    UserRole.role_id == approver.role_id
+                    UserRole.role_id == approver.role_id, PLATFORM_GRANT
                 ).all()
                 role_user_ids = {u.user_id for u in role_users}
                 if not (role_user_ids & approved_user_ids):
@@ -142,7 +145,7 @@ def check_step_approval_requirements(
                 return {"can_advance": False, "reason": f"Waiting for user (sequence {approver.sequence})"}
             elif approver.approver_type == "role":
                 role_users = db.query(UserRole.user_id).filter(
-                    UserRole.role_id == approver.role_id
+                    UserRole.role_id == approver.role_id, PLATFORM_GRANT
                 ).all()
                 role_user_ids = {u.user_id for u in role_users}
                 if role_user_ids & approved_user_ids:
@@ -266,7 +269,7 @@ def serialize_workflow_instance(
     return result
 
 
-@router.post("/{document_id}/start-workflow", status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/start-workflow", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_require_doc_editor)])
 def start_workflow(
     document_id: int,
     request: StartWorkflowRequest = None,
@@ -288,6 +291,9 @@ def start_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    from ..permissions import ensure_not_archived
+
+    ensure_not_archived(document)                      # out of the archive only by Restore
     
     if document.workflow_instance and document.workflow_instance.status == "active":
         raise HTTPException(
@@ -396,6 +402,7 @@ def advance_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    _ensure_not_archived(document)                     # a step sets the document's status
     
     instance = document.workflow_instance
     if not instance or instance.status != "active":
@@ -456,7 +463,7 @@ def advance_workflow(
                 )
             elif approver.approver_type == "role":
                 role_users = db.query(UserRole.user_id).filter(
-                    UserRole.role_id == approver.role_id
+                    UserRole.role_id == approver.role_id, PLATFORM_GRANT
                 ).all()
                 role_user_ids = {u.user_id for u in role_users}
                 if role_user_ids & approved_user_ids:
@@ -585,6 +592,7 @@ def reject_workflow_step(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    _ensure_not_archived(document)                     # a step sets the document's status
     
     instance = document.workflow_instance
     if not instance or instance.status != "active":
@@ -692,7 +700,7 @@ def reject_workflow_step(
     return serialize_workflow_instance(instance, document, db, include_steps=True, include_actions=True)
 
 
-@router.get("/{document_id}/workflow")
+@router.get("/{document_id}/workflow", dependencies=[Depends(_require_doc_reader)])
 def get_workflow_status(
     document_id: int,
     db: Session = Depends(get_db),

@@ -29,6 +29,7 @@ mode is out of date). From scratch, regenerate everything with --force:
     #   --limit 5                    cap how many are generated this run (smoke test)
     #   --force                      regenerate everything (use for a from-scratch run)
     #   --model gpt-4o               override the model (default = latest, gpt-5.5)
+    #   --ids NIST53-001,NIST53-011  only these artifact ids (with --force, regenerate just those)
 
 Requires a real OpenAI key (AI_INTEGRATIONS_OPENAI_* / OPENAI_API_KEY in .env).
 """
@@ -200,7 +201,7 @@ def _prompt(framework_name: str, name: str, artifact_type: str, control_ref: str
         "4. Start with a short metadata block (Document ID, Version, Owner, Effective Date, Framework, "
         "Classification) as a markdown table. Do NOT include a 'Control Reference' row.\n"
         "5. Where the type calls for inline tables (forms, timelines), include realistic markdown tables.\n"
-        "6. Use [bracketed placeholders] only for genuinely org-specific values (names, dates, systems).\n"
+        "6. Use [bracketed placeholders] only for genuinely org-specific values (names, dates, systems, retention periods, review frequencies).\n"
         "7. Do NOT include any framework clause numbers, control-reference codes, annex numbers, or citations "
         "anywhere (no 'Clause X', no '(A.5.9)', no 'Control Reference' row).\n"
         "8. Be thorough and ready-to-use; aim for a document an auditor would accept as a strong first draft."
@@ -219,7 +220,7 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "Return STRICT JSON ONLY with this exact shape (no code fences, no commentary):\n"
         '{ "columns": ["..."], "field_guidance": {"Column": "precise instruction for what the user enters here, '
         'incl. format/allowed values where relevant"}, "example_rows": [["..."]], '
-        '"maintenance": "who owns this template, how often it is updated, and the source system it draws from" }\n\n'
+        '"maintenance": "who owns this template, how often it is updated (a [bracketed] suggestion for the organisation to set), and the source system it draws from" }\n\n'
         "Rules:\n"
         f"- columns: the COMPLETE, specific column set this {artifact_type} needs to satisfy "
         f"{framework_name} {control_ref or ''} — derived from what that control actually requires. "
@@ -228,8 +229,9 @@ def _prompt_table(framework_name: str, name: str, artifact_type: str, control_re
         "exactly what to record, including expected format, units, or allowed values (e.g. dates as YYYY-MM-DD, "
         "a RAG status, a control ref).\n"
         "- example_rows: ONE or TWO illustrative rows ONLY, and wrap EVERY cell value like `[EXAMPLE: ...]` so it "
-        "is obviously placeholder text the user must replace.\n"
-        "- maintenance: 1-2 sentences (owner role, update cadence, source system)."
+        "is obviously placeholder text the user must replace. Example values are invented: never put the framework's own "
+        "control, clause or annex numbers (or the control given above) in an example cell, a column name or the guidance.\n"
+        "- maintenance: 1-2 sentences (owner role, update cadence written as a [bracketed] suggestion, never a fixed frequency, source system)."
     )
 
 
@@ -241,17 +243,21 @@ def _prompt_guide(framework_name: str, name: str, artifact_type: str, control_re
         f"(e.g. SIEM/log store, ITSM/ticketing, a portal, a tool, or a dashboard). Do NOT fabricate the "
         f"evidence itself. Instead, write a concise, practical GUIDE telling the user HOW and WHERE to "
         f"collect it from THEIR setup, for an organisation implementing **{framework_name}** "
-        f"(control {control_ref or 'general obligation'}).\n"
+        f"(internal scope hint, do NOT print it or any control, clause or annex number: {control_ref or 'general obligation'}).\n"
         f"Intent: {description or 'Not provided.'}\n\n"
         "Output GitHub-flavoured Markdown (no code fences) with these ## sections:\n"
-        "- What This Evidences (tie explicitly to the control, and state plainly that it is collected, not authored)\n"
+        "- What This Evidences (say in plain words what the evidence shows about the safeguard, never cite a control or say what a framework expects, and state plainly that it is collected, not authored)\n"
         "- Where To Collect It From (the source system/tool in a typical setup; name the kind of system)\n"
         "- How To Collect (concrete, ordered steps an operator can follow)\n"
         "- What To Capture (the exact fields/records/screens that make it sufficient)\n"
         "- Frequency & Owner\n"
         "- Retention & Storage\n"
-        "- Acceptance Criteria (what an auditor accepts as sufficient)\n\n"
-        "Keep it tight (~350-550 words). Use [bracketed placeholders] for org-specific tool/system names."
+        "- Acceptance Criteria (what a reviewer should check before signing off; a suggestion, not a promise of audit acceptance)\n\n"
+        "Keep it tight (~350-550 words). Use [bracketed placeholders] for org-specific tool/system names. "
+        "Rules: never print any control, clause or annex number and never say what the framework or an auditor expects or will accept; "
+        "write every frequency, retention period, sample size and acceptance criterion as a [bracketed] suggestion for the organisation "
+        "to set, never as a fixed number or a requirement of the framework; name kinds of systems, not products or vendors, and cover "
+        "on-premises and own data center systems as well as cloud."
     )
 
 
@@ -322,6 +328,25 @@ def _sanitize(content: str) -> str:
     return s
 
 
+def _grounding(evidence_items: list, requirement: str) -> str:
+    """Optional extra intent for frameworks whose artifacts are built from their evidence recommendations (UAE IA):
+    what the standard requires in this area, and the evidence the document must let the organisation show. Absent
+    (no `evidence_items`/`requirement` on the artifact) it adds nothing, so every other framework is generated as before."""
+    parts = []
+    if requirement:
+        parts.append("What the standard requires in this area (paraphrase it in your own words; do not quote its numbering):\n"
+                     + requirement.strip())
+    if evidence_items:
+        lines = [f"- {e.get('name', '')}: {e.get('description', '')}".strip() for e in evidence_items]
+        parts.append("The organisation must be able to show these pieces of evidence with this document (they are the evidence "
+                     "recommendations for this area). Make each one a clearly identifiable part of what you write - a section, an "
+                     "appendix, a form, a record template or a register column - and do not add requirements beyond them. In a "
+                     "document, the final section \"Evidence Provided\" is a markdown table with two columns, \"Evidence item\" (each "
+                     "item name exactly as written below, without its description) and \"Where this document provides it\":\n"
+                     + "\n".join(lines))
+    return ("\n\n" + "\n\n".join(parts)) if parts else ""
+
+
 def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
     """Generate one artifact in the mode that suits its catalog `format`.
 
@@ -333,8 +358,10 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
     name = art.get("name", "")
     cref = art.get("control_ref", "")
     desc = art.get("description", "")
+    evidence_items = art.get("evidence_items") or []
+    desc = (desc + _grounding(evidence_items, art.get("requirement") or "")).strip()
     mode = _content_mode(fmt, atype)
-    is_reasoning = model.lower().startswith(("gpt-5", "o1", "o3", "o4"))
+    is_reasoning = model.lower().startswith(("gpt-5", "gpt-6", "o1", "o3", "o4"))
     max_toks = 16000 if is_reasoning else 4000
 
     if mode == "table":
@@ -368,8 +395,26 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
 
     # markdown (authored document)
     _key, sections = _skeleton(atype)
+    # A NIST document that NIST itself publishes a template for (system security plan, contingency plan,
+    # business impact analysis, risk assessment report...) follows that template's outline, not the generic
+    # skeleton for its type. The outlines live in seed_data/nist_publications.json.
+    if fw_name.upper().startswith("NIST"):
+        from grc.services.assessment_evidence_ai import template_for
+        tpl = template_for(name, _NIST_KIND.get(_key))
+        if tpl:
+            sections = [line.replace(": ", " (subsections: ", 1) + ")" if ": " in line else line
+                        for line in tpl["outline"]]
+            desc = (f"{desc} Follow the outline of NIST's official {tpl['name']} ({tpl['publication']}), "
+                    "keeping its section numbers and headings.").strip()
+    if evidence_items:
+        sections = list(sections) + ["Evidence Provided"]
     prompt = _prompt(fw_name, name, atype, cref, desc, sections)
     return {"content": _sanitize(_call_md(client, model, _SYS, prompt, max_toks)), "content_format": "markdown", "table": None}
+
+
+# Skeleton key -> the document kind nist_publications.json templates are tagged with.
+_NIST_KIND = {"plan": "plan", "report": "report", "assessment": "report", "policy": "policy",
+              "standard": "standard", "procedure": "procedure"}
 
 
 def _is_current(existing: dict, art: dict) -> bool:
@@ -388,6 +433,7 @@ def main() -> None:
     ap.add_argument("--type", help="Only this artifact type (e.g. Charter)")
     ap.add_argument("--limit", type=int, default=0, help="Cap generations this run (0 = all)")
     ap.add_argument("--force", action="store_true", help="Regenerate even if already present")
+    ap.add_argument("--ids", help="Only these artifact ids, comma-separated")
     ap.add_argument("--sanitize", action="store_true",
                     help="Clean clause/control-reference citations from EXISTING content in place (no AI, no regeneration)")
     # Default to the platform's latest model (gpt-5.5 via get_openai_model()).
@@ -397,6 +443,13 @@ def main() -> None:
     # `--model gpt-4o` or the ARTIFACT_GEN_MODEL env var.
     ap.add_argument("--model", default=os.environ.get("ARTIFACT_GEN_MODEL") or get_openai_model())
     args = ap.parse_args()
+    only = {x.strip() for x in (args.ids or "").split(",") if x.strip()}
+    # Progress lines carry arrows; a Windows console or redirected log would otherwise fail on them.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
 
     # ── --sanitize: clean existing content in place, no AI needed ──────────────
     if args.sanitize:
@@ -432,6 +485,8 @@ def main() -> None:
             return False
         if not art.get("artifact_id"):
             return False
+        if only and art["artifact_id"] not in only:
+            return False
         if args.type and (art.get("type", "").strip().lower() != args.type.strip().lower()):
             return False
         return True
@@ -456,10 +511,10 @@ def main() -> None:
         if args.framework and fw_key != args.framework:
             continue
         fw_name = fw.get("name", fw_key)
-        bucket = content.setdefault(fw_key, {})
+        bucket = content.get(fw_key, {})              # created below only when something is written to it
         for art in fw.get("artifacts", []):
             aid = art.get("artifact_id")
-            if not aid:
+            if not aid or (only and aid not in only):
                 continue
             if args.type and (art.get("type", "").strip().lower() != args.type.strip().lower()):
                 continue
@@ -471,6 +526,7 @@ def main() -> None:
                 continue
             try:
                 res = generate_one(client, fw_name, art, args.model)
+                bucket = content.setdefault(fw_key, bucket)
                 bucket[aid] = {
                     "title": art.get("name"), "type": art.get("type"),
                     "control_ref": art.get("control_ref"), "format": art.get("format"),

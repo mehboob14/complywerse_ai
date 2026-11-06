@@ -35,7 +35,8 @@ from ....schemas import (
     InternalControlWorkflowActionResponse, InternalControlDashboard,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
+from ....services.ai_gateway.field_policies import pick
 
 router = APIRouter(prefix="/internal-controls", tags=["ERM - Internal Controls"])
 
@@ -124,6 +125,10 @@ def _heuristic_control_enrichment(items: List[dict]) -> List[dict]:
     return enriched
 
 
+_ENRICH_KEYS = ("control_id", "name", "description", "category", "sub_category", "control_type", "frequency",
+                "regulatory_source", "priority", "is_key_control")
+
+
 def _ai_enrich_controls(items: List[dict]) -> List[dict]:
     if not items:
         return []
@@ -132,6 +137,8 @@ def _ai_enrich_controls(items: List[dict]) -> List[dict]:
     if not client:
         return _heuristic_control_enrichment(items)
 
+    # An upload may carry any column (owner, e-mail, department...): the model gets only the ones it enriches.
+    asked = [pick(item, _ENRICH_KEYS) for item in items]
     prompt = f"""You are a GRC controls expert. Enrich internal controls parsed from a manually uploaded file.
 Return ONLY valid JSON array with one object per input item and preserve input order.
 
@@ -148,7 +155,7 @@ Required keys for each object:
 - is_key_control (boolean)
 
 Input items:
-{json.dumps(items, ensure_ascii=False)}
+{json.dumps(asked, ensure_ascii=False)}
 """
 
     try:
@@ -562,6 +569,7 @@ def create_internal_control(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source governance document not found"
             )
+    refuse_imported_accounts(db, [control.owner_id, control.backup_owner_id])
     
     db_control = InternalControl(
         tenant_id=tenant_id,
@@ -910,6 +918,8 @@ def update_internal_control(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source governance document not found"
             )
+    refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("backup_owner_id")],
+                             kept=[control.owner_id, control.backup_owner_id])
     for field, value in update_data.items():
         setattr(control, field, value)
     
@@ -1399,6 +1409,7 @@ def create_escalation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     control = get_control_or_404(control_id, user_tenants, db)
+    refuse_imported_accounts(db, [escalation_data.escalate_to_user_id])
     
     db_escalation = InternalControlEscalation(
         control_id=control_id,
@@ -1459,6 +1470,7 @@ def update_escalation(
         )
     
     update_data = escalation_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("escalate_to_user_id")], kept=[escalation.escalate_to_user_id])
     for field, value in update_data.items():
         setattr(escalation, field, value)
     

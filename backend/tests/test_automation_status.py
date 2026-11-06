@@ -110,3 +110,58 @@ def test_a_run_with_no_findings_for_this_control_is_not_run():
 
 def test_collection_goes_stale_after_a_quarter():
     assert COLLECTION_STALE_DAYS == 90
+
+
+# ── connectors are alternatives, not a checklist ─────────────────────────────
+# 53 providers claim CC6.1 because 53 systems can prove logical access. Nobody
+# runs 53. Letting the unconfigured ones contribute made an evidenced control
+# report "partial", so scope is decided before the aggregate, not inside it.
+
+from grc.modules.automation.router import _coverage_for
+
+
+def _bound(*providers):
+    return [{"provider": p, "checks": [{"id": f"{p}.mfa"}]} for p in providers]
+
+
+def test_an_unconnected_provider_is_not_a_gap():
+    cov = _coverage_for(_bound("okta", "aws", "github"), connected={"github"})
+    assert cov["state"] == "covered"
+    assert cov["satisfied_by"] == ["github"]
+
+
+def test_nothing_connected_asks_for_one_source():
+    cov = _coverage_for(_bound("okta", "aws", "github"), connected=set())
+    assert cov["state"] == "connect_one"
+    assert cov["satisfied_by"] == []
+    assert cov["provider_count"] == 3
+
+
+def test_options_are_grouped_by_category_with_connected_first():
+    cov = _coverage_for(_bound("okta", "google_workspace", "github"), connected={"github"})
+    assert cov["options"][0]["category"] == "scm", "the connected category leads"
+    assert cov["options"][0]["connected"] is True
+    cats = {o["category"] for o in cov["options"]}
+    assert "identity" in cats and "scm" in cats
+
+
+def test_providers_rank_by_checks_contributed_to_this_control():
+    bound = [
+        {"provider": "okta", "checks": [{"id": "a"}, {"id": "b"}, {"id": "c"}]},
+        {"provider": "clerk", "checks": [{"id": "d"}]},
+    ]
+    identity = next(o for o in _coverage_for(bound, set()) ["options"] if o["category"] == "identity")
+    assert [p["provider"] for p in identity["providers"]] == ["okta", "clerk"]
+
+
+def test_a_control_with_no_connector_is_manual_not_an_ask():
+    assert _coverage_for([], set())["state"] == "manual"
+    # a non-connector plugin has nothing to connect either
+    assert _coverage_for([{"provider": None, "checks": []}], set())["state"] == "manual"
+
+
+def test_every_connected_source_still_has_to_pass():
+    # The disjunction is only over what you do NOT run. Two connected systems are
+    # both in scope, so one failing fails the control -- Okta passing does not
+    # excuse weak MFA in AWS.
+    assert _aggregate_status(["passed", "failed"]) == "failed"

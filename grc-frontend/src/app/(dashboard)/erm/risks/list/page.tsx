@@ -42,6 +42,11 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
+import ModuleSettingsPanel, { ModuleSettingsSwitch, SlaBadge } from '@/components/settings/ModuleSettingsPanel';
+import { PRIORITIES, PriorityPill } from '@/components/settings/PrioritySla';
 import { PageLoader } from '@/components/ui';
 import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
@@ -527,6 +532,12 @@ const isNcaRegisterTypeValue = (value: string | null | undefined) =>
 const isOneLinkRegisterTypeValue = (value: string | null | undefined) =>
   canonicalFilterValue(value).includes(canonicalFilterValue(ONELINK_REGISTER_TYPE));
 
+// The per-client register templates keep their own entries until they are
+// moved into each tenant's custom fields; the other register types are the
+// tenant's own list (module settings → risks → register_type).
+const isTemplateRegisterTypeValue = (value: string | null | undefined) =>
+  isUBLRegisterTypeValue(value) || isNcaRegisterTypeValue(value) || isOneLinkRegisterTypeValue(value);
+
 const isUBLAllowedCategoryValue = (value: string | null | undefined) =>
   UBL_ONLY_RISK_CATEGORIES.some((allowed) => filterValuesMatch(value, allowed));
 
@@ -690,7 +701,9 @@ const getCategoryStyle = (category: string | null | undefined) => {
 };
 
 const getStatusStyle = (status: RiskStatus) => {
-  return RISK_STATUSES.find(s => s.value === status) || RISK_STATUSES[0];
+  return RISK_STATUSES.find(s => s.value === status) || {
+    value: status, label: String(status || '').replace(/_/g, ' '), color: 'text-slate-700', bgColor: 'bg-slate-100',
+  };
 };
 
 const getScoreColor = (score: number | undefined) => {
@@ -700,6 +713,10 @@ const getScoreColor = (score: number | undefined) => {
   if (score >= 6) return { text: 'text-amber-700', bg: 'bg-amber-50' };
   return { text: 'text-emerald-700', bg: 'bg-emerald-50' };
 };
+
+/** The priority a score falls in when none is set on the risk (the same bands as the dashboard). */
+const priorityForScore = (score: number) =>
+  (score >= 20 ? 'critical' : score >= 12 ? 'high' : score >= 6 ? 'medium' : score > 0 ? 'low' : '');
 
 const getHeatmapCellColor = (likelihood: number, impact: number) => {
   const score = likelihood * impact;
@@ -729,6 +746,7 @@ export default function ERMRisksPage() {
   const canDelete = hasPermission('erm:risks:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
+  const [pageView, setPageView] = useState<'records' | 'settings'>('records');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [registerTypeFilter, setRegisterTypeFilter] = useState<string>('all');
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>('all');
@@ -1309,6 +1327,20 @@ export default function ERMRisksPage() {
     }));
   };
 
+  if (pageView === 'settings') {
+    return (
+      <div className="space-y-4 px-3 sm:px-6">
+        <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Risk register" />
+        <p className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600">
+          Each risk&apos;s SLA follows its <span className="font-medium text-slate-800">Priority</span>: the one set on the
+          risk or, left on Auto, the band its residual score falls in (critical 20+, high 12+, medium 6+, low below).
+          Set the days for each priority under <span className="font-medium text-slate-800">SLA and escalation</span> below.
+        </p>
+        <ModuleSettingsPanel moduleKey="risks" />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <PageLoader className="h-64" />
@@ -1331,12 +1363,11 @@ export default function ERMRisksPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      {/* View switcher — replaces the inline Dashboard button that used to
-          live in the filters row. Lets the user flip between the flat
-          register and the dashboard from a single dropdown that always
-          reflects the current view. */}
       <div className="flex items-center justify-between gap-3">
-        <RiskViewSwitcher active="list" />
+        <div className="flex flex-wrap items-center gap-3">
+          <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Risk register" />
+          <RiskViewSwitcher active="list" />
+        </div>
       </div>
 
       {uploadResult && (
@@ -1594,6 +1625,8 @@ export default function ERMRisksPage() {
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Inherent Rating</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Treatment</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Residual Rating</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Priority</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">SLA</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider">Owner</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Action</th>
                   </tr>
@@ -1692,6 +1725,13 @@ export default function ERMRisksPage() {
                               {residualRating || '—'}
                             </span>
                           </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <PriorityPill
+                              priority={risk.effective_priority}
+                              title={risk.priority ? 'Priority set on this risk' : 'Priority from the risk score'}
+                            />
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap"><SlaBadge sla={risk.sla} /></td>
                           <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{ownerName || <span className="italic text-slate-400">—</span>}</td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-0.5">
@@ -1740,7 +1780,7 @@ export default function ERMRisksPage() {
                         {expanded && (
                           <tr className="bg-primary-50/30">
                             <td></td>
-                            <td colSpan={9} className="px-4 py-3">
+                            <td colSpan={11} className="px-4 py-3">
                               <div className="rounded-lg border border-primary-100 bg-white p-3">
                                 <p className="text-xs font-semibold text-primary-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
@@ -1944,6 +1984,13 @@ export default function ERMRisksPage() {
                           <span className="text-[10px] uppercase tracking-wide opacity-75">Res</span>
                           <span className="font-semibold">{risk.residual_score || '-'}</span>
                         </span>
+                        <div className="flex w-[68px] justify-center">
+                          <PriorityPill
+                            priority={risk.effective_priority}
+                            title={risk.priority ? 'Priority set on this risk' : 'Priority from the risk score'}
+                          />
+                        </div>
+                        <div className="flex min-w-[104px] justify-center"><SlaBadge sla={risk.sla} /></div>
                         <div className="flex gap-0.5">
                           {canEdit && (
                             <button
@@ -2179,6 +2226,7 @@ function RiskModal({
       ?? (risk as unknown as { business_unit_id?: number } | null)?.business_unit_id
       ?? undefined) as number | undefined,
     status: risk?.status || 'open' as RiskStatus,
+    priority: risk?.priority || '',   // empty = from the score
     inherent_likelihood: risk?.inherent_likelihood || 3,
     inherent_impact: risk?.inherent_impact || 3,
     residual_likelihood: risk?.residual_likelihood || 2,
@@ -2188,6 +2236,10 @@ function RiskModal({
     consequences: (risk as unknown as { consequences?: string } | null)?.consequences || '',
     recommendations: (risk as unknown as { recommendations?: string } | null)?.recommendations || '',
   });
+  const [tab, setTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>(() => risk?.custom_values || {});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { data: fieldSettings } = useModuleSettings('risks');
   const [assetSearch, setAssetSearch] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>(
     ((risk as unknown as { linked_assets?: Array<{ asset_id?: number; id?: number }> } | null)?.linked_assets || [])
@@ -2294,7 +2346,7 @@ function RiskModal({
     },
   });
 
-  // Active teams from admin/teams. These drive the "Assigned Team / Department"
+  // Active departments (each as its picker record, admin/teams). These drive the "Assigned Team / Department"
   // picker — replacing the hardcoded list that the tenant couldn't edit.
   const { data: teams } = useQuery({
     queryKey: ['risk-modal-teams'],
@@ -2383,7 +2435,7 @@ function RiskModal({
     queryKey: ['governance-documents-for-onelink'],
     queryFn: async () => {
       try {
-        const response = await governanceApi.getDocuments({ limit: 500 });
+        const response = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
         const data: any = response.data;
         return (Array.isArray(data) ? data : data?.items || []) as Array<{ id: number; title?: string }>;
       } catch {
@@ -2406,9 +2458,15 @@ function RiskModal({
     documents: (oneLinkDocuments || []).map((d) => d.title || `Document #${d.id}`).filter(Boolean),
   }), [users, teams, oneLinkIncidents, oneLinkControls, oneLinkDocuments]);
 
-  const categoryOptions = isUBLTemplateSelected
+  const categoryOptions: Array<{ value: string; label: string }> = isUBLTemplateSelected
     ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
-    : STANDARD_RISK_CATEGORIES;
+    : listOptions(fieldSettings, 'category', formData.risk_category, STANDARD_RISK_CATEGORIES);
+  const registerTypeItems = [
+    ...REGISTER_TYPES.filter((t) => isTemplateRegisterTypeValue(t.value)),
+    ...listOptions(fieldSettings, 'register_type',
+      isTemplateRegisterTypeValue(formData.register_type) ? '' : formData.register_type,
+      REGISTER_TYPES.filter((t) => !isTemplateRegisterTypeValue(t.value))),
+  ].map((t) => ({ value: t.value, label: t.label }));
   const extraUblFieldKeys = useMemo(() => {
     return Object.keys(ublFields).filter(
       (key) =>
@@ -2437,7 +2495,12 @@ function RiskModal({
     return UBL_SUB_CATEGORY_SUGGESTIONS[key] || [];
   }, [formData.risk_category]);
 
-  const subCategories = SUB_CATEGORIES_BY_CATEGORY[formData.risk_category] || [];
+  const subsFor = (category: string) => {
+    const opt = fieldSettings?.lists?.category?.options?.find((o) => o.value === category);
+    if (opt?.children?.length) return opt.children;
+    return SUB_CATEGORIES_BY_CATEGORY[category as RiskCategory] || [];
+  };
+  const subCategories = subsFor(formData.risk_category);
 
   const handleCategoryChange = (newCategory: RiskCategory) => {
     setFormData({ 
@@ -2455,7 +2518,7 @@ function RiskModal({
     }
     const nextSubCategory = isUBL
       ? formData.risk_sub_category
-      : (SUB_CATEGORIES_BY_CATEGORY[nextCategory]?.includes(formData.risk_sub_category) ? formData.risk_sub_category : '');
+      : (subsFor(nextCategory).includes(formData.risk_sub_category) ? formData.risk_sub_category : '');
     setFormData({
       ...formData,
       register_type: newRegisterType,
@@ -2597,19 +2660,25 @@ function RiskModal({
       }
     }
 
-    await onSubmit({
-      riskData: {
-        ...formData,
-        risk_sub_category: derivedSubCategory,
-        inherent_score: formData.inherent_likelihood * formData.inherent_impact,
-        residual_score: formData.residual_likelihood * formData.residual_impact,
-        ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
-        ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
-        template_fields: isOneLinkSelected ? templateFields : undefined,
-      },
-      linkedAssetIds: selectedAssetIds,
-      aiSuggestions: aiAssistUsed ? aiSuggestions : null,
-    });
+    setSaveError(null);
+    try {
+      await onSubmit({
+        riskData: {
+          ...formData,
+          risk_sub_category: derivedSubCategory,
+          inherent_score: formData.inherent_likelihood * formData.inherent_impact,
+          residual_score: formData.residual_likelihood * formData.residual_impact,
+          ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
+          ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
+          template_fields: isOneLinkSelected ? templateFields : undefined,
+          custom_values: valuesToSave(fieldSettings, customValues, risk ? (risk.custom_values || {}) : null),
+        },
+        linkedAssetIds: selectedAssetIds,
+        aiSuggestions: aiAssistUsed ? aiSuggestions : null,
+      });
+    } catch (err) {
+      setSaveError(errorText(err, 'Could not save the risk.'));
+    }
   };
 
   const renderUblInput = (field: UBLFieldDef) => {
@@ -2704,9 +2773,17 @@ function RiskModal({
         </div>
       }
     >
-      <form id="risk-modal-form" onSubmit={handleSubmit} className="space-y-3">
+      {/* A required field left empty on the other tab: go to it. */}
+      <form id="risk-modal-form" onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="space-y-3">
+        {saveError && (
+          <p className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {saveError}
+          </p>
+        )}
+        <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
+        <div data-tab="details" className={tab === 'details' ? 'space-y-3' : 'hidden'}>
           <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'title', 'Title')} *</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -2977,8 +3054,8 @@ function RiskModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Description</label>
+          {showBuiltin(fieldSettings, 'description') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -2986,13 +3063,13 @@ function RiskModal({
               rows={3}
               placeholder="Describe the risk..."
             />
-          </div>
+          </div>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Register Type</label>
+          {showBuiltin(fieldSettings, 'register_type') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'register_type', 'Register Type')}</label>
             <MultiSelectDropdown
               title="Register Type"
-              items={REGISTER_TYPES.filter(t => t.value).map(t => ({ value: t.value, label: t.label }))}
+              items={registerTypeItems}
               selectedValues={formData.register_type ? [formData.register_type] : []}
               onApply={(vals) => handleRegisterTypeChange(vals[0] || '')}
               multiSelect={false}
@@ -3000,7 +3077,7 @@ function RiskModal({
               placeholder="Select Register Type"
               size="md"
             />
-          </div>
+          </div>}
 
           {isUBLTemplateSelected && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -3061,9 +3138,9 @@ function RiskModal({
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            {showBuiltin(fieldSettings, 'category') && <div>
               <label className="block text-sm font-medium text-slate-800 mb-1">
-                {isUBLTemplateSelected ? 'Category (Risk Category)' : 'Category'}
+                {isUBLTemplateSelected ? 'Category (Risk Category)' : builtinLabel(fieldSettings, 'category', 'Category')}
               </label>
               <MultiSelectDropdown
                 title="Category"
@@ -3075,10 +3152,10 @@ function RiskModal({
                 placeholder="Select Category"
                 size="md"
               />
-            </div>
-            <div>
+            </div>}
+            {showBuiltin(fieldSettings, 'sub_category') && <div>
               <label className="block text-sm font-medium text-slate-800 mb-1">
-                {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : 'Sub-Category'}
+                {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : builtinLabel(fieldSettings, 'sub_category', 'Sub-Category')}
               </label>
               {isUBLTemplateSelected ? (
                 <>
@@ -3108,25 +3185,48 @@ function RiskModal({
                   size="md"
                 />
               )}
-            </div>
+            </div>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Status</label>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Priority</label>
+              <MultiSelectDropdown
+                title="Priority"
+                items={[
+                  {
+                    value: 'auto',
+                    label: `Auto${priorityForScore(formData.residual_likelihood * formData.residual_impact || formData.inherent_likelihood * formData.inherent_impact) ? ` (${priorityForScore(formData.residual_likelihood * formData.residual_impact || formData.inherent_likelihood * formData.inherent_impact)})` : ''}`,
+                    subLabel: 'From the risk score',
+                  },
+                  ...PRIORITIES,
+                ]}
+                selectedValues={[formData.priority || 'auto']}
+                onApply={(vals) => setFormData({ ...formData, priority: vals[0] && vals[0] !== 'auto' ? vals[0] : '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                size="md"
+              />
+            </div>
+            <p className="self-end pb-2 text-xs text-slate-500">The SLA for this risk follows its priority (Risk register → Settings).</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {showBuiltin(fieldSettings, 'status') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
               <MultiSelectDropdown
                 title="Status"
-                items={RISK_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                items={statusChoices(fieldSettings, RISK_STATUSES)}
                 selectedValues={formData.status ? [formData.status] : []}
-                onApply={(vals) => setFormData({ ...formData, status: (vals[0] || RISK_STATUSES[0].value) as RiskStatus })}
+                onApply={(vals) => setFormData({ ...formData, status: (vals[0] || 'open') as RiskStatus })}
                 multiSelect={false}
                 triggerVariant="input"
                 placeholder="Select Status"
                 size="md"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Business Owner</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'owner') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'owner', 'Business Owner')}</label>
               <MultiSelectDropdown
                 title="Business Owner"
                 items={(users || []).map((user) => ({
@@ -3142,7 +3242,7 @@ function RiskModal({
                 size="md"
                 forceSearch
               />
-            </div>
+            </div>}
           </div>
 
           {/* Assigned team / department picker — backed by admin/teams.
@@ -3152,9 +3252,9 @@ function RiskModal({
               That same business_unit_id is what RCSA assessments and the
               dashboard's BU-progress panel are keyed on, so a risk
               assigned here lands in the right team's scope automatically. */}
-          <div>
+          {showBuiltin(fieldSettings, 'team') && <div>
             <label className="block text-sm font-medium text-slate-800 mb-1">
-              Assigned Team / Department
+              {builtinLabel(fieldSettings, 'team', 'Assigned Team / Department')}
               <span className="ml-1 text-xs font-normal text-slate-500">(defines who owns and reviews this risk)</span>
             </label>
             <MultiSelectDropdown
@@ -3168,14 +3268,14 @@ function RiskModal({
               onApply={(vals) => setFormData({ ...formData, team_id: vals[0] ? Number(vals[0]) : undefined })}
               multiSelect={false}
               triggerVariant="input"
-              placeholder={(teams || []).length === 0 ? 'No teams configured yet — create one in Admin → Teams' : 'Select a team / department'}
+              placeholder={(teams || []).length === 0 ? 'No departments configured yet — create one in Admin → Departments' : 'Select a team / department'}
               size="md"
               forceSearch
             />
-          </div>
+          </div>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Linked Assets (Optional)</label>
+          {showBuiltin(fieldSettings, 'linked_assets') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'linked_assets', 'Linked Assets (Optional)')}</label>
             <div className="rounded-lg border border-slate-300 bg-white p-2">
               <SearchInput
                 value={assetSearch}
@@ -3212,11 +3312,11 @@ function RiskModal({
                 </p>
               )}
             </div>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Likelihood (1-5)</label>
+            {showBuiltin(fieldSettings, 'inherent_likelihood') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_likelihood', 'Inherent Likelihood (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3225,9 +3325,9 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Impact (1-5)</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'inherent_impact') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_impact', 'Inherent Impact (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3236,12 +3336,12 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </div>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Likelihood (1-5)</label>
+            {showBuiltin(fieldSettings, 'residual_likelihood') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_likelihood', 'Residual Likelihood (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3250,9 +3350,9 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Impact (1-5)</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'residual_impact') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_impact', 'Residual Impact (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3261,12 +3361,12 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </div>}
           </div>
 
           {/* Field sequence: Root Cause → Consequences → Recommendations → Treatment Plan */}
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Root Cause</label>
+          {showBuiltin(fieldSettings, 'root_cause') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'root_cause', 'Root Cause')}</label>
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
@@ -3274,9 +3374,9 @@ function RiskModal({
               rows={formData.root_cause.length > 200 ? 6 : 2}
               placeholder="Why this risk exists (use AI Assist → Root Causes → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Consequences</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'consequences') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'consequences', 'Consequences')}</label>
             <textarea
               value={formData.consequences}
               onChange={(e) => setFormData({ ...formData, consequences: e.target.value })}
@@ -3284,9 +3384,9 @@ function RiskModal({
               rows={formData.consequences.length > 200 ? 6 : 2}
               placeholder="Potential impact/consequences if this risk materializes (AI Assist → Consequences → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Recommendations</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'recommendations') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'recommendations', 'Recommendations')}</label>
             <textarea
               value={formData.recommendations}
               onChange={(e) => setFormData({ ...formData, recommendations: e.target.value })}
@@ -3294,9 +3394,9 @@ function RiskModal({
               rows={formData.recommendations.length > 200 ? 6 : 2}
               placeholder="Recommended actions to reduce this risk (AI Assist → Recommendations → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Treatment Plan</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'treatment_plan') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'treatment_plan', 'Treatment Plan')}</label>
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
@@ -3304,8 +3404,11 @@ function RiskModal({
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
               placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
             />
-          </div>
-
+          </div>}
+        </div>
+        <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
+          <CustomFieldsTab moduleKey="risks" values={customValues} onChange={setCustomValues} />
+        </div>
       </form>
     </RightSlidePanel>
   );

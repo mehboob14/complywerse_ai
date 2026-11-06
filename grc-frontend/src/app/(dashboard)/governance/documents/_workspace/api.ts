@@ -9,7 +9,7 @@
  * is restarted with them.
  */
 import apiClient, { governanceApi } from '@/lib/api';
-import type { GovDoc, GovDocNode } from './lib';
+import type { GovDoc } from './lib';
 
 export interface DocListParams {
   doc_type?: string;
@@ -37,21 +37,13 @@ export async function fetchDocuments(params?: DocListParams): Promise<DocListRes
   return data as DocListResponse;
 }
 
-export async function fetchHierarchy(): Promise<GovDocNode[]> {
-  const res = await governanceApi.getDocumentHierarchy();
-  const data = res.data as unknown;
-  return (Array.isArray(data) ? data : ((data as { items?: GovDocNode[] })?.items ?? [])) as GovDocNode[];
-}
-
-export interface DashboardSummary {
-  total_documents: number;
-  by_type: Record<string, number>;
-  by_status: Record<string, number>;
-  by_classification: Record<string, number>;
-}
-export async function fetchSummary(): Promise<DashboardSummary> {
-  const res = await governanceApi.getDashboardSummary();
-  return res.data as DashboardSummary;
+/** The documents the Documents Overview names for one of its figures (GET /governance/document-overview/ids): what the Attention filter (`?attn=`) keeps.
+ *  `department`: the one department the library is filtered to ('none' for none; '' lets the server choose its own scope). */
+export async function fetchAttention(kind: string, department: string): Promise<{ ids: number[]; total: number }> {
+  const res = await apiClient.get('/governance/document-overview/ids', { params: { kind, ...(department ? { department_id: department } : {}) } });
+  const d = res.data as { ids?: number[]; total?: number };
+  const ids = Array.isArray(d.ids) ? d.ids : [];
+  return { ids, total: typeof d.total === 'number' ? d.total : ids.length };
 }
 
 export interface OverdueReviewItem {
@@ -87,41 +79,61 @@ export async function fetchMyPending(): Promise<{ total: number; items: MyPendin
   return { total: d.total ?? (d.items?.length ?? 0), items: d.items ?? [] };
 }
 
+/** Per-document attestation coverage: the % and, where the server says them, how many of how many (the ring's "4/5"). */
+export interface Coverage {
+  pct: Record<number, number>;
+  counts: Record<number, { done: number; total: number }>;
+}
+
 /**
- * Per-document attestation coverage %. Prefers document-attestation campaigns
+ * Per-document attestation coverage. Prefers document-attestation campaigns
  * (acks / same-domain active users); falls back to legacy coverage-map.
  */
-export async function fetchCoverageMap(): Promise<Record<number, number>> {
-  const parse = (d: { coverage?: Record<string, number>; items?: Array<{ document_id: number; compliance_rate: number }> }) => {
-    const out: Record<number, number> = {};
+export async function fetchCoverage(): Promise<Coverage> {
+  type Reply = { coverage?: Record<string, number>; counts?: Record<string, { done: number; total: number }>; items?: Array<{ document_id: number; compliance_rate: number }> };
+  const parse = (d: Reply): Coverage => {
+    const out: Coverage = { pct: {}, counts: {} };
     if (d.coverage) {
-      for (const [k, v] of Object.entries(d.coverage)) out[Number(k)] = Number(v);
+      for (const [k, v] of Object.entries(d.coverage)) out.pct[Number(k)] = Number(v);
     } else if (Array.isArray(d.items)) {
-      for (const it of d.items) out[it.document_id] = it.compliance_rate;
+      for (const it of d.items) out.pct[it.document_id] = it.compliance_rate;
+    }
+    for (const [k, v] of Object.entries(d.counts ?? {})) {
+      if (v && Number.isFinite(v.done) && Number.isFinite(v.total)) out.counts[Number(k)] = { done: v.done, total: v.total };   // an older server sends none
     }
     return out;
   };
   try {
     const res = await governanceApi.getDocAttestationCoverageMap();
-    const out = parse(res.data as any);
-    if (Object.keys(out).length > 0) return out;
+    const out = parse(res.data as Reply);
+    if (Object.keys(out.pct).length > 0) return out;
   } catch {
     /* fall through */
   }
   try {
     const res = await apiClient.get('/governance/attestations/coverage-map');
-    return parse(res.data as any);
+    return parse(res.data as Reply);
   } catch {
-    return {};
+    return { pct: {}, counts: {} };
   }
 }
 
-// ─── Mutations ───────────────────────────────────────────────────────────────
-export const bulkUpdateStatus = (document_ids: number[], status: string) =>
-  apiClient.post('/governance/documents/bulk-update-status', { document_ids, status });
+/** The % only (what the library showed before the counts). */
+export async function fetchCoverageMap(): Promise<Record<number, number>> {
+  return (await fetchCoverage()).pct;
+}
 
+// ─── Mutations ───────────────────────────────────────────────────────────────
 export const bulkArchive = (document_ids: number[]) =>
   apiClient.post('/governance/documents/bulk-archive', { document_ids });
+
+/** An archived document back as a draft (its editors only): it is reviewed, approved and published again before it is in force. */
+export const restoreDocument = (id: number) => apiClient.post(`/governance/documents/${id}/restore`);
+
+/** A document into a department (null: none). The server decides who may, refuses an archived document and a department that is
+ *  switched off, and records "Department changed from X to Y" in the Change log: the same request the Details dialog sends. */
+export const moveDocument = (id: number, department_id: number | null) =>
+  apiClient.put(`/governance/documents/${id}`, { department_id });
 
 export const bulkAssignOwner = (document_ids: number[], owner_id: number) =>
   apiClient.post('/governance/documents/bulk-assign-owner', { document_ids, owner_id });
@@ -134,6 +146,7 @@ export const bulkPublish = (document_ids: number[]) =>
 
 export const publishDocument = (id: number) => governanceApi.publishDocument(id);
 
-/** Sign off the current user's review/approval stage (records a signature + advances
- *  the sign-off pipeline) — the correct action for a "pending your approval" item. */
-export const signOffDocument = (id: number) => governanceApi.signDocumentOff(id, {});
+/** Sign off the current user's review/approval stage with a drawn electronic signature (records it, seals it and
+ *  advances the sign-off pipeline) — the correct action for a "pending your approval" item. */
+export const signOffDocument = (id: number, signature_image: string, comment?: string) =>
+  governanceApi.signDocumentOff(id, { signature_image, comment: comment || undefined });

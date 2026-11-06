@@ -14,6 +14,8 @@ import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import DCCAssessmentTab from '@/components/compliance/DCCAssessmentTab';
 import AuditPlanTab from '@/components/compliance/AuditPlanTab';
 import NcaTab from '@/components/compliance/NcaTab';
+import ItemAssignees, { type Assignee } from '@/components/compliance/ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs, type EvidenceQuality } from '@/components/compliance/EvidenceQualityNote';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
@@ -61,6 +63,8 @@ interface EvidenceUpload {
   control_code?: string;
   confidence_score?: number;
   matching_rationale?: string;
+  /** How well the file proves this item, as the review left it (null until it has run). */
+  quality?: EvidenceQuality | null;
   evidence?: {
     id: number;
     name: string;
@@ -107,6 +111,7 @@ interface AssessmentItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: Assignee[];
   timeline: string | null;
   priority: string | null;
   evidence_reference: string | null;
@@ -379,6 +384,7 @@ export default function AssessmentDetailPage() {
             control_code: ev.control_code || null,
             confidence_score: ev.confidence_score ?? null,
             matching_rationale: ev.matching_rationale || null,
+            quality: ev.quality ?? null,
             evidence: ev.evidence_id ? {
               id: ev.evidence_id,
               name: ev.evidence_name,
@@ -395,6 +401,7 @@ export default function AssessmentDetailPage() {
       return results;
     },
     enabled: expandedEvidence.size > 0,
+    refetchInterval: (q) => reviewPollMs(Object.values((q.state.data as Record<number, EvidenceUpload[]> | undefined) ?? {}).flat()),
   });
 
   const { data: evidenceLibraryOptions = [], isLoading: isEvidenceLibraryLoading } = useQuery<EvidenceLibraryOption[]>({
@@ -1261,7 +1268,7 @@ export default function AssessmentDetailPage() {
                           <col style={{ width: '40px' }} />
                           <col style={{ width: '56px' }} />
                           <col />
-                          <col className="hidden lg:table-column" style={{ width: '150px' }} />
+                          <col className="hidden lg:table-column" style={{ width: '184px' }} />
                           <col className="hidden lg:table-column" style={{ width: '120px' }} />
                           <col style={{ width: '132px' }} />
                           <col className="hidden md:table-column" style={{ width: '104px' }} />
@@ -1272,7 +1279,7 @@ export default function AssessmentDetailPage() {
                             <th className="px-2 py-2.5"></th>
                             <th className="px-2 py-2.5">#</th>
                             <th className="px-2 py-2.5">Control</th>
-                            <th className="hidden px-2 py-2.5 lg:table-cell">Responsible</th>
+                            <th className="hidden px-2 py-2.5 lg:table-cell">Assigned to</th>
                             <th className="hidden px-2 py-2.5 lg:table-cell">Timeline</th>
                             <th className="px-2 py-2.5">Status</th>
                             <th className="hidden px-2 py-2.5 md:table-cell">Priority</th>
@@ -1301,7 +1308,10 @@ export default function AssessmentDetailPage() {
                                       <p className="line-clamp-2 text-sm leading-snug text-slate-800">{item.control_description}</p>
                                     </button>
                                   </td>
-                                  <td className="hidden truncate px-2 py-2.5 align-top text-xs text-slate-600 lg:table-cell" title={item.responsible_party || undefined}>{item.responsible_party || '—'}</td>
+                                  <td className="hidden px-1 py-1.5 align-top lg:table-cell">
+                                    <ItemAssignees itemId={item.id} value={item.assignees} fallback={item.responsible_party} label={item.item_number}
+                                      onSaved={() => queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] })} />
+                                  </td>
                                   <td className="hidden truncate px-2 py-2.5 align-top text-xs text-slate-600 lg:table-cell">{formatTimelineDisplay(item.timeline)}</td>
                                   <td className="px-2 py-2.5 align-top">
                                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${itemStatusStyle.bg} ${itemStatusStyle.text} ${itemStatusStyle.border}`}>
@@ -1560,6 +1570,10 @@ export default function AssessmentDetailPage() {
                               </button>
                             )}
                           </div>
+                          {typeof ev.evidence_id === 'number' && (
+                            <EvidenceQualityNote assessmentId={assessmentId} itemId={activePanelItem.id} evidenceId={ev.evidence_id} quality={ev.quality ?? null}
+                              since={ev.created_at} onRechecked={() => refetchEvidence()} />
+                          )}
                         </div>
                       );
                     })}

@@ -1,0 +1,440 @@
+"""AI evidence recommendations for an assessment item (Cyber Security hub and
+every other compliance assessment).
+
+Recommendations fit the kind of item; library records are shortlisted by the
+words they share with the item, the model may only pick from that shortlist,
+records already linked are left out; the endpoint keeps the result on the item
+and says plainly when AI is not set up.
+"""
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+import grc.models as m
+from grc.config import REASONING_HEADROOM
+from grc.models import get_db
+from grc.routers.auth_router import require_auth
+from grc.services import assessment_evidence_ai as advisor
+
+
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    m.Base.metadata.create_all(engine)
+    session = Session(engine)
+    session.add(m.Tenant(id=1, name="Demo Bank", slug="demo"))
+    session.add(m.GRCUser(id=7, username="assessor", email="assessor@bank.example", display_name="Assessor"))
+    session.add(m.ComplianceAssessmentDocument(id=3, tenant_id=1, name="OWASP ASVS 4.0.3", assessment_type="checklist",
+                                               assessment_format="asvs_checklist"))
+    session.add(m.ComplianceAssessmentDocumentItem(
+        id=30, assessment_id=3, tenant_id=1, item_number="V2.1.1", area_domain="Authentication",
+        subdomain_name="Password Security", compliance_status="in_progress",
+        control_description="Verify that user set passwords are at least 12 characters in length.",
+        remarks="ASVS Level: 1 | CWE: 521 | NIST: 5.1.1.2"))
+    session.add_all([
+        m.Evidence(id=101, tenant_id=1, name="Password policy", evidence_type="Policy",
+                   description="Corporate password policy: minimum length 12 characters, complexity"),
+        m.Evidence(id=102, tenant_id=1, name="IdP password settings export", evidence_type="Configuration",
+                   content_summary="Okta password policy minimum length 12"),
+        m.Evidence(id=103, tenant_id=1, name="Firewall rule review", evidence_type="Report",
+                   description="Quarterly firewall review"),
+        m.Evidence(id=104, tenant_id=1, name="Old password standard", status="rejected",
+                   description="password length 8 characters"),
+    ])
+    session.commit()
+    yield session
+    session.close()
+
+
+def _item(db):
+    return db.get(m.ComplianceAssessmentDocumentItem, 30)
+
+
+def test_the_library_shortlist_fits_the_item_and_skips_linked_and_rejected_records(db):
+    ids = [ev.id for ev in advisor.shortlist_existing(db, _item(db))]
+    assert 101 in ids and 102 in ids
+    assert 103 not in ids                        # shares nothing with a password-length requirement
+    assert 104 not in ids                        # rejected
+    db.add(m.AssessmentItemEvidence(assessment_item_id=30, tenant_id=1, evidence_id=101, status="draft"))
+    db.commit()
+    assert 101 not in [ev.id for ev in advisor.shortlist_existing(db, _item(db))]
+
+
+def test_recommendations_are_cleaned_and_only_shortlisted_records_can_match(db):
+    seen = {}
+
+    def model(messages):
+        seen["prompt"] = messages[1]["content"]
+        return "```json\n" + json.dumps({
+            "summary": "Show the enforced minimum length.",
+            "recommendations": [
+                {"evidence_type": "IdP password policy export", "description": "Minimum length 12 enforced",
+                 "how_to_collect": "Okta Admin > Security > Authenticators > Password > export", "priority": "HIGH",
+                 "example_files": ["okta-password-policy.json"]},
+                {"evidence_type": "Signup test", "description": "An 11-character password is refused",
+                 "priority": "urgent"},
+                "not a recommendation",
+            ],
+            "matches": [
+                {"evidence_id": 102, "reason": "Shows the IdP minimum length", "confidence": 1.4},
+                {"evidence_id": 101, "reason": "Policy states 12 characters", "confidence": 0.7},
+                {"evidence_id": 999, "reason": "invented", "confidence": 0.9},
+                {"evidence_id": 103, "reason": "not shortlisted", "confidence": 0.9},
+            ],
+        }) + "\n```"
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert "OWASP ASVS verification requirement" in seen["prompt"]          # written for its kind of item
+    assert "V2.1.1" in seen["prompt"] and "ASVS Level: 1" in seen["prompt"]
+    assert "- 101 | Password policy" in seen["prompt"] and "Firewall" not in seen["prompt"]
+
+    assert [r["priority"] for r in result["recommendations"]] == ["high", "medium"]
+    assert result["recommendations"][0]["how_to_collect"].startswith("Okta Admin")
+    assert [x["evidence_id"] for x in result["matches"]] == [102, 101]       # invented and unlisted dropped
+    assert result["matches"][0]["confidence"] == 1.0 and result["matches"][0]["name"] == "IdP password settings export"
+    assert result["library_checked"] == 2
+
+
+def test_the_endpoint_keeps_the_result_and_says_when_ai_is_not_set_up(db, monkeypatch):
+    from grc.main import app
+
+    user = db.get(m.GRCUser, 7)
+    real_complete = advisor.openai_complete
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: user
+    try:
+        http = TestClient(app)
+        base = "/compliance/assessments/3/items/30/ai-recommendation"
+        monkeypatch.setattr(advisor, "openai_complete", lambda messages: json.dumps({
+            "summary": "s", "recommendations": [{"evidence_type": "Policy", "description": "d", "priority": "low"}],
+            "matches": [{"evidence_id": 102, "reason": "fits", "confidence": 0.8}]}))
+        made = http.post(base)
+        assert made.status_code == 200, made.text
+        assert made.json()["recommendation"]["matches"][0]["evidence_id"] == 102
+        kept = http.get(base).json()
+        assert kept["recommendation"]["recommendations"][0]["evidence_type"] == "Policy" and kept["generated_at"]
+
+        monkeypatch.setattr(advisor, "openai_complete", real_complete)       # the real call, with no key
+        monkeypatch.setattr(advisor, "_configured_key", lambda: None)
+        refused = http.post(base)
+        assert refused.status_code == 503 and "no AI key" in refused.json()["detail"]
+        assert http.get(base).json()["recommendation"]["summary"] == "s"     # the last good one is kept
+
+        monkeypatch.setattr(advisor, "openai_complete", lambda messages: (_ for _ in ()).throw(RuntimeError("down")))
+        down = http.post(base)
+        assert down.status_code == 502 and "did not answer" in down.json()["detail"]
+
+        # An answer cut off mid-JSON, or with nothing we asked for, is refused rather than saved as empty.
+        for unusable in ('{"summary": "s", "recommendations": [{"evidence_type": "Pol', '{"note": "n/a"}', ""):
+            monkeypatch.setattr(advisor, "openai_complete", lambda messages, text=unusable: text)
+            cut = http.post(base)
+            assert cut.status_code == 502 and "empty or cut off" in cut.json()["detail"], cut.text
+        assert http.get(base).json()["recommendation"]["summary"] == "s"     # the last good one is still kept
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("model, sent", [
+    # gpt-6 models answer 400 to max_tokens and to a temperature other than 1, as gpt-5 does; and their hidden
+    # thinking comes out of the same budget as the answer, so the shim adds room for it (gpt-4o is left alone).
+    ("gpt-6-luna", {"max_completion_tokens": 8000 + REASONING_HEADROOM, "reasoning_effort": "low"}),
+    ("gpt-4o", {"max_tokens": 8000, "temperature": 0.3}),
+])
+def test_old_style_parameters_are_translated_for_reasoning_models(monkeypatch, model, sent):
+    import httpx
+    import openai
+
+    seen = {}
+
+    def reply(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"id": "c", "object": "chat.completion", "created": 0, "model": model,
+                                         "choices": [{"index": 0, "finish_reason": "stop",
+                                                      "message": {"role": "assistant", "content": '{"ok": true}'}}]})
+
+    real = openai.OpenAI
+    monkeypatch.setattr(openai, "OpenAI",
+                        lambda **kw: real(**kw, http_client=httpx.Client(transport=httpx.MockTransport(reply))))
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_API_KEY", "sk-test-" + "x" * 32)
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_MODEL", model)
+    monkeypatch.delenv("AI_INTEGRATIONS_OPENAI_BASE_URL", raising=False)
+
+    assert advisor.openai_complete([{"role": "user", "content": "Which evidence proves MFA is enforced?"}]) == '{"ok": true}'
+    keys = ("max_tokens", "max_completion_tokens", "temperature", "reasoning_effort")
+    assert {k: seen[k] for k in keys if k in seen} == sent
+
+
+def test_an_answer_with_nothing_in_it_is_asked_once_more(db):
+    answers = iter([
+        json.dumps({"summary": "Headers must not show versions.", "recommendations": [], "matches": []}),
+        json.dumps({"summary": "s", "recommendations": [
+            {"evidence_type": "HTTP response headers capture", "description": "No Server or X-Powered-By version",
+             "priority": "high"}]}),
+    ])
+    asked = []
+
+    def model(messages):
+        asked.append(messages)
+        return next(answers)
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert len(asked) == 2 and result["recommendations"][0]["evidence_type"] == "HTTP response headers capture"
+    assert "must never be empty" in asked[0][1]["content"]
+
+
+def test_an_answer_in_another_shape_is_still_read(db):
+    """Models asked for one shape now and then give another; each of these used to read as 'empty'."""
+    shapes = {
+        "wrapped": {"result": {"summary": "s", "recommendations": [{"evidence_type": "IdP export", "description": "d"}]}},
+        "renamed": {"Recommended_Evidence": [{"type": "IdP export", "details": "d", "collection": "export it"}]},
+        "bare names": {"summary": "s", "recommendations": ["IdP export", "Signup test"]},
+        "keyed": {"recommendations": {"1": {"evidence_type": "IdP export", "description": "d"}}},
+        "one object": {"recommendation": {"evidence_type": "IdP export", "description": "d"}},
+    }
+    for name, shape in shapes.items():
+        asked = []
+        result = advisor.recommend_evidence(
+            db, _item(db), complete=lambda messages, s=shape: asked.append(messages) or json.dumps(s))
+        assert len(asked) == 1 and result["recommendations"][0]["evidence_type"] == "IdP export", name
+    assert result["recommendations"][0]["priority"] == "medium"                 # absent fields get their defaults
+
+
+def test_every_kind_of_assessment_item_gets_recommendations_even_a_bare_one(db):
+    """The same path serves Cyber Security, NCA, PDPL, DPIA, Digital Operations maturity and every other assessment."""
+    item = _item(db)
+    item.control_description, item.remarks, item.area_domain, item.subdomain_name = None, None, None, None     # a bare row
+    for fmt in [*advisor.FORMAT_GUIDE, "pdpl_assessment_toolkit", "dpia_pia", "nca_container", "standard", None]:
+        db.get(m.ComplianceAssessmentDocument, 3).assessment_format = fmt
+        db.commit()
+        seen = []
+        result = advisor.recommend_evidence(db, item, complete=lambda messages: seen.append(messages[1]["content"]) or json.dumps(
+            {"summary": "s", "recommendations": [{"evidence_type": "Policy", "description": "d"}]}))
+        assert result["recommendations"][0]["evidence_type"] == "Policy" and len(seen) == 1, fmt
+        # the kinds with a guide are asked about in their own terms; the rest get the plain description
+        assert (advisor.FORMAT_GUIDE[fmt].split(".")[0] in seen[0]) if fmt in advisor.FORMAT_GUIDE else "each item is" not in seen[0], fmt
+
+
+def test_a_reply_cut_off_mid_answer_keeps_what_was_finished(db):
+    cut = ('{"summary": "Show it.", "recommendations": [{"evidence_type": "IdP export", "description": "d", '
+           '"priority": "high"}, {"evidence_type": "Signup test", "description": "An 11-char pass')
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: cut)
+    assert [r["evidence_type"] for r in result["recommendations"]] == ["IdP export"]
+    assert result["summary"] == "Show it." and result["recommendations"][0]["priority"] == "high"
+
+
+def test_an_unusable_answer_is_asked_again_and_told_why(db):
+    good = json.dumps({"summary": "s", "recommendations": [{"evidence_type": "Signup test", "description": "d"}]})
+    answers, asked = iter(["", '{"summary": "s", "recommendations": []}', good]), []
+
+    def model(messages):
+        asked.append(messages)
+        return next(answers)
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert len(asked) == advisor.ATTEMPTS == 3 and result["recommendations"][0]["evidence_type"] == "Signup test"
+    assert len(asked[0]) == 2 and "it was empty" in asked[1][-1]["content"]      # the second ask says what was wrong
+    # the last ask drops the library, NIST and catalog lists: nothing for a small model to answer "none" to
+    assert "EXISTING EVIDENCE" in asked[0][1]["content"] and "EXISTING EVIDENCE" not in asked[2][1]["content"]
+    assert "NIST PUBLICATIONS" not in asked[2][1]["content"] and "V2.1.1" in asked[2][1]["content"]
+
+
+def test_three_unusable_answers_save_nothing_and_matches_alone_are_kept(db):
+    asked = []
+    with pytest.raises(advisor.AIEmptyAnswer, match="empty or cut off"):
+        advisor.recommend_evidence(db, _item(db), complete=lambda messages: asked.append(1) or "not json at all")
+    assert len(asked) == advisor.ATTEMPTS
+
+    only_matches = json.dumps({"summary": "s", "recommendations": [], "matches": [
+        {"evidence_id": 102, "reason": "fits", "confidence": 0.9}]})
+    answers = iter([only_matches, "", ""])
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: next(answers))
+    assert result["recommendations"] == [] and [m["evidence_id"] for m in result["matches"]] == [102]
+
+    # ...and when the last, plain ask finally gives recommendations, the matches from the first answer still ride along
+    rescued = json.dumps({"summary": "s", "recommendations": [{"evidence_type": "Signup test", "description": "d"}]})
+    answers = iter([only_matches, "", rescued])
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: next(answers))
+    assert [r["evidence_type"] for r in result["recommendations"]] == ["Signup test"]
+    assert [m["evidence_id"] for m in result["matches"]] == [102]
+
+
+def test_a_draft_that_comes_back_short_is_asked_for_once_more(db):
+    drafts = iter(["# Too short", "# Password Standard\n\n" + "Passwords shall be at least 12 characters. " * 20])
+    rec = {"evidence_type": "Password standard", "description": "d", "document": "standard"}
+    text = advisor.draft_document(_item(db), rec, [], "Demo Bank", complete=lambda messages: next(drafts))
+    assert text.startswith("# Password Standard")
+    with pytest.raises(advisor.AIEmptyAnswer):
+        advisor.draft_document(_item(db), rec, [], "Demo Bank", complete=lambda messages: "# Too short")
+
+
+def test_recommendations_cite_nist_sources_catalog_documents_and_document_kinds(db, monkeypatch):
+    monkeypatch.setattr(advisor, "nist_catalog", lambda: ({
+        "artifact_id": "NIST-015", "framework_key": "nist_csf_2", "framework": "NIST CSF 2.0",
+        "title": "Data Security Policy", "type": "Policy", "control_ref": "PR.DS"},))
+    seen = {}
+
+    def model(messages):
+        seen["prompt"] = messages[1]["content"]
+        return json.dumps({"summary": "s", "recommendations": [
+            {"evidence_type": "Password standard", "description": "d", "priority": "high", "document": "Standard"},
+            {"evidence_type": "Signup test", "description": "d", "priority": "low", "document": "screenshot"}],
+            "nist": [{"id": "NIST SP 800-63B-4", "refs": "3.1.1.2", "why": "length rules"}, {"id": "SP 800-53 Rev. 5"},
+                     {"id": "SP800-63B"}, {"id": "ISO 27001"}],
+            "references": [{"artifact_id": "NIST-015", "reason": "covers credentials"}, {"artifact_id": "NIST-999"}]})
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert "- SP800-63B | NIST SP 800-63B-4" in seen["prompt"]
+    assert "- NIST-015 | Data Security Policy | Policy | PR.DS" in seen["prompt"]
+    assert [r["document"] for r in result["recommendations"]] == ["standard", None]
+    assert [(n["id"], n["refs"]) for n in result["nist"]] == [("SP800-63B", "3.1.1.2"), ("SP800-53", "")]
+    assert result["nist"][0]["url"].startswith("https://csrc.nist.gov/")          # titles and links are ours
+    assert [(r["artifact_id"], r["framework_key"], r["reason"]) for r in result["references"]] == [
+        ("NIST-015", "nist_csf_2", "covers credentials")]                           # an invented id is dropped
+
+
+def test_the_pdpl_ai_assessment_is_asked_again_when_it_comes_back_empty(db, monkeypatch):
+    """gpt-5-nano answered nothing in 2 of 4 tries (its budget went on thinking) and the page showed an empty box."""
+    import importlib
+    from types import SimpleNamespace
+
+    from grc.main import app
+
+    car = importlib.import_module("grc.routers.compliance_assessments_router")
+    good = json.dumps({"how_to_assess": "Check the DPO appointment letter.", "evidence_examples": ["DPO letter", "Org chart"],
+                       "findings": "f", "remediation": "r", "risk_rating": "High", "priority": "high", "suggested_maturity": 2})
+    sent = []
+
+    def client_saying(*replies):
+        said = iter(replies)
+
+        def create(**kw):
+            sent.append(kw)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=next(said)))])
+        return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
+    try:
+        http, url = TestClient(app), "/compliance/assessments/3/items/30/ai-assess"
+        monkeypatch.setattr(car, "get_openai_client", lambda: client_saying("", '{"how_to_assess": "cut o', good))
+        made = http.post(url)
+        assert made.status_code == 200 and made.json()["draft"]["evidence_examples"] == ["DPO letter", "Org chart"]
+        assert len(sent) == 3 and sent[0]["max_tokens"] == 2500
+
+        sent.clear()
+        monkeypatch.setattr(car, "get_openai_client", lambda: client_saying("", "", ""))
+        refused = http.post(url)                          # never a 200 with every field empty
+        assert refused.status_code == 502 and "empty or cut off" in refused.json()["detail"] and len(sent) == 3
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_recommended_document_is_drafted_exported_and_linked_to_governance(db, monkeypatch):
+    from grc import audit_logger
+    from grc.main import app
+
+    _item(db).ai_evidence_recommendation = json.dumps({"summary": "s", "matches": [], "recommendations": [
+        {"evidence_type": "Password standard", "description": "Minimum length 12 for every account",
+         "how_to_collect": "The approved standard", "priority": "high", "document": "standard"},
+        {"evidence_type": "IdP export", "description": "Settings", "priority": "high", "document": None}],
+        "nist": [{"id": "SP800-63B", "title": advisor.NIST_SOURCES["SP800-63B"][0], "refs": "3.1.1.2", "why": "length"}]})
+    db.commit()
+    written = []
+
+    def writer(messages):
+        written.append(messages[1]["content"])
+        return "```markdown\n# Password Standard\n\n" + "1. Passwords shall be at least 12 characters long. " * 20 + "\n```"
+
+    monkeypatch.setattr(audit_logger, "_resolve_tenant_slug", lambda request, tenant_id: "demo")
+    monkeypatch.setattr(advisor, "_configured_key", lambda: "sk-test")
+    monkeypatch.setattr(advisor, "start_draft", lambda slug, item_id, key, user_id: advisor.draft_into(db, item_id, key, writer))
+    user = db.get(m.GRCUser, 7)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: user
+    try:
+        http = TestClient(app)
+        base = "/compliance/assessments/3/items/30"
+        assert http.post(f"{base}/ai-drafts", json={"title": "IdP export"}).status_code == 404      # not a document
+        started = http.post(f"{base}/ai-drafts", json={"title": "Password standard"})
+        assert started.status_code == 202 and started.json()["key"] == "password-standard"
+        assert "ORGANISATION: Demo Bank" in written[0] and "SP 800-63B-4" in written[0] and "technical standard" in written[0]
+
+        draft = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert draft["status"] == "ready" and draft["content"].startswith("# Password Standard")
+        assert "courtesy of the National Institute of Standards and Technology" in draft["content"]
+        docx = http.get(f"{base}/ai-drafts/password-standard/export", params={"fmt": "docx"})
+        assert docx.status_code == 200 and docx.content[:2] == b"PK"
+        pdf = http.get(f"{base}/ai-drafts/password-standard/export", params={"fmt": "pdf"})
+        assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+        db.add(m.GovernanceDocument(id=501, tenant_id=1, title="Password Standard", doc_type="standard", status="draft"))
+        db.commit()
+        assert http.patch(f"{base}/ai-drafts/password-standard", json={"document_id": 999}).status_code == 404
+        assert http.patch(f"{base}/ai-drafts/password-standard", json={"document_id": 501}).json()["document_id"] == 501
+
+        # A regenerate keeps the drafts; one left 'drafting' by a restart reads as stopped.
+        monkeypatch.setattr(advisor, "openai_complete", lambda messages: json.dumps({"summary": "again", "recommendations": [
+            {"evidence_type": "Password standard", "description": "d", "priority": "high", "document": "standard"}]}))
+        again = http.post(f"{base}/ai-recommendation").json()["recommendation"]
+        assert again["drafts"]["password-standard"]["document_id"] == 501
+        stored = advisor.loads(_item(db).ai_evidence_recommendation)
+        stored["drafts"]["password-standard"].update(status="drafting", started_at="2020-01-01T00:00:00")
+        _item(db).ai_evidence_recommendation = json.dumps(stored)
+        db.commit()
+        stale = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert stale["status"] == "failed" and "stopped" in stale["error"]
+
+        # A provider failure is kept on the draft for the page to show.
+        monkeypatch.setattr(advisor, "start_draft", lambda slug, item_id, key, user_id: advisor.draft_into(
+            db, item_id, key, lambda messages: (_ for _ in ()).throw(RuntimeError("down"))))
+        assert http.post(f"{base}/ai-drafts", json={"title": "Password standard"}).status_code == 202
+        failed = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert failed["status"] == "failed" and "did not answer" in failed["error"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_the_nist_library_is_served_and_drafts_follow_official_template_outlines(db, monkeypatch):
+    from grc.main import app
+
+    lib = advisor.nist_library()["publications"]
+    assert all(p["url"].startswith("https://") and all(t["url"].startswith("https://") for t in p["templates"]) for p in lib)
+    assert advisor.NIST_SOURCES["SP800-18"][1].endswith("/800/18/r2/final")          # Rev. 1 was withdrawn June 2026
+    picked = {t: (advisor.template_for(t, k) or {}).get("name") for t, k in [
+        ("Business impact analysis for payments", "report"), ("IT disaster recovery plan", "plan"),
+        ("System security plan", "plan"), ("Security testing rules of engagement", "plan"),
+        ("Application risk assessment report", "report"), ("Incident response plan", "plan"),
+        ("Algorithmic bias review", "report"), ("Penetration test report", "report")]}
+    assert picked == {
+        "Business impact analysis for payments": "Business impact analysis template",
+        "IT disaster recovery plan": "Contingency plan template, moderate-impact system",
+        "System security plan": "System security plan outline",
+        "Security testing rules of engagement": "Rules of engagement template",
+        "Application risk assessment report": "Risk assessment report elements",
+        "Incident response plan": None, "Algorithmic bias review": None, "Penetration test report": None}
+
+    _item(db).ai_evidence_recommendation = json.dumps({"summary": "s", "matches": [], "nist": [], "recommendations": [
+        {"evidence_type": "Business impact analysis", "description": "Downtime tolerance of the login service",
+         "priority": "high", "document": "report"}]})
+    db.commit()
+    prompts = []
+    advisor.draft_into(db, 30, "business-impact-analysis", lambda m: prompts.append(m[1]["content"]) or "# BIA\n\n" + "Text. " * 120)
+    draft = advisor.loads(_item(db).ai_evidence_recommendation)["drafts"]["business-impact-analysis"]
+    assert "Business impact analysis template" in prompts[0] and "3. BIA Data Collection" in prompts[0]
+    assert draft["status"] == "ready" and draft["template"].startswith("Business impact analysis template (NIST SP 800-34")
+    assert "Structured on NIST's Business impact analysis template" in draft["content"]
+
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
+    try:
+        served = TestClient(app).get("/compliance/assessments/nist-library").json()
+    finally:
+        app.dependency_overrides.clear()
+    ids = [p["id"] for p in served["publications"]]
+    assert "SP800-53" in ids and "SP800-34" in ids and isinstance(served["catalog"], list)
+    sp34 = next(p for p in served["publications"] if p["id"] == "SP800-34")
+    assert {t["name"]: t["drafts_follow"] for t in sp34["templates"]}["Business impact analysis template"] is True
+    assert all("outline" not in t for t in sp34["templates"])                        # outlines stay server-side

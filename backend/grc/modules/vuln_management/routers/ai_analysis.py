@@ -13,6 +13,7 @@ from ....models import (
 )
 from ....schemas import VulnerabilityAIJobResponse, MessageResponse
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.field_policies import ai_view
 
 router = APIRouter(prefix="/ai", tags=["Vulnerability AI Analysis"])
 
@@ -78,9 +79,10 @@ def analyze_report(
             Vulnerability.report_id == report_id
         ).limit(20).all()
         
+        views = [ai_view(v, "vulnerabilities.analyze_report") for v in vulnerabilities]
         vuln_summary = "\n".join([
-            f"- {v.title} (Severity: {v.severity}, CVE: {v.cve_id or 'N/A'})"
-            for v in vulnerabilities
+            f"- {v['title']} (Severity: {v['severity']}, CVE: {v['cve_id'] or 'N/A'})"
+            for v in views
         ])
         
         prompt = f"""Analyze this vulnerability report summary and provide:
@@ -143,9 +145,10 @@ Provide a concise, actionable analysis."""
     )
 
 
-def _format_enrichment_block(vuln: Vulnerability) -> str:
+def _format_enrichment_block(vuln: dict) -> str:
     """Render the threat-intel context the AI should reason over.
 
+    ``vuln`` is the finding's ``ai_view`` (what the field policy lets a prompt carry).
     Only includes fields that are actually populated so the prompt stays
     short for un-enriched vulns. The presence of KEV, EPSS percentile, and
     the composite priority materially changes the urgency the AI surfaces,
@@ -153,36 +156,33 @@ def _format_enrichment_block(vuln: Vulnerability) -> str:
     "actually risk-prioritised guidance".
     """
     lines: list[str] = []
-    if vuln.kev_flag:
-        kev_when = (
-            vuln.kev_date_added.strftime("%Y-%m-%d")
-            if vuln.kev_date_added else "date unknown"
-        )
+    if vuln["kev_flag"]:
+        kev_when = vuln["kev_date_added"] or "date unknown"
         lines.append(
             f"- CISA KEV: YES — actively exploited in the wild (added {kev_when}). "
             "Treat as drop-everything urgent."
         )
-    if isinstance(vuln.epss_score, (int, float)):
+    if isinstance(vuln["epss_score"], (int, float)):
         pct = (
-            f" ({vuln.epss_percentile * 100:.1f}th percentile)"
-            if isinstance(vuln.epss_percentile, (int, float)) else ""
+            f" ({vuln['epss_percentile'] * 100:.1f}th percentile)"
+            if isinstance(vuln["epss_percentile"], (int, float)) else ""
         )
         lines.append(
-            f"- EPSS exploit probability: {vuln.epss_score:.4f}{pct} "
+            f"- EPSS exploit probability: {vuln['epss_score']:.4f}{pct} "
             "(higher = more likely to be exploited in the next 30 days)."
         )
-    if isinstance(vuln.composite_priority, (int, float)):
+    if isinstance(vuln["composite_priority"], (int, float)):
         lines.append(
-            f"- Composite priority: {vuln.composite_priority:.2f} / 10 "
+            f"- Composite priority: {vuln['composite_priority']:.2f} / 10 "
             "(blend of CVSS, EPSS, KEV, asset criticality)."
         )
-    if vuln.nvd_published_at:
+    if vuln["nvd_published_at"]:
         lines.append(
-            f"- NVD published: {vuln.nvd_published_at.strftime('%Y-%m-%d')}."
+            f"- NVD published: {vuln['nvd_published_at']}."
         )
-    if vuln.exploit_references:
+    if vuln["exploit_references"]:
         refs = [
-            r for r in (vuln.exploit_references or [])
+            r for r in (vuln["exploit_references"] or [])
             if isinstance(r, str)
         ][:6]
         if refs:
@@ -193,10 +193,10 @@ def _format_enrichment_block(vuln: Vulnerability) -> str:
     return "\n".join(lines) if lines else "- No threat-intel enrichment available."
 
 
-def _format_patch_block(vuln: Vulnerability) -> str:
+def _format_patch_block(vuln: dict) -> str:
     """Render vendor patch intelligence (MSRC KB articles, advisories, fix text)."""
     lines: list[str] = []
-    patches = vuln.patch_references or []
+    patches = vuln["patch_references"] or []
     if patches:
         rendered = []
         for ref in patches[:10]:
@@ -208,30 +208,28 @@ def _format_patch_block(vuln: Vulnerability) -> str:
             rendered.append(f"{rid} ({source}) — {url}".strip())
         if rendered:
             lines.append("- Vendor KB articles / patches:\n  " + "\n  ".join(rendered))
-    advisories = vuln.vendor_advisory_ids or []
+    advisories = vuln["vendor_advisory_ids"] or []
     if advisories:
-        lines.append("- Vendor advisories: " + ", ".join(advisories[:10]))
-    if vuln.remediation_guidance:
-        guidance = vuln.remediation_guidance.strip()
-        if len(guidance) > 800:
-            guidance = guidance[:800] + "…"
-        lines.append("- Vendor remediation guidance (verbatim):\n  " + guidance)
-    if vuln.psirt_source:
-        lines.append(f"- PSIRT source: {vuln.psirt_source}.")
+        lines.append("- Vendor advisories: " + ", ".join(str(a) for a in advisories[:10]))
+    if vuln["remediation_guidance"]:
+        lines.append("- Vendor remediation guidance (verbatim):\n  " + vuln["remediation_guidance"])
+    if vuln["psirt_source"]:
+        lines.append(f"- PSIRT source: {vuln['psirt_source']}.")
     return "\n".join(lines) if lines else "- No vendor patch intelligence synced yet."
 
 
 def _format_asset_block(db: Session, vuln: Vulnerability) -> str:
     """Render linked-asset context so the AI can suggest compensating controls
     proportional to the blast radius (e.g. internet-facing prod DB vs. dev VM).
+    Assets are described by what they are, never by name.
     """
     try:
         rows = (
-            db.query(ITAsset.name, ITAsset.asset_type, ITAsset.criticality,
-                     ITAsset.internet_facing, ITAsset.data_classification)
+            db.query(ITAsset)
             .join(VulnerabilityAssetLink,
                   VulnerabilityAssetLink.asset_id == ITAsset.id)
             .filter(VulnerabilityAssetLink.vulnerability_id == vuln.id)
+            .order_by(ITAsset.id)
             .limit(5)
             .all()
         )
@@ -240,16 +238,17 @@ def _format_asset_block(db: Session, vuln: Vulnerability) -> str:
     if not rows:
         return "- No linked assets recorded."
     lines = []
-    for name, atype, crit, inet, dclass in rows:
-        bits = [f"{name}"]
-        if atype:
-            bits.append(f"type={atype}")
-        if crit:
-            bits.append(f"criticality={crit}")
-        if inet:
+    for n, asset in enumerate(rows, start=1):
+        a = ai_view(asset, "vulnerabilities.suggest_fix")
+        bits = [f"Asset {n}"]
+        if a["asset_type"]:
+            bits.append(f"type={a['asset_type']}")
+        if a["criticality"]:
+            bits.append(f"criticality={a['criticality']}")
+        if a["internet_facing"]:
             bits.append("internet_facing=YES")
-        if dclass:
-            bits.append(f"data={dclass}")
+        if a["data_classification"]:
+            bits.append(f"data={a['data_classification']}")
         lines.append("- " + ", ".join(bits))
     return "\n".join(lines)
 
@@ -322,8 +321,9 @@ def suggest_fix(
     if not vuln:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
 
-    enrichment_block = _format_enrichment_block(vuln)
-    patch_block = _format_patch_block(vuln)
+    v = ai_view(vuln, "vulnerabilities.suggest_fix")       # what the field policy lets this prompt carry
+    enrichment_block = _format_enrichment_block(v)
+    patch_block = _format_patch_block(v)
     asset_block = _format_asset_block(db, vuln)
 
     job = VulnerabilityAIJob(
@@ -377,15 +377,14 @@ toward containment and detection accordingly — but express that through
 which controls you choose, not through urgency language.
 
 VULNERABILITY
-Title: {vuln.title}
-Severity: {vuln.severity or 'unknown'}
-Status: {vuln.status or 'open'}
-CVSS Score: {vuln.cvss_score if vuln.cvss_score is not None else 'N/A'}
-CVE: {vuln.cve_id or 'N/A'}
-CWE: {vuln.cwe_id or 'N/A'}
-Description: {(vuln.description or 'Not provided').strip()}
-Affected Component: {vuln.affected_component or 'N/A'}
-Affected Host: {vuln.affected_host or 'N/A'}
+Title: {v['title']}
+Severity: {v['severity'] or 'unknown'}
+Status: {v['status'] or 'open'}
+CVSS Score: {v['cvss_score'] if v['cvss_score'] is not None else 'N/A'}
+CVE: {v['cve_id'] or 'N/A'}
+CWE: {v['cwe_id'] or 'N/A'}
+Description: {v['description'] or 'Not provided'}
+Affected Component: {v['affected_component'] or 'N/A'}
 
 THREAT INTELLIGENCE
 {enrichment_block}
@@ -397,7 +396,7 @@ LINKED ASSETS
 {asset_block}
 
 CURRENT MANUAL RECOMMENDATION (if any)
-{(vuln.recommendation or 'None').strip()}
+{v['recommendation'] or 'None'}
 
 Respond with a single JSON object of EXACTLY this shape — no prose
 before or after, no markdown fences:

@@ -7,6 +7,7 @@ from starlette.responses import Response
 from .models import init_master_db
 from .startup_seed import ensure_startup_seed_data
 from .audit_logger import should_audit_request, parse_request_payload, write_audit_log
+from . import audit_changes
 from .routers import (
     auth_router,
     tenants_router,
@@ -37,6 +38,12 @@ from .routers import criticality_assessments_router
 from .routers import search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .routers import teams_router
+# Departments - admin CRUD for departments with roles and hand-added members; Teams are their picker records.
+from .routers import admin_departments_router
+# Per-tenant status levels, SLA days and extra fields for a module.
+from .routers import module_settings_router
+# Administration → Scheduler: the recurring jobs the platform clock queues.
+from .routers import scheduler_router
 # Notes / History / derived Alerts for assets + vulnerabilities.
 from .routers import entity_extras_router
 
@@ -46,6 +53,7 @@ from .modules.erm import erm_router
 from .modules.governance import governance_module_router
 from .modules.framework_upload import framework_upload_router
 from .modules.compliance import compliance_router
+from .modules.assessments.scope_router import router as assessment_scope_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.framework_templates import framework_templates_router
@@ -76,14 +84,19 @@ from .modules.agents import agents_router, agent_downloads_router
 from .modules.risk_posture import risk_posture_router
 from .modules.onboarding import onboarding_router
 from .modules.asset_discovery import asset_discovery_router
+from .modules.asset_import.router import router as asset_import_router
 from .modules.compliance_plugins import compliance_plugins_router
-from .modules.automation import automation_soc2_router, automation_frameworks_router, automation_common_router
+from .modules.automation import (
+    automation_soc2_router, automation_frameworks_router, automation_common_router,
+    automation_assurance_router,
+)
+from .modules.scf import scf_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
 from .routers.admin_ai_usage_router import router as admin_ai_usage_router
 from .routers.ai_recommendations_router import router as ai_recommendations_router
 from .routers.reporting_router import router as reporting_router
-from .middleware.subdomain import TenantMiddleware
+from .middleware.subdomain import ForeignAuthCookieFilter, TenantMiddleware
 
 app = FastAPI(
     title="Enterprise GRC Platform API's",
@@ -159,8 +172,12 @@ async def audit_log_middleware(request: Request, call_next):
         request._receive = receive
         request_payload = await parse_request_payload(request, body)
 
+    # What the request commits to the database, old → new, for its audit row.
+    changes_token = audit_changes.start()
     try:
         response = await call_next(request)
+        db_changes = audit_changes.finish(changes_token)
+        changes_token = None
         response_error = None
         try:
             status = getattr(response, "status_code", 200)
@@ -180,11 +197,29 @@ async def audit_log_middleware(request: Request, call_next):
         except Exception:
             response_error = None
 
-        write_audit_log(request, response, started_at, request_payload, response_error)
+        write_audit_log(request, response, started_at, request_payload, response_error, db_changes)
         return response
     except Exception:
+        if changes_token is not None:
+            audit_changes.finish(changes_token)
         write_audit_log(request, Response(status_code=500), started_at, request_payload)
         raise
+
+
+# Outermost, so tenant resolution, auth and the audit log all see the filtered
+# cookie header.
+app.add_middleware(ForeignAuthCookieFilter)
+
+
+from .services.ai_gateway.errors import AIBlocked  # noqa: E402
+
+
+@app.exception_handler(AIBlocked)
+async def _ai_blocked(request, exc: AIBlocked):
+    """The data-protection guard refused to send a prompt to a model: a clear 403, not a server error.
+    ``detail`` stays a plain sentence because every screen shows ``detail`` as it is."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=403, content={"detail": str(exc), "code": "ai_blocked", "reason": exc.code})
 
 # NCA routers MUST register BEFORE risks_router and vuln_management_router
 # because those expose parametric `/risks/{risk_id}` and `/vulnerabilities/{vuln_id}`
@@ -217,6 +252,7 @@ app.include_router(advanced_erm_router)
 app.include_router(ai_risk_assessment_router)
 app.include_router(ai_recommendations_router)
 app.include_router(reporting_router)
+app.include_router(assessment_scope_router)               # before the older router: its literal paths (templates, initiate) must win over /{assessment_id}
 app.include_router(compliance_assessments_router)
 app.include_router(artifacts_router)
 app.include_router(dcc_router)
@@ -254,6 +290,10 @@ app.include_router(connectors_router)
 app.include_router(search_router)
 # Teams — admin CRUD for org teams + asset owning-team dropdown.
 app.include_router(teams_router)
+app.include_router(admin_departments_router)
+# Status levels, SLA days and extra fields a tenant sets per module.
+app.include_router(module_settings_router)
+app.include_router(scheduler_router)
 # Notes, History, derived Alerts for assets + vulnerabilities.
 app.include_router(entity_extras_router.router)
 
@@ -263,15 +303,34 @@ app.include_router(agent_downloads_router)
 app.include_router(risk_posture_router)
 app.include_router(onboarding_router)
 app.include_router(asset_discovery_router)
+app.include_router(asset_import_router)
+# AI Pentest assessments (isolated cyber module: grc/modules/pentest)
+from .modules.pentest.router import router as pentest_router  # noqa: E402
+app.include_router(pentest_router)
+# Performance (exec) dashboard read-only aggregates (isolated cyber module: grc/modules/exec_dashboard)
+from .modules.exec_dashboard.router import router as exec_dashboard_router  # noqa: E402
+app.include_router(exec_dashboard_router)
 app.include_router(compliance_plugins_router)
 app.include_router(automation_soc2_router)
+app.include_router(scf_router)
 # common must be registered before the {framework} router so /automation/common/*
 # matches the literal route, not the {framework} path param (framework="common").
 app.include_router(automation_common_router)
+app.include_router(automation_assurance_router)
 app.include_router(automation_frameworks_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)
 app.include_router(admin_ai_usage_router)
+# Administration -> AI Governance: what AI is used for and every call that was made (read-only; grc/modules/ai_governance)
+from .modules.ai_governance.router import router as ai_governance_router  # noqa: E402
+app.include_router(ai_governance_router)
+
+# Every route is in: put the write endpoints of route files the workflow
+# catalog's scanner does not read (Controls Automation, Reports, IT assets,
+# Administration, …) into the builder, so each one can start a workflow.
+from .modules.workflow_engine.services.catalog import extend_with_app_routes  # noqa: E402
+
+extend_with_app_routes(app)
 
 
 @app.on_event("startup")
@@ -290,6 +349,11 @@ def on_startup():
         import logging
         logging.getLogger(__name__).exception("compliance schema self-heal failed")
 
+    # The scheduled jobs in celery_app.beat_schedule: no VM runs celery beat, so
+    # the web app queues them itself (services/platform_clock.py).
+    from .services import platform_clock
+    platform_clock.start()
+
     _disable_embedded = os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower()
     if _disable_embedded not in ("1", "true", "yes", "on"):
         start_workflow_engine_runtime()
@@ -299,9 +363,31 @@ def on_startup():
     if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
         start_complychat_embedding_worker()
 
+    # Pentest Find scans (grc_pentest_scan_jobs): their worker thread dies on restart, so re-drive
+    # nessus/openvas and fail the in-process ones with a clear reason instead of leaving them 'running'.
+    try:
+        from grc.modules.pentest.service import resume_inflight_scans
+        resume_inflight_scans(os.getenv("DEFAULT_TENANT_SLUG", "ava"))
+    except Exception:  # noqa: BLE001
+        import logging as _logging
+        _logging.getLogger(__name__).warning("pentest resume-on-startup skipped", exc_info=True)
+
+    # Auto-start the pentest MCP fleet's PERSISTENT backends (HexStrike's :8888 server, and the
+    # Greenbone/OpenVAS stack when built) so scanners are available without a manual restart — a WSL
+    # restart otherwise kills them. Non-blocking (daemon thread) + fault-tolerant.
+    if os.getenv("DISABLE_PENTEST_FLEET_AUTOSTART", "").strip().lower() not in ("1", "true", "yes", "on"):
+        try:
+            from grc.modules.pentest.fleet_lifecycle import ensure_fleet_up
+            ensure_fleet_up()
+        except Exception:  # noqa: BLE001
+            import logging as _logging
+            _logging.getLogger(__name__).warning("pentest fleet auto-start skipped", exc_info=True)
+
 
 @app.on_event("shutdown")
 def on_shutdown():
+    from .services import platform_clock
+    platform_clock.stop()
     stop_workflow_engine_runtime()
     stop_complychat_embedding_worker()
 

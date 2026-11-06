@@ -12,17 +12,18 @@ from .stages import cadence_days_for
 
 # Signal types that always warrant a reassessment regardless of severity.
 ALWAYS_TRIGGER_TYPES = {"breach"}
-# Severities that warrant a reassessment for any signal type.
-TRIGGER_SEVERITIES = {"high", "critical"}
+_SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 
-def should_trigger_reassessment(signal_type: str, severity: str) -> bool:
-    """A breach always triggers; otherwise a high/critical signal triggers."""
+def should_trigger_reassessment(signal_type: str, severity: str, threshold: str = "high") -> bool:
+    """A breach always triggers; otherwise a signal at or above the threshold
+    does. The threshold follows the vendor's tier (tier_policy.reassess_on):
+    a critical vendor is reopened by less than a low one."""
     st = (signal_type or "").lower()
-    sev = (severity or "").lower()
     if st in ALWAYS_TRIGGER_TYPES:
         return True
-    return sev in TRIGGER_SEVERITIES
+    rank = _SEVERITY_RANK.get((severity or "").lower())
+    return rank is not None and rank >= _SEVERITY_RANK.get((threshold or "high").lower(), 2)
 
 
 def next_review_in_days(tier: str, cadence_override: Optional[dict] = None) -> int:

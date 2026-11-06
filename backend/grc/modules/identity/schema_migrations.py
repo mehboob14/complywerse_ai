@@ -92,6 +92,15 @@ _COLUMN_ADDS = [
     ("grc_users", "external_provider", "VARCHAR(32)"),
     ("grc_users", "external_id", "VARCHAR(128)"),
     ("grc_user_roles", "source", "VARCHAR(16)"),
+    # A campaign can be scoped to one connected source.
+    ("grc_access_review_campaigns", "source", "VARCHAR(32)"),
+    # The access each sampled identity holds, per system; and the rule behind
+    # a finding, so a review reports passes as well as failures.
+    ("grc_access_review_items", "access_snapshot", "JSON"),
+    ("grc_access_review_findings", "rule_id", "VARCHAR(40)"),
+    # What a source's credentials reach — droplets, disks, databases, clusters —
+    # as of its last sync, so a review shows the estate behind the access.
+    ("grc_identity_provider_configs", "estate", "JSON"),
     # Access-review enrichment columns on grc_users (synced from Entra Graph).
     # Must mirror the ORM columns in models/_04_user_model_extended.py so the
     # enrichment writer actually persists MFA / sign-in / termination data.
@@ -110,6 +119,14 @@ _COLUMN_ADDS = [
     ("grc_access_review_items", "is_anomaly", "BOOLEAN"),
     ("grc_access_review_items", "anomaly_note", "TEXT"),
     ("grc_access_review_campaigns", "ai_summary", "TEXT"),
+    # The rules a review runs (all enabled, one framework's, or a picked set) and
+    # the ones that actually ran.
+    ("grc_access_review_campaigns", "rule_scope", "VARCHAR(20)"),
+    ("grc_access_review_campaigns", "rule_framework", "VARCHAR(120)"),
+    ("grc_access_review_campaigns", "rule_ids", "JSON"),
+    ("grc_access_review_campaigns", "rules_run", "JSON"),
+    # What each rule found when the checks ran — frozen, so the report never moves.
+    ("grc_access_review_campaigns", "rule_results", "JSON"),
     ("grc_access_review_campaigns", "ai_summary_at", "TIMESTAMP"),
     # SaaS multi-tenant Entra columns
     ("grc_identity_provider_configs", "entra_directory_id", "VARCHAR(64)"),

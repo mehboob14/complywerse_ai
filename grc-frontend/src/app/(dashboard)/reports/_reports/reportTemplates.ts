@@ -74,7 +74,50 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     },
   },
 
+  {
+    id: 'exec-controls-automation-posture',
+    category: 'Executive',
+    name: 'Common controls: automation and assurance',
+    description: 'In-scope common controls by automation status, split by assurance status.',
+    dataset: 'common_controls',
+    spec: {
+      ...base,
+      rows: ['overall_status'],
+      col: 'designation',
+      measures: [{ id: 'm0', key: '', agg: 'count' }],
+      view: 'stacked',
+    },
+  },
+
   // ── Audit ───────────────────────────────────────────────────────────────
+  {
+    id: 'audit-control-test-results',
+    category: 'Audit',
+    name: 'Control test results',
+    description: 'Design and operating effectiveness results across the common controls, with exceptions found.',
+    dataset: 'control_tests',
+    spec: {
+      ...base,
+      rows: ['result'],
+      col: 'test_type',
+      measures: [{ id: 'm0', key: '', agg: 'count' }, { id: 'm1', key: 'exceptions_found', agg: 'sum' }],
+      view: 'bar',
+    },
+  },
+  {
+    id: 'audit-control-maturity-gap',
+    category: 'Audit',
+    name: 'Control maturity by domain',
+    description: 'Average CMM maturity against target for each domain of the in-scope common controls.',
+    dataset: 'common_controls',
+    spec: {
+      ...base,
+      rows: ['category'],
+      col: null,
+      measures: [{ id: 'm0', key: 'cmm_actual', agg: 'avg' }, { id: 'm1', key: 'cmm_target', agg: 'avg' }],
+      view: 'hbar',
+    },
+  },
   {
     id: 'audit-control-automation',
     category: 'Audit',

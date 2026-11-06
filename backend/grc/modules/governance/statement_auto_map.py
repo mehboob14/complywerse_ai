@@ -24,7 +24,8 @@ import logging
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ...config import get_openai_api_key, get_openai_model
+from ...config import get_openai_api_key, get_openai_base_url, get_openai_model
+from ...services.licence_guard import exclude_restricted
 
 from ...models import (
     GovernanceDocument,
@@ -48,7 +49,7 @@ def _ai_available() -> bool:
 
 def _client():
     from openai import OpenAI
-    return OpenAI(api_key=get_openai_api_key(), base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"))
+    return OpenAI(api_key=get_openai_api_key(), base_url=get_openai_base_url())
 
 
 def _kw(s: str) -> set:
@@ -59,6 +60,17 @@ def _cand_text(kind: str, c) -> tuple:
     if kind == "normalized":
         return (c.code or "", c.name or "", c.statement or "", c.domain or "")
     return (c.control_id or "", c.title or "", (c.full_text or c.description or ""), c.domain or "")
+
+
+def framework_scope(doc) -> dict:
+    """The frameworks a document is mapped against: the applicable and linked
+    ones it was created (or edited) with, plus any further ones picked on its
+    Mappings tab. The engine, the Mappings tab and the coverage panel all use it."""
+    applicable = {int(x) for x in (getattr(doc, "applicable_framework_ids", None) or [])}
+    linked = {int(x) for x in (getattr(doc, "framework_ids", None) or [])}
+    extra = {int(x) for x in (getattr(doc, "mapping_framework_ids", None) or [])} - applicable - linked
+    return {"applicable": sorted(applicable), "linked": sorted(linked), "extra": sorted(extra),
+            "all": sorted(applicable | linked | extra)}
 
 
 def _candidates(db: Session, fw_ids=None):
@@ -81,27 +93,49 @@ def _candidates(db: Session, fw_ids=None):
             ParsedFrameworkControl,
             NormalizedControlLink.parsed_control_id == ParsedFrameworkControl.id,
         ).filter(ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids)).subquery()
-        ncs = db.query(NormalizedControl).filter(NormalizedControl.id.in_(sub)).all()
+        # Candidates are shown to the model with their statement text, and an SCF
+        # control's statement is licensed text that may not reach a model. With
+        # SCF rows excluded, the parsed framework controls below take over.
+        ncs = exclude_restricted(
+            db.query(NormalizedControl).filter(NormalizedControl.id.in_(sub)), NormalizedControl,
+        ).all()
+        # ponytail: one kind per run — a scope where only some frameworks reach
+        # normalized controls maps those alone. Normalized controls are SCF here and
+        # excluded above, so today every scoped run takes the parsed path; mix
+        # both kinds per statement if a tenant ever links its own normalized hub.
         if ncs:
             return "normalized", ncs
         # No normalized linkage for these frameworks → map directly against their parsed controls.
         return "parsed", parsed
-    ncs = db.query(NormalizedControl).all()
+    ncs = exclude_restricted(db.query(NormalizedControl), NormalizedControl).all()
     if ncs:
         return "normalized", ncs
     return "parsed", db.query(ParsedFrameworkControl).all()
 
 
-def _narrow(stmt_text: str, kind: str, rows: list, top: int = 25) -> list:
+def _narrow(stmt_text: str, kind: str, rows: list, top: int = 25, per_framework: bool = False) -> list:
     skw = _kw(stmt_text)
-    scored = []
-    for c in rows:
-        _code, title, text, _dom = _cand_text(kind, c)
-        scored.append((len(skw & _kw(f"{title} {text}")), c))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    hits = [c for ov, c in scored[:top] if ov > 0]
-    # If nothing overlaps, still hand the LLM the closest candidates to judge.
-    return hits or [c for _ov, c in scored[:top]]
+
+    def best(group: list, n: int) -> list:
+        scored = []
+        for c in group:
+            _code, title, text, _dom = _cand_text(kind, c)
+            scored.append((len(skw & _kw(f"{title} {text}")), c))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        hits = [c for ov, c in scored[:n] if ov > 0]
+        # If nothing overlaps, still hand the LLM the closest candidates to judge.
+        return hits or [c for _ov, c in scored[:n]]
+
+    if per_framework and kind == "parsed":
+        # A document mapped against several frameworks: each gets its share of
+        # the candidates, so one large catalogue cannot crowd out the others.
+        by_fw: dict = {}
+        for c in rows:
+            by_fw.setdefault(getattr(c, "uploaded_framework_id", None), []).append(c)
+        if len(by_fw) > 1:
+            share = max(5, 40 // len(by_fw))
+            return [c for group in by_fw.values() for c in best(group, share)]
+    return best(rows, top)
 
 
 def _ai_match(stmt, kind: str, cands: list) -> list:
@@ -176,9 +210,12 @@ def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     granularity; this commits its own unit of work. fw_ids scopes the candidate
     pool to the document's own frameworks (see _candidates)."""
     # Idempotent: drop prior AI-generated, non-locked rows before re-mapping.
+    # Only AI rows: a link a person made (a control authored from this
+    # statement, created_by_ai=False) must survive a re-map.
     db.query(StatementControlMapping).filter(
         StatementControlMapping.statement_id == stmt.id,
         StatementControlMapping.is_locked.is_(False),
+        StatementControlMapping.created_by_ai.isnot(False),
     ).delete(synchronize_session=False)
 
     if not _ai_available():
@@ -194,7 +231,8 @@ def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     norm_ids, fc_ids, pc_ids = [], [], []
 
     # 1) Direct AI matches.
-    for c, conf, cov, rat in _ai_match(stmt, kind, _narrow(stmt.statement_text, kind, rows)):
+    for c, conf, cov, rat in _ai_match(stmt, kind, _narrow(stmt.statement_text, kind, rows,
+                                                            per_framework=bool(fw_ids))):
         if kind == "normalized":
             _add(db, seen, stmt, "normalized", "normalized_control_id", c.id, c.code, c.name, None, c.domain, conf, cov, rat, "ai")
             norm_ids.append(c.id)
@@ -265,23 +303,23 @@ def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     return {"mapped": len(seen), "evidence": new_ev, "source": "ai"}
 
 
-def auto_map_document(db: Session, document_id: int) -> dict:
-    """Auto-map every active statement of a document. Best-effort per statement —
-    one failure never aborts the rest. Returns a summary."""
-    # Scope the candidate pool to the document's OWN frameworks (in-scope ∪
-    # referenced UploadedFramework ids) so we never map against the whole catalog.
+def auto_map_document(db: Session, document_id: int, statement_ids=None) -> dict:
+    """Auto-map every active statement of a document (or only ``statement_ids``: the
+    new and changed ones of a new version). Best-effort per statement — one failure
+    never aborts the rest. Returns a summary."""
+    # Scope the candidate pool to the document's OWN frameworks (applicable ∪
+    # linked ∪ those picked on its Mappings tab) so we never map against the whole
+    # catalog.
     doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
-    fw_ids = None
-    if doc is not None:
-        fw_ids = sorted(
-            {int(x) for x in (getattr(doc, "applicable_framework_ids", None) or [])}
-            | {int(x) for x in (getattr(doc, "framework_ids", None) or [])}
-        ) or None
+    fw_ids = (framework_scope(doc)["all"] or None) if doc is not None else None
 
-    stmts = db.query(PolicyStatement).filter(
+    query = db.query(PolicyStatement).filter(
         PolicyStatement.document_id == document_id,
         PolicyStatement.status == "active",
-    ).all()
+    )
+    if statement_ids is not None:
+        query = query.filter(PolicyStatement.id.in_(list(statement_ids) or [0]))
+    stmts = query.order_by(PolicyStatement.id).all()
     mapped_total, ev_total, ok = 0, 0, 0
     for s in stmts:
         try:

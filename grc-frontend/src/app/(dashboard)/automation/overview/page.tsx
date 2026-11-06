@@ -13,14 +13,16 @@
 // claims, and only the second one is true today — a dashboard that renders the
 // first is worse than no dashboard.
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity, AlertTriangle, BarChart3, CheckCircle2, ClipboardList, FileText,
+  Activity, AlertTriangle, BarChart3, CheckCircle2, ClipboardList, Crosshair, FileText,
   Layers, Loader2, Plug, ShieldCheck, Users,
 } from 'lucide-react';
 import { automationApi } from '@/lib/api';
-import { CONTROL_STATUS, FrameworkBadge } from '@/components/soc2/ui';
+import { CONTROL_STATUS, FrameworkBadge, frameworkColor } from '@/components/soc2/ui';
+import { ScopeDialog } from '@/components/soc2/ScopeDialog';
 
 interface DomainRow {
   domain: string; identifier: string | null; controls: number; material: number;
@@ -35,15 +37,26 @@ interface FrameworkRow {
 }
 interface Overview {
   release: string;
+  scope?: { frameworks?: { key: string; label: string }[]; applicable_count?: number; total_count?: number };
   library: {
     controls: number; domains: number; material: number; orphans: number;
     objectives: number; pptdf: Record<string, number>;
     cadence: Record<string, number>; by_domain: DomainRow[];
+    /** How many of those controls the tenant wrote themselves. */
+    custom?: number;
   };
   automation: {
     controls_with_checks: number; checks_bound: number; plugins_enabled: number;
     plugins_run: number; last_run_at: string | null; posture: Record<string, number>;
   };
+  connector_categories: {
+    category: string;
+    connected: boolean;
+    connected_providers: { provider: string; label: string }[];
+    providers: { provider: string; label: string; connected: boolean; bindings: number }[];
+    controls_reachable: number;
+    controls_waiting: number;
+  }[];
   collection: {
     connectors: {
       plugin_key: string; title: string | null; provider: string | null;
@@ -133,8 +146,102 @@ function NotTracked({ system, cta }: { system: string; cta?: { href: string; lab
 const POSTURE_CLS: Record<string, string> = {
   passed: 'bg-emerald-500', failed: 'bg-rose-500', partial: 'bg-amber-500',
   error: 'bg-amber-400', expired: 'bg-orange-500', collection_failed: 'bg-purple-500',
+  connect_one: 'bg-indigo-500', unbound: 'bg-cyan-500',
   not_run: 'bg-slate-300', manual: 'bg-slate-200',
 };
+const CATEGORY_LABEL: Record<string, string> = {
+  scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud',
+  observability: 'Observability', security: 'Security tooling', productivity: 'Work management',
+  comms: 'Communications', email: 'Email', incident: 'Incident response', hr: 'HR system',
+  mdm: 'Device management', itsm: 'IT service management', crm: 'CRM', data: 'Data platform',
+  payments: 'Payments', ai: 'AI platform', other: 'Other',
+};
+
+/** Which connector category to connect next, and what it would unlock.
+ *
+ *  A tenant needs any one source per category, not every source. So the
+ *  question worth answering at library level is not "which connectors exist"
+ *  but "which category is holding the most controls back", ranked by the
+ *  controls currently waiting on it.
+ */
+function ConnectorCategoriesPanel({ cats }: { cats: Overview['connector_categories'] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!cats.length) return null;
+  const connected = cats.filter((c) => c.connected).length;
+  const waiting = cats.filter((c) => !c.connected).reduce((n, c) => n + c.controls_waiting, 0);
+  const maxReach = Math.max(1, ...cats.map((c) => c.controls_reachable));
+  return (
+    <Panel
+      icon={Plug}
+      title="Connector categories"
+      hint={`${connected} of ${cats.length} connected`}
+      action={
+        <Link href="/admin/evidence-collectors" className="text-xs font-medium text-blue-700 hover:underline">
+          Connect a source →
+        </Link>
+      }
+    >
+      <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
+        Connect <span className="font-semibold text-slate-700">any one</span> source in a category; you do not need
+        them all. Categories are ranked by how many controls are waiting on them: automatable, with nothing connected
+        that proves them.
+        {waiting > 0 && <> Connecting the unconnected categories would reach up to <span className="font-semibold text-slate-700">{waiting.toLocaleString()}</span> waiting controls.</>}
+      </p>
+      <ul className="divide-y divide-slate-100 rounded border border-slate-200">
+        {cats.map((c) => {
+          const isOpen = open === c.category;
+          return (
+            <li key={c.category}>
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : c.category)}
+                aria-expanded={isOpen}
+                className="grid w-full grid-cols-[10rem_1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
+              >
+                <span className="flex items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${c.connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <span className="truncate text-sm font-medium text-slate-800">{CATEGORY_LABEL[c.category] || c.category}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-1.5 w-full max-w-[12rem] overflow-hidden rounded bg-slate-100">
+                    <span className={`block h-full ${c.connected ? 'bg-emerald-400' : 'bg-indigo-400'}`}
+                      style={{ width: `${(c.controls_reachable / maxReach) * 100}%` }} />
+                  </span>
+                  <span className="whitespace-nowrap text-[11px] tabular-nums text-slate-500">{c.controls_reachable} controls</span>
+                </span>
+                <span className="whitespace-nowrap text-[11px]">
+                  {c.connected
+                    ? <span className="font-medium text-emerald-700">via {c.connected_providers.map((p) => p.label).join(', ')}</span>
+                    : c.controls_waiting > 0
+                      ? <span className="font-medium text-indigo-700">{c.controls_waiting} waiting</span>
+                      : <span className="text-slate-400">nothing waiting</span>}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {c.connected ? 'Connected, plus other sources in this category' : 'Connect any one of these'}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.providers.map((p) => (
+                      <span key={p.provider}
+                        className={`rounded-md border px-2 py-1 text-[12px] ${p.connected
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-slate-200 bg-white text-slate-700'}`}>
+                        {p.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
 const COLLECTION_CLS: Record<string, string> = {
   healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   stale: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -143,9 +250,12 @@ const COLLECTION_CLS: Record<string, string> = {
 };
 
 export default function AutomationOverviewPage() {
-  const { data, isLoading, error } = useQuery<Overview>({
-    queryKey: ['common-overview'],
-    queryFn: async () => (await automationApi.getCommonOverview()).data,
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const { data, isLoading, error } = useQuery<Overview & {
+    scope_status?: string;
+  }>({
+    queryKey: ['common-overview', 'in_scope'],
+    queryFn: async () => (await automationApi.getCommonOverview({ scope: 'in_scope' })).data,
   });
 
   if (isLoading) {
@@ -163,21 +273,69 @@ export default function AutomationOverviewPage() {
     );
   }
 
+  const unconfigured = data.scope_status === 'unconfigured';
+
+  if (unconfigured) {
+    return (
+      <div className="space-y-5 p-6">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Common controls overview</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Scope is not configured — aggregates stay empty until frameworks are selected.
+          </p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+          <p className="text-sm text-amber-900">
+            Configure scope to see in-scope control counts, posture, and framework coverage.
+          </p>
+          <button
+            type="button"
+            onClick={() => setScopeOpen(true)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-white hover:bg-primary-700"
+          >
+            <Crosshair className="h-3.5 w-3.5" />Configure scope
+          </button>
+        </div>
+        <ScopeDialog open={scopeOpen} onClose={() => setScopeOpen(false)} />
+      </div>
+    );
+  }
+
   const { library: lib, automation: au, evidence: ev, assurance: asr, crosswalk: xw } = data;
   const covered = au.controls_with_checks;
   const inferredFw = data.frameworks.filter((f) => f.inferred > 0).sort((a, b) => b.inferred_pct - a.inferred_pct);
   const maxDomain = Math.max(1, ...lib.by_domain.map((d) => d.controls));
+  const scopeFws = data.scope?.frameworks ?? [];
+  const scoped = scopeFws.length > 0;
 
   return (
     <div className="space-y-5 p-6">
       <div className="flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Common controls overview</h1>
-          <p className="text-sm text-slate-500">
-            One control set, {n(lib.controls)} controls across {lib.domains} domains · SCF {data.release}
+          <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+            <span>
+              {n(lib.controls)} {scoped ? 'in-scope ' : ''}controls across {lib.domains} domains · SCF {data.release}
+              {!!lib.custom && <> · <Link href="/automation/soc2-controls?source=custom" className="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900">{n(lib.custom)} authored here</Link></>}
+            </span>
+            {scoped && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span>Scoped to</span>
+                {scopeFws.map((f) => (
+                  <span key={f.key} className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                    <span className="size-1.5 rounded-full" style={{ backgroundColor: frameworkColor(f.key) }} />
+                    {f.label}
+                  </span>
+                ))}
+              </>
+            )}
           </p>
         </div>
         <div className="ml-auto flex gap-2">
+          <button type="button" onClick={() => setScopeOpen(true)} className="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+            <Crosshair className="h-3.5 w-3.5" />Configure scope
+          </button>
           <Link href="/automation/soc2-controls" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
             Control library
           </Link>
@@ -191,12 +349,16 @@ export default function AutomationOverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label="Controls" value={n(lib.controls)} sub={`${n(lib.material)} material · ${n(lib.objectives)} objectives`} />
+        <Stat label="Controls" value={n(lib.controls)}
+          sub={`${n(lib.material)} material · ${n(lib.objectives)} objectives${lib.custom ? ` · ${n(lib.custom)} custom` : ''}`} />
         <Stat label="Automated" value={n(covered)} sub={`${pct(covered, lib.controls)}% of the library · ${n(au.checks_bound)} checks bound`} />
         <Stat label="Frameworks" value={data.frameworks.length} sub={`${n(xw.rows)} crosswalk rows`} />
-        <Stat label="Evidence sets" value={n(ev.controls_with_set)} sub={`${n(ev.artifacts)} artifacts`} />
+        <Stat label={scoped ? 'Required evidence' : 'Evidence sets'} value={n(ev.controls_with_set)}
+          sub={scoped ? `controls · ${n(ev.artifacts)} asks from your frameworks` : `${n(ev.artifacts)} artifacts`} />
         <Stat label="Owned" value={n(asr.assigned)} sub={asr.tracked ? `${n(asr.tracked)} tracked` : 'not tracked yet'} />
       </div>
+
+      <ConnectorCategoriesPanel cats={data.connector_categories ?? []} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel icon={Activity} title="Automation posture" hint={au.last_run_at ? `last run ${new Date(au.last_run_at).toLocaleDateString()}` : 'never run'}>
@@ -214,6 +376,13 @@ export default function AutomationOverviewPage() {
             {n(au.plugins_enabled)} checks enabled, {n(au.plugins_run)} have ever run. A check reaches a control
             through the SOC&nbsp;2 criteria it names, so only the {pct(covered, lib.controls)}% of the library
             that maps to SOC&nbsp;2 can be asserted automatically today.
+            {(au.posture.connect_one || 0) > 0 && (
+              <>
+                {' '}<span className="font-medium text-indigo-700">{n(au.posture.connect_one)}</span> of those
+                could be evidenced now — they map to connectors you have not configured. A control needs
+                <em> any one</em> source that proves it, not all of them.
+              </>
+            )}
           </p>
         </Panel>
 
@@ -265,8 +434,8 @@ export default function AutomationOverviewPage() {
         title="Collection health"
         hint={`stale after ${data.collection.stale_after_days} days`}
         action={
-          <Link href="/automation/checks" className="text-xs font-medium text-blue-700 hover:underline">
-            Checks →
+          <Link href="/admin/evidence-collectors" className="text-xs font-medium text-blue-700 hover:underline">
+            Connections →
           </Link>
         }
       >
@@ -387,7 +556,10 @@ export default function AutomationOverviewPage() {
           </p>
         </Panel>
 
-        <Panel icon={FileText} title="Evidence" hint={`${pct(ev.controls_with_set, lib.controls)}% of controls have a set`}>
+        <Panel icon={FileText} title={scoped ? 'Required evidence' : 'Evidence'}
+          hint={scoped
+            ? `${pct(ev.controls_with_set, lib.controls)}% of in-scope controls have asks from your frameworks`
+            : `${pct(ev.controls_with_set, lib.controls)}% of controls have a set`}>
           <Bar total={ev.artifacts} parts={[
             { key: 'manual', value: ev.by_method.manual || 0, cls: 'bg-slate-400' },
             { key: 'hybrid', value: ev.by_method.hybrid || 0, cls: 'bg-sky-500' },
@@ -456,7 +628,8 @@ export default function AutomationOverviewPage() {
           )}
         </Panel>
 
-        <Panel icon={BarChart3} title="Over time" hint={`${data.trend.length} snapshot${data.trend.length === 1 ? '' : 's'}`}>
+        <Panel icon={BarChart3} title="Over time"
+          hint={`${data.trend.length} snapshot${data.trend.length === 1 ? '' : 's'}${scoped ? ' · every tracked control, not only in-scope' : ''}`}>
           {data.trend.length < 2 ? (
             <NotTracked system="assurance snapshot history" />
           ) : (
@@ -492,10 +665,12 @@ export default function AutomationOverviewPage() {
 
       {lib.orphans > 0 && (
         <p className="text-[12px] text-slate-500">
-          {n(lib.orphans)} of {n(lib.controls)} controls map to none of the frameworks in this crosswalk. They are
-          part of SCF, not part of any obligation you are currently assessed against.
+          {scoped
+            ? `${n(lib.orphans)} of ${n(lib.controls)} in-scope controls map to none of your selected frameworks. They apply through your profile answers (ESP level, facilities, personal data).`
+            : `${n(lib.orphans)} of ${n(lib.controls)} controls map to none of the frameworks in this crosswalk. They are part of SCF, not part of any obligation you are currently assessed against.`}
         </p>
       )}
+      <ScopeDialog open={scopeOpen} onClose={() => setScopeOpen(false)} />
     </div>
   );
 }

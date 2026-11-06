@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Shared primitives for the Governance Documents workspace (Tree / Register / Board views).
+ * Shared primitives for the Governance Documents workspace (the register table, the life-cycle hover, the document page).
  * One source of truth for lifecycle mapping, review-status coloring, framework-name
  * resolution, owner avatars and doc-type tiles — so every view renders identically.
  *
@@ -12,6 +12,10 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
+import { useOrgDepartments } from '../_DetailsFields';
+import { departmentNames } from './library';
+import { DOC_TYPE_LABEL, STAGE_ORDER, STATUS_LABEL, statusLabel, type FrameworkInfo } from './libraryModel';
 
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
@@ -26,6 +30,8 @@ export interface GovDoc {
   classification: string;
   parent_document_id: number | null;
   current_version: string;
+  /** the version everyone else reads while a newer one is on its way (the published one); none when never published */
+  version_in_force?: string | null;
   status: string;
   owner_id: number | null;
   owner_name: string | null;
@@ -55,29 +61,10 @@ export interface GovDoc {
   policy_statement_count?: number;
 }
 
-export interface GovDocNode extends GovDoc {
-  children?: GovDocNode[];
-}
-
 // ─── Lifecycle stages ────────────────────────────────────────────────────────
 // Ordered approval workflow. Terminal states (expired/archived/exception_applied)
-// are handled separately as neutral.
-export const STAGE_ORDER = ['draft', 'pending_review', 'pending_approval', 'approved', 'published'] as const;
-
-export const STATUS_LABEL: Record<string, string> = {
-  draft: 'Draft',
-  pending_review: 'In Review',
-  pending_approval: 'Pending Approval',
-  approved: 'Approved',
-  published: 'Published',
-  expired: 'Expired',
-  archived: 'Archived',
-  exception_applied: 'Exception',
-};
-
-export function statusLabel(status: string): string {
-  return STATUS_LABEL[status] || status.replace(/_/g, ' ');
-}
+// are handled separately as neutral. The words live in libraryModel (pure, tested).
+export { STAGE_ORDER, STATUS_LABEL, statusLabel };
 
 /** Tone for the status dot / text. */
 export function statusTone(status: string): 'draft' | 'progress' | 'pending' | 'approved' | 'published' | 'terminal' {
@@ -91,22 +78,24 @@ export function statusTone(status: string): 'draft' | 'progress' | 'pending' | '
   }
 }
 
+// Explicit hex, not slate-/blue-/emerald-* utilities: the platform CSS repaints those (slate fills go white, blue and green text take the
+// theme's accent), which blanked the stepper's empty track and turned "Approved" into the accent colour.
 const STATUS_DOT: Record<ReturnType<typeof statusTone>, string> = {
-  draft: 'bg-slate-400',
-  progress: 'bg-amber-500',
-  pending: 'bg-amber-500',
-  approved: 'bg-blue-500',
-  published: 'bg-emerald-500',
-  terminal: 'bg-slate-400',
+  draft: 'bg-[#94a3b8]',
+  progress: 'bg-[#f59e0b]',
+  pending: 'bg-[#f59e0b]',
+  approved: 'bg-[#3b82f6]',
+  published: 'bg-[#10b981]',
+  terminal: 'bg-[#94a3b8]',
 };
 
 const STATUS_TEXT: Record<ReturnType<typeof statusTone>, string> = {
-  draft: 'text-slate-600',
-  progress: 'text-amber-700',
-  pending: 'text-amber-700',
-  approved: 'text-blue-700',
-  published: 'text-emerald-700',
-  terminal: 'text-slate-500',
+  draft: 'text-[#3f4b58]',
+  progress: 'text-[#b45309]',
+  pending: 'text-[#b45309]',
+  approved: 'text-[#1d4ed8]',
+  published: 'text-[#047857]',
+  terminal: 'text-[#586472]',
 };
 
 /** Inline status: colored dot + label (used in list rows + table cells). */
@@ -127,18 +116,18 @@ export function LifecycleDots({ status, showLabel = true }: { status: string; sh
   const tone = statusTone(status);
   // color of the "current" (last filled) dot
   const currentDot =
-    tone === 'progress' || tone === 'pending' ? 'bg-amber-500'
-    : tone === 'approved' ? 'bg-blue-500'
-    : tone === 'published' ? 'bg-emerald-500'
-    : 'bg-slate-400';
+    tone === 'progress' || tone === 'pending' ? 'bg-[#f59e0b]'
+    : tone === 'approved' ? 'bg-[#3b82f6]'
+    : tone === 'published' ? 'bg-[#10b981]'
+    : 'bg-[#94a3b8]';
 
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1" aria-hidden>
         {STAGE_ORDER.map((_, i) => {
-          let cls = 'bg-slate-200';
+          let cls = 'bg-[#d5dbe1]';
           if (!terminal) {
-            if (i < idx) cls = 'bg-primary-500';
+            if (i < idx) cls = 'bg-[#14b8a6]';
             else if (i === idx) cls = currentDot;
           }
           return <span key={i} className={`h-1.5 w-4 rounded-full ${cls}`} />;
@@ -159,9 +148,9 @@ export interface ReviewInfo {
 }
 
 export function reviewInfo(nextReviewDate: string | null | undefined): ReviewInfo {
-  if (!nextReviewDate) return { label: '—', tone: 'muted', days: null };
+  const due = parseUtc(nextReviewDate);
+  if (!due) return { label: '—', tone: 'muted', days: null };
   const now = new Date();
-  const due = new Date(nextReviewDate);
   const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
   if (days < 0) {
     const over = Math.abs(days);
@@ -198,26 +187,16 @@ export function ReviewStatus({ date, className = '' }: { date: string | null | u
 // ─── Doc-type tile (letter square) ───────────────────────────────────────────
 // Category tints are sanctioned for doc-type markers (not brand meaning).
 export const DOC_TYPE_STYLE: Record<string, { letter: string; tile: string; label: string }> = {
-  policy: { letter: 'P', tile: 'bg-primary-50 text-primary-700', label: 'Policy' },
-  standard: { letter: 'S', tile: 'bg-blue-50 text-blue-700', label: 'Standard' },
-  procedure: { letter: 'P', tile: 'bg-amber-50 text-amber-700', label: 'Procedure' },
-  guideline: { letter: 'G', tile: 'bg-violet-50 text-violet-700', label: 'Guideline' },
-  charter: { letter: 'C', tile: 'bg-slate-100 text-slate-600', label: 'Charter' },
-  framework: { letter: 'F', tile: 'bg-cyan-50 text-cyan-700', label: 'Framework' },
+  policy: { letter: 'P', tile: 'bg-primary-50 text-primary-700', label: DOC_TYPE_LABEL.policy },
+  standard: { letter: 'S', tile: 'bg-blue-50 text-blue-700', label: DOC_TYPE_LABEL.standard },
+  procedure: { letter: 'P', tile: 'bg-amber-50 text-amber-700', label: DOC_TYPE_LABEL.procedure },
+  guideline: { letter: 'G', tile: 'bg-violet-50 text-violet-700', label: DOC_TYPE_LABEL.guideline },
+  charter: { letter: 'C', tile: 'bg-slate-100 text-slate-600', label: DOC_TYPE_LABEL.charter },
+  framework: { letter: 'F', tile: 'bg-cyan-50 text-cyan-700', label: DOC_TYPE_LABEL.framework },
 };
 
 export function docTypeStyle(docType: string) {
   return DOC_TYPE_STYLE[docType] || { letter: (docType[0] || '?').toUpperCase(), tile: 'bg-slate-100 text-slate-600', label: docType };
-}
-
-export function DocTypeTile({ docType, size = 'md' }: { docType: string; size?: 'sm' | 'md' }) {
-  const s = docTypeStyle(docType);
-  const dim = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-9 w-9 text-sm';
-  return (
-    <span className={`inline-flex shrink-0 items-center justify-center rounded-lg font-bold ${dim} ${s.tile}`}>
-      {s.letter}
-    </span>
-  );
 }
 
 /** Type pill (TYPE column). */
@@ -290,24 +269,52 @@ export function OwnerChip({ name }: { name: string | null | undefined }) {
  * NOT Framework-catalog ids — so resolve against the uploaded-frameworks list
  * (GET /framework-upload/upload), else pills show a raw "#11" fallback.
  */
-export function useFrameworkNames() {
+type UploadedFramework = { id: string | number; name: string; short_code?: string | null };
+function useUploadedFrameworks() {
   const { data } = useQuery({
     queryKey: ['uploaded-frameworks-name-map'],
     queryFn: async () => {
       const res = await apiClient.get('/framework-upload/upload', { params: { limit: 1000 } });
       const d = res.data as unknown;
-      return (Array.isArray(d) ? d : ((d as { items?: unknown[]; frameworks?: unknown[] })?.items ?? (d as { frameworks?: unknown[] })?.frameworks ?? [])) as Array<{ id: string | number; name: string; short_code?: string | null }>;
+      return (Array.isArray(d) ? d : ((d as { items?: unknown[]; frameworks?: unknown[] })?.items ?? (d as { frameworks?: unknown[] })?.frameworks ?? [])) as UploadedFramework[];
     },
     staleTime: 10 * 60 * 1000,
   });
+  return data as UploadedFramework[] | undefined;
+}
+
+export function useFrameworkNames() {
+  const data = useUploadedFrameworks();
   const nameMap = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const f of (data as Array<{ id: string | number; name: string; short_code?: string | null }>) || []) {
-      m[String(f.id)] = (f.short_code || f.name || '').trim() || `#${f.id}`;
-    }
+    for (const f of data || []) m[String(f.id)] = (f.short_code || f.name || '').trim() || `#${f.id}`;
     return m;
   }, [data]);
   return nameMap;
+}
+
+/** The same list with both names: the short label a chip carries and the full name a popover, a drawer and the search read. */
+export function useFrameworkInfo() {
+  const data = useUploadedFrameworks();
+  return useMemo(() => {
+    const m: Record<string, FrameworkInfo> = {};
+    for (const f of data || []) {
+      const short = (f.short_code || '').trim();
+      const name = (f.name || '').trim();
+      m[String(f.id)] = { short: short || name || `#${f.id}`, name: name || short || `#${f.id}` };
+    }
+    return m;
+  }, [data]);
+}
+
+/**
+ * Cached lookup of department id -> name for the register's Department column. A document's department_id is a department of
+ * Administration → Departments; the list is the one the Details fields read (same query), the switched-off ones included so a
+ * document that still sits in one shows its name. An id the list does not hold has no entry.
+ */
+export function useDepartmentNames() {
+  const { data } = useOrgDepartments();
+  return useMemo(() => departmentNames(data), [data]);
 }
 
 export function FrameworkPills({
@@ -349,4 +356,9 @@ export function AttestCell({ pct }: { pct: number | null | undefined }) {
 export function verLabel(v: string | null | undefined): string {
   if (!v) return '—';
   return v.startsWith('v') ? v : `v${v}`;
+}
+
+/** "v1.0 in force" while a newer version than the one in force is on its way; null otherwise. */
+export function inForceNote(d: { version_in_force?: string | null; current_version?: string | null }): string | null {
+  return d.version_in_force && d.version_in_force !== d.current_version ? `${verLabel(d.version_in_force)} in force` : null;
 }

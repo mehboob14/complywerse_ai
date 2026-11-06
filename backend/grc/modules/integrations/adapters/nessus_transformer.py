@@ -14,7 +14,7 @@ NESSUS_SEVERITY_MAP = {
     4: "critical",
 }
 
-COMPLIVERSE_SEVERITY_ORDER = {
+AVA_SEVERITY_ORDER = {
     "critical": 4,
     "high": 3,
     "medium": 2,
@@ -49,7 +49,7 @@ def _epoch_to_dt(val) -> Optional[datetime]:
     return None
 
 
-def _compute_compliverse_severity(composite_score: float) -> str:
+def _compute_ava_severity(composite_score: float) -> str:
     if composite_score >= 9.0:
         return "critical"
     elif composite_score >= 7.0:
@@ -413,8 +413,8 @@ class NessusTransformer:
             "cvss_v2_vector": cvss_v2_vector,
             "nexpose_risk_score": None,
             "scanner_severity": scanner_severity,
-            "compliverse_risk_score": composite,
-            "compliverse_severity": _compute_compliverse_severity(composite),
+            "ava_risk_score": composite,
+            "ava_severity": _compute_ava_severity(composite),
             "cve_id": cve_ids[0] if cve_ids else None,
             "cve_ids": cve_ids if cve_ids else None,
             "cwe_id": cwe_ids[0] if cwe_ids else None,

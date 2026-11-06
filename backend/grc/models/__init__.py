@@ -28,3 +28,42 @@ from ._53_choke_point_models import *  # noqa: F401,F403 - CTEM choke-point anal
 from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket links (Phase 5)
 from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control proposals (P5)
 from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog + tenant overlay
+from ._57_custom_control_models import *  # noqa: F401,F403 - custom control profile + cross-module record links
+from ._58_audit_register_models import *  # noqa: F401,F403 - audit issue register profile + workbook imports
+from ._59_evidence_quality_models import *  # noqa: F401,F403 - does this file prove the item it was attached to
+from ._60_module_settings import *  # noqa: F401,F403 - per-tenant status levels, SLA days and extra fields
+from ._62_vendor_reminders import *  # noqa: F401,F403 - third-party risk reminders, one row per notice
+from ._63_attention import *  # noqa: F401,F403 - snoozes, assignments and notes on attention-queue items
+from ._64_tpra_template_versions import *  # noqa: F401,F403 - questionnaire templates frozen as sent
+from ._65_tpra_monitoring import *  # noqa: F401,F403 - monitoring cursors, ruled-out alerts, external ratings
+from ._66_tpra_vendor_graph import *  # noqa: F401,F403 - fourth parties, platform aliases, vendor links and products
+from ._67_tpra_reports import *  # noqa: F401,F403 - frozen committee packs, registers and vendor files
+from ._68_regulatory_obligations import *  # noqa: F401,F403 - what each regulatory circular requires, clause by clause
+from ._69_tpra_checkins import *  # noqa: F401,F403 - stakeholders' yearly check-ins on suppliers
+from ._70_tpra_outside_in import *  # noqa: F401,F403 - outside-in scans of supplier domains, and waivers
+from ._71_tpra_shadow_saas import *  # noqa: F401,F403 - software in use that no one has assessed
+from ._72_tpra_fair import *  # noqa: F401,F403 - FAIR analyses of supplier loss scenarios
+from ._73_tpra_email_templates import *  # noqa: F401,F403 - a tenant's own wording for TPRM emails
+from ._74_tpra_action_items import *  # noqa: F401,F403 - planned actions on a supplier
+from ._pentest_scan_jobs import PentestScanJob  # noqa: F401 - pentest live scan jobs (M2)
+from ._pentest_exploit_results import PentestExploitResult  # noqa: F401 - pentest persisted exploit results (M2)
+from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest all-stage event log
+from ._75_tpra_leaks_logos import *  # noqa: F401,F403 - own-domain code leaks and supplier logos
+from ._76_electronic_signatures import *  # noqa: F401,F403 - signatures drawn on screen, sealed and kept with the record
+from ._77_ai_call_payloads import *  # noqa: F401,F403 - the prompts and answers of AI calls, encrypted, kept for a while
+from ._80_document_studio import *  # noqa: F401,F403 - AI Studio: sessions, revisions, chat, references, templates, logos
+from ._79_document_obligations import *  # noqa: F401,F403 - who a document is waiting for: reviews, approvals, acknowledgements
+from ._81_document_routes import *  # noqa: F401,F403 - a document's approval route: its stages, and the changes asked for while it waits
+from ._82_document_change_proposals import *  # noqa: F401,F403 - changes by anyone but the owner or author, waiting for their accept
+from ._78_ai_result_cache import *  # noqa: F401,F403 - answers to AI requests that repeat exactly, encrypted, expiring
+from ._83_department_roles import *  # noqa: F401,F403 - the roles a department takes its members from
+from ._84_tpra_supplier_contacts import *  # noqa: F401,F403 - TPRM: a supplier's contacts and their personal portal links
+from ._85_tpra_paperwork import *  # noqa: F401,F403 - TPRM: a supplier's paperwork: SOC report reviews and documents' coverage
+from ._86_tpra_engagements import *  # noqa: F401,F403 - TPRM: what we use a supplier for, each with its own tier and lifecycle
+from ._87_tpra_supplier_requests import *  # noqa: F401,F403 - TPRM: what we ask a supplier for outside a questionnaire, and messages with them
+from ._88_tpra_reviews import *  # noqa: F401,F403 - TPRM: who reviews which part of a supplier's answers
+from ._89_tpra_alert_rules import *  # noqa: F401,F403 - TPRM: what a monitoring signal sets off
+from ._90_tpra_roster import *  # noqa: F401,F403 - TPRM: who the workflow asks at each review stage
+from ._91_risk_framework_requirement_links import *  # noqa: F401,F403 - a risk linked to a control of an installed framework (Risk Library)
+from ._92_department_levels import *  # noqa: F401,F403 - what an organisation calls the levels of its department tree
+from ._93_exception_approvals import *  # noqa: F401,F403 - who reviews and approves a policy exception: rules, runs, decisions

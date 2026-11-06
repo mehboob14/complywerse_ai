@@ -17,7 +17,10 @@ import {
   Smartphone, Loader2, Upload, CheckCircle2, XCircle, MinusCircle, Clock,
   ChevronRight, Search, Server, Plus, X, Paperclip, FileText, ShieldCheck, Trash2,
 } from 'lucide-react';
+import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
+import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const MASVS_FORMAT = 'mobile_app_security';
 
@@ -38,8 +41,9 @@ interface Item {
   remarks: string | null;
   priority: string | null;
   evidence_count?: number;
+  assignees?: Assignee[];
 }
-interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; }
+interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; scope_model?: string | null; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
 
 // Pull "Platform: Android | MASVS: L1,L2 | MSTG: MSTG-ARCH-1 | Testing: …" out
@@ -77,6 +81,10 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   const [uploading, setUploading] = useState(false);
   const { data: ev = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['masvs-ev', itemId],
+    // The review runs in the background on upload, so poll until every file
+    // has a verdict, then stop.
+    refetchInterval: (q) => (((q.state.data as Record<string, unknown>[] | undefined) || [])
+      .some((row) => !row.quality) ? 4000 : false),
     queryFn: async () => {
       const r = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
       return (r.data?.evidence || r.data || []) as Record<string, unknown>[];
@@ -115,8 +123,19 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
           {list.map((e, i) => {
             const name = (e.evidence_name || (e.evidence as Record<string, unknown>)?.name || e.file_name || e.evidence_file_name || `Evidence ${i + 1}`) as string;
             return (
-              <li key={(e.id as number) ?? i} className="flex items-center gap-2 text-[12px] text-slate-700">
-                <FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span>
+              <li key={(e.id as number) ?? i} className="text-[12px] text-slate-700">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span>
+                </div>
+                {typeof e.evidence_id === 'number' && (
+                  <EvidenceQualityNote
+                    assessmentId={assessmentId}
+                    itemId={itemId}
+                    evidenceId={e.evidence_id as number}
+                    quality={(e.quality as EvidenceQuality | null) ?? null}
+                    onRechecked={() => qc.invalidateQueries({ queryKey: ['masvs-ev', itemId] })}
+                  />
+                )}
               </li>
             );
           })}
@@ -126,22 +145,25 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   );
 }
 
-export default function MobileAppSecurityTab() {
+/** `assessmentId`: the assessment to show (made for one application); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function MobileAppSecurityTab({ assessmentId, allowUpload = true }: { assessmentId?: number; allowUpload?: boolean } = {}) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [evOpen, setEvOpen] = useState<number | null>(null);
+  const [aiFor, setAiFor] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | 'L1' | 'L2' | 'R'>('all');
   const [platform, setPlatform] = useState<string | null>(null);
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['masvs-assessments'],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: MASVS_FORMAT } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: MASVS_FORMAT, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['masvs-detail', activeId],
@@ -169,6 +191,7 @@ export default function MobileAppSecurityTab() {
   // so the audit is traceable from the IT-asset side (reverse view). One
   // assessment = one app, so this is a tag, not a per-asset results switch.
   const linkedIds: number[] = detail?.linked_asset_ids ?? [];
+  const scoped = !!detail?.scope_model;                    // made for one application: its target is in the scope, not picked here
   const { data: assets = [] } = useQuery<Asset[]>({
     queryKey: ['it-assets-list'],
     queryFn: async () => (await assetsApi.getAll({ limit: 500 })).data as Asset[],
@@ -267,6 +290,8 @@ export default function MobileAppSecurityTab() {
   const term = search.trim().toLowerCase();
   const scoreColor = (p: number) => (p >= 80 ? '#059669' : p >= 50 ? '#d97706' : '#dc2626');
 
+  const aiItem = aiFor != null ? (detail?.items || []).find((x) => x.id === aiFor) : undefined;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -283,7 +308,7 @@ export default function MobileAppSecurityTab() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload MASVS Excel' : 'Upload MASVS Excel'}
           </button>
           {activeId && (
@@ -307,7 +332,8 @@ export default function MobileAppSecurityTab() {
         <>
           {/* App under test (asset link) + platform toggle */}
           <div className="flex flex-col gap-3 lg:flex-row">
-            <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
+            {!scoped && (
+<div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
                 <Server className="h-4 w-4 text-slate-400" />
                 <h4 className="text-[12.5px] font-bold uppercase tracking-wide text-slate-500">App under test</h4>
@@ -339,6 +365,7 @@ export default function MobileAppSecurityTab() {
                 {saveAssets.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
               </div>
             </div>
+)}
 
             {platforms.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -461,7 +488,12 @@ export default function MobileAppSecurityTab() {
                                   {m.testing && <span className="truncate">Test: {m.testing}</span>}
                                 </div>
                               </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['masvs-detail', activeId] })} />
+                              </div>
                               <div className="flex shrink-0 items-center gap-1">
+                                <AiEvidenceButton assessmentId={activeId!} itemId={it.id} active={aiFor === it.id} onOpen={() => setAiFor(it.id)} />
                                 <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence — attaching evidence marks this Pass"
                                   className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
                                   style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}>
@@ -497,6 +529,14 @@ export default function MobileAppSecurityTab() {
             })}
           </div>
         </>
+      )}
+      {aiItem && activeId != null && (
+        <AiEvidenceDialog assessmentId={activeId} item={aiItem} context={detail?.name} onClose={() => setAiFor(null)}
+          onLinked={() => {
+            qc.invalidateQueries({ queryKey: ['masvs-ev', aiItem.id] });
+            qc.invalidateQueries({ queryKey: ['masvs-detail', activeId] });
+            setStatus.mutate({ itemId: aiItem.id, status: 'complied' });
+          }} />
       )}
     </div>
   );

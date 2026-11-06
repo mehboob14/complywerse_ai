@@ -135,6 +135,114 @@ _COLUMN_TYPE_FIXUPS = [
 ]
 
 
+def _widen_scf_check_status(engine: Engine) -> bool:
+    """grc_scf_check_result.status VARCHAR(10) -> VARCHAR(20).
+
+    A check result can now be `not_applicable` (14 chars); VARCHAR(10) would
+    truncate it to `not_applic`. The generic _ensure_column_type cannot do this
+    one: `reporting_scf_check_results` selects the column, and Postgres refuses
+    to alter the type of a column a view depends on. That failure also left the
+    engine permanently un-ensured, so the self-heal retried and logged the same
+    traceback on every engine creation.
+
+    So: drop the view and widen in one transaction, then let the reporting layer
+    recreate its views, which it does idempotently. Returns True when the column
+    is wide enough, whether or not this call did the work.
+    """
+    try:
+        inspector = inspect(engine)
+        if "grc_scf_check_result" not in inspector.get_table_names():
+            return True
+        col = next((c for c in inspector.get_columns("grc_scf_check_result")
+                    if c["name"] == "status"), None)
+        width = getattr(col["type"], "length", None) if col else None
+        if width is None or width >= 20:
+            return True
+        with engine.begin() as conn:
+            conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+            conn.execute(text(
+                "ALTER TABLE grc_scf_check_result ALTER COLUMN status TYPE VARCHAR(20)"))
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:  # noqa: BLE001 — the column is fixed; a view can be re-ensured later
+            logger.exception("recreating reporting views after status widening failed on %s",
+                             getattr(engine.url, "database", "?"))
+        logger.info("Widened grc_scf_check_result.status to VARCHAR(20) on %s",
+                    getattr(engine.url, "database", "?"))
+        return True
+    except Exception:
+        logger.exception("Failed to widen grc_scf_check_result.status on %s",
+                         getattr(engine.url, "database", "?"))
+        return False
+
+
+def _widen_scf_id_columns(engine: Engine) -> bool:
+    """Widen scf_id to VARCHAR(64) on control_state (critical) and normalized_controls.
+
+    Custom controls share the SCF identity space and need codes longer than 16.
+    If a dependent view blocks the NC alter, log and continue — state table is
+    the hard requirement for Stage D.
+    """
+    db_label = getattr(engine.url, "database", "?")
+    state_ok = True
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+
+        def _needs_widen(table: str) -> bool:
+            if table not in tables:
+                return False
+            col = next(
+                (c for c in inspector.get_columns(table) if c["name"] == "scf_id"),
+                None,
+            )
+            if col is None:
+                return False
+            width = getattr(col["type"], "length", None)
+            return width is not None and width < 64
+
+        if _needs_widen("grc_scf_control_state"):
+            with engine.begin() as conn:
+                # Best-effort: drop known reporting views that might pin the type.
+                conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+                conn.execute(text(
+                    "ALTER TABLE grc_scf_control_state "
+                    "ALTER COLUMN scf_id TYPE VARCHAR(64)"
+                ))
+            logger.info("Widened grc_scf_control_state.scf_id to VARCHAR(64) on %s", db_label)
+
+        if _needs_widen("grc_normalized_controls"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+                    conn.execute(text(
+                        "ALTER TABLE grc_normalized_controls "
+                        "ALTER COLUMN scf_id TYPE VARCHAR(64)"
+                    ))
+                logger.info(
+                    "Widened grc_normalized_controls.scf_id to VARCHAR(64) on %s", db_label
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to widen grc_normalized_controls.scf_id on %s "
+                    "(continuing; control_state widen is critical)",
+                    db_label,
+                )
+
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:
+            logger.exception(
+                "recreating reporting views after scf_id widening failed on %s", db_label
+            )
+        return state_ok
+    except Exception:
+        logger.exception("Failed to widen scf_id columns on %s", db_label)
+        return False
+
+
 def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> None:
     try:
         inspector = inspect(engine)
@@ -155,6 +263,78 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # Departments replace teams (services/org_departments.py): the department a team is the picker record of (no foreign key on an
+    # existing table; create_all gives a new database one)
+    ("grc_teams", "department_id", "INTEGER", "ix_team_department"),
+    # Change chain: what a document version changed against the one before it, from -> to, and where each change came from
+    ("grc_governance_document_versions", "change_set", "JSON", None),
+    # AI Studio: what the screen shows while an AI turn works (the steps, the text so far, the parts of a document)
+    ("grc_studio_messages", "live", "JSON", None),
+    # AI Studio: a person's answers to the questions Comply Agent asked (on the person's message)
+    ("grc_studio_messages", "answers", "JSON", None),
+    # AI Studio: the files a person attached to a message in the chat (references of the session)
+    ("grc_studio_messages", "attachments", "JSON", None),
+    # AI Studio: a whole document as far as it is written, shown in the document while Comply Agent writes it
+    ("grc_studio_messages", "preview", "TEXT", None),
+    ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
+    ("grc_document_obligations", "overdue_at", "TIMESTAMP", None),     # Governance > Settings: the person's overdue notice
+    # Approval routes (modules/governance/routes.py): the stage and turn of each participant, signature and request, the stage a
+    # document is at, and who a delegate signs for
+    ("grc_document_signoff_assignments", "stage_position", "INTEGER", None),
+    ("grc_document_signoff_assignments", "position", "INTEGER", None),
+    ("grc_document_signatures", "stage_position", "INTEGER", None),
+    ("grc_document_signatures", "on_behalf_of", "INTEGER", None),
+    ("grc_document_obligations", "stage_position", "INTEGER", None),
+    ("grc_document_obligations", "on_behalf_of", "INTEGER", None),
+    ("grc_governance_documents", "route_stage", "INTEGER", None),
+    # ...and, on changes asked for, the version they were asked on and the newest signature then (its stage is signed again)
+    ("grc_document_route_holds", "version_id", "INTEGER", None),
+    ("grc_document_route_holds", "signature_mark", "INTEGER", None),
+    # Proposed changes (modules/governance/proposals.py): a hold that waits for the owner's accept, and the requests about one
+    ("grc_document_route_holds", "kind", "VARCHAR(20) DEFAULT 'changes'", None),
+    ("grc_document_route_holds", "proposal_id", "INTEGER", None),
+    ("grc_document_obligations", "proposal_id", "INTEGER", None),
+    # Statement <-> original document sync (cfsb): the wording as the file has it and where
+    ("grc_policy_statements", "source_text", "TEXT", None),
+    ("grc_policy_statements", "source_start", "INTEGER", None),
+    ("grc_policy_statements", "source_match", "VARCHAR(20)", None),
+    # Statements follow every new version (modules/governance/statement_reparse.py): the hashes of the parts of a document's text its
+    # statements reflect, and the part each statement came from
+    ("grc_governance_documents", "statement_parts", "JSON", None),
+    ("grc_policy_statements", "source_hash", "VARCHAR(40)", None),
+    # AI Governance: the use case a call belonged to (set by the data-protection guard)
+    ("ai_usage_events", "use_case_id", "VARCHAR(150)", "ix_ai_usage_events_use_case_id"),
+    # Audit register — columns added after the first tenants already had the
+    # tables (the local cfsb tenant was provisioned in between).
+    ("grc_audit_register_imports", "client_summary", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "title_key", "VARCHAR(120)", None),
+    ("grc_audit_issue_profiles", "validation_owner", "TEXT", None),
+    ("grc_audit_issue_profiles", "edited_fields", "JSON DEFAULT '[]'::json", None),
+    # Statutory Audit adds this lazily on its own endpoints; the register writes
+    # observations from imports, so the column is healed here as well.
+    ("grc_audit_observations", "category", "VARCHAR(120)", None),
+    ("grc_audit_register_imports", "summary_month", "VARCHAR(7)", None),
+    ("grc_audit_register_imports", "status_definitions", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "incident_id", "INTEGER", None),
+    ("grc_audit_issue_profiles", "business_unit_id", "INTEGER", None),
+    ("grc_audit_issue_profiles", "regulator_status", "TEXT", None),
+    ("grc_audit_issue_profiles", "last_reminded_on", "DATE", None),
+    ("grc_audit_register_imports", "sheet_headers", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "deleted_at", "TIMESTAMP", None),
+    ("grc_audit_issue_profiles", "deleted_by", "INTEGER", None),
+    ("grc_audit_register_reports", "project_name", "TEXT", None),
+    ("grc_governance_documents", "mapping_framework_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_governance_documents", "signoff_round_at", "TIMESTAMP", None),     # doc_lifecycle.start_round
+    ("grc_governance_documents", "acks_everyone_at", "TIMESTAMP", None),     # doc_lifecycle._add_joiners
+    ("grc_governance_documents", "published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_number
+    ("grc_governance_documents", "last_published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_row
+    ("grc_workflow_notifications", "link", "VARCHAR(500)", None),          # the page a bell notification opens
+    # Policy exceptions: the decision record (policy_exception_router approve / revoke)
+    ("grc_policy_exceptions", "approval_comments", "TEXT", None),
+    ("grc_policy_exceptions", "revoked_by", "INTEGER", None),
+    ("grc_policy_exceptions", "revocation_reason", "TEXT", None),
+    ("grc_policy_exceptions", "department_id", "INTEGER", "ix_pol_exc_department"),   # the unit it is raised for (approval rules, D58)
+    ("grc_policy_exceptions", "exception_type", "VARCHAR(40)", "ix_pol_exc_type"),     # its kind, from the organisation's own list (D59)
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),
@@ -183,6 +363,11 @@ _COLUMN_ADDS = [
     # scanner writes. asset_role + parent_asset_id support promoting an
     # application detected on a host into its own child asset.
     ("grc_it_assets", "detected_software_json", "JSON DEFAULT '[]'::json", None),
+    # Every address this machine has answered on (multi-NIC, DHCP history).
+    # Written by asset_discovery.resolver and read by finding_asset_linker, so
+    # a missing column breaks every `SELECT * FROM grc_it_assets` ORM query —
+    # the whole IT Asset Inventory register, not just discovery.
+    ("grc_it_assets", "known_ips", "JSON", None),
     ("grc_it_assets", "asset_role", "VARCHAR(50)", None),
     ("grc_it_assets", "parent_asset_id", "INTEGER",
      "ix_grc_it_assets_parent_asset_id"),
@@ -281,10 +466,22 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_document_items", "closed_at", "TIMESTAMP", None),
     # Per-asset verification status {asset_id: status} for multi-asset assessments (ASVS).
     ("grc_compliance_assessment_document_items", "asset_status", "JSON DEFAULT '{}'::json", None),
+    # Who an item is assigned to: [{"type": "user"|"team", "id": n}].
+    ("grc_compliance_assessment_document_items", "assignees", "JSON DEFAULT '[]'::json", None),
     # Assessment ↔ IT Assets scope (application(s) the assessment verifies).
     ("grc_compliance_assessment_documents", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
     # Per-asset target ASVS level {asset_id: level} for level-scoped assessments.
     ("grc_compliance_assessment_documents", "asset_levels", "JSON DEFAULT '{}'::json", None),
+    # Scoping and initiation of the Cyber Security assessments: NULL on every assessment that predates it.
+    ("grc_compliance_assessment_documents", "scope_model", "VARCHAR(16)", None),
+    ("grc_compliance_assessment_documents", "phase", "VARCHAR(24)", None),
+    ("grc_compliance_assessment_documents", "template_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "owner_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "primary_asset_id", "INTEGER", None),
+    ("grc_compliance_assessment_documents", "scope", "JSON DEFAULT '{}'::json", None),
+    ("grc_compliance_assessment_documents", "scope_snapshot", "JSON", None),
+    ("grc_compliance_assessment_documents", "subject_summary", "TEXT", None),
+    ("grc_compliance_assessment_documents", "started_at", "TIMESTAMP", None),
     # Point-score weights on the tenant SLA policy (grc_compliance_sla_policy is
     # a new table via create_all; these ALTERs cover tenants whose table was
     # created before the weight columns existed).
@@ -359,8 +556,16 @@ _COLUMN_ADDS = [
     ("grc_parsed_framework_controls", "control_description", "TEXT", None),
     # Assessment criteria parsed from each spec's Control Specification text.
     ("grc_parsed_framework_controls", "assessment_criteria", "JSON DEFAULT '[]'::json", None),
+    # Native attributes and sub-controls of a framework's own hierarchy (UAE IA); NULL elsewhere.
+    ("grc_parsed_framework_controls", "native_attributes", "JSON", None),
     # Per-criterion met/not-met state on each journey control implementation.
     ("grc_control_implementations", "criteria_status", "JSON DEFAULT '{}'::json", None),
+    # Sub-controls of a framework's own hierarchy (UAE IA): who owns each inside a control, and which one a file was attached to.
+    ("grc_control_implementations", "sub_control_state", "JSON", None),
+    ("grc_implementation_evidence", "sub_control_code", "VARCHAR(64)", None),
+    # Gap-analysis runs: the job's heartbeat (a run silent for 15 minutes is cancelled automatically) and the version it read
+    ("grc_policy_gap_analysis_runs", "updated_at", "TIMESTAMP", None),
+    ("grc_policy_gap_analysis_runs", "document_version", "VARCHAR(50)", None),
     # Gap-analysis remediation: AI-drafted clause text + apply-to-document
     # audit columns. Populated via /gap-analysis/findings/{id}/generate-fix
     # and /apply-fix endpoints with human-in-the-loop edit/approve.
@@ -489,6 +694,12 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "last_seen_at", "TIMESTAMP",
      "ix_it_asset_last_seen_at"),
     ("grc_it_assets", "last_seen_source", "VARCHAR(50)", None),
+    # Birth provenance + host aliases. Same omission as known_ips above: both
+    # ship on the model and are written by discovery, so a tenant DB predating
+    # them raises UndefinedColumn on every asset query.
+    ("grc_it_assets", "origin_source", "VARCHAR(30)",
+     "ix_grc_it_assets_origin_source"),
+    ("grc_it_assets", "dns_aliases", "JSON", None),
     # Phase 6 — Vendor Patch Intelligence (MSRC first). All nullable so the
     # column adds are no-ops for existing rows; populated on demand via
     # /vulnerabilities/{id}/sync-patch-info, on ingest via Celery, and by
@@ -537,6 +748,29 @@ _COLUMN_ADDS = [
     # the ITAsset.owning_team_id FK above.
     # Committee charter — structured sections JSON for uploaded charters
     # so they render in the same UI as AI-drafted ones.
+    # Control Workbench — Assurance tab: procedure outcomes tied to SCF objectives,
+    # and a reproducible sampling plan + reviewable conclusion on each test.
+    ("grc_control_work_test_procedures", "ao_ids", "JSON", None),
+    ("grc_control_work_test_procedures", "expected_result", "TEXT", None),
+    ("grc_control_work_test_procedures", "result", "VARCHAR(20)", None),
+    ("grc_control_work_test_procedures", "result_note", "TEXT", None),
+    ("grc_control_work_test_procedures", "tested_by", "INTEGER", None),
+    ("grc_control_work_test_procedures", "tested_at", "TIMESTAMP", None),
+    ("grc_control_work_tests", "frequency", "VARCHAR(30)", None),
+    ("grc_control_work_tests", "population_size", "INTEGER", None),
+    ("grc_control_work_tests", "population_description", "TEXT", None),
+    ("grc_control_work_tests", "selection_method", "VARCHAR(20)", None),
+    ("grc_control_work_tests", "sample_seed", "INTEGER", None),
+    ("grc_control_work_tests", "tolerable_exceptions", "INTEGER DEFAULT 0", None),
+    ("grc_control_work_tests", "conclusion_rationale", "TEXT", None),
+    ("grc_control_work_tests", "locked_at", "TIMESTAMP", None),
+    ("grc_control_work_tests", "independent_review", "BOOLEAN", None),
+    # Evidence linked to a specific required artifact on a control (Assurance tab).
+    ("grc_evidence_control_mappings", "artifact_key", "VARCHAR(255)",
+     "ix_evidence_control_mappings_artifact_key"),
+    # Saved reports vs dashboards share one table; `kind` separates them.
+    ("grc_report_definitions", "kind", "VARCHAR(16) DEFAULT 'report'",
+     "ix_report_definition_kind"),
     ("grc_committee_charters", "sections_json", "JSON", None),
     # External connector framework — extends IntegrationConnection beyond
     # the original Nessus/Nexpose scope to cover ticketing, SIEM, pen-test,
@@ -729,6 +963,105 @@ _COLUMN_ADDS = [
     ("grc_clause_applicability", "owner_name", "VARCHAR(255)", None),
     ("grc_clause_applicability", "implementation_status", "VARCHAR(50)", None),
     ("grc_clause_applicability", "linked_evidence_id", "INTEGER", None),
+    # A tenant's own extra fields on an audit record (services/module_settings.py
+    # holds their definitions; the values live here).
+    ("grc_audit_observations", "custom_values", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_plan_entries", "custom_values", "JSON DEFAULT '{}'::json", None),
+    ("grc_it_assets", "custom_values", "JSON", None),
+    ("grc_vulnerabilities", "custom_values", "JSON", None),
+    ("grc_risks", "custom_values", "JSON", None),
+    ("grc_critical_tasks", "custom_values", "JSON", None),
+    ("grc_evidence", "custom_values", "JSON", None),
+    ("grc_evidence", "ai_review", "JSON", None),
+    ("grc_attestation_campaigns", "requires_signature", "BOOLEAN DEFAULT FALSE", None),
+    ("grc_scf_control_state", "custom_values", "JSON", None),
+    # Vendor onboarding requests (vendor_risk/tpra/intake.py).
+    ("grc_vendors", "intake", "JSON", None),
+    ("grc_vendors", "custom_values", "JSON", None),
+    ("grc_vendors", "intake_status", "VARCHAR(20)", "ix_grc_vendors_intake_status"),
+    ("grc_vendors", "requested_by", "INTEGER", None),
+    ("grc_vendors", "submitted_at", "TIMESTAMP", None),
+    ("grc_vendors", "stakeholder_ids", "JSON", None),
+    ("grc_vendors", "notify_emails", "TEXT", None),
+    # AI-suggested findings on a vendor assessment, kept apart from the analyst's
+    # own list (vendor_risk/routers/ai_analysis.py used to overwrite it).
+    ("grc_vendor_assessments", "ai_findings", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendor_assessments", "ai_recommendations", "JSON DEFAULT '[]'::json", None),
+    # When to remind about third-party risk dates and whom to escalate to.
+    ("grc_tpra_tiering_config", "reminder_policy", "JSON DEFAULT '{}'::json", None),
+    # Questionnaire versions (vendor_risk/tpra/versions.py): what a vendor was sent
+    # is pinned, and so is each question, answer and finding that came from it.
+    ("grc_vendor_questionnaire_responses", "template_version_id", "INTEGER", None),
+    ("grc_tpra_questions", "template_version_id", "INTEGER", None),
+    ("grc_tpra_findings", "template_version_id", "INTEGER", None),
+    ("grc_tpra_findings", "question_key", "VARCHAR(100)", None),
+    ("grc_tpra_findings", "answer_value", "VARCHAR(255)", None),
+    ("grc_tpra_tiering_config", "scoring_policy", "JSON DEFAULT '{}'::json", None),
+    # The questionnaire reviewer loop and a hardened vendor portal (tpra/portal.py).
+    ("grc_vendor_questionnaire_responses", "due_date", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "last_sent_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "attested_name", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_title", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_email", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "vendor_comments", "JSON DEFAULT '{}'::json", None),
+    ("grc_vendor_questionnaire_responses", "review", "JSON DEFAULT '{}'::json", None),
+    ("grc_vendor_questionnaire_responses", "accepted_by", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "accepted_at", "TIMESTAMP", None),
+    # Questionnaire evidence in the library, once (tpra/questionnaire_evidence.py).
+    ("grc_vendor_questionnaire_responses", "certificate_evidence_id", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "certificate_mode", "VARCHAR(12)", None),
+    ("grc_vendor_questionnaire_evidence", "evidence_id", "INTEGER", None),
+    ("grc_tpra_evidence_links", "questionnaire_id", "INTEGER", "ix_tpra_evlink_questionnaire"),
+    ("grc_tpra_evidence_links", "question_key", "VARCHAR(100)", None),
+    # Follow-up questionnaires an answer called for (tpra/follow_ups.py).
+    ("grc_vendor_questionnaire_responses", "parent_response_id", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "trigger_key", "VARCHAR(200)", "ix_vqr_trigger_key"),
+    # What a vendor's tier asks for, and keeping the tier true (tpra/tier_policy.py).
+    ("grc_tpra_tiering_config", "tier_policy", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_evidence_links", "requirement", "VARCHAR(40)", None),
+    ("grc_vendor_assessments", "tiering_basis", "JSON", None),
+    ("grc_vendor_assessments", "tier_override", "JSON", None),
+    # Outside-in monitoring signals fetched by connectors (tpra/monitoring.py).
+    ("grc_tpra_monitoring_signals", "external_id", "VARCHAR(200)", "ix_tpra_signal_external_id"),
+    ("grc_tpra_monitoring_signals", "sources", "JSON DEFAULT '[]'::json", None),
+    ("grc_tpra_monitoring_signals", "verification", "JSON", None),
+    ("grc_tpra_monitoring_signals", "verified", "BOOLEAN DEFAULT TRUE", None),
+    ("grc_tpra_monitoring_signals", "finding_id", "INTEGER", None),
+    ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_tiering_config", "quantification", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_tiering_config", "customisation", "JSON DEFAULT '{}'::json", None),
+    # Comply analyses: the supplier's insurance cover and the AI's write-up (tpra/fair.py).
+    ("grc_tpra_fair_analyses", "insurance_cover", "DOUBLE PRECISION", None),
+    ("grc_tpra_fair_analyses", "ai_review", "JSON", None),
+    ("grc_tpra_fair_analyses", "ai_review_for", "VARCHAR(64)", None),
+    # What a ratings provider says beyond the score: UpGuard's risks by severity (tpra/rating_feeds.py).
+    ("grc_tpra_external_ratings", "details", "JSON", None),
+    # Who Grip has seen using each shadow SaaS app (tpra/shadow_saas.py).
+    ("grc_tpra_shadow_apps", "people", "JSON", None),
+    # A supplier's EU VAT number and what VIES said about it (tpra/vat.py).
+    ("grc_vendors", "vat_number", "VARCHAR(40)", None),
+    ("grc_vendors", "vat_check", "JSON", None),
+    # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
+    # and how each contract renews.
+    ("grc_tpra_contracts", "evidence_id", "INTEGER", None),
+    ("grc_tpra_contracts", "reference", "VARCHAR(120)", None),
+    ("grc_tpra_contracts", "record_link", "VARCHAR(500)", None),
+    ("grc_tpra_contracts", "renewal_type", "VARCHAR(20)", None),
+    ("grc_tpra_contracts", "notice_days", "INTEGER", None),
+    ("grc_tpra_contracts", "annual_value", "NUMERIC(14,2)", None),
+    ("grc_tpra_contracts", "currency", "VARCHAR(3)", None),
+    ("grc_tpra_contracts", "billing", "VARCHAR(20)", None),
+    ("grc_tpra_contracts", "pricing", "JSON", None),
+    ("grc_tpra_contracts", "termination", "TEXT", None),
+    # Outside-in scans (tpra/outside_in.py) look at these domains as well as the website.
+    ("grc_vendors", "domains", "JSON", None),
+    # What each scanned host showed it runs (asset_discovery/services/web_tech.py).
+    ("grc_tpra_surface_scans", "technologies", "JSON", None),
+    # Breach alerts worked like cases (tpra/alerts.py).
+    ("grc_tpra_monitoring_signals", "triage_status", "VARCHAR(20)", "ix_tpra_signal_triage_status"),
+    ("grc_tpra_monitoring_signals", "triage_owner", "INTEGER", None),
+    ("grc_tpra_monitoring_signals", "research", "JSON", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat
@@ -830,19 +1163,218 @@ _COLUMN_ADDS = [
     # assessments can be regenerated at full fidelity, and flag AI-generated rows
     # so regenerate can replace them while preserving manually-added ones.
     ("grc_regulatory_changes", "source_text", "TEXT", None),
+    ("grc_regulatory_changes", "analysis", "JSON", None),
+    ("grc_regulatory_obligations", "position", "INTEGER", None),
     ("grc_regulatory_impact_assessments", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
     ("grc_regulatory_implementation_tasks", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
+    # Regulatory tasks: several assignees, the obligation raised from, the Task Management twin.
+    ("grc_regulatory_implementation_tasks", "assignee_ids", "JSON", None),
+    ("grc_regulatory_implementation_tasks", "obligation_id", "INTEGER", "ix_reg_task_obligation"),
+    ("grc_regulatory_implementation_tasks", "critical_task_id", "INTEGER", "ix_reg_task_critical_task"),
+    ("grc_regulatory_obligations", "owner_ids", "JSON", None),
+    ("grc_critical_tasks", "linked_regulatory_change_id", "INTEGER", "ix_critical_task_reg_change"),
+    # Committee action items: a priority (its SLA) and a twin in Task Management.
+    ("grc_oversight_actions", "priority", "VARCHAR(20) DEFAULT 'medium'", None),
+    ("grc_oversight_actions", "critical_task_id", "INTEGER", "ix_oversight_action_critical_task"),
+    # Risk register: the priority a person set (blank = from the score).
+    ("grc_risks", "priority", "VARCHAR(20)", None),
     # SCF control plane. The bridge: one NormalizedControl row per SCF control
     # carries its scf_id, so every table already FK'd to grc_normalized_controls
     # (evidence, exceptions, assessments, work items) keeps working unchanged and
     # nothing else in the platform has to learn the word "SCF".
-    ("grc_normalized_controls", "scf_id", "VARCHAR(16)", "ix_grc_normalized_controls_scf_id"),
+    ("grc_normalized_controls", "scf_id", "VARCHAR(64)", "ix_grc_normalized_controls_scf_id"),
+    # Stage D — custom controls share SCF identity on NormalizedControl.
+    ("grc_normalized_controls", "tenant_id", "INTEGER", "ix_grc_normalized_controls_tenant_id"),
+    ("grc_normalized_controls", "pptdf", "VARCHAR(16)", None),
+    ("grc_normalized_controls", "conformity_cadence", "VARCHAR(20)", None),
+    ("grc_normalized_controls", "control_sub_type", "VARCHAR(20)", None),
+    ("grc_normalized_controls", "retired_at", "TIMESTAMP", None),
+    ("grc_normalized_controls", "implements_scf_ids", "JSON", None),
+    # Stage G — custom controls may bind connector check ids directly.
+    ("grc_normalized_controls", "bound_check_ids", "JSON", None),
     # Collection health, kept distinct from control failure: a revoked scope or an
     # expired secret must surface as "not collected in 90 days", never as a
     # deficient control.
     ("grc_integration_connections", "last_success_at", "TIMESTAMP", None),
     ("grc_integration_connections", "last_error", "TEXT", None),
+    # Stage B — SCF scope boundary fields + UploadedFramework slug for journey sync.
+    ("grc_scf_scope", "scope_statement", "TEXT", None),
+    ("grc_scf_scope", "business_unit_ids", "JSON", None),
+    ("grc_scf_scope", "locations", "JSON", None),
+    ("grc_scf_control_state", "assigned_user_ids", "JSON", None),
+    ("grc_uploaded_frameworks", "slug", "VARCHAR(64)", "ix_grc_uploaded_frameworks_slug"),
+
+    # ── TPRM supplier contacts and portal links (A/C0): add columns below this line ──
+    ("grc_vendor_questionnaire_responses", "contact_id", "INTEGER", None),
+
+    # ── TPRM paperwork (E): add columns below this line ──
+    # The period a supplier's document vouches for, and who checked it (tpra/paperwork.py).
+    ("grc_tpra_evidence_links", "coverage_from", "DATE", None),
+    ("grc_tpra_evidence_links", "coverage_to", "DATE", None),
+    ("grc_tpra_evidence_links", "reviewed_by", "INTEGER", None),
+    ("grc_tpra_evidence_links", "reviewed_at", "TIMESTAMP", None),
+    # The clauses a security review asks about (tpra/contracts.py).
+    ("grc_tpra_contracts", "right_to_audit", "BOOLEAN", None),
+    ("grc_tpra_contracts", "subprocessor_terms", "BOOLEAN", None),
+    ("grc_tpra_contracts", "exit_data_return", "BOOLEAN", None),
+    ("grc_tpra_contracts", "security_addendum", "BOOLEAN", None),
+    ("grc_tpra_contracts", "breach_notification_hours", "INTEGER", None),
+    # Service levels measured against the contract (routers/monitoring.py).
+    ("grc_vendor_sla_records", "contract_id", "INTEGER", None),
+    ("grc_vendor_sla_records", "unit", "VARCHAR(20)", None),
+    ("grc_vendor_sla_records", "direction", "VARCHAR(20)", None),
+
+    # ── TPRM engagements (B): add columns below this line ──
+    # What each record is for; NULL is the General scope, the supplier as it always was.
+    ("grc_vendor_assessments", "engagement_id", "INTEGER", "ix_grc_vendor_assessments_engagement_id"),
+    ("grc_tpra_contracts", "engagement_id", "INTEGER", None),
+    ("grc_tpra_risk_snapshots", "engagement_id", "INTEGER", None),
+    ("grc_tpra_action_items", "engagement_id", "INTEGER", None),
+
+    # ── TPRM supplier requests and messages (C1): add columns below this line ──
+
+    # ── TPRM reviews and question rules (D): add columns below this line ──
+
+    # ── TPRM hardening (F): add columns below this line ──
+    # The tiering config and tier policy an assessment is held to (tpra/service.policy_snapshot).
+    ("grc_vendor_assessments", "policy_snapshot", "JSON", None),
+
+    # ── TPRM parity foundations: vendor fields, finding fields, policy (P0): add columns below this line ──
+    # What the register slices a supplier by; owners are plain ids (routers/vendors.py).
+    ("grc_vendors", "holds_personal_data", "BOOLEAN", None),
+    ("grc_vendors", "data_classification", "VARCHAR(20)", None),
+    ("grc_vendors", "data_location", "VARCHAR(255)", None),
+    ("grc_vendors", "systems_in_scope", "JSON", None),
+    ("grc_vendors", "tags", "JSON", None),
+    ("grc_vendors", "security_owner_id", "INTEGER", None),
+    ("grc_vendors", "relationship_owner_id", "INTEGER", None),
+    # The vendor policy beyond bands and cadence (tpra/policy.py).
+    ("grc_tpra_tiering_config", "remediation_days", "JSON", None),
+    ("grc_tpra_tiering_config", "skip_matrix", "JSON", None),
+    ("grc_tpra_tiering_config", "required_reviewers", "JSON", None),
+
+    # ── TPRM parity lifecycle rules (B3): add columns below this line ──
+
+    # ── TPRM parity questionnaires (B4): add columns below this line ──
+    # A questionnaire retired instead of deleted, and who changed it last (routers/questionnaires.py).
+    ("grc_vendor_questionnaire_templates", "archived_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_templates", "updated_by", "INTEGER", None),
+
+    # ── TPRM parity findings, intake and offboarding (B5): add columns below this line ──
+    # One engagement's own exit checklist (tpra/engagements.py, B5b).
+    ("grc_tpra_engagements", "offboarding", "JSON", None),
+    # A finding's owner, whether it holds the approval gate, where it came from and its Task Management twin
+    # (tpra/findings.py, B5a). A row from before reads NULL: no owner, not blocking, source worked out from the row.
+    ("grc_tpra_findings", "owner_id", "INTEGER", None),
+    ("grc_tpra_findings", "is_blocking", "BOOLEAN", None),
+    ("grc_tpra_findings", "source", "VARCHAR(30)", None),
+    ("grc_tpra_findings", "task_id", "INTEGER", None),
 ]
+
+
+def _backfill_audit_register_source_type(engine: Engine) -> None:
+    """Register findings (issue_type 'audit_finding') with no source → 'audit'."""
+    try:
+        if not inspect(engine).has_table("grc_issues"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE grc_issues SET source_type = 'audit' "
+                "WHERE issue_type = 'audit_finding' AND source_type IS NULL"
+            ))
+    except Exception:
+        logger.exception("audit register source_type backfill failed on %s",
+                         getattr(engine.url, "database", "?"))
+
+
+def _backfill_published_version(engine: Engine) -> None:
+    """A document published before published_version existed: its published version is the one in force and the one published
+    last. Fills only those new columns, only where they are empty (the user's approval of 2026-10-17)."""
+    try:
+        if not inspect(engine).has_table("grc_governance_documents"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE grc_governance_documents SET published_version = COALESCE(current_version, '1.0') "
+                "WHERE status = 'published' AND published_version IS NULL"
+            ))
+            conn.execute(text(        # the version published last, likewise (never cleared afterwards)
+                "UPDATE grc_governance_documents SET last_published_version = COALESCE(published_version, current_version, '1.0') "
+                "WHERE last_published_version IS NULL AND (status = 'published' OR published_version IS NOT NULL)"
+            ))
+    except Exception:
+        logger.exception("published_version backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
+def _backfill_imported_account_owners(engine: Engine) -> None:
+    """Once per tenant: documents owned by an account an access-review connector imported get their author as owner, the
+    requests waiting on such accounts end, and such accounts named as reviewers or approvers are removed
+    (governance/imported_owners.py; it records that it ran)."""
+    try:
+        insp = inspect(engine)
+        if not all(insp.has_table(t) for t in ("grc_governance_documents", "grc_document_obligations", "grc_users")):
+            return
+        from ..governance.imported_owners import run
+        with Session(bind=engine) as db:
+            out = run(db)
+            db.commit()
+        if any(out.values()):
+            logger.info("Imported-account owners fixed on %s: %s", getattr(engine.url, "database", "?"), out)
+    except Exception:
+        logger.exception("imported-account owner fix failed on %s", getattr(engine.url, "database", "?"))
+
+
+def _backfill_departments_from_teams(engine: Engine) -> None:
+    """Teams become departments (services/org_departments.py, DECISIONS D37): every team with no department gets one, with its
+    people, and every active department a picker record. Adds and links only, never deletes or rewrites; idempotent and safe to
+    run from two processes at once."""
+    try:
+        insp = inspect(engine)
+        if not all(insp.has_table(t) for t in ("grc_teams", "grc_team_members", "grc_departments", "grc_department_members", "grc_users")):
+            return
+        if "department_id" not in {c["name"] for c in insp.get_columns("grc_teams")}:
+            return                  # the column add failed: the next run (it is retried) does this
+        from ...services import org_departments
+        with Session(bind=engine) as db:
+            out = org_departments.backfill(db)
+        if any(out.values()):
+            logger.info("Teams turned into departments on %s: %s", getattr(engine.url, "database", "?"), out)
+    except Exception:
+        logger.exception("teams-to-departments backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
+def _backfill_regulatory_task_twins(engine: Engine) -> None:
+    """Every regulatory implementation task without a Task Management twin gets one."""
+    try:
+        insp = inspect(engine)
+        if not (insp.has_table("grc_regulatory_implementation_tasks") and insp.has_table("grc_critical_tasks")):
+            return
+        from ..governance.regulatory_tasks import backfill
+        with Session(bind=engine) as db:
+            made = backfill(db)
+            db.commit()
+        if made:
+            logger.info("Mirrored %s regulatory tasks into Task Management on %s",
+                        made, getattr(engine.url, "database", "?"))
+    except Exception:
+        logger.exception("regulatory task twin backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
+def _backfill_committee_task_twins(engine: Engine) -> None:
+    """Every committee action without a Task Management twin gets one."""
+    try:
+        insp = inspect(engine)
+        if not (insp.has_table("grc_oversight_actions") and insp.has_table("grc_critical_tasks")):
+            return
+        from ..governance.committee_tasks import backfill
+        with Session(bind=engine) as db:
+            made = backfill(db)
+            db.commit()
+        if made:
+            logger.info("Mirrored %s committee actions into Task Management on %s",
+                        made, getattr(engine.url, "database", "?"))
+    except Exception:
+        logger.exception("committee action twin backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
 def _backfill_framework_assessment_register_type(engine: Engine) -> None:
@@ -996,6 +1528,8 @@ def _ensure_for_engine(engine: Engine) -> None:
             ok = _ensure_column_type(engine, table=table, column=column,
                                      expected_type=expected_type)
             all_ok = all_ok and ok
+        all_ok = _widen_scf_check_status(engine) and all_ok
+        all_ok = _widen_scf_id_columns(engine) and all_ok
 
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.
@@ -1010,6 +1544,36 @@ def _ensure_for_engine(engine: Engine) -> None:
         # find them. Idempotent — rows already migrated have a non-legacy
         # `register_type` and are skipped on subsequent runs.
         _backfill_framework_assessment_register_type(engine)
+
+        # Audit register findings imported before the importer set the issue's
+        # source show as "Manual" in Issues; tag them "audit". Idempotent.
+        _backfill_audit_register_source_type(engine)
+
+        # Regulatory implementation tasks show in Task Management: a task made
+        # before that gets its twin now. Idempotent.
+        _backfill_regulatory_task_twins(engine)
+
+        # Committee action items show in Task Management too, the same way.
+        _backfill_committee_task_twins(engine)
+
+        # Documents published before the version in force was recorded. Idempotent.
+        _backfill_published_version(engine)
+
+        # Documents owned by accounts an access review imported: the author owns them now. Once per tenant.
+        _backfill_imported_account_owners(engine)
+
+        # Teams become departments: each team without one gets a department (with its people), each department a picker record.
+        _backfill_departments_from_teams(engine)
+
+        # Metabase / BI semantic layer — reporting_* views (idempotent).
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:
+            logger.exception(
+                "reporting semantic views failed on %s",
+                getattr(engine.url, "database", "?"),
+            )
 
         # Only mark the engine as "ensured" if every column add succeeded (or
         # was a no-op) — otherwise let a later request retry, since the

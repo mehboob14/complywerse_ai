@@ -92,6 +92,9 @@ class TPRAQuestion(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     template_id = Column(Integer, ForeignKey("grc_vendor_questionnaire_templates.id"), nullable=False, index=True)
+    # The frozen template version this question belongs to. Rows without one
+    # predate versions and follow the template.
+    template_version_id = Column(Integer, nullable=True)
     # Stable external key matching the legacy JSON question id where backfilled.
     question_key = Column(String(100), nullable=True, index=True)
     text = Column(Text, nullable=False)
@@ -162,6 +165,18 @@ class TPRAFinding(Base):
     # Loose ref to grc_issues.id — the shared Issue/Action item this finding mirrors
     # into (unified owner/SLA/workflow). Set by service.ensure_finding_issue (TPRM-003).
     linked_issue_id = Column(Integer, nullable=True, index=True)
+    # Raised from an answer: which template version, which question, what was answered.
+    template_version_id = Column(Integer, nullable=True)
+    question_key = Column(String(100), nullable=True)
+    answer_value = Column(String(255), nullable=True)
+    # Who sees it through (a platform user), whether it holds the approval gate whatever its
+    # severity, where it came from (assessment | manual | sla_breach | signal | document_review |
+    # offboarding; NULL on a row from before: tpra/findings.py source_of reads it) and the
+    # Task Management twin "Start remediation" opens.
+    owner_id = Column(Integer, nullable=True)
+    is_blocking = Column(Boolean, default=False)
+    source = Column(String(30), nullable=True)
+    task_id = Column(Integer, nullable=True)
     created_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
@@ -242,6 +257,8 @@ class TPRAContract(Base):
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
+    # The engagement it covers (grc_tpra_engagements); NULL covers the whole supplier.
+    engagement_id = Column(Integer, nullable=True)
     # master | dpa | sla | security_addendum
     contract_type = Column(String(40), default="master")
     title = Column(String(255), nullable=True)
@@ -253,6 +270,24 @@ class TPRAContract(Base):
     expiry_date = Column(DateTime, nullable=True)
     # draft | active | expired | terminated
     status = Column(String(30), default="draft", index=True)
+    # The signed copy, kept in the evidence library (loose link).
+    evidence_id = Column(Integer, nullable=True)
+    # Commercial terms; tpra/contracts.py cleans every one of them.
+    reference = Column(String(120), nullable=True)       # contract, order or PO number
+    record_link = Column(String(500), nullable=True)     # where the contract is held
+    renewal_type = Column(String(20), nullable=True)     # auto | manual | evergreen
+    notice_days = Column(Integer, nullable=True)         # notice owed before the end date
+    annual_value = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    currency = Column(String(3), nullable=True)
+    billing = Column(String(20), nullable=True)          # monthly | quarterly | annually
+    pricing = Column(JSON, nullable=True)                # unit price, included units, overage, one-off fees, cap, uplift
+    termination = Column(Text, nullable=True)            # how either side can get out
+    # The clauses a security review asks about; None until someone has checked (contracts.CLAUSE_FIELDS).
+    right_to_audit = Column(Boolean, nullable=True)
+    subprocessor_terms = Column(Boolean, nullable=True)
+    exit_data_return = Column(Boolean, nullable=True)
+    security_addendum = Column(Boolean, nullable=True)
+    breach_notification_hours = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -335,6 +370,19 @@ class TPRAMonitoringSignal(Base):
     acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(Integer, nullable=True)      # who cleared the signal
     acknowledged_at = Column(DateTime, nullable=True)     # when it was cleared
+    # Fetched by a connector: its own id (the dedupe key), the articles or records
+    # behind it, and whether it survived verification. An unverified alert is
+    # shown but never reopens an assessment or goes out by email.
+    external_id = Column(String(200), nullable=True)
+    sources = Column(JSON, default=list)
+    verification = Column(JSON, nullable=True)
+    verified = Column(Boolean, default=True)
+    finding_id = Column(Integer, nullable=True)           # the finding it was raised as
+    # Breach alerts (tpra/alerts.py): new → investigating → confirmed | not_relevant → closed,
+    # who is investigating, and the AI's reading of the articles behind it.
+    triage_status = Column(String(20), nullable=True, index=True)
+    triage_owner = Column(Integer, nullable=True)
+    research = Column(JSON, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -384,6 +432,27 @@ class TPRATieringConfig(Base):
     thresholds = Column(JSON, default=dict)
     # {critical: days, high: days, medium: days, low: days}
     cadence_days = Column(JSON, default=dict)
+    # When to remind and whom to escalate to: {enabled, remind_before_days,
+    # repeat_every_days, escalate_after_days, escalate_to: ["role:<name>" | "user:<id>"]}
+    reminder_policy = Column(JSON, default=dict)
+    # How answers score: {partial_credit: 0..1}. Frozen into each template version.
+    scoring_policy = Column(JSON, default=dict)
+    # What each tier asks for: {tier: {template_ids, evidence, approver_role, reassess_on}}
+    # (tpra/tier_policy.py; its defaults apply to any tier left unset).
+    tier_policy = Column(JSON, default=dict)
+    # Which outside-in feeds to run: {adverse_media: bool} (tpra/monitoring_connectors.py).
+    monitoring_policy = Column(JSON, default=dict)
+    # The exposure model's constants (tpra/quantification.py; its defaults fill any gap).
+    quantification = Column(JSON, default=dict)
+    # The tenant's own onboarding questions, tiering factors and evidence types
+    # (tpra/customisation.py).
+    customisation = Column(JSON, default=dict)
+    # The vendor policy beyond bands and cadence (tpra/policy.py; its defaults fill any gap):
+    # days to fix a finding by severity {critical: days, …}, the stages each tier skips
+    # {tier: [stage keys]}, and the roster roles each tier needs as reviewers {tier: [role keys]}.
+    remediation_days = Column(JSON, default=dict)
+    skip_matrix = Column(JSON, default=dict)
+    required_reviewers = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -429,6 +498,7 @@ class TPRARiskSnapshot(Base):
     scope = Column(String(20), nullable=False, default="vendor", index=True)
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=True, index=True)
     assessment_id = Column(Integer, nullable=True)  # loose ref: which assessment drove it
+    engagement_id = Column(Integer, nullable=True)  # that assessment's engagement; NULL is General
     inherent_score = Column(Float, nullable=True)
     residual_score = Column(Float, nullable=True)
     rating_grade = Column(String(2), nullable=True)        # A–F
@@ -464,8 +534,18 @@ class TPRAEvidenceLink(Base):
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
     finding_id = Column(Integer, ForeignKey("grc_tpra_findings.id"), nullable=True, index=True)
     response_id = Column(Integer, nullable=True, index=True)   # optional: per-question response
+    # The questionnaire and question this evidence answers, when it answers one.
+    questionnaire_id = Column(Integer, nullable=True)
+    question_key = Column(String(100), nullable=True)
+    # The evidence the vendor's tier asks for that this satisfies (tier_policy.EVIDENCE_KINDS).
+    requirement = Column(String(40), nullable=True)
     evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
     note = Column(Text, nullable=True)
+    # The period the document vouches for, and who checked it (tpra/paperwork.py).
+    coverage_from = Column(Date, nullable=True)
+    coverage_to = Column(Date, nullable=True)
+    reviewed_by = Column(Integer, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

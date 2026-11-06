@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { Fragment, useState, useMemo, useCallback } from 'react';
 import {
   ChevronUp,
   ChevronDown,
@@ -60,6 +60,15 @@ export interface DataTableProps<T extends { id: string | number }> {
   bulkBarVariant?: 'light' | 'dark';
   /** Render each row as a raised, separated card (gap + border + shadow) instead of flat divided rows. */
   cardRows?: boolean;
+  /** A tree: the rows under a row (all of them, drawn or not; never a row under itself), drawn under it with the same cells while
+   *  `showSubRows` says so. Each level is sorted like the top one, a page holds top-level rows with what is open under them, and
+   *  selection and the export cover the rows under them too. */
+  subRows?: (row: T) => readonly T[];
+  showSubRows?: (row: T) => boolean;
+  /** Drawn under a row's cells (beside its tick box), before the rows under it; null draws nothing. */
+  renderUnder?: (row: T) => React.ReactNode;
+  /** A row shown only for the rows under it (e.g. the parent of a search match): it has no tick box and is not exported. */
+  isContext?: (row: T) => boolean;
 }
 
 // Shared per-cell classes for card-row mode: white card body, border, shadow
@@ -113,6 +122,10 @@ export function DataTable<T extends { id: string | number }>({
   stickyHeader = false,
   bulkBarVariant = 'light',
   cardRows = false,
+  subRows,
+  showSubRows,
+  renderUnder,
+  isContext,
 }: DataTableProps<T>) {
   const [internalSearchValue, setInternalSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -148,12 +161,12 @@ export function DataTable<T extends { id: string | number }>({
     });
   }, [data, searchValue, visibleColumns]);
 
-  const sortedData = useMemo(() => {
-    if (!sortColumn || !sortDirection) return filteredData;
+  const sortRows = useCallback((rows: readonly T[]): T[] => {
+    if (!sortColumn || !sortDirection) return rows as T[];
     const column = visibleColumns.find((col) => col.id === sortColumn);
-    if (!column || !column.accessor) return filteredData;
+    if (!column || !column.accessor) return rows as T[];
 
-    return [...filteredData].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const aVal = getSortValue(a, column.accessor!);
       const bVal = getSortValue(b, column.accessor!);
       
@@ -166,13 +179,23 @@ export function DataTable<T extends { id: string | number }>({
       
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [filteredData, sortColumn, sortDirection, visibleColumns]);
+  }, [sortColumn, sortDirection, visibleColumns]);
+  const sortedData = useMemo(() => sortRows(filteredData), [sortRows, filteredData]);
 
   const totalPages = Math.ceil(sortedData.length / pageSize);
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
+
+  // a tree (subRows): every row with all the rows under it, in the table's order; the rows drawn (open rows show theirs);
+  // the rows that can be ticked. Without subRows/isContext these are the rows themselves.
+  const everyRow = (rows: readonly T[]): T[] => (subRows ? rows.flatMap((r) => [r, ...everyRow(sortRows(subRows(r)))]) : (rows as T[]));
+  const drawn = (rows: readonly T[]): T[] =>
+    subRows ? rows.flatMap((r) => [r, ...(showSubRows?.(r) ? drawn(sortRows(subRows(r))) : [])]) : (rows as T[]);
+  const canTick = (row: T) => !isContext?.(row);
+  const pageRows = drawn(paginatedData);
+  const pageTickable = isContext ? pageRows.filter(canTick) : pageRows;
 
   const handleSort = useCallback((columnId: string) => {
     if (sortColumn === columnId) {
@@ -200,20 +223,20 @@ export function DataTable<T extends { id: string | number }>({
     });
   }, []);
 
-  const handleSelectAll = useCallback(() => {
-    if (selectedRows.size === paginatedData.length) {
+  const handleSelectAll = () => {
+    if (selectedRows.size === pageTickable.length) {
       setSelectedRows(new Set());
     } else {
-      setSelectedRows(new Set(paginatedData.map((row) => row.id)));
+      setSelectedRows(new Set(pageTickable.map((row) => row.id)));
     }
-  }, [paginatedData, selectedRows.size]);
+  };
 
-  const handleExportCSV = useCallback(() => {
+  const handleExportCSV = () => {
     const headers = visibleColumns
       .filter((col) => col.accessor)
       .map((col) => col.header);
     
-    const rows = sortedData.map((row) => {
+    const rows = everyRow(sortedData).filter(canTick).map((row) => {
       return visibleColumns
         .filter((col) => col.accessor)
         .map((col) => {
@@ -236,11 +259,10 @@ export function DataTable<T extends { id: string | number }>({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [visibleColumns, sortedData, exportFilename]);
+  };
 
-  const selectedRowsData = useMemo(() => {
-    return data.filter((row) => selectedRows.has(row.id));
-  }, [data, selectedRows]);
+  // a context row is never acted on, also when it was ticked before a search made it one
+  const selectedRowsData = everyRow(data).filter((row) => selectedRows.has(row.id) && canTick(row));
 
   const toggleColumnVisibility = useCallback((columnId: string) => {
     setColumnVisibility((prev) => ({
@@ -423,7 +445,7 @@ export function DataTable<T extends { id: string | number }>({
                 <th className="w-10 px-3 py-2.5">
                   <input
                     type="checkbox"
-                    checked={paginatedData.length > 0 && selectedRows.size === paginatedData.length}
+                    checked={pageTickable.length > 0 && selectedRows.size === pageTickable.length}
                     onChange={handleSelectAll}
                     className="h-4 w-4 rounded border-slate-300 bg-white text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
                     aria-label="Select all rows"
@@ -476,9 +498,11 @@ export function DataTable<T extends { id: string | number }>({
                 </td>
               </tr>
             ) : (
-              paginatedData.map((row, rowIndex) => (
+              pageRows.map((row, rowIndex) => {
+                const under = renderUnder?.(row);
+                return (
+                <Fragment key={row.id}>
                 <tr
-                  key={row.id}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={clsx(
                     'transition-colors',
@@ -494,13 +518,15 @@ export function DataTable<T extends { id: string | number }>({
                       className={clsx('px-3', cardRows ? clsx('py-4', cardCellClasses(selectedRows.has(row.id))) : 'py-2.5')}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.has(row.id)}
-                        onChange={() => handleSelectRow(row.id)}
-                        className="h-4 w-4 rounded border-slate-300 bg-white text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
-                        aria-label={`Select row ${row.id}`}
-                      />
+                      {canTick(row) && (
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.has(row.id)}
+                          onChange={() => handleSelectRow(row.id)}
+                          className="h-4 w-4 rounded border-slate-300 bg-white text-primary-500 focus:ring-primary-500 focus:ring-offset-0"
+                          aria-label={`Select row ${row.id}`}
+                        />
+                      )}
                     </td>
                   )}
                   {visibleColumns.map((column) => (
@@ -517,7 +543,15 @@ export function DataTable<T extends { id: string | number }>({
                     </td>
                   ))}
                 </tr>
-              ))
+                {under ? (
+                  <tr>
+                    {selectable && <td aria-hidden />}
+                    <td colSpan={visibleColumns.length} className="px-3 py-2 text-sm text-slate-600">{under}</td>
+                  </tr>
+                ) : null}
+                </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

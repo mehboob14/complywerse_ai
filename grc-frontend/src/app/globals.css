@@ -1,4 +1,5 @@
 @import '../../styles/tokens.css';
+@import '../../styles/dashboard.css';
 
 /* ----- Platform-wide page loader animations -----------------------------
    Used by `<PageLoader>` (components/ui/PageLoader.tsx). Twelve dots arranged

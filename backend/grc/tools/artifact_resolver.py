@@ -13,7 +13,7 @@ before an artifact can be attached to a control:
     "Cl. 5.1", "Art. 24 / 5", "A.5.24-28", "Req 12.10", "CIS Methodology".
     _candidates() turns that into zero or more library codes.
 
-Nothing is dropped silently: every one of the 922 items lands in exactly one
+Nothing is dropped silently: every catalogue item lands in exactly one
 status, and the unresolved ones carry the reason. That is the point of the
 report -- the misses are a worklist, not an error.
 """

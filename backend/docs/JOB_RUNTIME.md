@@ -111,7 +111,7 @@ through Redis and Postgres.
 | [grc/celery_app.py](../grc/celery_app.py) | Celery `Celery(...)` instance, broker/backend URLs from env, queues, time limits, retry config, signal handlers (logging, prerun/postrun, worker_process_init that preloads heavy modules). |
 | [grc/tasks/base.py](../grc/tasks/base.py) | `TenantTask` (Celery base class enforcing `tenant_slug` as the first arg, opens/commits/rolls-back/closes a tenant session), `tenant_lock` (Redis advisory lock with owner-based reclaim), `tenant_rate_limit` (per-tenant per-bucket sliding window), `ping_tenant` (diagnostic). |
 | [grc/tasks/governance.py](../grc/tasks/governance.py) | `parse_policy_document`, `run_gap_analysis` task wrappers around the existing pure-Python bodies in `policy_parser._parse_policy_body` and `gap_analysis._gap_analysis_body`. |
-| [grc/tasks/frameworks.py](../grc/tasks/frameworks.py) | `parse_framework`, `enhance_framework_controls`, `generate_evidence_requirements` task wrappers around the existing bodies in `framework_upload/parser`. |
+| [grc/tasks/frameworks.py](../grc/tasks/frameworks.py) | `enhance_framework_controls`, `generate_evidence_requirements` task wrappers around the existing bodies in `framework_upload/parser`. |
 | [grc/job_status.py](../grc/job_status.py) | Redis-backed, tenant-namespaced job status helpers (`set_status`, `get_status`, `update_status`, `delete_status`). Replaces the per-process `_parsing_status` global dict. |
 | [grc/routers/tasks_router.py](../grc/routers/tasks_router.py) | `GET /tasks/{id}` and `POST /tasks/{id}/revoke`. Tenant-scoped: returns 404 if a tenant tries to see another tenant's task. |
 | [grc/db.py](../grc/db.py) | `open_tenant_session(slug)` is what `TenantTask` calls; the same per-tenant engine cache used by the FastAPI request path. Workers and uvicorn share zero in-process state, but they share the connection-pool design. |
@@ -126,8 +126,6 @@ through Redis and Postgres.
 |---|---|---|---|
 | `POST /governance/documents/{id}/parse-policy` | `governance.parse_policy_document` | `policy_parse:{doc_id}` | `governance_parse` |
 | `POST /governance/gap-analysis/run` | `governance.run_gap_analysis` | `gap_analysis:{doc_id}` | `gap_analysis` |
-| `POST /framework-upload/{id}/parse` | `frameworks.parse_framework` | `framework_parse:{id}` | `framework_parse` |
-| `POST /framework-upload/{id}/retry-parse` | `frameworks.parse_framework` | `framework_parse:{id}` | `framework_parse` |
 | `POST /framework-upload/frameworks/{id}/enhance` | `frameworks.enhance_framework_controls` | `framework_enhance:{id}` | `framework_enhance` |
 | `POST /framework-upload/{id}/generate-evidence-requirements` | `frameworks.generate_evidence_requirements` | `framework_evidence_reqs:{id}` | `framework_evidence_reqs` |
 
@@ -403,7 +401,7 @@ concurrent load.
 14:00:00.020  bob@globex       → GET  /controls                         (Quick)
 14:00:00.500  carol@initech    → POST /governance/documents/9/parse-policy  (Heavy)
 14:00:00.700  alice@acme       → POST /governance/gap-analysis/run       (Heavy)
-14:00:01.200  dave@globex      → POST /framework-upload/3/parse          (Heavy)
+14:00:01.200  dave@globex      → POST /framework-upload/frameworks/3/enhance (Heavy)
 14:00:01.300  eve@acme         → GET  /tasks/{carol_task_id}             (Quick: NOT theirs!)
 14:00:02.000  bob@globex       → GET  /risks                             (Quick)
 ```
@@ -460,9 +458,9 @@ concurrent load.
   │  _gap_analysis_body(...)
   │  (OpenAI calls, ~60 s)
 
-14:00:01.200  dave's POST .../framework-upload/3/parse
+14:00:01.200  dave's POST .../framework-upload/frameworks/3/enhance
   │  uvicorn worker A
-  │  parse_framework.delay("globex", 3, "/uploads/...", "pdf", "GDPR")
+  │  enhance_framework_controls.delay("globex", 3, "GDPR")
   │  return {"status": "queued"}
   └─ DONE at 14:00:01.290  (90 ms)
                        │
@@ -470,9 +468,9 @@ concurrent load.
 14:00:01.350  Celery worker child #3
   │  BRPOP parsing → got message
   │  open_tenant_session("globex")
-  │  acquire lock:globex:framework_parse:3
-  │  _run_background_parsing_body(...)
-  │  (PDF extraction + chunked OpenAI calls, ~3 min)
+  │  acquire lock:globex:framework_enhance:3
+  │  _enhance_controls_body(...)
+  │  (chunked OpenAI calls, ~3 min)
 
 14:00:01.300  eve's GET /tasks/t-AAAA  (carol's task!)
   │  uvicorn worker B

@@ -17,11 +17,21 @@ export interface LinkageDef {
   hasEdge?: boolean;   // a real join edge exists base→this module (orphan filters are meaningful)
 }
 
+export interface LinkageCatalog {
+  defs: LinkageDef[];
+  /** True when the server catalog could not be loaded. The open catalog still
+   *  gives cross-module COLUMNS, but it carries no `hasEdge`, so every "Find
+   *  gaps" chip disappears. Without this flag that looks identical to "this
+   *  module has no linked modules" — a missing feature reading as a finding of
+   *  no gaps is the worst of both. */
+  degraded: boolean;
+}
+
 /** Build the open catalog (all modules / all columns) and merge any server extras. */
 export async function fetchLinkageCatalog(
   dataset: string,
   datasets?: ReportDataset[],
-): Promise<LinkageDef[]> {
+): Promise<LinkageCatalog> {
   const open = datasets?.length ? buildOpenLinkageCatalog(dataset, datasets) : [];
   try {
     const r = await apiClient.get<{ linkages: LinkageDef[] }>('/reporting/linkages', { params: { dataset } });
@@ -31,10 +41,9 @@ export async function fetchLinkageCatalog(
       ...l,
       hasEdge: (l as { has_edge?: boolean }).has_edge ?? l.hasEdge,
     }));
-    if (open.length) return mergeLinkageCatalogs(open, server);
-    return server;
+    return { defs: open.length ? mergeLinkageCatalogs(open, server) : server, degraded: false };
   } catch {
-    return open;
+    return { defs: open, degraded: true };
   }
 }
 

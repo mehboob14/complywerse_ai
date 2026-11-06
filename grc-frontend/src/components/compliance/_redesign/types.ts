@@ -1,6 +1,9 @@
 // Shared types for the Compliance Assessments module.
 // Mirrors the data model in the existing assessments pages.
 
+import type { Assignee } from '../ItemAssignees';
+import type { EvidenceQuality } from '../EvidenceQualityNote';
+
 export type ComplianceStatus =
   | 'complied'
   | 'partially_complied'
@@ -22,6 +25,7 @@ export interface ControlItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: Assignee[]; // people and teams the item is assigned to
   timeline: string | null;
   evidence_reference: string | null;
   remarks: string | null;
@@ -63,6 +67,10 @@ export interface EvidenceRow {
   ext: string;
   meta: string;
   tone?: 'teal' | 'rose' | 'slate';
+  /** The library record, when it was attached and how well the file proves this control (as the API sends them). */
+  evidence_id?: number | null;
+  created_at?: string | null;
+  quality?: EvidenceQuality | null;
 }
 
 export interface AiRec {

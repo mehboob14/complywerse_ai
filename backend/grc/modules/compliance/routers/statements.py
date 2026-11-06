@@ -1,16 +1,18 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ....models import (
     PolicyStatement, PolicyStatementCompliance, GovernanceDocument,
-    GRCUser, TenantUser, Tenant, UserRole, Role, Evidence, get_db,
+    GRCUser, TenantUser, Evidence, get_db,
     StatementControlMapping, EvidencePolicyLink,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin
 from ..schema_migrations import ensure_assigned_column
+from ...governance.permissions import ensure_not_archived, require_doc_editor, require_doc_reader, visible_filter
 
 
 def _ensure_statement_schema(db: Session = Depends(get_db)) -> None:
@@ -71,29 +73,7 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
         )
 
 
-def _is_admin(db: Session, user: GRCUser) -> bool:
-    """Mirror the admin check used by `auth_router.require_tenant_permission`:
-    primary-contact email OR Administrator role membership inside this tenant DB.
-    """
-    if getattr(user, "is_admin", False):
-        return True
-    tenant_row = db.query(Tenant).first()
-    if (
-        tenant_row
-        and tenant_row.primary_contact_email
-        and user.email
-        and tenant_row.primary_contact_email.lower() == user.email.lower()
-    ):
-        return True
-    role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-    if not role_ids:
-        return False
-    admin_role = (
-        db.query(Role)
-        .filter(Role.id.in_(role_ids), Role.name == "Administrator")
-        .first()
-    )
-    return admin_role is not None
+_is_admin = is_tenant_admin  # the shared admin rule (auth_router)
 
 
 def _ensure_can_assess(db: Session, statement: PolicyStatement, user: GRCUser) -> None:
@@ -113,6 +93,14 @@ def _ensure_can_assess(db: Session, statement: PolicyStatement, user: GRCUser) -
         status_code=status.HTTP_403_FORBIDDEN,
         detail="This statement is assigned to another user; only the assignee can perform this action."
     )
+
+
+def _ensure_may_change(db: Session, statement: PolicyStatement, user: GRCUser, *, assignee: bool = False) -> None:
+    """A statement belongs to its document: changing it needs the right to change that document (governance/permissions.py),
+    except that the person it is assigned to assesses it (``assignee``)."""
+    if assignee and getattr(statement, "assigned_to_user_id", None) == user.id:
+        return
+    require_doc_editor(statement.document_id, db, user)
 
 
 def get_or_create_compliance_record(db: Session, statement_id: int, tenant_id: int) -> PolicyStatementCompliance:
@@ -159,6 +147,9 @@ def list_policy_statements(
     
     if document_id:
         query = query.filter(PolicyStatement.document_id == document_id)
+    visible = visible_filter(db, current_user)
+    if visible is not None:
+        query = query.filter(PolicyStatement.document_id.in_(select(GovernanceDocument.id).where(visible)))
     
     if category:
         query = query.filter(PolicyStatement.category == category)
@@ -239,6 +230,7 @@ def get_statement_linkage(
     ).first()
     if not stmt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
+    require_doc_reader(stmt.document_id, db, current_user)
 
     grouped = {"normalized": [], "framework": [], "parsed": [], "internal": []}
     try:
@@ -298,7 +290,7 @@ def get_statement_linkage(
     }
 
 
-@router.get("/by-document/{document_id}")
+@router.get("/by-document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_statements_by_document(
     document_id: int,
     category: Optional[str] = None,
@@ -384,6 +376,7 @@ def get_statement_details(
     
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
+    require_doc_reader(statement.document_id, db, current_user)
     
     compliance = db.query(PolicyStatementCompliance).filter(
         PolicyStatementCompliance.statement_id == statement_id
@@ -484,6 +477,8 @@ def update_statement(
     
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
+    _ensure_may_change(db, statement, current_user)
+    ensure_not_archived(statement.document)          # an archived document's statements stay as they are (D29)
     
     if update_data.category is not None:
         statement.category = update_data.category
@@ -529,6 +524,7 @@ def update_compliance_status(
         raise HTTPException(status_code=404, detail="Statement not found")
     
     _ensure_can_assess(db, statement, current_user)
+    _ensure_may_change(db, statement, current_user, assignee=True)
 
     valid_statuses = ["compliant", "partially_compliant", "non_compliant", "not_assessed", "not_applicable"]
     if compliance_data.compliance_status not in valid_statuses:
@@ -538,6 +534,8 @@ def update_compliance_status(
         )
 
     compliance = get_or_create_compliance_record(db, statement_id, statement.tenant_id)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [compliance_data.owner_id], kept=[compliance.owner_id])
     
     compliance.compliance_status = compliance_data.compliance_status
     compliance.assessment_date = datetime.utcnow()
@@ -591,6 +589,7 @@ def link_evidence_to_compliance(
         raise HTTPException(status_code=404, detail="Statement not found")
 
     _ensure_can_assess(db, statement, current_user)
+    _ensure_may_change(db, statement, current_user, assignee=True)
 
     valid_evidence_ids = []
     for eid in evidence_data.evidence_ids:
@@ -669,6 +668,7 @@ def assign_statement(
 
     # If already assigned, only the current assignee or an admin can change it
     _ensure_can_assess(db, statement, current_user)
+    _ensure_may_change(db, statement, current_user, assignee=True)
 
     new_user_id = payload.assigned_to_user_id
     new_assignee = None
@@ -684,6 +684,8 @@ def assign_statement(
                 status_code=400,
                 detail="Assignee must be an active user in this tenant"
             )
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [new_user_id])
 
     statement.assigned_to_user_id = new_user_id
     statement.updated_at = datetime.utcnow()
@@ -714,9 +716,11 @@ def list_tenant_users_for_assignment(
     though users exist. The simple query below is correct for the per-tenant
     DB model used here.
     """
+    from ....routers.auth_router import platform_account
+
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active == True)
+        .filter(GRCUser.is_active == True, platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

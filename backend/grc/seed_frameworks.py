@@ -165,10 +165,10 @@ def _determine_control_attributes(control_name, control_statement):
 def seed_frameworks(session=None):
     """
     DEPRECATED: Pre-seeded frameworks have been removed from the system.
-    Users should now upload their own framework documents via the Framework Upload feature.
+    Frameworks are loaded by the platform (scripts/batch_parse_frameworks.py); the app no longer uploads them.
     Kept as a no-op so tenant provisioning can call it idempotently.
     """
-    print("Pre-seeded frameworks disabled. Use Framework Upload to add frameworks.")
+    print("Pre-seeded frameworks disabled. Frameworks are loaded by scripts/batch_parse_frameworks.py.")
     return
 
     # Legacy code below - kept for reference but never executed
@@ -2090,6 +2090,8 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
             control_description=control_data.get("control_description"),
             # Assessment criteria (numbered sub-points of the spec).
             assessment_criteria=control_data.get("assessment_criteria", []),
+            # Priority tier, applicability, sub-controls... a framework's own hierarchy (UAE IA); None for the others.
+            native_attributes=control_data.get("native_attributes"),
             section_number=_cap_control("section_number", 50),
             parent_section=_cap_control("parent_section", 255),
             ai_confidence=control_data.get("ai_confidence"),

@@ -1,4 +1,5 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import exclude_restricted
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -584,6 +585,9 @@ def replace_feed_assignments(
             if not role:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Role {raw.id} not found")
             normalized.append(("role", None, int(raw.id)))
+    from ....routers.auth_router import refuse_imported_accounts
+    had = [uid for (uid,) in db.query(RegulatoryFeedAssignment.user_id).filter(RegulatoryFeedAssignment.feed_source_id == source_id)]
+    refuse_imported_accounts(db, [uid for _, uid, _ in normalized], kept=had)
 
     db.query(RegulatoryFeedAssignment).filter(
         RegulatoryFeedAssignment.feed_source_id == source_id
@@ -788,7 +792,8 @@ def analyze_feed_item(
         Framework.is_active == True
     ).all()
 
-    controls = db.query(NormalizedControl).all()
+    # Listed to the model by name; SCF control names may not reach it (CC BY-ND).
+    controls = exclude_restricted(db.query(NormalizedControl), NormalizedControl).all()
     
     policies = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id == tenant_id,

@@ -120,7 +120,12 @@ def _cvss_rule_techniques(cvss: dict) -> List[dict]:
 
     if av == "N":
         add("T1190", "high", "AV:N", "network attack vector — exploit of a public-facing application")
-        add("T1210", "medium", "AV:N", "network attack vector — exploitation of a remote service")
+        # NOTE: T1210 (Exploitation of Remote Services) is deliberately NOT added on AV:N.
+        # MITRE files it under Lateral Movement (a late tactic), so adding it to every
+        # network finding put a lone technique out at stage ~11 with empty stages before it —
+        # the chain "jumped" from Initial Access straight to Lateral Movement. T1190 already
+        # captures "network exploit = entry". A finding whose CWE genuinely maps to lateral
+        # movement still gets T1210 from the CAPEC/analyst tiers; this only drops the blanket one.
         add(_RECON_TECHNIQUE, "high", "AV:N", "network-reachable target is scannable")
     elif av == "A":
         add("T1210", "high", "AV:A", "adjacent-network attack vector — exploitation of a remote service")

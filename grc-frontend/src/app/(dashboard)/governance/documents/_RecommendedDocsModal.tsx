@@ -10,12 +10,12 @@
 //
 // Every source funnels its pick through a single `onPick` so the parent page
 // (governance/documents) only has to wire ONE handler. The pick discriminates
-// on `.kind` so the parent can decide how to seed the AI Draft modal.
+// on `.kind`; the parent opens the pick in the AI Studio as a new draft.
 //
 // Presentation follows the platform charter: one teal brand (primary-*),
 // flat (no gradients), hairline slate borders, semantic-only status chips.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   X, Search, Sparkles, BookMarked, FileText, Layers,
@@ -23,15 +23,44 @@ import {
   Tag, Hash, Info, Scale, Globe, Building2, CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
+import { InfoTip } from '@/components/ui/InfoTip';
 import apiClient, { certificationsApi } from '@/lib/api';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
+import { BTN } from '@/components/governance/docUi';
 import {
   RECOMMENDED_DOCS,
   RECOMMENDED_CATEGORIES,
   type RecommendedDoc,
   type RecommendedCategory,
 } from './_recommendedDocsCatalog';
+import { fileKind, ncaName } from './_ncaName';
 import type { CertificationJourney } from '@/types';
+
+/** A popup as a dialog: the focus moves into it (unless a field already took it) and back where it was when it closes; Escape
+ *  closes it, the preview opened inside it first. Spread `props` on the panel and give `titleId` to its title. */
+function useDialog(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const close = useRef(onClose);
+  close.current = onClose;
+  // read while rendering, before an autofocused field inside takes the focus
+  const [opener] = useState(() => (typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)));
+  useEffect(() => {
+    const node = ref.current;
+    if (!node?.contains(document.activeElement)) node?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || node?.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      setTimeout(() => { if (!node?.isConnected) opener?.focus?.(); }, 0);     // closed, not re-run (dev strict mode)
+    };
+  }, [opener]);
+  return { titleId, props: { ref, role: 'dialog', 'aria-modal': true, 'aria-labelledby': titleId, tabIndex: -1 } as const };
+}
 
 // ─── Pick payloads ──────────────────────────────────────────────────────
 export type DocumentTemplatePick =
@@ -65,6 +94,8 @@ interface LegacyProps {
    * path fires (legacy behaviour).
    */
   onPickAny?: (pick: DocumentTemplatePick) => void;
+  /** While the picked template is being opened in the AI Studio. */
+  busy?: boolean;
 }
 
 // ─── Source (rail) definitions ──────────────────────────────────────────
@@ -155,7 +186,7 @@ const ARTIFACT_DOC_TYPE_MAP = (artifactType: string): 'policy' | 'standard' | 'p
 const ALL: 'All' = 'All';
 
 // ─── Main ───────────────────────────────────────────────────────────────
-export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: LegacyProps) {
+export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy = false }: LegacyProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('standard');
   const [search, setSearch] = useState('');
 
@@ -167,26 +198,22 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
   };
 
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'templates';
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="flex w-full max-w-5xl max-h-[94vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-start gap-3.5 border-b border-slate-200 px-5 py-4">
-          <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 shrink-0">
-            <BookMarked className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
+      <div {...dialog.props} className="flex w-full max-w-5xl max-h-[94vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none">
+        {/* Header: the title, and an (i) for what the popup used to explain in a paragraph and in its foot */}
+        <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-3.5">
+          <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 shrink-0">
+            <BookMarked className="h-4 w-4 text-primary-700" strokeWidth={1.75} />
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-900 flex items-center gap-2">
-              Document Templates
-              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-700">
-                <Sparkles className="h-3 w-3" />
-                AI-ready
-              </span>
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">
+              <span id={dialog.titleId}>Templates</span>
             </h2>
-            <p className="mt-0.5 text-xs sm:text-sm text-slate-500 max-w-2xl">
-              Standard, NCA Saudi and per-framework artifact templates open in the editor ready to edit and save; reference laws open the AI Draft flow.
-            </p>
+            <InfoTip label="About templates"
+              text="A template opens in the Comply AI Studio as a new draft, ready for you and Comply Agent to work on; it stays a draft until you move it to the library. A reference law starts one with the law attached." />
           </div>
           <button
             onClick={onClose}
@@ -201,9 +228,6 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
           {/* Source rail */}
           <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 p-2 sm:w-[210px] sm:flex-col sm:gap-0.5 sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3">
-            <p className="hidden sm:block px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Template source
-            </p>
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
@@ -227,13 +251,12 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
                     <span className={`block truncate text-[13px] font-semibold ${active ? 'text-primary-700' : 'text-slate-800'}`}>
                       {tab.railLabel}
                     </span>
-                    <span
-                      className={`mt-0.5 inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-semibold uppercase tracking-wide ${
-                        tab.action === 'ai' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {tab.action === 'ai' ? <><Sparkles className="h-2.5 w-2.5" />AI Draft</> : 'Editor'}
-                    </span>
+                    {/* only the source Comply Agent drafts from says so; the others are plain templates */}
+                    {tab.action === 'ai' && (
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary-700">
+                        <Sparkles className="h-2.5 w-2.5" aria-hidden />Comply Agent
+                      </span>
+                    )}
                   </span>
                 </button>
               );
@@ -250,7 +273,8 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Search ${activeLabel.toLowerCase()}…`}
+                  placeholder="Search…"
+                  aria-label={`Search ${activeLabel}`}
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   autoFocus
                 />
@@ -278,18 +302,15 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-slate-200 px-5 py-3 bg-white flex items-center justify-between gap-3">
-          <p className="text-[11px] text-slate-400">
-            Editor sources open ready to edit &amp; save; reference laws open the AI Draft modal.
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3.5 py-1.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium"
-          >
-            Cancel
-          </button>
+        {/* Footer: what is happening, when something is; the header's (i) says the rest */}
+        <div className="border-t border-slate-200 px-5 py-3 bg-white flex items-center justify-end gap-3">
+          {busy && (
+            <p role="status" className="mr-auto inline-flex items-center gap-1.5 text-[12px] font-medium text-[#0b6b58]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Opening…
+            </p>
+          )}
+          <button type="button" onClick={onClose} className={BTN}>Cancel</button>
         </div>
       </div>
     </div>
@@ -362,7 +383,7 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState message="No documents match your search." />
+        <EmptyState message="No matches" />
       ) : (
         <div className="space-y-5">
           {Array.from(groupedByCategory.entries()).map(([cat, docs]) => (
@@ -381,6 +402,7 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
                       key={d.title}
                       type="button"
                       onClick={() => onPick(d)}
+                      title="Opens in the Comply AI Studio"
                       className="group relative flex flex-col text-left rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
                       <div className="flex items-start gap-3">
@@ -395,13 +417,10 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
                         </div>
                       </div>
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium capitalize border ${DOC_TYPE_BADGE}`}>
                           {d.doc_type}
                         </span>
-                        <span className="text-[10px] font-medium text-slate-400 group-hover:text-primary-700 inline-flex items-center gap-1 transition-colors">
-                          Opens in editor
-                          <ChevronRight className="h-3 w-3" />
-                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-primary-700 transition-colors" aria-hidden />
                       </div>
                     </button>
                   );
@@ -426,7 +445,8 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
     queryKey: ['nca-templates-list'],
     queryFn: async () => {
       const r = await apiClient.get('/governance/nca-templates');
-      return r.data;
+      // names, not file names: shown here, in the preview and as the new document's title
+      return { ...r.data, templates: (r.data?.templates ?? []).map((t: NcaTemplate) => ({ ...t, title: ncaName(t.title) })) };
     },
     staleTime: 5 * 60_000,
   });
@@ -463,19 +483,17 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
     return (
       <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
         <AlertCircle className="h-4 w-4" />
-        Failed to load NCA templates.
+        Could not load templates
       </div>
     );
   }
 
-  if (filtered.length === 0) return <EmptyState message="No NCA templates match your search." />;
+  if (filtered.length === 0) return <EmptyState message="No matches" />;
 
   return (
     <>
       <div className="space-y-5">
-        <p className="text-[11px] text-slate-500">
-          {data.total} reference documents from the NCA Saudi catalogue. Preview opens a full rendered view — headings, tables, and lists are styled exactly like the document viewer.
-        </p>
+        <p className="text-xs text-slate-500">{data.total} documents</p>
         {Array.from(groupedByCategory.entries()).map(([cat, items]) => (
           <section key={cat}>
             <div className="flex items-center gap-2 mb-2">
@@ -495,7 +513,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900 truncate">{t.title}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{t.filename}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{fileKind(t.filename)}</p>
                   </div>
                   <button
                     type="button"
@@ -511,7 +529,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                       toast({
                         type: 'info',
                         title: 'Opening template',
-                        message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
+                        message: `Opening "${t.title}" in the Comply AI Studio.`,
                       });
                       onPick(t);
                     }}
@@ -535,7 +553,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
+              message: `Opening "${t.title}" in the Comply AI Studio.`,
             });
             onPick(t);
           }}
@@ -563,17 +581,18 @@ function NcaPreviewPopup({
     },
     staleTime: 5 * 60_000,
   });
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         {/* Header */}
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <FileText className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={template.title}>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={template.title}>
               {template.title}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
@@ -581,7 +600,7 @@ function NcaPreviewPopup({
                 {template.category}
               </span>
               <span className="text-slate-300">·</span>
-              <span className="truncate">{template.filename}</span>
+              <span className="truncate">{fileKind(template.filename)}</span>
               {data && (
                 <>
                   <span className="text-slate-300">·</span>
@@ -626,10 +645,10 @@ function NcaPreviewPopup({
           ) : error || !data ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              Failed to load template content.
+              Could not load the template
             </div>
           ) : !data.content?.trim() ? (
-            <p className="text-sm text-slate-500">This template is empty.</p>
+            <p className="text-sm text-slate-500">This template is empty</p>
           ) : (
             // Render via the shared component so headings, tables, lists,
             // and AI-distortion repairs all match the regular document
@@ -638,16 +657,10 @@ function NcaPreviewPopup({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer: where it comes from, and Close */}
         <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Source: NCA Saudi reference catalogue.</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1 rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-          >
-            Close
-          </button>
+          <span>NCA Saudi catalogue</span>
+          <button type="button" onClick={onClose} className={BTN}>Close</button>
         </div>
       </div>
     </div>
@@ -693,20 +706,21 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
     return (
       <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
         <AlertCircle className="h-4 w-4" />
-        Failed to load reference laws.
+        Could not load laws
       </div>
     );
   }
   if (filtered.length === 0) {
-    return <EmptyState message={search ? 'No reference laws match your search.' : 'No reference laws available yet.'} />;
+    return <EmptyState message={search ? 'No matches' : 'No laws yet'} />;
   }
 
   return (
     <>
       <div className="space-y-3">
-        <p className="text-[11px] text-slate-500">
-          {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Drafting generates a
-          new tenant-specific document (policy, charter, procedure…) that complies with — and cites — the law&apos;s articles.
+        <p className="flex items-center gap-1 text-xs text-slate-500">
+          {data.total} {data.total === 1 ? 'law' : 'laws'}
+          <InfoTip label="About reference laws"
+            text="Each starts a new document in the Comply AI Studio with the law attached, for Comply Agent to draft so that it complies with, and cites, the law's articles." />
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map((law) => (
@@ -773,15 +787,16 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                   onClick={() => {
                     toast({
                       type: 'info',
-                      title: 'Opening AI Draft',
-                      message: `Drafting from "${law.short_name || law.name}". Pick the document type and generate.`,
+                      title: 'Opening the Comply AI Studio',
+                      message: `"${law.short_name || law.name}" is attached for Comply Agent to draft from.`,
                     });
                     onPick(law);
                   }}
+                  title="Comply Agent drafts a document that complies with, and cites, these articles"
                   className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
                 >
                   <Sparkles className="h-3 w-3" />
-                  AI Draft
+                  Draft from it
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -797,8 +812,8 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
             setPreviewLaw(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Drafting from "${l.short_name || l.name}". Pick the document type and generate.`,
+              title: 'Opening the Comply AI Studio',
+              message: `"${l.short_name || l.name}" is attached for Comply Agent to draft from.`,
             });
             onPick(l);
           }}
@@ -826,16 +841,17 @@ function ReferenceLawPreviewPopup({
     },
     staleTime: 5 * 60_000,
   });
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <Scale className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={law.name}>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={law.name}>
               {law.name}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
@@ -857,10 +873,11 @@ function ReferenceLawPreviewPopup({
           <button
             type="button"
             onClick={() => onDraft(law)}
+            title="Comply Agent drafts a document that complies with, and cites, these articles"
             className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100 shrink-0"
           >
             <Sparkles className="h-3 w-3" />
-            AI Draft
+            Draft from it
           </button>
           <button
             onClick={onClose}
@@ -879,24 +896,17 @@ function ReferenceLawPreviewPopup({
           ) : error || !data ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              Failed to load law text.
+              Could not load the law
             </div>
           ) : !data.content?.trim() ? (
-            <p className="text-sm text-slate-500">This reference law has no text.</p>
+            <p className="text-sm text-slate-500">This law has no text</p>
           ) : (
             <GovernanceDocumentMarkdown content={data.content} />
           )}
         </div>
 
-        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Authoritative reference — the AI draft must comply with and cite these articles.</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1 rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-          >
-            Close
-          </button>
+        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-end">
+          <button type="button" onClick={onClose} className={BTN}>Close</button>
         </div>
       </div>
     </div>
@@ -1057,20 +1067,15 @@ function ArtifactsTab({
 
   if (filtered.length === 0) {
     return (
-      <EmptyState message={search ? 'No artifacts match your search.' : 'No artifact catalogues available yet.'} />
+      <EmptyState message={search ? 'No matches' : 'Nothing here yet'} />
     );
   }
 
   return (
     <>
       <div className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-[11px] text-slate-500">
-            Every compliance framework&apos;s artifacts, grouped by framework and ordered so
-            generated (Ready) ones surface first. Drafting auto-links the new document back
-            to its source framework when you have a journey for it.
-          </p>
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+        <div className="flex items-center justify-between gap-2">
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
             <Layers className="h-3 w-3" />
             {filtered.reduce((s, g) => s + g.items.length, 0)} artifacts · {filtered.length} frameworks
             {(() => {
@@ -1078,6 +1083,8 @@ function ArtifactsTab({
               return ready > 0 ? ` · ${ready} ready` : '';
             })()}
           </span>
+          <InfoTip align="end" label="About artifact templates"
+            text="Grouped by framework, with the generated (Ready) ones first. Each opens in the Comply AI Studio as a new draft." />
         </div>
         <div className="space-y-2">
           {filtered.map((group, idx) => {
@@ -1117,12 +1124,6 @@ function ArtifactsTab({
                       </span>
                     ) : null;
                   })()}
-                  {group.frameworkUploadedId && (
-                    <span className="ml-auto text-[10px] text-primary-700 font-medium inline-flex items-center gap-1">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      Auto-links framework
-                    </span>
-                  )}
                 </button>
                 {isOpen && (
                   <div className="border-t border-slate-100 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-slate-50">
@@ -1145,9 +1146,7 @@ function ArtifactsTab({
                             toast({
                               type: 'info',
                               title: 'Opening template',
-                              message: `Loading "${item.name}" (${group.framework}) into the editor — edit and save.${
-                                group.frameworkUploadedId ? ' Framework auto-selected.' : ''
-                              }`,
+                              message: `Opening "${item.name}" (${group.framework}) in the Comply AI Studio.`,
                             });
                             onPick(item, group.framework, group.frameworkUploadedId);
                           }}
@@ -1172,9 +1171,7 @@ function ArtifactsTab({
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Loading "${picked.item.name}" (${picked.frameworkName}) into the editor — edit and save.${
-                picked.frameworkUploadedId ? ' Framework auto-selected.' : ''
-              }`,
+              message: `Opening "${picked.item.name}" (${picked.frameworkName}) in the Comply AI Studio.`,
             });
             onPick(picked.item, picked.frameworkName, picked.frameworkUploadedId);
           }}
@@ -1226,9 +1223,7 @@ function ArtifactCard({
           </div>
           {/* Full description — no line-clamp; this was the missing context. */}
           <p className={`mt-1 text-[12px] leading-relaxed ${hasDescription ? 'text-slate-600' : 'text-slate-400 italic'}`}>
-            {hasDescription
-              ? item.description
-              : `No catalogue description for this artifact. AI Draft will work from the title and ${docType} scaffold.`}
+            {hasDescription ? item.description : 'No description'}
           </p>
         </div>
       </div>
@@ -1254,18 +1249,18 @@ function ArtifactCard({
       {/* Action row */}
       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border ${DOC_TYPE_BADGE}`}>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium capitalize border ${DOC_TYPE_BADGE}`}>
             {docType}
           </span>
           {item.mandatory && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border bg-rose-50 text-rose-700 border-rose-200">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium border bg-rose-50 text-rose-700 border-rose-200">
               Mandatory
             </span>
           )}
           {item.has_content && (
             <span
               title="A ready-to-edit document body has been generated for this artifact"
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border bg-emerald-50 text-emerald-700 border-emerald-200"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border bg-emerald-50 text-emerald-700 border-emerald-200"
             >
               <CheckCircle2 className="h-2.5 w-2.5" />
               Ready
@@ -1361,16 +1356,17 @@ function ArtifactDetailsPopup({
     genMode === 'table' ? { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' }
       : genMode === 'guide' ? { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' }
         : { t: 'Document', c: 'bg-primary-50 text-primary-700' };
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <Layers className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">{item.name}</h2>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">{item.name}</h2>
             <p className="mt-0.5 text-[11px] text-slate-500">
               {frameworkName} · {item.artifact_type}
             </p>
@@ -1386,13 +1382,13 @@ function ArtifactDetailsPopup({
 
         <div className="overflow-y-auto px-5 py-4 flex-1 space-y-4">
           <section>
-            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Description</h3>
+            <h3 className="text-xs font-semibold text-slate-500 mb-1">Description</h3>
             <p className="text-sm leading-relaxed text-slate-800 whitespace-pre-wrap">
-              {item.description?.trim() || 'No catalogue description provided.'}
+              {item.description?.trim() || 'No description'}
             </p>
           </section>
           <section>
-            <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-2">Metadata</h3>
+            <h3 className="text-xs font-semibold text-slate-500 mb-2">Metadata</h3>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
               {rows
                 .filter((r) => r.value !== null && r.value !== undefined && String(r.value).trim().length > 0)
@@ -1409,7 +1405,7 @@ function ArtifactDetailsPopup({
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h3 className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Generated content</h3>
+                <h3 className="text-xs font-semibold text-slate-500">Generated content</h3>
                 {gen?.found && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${genBadge.c}`}>{genBadge.t}</span>}
               </div>
               {gen?.found && (
@@ -1425,8 +1421,8 @@ function ArtifactDetailsPopup({
               )}
             </div>
             {genLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6 text-xs text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading generated content…
+              <div className="flex items-center justify-center py-6 text-slate-400" role="status" aria-label="Loading generated content">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               </div>
             ) : gen?.found && gen.content ? (
               <div className="max-h-[42vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
@@ -1434,33 +1430,24 @@ function ArtifactDetailsPopup({
               </div>
             ) : (
               <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs italic text-slate-400">
-                Not generated yet — run the artifact-content generator for this framework, then it appears here.
+                Not generated yet
               </p>
             )}
           </section>
         </div>
 
-        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-slate-500">
-            Opens the template in the editor, ready to edit &amp; save.
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1 rounded-md border border-slate-200 bg-white text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={onDraft}
-              className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-primary-200 bg-primary-50 text-sm font-medium text-primary-700 hover:bg-primary-100"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Use template
-            </button>
-          </div>
+        {/* the template opens in the Comply AI Studio as a new draft: the popup's (i) said so */}
+        <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className={BTN}>Close</button>
+          <button
+            type="button"
+            onClick={onDraft}
+            title="Opens in the Comply AI Studio as a new draft"
+            className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg border border-primary-200 bg-primary-50 text-sm font-medium text-primary-700 hover:bg-primary-100"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Use template
+          </button>
         </div>
       </div>
     </div>
@@ -1471,8 +1458,8 @@ function ArtifactDetailsPopup({
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <Search className="h-10 w-10 text-slate-300" />
-      <p className="mt-3 text-sm text-slate-500">{message}</p>
+      <Search className="h-8 w-8 text-slate-300" aria-hidden />
+      <p className="mt-2 text-sm text-slate-500">{message}</p>
     </div>
   );
 }

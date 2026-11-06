@@ -18,7 +18,7 @@ from ....schemas import (
     GRCVulnWorkflowHistoryResponse, VulnWorkflowTransitionRequest, VulnAvailableTransitionResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import PLATFORM_GRANT, require_auth, get_user_tenants, get_user_primary_tenant
 from ..services.email_service import EmailService
 import logging
 
@@ -718,7 +718,8 @@ def perform_vulnerability_transition(
         from ....models import UserRole, Role
         user_roles = db.query(Role.name).join(UserRole).filter(
             UserRole.user_id == current_user.id,
-            UserRole.tenant_id == vuln.tenant_id
+            UserRole.tenant_id == vuln.tenant_id,
+            PLATFORM_GRANT,
         ).all()
         user_role_names = [r[0].lower() for r in user_roles]
         allowed_roles_lower = [r.lower() for r in transition.allowed_roles]

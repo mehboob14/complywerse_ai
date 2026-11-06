@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Shared tab bar at the top of /frameworks and /frameworks/manage. Drives
 // navigation between the dashboard surface (compliance posture + launcher)
-// and the management surface (processing / active / available frameworks).
+// and the management surface (active journeys / available frameworks).
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';

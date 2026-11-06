@@ -19,9 +19,12 @@ from pydantic import BaseModel
 from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
-    Risk, RegulatoryChange, GRCUser, Tenant, get_db, Exception,
+    Risk, RegulatoryChange, GRCUser, Tenant, get_db,
     UploadedFramework, ParsedFrameworkControl, MeetingAttachment
 )
+# the control-exception model under its own name: imported as "Exception" it hid Python's, and every `except Exception:` here
+# raised TypeError instead of catching the error
+from ....models import Exception as ControlException
 from ....schemas import (
     GovernanceCommitteeCreate, GovernanceCommitteeUpdate, GovernanceCommitteeResponse,
     CommitteeMemberCreate, CommitteeMemberResponse,
@@ -33,6 +36,7 @@ from ....schemas import (
     CommitteeDashboardStats, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .. import committee_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +153,7 @@ class ManualOversightActionCreate(BaseModel):
     title: str
     description: Optional[str] = None
     action_type: str = "follow_up"
+    priority: Optional[str] = None
     assigned_to: Optional[int] = None
     due_date: Optional[datetime] = None
     linked_policy_id: Optional[int] = None
@@ -322,11 +327,11 @@ def serialize_minutes(minutes: MeetingMinutes) -> dict:
     }
 
 
-def serialize_action(action: OversightAction) -> dict:
+def serialize_action(action: OversightAction, sla_settings: Optional[dict] = None) -> dict:
     is_overdue = False
     if action.status in ["open", "in_progress"] and action.due_date:
         is_overdue = action.due_date < datetime.utcnow()
-    
+
     return {
         "id": action.id,
         "tenant_id": action.tenant_id,
@@ -343,6 +348,9 @@ def serialize_action(action: OversightAction) -> dict:
         "assignee_name": action.assignee.display_name if action.assignee else None,
         "due_date": action.due_date,
         "status": action.status,
+        "priority": action.priority or "medium",
+        "sla": committee_tasks.sla_of(action, sla_settings),
+        "critical_task_id": action.critical_task_id,
         "completed_at": action.completed_at,
         "completion_notes": action.completion_notes,
         "linked_policy_id": action.linked_policy_id,
@@ -467,6 +475,8 @@ def create_committee(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User is not assigned to any tenant"
             )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [committee.chair_id, committee.secretary_id])
     
     db_committee = GovernanceCommittee(
         tenant_id=tenant_id,
@@ -1610,11 +1620,11 @@ def get_suggested_agenda_items(
             "document_status": doc.status,
         })
     
-    pending_exceptions = db.query(Exception).filter(
-        Exception.tenant_id == meeting.tenant_id,
-        Exception.status == "pending"
+    pending_exceptions = db.query(ControlException).filter(
+        ControlException.tenant_id == meeting.tenant_id,
+        ControlException.status == "pending"
     ).all()
-    
+
     for exc in pending_exceptions:
         suggested_items.append({
             "source_type": "exception",
@@ -1623,7 +1633,7 @@ def get_suggested_agenda_items(
             "description": exc.justification or f"Review risk exception: {exc.title}",
             "item_type": "decision",
             "linked_document_id": None,
-            "linked_risk_id": exc.id,
+            "linked_risk_id": None,             # an exception is not a risk: its id names no risk
             "linked_regulatory_change_id": None,
             "exception_status": exc.status,
         })
@@ -1708,26 +1718,27 @@ def auto_populate_agenda_from_pending_approvals(
             db.add(agenda_item)
             created_items.append(agenda_item)
     
+    exception_items = 0
     if opts.include_exceptions:
-        pending_exceptions = db.query(Exception).filter(
-            Exception.tenant_id == meeting.tenant_id,
-            Exception.status == "pending"
+        pending_exceptions = db.query(ControlException).filter(
+            ControlException.tenant_id == meeting.tenant_id,
+            ControlException.status == "pending"
         ).all()
-        
+
         for exc in pending_exceptions:
             current_item_number += 1
-            agenda_item = MeetingAgendaItem(
+            agenda_item = MeetingAgendaItem(          # no risk link: an exception's id names no risk
                 tenant_id=meeting.tenant_id,
                 meeting_id=meeting_id,
                 item_number=current_item_number,
                 title=f"Risk Exception Review: {exc.title}",
                 description=exc.justification or f"Review risk exception: {exc.title}",
                 item_type="decision",
-                linked_risk_id=exc.id,
                 status="pending",
             )
             db.add(agenda_item)
             created_items.append(agenda_item)
+            exception_items += 1
     
     if opts.include_regulatory_changes:
         pending_regulatory_changes = db.query(RegulatoryChange).filter(
@@ -1762,7 +1773,7 @@ def auto_populate_agenda_from_pending_approvals(
         "total_created": len(created_items),
         "by_type": {
             "documents": sum(1 for item in created_items if item.linked_document_id is not None),
-            "exceptions": sum(1 for item in created_items if item.linked_risk_id is not None),
+            "exceptions": exception_items,
             "regulatory_changes": sum(1 for item in created_items if item.linked_regulatory_change_id is not None),
         }
     }
@@ -1977,7 +1988,14 @@ def create_oversight_action(
         OversightAction.committee_id == meeting.committee_id
     ).count()
     action_number = action.action_number or f"ACT-{meeting.committee_id}-{action_count + 1:04d}"
-    
+    try:
+        priority, due_date, raised_at = committee_tasks.prepare(
+            db, meeting.tenant_id, action.priority, action.due_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [action.assigned_to])
+
     db_action = OversightAction(
         tenant_id=meeting.tenant_id,
         committee_id=meeting.committee_id,
@@ -1988,15 +2006,19 @@ def create_oversight_action(
         description=action.description,
         action_type=action.action_type,
         assigned_to=action.assigned_to,
-        due_date=action.due_date,
+        priority=priority,
+        due_date=due_date,
+        created_at=raised_at,
         linked_policy_id=action.linked_policy_id,
         linked_risk_id=action.linked_risk_id,
         created_by=current_user.id,
     )
     db.add(db_action)
+    db.flush()
+    committee_tasks.mirror(db, db_action, current_user.id)
     db.commit()
     db.refresh(db_action)
-    
+
     return serialize_action(db_action)
 
 @router.get("/actions")
@@ -2045,8 +2067,9 @@ def list_actions(
     total = query.count()
     actions = query.order_by(OversightAction.due_date.asc().nullslast()).offset(skip).limit(limit).all()
     
+    sla_settings = {tid: committee_tasks.sla_settings(db, tid) for tid in {a.tenant_id for a in actions}}
     return {
-        "items": [serialize_action(a) for a in actions],
+        "items": [serialize_action(a, sla_settings[a.tenant_id]) for a in actions],
         "total": total,
         "skip": skip,
         "limit": limit
@@ -2076,16 +2099,26 @@ def update_action_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action not found")
     
     update_data = action_update.model_dump(exclude_unset=True)
-    
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[action.assigned_to])
+
     if update_data.get("status") == "completed" and action.status != "completed":
         update_data["completed_at"] = datetime.utcnow()
-    
+    if "priority" in update_data:
+        try:
+            update_data["priority"] = committee_tasks.clean_priority(update_data["priority"])
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        if update_data["priority"] != (action.priority or "medium") and "due_date" not in update_data:
+            update_data["due_date"] = committee_tasks.due_after_reprioritising(db, action, update_data["priority"])
+
     for key, value in update_data.items():
         setattr(action, key, value)
-    
+
+    committee_tasks.mirror(db, action, current_user.id)
     db.commit()
     db.refresh(action)
-    
+
     return serialize_action(action)
 
 
@@ -2119,6 +2152,12 @@ def create_manual_action(
         OversightAction.committee_id == committee.id
     ).count()
     action_number = action.action_number or f"ACT-{committee.id}-{action_count + 1:04d}"
+    try:
+        priority, due_date, raised_at = committee_tasks.prepare(db, committee.tenant_id, action.priority, action.due_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [action.assigned_to])
 
     db_action = OversightAction(
         tenant_id=committee.tenant_id,
@@ -2130,12 +2169,16 @@ def create_manual_action(
         description=action.description,
         action_type=action.action_type,
         assigned_to=action.assigned_to,
-        due_date=action.due_date,
+        priority=priority,
+        due_date=due_date,
+        created_at=raised_at,
         linked_policy_id=action.linked_policy_id,
         linked_risk_id=action.linked_risk_id,
         created_by=current_user.id,
     )
     db.add(db_action)
+    db.flush()
+    committee_tasks.mirror(db, db_action, current_user.id)
     db.commit()
     db.refresh(db_action)
 
@@ -2271,6 +2314,9 @@ def update_committee(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
     
     update_data = committee_update.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("chair_id"), update_data.get("secretary_id")],
+                             kept=[committee.chair_id, committee.secretary_id])
     for key, value in update_data.items():
         setattr(committee, key, value)
     
@@ -2295,7 +2341,9 @@ def delete_committee(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
-    
+
+    for action in db.query(OversightAction).filter(OversightAction.committee_id == committee.id):
+        committee_tasks.drop_twin(db, action)
     db.delete(committee)
     db.commit()
     return None
@@ -2350,7 +2398,10 @@ def add_committee_member(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [member.user_id])
+
     existing = db.query(CommitteeMember).filter(
         CommitteeMember.committee_id == committee_id,
         CommitteeMember.user_id == member.user_id,

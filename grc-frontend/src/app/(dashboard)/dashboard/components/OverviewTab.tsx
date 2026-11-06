@@ -116,7 +116,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
                 </RadarChart>
               </ResponsiveContainer>
             ) : (
-              <ChartEmptyState title="No framework data" description="Upload frameworks to see radar view" icon={<Target className="h-8 w-8" style={{ color: 'var(--color-muted)' }} />} />
+              <ChartEmptyState title="No framework data" description="Framework data appears once frameworks are in the library" icon={<Target className="h-8 w-8" style={{ color: 'var(--color-muted)' }} />} />
             )}
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <ChartEmptyState title="No framework data" description="Upload frameworks to see control implementation" icon={<Shield className="h-8 w-8" style={{ color: 'var(--color-muted)' }} />} />
+              <ChartEmptyState title="No framework data" description="Framework data appears once frameworks are in the library" icon={<Shield className="h-8 w-8" style={{ color: 'var(--color-muted)' }} />} />
             )}
           </div>
         </div>

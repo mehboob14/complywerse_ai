@@ -55,8 +55,16 @@ def _stride_select(items: List[GRCUser], n: int) -> List[GRCUser]:
     return [items[int(i * step)] for i in range(n)]
 
 
+def filter_by_source(users: List[GRCUser], source: str, user_ids_with_source: Set[int]) -> List[GRCUser]:
+    """Users this source knows about: it wrote an entitlement for them, or it
+    created their row (Okta, Google and LDAP import people without roles)."""
+    return [u for u in users
+            if u.id in user_ids_with_source or u.external_provider == source]
+
+
 def build_population(
-    tenant_db, tenant_id: int, review_type: str = "user_access"
+    tenant_db, tenant_id: int, review_type: str = "user_access",
+    source: str | None = None,
 ) -> List[GRCUser]:
     """The users in scope for the review, stable-ordered for reproducibility.
 
@@ -65,12 +73,18 @@ def build_population(
       * user_access        — every user (default)
       * privileged_access  — only users holding a privileged role
       * terminated_access  — only users with a termination date recorded
+
+    `source` narrows it to one connected system (a campaign's `source`, e.g.
+    "digitalocean"), so a review of one system doesn't sample the whole
+    directory. It applies before `review_type`, so the two combine.
     """
-    users = (
-        tenant_db.query(GRCUser)
-        .order_by(GRCUser.id.asc())
-        .all()
-    )
+    users = tenant_db.query(GRCUser).order_by(GRCUser.id.asc()).all()
+    if source:
+        with_source = {
+            row[0] for row in tenant_db.query(UserRole.user_id)
+            .filter(UserRole.source == source).distinct().all()
+        }
+        users = filter_by_source(users, source, with_source)
     if review_type == "privileged_access":
         priv = privileged_user_ids(tenant_db, tenant_id)
         return [u for u in users if u.id in priv]

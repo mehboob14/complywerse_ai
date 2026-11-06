@@ -50,7 +50,7 @@ export default function SelectedColumnList({
   }
 
   return (
-    <div className="max-h-[160px] space-y-1 overflow-auto">
+    <div className="space-y-1">
       {visibleKeys.map((key, idx) => {
         const col = cols.find((c) => c.key === key);
         if (!col) return null;

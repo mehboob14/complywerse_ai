@@ -15,7 +15,8 @@ export interface RowAction {
   key: string;
   label: string;
   icon: React.ElementType;
-  onClick: () => void;
+  /** `anchor`: the box of the ⋯ button, for an action that opens something beside it (Move to…) */
+  onClick: (anchor?: DOMRect) => void;
   variant?: 'default' | 'danger';
   hidden?: boolean;
 }
@@ -69,6 +70,7 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
         onClick={(e) => { e.stopPropagation(); toggle(); }}
         className={`rounded-md p-1.5 transition-colors ${open ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}
         title="Actions"
+        aria-label="Actions"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -89,7 +91,7 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
                 <button
                   key={a.key}
                   role="menuitem"
-                  onClick={() => { setOpen(false); a.onClick(); }}
+                  onClick={() => { const anchor = btnRef.current?.getBoundingClientRect(); setOpen(false); a.onClick(anchor); }}
                   className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${a.variant === 'danger' ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700 hover:bg-slate-50'}`}
                 >
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />

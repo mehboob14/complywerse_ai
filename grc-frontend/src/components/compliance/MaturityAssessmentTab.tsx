@@ -14,7 +14,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Gauge, Loader2, Upload, ChevronRight, Search, Paperclip, FileText, Trash2, Target,
 } from 'lucide-react';
+import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient from '@/lib/api';
+import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 
@@ -47,6 +50,7 @@ interface Item {
   remarks: string | null;
   maturity_score: number | null;
   evidence_count?: number;
+  assignees?: Assignee[];
 }
 interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; }
 
@@ -66,6 +70,10 @@ function EvidencePanel({ assessmentId, itemId }: { assessmentId: number; itemId:
   const [uploading, setUploading] = useState(false);
   const { data: ev = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['maturity-ev', itemId],
+    // The review runs in the background on upload, so poll until every file
+    // has a verdict, then stop.
+    refetchInterval: (q) => (((q.state.data as Record<string, unknown>[] | undefined) || [])
+      .some((row) => !row.quality) ? 4000 : false),
     queryFn: async () => {
       const r = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
       return (r.data?.evidence || r.data || []) as Record<string, unknown>[];
@@ -96,27 +104,45 @@ function EvidencePanel({ assessmentId, itemId }: { assessmentId: number; itemId:
         : list.length === 0 ? <div className="py-1 text-[12px] text-slate-400">No evidence yet.</div>
         : <ul className="space-y-1">{list.map((e, i) => {
             const name = (e.evidence_name || (e.evidence as Record<string, unknown>)?.name || e.file_name || `Evidence ${i + 1}`) as string;
-            return <li key={(e.id as number) ?? i} className="flex items-center gap-2 text-[12px] text-slate-700"><FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span></li>;
+            return (
+              <li key={(e.id as number) ?? i} className="text-[12px] text-slate-700">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span>
+                </div>
+                {typeof e.evidence_id === 'number' && (
+                  <EvidenceQualityNote
+                    assessmentId={assessmentId}
+                    itemId={itemId}
+                    evidenceId={e.evidence_id as number}
+                    quality={(e.quality as EvidenceQuality | null) ?? null}
+                    onRechecked={() => qc.invalidateQueries({ queryKey: ['maturity-ev', itemId] })}
+                  />
+                )}
+              </li>
+            );
           })}</ul>}
     </div>
   );
 }
 
-export default function MaturityAssessmentTab({ format }: { format: string }) {
+/** `assessmentId`: the assessment to show (made for one function); without it the newest of its format, as before. `allowUpload`: the workbook is the questionnaire's, not a scoped assessment's. */
+export default function MaturityAssessmentTab({ format, assessmentId, allowUpload = true }: { format: string; assessmentId?: number; allowUpload?: boolean }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [openDom, setOpenDom] = useState<string | null>(null);
   const [evOpen, setEvOpen] = useState<number | null>(null);
+  const [aiFor, setAiFor] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const m = META[format] || { title: 'Cyber Maturity', subtitle: 'Maturity assessment' };
 
   const { data: list = [], isLoading: listLoading } = useQuery<{ id: number }[]>({
     queryKey: ['maturity-assessments', format],
-    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: format } })).data?.assessments || [],
+    enabled: assessmentId == null,
+    queryFn: async () => (await apiClient.get('/compliance/assessments', { params: { limit: 50, assessment_format: format, scope_model: 'none' } })).data?.assessments || [],
     staleTime: 30_000,
   });
-  const activeId = list[0]?.id ?? null;
+  const activeId = assessmentId ?? list[0]?.id ?? null;
 
   const { data: detail, isLoading: detailLoading } = useQuery<Detail>({
     queryKey: ['maturity-detail', activeId],
@@ -185,6 +211,8 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
   const term = search.trim().toLowerCase();
   const answeredPct = overall.total ? Math.round((overall.answered / overall.total) * 100) : 0;
 
+  const aiItem = aiFor != null ? (detail?.items || []).find((x) => x.id === aiFor) : undefined;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -200,7 +228,7 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm" className="hidden" onChange={onUpload} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} style={allowUpload ? PRIMARY : { display: 'none' }} className="inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold hover:opacity-90 disabled:opacity-60">
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? 'Uploading…' : activeId ? 'Re-upload Excel' : 'Upload Excel'}
           </button>
           {activeId && (
@@ -330,8 +358,13 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
                                   {mm.target != null && <span className="inline-flex items-center gap-0.5"><Target className="h-2.5 w-2.5" />target L{mm.target}</span>}
                                 </div>
                               </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['maturity-detail', activeId] })} />
+                              </div>
                               <div className="flex shrink-0 flex-col items-end gap-1">
                                 <div className="flex items-center gap-1">
+                                  <AiEvidenceButton assessmentId={activeId!} itemId={it.id} active={aiFor === it.id} onOpen={() => setAiFor(it.id)} />
                                   <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence"
                                     className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
                                     style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}>
@@ -375,6 +408,13 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
             })}
           </div>
         </>
+      )}
+      {aiItem && activeId != null && (
+        <AiEvidenceDialog assessmentId={activeId} item={aiItem} context={detail?.name} onClose={() => setAiFor(null)}
+          onLinked={() => {
+            qc.invalidateQueries({ queryKey: ['maturity-ev', aiItem.id] });
+            qc.invalidateQueries({ queryKey: ['maturity-detail', activeId] });
+          }} />
       )}
     </div>
   );

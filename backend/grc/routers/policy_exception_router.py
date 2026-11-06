@@ -2,6 +2,7 @@ from ..config import get_openai_api_key, get_openai_model
 
 from typing import List, Optional
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 import json
 import logging
 import os
@@ -11,11 +12,90 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..models import PolicyException, PolicyExceptionComment, GovernanceDocument, GRCUser, get_db
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, tenant_permission_names
 from ..services import exception_posture
 
 router = APIRouter(prefix="/policy-exceptions", tags=["Policy Exceptions"])
 logger = logging.getLogger(__name__)
+
+# Who may do what with an exception, enforced here (governance:policy_exceptions:* in Administration > Roles; an administrator
+# holds every right): raise one (create); change or submit one - its requester with the create right, anyone with the edit
+# right; delete a draft - its requester with the create right, or the delete right; decide one (approve, reject, revoke) - the
+# approve right, never on an exception one requested oneself (four eyes, administrators included).
+_RIGHTS = ("create", "edit", "delete", "approve")
+_EDITABLE = ("draft", "pending_approval")       # an approved exception's dates and scope are what was approved
+CREATE_REFUSED = "Only someone allowed to request policy exceptions can raise one."
+CHANGE_REFUSED = "Only the person who requested this exception, or someone allowed to edit policy exceptions, can change or submit it."
+DELETE_REFUSED = "Only the person who requested this exception, or someone allowed to delete policy exceptions, can delete it."
+COMMENT_REFUSED = "Only people allowed to request, edit or approve policy exceptions can comment on one."
+DECIDE_REFUSED = "Only someone allowed to approve policy exceptions can approve, reject or revoke one."
+OWN_REFUSED = "You requested this exception, so someone else who may approve exceptions has to decide it."
+APPROVED_LOCKED = ("An approved exception cannot be changed: its dates and scope are what was approved. "
+                   "Request a new exception, or revoke this one.")
+
+
+def _held(db: Session, user: GRCUser) -> set:
+    """The policy-exception rights the person holds (has_tenant_permission's rule, read once)."""
+    if is_tenant_admin(db, user):
+        return set(_RIGHTS)
+    names = tenant_permission_names(db, user)
+    return {r for r in _RIGHTS if f"governance:policy_exceptions:{r}" in names}
+
+
+def _viewer(db: Session, user: GRCUser, exceptions) -> SimpleNamespace:
+    """What one person may do and which document titles they may see, for these exceptions; the approval of each one that goes
+    through a rule (exception_approvals) and the department tree its unit is named from."""
+    from ..modules.governance import exception_approvals, exception_types
+    from ..modules.governance.permissions import readable_among
+    from ..services import org_departments
+
+    exceptions = list(exceptions)
+    held = _held(db, user)
+    approvals = exception_approvals.bulk_views(db, exceptions, user.id)
+    if approvals and not held:      # who decided what, with their words: for people who work with exceptions and those raising or asked about this one
+        mine = {e.id for e in exceptions if e.requested_by == user.id} | exception_approvals.involved_ids(db, approvals, user.id)
+        approvals = {eid: view for eid, view in approvals.items() if eid in mine}
+    tenants = {e.tenant_id for e in exceptions}
+    return SimpleNamespace(id=user.id, held=held, readable=readable_among(db, user, [e.document_id for e in exceptions]),
+                           approvals=approvals, trees={t: org_departments.Tree.load(db, t) for t in tenants},
+                           types={t: exception_types.labels(db, t) for t in tenants if any(e.tenant_id == t and e.exception_type for e in exceptions)})
+
+
+def _may_change(v, exc) -> bool:
+    return "edit" in v.held or (exc.requested_by == v.id and "create" in v.held)
+
+
+def _may_delete(v, exc) -> bool:
+    return "delete" in v.held or (exc.requested_by == v.id and "create" in v.held)
+
+
+def _may_decide(v, exc) -> bool:
+    return exc.requested_by != v.id and "approve" in v.held
+
+
+def _refuse(detail: str):
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def _ensure_decider(v, exc) -> None:
+    if "approve" not in v.held:
+        _refuse(DECIDE_REFUSED)
+    if exc.requested_by == v.id:
+        _refuse(OWN_REFUSED)
+
+
+def _ensure_editable(exc) -> None:
+    if exc.status in _EDITABLE:
+        return
+    detail = APPROVED_LOCKED if exc.status == "approved" else (
+        f"This exception is {(exc.status or '').replace('_', ' ')} and can no longer be changed. Request a new exception instead.")
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+
+def _log_decision(db: Session, exc: PolicyException, user: GRCUser, what: str, text: Optional[str]) -> None:
+    """A decision is written into the exception's comments too, with who and when: its history."""
+    text = (text or "").strip()
+    db.add(PolicyExceptionComment(exception_id=exc.id, user_id=user.id, comment=f"{what}: {text}" if text else f"{what}."))
 
 # Self-heal the additive columns (linked_asset_ids, closed_at) for tenants
 # provisioned before they existed — create_all only runs at provisioning, and the
@@ -36,10 +116,34 @@ def _ensure_columns(db: Session) -> None:
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS linked_asset_ids JSON"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP"))
         db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS promoted_risk_id INTEGER"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type VARCHAR(40)"))
         db.commit()
         _COLS_ENSURED.add(key)
     except Exception:
         db.rollback()
+
+
+def _clean_department(db: Session, tenant_id: int, value, current: Optional[int] = None) -> Optional[int]:
+    """The unit an exception is raised for (the approval rules of Governance > Settings match on it): nothing, or a department of the
+    organisation at any level; choosing another one than it has means an active one."""
+    if value in (None, "", 0):
+        return None
+    missing = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen does not exist.")
+    try:
+        dept_id = int(value)
+    except (TypeError, ValueError):
+        raise missing from None
+    if dept_id == current:
+        return dept_id
+    from ..models import GRCDepartment
+
+    dept = db.get(GRCDepartment, dept_id)
+    if dept is None or dept.tenant_id != tenant_id:
+        raise missing
+    if dept.is_active is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The department chosen is not active.")
+    return dept_id
 
 
 def _clean_asset_ids(data: dict, db: Session, tenant_ids):
@@ -233,6 +337,17 @@ def _make_snippet(text: str, term: str, width: int = 180) -> str:
     return ("… " if start > 0 else "") + snippet + (" …" if end < len(text) else "")
 
 
+def _as_read(db: Session, user: GRCUser, d: GovernanceDocument):
+    """The document as this person reads it: while a newer version is on its way, the text of the version in force for whoever
+    reads that one (title and description as the document page shows them)."""
+    from types import SimpleNamespace
+    from ..modules.governance.permissions import version_for
+
+    row = version_for(db, user, d)
+    return d if row is None else SimpleNamespace(id=d.id, title=d.title, doc_type=d.doc_type, description=d.description,
+                                                 content=row.content)
+
+
 def _fallback_candidate_exceptions(documents) -> list:
     """Deterministic candidate suggestions when the LLM is unavailable — keeps the
     feature working (no hard failure) without an API key."""
@@ -373,7 +488,8 @@ def get_expiring_soon(
         PolicyException.expiry_date <= threshold,
         PolicyException.expiry_date >= now
     ).order_by(PolicyException.expiry_date.asc()).all()
-    return [_exception_to_dict(e, db) for e in exceptions]
+    v = _viewer(db, current_user, exceptions)
+    return [_exception_to_dict(e, db, v) for e in exceptions]
 
 
 @router.get("/summary")
@@ -422,6 +538,20 @@ def get_exception_analytics(
     if not user_tenants:
         return {"avg_posture": None, "open": 0, "overdue": 0, "aging_buckets": {}, "by_status": {}, "by_priority": {}, "total": 0}
     return exception_posture.analytics(db, user_tenants)
+
+
+@router.get("/waiting-for-me")
+def exceptions_waiting_for_me(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The exceptions that go through an approval rule (Governance > Settings) and wait for this person's decision now."""
+    from ..modules.governance import exception_approvals
+
+    _ensure_columns(db)
+    exceptions = exception_approvals.waiting_for(db, current_user.id, get_user_tenants(current_user, db))
+    v = _viewer(db, current_user, exceptions)
+    return [_exception_to_dict(e, db, v) for e in exceptions]
 
 
 @router.post("/{exception_id}/promote-to-risk")
@@ -497,6 +627,7 @@ def list_exceptions(
     status_filter: Optional[str] = Query(None, alias="status"),
     document_id: Optional[int] = Query(None),
     priority: Optional[str] = Query(None),
+    exception_type: Optional[str] = Query(None),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -517,9 +648,12 @@ def list_exceptions(
         query = query.filter(PolicyException.document_id == document_id)
     if priority:
         query = query.filter(PolicyException.priority == priority)
+    if exception_type:
+        query = query.filter(PolicyException.exception_type == exception_type)
 
     exceptions = query.order_by(PolicyException.created_at.desc()).offset(skip).limit(limit).all()
-    return [_exception_to_dict(e, db) for e in exceptions]
+    v = _viewer(db, current_user, exceptions)
+    return [_exception_to_dict(e, db, v) for e in exceptions]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -532,6 +666,9 @@ def create_exception(
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant")
+    if "create" not in _held(db, current_user):
+        _refuse(CREATE_REFUSED)
+    from ..modules.governance import exception_types
 
     user_tenants = get_user_tenants(current_user, db)
 
@@ -542,10 +679,14 @@ def create_exception(
         ).first()
         if not doc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        from ..modules.governance.permissions import ensure_reader
+        ensure_reader(db, current_user, doc)            # raised against a document the person may open
 
     exception = PolicyException(
         tenant_id=tenant_id,
         document_id=data.get("document_id"),
+        department_id=_clean_department(db, tenant_id, data.get("department_id")),
+        exception_type=exception_types.clean(db, tenant_id, data.get("exception_type")),
         title=data.get("title"),
         description=data.get("description"),
         justification=data.get("justification"),
@@ -563,7 +704,7 @@ def create_exception(
     db.add(exception)
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
 
 
 @router.post("/suggest-content")
@@ -590,8 +731,10 @@ def suggest_exception_content(
     ).first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    from ..modules.governance.permissions import ensure_reader
+    ensure_reader(db, current_user, doc)
 
-    suggestion = _generate_exception_suggestion(title, doc)
+    suggestion = _generate_exception_suggestion(title, _as_read(db, current_user, doc))
     return {
         "title": title,
         "document_id": doc.id,
@@ -624,8 +767,15 @@ def search_policies(
     like = f"%{term}%"
     results = []
     seen_docs = set()
+    from ..models import GovernanceDocumentVersion
+    from ..modules.governance.permissions import visible_filter
 
-    # 1) Document-level matches (title / description / full content)
+    # only documents the person may read (never-published drafts stay with whoever may see them)
+    visible = visible_filter(db, current_user)
+    readable = [visible] if visible is not None else []
+
+    # 1) Document-level matches (title / description / full content). The content of any version can match here; what is
+    # shown is checked below against the text this person reads (the version in force while a newer one is on its way).
     docs = (
         db.query(GovernanceDocument)
         .filter(
@@ -635,7 +785,10 @@ def search_policies(
                 GovernanceDocument.title.ilike(like),
                 GovernanceDocument.description.ilike(like),
                 GovernanceDocument.content.ilike(like),
+                GovernanceDocument.id.in_(db.query(GovernanceDocumentVersion.document_id)
+                                          .filter(GovernanceDocumentVersion.content.ilike(like))),
             ),
+            *readable,
         )
         .order_by(GovernanceDocument.updated_at.desc())
         .limit(limit)
@@ -648,7 +801,9 @@ def search_policies(
         elif tl in (d.description or "").lower():
             field, src = "description", d.description or ""
         else:
-            field, src = "content", d.content or ""
+            field, src = "content", _as_read(db, current_user, d).content or ""
+            if tl not in src.lower():
+                continue                    # only an older or a newer version holds the words
         results.append({
             "document_id": d.id,
             "document_title": d.title,
@@ -672,6 +827,7 @@ def search_policies(
                     GovernanceDocument.tenant_id.in_(user_tenants),
                     GovernanceDocument.doc_type.ilike("policy"),
                     PolicyStatement.statement_text.ilike(like),
+                    *readable,
                 )
                 .limit((limit - len(results)) * 2)
                 .all()
@@ -709,6 +865,8 @@ def suggest_candidate_exceptions(
     if not user_tenants:
         return {"source": "template", "candidates": []}
 
+    from ..modules.governance.permissions import ensure_reader, visible_filter
+
     focus = None
     if document_id:
         focus = db.query(GovernanceDocument).filter(
@@ -721,22 +879,26 @@ def suggest_candidate_exceptions(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Policy not found — exceptions can only be raised against policy documents",
             )
+        ensure_reader(db, current_user, focus)
         documents = [focus]
     else:
         # Exceptions can ONLY be raised against policies — never scan procedures,
-        # standards, guidelines, charters or other document types.
+        # standards, guidelines, charters or other document types. Only those the person may read.
+        visible = visible_filter(db, current_user)
         documents = (
             db.query(GovernanceDocument)
             .filter(
                 GovernanceDocument.tenant_id.in_(user_tenants),
                 GovernanceDocument.doc_type.ilike("policy"),
+                *([visible] if visible is not None else []),
             )
             .order_by(GovernanceDocument.updated_at.desc())
             .limit(25)
             .all()
         )
 
-    return _generate_candidate_exceptions(documents, focus, limit)
+    documents = [_as_read(db, current_user, d) for d in documents]
+    return _generate_candidate_exceptions(documents, documents[0] if focus is not None else None, limit)
 
 
 @router.get("/{exception_id}")
@@ -753,7 +915,7 @@ def get_exception(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
 
 
 @router.put("/{exception_id}")
@@ -771,6 +933,18 @@ def update_exception(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if not _may_change(_viewer(db, current_user, []), exception):
+        _refuse(CHANGE_REFUSED)
+    _ensure_editable(exception)
+    from ..modules.governance import exception_approvals, exception_types
+
+    locked = exception_approvals.locked_fields(db, exception, data)       # what chose its approval rule stays while it waits
+    if locked:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=locked)
+    if "department_id" in data:
+        exception.department_id = _clean_department(db, exception.tenant_id, data["department_id"], current=exception.department_id)
+    if "exception_type" in data:
+        exception.exception_type = exception_types.clean(db, exception.tenant_id, data["exception_type"], current=exception.exception_type)
 
     _aids = _clean_asset_ids(data, db, user_tenants)
     if _aids is not None:
@@ -784,6 +958,8 @@ def update_exception(
         ).first()
         if not doc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        from ..modules.governance.permissions import ensure_reader
+        ensure_reader(db, current_user, doc)            # raised against a document the person may open
 
     updatable = ["title", "description", "justification", "risk_assessment",
                  "compensating_controls", "priority", "document_id"]
@@ -801,7 +977,7 @@ def update_exception(
     exception.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
 
 
 @router.delete("/{exception_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -817,6 +993,8 @@ def delete_exception(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if not _may_delete(_viewer(db, current_user, []), exception):
+        _refuse(DELETE_REFUSED)
     if exception.status != "draft":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft exceptions can be deleted")
     db.delete(exception)
@@ -837,55 +1015,53 @@ def submit_exception(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    v = _viewer(db, current_user, [exception])
+    if not _may_change(v, exception):
+        _refuse(CHANGE_REFUSED)
     if exception.status != "draft":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only draft exceptions can be submitted")
 
-    exception.status = "pending_approval"
-    exception.updated_at = datetime.utcnow()
+    from ..modules.governance import exception_approvals
+
+    # the approval rule that applies (Governance > Settings) asks its steps' people; with none, anyone allowed to approve decides, as before
+    if exception_approvals.start(db, exception, current_user) is None:
+        exception.status = "pending_approval"
+        exception.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
 
 
-def _is_tenant_administrator(user: GRCUser, db: Session) -> bool:
-    """True when the user has the Administrator system role OR is the
-    tenant's primary contact. Used to bypass separation-of-duties
-    checks on tenants where the same person both raised and approves
-    a request (typical single-admin SaaS deployments).
+def _to_decide(exception_id: int, db: Session, user: GRCUser, decision: str, wanted: str = "pending_approval"):
+    """The exception to approve, reject or revoke, and what the person may see of it: refused unless they may decide it."""
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(get_user_tenants(user, db))
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    v = _viewer(db, user, [exception])
+    _ensure_decider(v, exception)
+    if exception.status != wanted:
+        which = "pending" if wanted == "pending_approval" else wanted
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Only {which} exceptions can be {decision}")
+    return exception, v
 
-    `db` is already bound to the user's tenant DB (we're inside a
-    request that resolved tenant context), so:
-      * Role lookup goes through UserRole rows in the tenant DB.
-      * Primary-contact lookup uses the tenant's self-row (every
-        tenant DB carries one Tenant row describing itself).
-    """
-    from ..models import Role, UserRole, Tenant
-    # Administrator role bypass
-    try:
-        admin_role_rows = (
-            db.query(UserRole)
-            .join(Role, Role.id == UserRole.role_id)
-            .filter(UserRole.user_id == user.id, Role.name == "Administrator")
-            .all()
-        )
-        if admin_role_rows:
-            return True
-    except Exception:
-        pass
-    # Primary-contact bypass. Per-tenant DB normally has exactly one
-    # Tenant row (its own self-row). The match is case-insensitive.
-    try:
-        tenant_row = db.query(Tenant).first()
-        if (
-            tenant_row
-            and tenant_row.primary_contact_email
-            and user.email
-            and tenant_row.primary_contact_email.lower() == user.email.lower()
-        ):
-            return True
-    except Exception:
-        pass
-    return False
+
+def _by_rule(exception_id: int, db: Session, user: GRCUser, decision: str, comment: Optional[str]):
+    """The person's decision at the open step, when the exception waits under an approval rule (Governance > Settings): the exception as
+    the API shows it. None when it does not wait under one: the older flow decides. Only the people the open step asks decide here,
+    administrators included (exception_approvals.decide says whose turn it is)."""
+    from ..modules.governance import exception_approvals
+
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id, PolicyException.tenant_id.in_(get_user_tenants(user, db))).first()
+    if exception is None or exception_approvals.open_run(db, exception) is None:
+        return None
+    exception_approvals.decide(db, exception, user, decision, comment)
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db, _viewer(db, user, [exception]))
 
 
 @router.post("/{exception_id}/approve")
@@ -895,35 +1071,22 @@ def approve_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    exception = db.query(PolicyException).filter(
-        PolicyException.id == exception_id,
-        PolicyException.tenant_id.in_(user_tenants)
-    ).first()
-    if not exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
-    if exception.status != "pending_approval":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending exceptions can be approved")
-    # Separation-of-duties guard: a regular user can't approve the
-    # exception they raised themselves. Administrators bypass — a
-    # single-admin tenant would otherwise have no path to clear its
-    # own queue, which is the common SaaS reality. The audit log
-    # still records *which* admin approved + that they were the
-    # original requester, so any policy review can trace it.
-    if exception.requested_by == current_user.id and not _is_tenant_administrator(current_user, db):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=("Cannot approve your own exception request. "
-                    "Ask a tenant Administrator (or the primary contact) to approve.")
-        )
+    ruled = _by_rule(exception_id, db, current_user, "approve", (data or {}).get("comments"))
+    if ruled is not None:
+        return ruled
+    # four eyes: never the requester, administrators included (the audit log keeps who decided)
+    exception, v = _to_decide(exception_id, db, current_user, "approved")
+    comments = ((data or {}).get("comments") or "").strip() or None
 
     exception.status = "approved"
     exception.approved_by = current_user.id
     exception.approved_at = datetime.utcnow()
+    exception.approval_comments = comments
     exception.updated_at = datetime.utcnow()
+    _log_decision(db, exception, current_user, "Approved", comments)
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, v)
 
 
 @router.post("/{exception_id}/reject")
@@ -933,48 +1096,101 @@ def reject_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    exception = db.query(PolicyException).filter(
-        PolicyException.id == exception_id,
-        PolicyException.tenant_id.in_(user_tenants)
-    ).first()
-    if not exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
-    if exception.status != "pending_approval":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending exceptions can be rejected")
+    ruled = _by_rule(exception_id, db, current_user, "reject", data.get("rejection_reason") or data.get("reason"))
+    if ruled is not None:
+        return ruled
+    exception, v = _to_decide(exception_id, db, current_user, "rejected")
 
     exception.status = "rejected"
     exception.rejected_by = current_user.id
     exception.rejected_at = datetime.utcnow()
     exception.rejection_reason = data.get("rejection_reason") or data.get("reason", "")
     exception.updated_at = datetime.utcnow()
+    _log_decision(db, exception, current_user, "Rejected", exception.rejection_reason)
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, v)
+
+
+@router.post("/{exception_id}/request-changes")
+def request_changes(
+    exception_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Send an exception that waits under an approval rule back to its requester as a draft, with what has to change; the rules start
+    again when it is submitted again. Only the people the open step asks."""
+    ruled = _by_rule(exception_id, db, current_user, "changes", data.get("comment") or data.get("reason"))
+    if ruled is None:
+        if db.query(PolicyException.id).filter(PolicyException.id == exception_id,
+                                               PolicyException.tenant_id.in_(get_user_tenants(current_user, db))).first() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="This exception is not waiting under an approval rule, so it cannot be sent back for changes. Reject it instead.")
+    return ruled
+
+
+@router.post("/{exception_id}/withdraw")
+def withdraw_exception(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Take an exception that waits under an approval rule back to a draft (its requester, or someone allowed to edit exceptions)."""
+    from ..modules.governance import exception_approvals
+
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id, PolicyException.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if not _may_change(_viewer(db, current_user, []), exception):
+        _refuse(CHANGE_REFUSED)
+    exception_approvals.withdraw(db, exception, current_user)
+    db.commit()
+    db.refresh(exception)
+    return _exception_to_dict(exception, db, _viewer(db, current_user, [exception]))
+
+
+@router.get("/{exception_id}/approval")
+def exception_approval(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Every round of an exception's approval: the rule, how it ended, who decided what at which step. For people who work with
+    exceptions (any exception right), its requester and everyone asked or who decided on it."""
+    from ..modules.governance import exception_approvals
+
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id, PolicyException.tenant_id.in_(get_user_tenants(current_user, db))).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    v = _viewer(db, current_user, [exception])
+    if not v.held and exception.requested_by != current_user.id and not exception_approvals.involved(db, exception, current_user.id):
+        _refuse("Only people who work with policy exceptions, or are asked about this one, can see how it was approved.")
+    return {**exception_approvals.history(db, exception, current_user.id), "current": v.approvals.get(exception.id)}
 
 
 @router.post("/{exception_id}/revoke")
 def revoke_exception(
     exception_id: int,
+    data: dict = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    user_tenants = get_user_tenants(current_user, db)
-    exception = db.query(PolicyException).filter(
-        PolicyException.id == exception_id,
-        PolicyException.tenant_id.in_(user_tenants)
-    ).first()
-    if not exception:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
-    if exception.status != "approved":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only approved exceptions can be revoked")
+    exception, v = _to_decide(exception_id, db, current_user, "revoked", wanted="approved")
+    reason = ((data or {}).get("reason") or "").strip() or None
 
     exception.status = "revoked"
     exception.closed_at = datetime.utcnow()   # closure time for the "closed on time" metric
+    exception.revoked_by = current_user.id
+    exception.revocation_reason = reason
     exception.updated_at = datetime.utcnow()
+    _log_decision(db, exception, current_user, "Revoked", reason)
     db.commit()
     db.refresh(exception)
-    return _exception_to_dict(exception, db)
+    return _exception_to_dict(exception, db, v)
 
 
 @router.get("/{exception_id}/comments")
@@ -993,7 +1209,7 @@ def list_comments(
 
     comments = db.query(PolicyExceptionComment).filter(
         PolicyExceptionComment.exception_id == exception_id
-    ).order_by(PolicyExceptionComment.created_at.asc()).all()
+    ).order_by(PolicyExceptionComment.created_at.asc(), PolicyExceptionComment.id.asc()).all()
 
     result = []
     for c in comments:
@@ -1023,6 +1239,8 @@ def add_comment(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+    if not _held(db, current_user) & {"create", "edit", "approve"}:
+        _refuse(COMMENT_REFUSED)
 
     comment = PolicyExceptionComment(
         exception_id=exception_id,
@@ -1043,9 +1261,11 @@ def add_comment(
     }
 
 
-def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
+def _exception_to_dict(exc: PolicyException, db: Session, v: SimpleNamespace) -> dict:
+    """``v`` (``_viewer``): what the person asking may do with it, and the documents whose title they may see."""
     requester = db.query(GRCUser).filter(GRCUser.id == exc.requested_by).first() if exc.requested_by else None
     approver = db.query(GRCUser).filter(GRCUser.id == exc.approved_by).first() if exc.approved_by else None
+    revoker = db.query(GRCUser).filter(GRCUser.id == exc.revoked_by).first() if exc.revoked_by else None
     doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == exc.document_id).first() if exc.document_id else None
 
     # Linked assets: objects (for the posture score) + compact dicts (for display).
@@ -1060,11 +1280,25 @@ def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
         "availability": a.availability_rating,
     } for a in _asset_rows]
 
+    # the approval rule it goes through (exception_approvals), and the unit it is raised for: its own department, else its policy's
+    approval = getattr(v, "approvals", {}).get(exc.id)
+    ruled = bool(approval and approval["status"] == "open")
+    tree = getattr(v, "trees", {}).get(exc.tenant_id)
+    # its own department, else the unit its approval rule was chosen for (known to everyone asked, who may not read the policy), else its policy's
+    unit = exc.department_id or (approval or {}).get("department_id") or (doc.department_id if doc is not None and doc.id in v.readable else None)
+    unit_path = [d.name for d in tree.path(unit)] if tree is not None and unit in tree.rows else []
+
     return {
         "id": exc.id,
         "tenant_id": exc.tenant_id,
         "document_id": exc.document_id,
-        "document_title": doc.title if doc else None,
+        "department_id": exc.department_id,
+        "department_path": unit_path,
+        "department_inherited": exc.department_id is None and bool(unit_path),
+        "exception_type": exc.exception_type,
+        "exception_type_label": getattr(v, "types", {}).get(exc.tenant_id, {}).get(exc.exception_type, exc.exception_type) if exc.exception_type else None,
+        "approval": approval,
+        "document_title": doc.title if doc and doc.id in v.readable else None,     # never a document the person may not open
         "title": exc.title,
         "description": exc.description,
         "justification": exc.justification,
@@ -1078,6 +1312,10 @@ def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
         "approved_by": exc.approved_by,
         "approver_name": (approver.display_name or approver.username) if approver else None,
         "approved_at": exc.approved_at.isoformat() if exc.approved_at else None,
+        "approval_comments": exc.approval_comments,
+        "revoked_by": exc.revoked_by,
+        "revoker_name": (revoker.display_name or revoker.username) if revoker else None,
+        "revocation_reason": exc.revocation_reason,
         "rejected_by": exc.rejected_by,
         "rejected_at": exc.rejected_at.isoformat() if exc.rejected_at else None,
         "rejection_reason": exc.rejection_reason,
@@ -1094,5 +1332,11 @@ def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
         "posture": exception_posture.posture_for(exc, _asset_rows),
         "closed_on_time": exception_posture.closed_on_time(exc),
         "promoted_risk_id": getattr(exc, "promoted_risk_id", None),
-        "comments_count": len(exc.comments) if exc.comments else 0
+        "comments_count": len(exc.comments) if exc.comments else 0,
+        # what the person asking may do with it (the server refuses the rest)
+        "can_edit": exc.status in _EDITABLE and _may_change(v, exc),
+        "can_delete": exc.status == "draft" and _may_delete(v, exc),
+        # under an approval rule only the people its open step asks decide; otherwise anyone allowed to approve, never the requester
+        "can_decide": bool(approval["my_step"]) if ruled else _may_decide(v, exc),
+        "can_withdraw": ruled and _may_change(v, exc),
     }

@@ -43,12 +43,24 @@ class NormalizedControl(Base):
     # common_group_id ties each NC back to the AI domain it was derived from;
     # source distinguishes ai_normalized from seed/manual.
     domain = Column(String(255), nullable=True, index=True)
-    source = Column(String(50), nullable=True)  # seed | manual | ai_normalized | scf
-    # The SCF control this row stands for (source='scf'). This single column is the
-    # whole bridge between the SCF catalog and the rest of the platform: everything
-    # already FK'd to grc_normalized_controls keeps working, and nothing else has
-    # to learn the word "SCF".
-    scf_id = Column(String(16), nullable=True, index=True)
+    source = Column(String(50), nullable=True)  # seed | manual | ai_normalized | scf | custom
+    # The SCF control this row stands for (source='scf'), or the tenant's own
+    # custom-control code (source='custom', same identity as SCFControlState.scf_id).
+    # This single column is the whole bridge between the SCF catalog / custom
+    # controls and the rest of the platform: everything already FK'd to
+    # grc_normalized_controls keeps working, and nothing else has to learn the
+    # word "SCF".
+    scf_id = Column(String(64), nullable=True, index=True)
+    # null = global/SCF bridge row; set = this tenant's custom control
+    tenant_id = Column(Integer, nullable=True, index=True)
+    pptdf = Column(String(16), nullable=True)  # People|Process|Technology|Data|Facility
+    conformity_cadence = Column(String(20), nullable=True)  # Annual|Semi-Annual|Quarterly
+    control_sub_type = Column(String(20), nullable=True)  # Manual|Automated|Hybrid
+    retired_at = Column(DateTime, nullable=True)
+    # list of SCF ids this custom control implements (inheritance, not copy)
+    implements_scf_ids = Column(JSON, nullable=True)
+    # Stage G — explicit connector/cloud check ids bound to this custom control
+    bound_check_ids = Column(JSON, nullable=True)
     common_group_id = Column(Integer, ForeignKey("grc_common_control_groups.id"), nullable=True, index=True)
     # AI-consolidated recommended evidence (cached): the member frameworks'
     # evidence requirements merged by meaning into one normalized list, so the

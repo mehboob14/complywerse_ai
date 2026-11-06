@@ -32,6 +32,92 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-04 — Department tree and exception approval rules: four new tables, one new column (auto-applied)
+
+### What
+
+- **New table `grc_department_levels`** (`id`, `tenant_id` → `grc_tenants.id` ON DELETE CASCADE, `level` 1–3, `label`, `updated_by` → `grc_users.id`
+  ON DELETE SET NULL, `updated_at`; unique `(tenant_id, level)`). What an organisation calls the levels of its department tree; a level with
+  no row has its default name (Department / Sub-department / Unit). Model: `backend/grc/models/_92_department_levels.py`.
+  Departments themselves are unchanged: `grc_departments.parent_department_id` and `department_head_user_id` already existed; the depth
+  limit (three levels) is checked in code when a department is placed or moved, and nothing existing is rewritten.
+- **New tables `grc_exception_approval_rules`, `grc_exception_approval_runs`, `grc_exception_approval_decisions`** (model
+  `backend/grc/models/_93_exception_approvals.py`): the rules a tenant writes for who reviews and approves a policy exception (a department
+  at any level or the whole organisation, optional priorities and policy kinds, the steps as JSON), one run per submission of an exception
+  (the rule's steps copied at submit, the step it is at, the people asked now), and one row per decision (who, which step, what, when). Runs
+  and decisions are deleted with their exception (ON DELETE CASCADE).
+- **New column `grc_policy_exceptions.department_id`** (INTEGER, nullable, index `ix_pol_exc_department`, no foreign key): the unit an exception is
+  raised for; empty means its policy's department. Added by `schema_migrations._COLUMN_ADDS`, and by the exceptions router's own
+  `_ensure_columns` for tenants provisioned before.
+- **New column `grc_policy_exceptions.exception_type`** (VARCHAR(40), nullable, index `ix_pol_exc_type`, added 2026-11-05, D59): the kind of
+  exception, a value of the organisation's own list of types. The list is not a table: it is the module-settings document
+  `governance_exceptions` (`grc_module_settings`, list `exception_type`; defaults in code, written on the first edit). The rules table carries
+  the types a rule names in `exception_types` (JSON, part of the new table). Added the same two ways as `department_id`.
+
+### Why
+
+The user asked for sub-departments and a third level under Governance Settings, a Documents Overview scoped by department, and approval/reviewer
+rules for policy exceptions per department, sub-department or unit.
+
+### How
+
+Nothing to run: `create_all` makes the four tables at a tenant's first start and the column is added by the startup schema step. Equivalent SQL
+for a manual replay: `ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS department_id INTEGER; CREATE INDEX IF NOT EXISTS
+ix_pol_exc_department ON grc_policy_exceptions (department_id); ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS exception_type
+VARCHAR(40); CREATE INDEX IF NOT EXISTS ix_pol_exc_type ON grc_policy_exceptions (exception_type);` and the four `CREATE TABLE`s from the
+two model files.
+
+### Risk
+
+None for existing data: every new object is additive, an exception no rule matches follows the older flow, and a tenant that never names the
+levels sees the defaults. A tenant that already holds a chain of departments deeper than three keeps it (read-only; only new placements are limited).
+
+---
+
+## 2026-10-23 — Departments replace teams: one new table, one new column, a one-time link of teams to departments (auto-applied)
+
+### What
+
+- **New table `grc_department_roles`** (`id`, `department_id` → `grc_departments.id` ON DELETE CASCADE, `role_id` → `grc_roles.id`
+  ON DELETE CASCADE, `added_by` → `grc_users.id` ON DELETE SET NULL, `added_at`; unique `(department_id, role_id)`). The roles a
+  department takes its members from. Model: [`backend/grc/models/_83_department_roles.py`](backend/grc/models/_83_department_roles.py).
+  Membership through a role is computed when asked and never stored.
+- **New column `grc_teams.department_id`** (INTEGER, nullable, index `ix_team_department`; no foreign key on an existing table, the
+  model has one for a new database). A team with a department is that department's *picker record*: it keeps its id (assets,
+  assignees, sign-off targets, risks and RCSA store team ids), mirrors the department's name, description, head (as `lead_user_id`)
+  and active flag, and its people are the department's. A team with no department keeps working as before.
+- **One-time data link (adds and links only, deletes and rewrites nothing that holds data):**
+  `services/org_departments.backfill()`, run from `schema_migrations._backfill_departments_from_teams` at each tenant's first
+  connect. For every team with no department: link it to the department of the same name (case and spaces aside) if that has no
+  team yet, else create a department from it (name, description, the lead as head, the active flag, a code made from the name); the
+  team's members (and its lead, if the department has another head) are copied into `grc_department_members`. Every active
+  department without a team gets one. The `grc_team_members` rows stay where they are.
+
+### Why
+
+Administration → Teams and the departments the Documents dropdown reads (`grc_departments`) were two unrelated lists, so the
+dropdown showed nothing for the teams an administrator had made. Departments are now the one unit; Teams are their picker records.
+
+### How
+
+```sql
+-- Auto-applied by schema_migrations.py (_COLUMN_ADDS + create_all + the backfill) at a tenant's first connection. Shown for
+-- visibility / manual replay only; the column add is idempotent. The new table is made by create_all.
+ALTER TABLE grc_teams ADD COLUMN IF NOT EXISTS department_id INTEGER;
+CREATE INDEX IF NOT EXISTS ix_team_department ON grc_teams (department_id);
+-- the linking itself is Python (org_departments.backfill); to replay it, restart the backend or call that function on a session
+```
+
+- **Risk**: a team and a department with the same name become one (their people are merged; the department's name, head and active
+  flag win on the team). Two teams whose names differ only in case: the first links, the second stays a legacy team (logged).
+  Leaving a team as it is never loses anyone. The backfill is safe to run again and from two processes at once (a collision is
+  rolled back and found settled next time).
+- **Auto-applied?**: yes, at the first request or start-up per tenant after the new code runs.
+- **Code-only companions**: `GRCDepartmentCreate.code` is optional (a code is made from the name); `GET/POST/PATCH /admin/departments`;
+  the documents' `department_id` is validated; deleting a role also deletes its `grc_department_roles` rows.
+
+---
+
 ## 2026-07-06 — ERM risk register: new `consequences` column (auto-applied)
 
 ### What

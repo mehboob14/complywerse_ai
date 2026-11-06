@@ -7,13 +7,19 @@ import { criticalTasksApi, risksApi, ermApi, vulnManagementApi, regulatoryApi, c
 import Link from 'next/link';
 import MyTasksPage from './my-tasks/page';
 import TaskReportsPage from './reports/page';
-import TasksSLAConfigPage from './sla/page';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import { TASK_SLA_LABELS, TASK_SLA_ORDER, TaskSLALevel, getTaskSLAConfig } from './slaConfig';
 import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import { DocumentTaskLink, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { dayOf, isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 import {
   Plus, X,
   ArrowUpDown, MoreHorizontal, Target, Loader2,
-  LayoutList, Columns3, Sparkles, Copy, RefreshCw,
+  LayoutList, Columns3, Sparkles, RefreshCw,
   ListTodo, ClipboardList, BarChart3, Clock,
 } from 'lucide-react';
 
@@ -31,6 +37,10 @@ interface CriticalTaskItem {
   description: string | null;
   source: string;
   source_module: string | null;
+  /** Set when the task mirrors an implementation task of a regulatory change. */
+  linked_regulatory_change_id?: number | null;
+  /** Set on a task made by a document review, approval or acknowledgement request. */
+  document_request?: DocumentRequest | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -61,6 +71,10 @@ interface CriticalTaskItem {
 interface TaskListResponse {
   items: CriticalTaskItem[];
   total: number;
+  /** 'mine': the tasks the person takes part in (owner, assignee, reviewer, creator); 'all': an administrator or view_all. */
+  scope?: 'all' | 'mine';
+  /** With 'mine': the owners of the person's tasks, for the Owner filter. */
+  owners?: TaskUser[];
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -107,6 +121,8 @@ export default function TaskBoardPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('critical_tasks:tasks:create');
   const canDelete = hasPermission('critical_tasks:tasks:delete');
+  const { toast } = useToast();
+  const meId = useMyUserId();
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showCreate, setShowCreate] = useState(false);
@@ -121,10 +137,18 @@ export default function TaskBoardPage() {
   const taskTabs = [
     { id: 'board' as const, label: 'Task Board', icon: ListTodo },
     { id: 'my-tasks' as const, label: 'My Tasks', icon: ClipboardList },
-    { id: 'sla' as const, label: 'SLA Configuration', icon: Clock },
+    { id: 'sla' as const, label: 'Settings', icon: Clock },
     { id: 'reports' as const, label: 'Reports', icon: BarChart3 },
   ];
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [taskTab, setTaskTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>({});
+  const { data: taskSettings } = useModuleSettings('tasks');
+  const slaDaysFor = (level: TaskSLALevel) => {
+    const saved = taskSettings?.sla?.targets?.[level]?.days;
+    return typeof saved === 'number' ? saved : getTaskSLAConfig()[level];
+  };
+  const asOptions = (key: string, current: string, fallback: string[]) =>
+    listOptions(taskSettings, key, current, fallback.map((v) => ({ value: v, label: v })));
   const [showAiResult, setShowAiResult] = useState(false);
   const [aiResult, setAiResult] = useState<Record<string, unknown> | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -283,19 +307,6 @@ export default function TaskBoardPage() {
     };
   }, []);
 
-  const { data: templates } = useQuery({
-    queryKey: ['task-templates'],
-    queryFn: async () => { const res = await criticalTasksApi.listTemplates(); return res.data; },
-  });
-
-  const templateMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => criticalTasksApi.createFromTemplate(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
-      setShowTemplateModal(false);
-    },
-  });
-
   const handleAiReprioritize = async () => {
     setAiLoading(true);
     try {
@@ -428,6 +439,8 @@ export default function TaskBoardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
       setShowCreate(false);
+      setTaskTab('details');
+      setCustomValues({});
       setNewTask({
         title: '', description: '', source: 'Manual', priority: 'Medium',
         severity: '', category: 'Other',
@@ -446,7 +459,12 @@ export default function TaskBoardPage() {
 
   const bulkMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => criticalTasksApi.bulkAction(payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const left = Number(res?.data?.left_document_tasks) || 0;
+      if (left) {
+        toast({ type: 'info', title: `${left} document task${left === 1 ? '' : 's'} left as ${left === 1 ? 'it was' : 'they were'}`,
+          message: 'Their person and status follow the request: they close when the person does it in the document.' });
+      }
       queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
       setSelectedTasks([]);
       setShowBulkMenu(false);
@@ -491,6 +509,8 @@ export default function TaskBoardPage() {
       delete payload.recurrence_interval;
     }
     if (!payload.approval_required) delete payload.approval_required;
+    const custom = valuesToSave(taskSettings, customValues, null);
+    if (custom) payload.custom_values = custom;
     createMutation.mutate(payload);
   };
 
@@ -534,11 +554,15 @@ export default function TaskBoardPage() {
     });
   };
 
-  const userItems = users.map((u) => ({
+  const toItem = (u: TaskUser) => ({
     value: String(u.id),
     label: u.display_name || u.username || u.email || `User #${u.id}`,
     subLabel: u.email,
-  }));
+  });
+  const userItems = users.map(toItem);
+  const onlyMine = data?.scope === 'mine';
+  // someone who sees only their own tasks picks among the owners of those (the server lists them, whatever is filtered now)
+  const ownerItems = onlyMine ? (data?.owners || []).map(toItem) : userItems;
 
   return (
     <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
@@ -571,7 +595,11 @@ export default function TaskBoardPage() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Board</h1>
-              <p className="mt-1 text-sm text-slate-600">Centralized critical task management — {total} tasks</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {onlyMine
+                  ? <>Your tasks — {total}. These are the tasks you own, are assigned to, review or created.</>
+                  : <>Centralized critical task management — {total} tasks</>}
+              </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden">
@@ -589,12 +617,6 @@ export default function TaskBoardPage() {
                 {aiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
                 <span className="hidden md:inline">AI Reprioritize</span>
                 <span className="md:hidden">AI</span>
-              </button>
-              <button onClick={() => setShowTemplateModal(true)}
-                className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium">
-                <Copy size={14} />
-                <span className="hidden md:inline">From Template</span>
-                <span className="md:hidden">Template</span>
               </button>
               {canCreate && (
                 <button onClick={() => setShowCreate(true)}
@@ -659,7 +681,7 @@ export default function TaskBoardPage() {
             />
             <MultiSelectDropdown
               title="Owner"
-              items={userItems}
+              items={ownerItems}
               selectedValues={filters.assigned_owner_id ? [filters.assigned_owner_id] : []}
               onApply={(v) => setSingleFilter('assigned_owner_id', v[0] || '')}
               multiSelect={false}
@@ -766,7 +788,12 @@ export default function TaskBoardPage() {
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5">
                         {task.category && <span className="text-xs text-[var(--color-muted)]">{task.category}</span>}
-                        {task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module}</span>}
+                        {task.linked_regulatory_change_id ? (
+                          <Link href={`/governance/regulatory-changes/${task.linked_regulatory_change_id}?tab=tasks`}
+                            className="text-xs text-primary-700 hover:underline">via regulatory change ↗</Link>
+                        ) : isDocumentTask(task) ? (
+                          <DocumentTaskLink request={task.document_request} meId={meId} />
+                        ) : task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module.replace(/_/g, ' ')}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3"><span className="text-xs text-[var(--color-muted)]">{task.source}</span></td>
@@ -787,7 +814,7 @@ export default function TaskBoardPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs text-[var(--color-muted)]">
-                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
+                        {dayOf(task.due_date) ?? '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -839,7 +866,7 @@ export default function TaskBoardPage() {
                           </span>
                         </div>
                         {task.due_date && (
-                          <span className="text-[10px] text-[var(--color-muted)] mt-1 block">Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-[var(--color-muted)] mt-1 block">Due {dayOf(task.due_date)}</span>
                         )}
                       </Link>
                     ))
@@ -878,6 +905,11 @@ export default function TaskBoardPage() {
         }
       >
         <div className="space-y-3">
+          {createMutation.isError && (
+            <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorText(createMutation.error)}</p>
+          )}
+          <CustomFieldsTabBar tab={taskTab} onTab={setTaskTab} settings={taskSettings} />
+          <div data-tab="details" className={taskTab === 'details' ? 'space-y-3' : 'hidden'}>
           {/* Linked entities + AI generate */}
           <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1027,7 +1059,7 @@ export default function TaskBoardPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-0.5">Title *</label>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'title', 'Title')} *</label>
             <input
               type="text"
               value={newTask.title}
@@ -1038,9 +1070,9 @@ export default function TaskBoardPage() {
             />
           </div>
 
-          <div>
+          {showBuiltin(taskSettings, 'description') && <div>
             <div className="flex items-center justify-between mb-0.5">
-              <label className="block text-xs font-medium text-slate-600">Description</label>
+              <label className="block text-xs font-medium text-slate-600">{builtinLabel(taskSettings, 'description', 'Description')}</label>
               {/* <button
                 type="button"
                 onClick={handleAiGenerateDescription}
@@ -1057,53 +1089,54 @@ export default function TaskBoardPage() {
               rows={3}
               placeholder="Task description"
             />
-          </div>
+          </div>}
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source</label>
+            {showBuiltin(taskSettings, 'source') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'source', 'Source')}</label>
               <select
                 value={newTask.source}
                 onChange={e => setNewTask(f => ({ ...f, source: e.target.value }))}
                 className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
-                {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                {asOptions('source', newTask.source, SOURCES).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Priority</label>
+            </div>}
+            {showBuiltin(taskSettings, 'priority') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'priority', 'Priority')}</label>
               <select
                 value={newTask.priority}
                 onChange={e => setNewTask(f => ({ ...f, priority: e.target.value }))}
                 className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
-                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                {asOptions('priority', newTask.priority, PRIORITIES).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Category</label>
+            </div>}
+            {showBuiltin(taskSettings, 'category') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'category', 'Category')}</label>
               <select
                 value={newTask.category}
                 onChange={e => setNewTask(f => ({ ...f, category: e.target.value }))}
                 className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {asOptions('category', newTask.category, CATEGORIES).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Severity</label>
+            </div>}
+            {showBuiltin(taskSettings, 'severity') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'severity', 'Severity')}</label>
               <select
                 value={newTask.severity}
                 onChange={e => setNewTask(f => ({ ...f, severity: e.target.value }))}
                 className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 <option value="">None</option>
-                <option value="Critical">Critical</option><option value="High">High</option>
-                <option value="Medium">Medium</option><option value="Low">Low</option>
+                {asOptions('severity', newTask.severity, ['Critical', 'High', 'Medium', 'Low']).map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned Owners</label>
+            </div>}
+            {showBuiltin(taskSettings, 'owners') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'owners', 'Assigned Owners')}</label>
               <MultiSelectDropdown
                 title="Owners"
                 items={userItems}
@@ -1126,9 +1159,9 @@ export default function TaskBoardPage() {
                 size="sm"
                 triggerClassName="w-full"
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Reviewer</label>
+            </div>}
+            {showBuiltin(taskSettings, 'reviewer') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'reviewer', 'Reviewer')}</label>
               <MultiSelectDropdown
                 title="Reviewer"
                 items={userItems}
@@ -1143,29 +1176,28 @@ export default function TaskBoardPage() {
                 size="sm"
                 triggerClassName="w-full"
               />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Due Date</label>
+            </div>}
+            {showBuiltin(taskSettings, 'due_date') && <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'due_date', 'Due Date')}</label>
               <input
                 type="date"
                 value={newTask.due_date}
                 onChange={e => setNewTask(f => ({ ...f, due_date: e.target.value }))}
                 className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               />
-            </div>
+            </div>}
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-0.5">SLA Level</label>
               <MultiSelectDropdown
                 title="SLA Level"
-                items={TASK_SLA_ORDER.map((level) => {
-                  const cfg = getTaskSLAConfig();
-                  return { value: level, label: `${TASK_SLA_LABELS[level]} (${cfg[level]} days)` };
-                })}
+                items={TASK_SLA_ORDER.map((level) => (
+                  { value: level, label: `${TASK_SLA_LABELS[level]} (${slaDaysFor(level)} days)` }
+                ))}
                 selectedValues={newTask.sla_level ? [newTask.sla_level] : []}
                 onApply={(v) => {
                   const level = (v[0] || '') as TaskSLALevel | '';
                   if (level) {
-                    const days = getTaskSLAConfig()[level];
+                    const days = slaDaysFor(level);
                     setNewTask(f => ({ ...f, sla_level: level, sla_days: String(days) }));
                   } else {
                     setNewTask(f => ({ ...f, sla_level: '', sla_days: '' }));
@@ -1229,8 +1261,8 @@ export default function TaskBoardPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-0.5">Evidence / Notes</label>
+          {showBuiltin(taskSettings, 'notes') && <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(taskSettings, 'notes', 'Evidence / Notes')}</label>
             <textarea
               value={newTask.evidence_notes}
               onChange={e => setNewTask(f => ({ ...f, evidence_notes: e.target.value }))}
@@ -1238,49 +1270,14 @@ export default function TaskBoardPage() {
               rows={2}
               placeholder="Supporting evidence or notes"
             />
-          </div>
+          </div>}
 
+          </div>
+          <div data-tab="custom" className={taskTab === 'custom' ? '' : 'hidden'}>
+            <CustomFieldsTab moduleKey="tasks" values={customValues} onChange={setCustomValues} />
+          </div>
         </div>
       </RightSlidePanel>
-
-      {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
-          <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-[var(--color-text)] flex items-center gap-2"><Copy size={18} /> Create from Template</h2>
-              <button onClick={() => setShowTemplateModal(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={20} /></button>
-            </div>
-            {(templates as Record<string, unknown>[] | undefined)?.length === 0 ? (
-              <p className="text-sm text-[var(--color-muted)] text-center py-8">No templates available</p>
-            ) : (
-              <div className="space-y-3">
-                {(templates as Record<string, unknown>[] | undefined)?.map((t: Record<string, unknown>) => (
-                  <div key={t.id as number} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-subtle)] transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-medium text-[var(--color-text)]">{t.name as string}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${t.is_system ? 'border-primary-200 text-primary-700 bg-primary-50' : 'border-[var(--color-border)] text-[var(--color-muted)] bg-[var(--color-subtle)]'}`}>
-                        {t.is_system ? 'System' : 'Custom'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[var(--color-muted)] mb-3">{t.description as string}</p>
-                    <div className="flex items-center gap-2 text-xs text-[var(--color-muted)] mb-3">
-                      <span>Priority: {t.priority as string}</span>
-                      <span>·</span>
-                      <span>Category: {t.category as string}</span>
-                      {(t.sla_days as number) && <><span>·</span><span>SLA: {t.sla_days as number}d</span></>}
-                    </div>
-                    <button onClick={() => templateMutation.mutate({ template_id: t.id, template_name: t.name, title: `${t.name} - ${new Date().toLocaleDateString()}` })}
-                      disabled={templateMutation.isPending}
-                      className="cw-btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50">
-                      {templateMutation.isPending ? <Loader2 className="animate-spin" size={12} /> : <Plus size={12} />} Create Task
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
           {showAiResult && aiResult && (
             <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
@@ -1341,7 +1338,7 @@ export default function TaskBoardPage() {
       )}
 
       {activeTab === 'my-tasks' && <MyTasksPage />}
-      {activeTab === 'sla' && <TasksSLAConfigPage />}
+      {activeTab === 'sla' && <ModuleSettingsPanel moduleKey="tasks" />}
       {activeTab === 'reports' && <TaskReportsPage />}
       </div>
     </div>

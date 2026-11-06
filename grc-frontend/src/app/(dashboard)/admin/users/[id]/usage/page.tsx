@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Download } from 'lucide-react';
@@ -14,7 +15,7 @@ export default function UserAIUsagePage({ params: route }: { params: { id: strin
   const [error, setError] = useState('');
 
   const filters = useCallback(() => { const date = new Date(); date.setDate(date.getDate() - Number(days)); return { date_from: date.toISOString() }; }, [days]);
-  useEffect(() => { adminApi.getAIUsageForUser(userId, filters()).then(r => setData(r.data)).catch((e: any) => setError(e?.response?.data?.detail || 'Failed to load user usage.')); }, [userId, filters]);
+  useEffect(() => { adminApi.getAIUsageForUser(userId, filters()).then(r => setData(r.data)).catch((e: any) => setError(detailText(e?.response?.data?.detail) || 'Failed to load user usage.')); }, [userId, filters]);
 
   const exportCsv = async () => {
     if (!data) return;

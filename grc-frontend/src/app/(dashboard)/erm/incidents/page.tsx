@@ -133,6 +133,8 @@ export default function IncidentsPage() {
       queryClient.invalidateQueries({ queryKey: ['erm-incidents'] });
       queryClient.invalidateQueries({ queryKey: ['erm-incident-dashboard'] });
     },
+    // A failed delete used to do nothing at all on screen.
+    onError: (e: any) => alert(e?.response?.data?.detail || 'Could not delete the incident.'),
   });
 
   const handleAnalyzeWithAI = async (incident: RiskIncident) => {

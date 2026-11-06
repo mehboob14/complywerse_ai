@@ -454,6 +454,7 @@ class RiskBase(BaseModel):
     register_type: Optional[str] = None  # PCI-DSS, ISO 27001, SOX, Internal, etc.
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields (e.g. 1LINK RCSA)
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -481,6 +482,7 @@ class RiskCreate(RiskBase):
     residual_score: Optional[float] = None
     risk_appetite: Optional[str] = None
     status: Optional[str] = "open"
+    priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
     consequences: Optional[str] = None
@@ -497,6 +499,7 @@ class RiskUpdate(BaseModel):
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None
@@ -505,6 +508,7 @@ class RiskUpdate(BaseModel):
     team_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     status: Optional[str] = None
+    priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
     consequences: Optional[str] = None
@@ -528,6 +532,7 @@ class RiskResponse(BaseModel):
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int]
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -539,6 +544,10 @@ class RiskResponse(BaseModel):
     residual_score: Optional[float]
     risk_appetite: Optional[str]
     status: str
+    # What a person set (empty = from the score), what the SLA follows, and where the risk stands against it.
+    priority: Optional[str] = None
+    effective_priority: Optional[str] = None
+    sla: Optional[Dict[str, Any]] = None
     treatment_plan: Optional[str]
     root_cause: Optional[str] = None
     consequences: Optional[str] = None
@@ -845,6 +854,7 @@ class DocumentControlLinkCreate(BaseModel):
 
 class ITAssetBase(BaseModel):
     name: str
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     description: Optional[str] = None
     asset_type: str
     owner_id: Optional[int] = None
@@ -927,6 +937,7 @@ class ITAssetCreate(ITAssetBase):
 
 class ITAssetUpdate(BaseModel):
     name: Optional[str] = None
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     description: Optional[str] = None
     asset_type: Optional[str] = None
     owner_id: Optional[int] = None
@@ -1003,6 +1014,7 @@ class ITAssetUpdate(BaseModel):
 class ITAssetResponse(BaseModel):
     id: int
     tenant_id: int
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     name: str
     description: Optional[str]
     asset_type: str
@@ -1373,6 +1385,7 @@ class ImplementationEvidenceResponse(BaseModel):
     reviewed_by: Optional[int]
     reviewed_at: Optional[datetime]
     review_notes: Optional[str]
+    sub_control_code: Optional[str] = None
 
     class Config:
         from_attributes = True

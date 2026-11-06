@@ -16,7 +16,8 @@ from ....schemas import (
     RiskIncidentCreate, RiskIncidentUpdate, RiskIncidentResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
+from ....services.ai_gateway.field_policies import ai_view
 from ..schema_migrations import ensure_incident_schema
 from .incident_links import apply_inline_links, serialize_links
 
@@ -119,6 +120,11 @@ def _fallback_incident_suggestion(title: str, description: Optional[str] = None,
         "operational_impact": "Moderate operational disruption",
         "rationale": "Heuristic suggestion generated from incident title and description"
     }
+
+
+def _risk_context(risk) -> str:
+    r = ai_view(risk, "erm.incident_suggest")           # what the field policy lets this prompt carry
+    return f"{r['title']} | category={r['category']} | status={r['status']}"
 
 
 def _ai_suggest_incident_payload(title: str, description: Optional[str], severity: Optional[str], risk_context: Optional[str] = None) -> dict:
@@ -228,13 +234,12 @@ def create_incident(
                 Risk.id == incident.risk_id,
                 Risk.tenant_id == tenant_id
             ).first()
-        risk_context = None
-        if linked_risk:
-            risk_context = f"{linked_risk.title} | category={linked_risk.category} | status={linked_risk.status}"
+        risk_context = _risk_context(linked_risk) if linked_risk else None
+        i = ai_view(incident, "erm.incident_suggest", model="RiskIncident")      # the create payload has the record's fields
         suggestion = _ai_suggest_incident_payload(
-            title=incident.title,
-            description=incident.description,
-            severity=incident.severity,
+            title=i["title"],
+            description=i["description"],
+            severity=i["severity"],
             risk_context=risk_context
         )
 
@@ -243,6 +248,7 @@ def create_incident(
     root_cause = incident.root_cause or (suggestion.get("root_cause") if suggestion else None)
     corrective_actions = incident.corrective_actions or (suggestion.get("corrective_actions") if suggestion else None)
     
+    refuse_imported_accounts(db, [incident.assigned_to])
     db_incident = RiskIncident(
         tenant_id=tenant_id,
         risk_id=incident.risk_id,
@@ -300,7 +306,7 @@ def suggest_incident_with_ai(
         ).first()
         if not risk:
             raise HTTPException(status_code=404, detail="Risk not found")
-        risk_context = f"{risk.title} | category={risk.category} | status={risk.status}"
+        risk_context = _risk_context(risk)
 
     return {
         "title": request.title,
@@ -377,9 +383,10 @@ def analyze_incident_with_ai(
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
     
     risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risk_views = [ai_view(r, "erm.incident_analyze") for r in risks[:30]]      # what the field policy lets this prompt carry
     risk_summary = "\n".join([
-        f"- Risk ID {r.id}: {r.title} (Category: {r.category}, Status: {r.status})"
-        for r in risks[:30]
+        f"- Risk ID {r['id']}: {r['title']} (Category: {r['category']}, Status: {r['status']})"
+        for r in risk_views
     ])
     
     controls = db.query(FrameworkControl).join(
@@ -400,8 +407,8 @@ def analyze_incident_with_ai(
     ).order_by(RiskIncident.incident_date.desc()).limit(20).all()
     
     incident_history = "\n".join([
-        f"- Incident ID {i.id}: {i.title} (Severity: {i.severity}, Date: {i.incident_date.strftime('%Y-%m-%d') if i.incident_date else 'N/A'})"
-        for i in similar_incidents
+        f"- Incident ID {i['id']}: {i['title']} (Severity: {i['severity']}, Date: {i['incident_date'] or 'N/A'})"
+        for i in (ai_view(i, "erm.incident_analyze") for i in similar_incidents)
     ])
     
     prompt = f"""You are a GRC (Governance, Risk, Compliance) expert analyzing a security incident. Analyze the following incident and provide a comprehensive AI-powered assessment.
@@ -569,6 +576,7 @@ def update_incident(
         )
     
     update_data = incident_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[incident.assigned_to])
     link_keys = {
         "linked_asset_ids", "linked_vulnerability_ids",
         "linked_risk_ids", "linked_evidence_ids",
@@ -616,7 +624,30 @@ def delete_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Incident not found"
         )
-    
+
+    _clear_incident_references(db, incident_id)
     db.delete(incident)
     db.commit()
     return {"message": "Incident deleted successfully", "id": incident_id}
+
+
+def _clear_incident_references(db: Session, incident_id: int) -> None:
+    """Remove what stops an incident from being deleted.
+
+    Link rows (risk, asset, vulnerability, evidence, risk-assessment links) go
+    with it; records that merely point at it (a risk's source incident, a BCM
+    drill, an audit-register finding) stay and are unlinked. Found from the
+    models, so a table added later that references incidents is covered too.
+    """
+    from sqlalchemy import inspect as sa_inspect
+    from ....models import Base
+
+    existing = set(sa_inspect(db.get_bind()).get_table_names())
+    for table in Base.metadata.tables.values():
+        if table.name not in existing:
+            continue
+        for column in table.columns:
+            if any(fk.target_fullname == "grc_risk_incidents.id" for fk in column.foreign_keys):
+                statement = (table.update().values({column.name: None}) if column.nullable
+                             else table.delete())
+                db.execute(statement.where(column == incident_id))

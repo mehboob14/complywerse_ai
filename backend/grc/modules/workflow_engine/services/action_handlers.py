@@ -416,6 +416,67 @@ def _build_template_context(db, instance, definition) -> Dict[str, Any]:
                     except Exception:
                         pass
 
+        # ── Audit Issue Register: a finding is an Issue plus its register row ──
+        elif resource_type == "audit-register":
+            from ....models import AuditIssueProfile
+            from ...issue_management.audit_register.summary import (
+                days_past_due, due_date_of, effective_status)
+            from ...issue_management.audit_register.template import SOURCE_TITLES, STATUS_LABELS
+
+            obj = db.query(Issue).filter(Issue.id == rid, Issue.tenant_id == tid).first()
+            profile = (db.query(AuditIssueProfile).filter(AuditIssueProfile.issue_id == rid).first()
+                       if obj else None)
+            if obj and profile:
+                today = datetime.utcnow().date()
+                due = due_date_of(profile, obj)
+                code = effective_status(profile, obj, today)
+                ctx.update({
+                    "title":            obj.title or "",
+                    "code":             obj.code or "",
+                    "severity":         obj.severity or "",
+                    "workflow_state":   obj.workflow_state or "",
+                    "reference":        profile.issue_ref or "",
+                    "source":           SOURCE_TITLES.get(profile.source, profile.source or ""),
+                    "sheet":            (profile.source_sheet or "").strip(),
+                    "report":           profile.report_name or profile.project_name or profile.report_number or "",
+                    "regulator":        profile.regulator or "",
+                    "register_status":  "Closed" if code == "CD" else STATUS_LABELS.get(code, code),
+                    "recorded_status":  profile.ia_status or profile.recommendation_state or profile.remediation_status or "",
+                    "due_date":         due.isoformat() if due else "",
+                    "days_past_due":    str(days_past_due(profile, obj, today)),
+                    "lob":              profile.lob or "",
+                    "regulator_status": profile.regulator_status or "",
+                })
+                if obj.owner_id:
+                    try:
+                        u = db.query(GRCUser).filter(GRCUser.id == obj.owner_id).first()
+                        if u:
+                            ctx["owner_name"] = u.display_name or u.username or ""
+                            ctx["owner_email"] = u.email or ""
+                    except Exception:
+                        pass
+            # What this action carried: the reason, the requested date, the result…
+            _after = ((payload.get("changes") or {}).get("snapshot") or {}).get("after") or {}
+            if isinstance(_after, dict):
+                for k, v in _after.items():
+                    if v is not None and not ctx.get(k):
+                        ctx[k] = str(v)
+
+        elif resource_type == "audit-register-import":
+            from ....models import AuditRegisterImport
+
+            rec = db.query(AuditRegisterImport).filter(AuditRegisterImport.id == rid).first()
+            if rec:
+                ctx.update({
+                    "file_name":     rec.file_name or "",
+                    "summary_month": rec.summary_month or "",
+                    "as_of":         rec.as_of_date.isoformat() if rec.as_of_date else "",
+                    "created":       str(rec.created_count or 0),
+                    "updated":       str(rec.updated_count or 0),
+                    "skipped":       str(rec.skipped_count or 0),
+                    "unmatched_owners": str(len(rec.unmatched_owners or [])),
+                })
+
         # ── CIS Compliance plugin runs ──────────────────────────────────
         elif resource_type == "runs":
             obj = db.query(CompliancePluginRun).filter(
@@ -530,9 +591,11 @@ def _get_manager_emails(db, tenant_id) -> List[str]:
     grc_tenant_users, which is only populated for the bootstrap admin and
     would miss every user created via /admin/users.
     """
+    from ....routers.auth_router import platform_account
+
     tenant_users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())     # not accounts an access review imported
         .all()
     )
     return [u.email for u in tenant_users if u.email]
@@ -560,6 +623,7 @@ def _emails_for_user_ids(db, user_ids: List[int]) -> List[str]:
 def _emails_for_role_ids(db, tenant_id: int, role_ids: List[int]) -> List[str]:
     if not role_ids:
         return []
+    from ....routers.auth_router import PLATFORM_GRANT, platform_account  # holders the platform gave the role, not connector-imported links
     rows = (
         db.query(GRCUser.email)
         .join(UserRole, UserRole.user_id == GRCUser.id)
@@ -568,6 +632,8 @@ def _emails_for_role_ids(db, tenant_id: int, role_ids: List[int]) -> List[str]:
             UserRole.tenant_id == int(tenant_id),
             Role.id.in_(role_ids),
             GRCUser.is_active.is_(True),
+            PLATFORM_GRANT,
+            platform_account(),                  # nor members an access review imported
         )
         .distinct()
         .all()
@@ -609,6 +675,10 @@ def _is_resolved_context(instance) -> bool:
         return True
     resolution_status = str(ctx.get("resolution_status") or "").lower()
     return resolution_status in {"resolved", "closed", "completed"}
+
+
+class ActionRefused(Exception):
+    """An action that may not be done (raised before it writes anything): its step fails with this sentence (StepExecutor)."""
 
 
 # ---------------------------------------------------------------------------
@@ -768,6 +838,8 @@ class WorkflowActionHandlers:
                 return WorkflowActionHandlers._execute_risk_action(
                     db, instance, definition, platform_action, submodule_key, functionality_key, payload
                 )
+        except ActionRefused:
+            raise                                   # the step fails with its reason; it is not "queued"
         except Exception:
             logger.exception(
                 "workflow.action.platform_capability sub-handler failed module=%s submodule=%s fn=%s",
@@ -1494,7 +1566,8 @@ class WorkflowActionHandlers:
         subject = _resolve_template(subject, ctx)
         message = _resolve_template(message, ctx)
 
-        # Collect target user IDs
+        # Collect target user IDs (a role's holders the platform gave it, not connector-imported links)
+        from ....routers.auth_router import PLATFORM_GRANT, platform_account
         target_user_ids: List[int] = list(user_ids)
         for role_id in role_ids:
             rows = (
@@ -1504,6 +1577,8 @@ class WorkflowActionHandlers:
                     UserRole.tenant_id == instance.tenant_id,
                     UserRole.role_id == role_id,
                     GRCUser.is_active.is_(True),
+                    PLATFORM_GRANT,
+                    platform_account(),          # nor members an access review imported
                 )
                 .all()
             )
@@ -2020,62 +2095,9 @@ class WorkflowActionHandlers:
                 comp = ctx.get("control_comparison") or []
                 return {"action": "comparison.export", "result": "exported", "rows": len(comp)}
 
-        # ── Frameworks submodule (compliance.frameworks.*) ────────────────────
-        if submodule_key == "frameworks":
-            from ....models import Framework as _Framework
-
-            framework_id = ctx.get("framework_id") or payload.get("framework_id")
-            try: framework_id = int(framework_id) if framework_id else None
-            except Exception: framework_id = None
-
-            if functionality in ("framework", "upload.framework"):
-                # Entry point — record marker only
-                if framework_id:
-                    _save_ctx("framework_id", framework_id); db.commit()
-                return {"action": "framework", "result": "received", "framework_id": framework_id}
-
-            if functionality in ("extract_text_from_framework", "upload.extract_text_from_framework"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                _save_ctx("framework_text_extracted", True); db.commit()
-                return {"action": "extract_text_from_framework", "result": "extracted", "framework_id": framework_id, "found": bool(fw)}
-
-            if functionality in ("analyze_and_align_controls", "trigger.analyze_and_align_controls"):
-                ct = db.query(_FC).count() if False else 0
-                from ....models import FrameworkControl as _FC2
-                if framework_id:
-                    ct = db.query(_FC2).filter(_FC2.framework_id==framework_id).count()
-                _save_ctx("analyzed_control_count", ct); db.commit()
-                return {"action": "analyze_and_align_controls", "result": "completed", "framework_id": framework_id, "controls": ct}
-
-            if functionality in ("alignment", "update.alignment"):
-                _save_ctx("alignment_confirmed", True); db.commit()
-                return {"action": "alignment", "result": "updated", "framework_id": framework_id}
-
-            if functionality in ("confirm_alignment", "trigger.confirm_alignment"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                if fw and hasattr(fw, "status"):
-                    try: fw.status = "published"
-                    except Exception: pass
-                    db.commit()
-                _save_ctx("framework_published", True); db.commit()
-                return {"action": "confirm_alignment", "result": "published", "framework_id": framework_id}
-
-            if functionality in ("unpublish_framework", "delete.unpublish_framework"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                if fw and hasattr(fw, "status"):
-                    try: fw.status = "archived"
-                    except Exception: pass
-                    db.commit()
-                _save_ctx("framework_unpublished", True); db.commit()
-                return {"action": "unpublish_framework", "result": "archived", "framework_id": framework_id}
-
         # ── Evidence requirements submodule (compliance.evidence_requirements.*) ─
         if submodule_key == "evidence_requirements":
             from ....models import ControlEvidenceRequirement as _ER
-
-            if functionality in ("upload_evidence", "create.upload_evidence"):
-                _save_ctx("evidence_requirement_evidence_uploaded", True); db.commit()
-                return {"action": "upload_evidence", "result": "received"}
 
             if functionality in ("generate_for_control", "trigger.generate_for_control"):
                 # Create one EvidenceRequirement linked to the most recent control
@@ -2107,22 +2129,6 @@ class WorkflowActionHandlers:
             if functionality in ("recommendation", "update.recommendation"):
                 _save_ctx("recommendation_updated", True); db.commit()
                 return {"action": "recommendation", "result": "updated"}
-
-            if functionality in ("classify_framework", "trigger.classify_framework"):
-                _save_ctx("framework_classified", True); db.commit()
-                return {"action": "classify_framework", "result": "classified"}
-
-            if functionality in ("parse_framework_document", "trigger.parse_framework_document"):
-                _save_ctx("framework_parsed", True); db.commit()
-                return {"action": "parse_framework_document", "result": "parsed"}
-
-            if functionality in ("verify_parsed_control", "trigger.verify_parsed_control"):
-                _save_ctx("parsed_control_verified", True); db.commit()
-                return {"action": "verify_parsed_control", "result": "verified"}
-
-            if functionality in ("parsed_control", "update.parsed_control"):
-                _save_ctx("parsed_control_updated", True); db.commit()
-                return {"action": "parsed_control", "result": "updated"}
 
         # ── Control library submodule ─────────────────────────────────────────
         if submodule_key == "control_library":
@@ -2319,8 +2325,7 @@ class WorkflowActionHandlers:
             RiskAssetLink, RiskControlLink,
             InternalControl, InternalControlRiskLink,
             RCSACampaign, RCSAFinding, RCSAAssessment,
-            Vendor, VendorAssessment, VendorIncident, VendorSLARecord,
-            VendorQuestionnaireResponse, VendorQuestionnaireEvidence,
+            Vendor,
         )
 
         tenant_id = instance.tenant_id
@@ -2606,63 +2611,7 @@ class WorkflowActionHandlers:
 
         # ── Vendor risk ───────────────────────────────────────────────────────
         if submodule_key == "vendor_risk":
-            vendor_id = _resolve_id("vendor_id", "resource_id")
-
-            if functionality in ("vendor", "create.vendor"):
-                _save_ctx("vendor_id", vendor_id); db.commit()
-                return {"action": "vendor_risk.vendor", "result": "received", "vendor_id": vendor_id}
-
-            if functionality in ("send_questionnaire", "create.send_questionnaire"):
-                if not vendor_id:
-                    return {"action": "send_questionnaire", "result": "skipped"}
-                # Look for VendorAssessment to update its status, or create a marker
-                va = db.query(VendorAssessment).filter(VendorAssessment.vendor_id == vendor_id).first()
-                if va and hasattr(va, "status"):
-                    try: va.status = "questionnaire_sent"; db.commit()
-                    except Exception: pass
-                return {"action": "send_questionnaire", "result": "sent", "vendor_id": vendor_id, "assessment_id": va.id if va else None}
-
-            if functionality in ("external_submit_questionnaire", "create.external_submit_questionnaire"):
-                return {"action": "external_submit_questionnaire", "result": "submitted"}
-
-            if functionality in ("external_upload_evidence", "create.external_upload_evidence"):
-                return {"action": "external_upload_evidence", "result": "received"}
-
-            if functionality in ("incident", "create.incident"):
-                if not vendor_id:
-                    return {"action": "vendor_incident", "result": "skipped"}
-                inc = VendorIncident(vendor_id=vendor_id, title=f"WF-logged incident", description="Auto-logged via workflow", severity="medium", reported_at=datetime.utcnow())
-                db.add(inc); db.commit()
-                return {"action": "vendor_incident", "result": "logged", "incident_id": inc.id}
-
-            if functionality in ("sla_record", "create.sla_record"):
-                if not vendor_id:
-                    return {"action": "sla_record", "result": "skipped"}
-                rec = VendorSLARecord(vendor_id=vendor_id, metric_name="WF-Logged SLA", target_value="99.9%", actual_value="99.5%", recorded_at=datetime.utcnow())
-                db.add(rec); db.commit()
-                return {"action": "sla_record", "result": "recorded", "record_id": rec.id}
-
-            if functionality in ("ai_vendor_risk_summary", "create.ai_vendor_risk_summary"):
-                if vendor_id:
-                    v = db.query(Vendor).filter(Vendor.id == vendor_id).first()
-                    if v and hasattr(v, "ai_summary"):
-                        try: v.ai_summary = f"AI summary: vendor '{v.name}' has tier '{getattr(v, 'tier', 'medium')}'. Auto-generated."; db.commit()
-                        except Exception: pass
-                return {"action": "ai_vendor_risk_summary", "result": "generated", "vendor_id": vendor_id}
-
-            if functionality in ("ai_score_assessment", "trigger.ai_score_assessment", "score_assessment", "trigger.score_assessment"):
-                va = db.query(VendorAssessment).filter(VendorAssessment.vendor_id == vendor_id).first() if vendor_id else None
-                if va and hasattr(va, "overall_score"):
-                    try: va.overall_score = 75; db.commit()
-                    except Exception: pass
-                return {"action": "score_assessment", "result": "scored", "vendor_id": vendor_id}
-
-            if functionality in ("assessment", "approve.assessment", "update.assessment"):
-                va = db.query(VendorAssessment).filter(VendorAssessment.vendor_id == vendor_id).first() if vendor_id else None
-                if va and hasattr(va, "status"):
-                    try: va.status = "approved" if verb == "approve" else "in_review"; db.commit()
-                    except Exception: pass
-                return {"action": f"vendor_risk.assessment.{verb}", "result": "ok", "assessment_id": va.id if va else None}
+            return WorkflowActionHandlers._execute_vendor_action(db, instance, definition, verb, functionality, payload)
 
         # ── RCSA ──────────────────────────────────────────────────────────────
         if submodule_key == "rcsa":
@@ -2808,6 +2757,121 @@ class WorkflowActionHandlers:
         return {"action": f"risk_management.{submodule_key}.{functionality}", "result": "executed", "verb": verb}
 
     @staticmethod
+    def _execute_vendor_action(db, instance, definition, verb: str, functionality: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """A supplier step does what the same button does: it calls the same endpoint with the rights of the workflow's
+        owner, so nothing is checked or written differently. What a workflow cannot do properly fails the step and says why."""
+        from fastapi import HTTPException
+        from pydantic import ValidationError
+        from ....models import Vendor
+        from ...vendor_risk.routers import assessments as A, monitoring as M, questionnaires as Q, vendors as V
+
+        fn = functionality.split(".")[-1]           # older nodes say "create.vendor"
+        if fn.startswith("external_"):
+            raise ActionRefused("Only the supplier answers its questionnaire and sends its evidence, through its own link; "
+                                "a workflow cannot do that for them.")
+        if fn.startswith("ai_"):
+            raise ActionRefused("The AI reads a supplier when someone asks for it on the supplier's page; a workflow cannot start it.")
+        if (fn, verb) == ("assessment", "approve"):
+            raise ActionRefused("A supplier's assessment is approved by a person on its Approval stage; a workflow cannot approve it.")
+        if (fn, verb) == ("assessment", "delete"):
+            raise ActionRefused("A supplier's assessments are kept as its history; a workflow does not delete one.")
+        # (step, verb) → (the endpoint its button calls, the request body, the ids in the endpoint's path)
+        step = {
+            ("vendor", "create"): (V.create_vendor, V.VendorCreate, ()),
+            ("vendor", "update"): (V.update_vendor, V.VendorUpdate, ("vendor_id",)),
+            ("vendor", "delete"): (V.delete_vendor, None, ("vendor_id",)),          # archives it
+            ("restore_vendor", "create"): (V.restore_vendor, None, ("vendor_id",)),
+            ("send_questionnaire", "create"): (Q.send_questionnaire, Q.SendQuestionnaireRequest, ()),
+            ("incident", "create"): (M.create_incident, M.IncidentCreate, ("vendor_id",)),
+            ("incident", "update"): (M.update_incident, M.IncidentUpdate, ("vendor_id", "incident_id")),
+            ("sla_record", "create"): (M.create_sla_record, M.SLARecordCreate, ("vendor_id",)),
+            ("assessment", "create"): (A.create_assessment, A.AssessmentCreate, ()),
+            ("assessment", "update"): (A.update_assessment, A.AssessmentUpdate, ("assessment_id",)),
+            ("score_assessment", "trigger"): (A.score_assessment, A.ScoreRequest, ("assessment_id",)),
+        }.get((fn, verb))
+        what = f"“{fn.replace('_', ' ')}” ({verb})"
+        if step is None:
+            raise ActionRefused(f"A workflow cannot do {what} on a supplier; do it on the supplier's page.")
+        endpoint, model, path = step
+
+        owner = db.get(GRCUser, definition.created_by_id) if getattr(definition, "created_by_id", None) else None
+        if owner is None or not owner.is_active:
+            raise ActionRefused("A supplier step acts with the rights of the workflow's owner, and this workflow has no active owner.")
+        trigger, ctx = dict(instance.trigger_payload or {}), dict(instance.context or {})
+
+        def ref(name):                              # the step's own setting, else an earlier step's, else the event's
+            for source in (payload, ctx, trigger):
+                value = source.get(name)
+                if value not in (None, ""):
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        raise ActionRefused(f"The step's {name.replace('_', ' ')} is not a number: {value}.")
+            return None
+
+        vendor = None
+        if "vendor_id" in path or (model is not None and "vendor_id" in model.model_fields):
+            vid = ref("vendor_id")
+            rtype = str(trigger.get("resource_type") or "").lower()
+            if vid is None and rtype in ("grc_vendors", "vendors", "vendor") and trigger.get("resource_id"):
+                vid = int(trigger["resource_id"])
+            if vid is None and rtype in ("grc_vendors", "vendors", "vendor", "vendor_risk"):
+                # The event of a supplier just added carries its name only (its id is not known when the event is written).
+                changes = trigger.get("changes") if isinstance(trigger.get("changes"), dict) else {}
+                request = changes.get("request") if isinstance(changes.get("request"), dict) else {}
+                name = trigger.get("resource_name") or changes.get("resource_name") or request.get("name")
+                row = name and (db.query(Vendor.id).filter(Vendor.tenant_id == instance.tenant_id, Vendor.name == name)
+                                .order_by(Vendor.id.desc()).first())
+                vid = row[0] if row else None
+            vendor = db.query(Vendor).filter(Vendor.id == vid, Vendor.tenant_id == instance.tenant_id).first() if vid else None
+            if vendor is None:
+                raise ActionRefused("The step names no supplier of this organisation: choose one, or start the workflow "
+                                    "from a supplier's event.")
+            if vendor.deleted_at is not None and (fn, verb) not in (("vendor", "delete"), ("restore_vendor", "create")):
+                raise ActionRefused(f"{vendor.name} is archived; restore it before a workflow acts on it.")
+        ids = {"vendor_id": vendor.id if vendor else None}
+        for name in path:
+            if name != "vendor_id":
+                ids[name] = ref(name)
+                if ids[name] is None:
+                    raise ActionRefused(f"The step names no {name[:-3].replace('_', ' ')}.")
+
+        body = []
+        if model is not None:
+            fields = {k: v for k, v in payload.items() if k in model.model_fields and v not in (None, "")}
+            if "vendor_id" in model.model_fields:
+                fields["vendor_id"] = vendor.id
+            if verb == "update" and not fields:
+                raise ActionRefused(f"The step {what} changes nothing: set at least one of its fields.")
+            try:
+                body = [model(**fields)]
+            except ValidationError as exc:
+                problem = exc.errors()[0]
+                field = ".".join(str(p) for p in problem.get("loc", ())).replace("_", " ") or "a field"
+                raise ActionRefused(f"The step {what} has a wrong {field}: {problem.get('msg', 'not valid')}.")
+        try:
+            out = endpoint(*[ids[name] for name in path], *body, db=db, current_user=owner)
+        except HTTPException as exc:
+            detail = (exc.detail.get("message") or str(exc.detail)) if isinstance(exc.detail, dict) else exc.detail
+            raise ActionRefused(f"The step {what} was not done: {detail}")
+
+        made = (out.get("questionnaire_response") or out.get("assessment") or out) if isinstance(out, dict) else {}
+        result = {"action": f"vendor_risk.{fn}.{verb}", "result": "done",
+                  "vendor_id": vendor.id if vendor else made.get("vendor_id", made.get("id") if fn == "vendor" else None),
+                  "record_id": made.get("id")}
+        if result["vendor_id"]:
+            instance.context = {**ctx, "vendor_id": result["vendor_id"]}      # a later supplier step acts on the same one
+        db.add(WorkflowAuditLog(
+            tenant_id=instance.tenant_id,
+            workflow_definition_id=definition.id,
+            workflow_instance_id=instance.id,
+            event_type=f"action.vendor_risk.{fn}.{verb}",
+            message=f"Supplier step {what} done (supplier {result['vendor_id']}, record {result['record_id']})",
+            payload={"vendor_id": result["vendor_id"], "record_id": result["record_id"]},
+        ))
+        return result
+
+    @staticmethod
     def _execute_governance_document_action(db, instance, definition, verb: str, functionality: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Execute governance document platform actions directly against the database."""
         tenant_id = instance.tenant_id
@@ -2851,6 +2915,13 @@ class WorkflowActionHandlers:
             if doc_id:
                 doc = _find_doc(int(doc_id))
                 if doc:
+                    # only an empty draft's text is filled in: never a document that is its file (an uploaded Word or PDF, whose text
+                    # is empty), nor one in review, approved or published (its text is what was, or is being, signed)
+                    if doc.file_path or doc.status != "draft":
+                        logger.info("workflow.action.generate_policy_ai_draft doc_id=%s left as it is (status %s, file %s)",
+                                    doc.id, doc.status, bool(doc.file_path))
+                        return {"action": "generate_policy_ai_draft", "result": "left_as_it_is", "document_id": doc.id,
+                                "reason": "Only an empty draft that is not a file gets a drafted text."}
                     if not doc.content:
                         doc.content = (
                             f"# {doc.title}\n\n"
@@ -3139,40 +3210,63 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _create_policy_review_task(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """A real task in Task Management: for the people named, else the owner of the document the event is about."""
+        from datetime import timedelta
+        from ....models import CriticalTask
+        from ...governance import doc_lifecycle
+
         policy_category = payload.get("policy_category")
         due_days = int(payload.get("due_days") or 14)
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        assignees = _normalize_ids(payload.get("assignee_user_ids") or []) or ([doc.owner_id] if doc and doc.owner_id else [])
+        what = doc.title if doc else (policy_category or "policy")
+        task = CriticalTask(
+            tenant_id=instance.tenant_id, title=(payload.get("title") or f"Review: {what}")[:255],
+            description=payload.get("description") or f"Created by workflow \"{getattr(definition, 'name', '')}\" for {what}.",
+            source="Workflow", source_module="workflow_engine", source_entity_type="WorkflowInstance", source_entity_id=instance.id,
+            category="Compliance", status="Open", priority=str(payload.get("priority") or "Medium").capitalize(),
+            due_date=datetime.utcnow() + timedelta(days=due_days), assigned_user_ids=assignees,
+            assigned_owner_id=assignees[0] if assignees else None)
+        db.add(task)
+        db.flush()
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.create_policy_review_task",
-            message=f"Policy review task created (category={policy_category}, due in {due_days}d)",
-            payload={"policy_category": policy_category, "due_days": due_days},
+            message=f"Task #{task.id} created for {what}, due in {due_days}d, assigned to {assignees or 'nobody'}",
+            payload={"policy_category": policy_category, "due_days": due_days, "task_id": task.id, "assignee_user_ids": assignees},
         ))
-        return {"action": "create_policy_review_task", "policy_category": policy_category, "due_days": due_days}
+        return {"action": "create_policy_review_task", "policy_category": policy_category, "due_days": due_days, "task_id": task.id}
 
     @staticmethod
     def _publish_policy(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
-        doc_id = payload.get("document_id")
-        if doc_id:
-            try:
-                doc = db.query(GovernanceDocument).filter(
-                    GovernanceDocument.id == int(doc_id),
-                    GovernanceDocument.tenant_id == instance.tenant_id,
-                ).first()
-                if doc:
-                    doc.status = "published"
-            except Exception:
-                pass
+        """Publish the approved document the event is about, the way the Publish button does (the version in force, everyone
+        asked to acknowledge it, the document's audit row). Anything else fails the step with the reason."""
+        from ...governance import doc_lifecycle
+        from ...governance.routers.documents import publish
+
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        if doc is None:
+            raise ActionRefused("There is no document to publish: the step names no document of this organisation.")
+        if doc.status == "published":
+            raise ActionRefused(f"\"{doc.title}\" was not published again: it is already published.")
+        if doc.status != "approved":
+            raise ActionRefused(f"\"{doc.title}\" was not published: only an approved document is published, and it is "
+                                f"{(doc.status or 'draft').replace('_', ' ')}. Approval comes from its approvers signing it in its review.")
+        by = getattr(definition, "created_by_id", None) or doc.owner_id or doc.author_id     # recorded as its publisher
+        if by is None:
+            raise ActionRefused(f"\"{doc.title}\" was not published: neither the workflow nor the document has an owner to record as its publisher.")
+        publish(db, doc, by, f"Document published by the workflow \"{getattr(definition, 'name', None) or 'without a name'}\"")
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.publish_policy",
-            message=f"Policy published (document_id={doc_id})",
-            payload={"document_id": doc_id},
+            message=f"Policy published (document_id={doc.id})",
+            payload={"document_id": doc.id},
         ))
-        return {"action": "publish_policy", "document_id": doc_id, "status": "published"}
+        return {"action": "publish_policy", "document_id": doc.id, "status": "published"}
 
     @staticmethod
     def _submit_policy_exception(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -3204,18 +3298,27 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _request_attestation(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Ask people (the users named, else everyone) to acknowledge the published document the event is about, for
+        organisations with document lifecycle; they get a task and an alert each."""
+        from ...governance import doc_lifecycle
+
         policy_category = payload.get("policy_category")
         deadline_days = int(payload.get("deadline_days") or 10)
         assignee_ids = _normalize_ids(payload.get("assignee_user_ids") or [])
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        asked, note = 0, "no published document to acknowledge"
+        if doc is not None and doc.status == "published" and doc_lifecycle.enabled(db):
+            asked = doc_lifecycle.request_acknowledgements(db, doc, assignee_ids or None, None, deadline_days)
+            note = f"{asked} acknowledgement(s) requested for \"{doc.title}\""
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.request_attestation",
-            message=f"Attestation requested (category={policy_category}, deadline={deadline_days}d, users={assignee_ids})",
-            payload={"policy_category": policy_category, "deadline_days": deadline_days, "assignee_user_ids": assignee_ids},
+            message=f"Attestation requested (category={policy_category}, deadline={deadline_days}d, users={assignee_ids}): {note}",
+            payload={"policy_category": policy_category, "deadline_days": deadline_days, "assignee_user_ids": assignee_ids, "requested": asked},
         ))
-        return {"action": "request_attestation", "policy_category": policy_category, "deadline_days": deadline_days}
+        return {"action": "request_attestation", "policy_category": policy_category, "deadline_days": deadline_days, "requested": asked}
 
     @staticmethod
     def _create_audit_plan(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

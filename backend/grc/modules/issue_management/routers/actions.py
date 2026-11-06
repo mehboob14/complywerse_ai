@@ -122,6 +122,8 @@ def create_action(
         raise HTTPException(status_code=400, detail="Invalid action_type")
 
     due_date_raw = body.get("due_date")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("assignee_id")])
     action = IssueAction(
         issue_id=issue.id,
         action_type=action_type,
@@ -154,6 +156,8 @@ def update_action(
 ):
     action = _get_action_with_issue(action_id, current_user, db)
     prev_status = action.status
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("assignee_id")], kept=[action.assignee_id])
 
     for field in ("title", "description", "action_type", "assignee_id", "evidence_id"):
         if field in body:

@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 
+from ....feature_map import modules as sidebar_modules
 from ....models import get_db, Framework, VulnerabilitySLAConfig, GRCUser, TenantUser, Role
 from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant, get_user_tenants
 
@@ -24,19 +25,51 @@ from ..services.catalog import (
 router = APIRouter(prefix="/catalog", tags=["Workflow Engine Catalog"])
 
 
+_REGISTER_PATH = ["Auditor Portal", "Issue Register"]
+
+
+def _register_off(db: Session) -> bool:
+    """The audit issue register exists only for the tenants that have it (config.AUDIT_REGISTER_TENANTS)."""
+    from ...issue_management.audit_register import enabled
+    return not enabled(db)
+
+
+def _menu(db: Session) -> list:
+    menu = sidebar_modules()
+    if not _register_off(db):
+        return menu
+    return [{**m, "submodules": [s for s in m["submodules"] if [m["module"], s] != _REGISTER_PATH]} for m in menu]
+
+
 @router.get("/node-types")
 def list_node_types(
+    db: Session = Depends(get_db),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
-    platform_functions = get_platform_functions_grouped_by_module()
+    triggers, platform_functions = TRIGGER_NODE_TYPES, get_platform_functions_grouped_by_module()
+    if _register_off(db):
+        keep = lambda items: [i for i in items if (i.get("path") or [])[:2] != _REGISTER_PATH]  # noqa: E731
+        triggers = keep(triggers)
+        platform_functions = {m: kept for m, fns in platform_functions.items() if (kept := keep(fns))}
     return {
-        "triggers": TRIGGER_NODE_TYPES,
+        "triggers": triggers,
         "actions": ACTION_NODE_TYPES,
         "platform_functions": platform_functions,
         "conditions": CONDITION_NODE_TYPES,
         "approvals": APPROVAL_NODE_TYPES,
         "timers": TIMER_NODE_TYPES,
+        # Sidebar order, so the builder lists modules the way the menu does.
+        "modules": _menu(db),
     }
+
+
+@router.get("/modules")
+def list_modules(
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
+):
+    """Every sidebar module with its pages, in menu order."""
+    return {"modules": _menu(db)}
 
 
 @router.get("/node-param-schemas")
@@ -83,7 +116,9 @@ def lookup_records(
     tenant_id = get_user_primary_tenant(current_user, db)
 
     if entity == "user":
-        query = db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+        from ....routers.auth_router import platform_account
+
+        query = db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
         if q:
             query = query.filter(
                 GRCUser.username.ilike(f"%{q}%")
@@ -258,10 +293,12 @@ def list_actor_users(
 
     # Per-tenant DB: every active grc_users row is a tenant member.
     # Joining through grc_tenant_users would silently drop users created
-    # via /admin/users (which doesn't backfill that join table).
+    # via /admin/users (which doesn't backfill that join table). Accounts an access review imported are not actors.
+    from ....routers.auth_router import platform_account
+
     query = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())
     )
 
     if search:

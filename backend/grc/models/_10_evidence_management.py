@@ -1,4 +1,5 @@
 from ._09_1_unified_common_control_library_models import *  # noqa: F401,F403
+from sqlalchemy import JSON as _JSON
 
 # =============================================================================
 # 7. Evidence Management
@@ -42,6 +43,10 @@ class Evidence(Base):
     review_comments = Column(Text, nullable=True)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     approved_at = Column(DateTime, nullable=True)
+    # Tenant-defined fields (services/module_settings.py, module "evidence").
+    custom_values = Column(_JSON, nullable=True)
+    # Where the AI review of the uploaded file stands (services/evidence_review.py): status, step, error, times.
+    ai_review = Column(JSON, nullable=True)
     
     tenant = relationship("Tenant", back_populates="evidence")
     uploader = relationship("GRCUser", back_populates="uploaded_evidence", foreign_keys=[uploaded_by])
@@ -119,6 +124,13 @@ class EvidenceControlMapping(Base):
     # Audit trail
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_ai = Column(Boolean, default=True)  # True if AI-generated, False if manual
+    # Which required artifact this file satisfies on the control, as the artifact's
+    # normalised name (evidence_match.artifact_key). Consolidated artifacts have no
+    # id, but a name is consistent across every control that asks for the same
+    # document — which is what lets a file linked as the 'Business Continuity
+    # Plan' once be offered wherever that artifact is required. NULL = linked to
+    # the control generally, not to a specific artifact.
+    artifact_key = Column(String(255), nullable=True, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_evidence_ai_assessments.id"), nullable=True)
     
     evidence = relationship("Evidence", back_populates="control_mappings")

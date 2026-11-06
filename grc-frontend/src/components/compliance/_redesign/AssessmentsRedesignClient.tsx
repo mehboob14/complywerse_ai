@@ -6,9 +6,7 @@ import apiClient, { assetsApi, getTenantSlug } from '@/lib/api';
 import ComplianceAssessmentsModule from './ComplianceAssessmentsModule';
 import NcaTab from '@/components/compliance/NcaTab';
 import PDPLAssessmentTab from '@/components/compliance/PDPLAssessmentTab';
-import ASVSAssessmentTab from '@/components/compliance/ASVSAssessmentTab';
-import MobileAppSecurityTab from '@/components/compliance/MobileAppSecurityTab';
-import OwaspTestingTab from '@/components/compliance/OwaspTestingTab';
+import AssessmentTypePage from '@/components/compliance/scoping/AssessmentTypePage';
 import MaturityAssessmentTab from '@/components/compliance/MaturityAssessmentTab';
 import KpiReportTab from '@/components/compliance/KpiReportTab';
 import DpiaAssessmentTab from '@/components/compliance/DpiaAssessmentTab';
@@ -52,6 +50,7 @@ interface RawItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: ControlItem['assignees'];
   timeline: string | null;
   priority: string | null;
   evidence_reference: string | null;
@@ -173,6 +172,7 @@ function mapItem(it: RawItem, auditMaster: boolean): ControlItem {
     gaps_identified: it.gaps_identified,
     proposed_solution: it.proposed_solution,
     responsible_party: it.responsible_party,
+    assignees: it.assignees ?? [],
     timeline: it.timeline,
     evidence_reference: it.evidence_reference,
     remarks: it.remarks,
@@ -319,13 +319,14 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
   };
 
   const renderTab = (tabKey: string) => {
-    if (tabKey === 'asvs') return <ASVSAssessmentTab />;
-    if (tabKey === 'cs_mobile') return <MobileAppSecurityTab />;
-    if (tabKey === 'owasp_testing') return <OwaspTestingTab />;
-    if (tabKey === 'cs_csir') return <MaturityAssessmentTab format="csir_maturity" />;
-    if (tabKey === 'cs_cti') return <MaturityAssessmentTab format="cti_maturity" />;
-    if (tabKey === 'cs_itsecops') return <MaturityAssessmentTab format="itsecops_maturity" />;
-    if (tabKey === 'cs_incident') return <MaturityAssessmentTab format="incident_maturity" />;
+    // the Cyber Security types open on their own page (what to have ready, the questionnaire, the assessments made from it, Start)
+    if (tabKey === 'asvs') return <AssessmentTypePage format="asvs_checklist" />;
+    if (tabKey === 'cs_mobile') return <AssessmentTypePage format="mobile_app_security" />;
+    if (tabKey === 'owasp_testing') return <AssessmentTypePage format="owasp_v4_testing_checklist" />;
+    if (tabKey === 'cs_csir') return <AssessmentTypePage format="csir_maturity" />;
+    if (tabKey === 'cs_cti') return <AssessmentTypePage format="cti_maturity" />;
+    if (tabKey === 'cs_itsecops') return <AssessmentTypePage format="itsecops_maturity" />;
+    if (tabKey === 'cs_incident') return <AssessmentTypePage format="incident_maturity" />;
     if (tabKey === 'digital_ops_maturity') return <MaturityAssessmentTab format="digital_ops_maturity" />;
     if (tabKey === 'cs_kpi') return <KpiReportTab />;
     if (tabKey === 'dpia') return <DpiaAssessmentTab />;
@@ -360,6 +361,9 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
           ext: fileExt(fileName),
           meta: `${isFramework ? 'Framework-linked' : 'Linked'} · ${status}${when ? ' · ' + formatDate(when) : ''}`,
           tone: isFramework ? 'teal' : 'slate',
+          evidence_id: ev.evidence_id ?? null,
+          created_at: ev.created_at ?? null,
+          quality: ev.quality ?? null,
         };
       });
     },

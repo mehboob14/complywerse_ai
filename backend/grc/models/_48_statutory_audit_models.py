@@ -42,6 +42,9 @@ class AuditObservation(Base):
 
     management_response = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    # The tenant's own extra fields for an observation, validated against
+    # its definitions in services/module_settings.py before they land here.
+    custom_values = Column(JSON, default=dict)
     area_domain = Column(String(255), nullable=True)
 
     # Free-text grouping window (e.g. "IFPD Circular", "Inspection", "Licensing")

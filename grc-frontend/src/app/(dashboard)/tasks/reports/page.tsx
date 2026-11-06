@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
+import { useToast } from '@/components/ui/ToastProvider';
+import { reassignReport } from '@/lib/documentTasks';
 import {
   Target,
   AlertTriangle,
@@ -41,6 +43,8 @@ interface ReportSummary {
   owner_workload: Record<string, number>;
   completion_by_source: Record<string, SourceCompletion>;
   trend_data: TrendEntry[];
+  /** 'mine': counts of the tasks the person takes part in; 'all': every task (an administrator or view_all). */
+  scope?: 'all' | 'mine';
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -63,6 +67,31 @@ export default function TaskReportsPage() {
   const [escalationPredictions, setEscalationPredictions] = useState<Record<string, unknown> | null>(null);
   const [workloadSuggestions, setWorkloadSuggestions] = useState<Record<string, unknown> | null>(null);
   const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const applyReassignments = async (suggestions: Record<string, unknown>[]) => {
+    setAiLoading('reassign');
+    const outcomes: (string | null)[] = [];
+    for (const s of suggestions) {
+      if (!s.task_id || !s.suggested_owner_id) continue;
+      try {
+        await criticalTasksApi.update(s.task_id as number, { assigned_owner_id: s.suggested_owner_id as number });
+        outcomes.push(null);
+      } catch (e: unknown) {
+        const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+        outcomes.push(typeof detail === 'string' ? detail : '');
+      }
+    }
+    const { moved, message } = reassignReport(outcomes);
+    toast(message
+      ? { type: 'warning', title: `${moved} task${moved === 1 ? '' : 's'} reassigned`, message }
+      : { type: 'success', title: `${moved} task${moved === 1 ? '' : 's'} reassigned` });
+    setWorkloadSuggestions(null);
+    setAiLoading(null);
+    queryClient.invalidateQueries({ queryKey: ['task-reports'] });
+    queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
+  };
 
   const { data: report, isLoading } = useQuery<ReportSummary>({
     queryKey: ['task-reports'],
@@ -119,7 +148,9 @@ export default function TaskReportsPage() {
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Reports</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Analytics and insights for critical task management
+            {report.scope === 'mine'
+              ? 'Analytics for your tasks: the ones you own, are assigned to, review or created'
+              : 'Analytics and insights for critical task management'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -445,21 +476,11 @@ export default function TaskReportsPage() {
             </button>
             {(workloadSuggestions.suggestions as Record<string, unknown>[])?.length > 0 && (
               <button
-                onClick={async () => {
-                  const suggestions = workloadSuggestions.suggestions as Record<string, unknown>[];
-                  for (const s of suggestions) {
-                    if (s.task_id && s.suggested_owner_id) {
-                      try {
-                        await criticalTasksApi.update(s.task_id as number, { assigned_owner_id: s.suggested_owner_id as number });
-                      } catch {
-                        /* skip failed updates */
-                      }
-                    }
-                  }
-                  setWorkloadSuggestions(null);
-                }}
-                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 transition-colors"
+                onClick={() => applyReassignments(workloadSuggestions.suggestions as Record<string, unknown>[])}
+                disabled={aiLoading === 'reassign'}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
+                {aiLoading === 'reassign' && <Loader2 className="animate-spin" size={14} />}
                 Apply Reassignments
               </button>
             )}

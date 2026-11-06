@@ -19,6 +19,7 @@ from ....models import (
     GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
 from ..framework_methodologies import (
     Methodology,
     all_methodologies,
@@ -495,6 +496,8 @@ def _validate_assigned_user_for_tenant(tenant_id: int, assigned_user_id: Optiona
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assigned user must belong to the same tenant as the assessment"
         )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [assigned_user_id])
 
 
 def _validate_risk_scale_value(field_name: str, value: Optional[int]) -> None:
@@ -1487,6 +1490,7 @@ async def upload_question_evidence(
 
     db.commit()
     db.refresh(evidence)
+    evidence_review.rate_upload(db, repo_evidence, current_user.id)
 
     evidence = db.query(FrameworkRiskQuestionEvidence).options(
         joinedload(FrameworkRiskQuestionEvidence.uploader)

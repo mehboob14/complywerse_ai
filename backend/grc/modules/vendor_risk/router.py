@@ -8,10 +8,73 @@ from .routers import (
     lifecycle_router,
 )
 from .tpra.api import router as tpra_router
-from .tpra.dashboard import router as tpra_dashboard_router
+from .tpra.dashboard import router as tpra_dashboard_router, portfolio_router as tpra_portfolio_router
+from .tpra.attention import router as tpra_attention_router
+from .tpra.graph import router as tpra_graph_router
+from .tpra.reports import router as tpra_reports_router
+from .tpra.quantification import router as tpra_exposure_router
+from .tpra.policy import router as tpra_policy_router
+from .tpra.roster import router as tpra_roster_router
+from .tpra.onboarding import router as tpra_onboarding_router
+from .tpra.checkins import router as tpra_checkins_router
+from .tpra.contracts import router as tpra_contracts_router
+from .tpra.outside_in import router as tpra_outside_in_router
+from .tpra.technology import router as tpra_technology_router
+from .tpra.alerts import router as tpra_alerts_router
+from .tpra.shadow_saas import router as tpra_shadow_saas_router
+from .tpra.fair import router as tpra_fair_router
+from .tpra.summary import router as tpra_summary_router
+from .tpra.emails import router as tpra_emails_router
+from .tpra.action_plans import router as tpra_action_plans_router
+from .tpra.leaks import router as tpra_leaks_router
+from .tpra.logos import router as tpra_logos_router
+from .tpra.vat import router as tpra_vat_router
+from .tpra.contacts import router as tpra_contacts_router
+from .tpra.supplier_portal import router as tpra_supplier_portal_router
+from .tpra.paperwork import router as tpra_paperwork_router
+from .tpra.engagements import router as tpra_engagements_router
+from .tpra.supplier_requests import router as tpra_supplier_requests_router
+from .tpra.reviews import router as tpra_reviews_router
+from .tpra.alert_rules import router as tpra_alert_rules_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
+# Onboarding requests, procurement's view and vendor import. First, so its
+# literal /vendors/import paths are matched before any /vendors/{id} route.
+router.include_router(tpra_onboarding_router)
+# Stakeholders' yearly check-ins on suppliers in use.
+router.include_router(tpra_checkins_router)
+# Every contract, with the ones needing a decision first.
+router.include_router(tpra_contracts_router)
+# Each supplier's websites and domains as the internet sees them, and waivers.
+router.include_router(tpra_outside_in_router)
+# Which suppliers run what, and which show a given vulnerability.
+router.include_router(tpra_technology_router)
+# Breach, adverse-media and vulnerability alerts, triaged like cases.
+router.include_router(tpra_alerts_router)
+# Software in use that no one has assessed: onboard, deny (and block) or dismiss.
+router.include_router(tpra_shadow_saas_router)
+# FAIR analyses of loss scenarios, prefilled from what we hold.
+router.include_router(tpra_fair_router)
+# A supplier on a few printable pages, with its NIST CSF 2.0 profile.
+router.include_router(tpra_summary_router)
+# The emails third-party risk sends, in the tenant's own words.
+router.include_router(tpra_emails_router)
+# A supplier's action plan: dated to-dos, and sends, check-ins and reassessments on a date.
+router.include_router(tpra_action_plans_router)
+# Leaked credentials in public code, supplier logos, and EU VAT numbers checked with VIES.
+router.include_router(tpra_leaks_router)
+router.include_router(tpra_logos_router)
+router.include_router(tpra_vat_router)
+# The supplier relationship: contacts and portal links, the portal itself, paperwork,
+# engagements, requests and messages, reviews, alert rules (wired once; each file is its own).
+router.include_router(tpra_contacts_router)
+router.include_router(tpra_supplier_portal_router)
+router.include_router(tpra_paperwork_router)
+router.include_router(tpra_engagements_router)
+router.include_router(tpra_supplier_requests_router)
+router.include_router(tpra_reviews_router)
+router.include_router(tpra_alert_rules_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)
@@ -23,6 +86,19 @@ router.include_router(lifecycle_router)
 router.include_router(tpra_router)
 # Program dashboard + risk-trend (read-only aggregation over TPRA tables + snapshots).
 router.include_router(tpra_dashboard_router)
+# The counts the module header and rail show (/vendor-risk/portfolio/counts).
+router.include_router(tpra_portfolio_router)
+# What needs somebody today, computed from current data.
+router.include_router(tpra_attention_router)
+# Fourth parties, concentration and what depends on each vendor.
+router.include_router(tpra_graph_router)
+# Committee pack, register, vendor evidence files and the examiner link.
+router.include_router(tpra_reports_router)
+# What a vendor could cost us in a year, as a range.
+router.include_router(tpra_exposure_router)
+# The vendor policy and the workspace roster (wired once; each file is its own).
+router.include_router(tpra_policy_router)
+router.include_router(tpra_roster_router)
 
 
 @router.get("")

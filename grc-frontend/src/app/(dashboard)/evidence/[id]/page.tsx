@@ -3,9 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel } from '@/components/ui';
+import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel, useToast } from '@/components/ui';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
@@ -13,17 +16,20 @@ import {
   AlertTriangle, Eye, Trash2, Send, Sparkles,
   History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
   ShieldCheck, ClipboardList, ExternalLink, Plus, X,
-  ChevronRight, Search, ChevronLeft
+  ChevronRight, Search, ChevronLeft, FileSearch
 } from 'lucide-react';
 import Link from 'next/link';
 import EvidenceTimeline from './_EvidenceTimeline';
-import LinksCoverage from './_LinksCoverage';
+import LinksCoverage, { type AiLinkRec as LcRec } from './_LinksCoverage';
+import { auditObservationId, controlCount, coverageSummary, linkedGroups } from './_linkedGroups';
 import RelationshipsPanel from './_RelationshipsPanel';
 import AuditReadinessCard from './_AuditReadinessCard';
 import ReviewerActionPanel from './_ReviewerActionPanel';
 import EvidenceCrossMap from './_EvidenceCrossMap';
 import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
+import { MatchingNote, MaturityNotes, RatedAgainst, ReviewProgress, reviewActive, useEvidenceReview, type ReviewState } from '../_review';
+import { parseUtc } from '@/lib/serverTime';
 
 interface EvidenceVersion {
   id: number;
@@ -119,6 +125,7 @@ interface EvidenceDetail {
   asset_links: AssetLink[];
   incident_links: IncidentLink[];
   policy_links: PolicyLink[];
+  custom_values?: CustomValues | null;
 }
 
 interface OCRContent {
@@ -172,6 +179,7 @@ interface AllLinksResponse {
   incidents: { total: number; links: Array<{ id: number; incident_id: number; link_type: string | null; incident: { id: number; title: string; severity: string; status: string } | null }> };
   policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string; document_id?: number | null; document_title?: string | null; document_code?: string | null; source_section?: string | null; source_page?: number | null } | null }> };
   assessments?: { total: number; links: Array<{ id: number; assessment_item_id: number; assessment_id: number | null; assessment_name: string | null; assessment_type: string | null; assessment_status: string | null; item_number: string | null; area_domain: string | null; control_description: string | null; link_status: string; created_at: string | null }> };
+  audit_observations?: { total: number; links: Array<{ id: number; kind: string; record_id: number; link_type: string | null; code: string | null; title: string | null; status: string | null; priority: string | null; source: string | null; created_at: string | null }> };
   total_links: number;
 }
 
@@ -179,8 +187,10 @@ interface ControlsResponse {
   evidence_id: number;
   evidence_name: string;
   total_mappings: number;
-  normalized_controls: Array<{ id: number; normalized_control: { id: number; code: string; name: string } | null }>;
-  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; framework_control?: { id: number; code: string; name: string } | null; parsed_control?: { id: number; control_id: string; title: string } | null }> }>;
+  normalized_controls: Array<{ id: number; clause_reference?: string | null; coverage_type?: string | null; is_locked?: boolean; normalized_control: { id: number; code: string; name: string; scf_id?: string | null } | null }>;
+  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; coverage_type?: string | null; is_locked?: boolean; framework_control?: { id: number; code: string; name: string } | null; parsed_control?: { id: number; control_id: string; title: string } | null }> }>;
+  // mappings that no longer resolve to a control: counted in total_mappings, so listed too
+  unresolved?: Array<{ id: number; control_code?: string | null; framework_name?: string | null; clause_reference?: string | null; coverage_type?: string | null; is_locked?: boolean }>;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -233,7 +243,6 @@ export default function EvidenceDetailPage() {
   const [ocrProcessMessage, setOcrProcessMessage] = useState<string | null>(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showCrossModule, setShowCrossModule] = useState(false);
-  const [assessError, setAssessError] = useState<string | null>(null);
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [showRiskModal, setShowRiskModal] = useState(false);
@@ -250,13 +259,18 @@ export default function EvidenceDetailPage() {
   const [showQualityOverlay, setShowQualityOverlay] = useState(false);
   const [showOcrOverlay, setShowOcrOverlay] = useState(false);
   const [showDetailsOverlay, setShowDetailsOverlay] = useState(false);
-  // Bumped after an AI assessment completes so the recommendation panels
-  // (cross-module link suggestions + targets-to-map) auto-run in parallel —
-  // no manual "Recommend with AI" click needed. Guarded so the auto-assess
-  // fires exactly once per detail open.
+  // Bumped once the file has been rated (or the review is over without a rating) so the recommendation
+  // panels (cross-module link suggestions + targets-to-map) auto-run — no manual "Recommend with AI" click.
   const [recommendNonce, setRecommendNonce] = useState(0);
-  const autoAssessFiredRef = useRef(false);
+  const bumpedRef = useRef(false);
+  // Where the AI review of this file stands. The server runs it and records it; the page only asks, and asks
+  // the server to start it when the file never had one or its run was lost.
+  const { review, working: reviewWorking, again: reviewAgain, matchAgain } = useEvidenceReview(evidenceId, { start: true });
+  const reviewRunning = reviewActive(review?.status);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTab, setEditTab] = useState<'details' | 'custom'>('details');
+  const [editCustom, setEditCustom] = useState<CustomValues>({});
+  const { data: fieldSettings } = useModuleSettings('evidence');
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
@@ -295,7 +309,7 @@ export default function EvidenceDetailPage() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: latestAssessment, refetch: refetchAssessment } = useQuery<LatestAssessment>({
+  const { data: latestAssessment } = useQuery<LatestAssessment>({
     queryKey: ['evidence-assessment', evidenceId],
     queryFn: async () => {
       const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/latest-assessment`);
@@ -335,6 +349,18 @@ export default function EvidenceDetailPage() {
     enabled: true,
   });
 
+  // Every common (SCF) control, for the manual picker: `available-controls` stops at 50.
+  const { data: commonControlOptions } = useQuery<{ controls: Array<{ id: number; scf_id: string; code: string; name: string }> }>({
+    queryKey: ['common-control-options'],
+    queryFn: async () => (await apiClient.get('/evidence-mgmt/links/common-control-options')).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: auditOptions } = useQuery<{ options: Array<{ id: number; code: string | null; title: string | null; subtitle: string | null; kind: string; record_id: number }> }>({
+    queryKey: ['evidence-audit-options', evidenceId],
+    queryFn: async () => (await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/audit-observation-options`)).data,
+  });
+
   const { data: risksList } = useQuery<Array<{ id: number; title: string }>>({
     queryKey: ['risks-list'],
     queryFn: async () => {
@@ -370,7 +396,7 @@ export default function EvidenceDetailPage() {
   }>({
     queryKey: ['governance-documents-for-evidence-link'],
     queryFn: async () => {
-      const response = await apiClient.get('/governance/documents', { params: { limit: 500 } });
+      const response = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
       const data = response.data;
       // The backend returns either a list or a paginated envelope; normalise.
       const docs = Array.isArray(data) ? data : (data?.items || data?.documents || []);
@@ -420,6 +446,7 @@ export default function EvidenceDetailPage() {
 
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-ocr', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-review', evidenceId] });   // reading it again starts the review
     },
     onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
       const detail = error.response?.data?.detail;
@@ -427,40 +454,16 @@ export default function EvidenceDetailPage() {
     },
   });
 
-  const runAssessmentMutation = useMutation({
-    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`),
-    onMutate: () => setAssessError(null),
-    onError: (error: any) => setAssessError(error?.response?.data?.detail || 'AI assessment could not run. Please try again.'),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
-      // Ensure AI suggested clause mappings and link status refresh immediately
-      queryClient.invalidateQueries({ queryKey: ['evidence-clause-mappings', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
-      refetchAssessment();
-      // Assessment done → kick the recommendation panels to auto-run in parallel.
-      setRecommendNonce((n) => n + 1);
-    },
-  });
-
-  // Auto-run the AI assessment once when the detail opens and OCR is ready but no
-  // assessment exists yet — the system runs it itself (no manual "Assess" button).
-  // If an assessment already exists, we still bump the nonce once so the
-  // recommendation panels auto-populate on open.
+  // The recommendation panels start once there is a rating to work from, or when the review is over without
+  // one (they can still match on the file's name and description).
   useEffect(() => {
-    if (autoAssessFiredRef.current || !evidence) return;
-    if (evidence.ocr_status !== 'completed') return;
-    const hasAssessment = !!latestAssessment || !!evidence.latest_assessment;
-    if (hasAssessment) {
-      autoAssessFiredRef.current = true;
+    if (bumpedRef.current || !evidence) return;
+    const rated = !!latestAssessment || !!evidence.latest_assessment || !!review?.has_assessment;
+    if (rated || review?.status === 'failed' || review?.status === 'unavailable') {
+      bumpedRef.current = true;
       setRecommendNonce((n) => n + 1);
-      return;
     }
-    if (runAssessmentMutation.isPending) return;
-    autoAssessFiredRef.current = true;
-    runAssessmentMutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evidence, latestAssessment]);
+  }, [evidence, latestAssessment, review?.has_assessment, review?.status]);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -497,6 +500,7 @@ export default function EvidenceDetailPage() {
       collection_date: editForm.collection_date ? `${editForm.collection_date}T00:00:00` : null,
       validity_period_days: editForm.validity_period_days ? Number(editForm.validity_period_days) : null,
       source_system: editForm.source_system || null,
+      custom_values: valuesToSave(fieldSettings, editCustom, evidence?.custom_values || {}),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
@@ -515,7 +519,13 @@ export default function EvidenceDetailPage() {
     },
   });
 
+  const { toast } = useToast();
+  const linkFailed = (what: string) => (e: any) =>
+    toast({ type: 'error', title: `Could not ${what}`, message: e?.response?.data?.detail || 'Please try again.' });
+  const unlinkFailed = linkFailed('remove the link');
+
   const unlinkControlMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (mappingId: number) => 
       apiClient.delete(`/evidence-mgmt/links/${evidenceId}/controls/${mappingId}`),
     onSuccess: () => {
@@ -525,6 +535,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkRiskMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/risks/${linkId}`),
     onSuccess: () => {
@@ -533,6 +544,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkAssetMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/assets/${linkId}`),
     onSuccess: () => {
@@ -541,6 +553,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkIncidentMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/incidents/${linkId}`),
     onSuccess: () => {
@@ -549,6 +562,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkPolicyMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements/${linkId}`),
     onSuccess: () => {
@@ -623,16 +637,6 @@ export default function EvidenceDetailPage() {
 
   // Id-accepting bulk link mutations — no shared state, so the consolidated
   // panel can link one OR many suggestions at once without a race.
-  const bulkLinkControls = useMutation({
-    mutationFn: (links: { framework_id: number; control_id: number }[]) =>
-      apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
-        control_links: links.map((l) => ({ parsed_control_id: l.control_id, uploaded_framework_id: l.framework_id })),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
-    },
-  });
   const bulkLinkRisks = useMutation({
     mutationFn: (ids: number[]) => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/risks`, { risk_ids: ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] }),
@@ -644,6 +648,41 @@ export default function EvidenceDetailPage() {
   const bulkLinkIncidents = useMutation({
     mutationFn: (ids: number[]) => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/incidents`, { incident_ids: ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] }),
+  });
+
+  // A common control is linked through the Assurance endpoint, as the artifact it asks for, so the
+  // control's own Evidence tab shows the file against that artifact.
+  const bulkLinkCommonControls = useMutation({
+    mutationFn: (recs: LcRec[]) => Promise.all(recs.filter((r) => r.meta?.scf_id).map((r) =>
+      apiClient.post(`/automation/common/controls/${encodeURIComponent(r.meta!.scf_id!)}/assurance/evidence`, {
+        evidence_id: evidenceId, artifact_name: r.meta?.artifact_name || null,
+      }))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+    onError: linkFailed('link the common control'),
+  });
+  const refreshAudit = () => {
+    queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    queryClient.invalidateQueries({ queryKey: ['evidence-audit-options', evidenceId] });
+  };
+  // Two registers, two endpoints: statutory audit observations, and findings in the issue register.
+  const bulkLinkAudit = useMutation({
+    mutationFn: async (recs: LcRec[]) => {
+      const statutory = recs.filter((r) => r.meta?.kind !== 'issue').map((r) => r.meta?.record_id ?? r.id);
+      const issues = recs.filter((r) => r.meta?.kind === 'issue').map((r) => r.meta?.record_id ?? -r.id);
+      if (statutory.length) await apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/audit-observations`, { observation_ids: statutory });
+      if (issues.length) await apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/audit-issues`, { issue_ids: issues });
+    },
+    onSuccess: refreshAudit,
+    onError: linkFailed('link the audit observation'),
+  });
+  const unlinkAuditMutation = useMutation({
+    mutationFn: ({ kind, linkId }: { kind: string; linkId: number }) =>
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/${kind === 'issue' ? 'audit-issues' : 'audit-observations'}/${linkId}`),
+    onSuccess: refreshAudit,
+    onError: unlinkFailed,
   });
 
   const unlockAssessmentMutation = useMutation({
@@ -702,7 +741,7 @@ export default function EvidenceDetailPage() {
 
   const formatDateTime = (dateString?: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('en-US', {
+    return (parseUtc(dateString) ?? new Date(dateString)).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -773,6 +812,14 @@ export default function EvidenceDetailPage() {
   const statusStyle = getStatusStyle(evidence.status);
   const ocrStatusStyle = getOCRStatusStyle(evidence.ocr_status);
   const TypeIcon = getTypeIcon(evidence.evidence_type);
+  const linked = linkedGroups(controlsData, allLinks, {
+    control: (id) => unlinkControlMutation.mutate(id),
+    risk: (id) => unlinkRiskMutation.mutate(id),
+    asset: (id) => unlinkAssetMutation.mutate(id),
+    incident: (id) => unlinkIncidentMutation.mutate(id),
+    policy: (id) => unlinkPolicyMutation.mutate(id),
+    audit: (kind, linkId) => unlinkAuditMutation.mutate({ kind, linkId }),
+  });
 
   return (
     <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
@@ -836,6 +883,8 @@ export default function EvidenceDetailPage() {
                   validity_period_days: evidence.validity_period_days ? String(evidence.validity_period_days) : '',
                   source_system: evidence.source_system || '',
                 });
+                setEditCustom(evidence.custom_values || {});
+                setEditTab('details');
                 setIsEditModalOpen(true);
               }}
               className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
@@ -878,10 +927,10 @@ export default function EvidenceDetailPage() {
                 OCR
               </button>
             )}
-            {runAssessmentMutation.isPending && (
+            {reviewRunning && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                AI assessing…
+                {review?.step === 'matching' ? 'AI matching clauses…' : 'AI rating…'}
               </span>
             )}
           </div>
@@ -913,7 +962,7 @@ export default function EvidenceDetailPage() {
 
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-800">Edit Evidence</h2>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-500 hover:text-slate-800">
@@ -921,36 +970,44 @@ export default function EvidenceDetailPage() {
               </button>
             </div>
             <div className="space-y-3 p-4">
+              <CustomFieldsTabBar tab={editTab} onTab={setEditTab} settings={fieldSettings} />
+              <div data-tab="details" className={editTab === 'details' ? 'space-y-3' : 'hidden'}>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Name</label>
+                <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'name', 'Name')}</label>
                 <input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Description</label>
+              {showBuiltin(fieldSettings, 'description') && <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
                 <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              </div>
+              </div>}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Evidence Type</label>
+                {showBuiltin(fieldSettings, 'evidence_type') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'evidence_type', 'Evidence Type')}</label>
                   <select value={editForm.evidence_type} onChange={(e) => setEditForm((prev) => ({ ...prev, evidence_type: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none">
                     <option value="">Select type...</option>
-                    {['screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','other'].map((type) => (
-                      <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                    {listOptions(fieldSettings, 'evidence_type', editForm.evidence_type, [
+                      'screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','validation_material','other',
+                    ].map((type) => ({ value: type, label: type.replace(/_/g, ' ') }))).map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Collection Date</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'collection_date') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'collection_date', 'Collection Date')}</label>
                   <input type="date" value={editForm.collection_date} onChange={(e) => setEditForm((prev) => ({ ...prev, collection_date: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Validity Days</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'validity') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'validity', 'Validity Days')}</label>
                   <input type="number" min="1" value={editForm.validity_period_days} onChange={(e) => setEditForm((prev) => ({ ...prev, validity_period_days: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Source System</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'source') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'source', 'Source System')}</label>
                   <input value={editForm.source_system} onChange={(e) => setEditForm((prev) => ({ ...prev, source_system: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
+                </div>}
+              </div>
+              </div>
+              <div data-tab="custom" className={editTab === 'custom' ? '' : 'hidden'}>
+                <CustomFieldsTab moduleKey="evidence" values={editCustom} onChange={setEditCustom} />
               </div>
               <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
                 <button onClick={() => setIsEditModalOpen(false)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50">Cancel</button>
@@ -971,7 +1028,7 @@ export default function EvidenceDetailPage() {
         qualityScore={evidence.quality_score}
         assessment={(evidence.latest_assessment ?? null) as Record<string, unknown> | null}
         ocrStatus={evidence.ocr_status}
-        isAssessing={runAssessmentMutation.isPending}
+        isAssessing={reviewRunning}
       />
 
       <OcrContentModal
@@ -1011,7 +1068,7 @@ export default function EvidenceDetailPage() {
             onClick={() => setShowQualityOverlay(true)}
             className="group flex w-full flex-col rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-primary-300 hover:bg-slate-50/60"
           >
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Brain className="h-3.5 w-3.5" strokeWidth={1.75} /> Quality Score</div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Brain className="h-3.5 w-3.5" strokeWidth={1.75} /> Maturity</div>
             {evidence.quality_score !== null ? (
               <>
                 <div className={`mt-1.5 text-2xl font-bold leading-none ${getQualityScoreTextColor(evidence.quality_score)}`}>{Math.round(evidence.quality_score)}%</div>
@@ -1022,8 +1079,12 @@ export default function EvidenceDetailPage() {
                   <div className={`h-1.5 rounded-full ${getQualityScoreColor(evidence.quality_score)}`} style={{ width: `${evidence.quality_score}%` }} />
                 </div>
               </>
+            ) : reviewRunning ? (
+              <div className="mt-1.5 flex items-center gap-1.5 text-sm text-primary-600"><Loader2 className="h-4 w-4 animate-spin" /> Rating…</div>
+            ) : review?.status === 'failed' || review?.status === 'unavailable' ? (
+              <div className="mt-1.5 text-sm text-amber-700">Could not be rated</div>
             ) : (
-              <div className="mt-1.5 text-sm text-slate-400">Not assessed yet</div>
+              <div className="mt-1.5 text-sm text-slate-400">Not rated yet</div>
             )}
           </button>
 
@@ -1055,6 +1116,8 @@ export default function EvidenceDetailPage() {
                 validity_period_days: evidence.validity_period_days ? String(evidence.validity_period_days) : '',
                 source_system: evidence.source_system || '',
               });
+              setEditCustom(evidence.custom_values || {});
+              setEditTab('details');
               setIsEditModalOpen(true);
             } : undefined}
             className={`group flex w-full flex-col rounded-xl border border-slate-200 bg-white p-4 text-left ${canEdit ? 'transition-colors hover:border-primary-300 hover:bg-slate-50/60' : 'cursor-default'}`}
@@ -1105,27 +1168,26 @@ export default function EvidenceDetailPage() {
                 <LinksCoverage
                   evidenceId={evidenceId}
                   autoRunKey={recommendNonce}
-                  totalLinked={
-                    (controlsData?.total_mappings ?? 0) +
-                    (allLinks?.policy_statements?.total ?? 0) +
-                    (allLinks?.assessments?.total ?? 0) +
-                    (allLinks?.risks?.total ?? 0) +
-                    (allLinks?.assets?.total ?? 0) +
-                    (allLinks?.incidents?.total ?? 0)
-                  }
                   pills={[
-                    { key: 'controls', label: 'Controls', icon: Shield, linkedCount: controlsData?.total_mappings ?? 0 },
-                    { key: 'policy_statements', label: 'Policies', icon: FileText, linkedCount: allLinks?.policy_statements?.total ?? 0 },
-                    { key: 'assessments', label: 'Assessments', icon: ClipboardList, linkedCount: allLinks?.assessments?.total ?? 0 },
-                    { key: 'risks', label: 'Risks', icon: AlertTriangle, linkedCount: allLinks?.risks?.total ?? 0 },
-                    { key: 'assets', label: 'Assets', icon: Building2, linkedCount: allLinks?.assets?.total ?? 0 },
-                    { key: 'incidents', label: 'Incidents', icon: AlertCircle, linkedCount: allLinks?.incidents?.total ?? 0 },
+                    { key: 'common_controls', label: 'Common controls', icon: ShieldCheck, linkedCount: controlCount(controlsData), groups: linked.common_controls, summary: coverageSummary(controlsData) },
+                    { key: 'policy_statements', label: 'Policies', icon: FileText, linkedCount: allLinks?.policy_statements?.total ?? 0, groups: linked.policy_statements },
+                    { key: 'assessments', label: 'Assessments', icon: ClipboardList, linkedCount: allLinks?.assessments?.total ?? 0, groups: linked.assessments, hint: 'Assessments link evidence from the assessment item itself.' },
+                    { key: 'audit_observations', label: 'Audit observations', icon: FileSearch, linkedCount: allLinks?.audit_observations?.total ?? 0, groups: linked.audit_observations },
+                    { key: 'risks', label: 'Risks', icon: AlertTriangle, linkedCount: allLinks?.risks?.total ?? 0, groups: linked.risks },
+                    { key: 'assets', label: 'Assets', icon: Building2, linkedCount: allLinks?.assets?.total ?? 0, groups: linked.assets },
+                    { key: 'incidents', label: 'Incidents', icon: AlertCircle, linkedCount: allLinks?.incidents?.total ?? 0, groups: linked.incidents },
                   ]}
                   suggestTargets={[
                     {
-                      key: 'controls', badgeLabel: 'CONTROL', icon: Shield, busy: bulkLinkControls.isPending,
-                      linkedIds: new Set((controlsData?.by_framework || []).flatMap((fw) => fw.controls.map((m) => m.parsed_control?.id).filter((x): x is number => typeof x === 'number'))),
-                      onLinkMany: (recs) => bulkLinkControls.mutate(recs.filter((r) => r.meta?.framework_id).map((r) => ({ framework_id: r.meta!.framework_id!, control_id: r.id }))),
+                      // A rule, not a model: asks the control library which controls want a document like this one.
+                      key: 'common_controls', badgeLabel: 'COMMON CONTROL', icon: ShieldCheck, immediate: true, busy: bulkLinkCommonControls.isPending,
+                      linkedIds: new Set((controlsData?.normalized_controls || []).map((m) => m.normalized_control?.id).filter((x): x is number => typeof x === 'number')),
+                      onLinkMany: (recs) => bulkLinkCommonControls.mutate(recs),
+                    },
+                    {
+                      key: 'audit_observations', badgeLabel: 'AUDIT OBSERVATION', icon: FileSearch, busy: bulkLinkAudit.isPending,
+                      linkedIds: new Set((allLinks?.audit_observations?.links || []).map((l) => auditObservationId(l.kind, l.record_id))),
+                      onLinkMany: (recs) => bulkLinkAudit.mutate(recs),
                     },
                     {
                       key: 'risks', badgeLabel: 'RISK', icon: AlertTriangle, busy: bulkLinkRisks.isPending,
@@ -1150,9 +1212,17 @@ export default function EvidenceDetailPage() {
                   ]}
                   manualTypes={[
                     {
-                      key: 'controls', label: 'Control', icon: Shield,
-                      items: (availableControls?.frameworks || []).flatMap((fw) => fw.controls.map((c) => ({ value: `${fw.id}:${c.id}`, label: `${c.control_id} — ${c.title}`, sub: fw.name }))),
-                      onPick: (v) => { const [fwId, ctrlId] = v.split(':').map(Number); bulkLinkControls.mutate([{ framework_id: fwId, control_id: ctrlId }]); },
+                      key: 'common_controls', label: 'Common control', icon: ShieldCheck,
+                      items: (commonControlOptions?.controls || []).map((c) => ({ value: c.scf_id, label: `${c.scf_id} — ${c.name}` })),
+                      onPick: (scfId) => bulkLinkCommonControls.mutate([{ id: 0, meta: { scf_id: scfId } }]),
+                    },
+                    {
+                      key: 'audit_observations', label: 'Audit observation', icon: FileSearch,
+                      items: (auditOptions?.options || []).map((o) => ({ value: `${o.kind}:${o.record_id}`, label: `${o.code ? `${o.code} — ` : ''}${o.title || 'Untitled'}`, sub: o.subtitle ?? undefined })),
+                      onPick: (v) => {
+                        const [kind, id] = v.split(':');
+                        bulkLinkAudit.mutate([{ id: auditObservationId(kind, Number(id)), meta: { kind, record_id: Number(id) } }]);
+                      },
                     },
                     {
                       key: 'risks', label: 'Risk', icon: AlertTriangle,
@@ -1188,23 +1258,6 @@ export default function EvidenceDetailPage() {
 
           {/* RIGHT — AI assessment (as it was previously) */}
           <div className="space-y-4 lg:col-span-7">
-        {assessError && (
-          <div className="cw-card flex items-start gap-2 rounded-xl border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">AI assessment couldn&apos;t run</p>
-              <p className="text-xs text-red-600">{assessError}</p>
-            </div>
-            <button
-              onClick={() => { setAssessError(null); autoAssessFiredRef.current = true; runAssessmentMutation.mutate(); }}
-              disabled={runAssessmentMutation.isPending}
-              className="shrink-0 rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-            >
-              {runAssessmentMutation.isPending ? 'Retrying…' : 'Retry'}
-            </button>
-          </div>
-        )}
-
         {/* AI Assessment — content summary + AI suggested clause mappings */}
         <div className="cw-card rounded-xl p-4 sm:p-5">
           <AssessmentTab
@@ -1213,10 +1266,13 @@ export default function EvidenceDetailPage() {
             controlsData={controlsData}
             assetsData={allLinks?.assets}
             clauseMappings={clauseMappings}
-            onRunAssessment={() => runAssessmentMutation.mutate()}
+            onRunAssessment={reviewAgain}
+            review={review}
+            working={reviewWorking}
+            onMatchAgain={matchAgain}
             onLock={() => lockAssessmentMutation.mutate()}
             onUnlock={() => unlockAssessmentMutation.mutate()}
-            isRunning={runAssessmentMutation.isPending}
+            isRunning={reviewRunning}
             isLocking={lockAssessmentMutation.isPending}
             isUnlocking={unlockAssessmentMutation.isPending}
             formatDateTime={formatDateTime}
@@ -1552,6 +1608,9 @@ function AssessmentTab({
   assetsData,
   clauseMappings,
   onRunAssessment,
+  review,
+  working,
+  onMatchAgain,
   onLock,
   onUnlock,
   isRunning,
@@ -1572,6 +1631,9 @@ function AssessmentTab({
   assetsData?: AssetsDataType;
   clauseMappings?: ClauseMapping[];
   onRunAssessment: () => void;
+  review?: ReviewState;
+  working: boolean;
+  onMatchAgain: () => void;
   onLock: () => void;
   onUnlock: () => void;
   isRunning: boolean;
@@ -1605,24 +1667,7 @@ function AssessmentTab({
   };
 
   if (!assessment && !evidence.latest_assessment) {
-    const busy = isRunning || evidence.ocr_status !== 'completed';
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        {busy ? (
-          <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary-400" />
-        ) : (
-          <Brain className="mb-4 h-12 w-12 text-slate-400" />
-        )}
-        <p className="text-lg font-medium text-slate-800">
-          {isRunning ? 'AI assessment in progress…' : evidence.ocr_status !== 'completed' ? 'Waiting for OCR…' : 'Preparing AI assessment…'}
-        </p>
-        <p className="text-slate-600">
-          {evidence.ocr_status !== 'completed'
-            ? 'OCR is still processing — the AI assessment runs automatically once it finishes.'
-            : 'The system runs the AI assessment automatically. This card fills in shortly.'}
-        </p>
-      </div>
-    );
+    return <ReviewProgress review={review} ocrStatus={evidence.ocr_status} onAgain={onRunAssessment} again={working} />;
   }
 
   const data = assessment || evidence.latest_assessment;
@@ -1664,6 +1709,13 @@ function AssessmentTab({
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Content summary</p>
         <p className="mt-2 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">{data.content_summary || 'No summary available'}</p>
       </div>
+
+      <MaturityNotes
+        gaps={assessment?.compliance_gaps ?? evidence.latest_assessment?.gap_analysis?.gaps}
+        recommendations={assessment?.recommendations ?? evidence.latest_assessment?.gap_analysis?.recommendations}
+      />
+      <RatedAgainst checks={review?.checks} />
+      <MatchingNote review={review} onMatchAgain={onMatchAgain} again={working} />
 
       {clauseMappings && clauseMappings.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white">
@@ -2561,12 +2613,19 @@ function PolicyStatementPicker({
 
   const { data: statementsForDoc, isLoading: statementsLoading } = useQuery<{
     statements?: Array<{ id: number; statement_code?: string | null; statement_summary?: string | null; statement_text?: string | null; category?: string | null }>;
+    refused?: boolean;
   }>({
     queryKey: ['policy-statements-by-doc', selectedDocId],
     queryFn: async () => {
       if (!selectedDocId) return { statements: [] };
-      const res = await apiClient.get(`/governance/documents/${selectedDocId}/policy-statements`);
-      return res.data;
+      try {
+        const res = await apiClient.get(`/governance/documents/${selectedDocId}/policy-statements`);
+        return res.data;
+      } catch (e: any) {
+        // a document listed by title whose statements the person may not open: an empty list that says so, not asked again
+        if (e?.response?.status === 403) return { statements: [], refused: true };
+        throw e;
+      }
     },
     enabled: !!selectedDocId,
   });
@@ -2742,7 +2801,9 @@ function PolicyStatementPicker({
                     </div>
                   ) : filteredStatements.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
-                      {(statementsForDoc?.statements || []).length === 0
+                      {statementsForDoc?.refused
+                        ? 'You may not open this document’s statements. Its owner or a governance administrator can give you access.'
+                        : (statementsForDoc?.statements || []).length === 0
                         ? 'This document has no parsed policy statements yet. Run the policy parser on the document first.'
                         : 'No statements match your search.'}
                     </p>

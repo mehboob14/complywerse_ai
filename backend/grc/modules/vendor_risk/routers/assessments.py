@@ -6,13 +6,19 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, null
 
 from ....models import (
-    Vendor, VendorAssessment, VendorQuestionnaireTemplate,
+    Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
+    TPRAFinding, TPRAStageInstance, TPRAEngagement,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import assessment_view, portal, rbac, versions
+from ..tpra import service as tpra_service
+from ..tpra.engine_tiering import score_to_tier
+from .questionnaires import _response_or_404, serialize_questionnaire_response
+from ..tpra import questionnaire_evidence as qevidence
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
@@ -58,6 +64,28 @@ class ApproveRequest(BaseModel):
 
 # ── Serializers ───────────────────────────────────────────────────
 
+def _split(items) -> tuple:
+    """The analyst types plain text into these lists. Before the AI had columns of
+    its own it wrote dicts into the same ones, which is how a string and a dict
+    came to share a list. Returns (analyst's, the AI's)."""
+    analyst, ai = [], []
+    for item in items or []:
+        (ai if isinstance(item, dict) else analyst).append(item)
+    return analyst, ai
+
+
+OPEN_FINDING = ("open", "in_remediation")
+
+
+def _open_findings(db: Session, assessment_id: int) -> int:
+    """Governed findings still open on this assessment."""
+    return db.query(TPRAFinding).filter(
+        TPRAFinding.assessment_id == assessment_id,
+        TPRAFinding.deleted_at.is_(None),
+        TPRAFinding.status.in_(OPEN_FINDING),
+    ).count()
+
+
 def serialize_assessment(a: VendorAssessment) -> dict:
     data = {
         "id": a.id,
@@ -69,8 +97,14 @@ def serialize_assessment(a: VendorAssessment) -> dict:
         "inherent_score": a.inherent_score,
         "residual_score": a.residual_score,
         "risk_rating": a.risk_rating,
-        "findings": a.findings or [],
-        "recommendations": a.recommendations or [],
+        # The analyst's own notes. Governed findings — the ones that gate the
+        # lifecycle — live in grc_tpra_findings, not here.
+        "findings": _split(a.findings)[0],
+        "recommendations": _split(a.recommendations)[0],
+        # What the AI suggested; a person raises one to make it a governed finding.
+        "ai_findings": list(getattr(a, "ai_findings", None) or []) + _split(a.findings)[1],
+        "ai_recommendations": (list(getattr(a, "ai_recommendations", None) or [])
+                               + _split(a.recommendations)[1]),
         "gap_analysis": getattr(a, "gap_analysis", None) or [],
         "linked_risk_id": getattr(a, "linked_risk_id", None),
         "assessed_by": a.assessed_by,
@@ -113,17 +147,6 @@ def get_assessment_or_404(
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
     return assessment
-
-
-def _calculate_risk_rating(score: float) -> str:
-    if score >= 80:
-        return "critical"
-    elif score >= 60:
-        return "high"
-    elif score >= 40:
-        return "medium"
-    else:
-        return "low"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────
@@ -177,6 +200,7 @@ def create_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -203,6 +227,9 @@ def create_assessment(
         )
         if not assessor:
             raise HTTPException(status_code=400, detail="Selected assessor is not part of your tenant")
+        from ....routers.auth_router import refuse_imported_accounts
+
+        refuse_imported_accounts(db, [payload.assessed_by])
         assessed_by = payload.assessed_by
 
     assessment = VendorAssessment(
@@ -215,6 +242,10 @@ def create_assessment(
         findings=payload.findings,
         recommendations=payload.recommendations,
         assessed_by=assessed_by,
+        # Stand-alone, approved on this page: no lifecycle stage (NULL, not the
+        # column's default), so the lifecycle never takes it for its own
+        # (tpra/service.IN_LIFECYCLE).
+        current_stage=null(),
     )
     db.add(assessment)
     db.commit()
@@ -246,14 +277,9 @@ def get_assessment(
     )
     qr_data = []
     for r in responses:
-        # Load template questions
-        questions = []
-        if r.template_id:
-            tmpl = db.query(VendorQuestionnaireTemplate).filter(
-                VendorQuestionnaireTemplate.id == r.template_id,
-            ).first()
-            if tmpl:
-                questions = tmpl.questions or []
+        # The questions as they were sent, not as the template reads today.
+        version = versions.pin(db, r)
+        questions = list(version.questions or []) if version else []
 
         # Load evidence files
         ev_list = db.query(VendorQuestionnaireEvidence).filter(
@@ -275,16 +301,16 @@ def get_assessment(
             })
 
         qr_data.append({
-            "id": r.id,
-            "respondent_name": r.respondent_name,
-            "respondent_email": r.respondent_email,
-            "responses": r.responses or {},
-            "status": r.status,
-            "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
+            # status, due date, attester, the vendor's comments and the review per question
+            **serialize_questionnaire_response(r),
             "questions": questions,
+            "template_version": version.version_no if version else None,
             "evidence": evidence_by_q,
+            # library evidence behind each answer, with its review against the question
+            "library_evidence": qevidence.by_question(db, r),
         })
     result["questionnaire_responses"] = qr_data
+    db.commit()                      # links sent before versions existed are pinned now
 
     return result
 
@@ -296,6 +322,7 @@ def update_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -303,6 +330,13 @@ def update_assessment(
     assessment = get_assessment_or_404(assessment_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    # Saving the analyst's list must not drop what the AI once wrote into it:
+    # move those entries to the AI's own column first.
+    for column, ai_column in (("findings", "ai_findings"), ("recommendations", "ai_recommendations")):
+        if column in update_data:
+            _, legacy = _split(getattr(assessment, column))
+            if legacy:
+                setattr(assessment, ai_column, list(getattr(assessment, ai_column, None) or []) + legacy)
     for key, value in update_data.items():
         setattr(assessment, key, value)
 
@@ -319,6 +353,7 @@ def delete_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "delete")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -350,6 +385,7 @@ def score_assessment(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Calculate risk score from questionnaire responses (weighted average)."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -359,7 +395,7 @@ def score_assessment(
     # Find the questionnaire response to score
     resp_query = db.query(VendorQuestionnaireResponse).filter(
         VendorQuestionnaireResponse.assessment_id == assessment_id,
-        VendorQuestionnaireResponse.status == "submitted",
+        VendorQuestionnaireResponse.status.in_(portal.ANSWERED),
     )
     if payload.response_id:
         resp_query = resp_query.filter(VendorQuestionnaireResponse.id == payload.response_id)
@@ -368,14 +404,8 @@ def score_assessment(
     if not qr:
         raise HTTPException(status_code=400, detail="No submitted questionnaire response found for this assessment")
 
-    # Load template questions for weights
-    template = None
-    if assessment.template_id:
-        template = db.query(VendorQuestionnaireTemplate).filter(
-            VendorQuestionnaireTemplate.id == assessment.template_id,
-        ).first()
-
-    questions = (template.questions or []) if template else []
+    # The questions (and their frozen scoring) as this questionnaire was sent.
+    questions = versions.questions_for(db, qr)
     responses = qr.responses or {}
 
     # TPRM-CRITICAL FIX — score through the GOVERNED engine instead of a weighted
@@ -388,7 +418,6 @@ def score_assessment(
         score_assessment as engine_score,
         build_responses_from_answers,
     )
-    from ..tpra.bootstrap import get_tiering_config
 
     inherent = assessment.inherent_score
     if not inherent:
@@ -396,7 +425,7 @@ def score_assessment(
         # so residual still responds to the answers rather than collapsing to a
         # false "low". Run the tiering stage for a real inherent value.
         inherent = 50.0
-    cfg = get_tiering_config(db, assessment.tenant_id)
+    cfg = tpra_service.config_for(db, assessment)
     resp_list = build_responses_from_answers(questions, responses)
     result = engine_score(resp_list, inherent_score=inherent, config=cfg)
 
@@ -430,43 +459,62 @@ def approve_assessment(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Approve an assessment and update the vendor's risk scores."""
+    rbac.require_write(db, current_user, "approvals", "approve", allow_fallback=False)
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
     assessment = get_assessment_or_404(assessment_id, tenant_ids, db)
 
+    # One way to approve an assessment the lifecycle runs: its Approval stage,
+    # which records the decision and moves the gate.
+    if db.query(TPRAStageInstance.id).filter(TPRAStageInstance.assessment_id == assessment.id).first():
+        raise HTTPException(
+            status_code=409,
+            detail="This assessment runs through the vendor's lifecycle: record the decision at its Approval stage.",
+        )
     if assessment.status not in ("reviewed", "submitted", "in_progress"):
         raise HTTPException(
             status_code=400,
             detail=f"Assessment in status '{assessment.status}' cannot be approved"
         )
+    # The rules the lifecycle's approval applies: segregation of duties, the
+    # tier's approver role, no unmitigated critical finding.
+    problem = tpra_service.approval_problem(db, current_user, assessment)
+    if problem:
+        raise HTTPException(*problem)
 
+    # The approver is not the reviewer: who approved goes on the audit trail below.
     assessment.status = "approved"
-    assessment.reviewed_by = current_user.id
     assessment.completed_at = datetime.utcnow()
     assessment.updated_at = datetime.utcnow()
 
     # TPRM-005: NEVER trust a client-supplied risk_rating — always recompute it
-    # server-side from the (server-computed) score. payload.risk_rating is ignored.
+    # server-side from the (server-computed) score, on the tenant's thresholds.
+    # payload.risk_rating is ignored.
     _basis = assessment.residual_score if assessment.residual_score is not None else assessment.inherent_score
     if _basis is not None:
-        assessment.risk_rating = _calculate_risk_rating(_basis)
+        assessment.risk_rating = score_to_tier(_basis, tpra_service.config_for(db, assessment).get("thresholds"))
     if payload.recommendations:
         assessment.recommendations = payload.recommendations
 
-    # Update vendor risk scores from assessment. Residual is clamped ≤ inherent
-    # (TPRM-004): controls can only reduce risk.
+    # Update vendor risk scores from assessment, on its scope's row (the supplier
+    # shows its worst engagement). Residual is clamped ≤ inherent (TPRM-004):
+    # controls can only reduce risk.
     vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
     if vendor and assessment.inherent_score is not None:
-        vendor.inherent_risk_score = assessment.inherent_score
         _res = assessment.residual_score
         if _res is not None:
             _res = min(_res, assessment.inherent_score)
             assessment.residual_score = _res
-        vendor.residual_risk_score = _res
-        vendor.risk_rating = assessment.risk_rating
+        tpra_service.set_scores(
+            db, vendor, tpra_service.scope_row(db, vendor, tpra_service.engagement_of(db, assessment)),
+            inherent_risk_score=assessment.inherent_score, residual_risk_score=_res, risk_rating=assessment.risk_rating)
         vendor.updated_at = datetime.utcnow()
+    tpra_service.write_audit(db, assessment.tenant_id, entity="approval", action="create",
+                             vendor_id=assessment.vendor_id, assessment_id=assessment.id, entity_id=assessment.id,
+                             actor_id=current_user.id, to_value="approve",
+                             reason="Approved on the Assessments page")
 
     # ── Linkage: surface the vendor's residual risk in the enterprise Risk
     # Register so it rolls up to the ERM dashboard. Fully guarded — a linkage
@@ -477,7 +525,7 @@ def approve_assessment(
             desc = (
                 f"Residual third-party risk from the {assessment.assessment_type} assessment of "
                 f"vendor '{vendor.name}'. Rating: {assessment.risk_rating or 'n/a'}. "
-                f"Open findings: {len(assessment.findings or [])}."
+                f"Open findings: {_open_findings(db, assessment.id)}."
             )
             existing = None
             if getattr(assessment, "linked_risk_id", None):
@@ -517,3 +565,39 @@ def approve_assessment(
         "message": "Assessment approved and vendor risk scores updated",
         "assessment": serialize_assessment(assessment),
     }
+
+
+# ── The supplier's Assessments tab (tpra/assessment_view.py) ──────
+
+@router.get("/vendors/{vendor_id}/assessment-cards")
+def assessment_cards(
+    vendor_id: int,
+    engagement_id: Optional[int] = Query(None, description="The engagement; omitted, General (the supplier itself)"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """One scope's questionnaires, newest review first, and what its buttons depend on."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.tenant_id.in_(tenant_ids)).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    engagement = None
+    if engagement_id:
+        engagement = db.query(TPRAEngagement).filter(
+            TPRAEngagement.id == engagement_id, TPRAEngagement.vendor_id == vendor.id).first()
+        if engagement is None:
+            raise HTTPException(status_code=404, detail="Engagement not found")
+    return assessment_view.cards(db, vendor, engagement)
+
+
+@router.get("/questionnaire-responses/{response_id}/detail")
+def questionnaire_detail(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A questionnaire read in full: answers by section, what moved since the last cycle, the score's steps."""
+    qr = _response_or_404(db, current_user, response_id)
+    return {**serialize_questionnaire_response(qr), **assessment_view.detail(db, qr)}

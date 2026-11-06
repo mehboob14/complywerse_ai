@@ -1,13 +1,14 @@
 """
-Framework-upload Celery tasks: parse, enhance, generate evidence requirements.
+Framework library Celery tasks: enhance, generate evidence requirements.
 
-These wrap the existing pure-Python bodies in
-`grc.modules.framework_upload.routers.parser`. The Celery layer adds:
+These wrap the pure-Python bodies in
+`grc.modules.framework_upload.routers.parser`. (The parse task went with the upload feature.) The Celery
+layer adds:
 
   * Per-tenant DB session via `TenantTask`.
   * Redis lock per (tenant, framework_id) so a double-click can't run twice.
   * Status mirrored to Redis (`job_status` namespace) so multi-worker setups
-    have a single source of truth for parse progress.
+    have a single source of truth for job progress.
 """
 
 from __future__ import annotations
@@ -21,33 +22,6 @@ from ..job_status import set_status
 from .base import TenantTask, tenant_lock, LockNotAcquired
 
 logger = logging.getLogger(__name__)
-
-
-@celery_app.task(
-    base=TenantTask,
-    bind=True,
-    name="grc.tasks.frameworks.parse_framework",
-    max_retries=2,
-)
-def parse_framework(self, tenant_slug: str, framework_id: int, file_path: str, file_type: str, framework_name: str, db: Session = None) -> dict:
-    """Parse an uploaded framework document into controls + evidence reqs."""
-    logger.info("parse_framework START tenant=%s framework=%s task=%s", tenant_slug, framework_id, self.request.id)
-    try:
-        with tenant_lock(tenant_slug, f"framework_parse:{framework_id}", ttl_seconds=1800, owner=self.request.id):
-            from ..modules.framework_upload.routers.parser import _run_background_parsing_body
-            set_status(tenant_slug, "framework_parse", framework_id,
-                       {"status": "parsing", "message": "Worker picked up the parse", "task_id": self.request.id})
-            result = _run_background_parsing_body(db, framework_id, file_path, file_type, framework_name, tenant_slug)
-            return result or {"status": "completed"}
-    except LockNotAcquired:
-        set_status(tenant_slug, "framework_parse", framework_id,
-                   {"status": "skipped", "message": "Already parsing this framework"})
-        return {"status": "skipped"}
-    except Exception as exc:
-        logger.exception("parse_framework failed: %s", exc)
-        set_status(tenant_slug, "framework_parse", framework_id,
-                   {"status": "failed", "error": str(exc)[:500]})
-        raise
 
 
 @celery_app.task(
@@ -104,4 +78,4 @@ def generate_evidence_requirements(self, tenant_slug: str, framework_id: int, fr
         raise
 
 
-__all__ = ["parse_framework", "enhance_framework_controls", "generate_evidence_requirements"]
+__all__ = ["enhance_framework_controls", "generate_evidence_requirements"]

@@ -50,11 +50,16 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
     if integration_type in LIVE_API_PROVIDERS:
         extra = getattr(connection, "credentials_extra_json", None) or {}
         token = extra.get("token")
+        # A connection saved by the connect form states every field, blank ones
+        # included. Falling back to console_url for a blank domain substituted the
+        # provider's API base (the column's NOT NULL placeholder) for {domain}.
+        saved = "token" in extra
         return {
             "provider": integration_type,
             "token": (decrypt_secret(token) if token else decrypt_secret(connection.password)) or "",
-            "domain": (extra.get("domain") or connection.console_url or "").strip(),
-            "email": (extra.get("email") or connection.username or "").strip(),
+            "secret2": decrypt_secret(extra.get("secret2") or "") or "",
+            "domain": ((extra.get("domain") if saved else extra.get("domain") or connection.console_url) or "").strip(),
+            "email": ((extra.get("email") if saved else extra.get("email") or connection.username) or "").strip(),
             # Cloud transports need a principal and a region alongside the secret.
             # The key id is an identifier, not a secret, so it is stored in clear.
             "access_key_id": (extra.get("access_key_id") or "").strip(),

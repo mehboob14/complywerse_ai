@@ -16,13 +16,18 @@ from ....schemas import (
     BulkVulnerabilityAssignRequest, BulkVulnerabilityAssignResponse,
     VulnerabilityResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from ..services.email_service import EmailService
+from ....services import org_departments
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Departments"])
+
+# Departments, their heads and members are the organisation's structure (a head can be asked to approve documents):
+# changing them is an administrator's right, reading them is anyone's.
+_manage = Depends(require_tenant_permission("admin:organization:edit"))
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -45,6 +50,17 @@ def get_department_or_404(dept_id: int, user_tenants: List[int], db: Session) ->
             detail="Department not found"
         )
     return dept
+
+
+def _follow_team(db: Session, dept: GRCDepartment) -> None:
+    """Keep the department's picker record (its Team row, Administration → Departments) in step after a write that is already
+    saved; a failure here must not undo or fail the write (the next start-up repairs a missing record)."""
+    try:
+        org_departments.sync_team_shim(db, dept)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("department %s: its team record could not be updated", dept.id)
 
 
 @router.get("/departments", response_model=List[GRCDepartmentResponse])
@@ -110,7 +126,8 @@ def create_department(
     request: GRCDepartmentCreate,
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -123,9 +140,10 @@ def create_department(
         if not tenant_id:
             tenant_id = user_tenants[0]
     
+    code = request.code or org_departments.unique_code(db, tenant_id, request.name)
     existing = db.query(GRCDepartment).filter(
         GRCDepartment.tenant_id == tenant_id,
-        (GRCDepartment.name == request.name) | (GRCDepartment.code == request.code)
+        (GRCDepartment.name == request.name) | (GRCDepartment.code == code)
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Department with this name or code already exists")
@@ -137,11 +155,13 @@ def create_department(
         ).first()
         if not parent:
             raise HTTPException(status_code=404, detail="Parent department not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.department_head_user_id])
     
     dept = GRCDepartment(
         tenant_id=tenant_id,
         name=request.name,
-        code=request.code,
+        code=code,
         description=request.description,
         parent_department_id=request.parent_department_id,
         department_head_user_id=request.department_head_user_id
@@ -149,6 +169,7 @@ def create_department(
     db.add(dept)
     db.commit()
     db.refresh(dept)
+    _follow_team(db, dept)
     
     return GRCDepartmentResponse(
         id=dept.id,
@@ -258,12 +279,15 @@ def update_department(
     dept_id: int,
     request: GRCDepartmentUpdate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
     
     update_data = request.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("department_head_user_id")], kept=[dept.department_head_user_id])
     
     if "name" in update_data and update_data["name"] != dept.name:
         existing = db.query(GRCDepartment).filter(
@@ -299,6 +323,7 @@ def update_department(
     dept.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(dept)
+    _follow_team(db, dept)
     
     member_count = db.query(func.count(GRCDepartmentMember.id)).filter(
         GRCDepartmentMember.department_id == dept.id,
@@ -326,7 +351,8 @@ def update_department(
 def delete_department(
     dept_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -335,6 +361,7 @@ def delete_department(
     dept.updated_at = datetime.utcnow()
     db.commit()
     
+    _follow_team(db, dept)
     return MessageResponse(message="Department deleted successfully", id=dept_id)
 
 
@@ -343,7 +370,8 @@ def add_department_member(
     dept_id: int,
     request: GRCDepartmentMemberCreate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -351,7 +379,10 @@ def add_department_member(
     user = db.query(GRCUser).filter(GRCUser.id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [user.id])
+
     existing = db.query(GRCDepartmentMember).filter(
         GRCDepartmentMember.department_id == dept_id,
         GRCDepartmentMember.user_id == request.user_id
@@ -368,6 +399,7 @@ def add_department_member(
         existing.added_by = current_user.id
         db.commit()
         db.refresh(existing)
+        _follow_team(db, dept)
         return GRCDepartmentMemberResponse(
             id=existing.id,
             department_id=existing.department_id,
@@ -393,6 +425,7 @@ def add_department_member(
     db.add(member)
     db.commit()
     db.refresh(member)
+    _follow_team(db, dept)
     
     return GRCDepartmentMemberResponse(
         id=member.id,
@@ -414,7 +447,8 @@ def remove_department_member(
     dept_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -431,6 +465,7 @@ def remove_department_member(
     member.is_active = False
     db.commit()
     
+    _follow_team(db, dept)
     return MessageResponse(message="Department member removed successfully", id=member.id)
 
 
@@ -575,6 +610,19 @@ def assign_vulnerability_to_department(
             except Exception as e:
                 logger.error(f"Failed to send assignment email to {member.user.email}: {e}")
     
+    for person in org_departments.role_recipients(db, dept):        # the people who belong through the department's roles
+        try:
+            EmailService.send_assignment_notification(
+                recipient_email=person.email,
+                recipient_name=person.display_name,
+                vulnerability=vuln,
+                department=dept,
+                assigned_by=current_user.display_name
+            )
+            email_sent = True
+        except Exception as e:
+            logger.error(f"Failed to send assignment email to {person.email}: {e}")
+
     if email_sent:
         assignment.notification_sent = True
         db.commit()
@@ -852,6 +900,7 @@ def bulk_assign_vulnerabilities(
         GRCDepartmentMember.email_notifications_enabled == True
     ).all()
     
+    role_people = org_departments.role_recipients(db, dept)         # the people who belong through the department's roles
     for item in assignments:
         for member in members:
             if member.user and member.user.email:
@@ -866,6 +915,18 @@ def bulk_assign_vulnerabilities(
                     item["assignment"].notification_sent = True
                 except Exception as e:
                     logger.error(f"Failed to send bulk assignment email: {e}")
+        for person in role_people:
+            try:
+                EmailService.send_assignment_notification(
+                    recipient_email=person.email,
+                    recipient_name=person.display_name,
+                    vulnerability=item["vuln"],
+                    department=dept,
+                    assigned_by=current_user.display_name
+                )
+                item["assignment"].notification_sent = True
+            except Exception as e:
+                logger.error(f"Failed to send bulk assignment email: {e}")
     
     db.commit()
     

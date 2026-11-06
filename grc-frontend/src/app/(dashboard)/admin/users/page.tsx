@@ -6,6 +6,7 @@ import { DataTable, IfPermission, SearchInput, PageLoader } from '@/components/u
 import { BarChart3, Edit2, Plus, Trash2 } from 'lucide-react';
 import { adminApi, AdminUser, AdminRole } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
+import { apiErrorText } from '@/lib/apiError';
 
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -35,6 +36,7 @@ export default function UsersManagementPage() {
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,6 +52,7 @@ export default function UsersManagementPage() {
     role_ids: [] as number[],
   });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);   // why a save failed, shown in the open form
 
   useEffect(() => {
     const init = async () => {
@@ -74,7 +77,7 @@ export default function UsersManagementPage() {
       setUsers(usersRes.data);
       setRoles(rolesRes.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load users');
+      setError(apiErrorText(err, 'Failed to load users'));
     } finally {
       setLoading(false);
     }
@@ -93,6 +96,7 @@ export default function UsersManagementPage() {
       designation: '',
       role_ids: [],
     });
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -109,6 +113,7 @@ export default function UsersManagementPage() {
       designation: user.designation || '',
       role_ids: user.roles.map((r) => r.id),
     });
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -120,7 +125,7 @@ export default function UsersManagementPage() {
       await adminApi.deleteUser(user.id);
       fetchData();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete user');
+      setError(apiErrorText(err, 'Failed to delete user'));
     }
   };
 
@@ -128,6 +133,7 @@ export default function UsersManagementPage() {
     e.preventDefault();
     try {
       setSaving(true);
+      setFormError(null);
       if (editingUser) {
         await adminApi.updateUser(editingUser.id, {
           display_name: formData.display_name,
@@ -139,7 +145,7 @@ export default function UsersManagementPage() {
           role_ids: formData.role_ids,
         });
       } else {
-        await adminApi.createUser({
+        const created = await adminApi.createUser({
           username: formData.username,
           email: formData.email,
           password: formData.password,
@@ -150,11 +156,13 @@ export default function UsersManagementPage() {
           designation: formData.designation,
           role_ids: formData.role_ids,
         });
+        // an account an access review had imported with this email became this user (the server says so)
+        setNotice(created.data?.adopted ? `${created.data.message}.` : null);
       }
       setShowModal(false);
       fetchData();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save user');
+      setFormError(apiErrorText(err, 'Failed to save user'));
     } finally {
       setSaving(false);
     }
@@ -302,6 +310,15 @@ export default function UsersManagementPage() {
         </IfPermission>
       </div>
 
+      {notice && (
+        <div role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
+          {notice}
+          <button onClick={() => setNotice(null)} className="ml-4 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
           {error}
@@ -340,6 +357,9 @@ export default function UsersManagementPage() {
             </div>
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {formError && (
+                  <p role="alert" className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{formError}</p>
+                )}
                 {!editingUser && (
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-0.5">

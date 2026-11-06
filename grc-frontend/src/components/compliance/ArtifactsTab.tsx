@@ -31,6 +31,10 @@ import {
   Loader2,
 } from 'lucide-react';
 
+// UAE IA marks a document Mandatory when its control is always applicable, not because the standard names the document.
+const mandatoryNote = (frameworkKey: string) =>
+  frameworkKey === 'uae_ia' ? 'Its control always applies; the standard does not name the document itself' : undefined;
+
 // ─── Native-format download helpers (server-rendered xlsx/csv/docx/pdf/md) ────
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -74,6 +78,8 @@ export interface CatalogItem {
   owner: string | null;
   is_platform_native: boolean;
   platform_data_type: string | null;
+  // Evidence items this artifact provides (only the per-requirement list returns it, for catalogs built from evidence, e.g. UAE IA).
+  provides?: string[];
   // Ready = pre-generated body exists (served from artifact_content.json, which
   // the backend hot-reloads by mtime). content_format = markdown|table|guide.
   has_content?: boolean;
@@ -243,6 +249,7 @@ function DownloadMenu({
       <button
         onClick={() => setOpen((o) => !o)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        aria-label={label || 'Download'} title={label ? undefined : 'Download'}
         className={`flex items-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 ${pad}`}>
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
         {label}
@@ -261,6 +268,41 @@ function DownloadMenu({
         </div>
       )}
     </div>
+  );
+}
+
+/** Download a working copy. Platform-native artifacts (risk register, asset
+ *  inventory, …) export live data as XLSX server-side, because their content is
+ *  live data, not the markdown stored in `artifact.content`; everything else is
+ *  rendered from its content in the formats that suit it. */
+export function ArtifactDownload({ artifact, label = '' }: { artifact: TenantArtifact; label?: string }) {
+  if (artifact.is_platform_native) {
+    return (
+      <button
+        onClick={() =>
+          downloadFromServer(`/artifacts/${artifact.id}/export`, {},
+            `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`)
+            .catch((e) => { console.error('Platform artifact export failed', e); alert('Download failed — see console for details.'); })
+        }
+        className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
+        title="Download live platform data as XLSX"
+        aria-label="Download live platform data as XLSX"
+      >
+        <Download className="h-4 w-4" />
+      </button>
+    );
+  }
+  if (!artifact.content) return null;
+  const p = (artifact.format || '').toUpperCase().split('/')[0].trim();
+  return (
+    <DownloadMenu
+      label={label}
+      formats={p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md']}
+      onPick={(fmt) =>
+        downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
+          .catch(() => alert('Download failed.'))
+      }
+    />
   );
 }
 
@@ -463,7 +505,7 @@ export function CreateArtifactModal({
           {/* Meta chips */}
           <div className="flex flex-wrap gap-2">
             {item.control_ref && <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded font-mono">{item.control_ref}</span>}
-            {item.mandatory   && <span className="px-2 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">Mandatory</span>}
+            {item.mandatory   && <span title={mandatoryNote(frameworkKey)} className="px-2 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">Mandatory</span>}
             {item.is_platform_native && <span className="px-2 py-0.5 text-xs bg-purple-50 text-purple-700 rounded flex items-center gap-1"><Database className="h-3 w-3" /> Platform Data</span>}
             {item.format && <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">{item.format}</span>}
           </div>
@@ -1053,7 +1095,7 @@ export default function ArtifactsTab({
                                   {item.name}
                                 </button>
                                 {item.mandatory && (
-                                  <span className="px-1.5 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">M</span>
+                                  <span title={mandatoryNote(frameworkKey)} className="px-1.5 py-0.5 text-xs bg-rose-50 text-rose-600 rounded font-medium">M</span>
                                 )}
                                 {item.is_platform_native && (
                                   <span className="px-1.5 py-0.5 text-xs bg-purple-50 text-purple-600 rounded flex items-center gap-1">
@@ -1186,50 +1228,7 @@ export default function ArtifactsTab({
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {!artifact.is_platform_native && artifact.content && (
-                            <DownloadMenu
-                              label=""
-                              formats={(() => {
-                                const p = (artifact.format || '').toUpperCase().split('/')[0].trim();
-                                return p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md'];
-                              })()}
-                              onPick={(fmt) =>
-                                downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
-                                  .catch(() => alert('Download failed.'))
-                              }
-                            />
-                          )}
-                          {artifact.is_platform_native && (
-                            <button
-                              onClick={async () => {
-                                // Platform-native artifacts (risk register,
-                                // asset inventory, …) are exported server-side
-                                // because their content is live data, not the
-                                // markdown stored in `artifact.content`.
-                                try {
-                                  const res = await apiClient.get(
-                                    `/artifacts/${artifact.id}/export`,
-                                    { responseType: 'blob' },
-                                  );
-                                  const url = window.URL.createObjectURL(new Blob([res.data]));
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  a.remove();
-                                  window.URL.revokeObjectURL(url);
-                                } catch (e) {
-                                  console.error('Platform artifact export failed', e);
-                                  alert('Download failed — see console for details.');
-                                }
-                              }}
-                              className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
-                              title="Download live platform data as XLSX"
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
-                          )}
+                          <ArtifactDownload artifact={artifact} />
                           <button
                             onClick={() => setEditingArtifact(artifact)}
                             className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"

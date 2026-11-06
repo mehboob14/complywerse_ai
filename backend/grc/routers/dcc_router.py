@@ -14,6 +14,7 @@ from ..models import (
     GRCUser,
     get_db,
 )
+from ..services.assessment_assignees import lists_for as assignee_lists
 from .auth_router import require_auth, get_user_primary_tenant
 
 logger = logging.getLogger(__name__)
@@ -69,9 +70,10 @@ def _summary(items: List[ComplianceAssessmentDocumentItem]) -> Dict[str, int]:
     return summary
 
 
-def _item_to_dict(item: ComplianceAssessmentDocumentItem) -> Dict[str, Any]:
+def _item_to_dict(item: ComplianceAssessmentDocumentItem, assignees: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "id": item.id,
+        "assignees": assignees,
         "assessment_id": item.assessment_id,
         "item_number": item.item_number,
         "area_domain": item.area_domain,
@@ -163,10 +165,11 @@ def get_dcc_items(
     )
 
     # Group by main domain
+    assignees = assignee_lists(db, items)
     grouped: Dict[str, List] = {}
     for item in items:
         domain = item.area_domain or "Other"
-        grouped.setdefault(domain, []).append(_item_to_dict(item))
+        grouped.setdefault(domain, []).append(_item_to_dict(item, assignees[item.id]))
 
     return {
         "initialized": len(items) > 0,

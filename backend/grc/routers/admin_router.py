@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text, or_, func, desc, case
+from sqlalchemy import text, or_, and_, not_, func, desc, case
 from pydantic import BaseModel, EmailStr
 import bcrypt
 
@@ -14,6 +14,7 @@ from ..models import (
     AuditLog as GlobalAuditLog,
     GRCUser,
     GRCUser as TenantUser,
+    GRCDepartmentRole,
     Permission,
     Role,
     RolePermission,
@@ -23,6 +24,7 @@ from ..models import (
     get_db,
 )
 from ..db import open_tenant_session
+from .. import feature_map
 
 # Per-database-per-tenant: each tenant DB carries the full schema. The legacy
 # `OrganizationProfile` model lived in a now-deleted per-schema base; the
@@ -30,7 +32,7 @@ from ..db import open_tenant_session
 OrganizationProfile = Tenant
 
 from ..permissions import get_permission_matrix_for_ui, get_all_permissions
-from .auth_router import decode_token, require_auth, get_current_user
+from .auth_router import PLATFORM_GRANT, decode_token, has_tenant_permission, require_auth, get_current_user
 
 
 def _generate_audit_description(
@@ -39,8 +41,11 @@ def _generate_audit_description(
     resource_id: Optional[int],
     path: str,
     request_payload: Optional[dict],
+    feature: Optional[str] = None,
 ) -> str:
-    """Return a plain-English summary of an audit log action."""
+    """Return a plain-English summary of an audit log action. `feature` is what
+    the endpoint does in the workflow builder's words ("Edit Risk"); it names
+    the action wherever the sentence would otherwise be generic."""
     payload = request_payload or {}
     path_lower = (path or "").lower()
     segments = [s for s in (path or "").replace("/grc", "", 1).strip("/").split("/") if s]
@@ -62,6 +67,11 @@ def _generate_audit_description(
         "documents": "document", "assets": "asset", "users": "user",
         "integrations": "integration", "workflow": "workflow",
         "system": "system", "chatbot": "chat",
+        "controls_automation": "controls automation record", "control_testing": "control test",
+        "control_evidence": "control evidence", "control_maturity": "control maturity",
+        "evidence_collector": "evidence collector", "scf_scope": "controls scope",
+        "scf_audit_period": "audit period", "scf_control_state": "control",
+        "control_record_link": "control link",
     }
     rt = RT.get(resource_type, resource_type.replace("_", " ") if resource_type else "record")
     id_part = f" #{resource_id}" if resource_id else ""
@@ -107,12 +117,20 @@ def _generate_audit_description(
     # Auth events
     if "login" in path_lower and action == "create":
         return "User logged in"
+    if "login" in path_lower and action.endswith("_failed"):
+        who = payload.get("username") or payload.get("email")
+        return f'Sign-in failed for "{who}"' if isinstance(who, str) and who.strip() else "Sign-in failed"
     if "logout" in path_lower:
         return "User logged out"
 
     # Cross-link / relationship
     if "cross-link" in path_lower or "crosslink" in path_lower:
         return f"Linked {rt}{id_part} to another record"
+
+    if feature:
+        if action.endswith("_failed"):
+            return f"Failed: {feature}{nm_part or id_part}"
+        return f"{feature}{nm_part or id_part}"
 
     # Generic action-based
     if action == "create":
@@ -277,6 +295,8 @@ def get_current_tenant_user(
 
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="User account is deactivated")
 
     from ..services.ai_usage import bind_request_context
     bind_request_context(request, user)
@@ -325,40 +345,9 @@ def _get_or_create_permission(tenant_db: Session, perm_name: str) -> Optional[Pe
 
 
 def check_permission(user: TenantUser, tenant_db: Session, required_permission: str) -> bool:
-    # Primary-contact bypass: the email registered as the tenant's primary
-    # contact gets administrator-grade access without needing a UserRole row.
-    # Mirrors auth_router.require_tenant_permission so admin endpoints work
-    # for the founding admin before any RBAC is configured.
-    tenant_row = tenant_db.query(Tenant).first()
-    if (
-        tenant_row
-        and tenant_row.primary_contact_email
-        and getattr(user, "email", None)
-        and tenant_row.primary_contact_email.lower() == user.email.lower()
-    ):
-        return True
-
-    user_roles = tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()
-    if not user_roles:
-        return False
-    role_ids = [ur.role_id for ur in user_roles]
-
-    admin_role = tenant_db.query(Role).filter(
-        Role.id.in_(role_ids),
-        Role.name == "Administrator",
-    ).first()
-    if admin_role:
-        return True
-
-    permission = tenant_db.query(Permission).filter(Permission.name == required_permission).first()
-    if not permission:
-        return False
-
-    has_perm = tenant_db.query(RolePermission).filter(
-        RolePermission.role_id.in_(role_ids),
-        RolePermission.permission_id == permission.id,
-    ).first()
-    return has_perm is not None
+    # The same rule as auth_router.require_tenant_permission: an administrator (the primary contact, or the
+    # platform-given Administrator role), else a platform-given role holding the permission.
+    return has_tenant_permission(tenant_db, user, required_permission)
 
 
 def require_permission(permission: str):
@@ -749,11 +738,15 @@ def list_users(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    users = tenant_db.query(TenantUser).all()
+    from .auth_router import platform_account
+
+    # the users of this platform: accounts an access review imported are listed in Access Reviews only
+    users = tenant_db.query(TenantUser).filter(platform_account()).order_by(TenantUser.id).all()
 
     result = []
     for u in users:
-        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id).all()
+        # Only platform-given roles: a connector-imported entitlement sent back by the users page would become a manual role.
+        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id, PLATFORM_GRANT).all()
         
         result.append({
             "id": u.id,
@@ -778,7 +771,7 @@ def get_user(
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id).all()
+    roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id, PLATFORM_GRANT).all()
     
     return {
         "id": target_user.id,
@@ -790,6 +783,48 @@ def get_user(
         "last_login": target_user.last_login.isoformat() if target_user.last_login else None,
         "roles": [{"id": r.id, "name": r.name} for r in roles]
     }
+
+
+ADOPTED_MESSAGE = "An account from Access Reviews was turned into a platform user"
+
+
+def _adopt_imported_account(tenant_db: Session, account: TenantUser, data: UserCreate, admin: TenantUser, tenant_id: int) -> dict:
+    """``account`` (imported by an access-review connector, with the email of the user being created) becomes that user: the
+    password, name and username asked for, and the roles ticked, given by this administrator - which is what makes it a platform
+    account (auth_router.platform_account). Its connector's external_provider and external_id stay, so Access Reviews keep
+    matching it; its imported role links stay too. Without a role it would stay an imported account, so one is required."""
+    from ..rich_audit import write_rich_audit_log
+
+    roles = tenant_db.query(Role).filter(Role.id.in_(list(data.role_ids or []))).order_by(Role.id).all()
+    if not roles:
+        raise HTTPException(status_code=400, detail="An access review imported an account with this email. To make it a user of "
+                                                    "this platform, choose at least one role for it.")
+    held = tenant_db.query(Role.name).join(UserRole, UserRole.role_id == Role.id).filter(UserRole.user_id == account.id, PLATFORM_GRANT)
+    before = {"username": account.username, "display_name": account.display_name, "is_active": account.is_active,
+              "external_provider": account.external_provider, "roles": sorted({n for (n,) in held})}
+    account.username = data.username
+    account.password_hash = hash_password(data.password)
+    account.display_name = data.display_name or data.username
+    account.is_active = True
+    # the ticked roles are the ones it holds, as update_user keeps them: an older link nobody gave (a connector's from before
+    # links carried their source) would otherwise grant a role the administrator did not choose, Administrator included
+    tenant_db.query(UserRole).filter(UserRole.user_id == account.id, PLATFORM_GRANT,
+                                     ~UserRole.role_id.in_([r.id for r in roles])).delete(synchronize_session=False)
+    for role in roles:
+        link = tenant_db.query(UserRole).filter(UserRole.user_id == account.id, UserRole.role_id == role.id,
+                                                UserRole.source.is_(None)).first()
+        if link is None:
+            tenant_db.add(UserRole(tenant_id=tenant_id, user_id=account.id, role_id=role.id, assigned_by=admin.id))
+        elif link.assigned_by is None:
+            link.assigned_by = admin.id
+    write_rich_audit_log(db=tenant_db, tenant_id=tenant_id, user_id=admin.id, action="update", resource_type="users",
+                         resource_id=account.id, resource_name=account.display_name, resource_url="/admin/users",
+                         summary=f"{ADOPTED_MESSAGE}: {account.display_name} ({account.external_provider or 'access review'})",
+                         before=before, after={"username": account.username, "display_name": account.display_name,
+                                               "is_active": True, "roles": [r.name for r in roles]})
+    tenant_db.commit()
+    return {"message": ADOPTED_MESSAGE, "adopted": True,
+            "user": {"id": account.id, "username": account.username, "email": account.email, "display_name": account.display_name}}
 
 
 @router.post("/users", status_code=201)
@@ -811,11 +846,20 @@ def create_user(
             )
     local_tenant_id = tenant.id
 
-    existing = tenant_db.query(TenantUser).filter(
-        (TenantUser.username == data.username) | (TenantUser.email == data.email)
-    ).first()
+    from .auth_router import is_platform_account
 
-    if existing:
+    taken = tenant_db.query(TenantUser).filter(
+        (TenantUser.username == data.username) | (func.lower(TenantUser.email) == data.email.lower())
+    ).order_by(TenantUser.id).all()
+    # A person an access review imported before an administrator added them (a directory import of the staff) is made this user
+    # in place: the one way in for them, since sign-in, SSO and the pickers refuse such accounts.
+    adopt = next((u for u in taken if (u.email or "").lower() == data.email.lower() and not is_platform_account(tenant_db, u)), None)
+    for existing in taken:
+        if existing is adopt:
+            continue
+        if not is_platform_account(tenant_db, existing):       # not on the Users page, so say why the name is taken
+            raise HTTPException(status_code=400, detail="An access review imported an account with this username or email, "
+                                                        "so it cannot be used for a new user.")
         raise HTTPException(status_code=400, detail="Username or email already exists")
 
     # Enforce this tenant's password complexity policy. The admin "Password
@@ -824,6 +868,9 @@ def create_user(
     _pw_ok, _pw_err = validate_password(data.password, get_active_password_policy(tenant_db))
     if not _pw_ok:
         raise HTTPException(status_code=400, detail=_pw_err)
+
+    if adopt is not None:
+        return _adopt_imported_account(tenant_db, adopt, data, user, local_tenant_id)
 
     new_user = TenantUser(
         username=data.username,
@@ -896,17 +943,15 @@ def update_user(
         target_user.is_active = data.is_active
 
     if data.role_ids is not None:
-        tenant_db.query(UserRole).filter(UserRole.user_id == user_id).delete()
-        for role_id in data.role_ids:
-            role = tenant_db.query(Role).filter(Role.id == role_id).first()
-            if role:
-                user_role = UserRole(
-                    tenant_id=local_tenant_id,
-                    user_id=user_id,
-                    role_id=role_id,
-                    assigned_by=user.id,
-                )
-                tenant_db.add(user_role)
+        # The ticked roles are the ones the platform gives this person. A role still ticked keeps the links it has (by hand or
+        # through SSO); one no longer ticked loses them (an SSO group mapping gives it back at the next sign-in, as before); one
+        # not held yet is added by hand. Links an access-review connector imported are never touched.
+        keep = {rid for (rid,) in tenant_db.query(Role.id).filter(Role.id.in_(list(data.role_ids)))}
+        tenant_db.query(UserRole).filter(UserRole.user_id == user_id, PLATFORM_GRANT,
+                                         ~UserRole.role_id.in_(list(keep))).delete(synchronize_session=False)
+        held = {rid for (rid,) in tenant_db.query(UserRole.role_id).filter(UserRole.user_id == user_id, PLATFORM_GRANT)}
+        for role_id in sorted(keep - held):
+            tenant_db.add(UserRole(tenant_id=local_tenant_id, user_id=user_id, role_id=role_id, assigned_by=user.id))
 
     tenant_db.commit()
     return {"message": "User updated successfully"}
@@ -944,7 +989,7 @@ def list_roles(
         perms = tenant_db.query(Permission).join(RolePermission).filter(
             RolePermission.role_id == role.id
         ).all()
-        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id).count()
+        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id, PLATFORM_GRANT).count()
         
         result.append({
             "id": role.id,
@@ -1074,10 +1119,16 @@ def delete_role(
     if role.is_system_role:
         raise HTTPException(status_code=400, detail="Cannot delete system role")
 
-    user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
+    user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id, PLATFORM_GRANT).count()
     if user_count > 0:
         raise HTTPException(status_code=400, detail=f"Role is assigned to {user_count} users. Unassign first.")
+    imported = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
+    if imported:        # the links an access-review connector imported are managed there (deleting the role would drop them)
+        raise HTTPException(status_code=400, detail=f"An access-review connector gave this role to {imported} "
+                                                    f"{'person' if imported == 1 else 'people'}; that access is managed in Access "
+                                                    "Reviews, so the role cannot be deleted here.")
     
+    tenant_db.query(GRCDepartmentRole).filter(GRCDepartmentRole.role_id == role_id).delete(synchronize_session=False)   # departments that took members from it
     tenant_db.delete(role)
     tenant_db.commit()
     
@@ -1107,6 +1158,7 @@ def list_audit_logs(
     offset: int = 0,
     action: Optional[str] = None,
     module: Optional[str] = None,
+    submodule: Optional[str] = None,
     user_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -1120,7 +1172,10 @@ def list_audit_logs(
 
     if action:
         query = query.filter(GlobalAuditLog.action.ilike(f"%{action}%"))
-    if module:
+    if module and module in feature_map.MODULE_ORDER:
+        query = query.filter(_module_filter(module, submodule))
+    elif module:
+        # A resource type, as this filter took before rows named their module.
         query = query.filter(GlobalAuditLog.resource_type.ilike(f"%{module}%"))
     if user_id:
         query = query.filter(GlobalAuditLog.user_id == user_id)
@@ -1160,13 +1215,21 @@ def list_audit_logs(
                 or "Unknown User"
             )
 
-        description = _generate_audit_description(
-            action=log.action,
-            resource_type=log.resource_type,
-            resource_id=log.resource_id,
-            path=changes.get("path", ""),
-            request_payload=changes.get("request"),
-        )
+        # A business event (no HTTP method) was written with its own sentence
+        # ("Signed off the design test on AST-01"); a request row is described
+        # from its path and payload.
+        description = (changes.get("summary") if not changes.get("method") and changes.get("summary") else None) \
+            or _generate_audit_description(
+                action=log.action,
+                resource_type=log.resource_type,
+                resource_id=log.resource_id,
+                path=changes.get("path", ""),
+                request_payload=changes.get("request"),
+                feature=changes.get("feature"),
+            )
+        # Rows written before rows named their module are placed by their URL.
+        row_module, row_submodule = (changes.get("module"), changes.get("submodule")) if changes.get("module") \
+            else feature_map.place(None, changes.get("path") or "") if changes.get("path") else (None, None)
 
         result.append({
             "id": log.id,
@@ -1175,6 +1238,9 @@ def list_audit_logs(
             "action": log.action,
             "resource_type": log.resource_type,
             "resource_id": log.resource_id,
+            "module": row_module,
+            "submodule": row_submodule,
+            "feature": changes.get("feature"),
             "description": description,
             "details": changes,
             "method": changes.get("method"),
@@ -1203,16 +1269,37 @@ def get_audit_log_filters(
         row[0] for row in base_query.with_entities(GlobalAuditLog.action).distinct().order_by(GlobalAuditLog.action).all()
         if row[0]
     ]
-    modules = [
-        row[0] for row in base_query.with_entities(GlobalAuditLog.resource_type).distinct().order_by(GlobalAuditLog.resource_type).all()
-        if row[0]
-    ]
+    # Every sidebar module and its sub-modules, whether or not anything has
+    # happened there yet.
+    places = feature_map.modules()
 
     return {
         "actions": actions,
-        "modules": modules,
+        "modules": [p["module"] for p in places],
+        "submodules": {p["module"]: p["submodules"] for p in places},
         "date_presets": ["all", "today", "last_7_days", "last_30_days"],
     }
+
+
+def _module_filter(module: str, submodule: Optional[str]):
+    """Rows of a sidebar module (or one of its sub-modules): those that name it,
+    and older rows whose URL falls under it."""
+    named_module = GlobalAuditLog.changes["module"].as_string()
+    named = named_module == module
+    if submodule:
+        named = and_(named, GlobalAuditLog.changes["submodule"].as_string() == submodule)
+    include, exclude = feature_map.legacy_prefixes(module, submodule)
+    if not include:
+        return named
+    path = GlobalAuditLog.changes["path"].as_string()
+
+    def under(prefix: str):
+        return or_(path == prefix, path == f"/grc{prefix}", path.like(f"{prefix}/%"), path.like(f"/grc{prefix}/%"))
+
+    legacy = and_(named_module.is_(None), or_(*[under(p) for p in include]))
+    if exclude:
+        legacy = and_(legacy, not_(or_(*[under(p) for p in exclude])))
+    return or_(named, legacy)
 
 
 # ---------------------------------------------------------------------------
@@ -1280,6 +1367,9 @@ def update_password_policy(
       - lockout_threshold 3..50, lockout_minutes 1..1440 (24h)
       - session_idle_timeout_minutes 5..1440
     """
+    if not has_tenant_permission(tenant_db, user, "admin:settings:edit"):
+        raise HTTPException(status_code=403, detail="Only an administrator can change the password policy.")
+
     from ..models import PasswordPolicy as _PP
     from ..services.password_policy import get_active_password_policy
 
@@ -1349,6 +1439,8 @@ def list_role_members(
 
     Used by the Role Management page to expand a role and show *who* has it.
     """
+    if not has_tenant_permission(tenant_db, user, "admin:roles:view"):
+        raise HTTPException(status_code=403, detail="Only an administrator can view role members.")
     role = tenant_db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -1356,7 +1448,7 @@ def list_role_members(
     rows = (
         tenant_db.query(UserRole, TenantUser)
         .join(TenantUser, TenantUser.id == UserRole.user_id)
-        .filter(UserRole.role_id == role_id)
+        .filter(UserRole.role_id == role_id, PLATFORM_GRANT)
         .order_by(UserRole.assigned_at.desc().nullslast(), TenantUser.email.asc())
         .all()
     )

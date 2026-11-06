@@ -137,6 +137,8 @@ export type PaletteItem = {
   group: 'triggers' | 'actions' | 'conditions' | 'approvals' | 'timers' | 'control' | 'platform_functions';
   module?: string;
   submodule?: string;
+  /** Where its page sits in the sidebar, outermost first (from the catalog). */
+  path?: string[];
 };
 
 export type NodeOptionItem = {
@@ -317,6 +319,25 @@ export const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600 border-gray-300',
 };
 
+// The Audit Issue Register's triggers (backend: trigger_dispatcher _EVENT_MAP
+// "audit-register", catalog.py) — key, label, palette description.
+const AUDIT_REGISTER_TRIGGERS: Array<[string, string, string]> = [
+  ['audit_register_imported', 'Audit Register Imported', 'Fires when the monthly register workbook is imported'],
+  ['audit_finding_added', 'Audit Finding Added', 'Fires when a finding is added to the register by hand'],
+  ['audit_finding_updated', 'Audit Finding Edited', 'Fires when any column of a register finding is edited'],
+  ['audit_finding_deleted', 'Audit Finding Deleted', 'Fires when a finding is deleted from the register'],
+  ['audit_finding_restored', 'Audit Finding Restored', 'Fires when a deleted finding is restored'],
+  ['audit_finding_submitted_for_validation', 'Audit Finding Submitted for Validation', 'Fires when an owner submits a finding and its materials to Audit Services'],
+  ['audit_finding_validated', 'Audit Finding Validated', 'Fires when Audit Services pass a finding, closing it'],
+  ['audit_finding_returned', 'Audit Finding Sent Back', 'Fires when validation needs more materials (Delayed) or fails (Past Due)'],
+  ['audit_extension_requested', 'Audit Extension Requested', 'Fires when a new target date is requested; it goes on the Audit Committee agenda'],
+  ['audit_extension_decided', 'Audit Extension Decided', 'Fires when the Audit Committee decides an extension, either way'],
+  ['audit_extension_approved', 'Audit Extension Approved', 'Fires when the Audit Committee approves an extension'],
+  ['audit_extension_rejected', 'Audit Extension Not Approved', 'Fires when the Audit Committee does not approve an extension'],
+  ['audit_regulator_status_changed', 'MRA Regulator Status Changed', 'Fires when an MRA is submitted to, accepted by or closed by the regulator'],
+  ['audit_reminders_sent', 'Audit Register Reminders Sent', 'Fires when owners are reminded of findings coming due or past due'],
+];
+
 export const TRIGGER_KEYS = new Set([
   // Core triggers
   'manual_trigger',
@@ -449,6 +470,8 @@ export const TRIGGER_KEYS = new Set([
   'issue_assigned',
   'capa_action_created',
   'capa_action_completed',
+  // Audit Issue Register
+  ...AUDIT_REGISTER_TRIGGERS.map(([key]) => key),
   // Assets / BCM / Administration / Tasks
   'asset_criticality_changed',
   'bcm_plan_created',
@@ -601,14 +624,14 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   vendor_remediation_created: { domains: ['risk'], module: 'Third-Party Risk' },
   vendor_reassessment_scheduled: { domains: ['risk'], module: 'Third-Party Risk' },
   vendor_offboarding_updated: { domains: ['risk'], module: 'Third-Party Risk' },
-  new_vulnerability_detected: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_sla_breach: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_sla_warning: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  new_vulnerability_detected: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_sla_breach: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_sla_warning: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   risk_updated: { domains: ['risk'], module: 'Risk Management' },
   risk_deleted: { domains: ['risk'], module: 'Risk Management' },
-  vulnerability_created: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_updated: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_deleted: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  vulnerability_created: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_updated: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_deleted: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   policy_submitted_for_review: { domains: ['governance'], module: 'Governance' },
   policy_review_due: { domains: ['governance'], module: 'Governance' },
   policy_approved: { domains: ['governance'], module: 'Governance' },
@@ -640,10 +663,10 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   policy_exception_revoked: { domains: ['governance'], module: 'Policy Exceptions' },
   audit_review_submitted: { domains: ['audit'], module: 'Auditor Portal' },
   audit_control_approved: { domains: ['audit'], module: 'Auditor Portal' },
-  asset_created: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_updated: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_deleted: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_criticality_changed: { domains: ['assets'], module: 'IT Asset Management' },
+  asset_created: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_updated: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_deleted: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_criticality_changed: { domains: ['assets'], module: 'Cybersecurity Assurance' },
   // BCM
   bcm_plan_created: { domains: ['workflow'], module: 'Business Continuity Management' },
   bcm_plan_activated: { domains: ['workflow'], module: 'Business Continuity Management' },
@@ -666,6 +689,8 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   issue_assigned: { domains: ['workflow'], module: 'Issue Management' },
   capa_action_created: { domains: ['workflow'], module: 'Issue Management' },
   capa_action_completed: { domains: ['workflow'], module: 'Issue Management' },
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]): [string, NodeDefinitionMeta] =>
+    [key, { domains: ['workflow'], module: 'Audit Register' }])),
   control_group_created: { domains: ['compliance', 'control'], module: 'Control Library' },
   control_group_updated: { domains: ['compliance', 'control'], module: 'Control Library' },
   control_group_deleted: { domains: ['compliance', 'control'], module: 'Control Library' },
@@ -688,9 +713,9 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   assign_risk_owner: { domains: ['risk'], module: 'Risk Management' },
   trigger_risk_review: { domains: ['risk'], module: 'Risk Management' },
   create_remediation_task: { domains: ['risk', 'vulnerability', 'compliance'], module: 'Risk Management' },
-  assign_vulnerability_owner: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  update_vulnerability_status: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  create_vulnerability_entry: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  assign_vulnerability_owner: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  update_vulnerability_status: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  create_vulnerability_entry: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   create_policy_review_task: { domains: ['governance'], module: 'Governance' },
   publish_policy: { domains: ['governance'], module: 'Governance' },
   submit_policy_exception: { domains: ['governance'], module: 'Governance' },
@@ -736,7 +761,7 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   check_evidence_age: { domains: ['evidence', 'compliance'], module: 'Evidence' },
   check_evidence_completeness: { domains: ['evidence', 'compliance'], module: 'Evidence' },
   check_framework_coverage: { domains: ['compliance'], module: 'Compliance' },
-  check_vulnerability_severity: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  check_vulnerability_severity: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   check_policy_status: { domains: ['governance'], module: 'Governance' },
   check_approval_status: { domains: ['workflow'], module: 'Workflow Engine' },
   check_user_role: { domains: ['workflow'], module: 'Workflow Engine' },
@@ -807,6 +832,8 @@ export function inferWorkflowDomainsFromModuleName(moduleName?: string): Workflo
   if (lower.includes('audit')) return ['audit'];
   if (lower.includes('control')) return ['control'];
   if (lower.includes('asset')) return ['assets'];
+  // Cybersecurity Assurance holds both the asset inventory and vulnerabilities.
+  if (lower.includes('cybersecurity')) return ['vulnerability', 'assets'];
   return ['workflow'];
 }
 
@@ -1168,6 +1195,41 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
   'audit.reviews:create':    'audit_review_submitted',
 };
 
+// ─── Exact endpoint events (backend services/route_events) ───────────────────
+// Each Platform Function node in the catalog carries `trigger_event`: the event
+// its own API endpoint raises. Registered when the catalog loads and preferred
+// over the prefix tables above — the order the backend's _infer_trigger_event
+// resolves in — so a node used as a trigger fires on exactly that endpoint, in
+// any module. The catalog's curated events are registered too, so events the
+// backend added (with their module) show in every palette.
+const ENDPOINT_TRIGGER_EVENTS = new Map<string, string>();
+
+export type CatalogNodeTypesPayload = {
+  triggers?: Array<{ key: string; label?: string; module?: string; path?: string[] }>;
+  platform_functions?: Record<string, Array<{ key: string; trigger_event?: string | null }>>;
+};
+
+export function registerCatalogNodeTypes(catalog: CatalogNodeTypesPayload | null | undefined): void {
+  if (!catalog) return;
+  for (const nodes of Object.values(catalog.platform_functions || {})) {
+    for (const node of nodes || []) {
+      if (node?.key && node.trigger_event) ENDPOINT_TRIGGER_EVENTS.set(node.key, node.trigger_event);
+    }
+  }
+  for (const trig of catalog.triggers || []) {
+    if (!trig?.key) continue;
+    TRIGGER_KEYS.add(trig.key);
+    // The catalog places every trigger on its sidebar page, so its module wins
+    // over the one kept here; the domains kept here stay.
+    if (trig.module) {
+      const known = CURATED_NODE_METADATA[trig.key];
+      CURATED_NODE_METADATA[trig.key] = {
+        domains: known?.domains || inferWorkflowDomainsFromModuleName(trig.module), module: trig.module,
+      };
+    }
+  }
+}
+
 /**
  * Given an action_name like "platform_action.create.erm.risk.create_risk",
  * return the canonical trigger event the backend would infer, or null when
@@ -1175,6 +1237,8 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
  */
 export function inferTriggerEventFromActionName(actionName?: string): string | null {
   if (!actionName || !actionName.startsWith('platform_action.')) return null;
+  const exact = ENDPOINT_TRIGGER_EVENTS.get(actionName);
+  if (exact) return exact;
   const parts = actionName.split('.');
   if (parts.length < 3) return null;
   const verb = parts[1];
@@ -1419,6 +1483,7 @@ export const TRIGGER_EVENT_MAP: Record<string, string> = {
   issue_assigned: 'issue_assigned',
   capa_action_created: 'capa_action_created',
   capa_action_completed: 'capa_action_completed',
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]) => [key, key])),
   // Assets / BCM / Administration / Tasks
   asset_criticality_changed: 'asset_criticality_changed',
   bcm_plan_created: 'bcm_plan_created',
@@ -1569,6 +1634,7 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   issue_assigned: 'Issue Assigned',
   capa_action_created: 'CAPA Action Created',
   capa_action_completed: 'CAPA Action Completed',
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key, label]) => [key, label])),
   // Assets / BCM / Administration / Tasks
   asset_criticality_changed: 'Asset Criticality Changed',
   bcm_plan_created: 'BCM Plan Created',
@@ -1710,6 +1776,8 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   new_vulnerability_detected: 'Fires when a new vulnerability is detected',
   vulnerability_sla_breach: 'Fires when a vulnerability SLA deadline has been breached',
   vulnerability_sla_warning: 'Fires when a vulnerability SLA deadline is approaching',
+  // Audit Issue Register triggers
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key, , description]) => [key, description])),
   // Governance triggers
   policy_submitted_for_review: 'Fires when a policy is submitted for review',
   policy_review_due: 'Fires when a policy is due for review',
@@ -1923,6 +1991,42 @@ const _ASSET: TemplateVar[] = [
   { key: 'owner_email',            label: 'Asset Owner (Email)' },
 ];
 
+// A register finding (action_handlers: resource_type "audit-register"), plus
+// what the action itself carried — a reason, a requested date, a result.
+const _FINDING: TemplateVar[] = [
+  { key: 'code',             label: 'Issue Code'              },
+  { key: 'reference',        label: 'Issue # (Reference)'     },
+  { key: 'title',            label: 'Issue Name'              },
+  { key: 'source',           label: 'Source'                  },
+  { key: 'sheet',            label: 'Workbook Sheet'          },
+  { key: 'report',           label: 'Report'                  },
+  { key: 'regulator',        label: 'Regulator'               },
+  { key: 'register_status',  label: 'Status (NS/IP/DE/PD/EXT)'},
+  { key: 'due_date',         label: 'Target Date'             },
+  { key: 'days_past_due',    label: 'Days Past Due'           },
+  { key: 'owner_name',       label: 'Owner (Name)'            },
+  { key: 'owner_email',      label: 'Owner (Email)'           },
+  { key: 'lob',              label: 'LOB'                     },
+  { key: 'regulator_status', label: 'Regulator Status'        },
+  { key: 'reason',           label: 'Reason / Note'           },
+  { key: 'requested_date',   label: 'Requested Date'          },
+  { key: 'result',           label: 'Validation Result'       },
+];
+const _REGISTER_IMPORT: TemplateVar[] = [
+  { key: 'file_name',        label: 'Workbook'                },
+  { key: 'summary_month',    label: 'Pack Month'              },
+  { key: 'created',          label: 'Findings Created'        },
+  { key: 'updated',          label: 'Findings Updated'        },
+  { key: 'skipped',          label: 'Rows Skipped'            },
+  { key: 'unmatched_owners', label: 'Unmatched Owner Names'   },
+];
+const _REGISTER_REMINDERS: TemplateVar[] = [
+  { key: 'owners',           label: 'Owners Reminded'         },
+  { key: 'due_soon',         label: 'Coming Due'              },
+  { key: 'past_due',         label: 'Past Due'                },
+  { key: 'escalated',        label: 'Escalated'               },
+];
+
 export const TRIGGER_TEMPLATE_VARS: Record<string, TemplateSections[]> = {
   // Core
   manual_trigger:   [{ section: 'Common', vars: _COMMON }],
@@ -1965,4 +2069,10 @@ export const TRIGGER_TEMPLATE_VARS: Record<string, TemplateSections[]> = {
   asset_created: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
   asset_updated: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
   asset_deleted: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
+  // Audit Issue Register
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]) => [key, key === 'audit_register_imported'
+    ? [{ section: 'Import Fields', vars: _REGISTER_IMPORT }, { section: 'Common', vars: _COMMON }]
+    : key === 'audit_reminders_sent'
+      ? [{ section: 'Reminder Fields', vars: _REGISTER_REMINDERS }, { section: 'Common', vars: _COMMON }]
+      : [{ section: 'Finding Fields', vars: _FINDING }, { section: 'Common', vars: _COMMON }]])),
 };

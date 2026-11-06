@@ -3,8 +3,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
+import { actionHref } from '@/lib/documentTasks';
+import { againLine, seeChangesHref, type Again } from '@/lib/approvalRoutes';
 import { GovernanceActionReviewItem } from '@/types';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, RightSlidePanel } from '@/components/ui';
 import {
   CheckCircle,
   XCircle,
@@ -18,13 +22,28 @@ import {
   User,
   ChevronRight,
   ShieldCheck,
+  UserCheck,
+  FileCheck2,
+  PenLine,
+  GitPullRequest,
+  RotateCcw,
 } from 'lucide-react';
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
+// What the person is asked to do on a document (the document life cycle), most pressing first.
+const ASKS = [
+  { kind: 'approval', title: 'To approve', verb: 'Approve', icon: ShieldCheck },
+  { kind: 'review', title: 'To review', verb: 'Review', icon: UserCheck },
+  { kind: 'acknowledgement', title: 'To acknowledge', verb: 'Acknowledge', icon: FileCheck2 },
+  { kind: 'changes', title: 'Changes asked for', verb: 'Make the changes', icon: PenLine },
+  // changes others proposed to a document you own or wrote, and your own change the owner did not accept (lib/proposals.ts)
+  { kind: 'decide', title: 'Decide on a proposed change', verb: 'Decide', icon: GitPullRequest },
+  { kind: 'revise', title: 'Your change was not accepted', verb: 'Revise', icon: RotateCcw },
+] as const;
 
+// the server's times are naive UTC (parseUtc), not the viewer's local time
 const formatDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
+  const date = parseUtc(dateString);
+  if (!date) return '-';
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -33,8 +52,8 @@ const formatDate = (dateString?: string) => {
 };
 
 const formatDateTime = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
+  const date = parseUtc(dateString);
+  if (!date) return '-';
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -283,7 +302,6 @@ function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDe
 
 export default function ApprovalsPage() {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<GovernanceActionReviewItem | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -298,7 +316,7 @@ export default function ApprovalsPage() {
   }>({ isOpen: false, item: null });
 
   const { data: pendingApprovals, isLoading, error } = useQuery({
-    queryKey: ['my-pending-approvals', statusFilter],
+    queryKey: ['my-pending-approvals'],
     queryFn: async () => {
       // Use the new endpoint that gets items needing approval by current user
       const response = await governanceApi.getMyPendingApprovals({});
@@ -314,6 +332,27 @@ export default function ApprovalsPage() {
       total: number; items: Array<{ document_id: number; title: string; doc_type: string; status: string; stage_label: string }>;
     },
   });
+
+  // Organisations with document lifecycle (cfsb): everything asked of the current user on documents, in one list.
+  const { data: docRequests } = useQuery({
+    queryKey: ['my-document-requests'],
+    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
+      enabled: boolean; total: number;
+      items: Array<{ id: number; kind: string; document_id: number; title: string; doc_type: string; due_date: string | null; overdue: boolean; escalation_level: number;
+        /** asked again after changes: what they did before and what changed (servers from before leave it out) */
+        again?: Again | null;
+        /** a decide or revise request: the proposed change it is about */
+        proposal_id?: number | null }>;
+    },
+  });
+  const lifecycleOn = !!docRequests?.enabled;
+  // documents waiting for this person's signature that have no request of the life cycle (they were already in review when it
+  // was switched on): still listed, so nobody's turn disappears
+  const signoffOnly = (signoffPending?.items ?? []).filter((it) => !lifecycleOn
+    || !(docRequests?.items ?? []).some((r) => r.document_id === it.document_id && (r.kind === 'review' || r.kind === 'approval')));
+  // overdue first, then the soonest due
+  const byUrgency = (a: { overdue: boolean; due_date: string | null }, b: { overdue: boolean; due_date: string | null }) =>
+    Number(b.overdue) - Number(a.overdue) || (a.due_date || '9999').localeCompare(b.due_date || '9999');
 
   const approveMutation = useMutation({
     mutationFn: async ({ reviewId, comments }: { reviewId: number; comments: string }) => {
@@ -414,20 +453,70 @@ export default function ApprovalsPage() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Clock size={14} />
-            {items.length} Pending
+            {items.length + (lifecycleOn ? docRequests?.total ?? 0 : 0) + signoffOnly.length} waiting for you
           </span>
         </div>
       </div>
 
-      {signoffPending && signoffPending.total > 0 && (
+      {lifecycleOn && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck size={16} className="text-primary-600" />
+            <h3 className="text-sm font-semibold text-black">Documents waiting for you</h3>
+            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{docRequests?.total ?? 0}</span>
+          </div>
+          {(docRequests?.items.length ?? 0) === 0 && <p className="text-xs text-gray-500">Nothing to review, approve or acknowledge.</p>}
+          <div className="space-y-3">
+            {ASKS.map(({ kind, title, verb, icon: Icon }) => {
+              const list = (docRequests?.items || []).filter((it) => it.kind === kind).sort(byUrgency);
+              if (!list.length) return null;
+              return (
+                <div key={kind}>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                    <Icon size={13} /> {title} · {list.length}
+                  </p>
+                  <div className="space-y-1.5">
+                    {list.map((it) => {
+                      const changes = seeChangesHref(it.document_id, it.again);
+                      return (
+                        <div key={it.id}>
+                          <a
+                            href={actionHref(it.document_id, kind, it.proposal_id)}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-black">{it.title}</p>
+                              <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                                <span className="capitalize">{it.doc_type}</span>
+                                <span>· due {parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '-'}</span>
+                                {it.overdue && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">overdue</span>}
+                                {it.escalation_level > 0 && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">escalated</span>}
+                              </p>
+                              {it.again && <p className="mt-0.5 text-xs text-amber-900">{againLine(it.again, (d) => formatDate(d ?? undefined))}</p>}
+                            </div>
+                            <span className="shrink-0 rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white">{it.again ? `${verb} again` : verb}</span>
+                          </a>
+                          {changes && <a href={changes} className="ml-3 mt-0.5 inline-block text-[11px] font-medium text-[#0b6b58] hover:underline">See what changed</a>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {signoffOnly.length > 0 && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck size={16} className="text-primary-600" />
             <h3 className="text-sm font-semibold text-black">Documents awaiting your signature</h3>
-            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{signoffPending.total}</span>
+            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{signoffOnly.length}</span>
           </div>
           <div className="space-y-1.5">
-            {signoffPending.items.map((it) => (
+            {signoffOnly.map((it) => (
               <a
                 key={it.document_id}
                 href={`/governance/documents/${it.document_id}?tab=sign-off`}
@@ -444,27 +533,17 @@ export default function ApprovalsPage() {
         </div>
       )}
 
+      {(lifecycleOn || (signoffPending?.total ?? 0) > 0) && (
+        <h3 className="pt-1 text-sm font-semibold text-black">Other approval requests</h3>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* no Status filter: the endpoint returns only what waits for you (the old one changed nothing and showed "Pending 1") */}
         <div className="flex-1">
           <SearchInput
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search documents..."
             size="md"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <MultiSelectDropdown
-            title="Status"
-            items={[
-              { value: 'pending', label: 'Pending' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'rejected', label: 'Rejected' },
-              { value: 'all', label: 'All' },
-            ]}
-            selectedValues={[statusFilter]}
-            onApply={(vals) => setStatusFilter((vals[0] as StatusFilter) || 'pending')}
-            multiSelect={false}
           />
         </div>
       </div>
@@ -476,11 +555,11 @@ export default function ApprovalsPage() {
       ) : filteredItems.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-white/50 py-10 text-center">
           <FileText className="mx-auto h-7 w-7 text-gray-400" />
-          <h3 className="mt-2 text-xs font-medium text-black">No pending approvals</h3>
+          <h3 className="mt-2 text-xs font-medium text-black">{lifecycleOn ? 'No other requests' : 'No pending approvals'}</h3>
           <p className="mt-2 text-sm text-gray-600">
             {searchQuery
               ? 'No documents match your search criteria'
-              : 'You have no documents waiting for your approval'}
+              : lifecycleOn ? 'Requests from approval workflows appear here.' : 'You have no documents waiting for your approval'}
           </p>
         </div>
       ) : (
@@ -511,8 +590,8 @@ export default function ApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredItems.map((item: GovernanceActionReviewItem) => {
-                  const actionDate = new Date(item.action_date);
-                  const isRecent = (Date.now() - actionDate.getTime()) / (1000 * 60 * 60 * 24) < 7; // Less than 7 days
+                  const actionDate = parseUtc(item.action_date);
+                  const isRecent = !!actionDate && (Date.now() - actionDate.getTime()) / (1000 * 60 * 60 * 24) < 7; // Less than 7 days
                   
                   return (
                     <tr

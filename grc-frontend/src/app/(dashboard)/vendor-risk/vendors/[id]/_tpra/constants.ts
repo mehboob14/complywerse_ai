@@ -242,7 +242,6 @@ export function stageStatusStyle(status: StageStatus): { dot: string; text: stri
 export const FINDING_STATUSES = ['open', 'in_remediation', 'accepted', 'closed'];
 export const SEVERITIES = ['critical', 'high', 'medium', 'low'];
 export const TREATMENT_TYPES = ['remediate', 'mitigate', 'transfer'];
-export const CONTRACT_TYPES = ['master', 'dpa', 'sla', 'security_addendum'];
 export const SIGNAL_TYPES = ['security_rating', 'breach', 'adverse_media', 'financial', 'sla', 'cert_expiry'];
 export const APPROVAL_DECISIONS = [
   { value: 'approve', label: 'Approve' },

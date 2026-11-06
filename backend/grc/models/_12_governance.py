@@ -61,6 +61,9 @@ class PolicyException(Base):
     requested_at = Column(DateTime, default=datetime.utcnow)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     approved_at = Column(DateTime, nullable=True)
+    approval_comments = Column(Text, nullable=True)            # what the approver wrote when approving
+    revoked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)   # revoked at: closed_at
+    revocation_reason = Column(Text, nullable=True)
     rejected_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     rejected_at = Column(DateTime, nullable=True)
     rejection_reason = Column(Text, nullable=True)
@@ -76,6 +79,12 @@ class PolicyException(Base):
     # When this exception's "potential risks" were promoted into the ERM risk
     # register, the created risk's id (so we link out instead of re-promoting).
     promoted_risk_id = Column(Integer, nullable=True)
+    # The department / sub-department / unit it is raised for (the approval rules of Governance > Settings match on it; unset: the
+    # policy's own department, else only the rules for the whole organisation).
+    department_id = Column(Integer, nullable=True, index=True)
+    # What kind of exception it is: a value of the organisation's own list (Governance > Settings > Exception approvals > Types;
+    # module_settings ``governance_exceptions``). The approval rules may name types; empty: none chosen.
+    exception_type = Column(String(40), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})

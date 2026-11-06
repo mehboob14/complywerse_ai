@@ -9,6 +9,7 @@ from grc.services.ai_usage import (
     _extract_usage,
     bind_request_context,
     dropped_event_count,
+    dropped_event_sites,
     record_provider_attempt,
     usage_scope,
 )
@@ -195,9 +196,11 @@ def test_complychat_style_call_captured_via_auth_stamped_holder(monkeypatch):
 
 
 def test_provider_call_without_any_tenant_context_is_counted_not_silent():
-    before = dropped_event_count()
+    before, sites = dropped_event_count(), dropped_event_sites()
     record_provider_attempt(response=_response(), requested_model="gpt-4o")
     assert dropped_event_count() == before + 1
+    new = {k: n - sites.get(k, 0) for k, n in dropped_event_sites().items() if n != sites.get(k, 0)}
+    assert sum(new.values()) == 1      # counted by call site ("unknown" here: the caller is a test, not backend/grc)
 
 
 def test_records_failed_attempt_without_breaking_caller(monkeypatch):

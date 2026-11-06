@@ -222,9 +222,12 @@ def test_contracting_exit_requires_contract_for_high_tier():
     assert evaluate_stage_exit("contracting", {"tier": "low", "contract_linked": False})["passed"] is True
 
 
-def test_monitoring_and_reassessment_have_no_hard_exit():
+def test_monitoring_is_the_resting_state_and_reassessment_waits_for_a_new_cycle():
+    # Monitoring is where a healthy vendor rests. Reassessment is settled by a new cycle or the exit, not by a click:
+    # without either (tpra/service.cycle_settled) there is a check to clear, as TPRM parity R13 says.
     assert evaluate_stage_exit("monitoring", {})["passed"] is True
-    assert evaluate_stage_exit("reassessment", {})["passed"] is True
+    assert evaluate_stage_exit("reassessment", {})["passed"] is False
+    assert evaluate_stage_exit("reassessment", {"cycle_settled": True})["passed"] is True
 
 
 # ── Decision recommendation ──────────────────────────────────────────────────

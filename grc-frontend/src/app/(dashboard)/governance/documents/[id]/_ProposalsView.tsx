@@ -1,0 +1,536 @@
+'use client';
+
+/**
+ * Proposed changes (D35): a change to the document's text, file or statements made by someone who may edit it but is not its owner or
+ * author waits here for the owner's (or the author's) decision. The view lists them (who, when, what, its status, the proposer's
+ * message); the one chosen shows the message, the library's text beside the proposed one (two Word or PDF panes and the changes for a
+ * file), a statement's fields before and after, and Accept / Reject for the person who decides, Withdraw and Propose again for the
+ * proposer. Also here: the page's banner, the route's hold of kind "proposal", the proposer's note in the writers' dialogs, and the
+ * handling of a writer's {proposed: true} answer. Calls and words: lib/proposals.ts.
+ */
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { Check, GitPullRequest, RotateCcw, Send, Undo2, X } from 'lucide-react';
+import { governanceApi } from '@/lib/api';
+import { dateTime, day } from '../_view/docDates';
+import type { RouteHold } from '@/lib/approvalRoutes';
+import {
+  acceptLine, compareTitles, deciderName, fieldRows, holdLine, isMine, mayProposeAgain, pageBanner,
+  pick, proposalHref, proposalsApi, proposalsKey, proposedOf, proposedToast, rejectLine, staleLine, staleOf, whatLine,
+  type DocumentCompare, type Proposal, type ProposalStatus,
+} from '@/lib/proposals';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { InfoTip } from '@/components/ui/InfoTip';
+import { useToast } from '@/components/ui/ToastProvider';
+import { Button, ErrorState, SkeletonLines, StatusPill as Pill, Textarea, useReportedMutation } from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import type { Tone } from '@/lib/status';
+import WordView from '@/components/governance/WordView';
+import { useMyUserId } from '@/components/governance/DocumentTaskActions';
+import RedlineView, { StatsLine } from '../studio/_components/RedlineView';
+import { InitialsAvatar } from '../_workspace/lib';
+import { useSignoff } from '../_SignoffControl';
+import { retryUnlessRefused } from '../_view/docRoute';
+
+const MUTED = 'text-[#586472]';
+const NONE: Proposal[] = [];
+
+// a proposal's status as the kit's pill: waiting for the owner, accepted, not accepted, withdrawn
+const PILL_TONE: Record<ProposalStatus, Tone> = { pending: 'pending', accepted: 'success', rejected: 'danger', withdrawn: 'neutral' };
+const PILL_LABEL: Record<ProposalStatus, string> = { pending: 'Waiting', accepted: 'Accepted', rejected: 'Not accepted', withdrawn: 'Withdrawn' };
+// after an Accept, a Reject or a Withdraw: the document, its versions, statements, review and tasks may all have moved
+const AFTER_DECISION = ['document-proposals', 'document-proposal-compare', 'governance-document', 'document-access', 'doc-signoff', 'document-lifecycle',
+  'document-chain', 'document-chain-redline', 'document-versions', 'document-view-html', 'governance-documents', 'document-policy-statements',
+  'my-document-requests', 'document-sync', 'document-file-blob'];
+// after a change became a proposal: the document is as it was; the list, the hold, the requests and the Change log are not
+const AFTER_PROPOSING = ['document-proposals', 'doc-signoff', 'document-lifecycle', 'my-document-requests', 'document-chain'];
+
+// ── reading ──────────────────────────────────────────────────────────────────
+/** The document's proposals (`['document-proposals', id]`). A server without them answers 404: nothing is shown, nothing changes. */
+export function useProposals(documentId: number | null | undefined) {
+  return useQuery({ queryKey: proposalsKey(documentId), queryFn: () => proposalsApi.list(documentId as number), enabled: !!documentId,
+    staleTime: 15_000, retry: retryUnlessRefused });
+}
+
+/** The document (the same query as the document page and the studio's Details). */
+function useDocument(documentId: number | null | undefined) {
+  return useQuery({ queryKey: ['governance-document', documentId], queryFn: async () => (await governanceApi.getDocument(documentId as number)).data as any,
+    enabled: !!documentId, retry: retryUnlessRefused });
+}
+
+/** Whether this person's changes go to the document's owner first (they may edit it but do not decide), and who decides. While the
+ *  list is unknown (loading, or a server from before proposals) nothing is proposed: the screens behave as before. */
+export function useProposalRole(documentId: number | null | undefined) {
+  const list = useProposals(documentId);
+  const doc = useDocument(documentId);
+  return { proposes: list.data?.can_decide === false, decider: deciderName(doc.data), list: list.data };
+}
+
+/** Handles a writer's answer: a proposal is told (the server's sentence) and the lists that show it are read again. Returns whether it
+ *  was one; anything else is the writer's usual answer. */
+export function useProposedAnswer() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  return (data: unknown, decider?: string): boolean => {
+    const answer = proposedOf(data);
+    if (!answer) return false;
+    toast({ type: 'success', ...proposedToast(answer, decider) });
+    for (const key of AFTER_PROPOSING) qc.invalidateQueries({ queryKey: [key] });
+    return true;
+  };
+}
+
+/** The same two halves, apart, for a writer that reports through useReportedMutation (its `success` says the words, its `onSuccess` reads the lists):
+ *  the words of a {proposed: true} answer ("Change proposed" and the server's sentence), or null when it is the writer's usual answer. */
+export function proposedWords(data: unknown, decider?: string): { title: string; message: string } | null {
+  const answer = proposedOf(data);
+  return answer ? proposedToast(answer, decider) : null;
+}
+
+/** What is read again after a change became a proposal: the document is as it was, the list, the hold, the requests and the Change log are not. */
+export function useRefreshAfterProposal(): () => void {
+  const qc = useQueryClient();
+  return () => { for (const key of AFTER_PROPOSING) qc.invalidateQueries({ queryKey: [key] }); };
+}
+
+// ── the proposer's note in a writer's dialog ─────────────────────────────────
+/** "Goes to <owner> to accept or reject" and the required message the owner reads. */
+export function ProposeNote({ id, decider, value, onChange, placeholder, autoFocus }: {
+  id: string; decider: string; value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-1.5 rounded-lg border border-[#99d5cc] bg-[#effaf8] px-2.5 py-1.5 text-xs font-medium text-[#0b3f38]">
+        <Send className="h-3.5 w-3.5 shrink-0 text-[#0b4f46]" aria-hidden />
+        <span className="min-w-0 flex-1">Goes to {decider} to accept or reject</span>
+        <InfoTip align="end" label="About proposing a change" text="The document does not change until then." />
+      </p>
+      <label htmlFor={id} className="block text-xs font-semibold text-[#26323d]">
+        What changed and why <span className="font-normal text-[#586472]">(required)</span>
+      </label>
+      <Textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={3} maxLength={2000} required aria-required="true" autoFocus={autoFocus}
+        placeholder={placeholder ?? 'e.g. Section 2 now names who approves exceptions, as Legal asked'} />
+    </div>
+  );
+}
+
+// ── small parts ──────────────────────────────────────────────────────────────
+function StatusPill({ status, stale }: { status: ProposalStatus; stale?: boolean }) {
+  return <Pill tone={PILL_TONE[status] ?? 'neutral'} size="sm" label={`${PILL_LABEL[status] ?? status}${stale && status === 'pending' ? ' · out of date' : ''}`} />;
+}
+
+function Layout({ value, onChange }: { value: 'sides' | 'redline'; onChange: (v: 'sides' | 'redline') => void }) {
+  return (
+    <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="group" aria-label="Show the change">
+      {(['sides', 'redline'] as const).map((k) => (
+        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${value === k ? 'bg-[#fff] text-[#0b4f46] shadow-card' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
+          {k === 'sides' ? 'Side by side' : 'One column'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── deciding ─────────────────────────────────────────────────────────────────
+type Decision = 'accept' | 'reject' | 'withdraw';
+
+/** Accept (what it makes, an optional note), Reject (a note, required) or Withdraw (the proposer), asked first. */
+function DecisionDialog({ documentId, p, mode, onClose }: { documentId: number; p: Proposal; mode: Decision; onClose: () => void }) {
+  const qc = useQueryClient();
+  const doc = useDocument(documentId).data;
+  const route = useSignoff(documentId).data?.route;
+  const [note, setNote] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const proposer = p.proposed_by?.name || 'The proposer';
+  const at = route?.hold?.stage_position ?? route?.current;
+  const stage = route?.stages.find((s) => s.position === at)?.name ?? null;
+  // a decision on a change: reported after the server answered; a proposal that moved on since (409) says so here, inside the dialog, and offers only Reject;
+  // no Retry, because a second try could decide twice
+  const run = useReportedMutation({
+    mutationFn: async () => (mode === 'accept' ? proposalsApi.accept(documentId, p.id, note)
+      : mode === 'reject' ? proposalsApi.reject(documentId, p.id, note) : proposalsApi.withdraw(documentId, p.id)),
+    success: (r) => {
+      const version = mode === 'accept' ? (r as { version?: { number: string } | null }).version : null;
+      return mode === 'accept' ? { title: 'Change accepted', message: `${version ? `It is version ${version.number} now. ` : ''}${proposer} is told.` }
+        : mode === 'reject' ? { title: 'Change not accepted', message: `${proposer} is told, with your note.` }
+        : { title: 'Change withdrawn', message: 'It no longer waits for a decision; the document stays as it is.' };
+    },
+    failure: mode === 'accept' ? 'Not accepted' : mode === 'reject' ? 'Not rejected' : 'Not withdrawn',
+    fallback: 'The decision could not be saved.',
+    retryable: false,
+    onSuccess: () => {
+      for (const key of AFTER_DECISION) qc.invalidateQueries({ queryKey: [key] });
+      onClose();
+    },
+    onError: (e) => {
+      const stale = staleOf(e);
+      setProblem(stale);
+      if (stale) qc.invalidateQueries({ queryKey: proposalsKey(documentId) });        // it now says so, and offers only Reject
+    },
+  });
+  const noteId = `proposal-note-${p.id}`;
+  const needsNote = mode === 'reject';
+  const title = mode === 'accept' ? `Accept ${proposer}'s change?` : mode === 'reject' ? `Reject ${proposer}'s change?` : 'Withdraw your change?';
+  return (
+    <AnimatedModal isOpen onClose={onClose} size="md" title={title} subtitle={whatLine(p)} dirty={note.trim() !== ''}
+      footer={(
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant={mode === 'accept' ? 'primary' : 'danger'} loading={run.isPending} disabled={(needsNote && !note.trim()) || (mode === 'accept' && !!staleOf(run.error))}
+            leftIcon={mode === 'accept' ? <Check aria-hidden /> : mode === 'reject' ? <X aria-hidden /> : <Undo2 aria-hidden />}
+            onClick={() => { setProblem(null); run.mutate(); }}>
+            {mode === 'accept' ? 'Accept' : mode === 'reject' ? 'Reject' : 'Withdraw'}
+          </Button>
+        </div>
+      )}>
+      <div className="space-y-3 px-5 py-4">
+        <p className="text-sm text-[#26323d]">
+          {mode === 'accept' ? acceptLine(p, { status: doc?.status ?? '', current: doc?.current_version, inForce: doc?.version_in_force }, stage)
+            : mode === 'reject' ? rejectLine(proposer, doc?.status ?? '')
+            : 'The document stays as it is.'}
+        </p>
+        {mode !== 'withdraw' && (
+          <label htmlFor={noteId} className="block">
+            <span className="text-xs font-semibold text-[#26323d]">
+              {mode === 'reject' ? 'Reason' : `Note for ${proposer}`}{' '}
+              <span className="font-normal text-[#586472]">({mode === 'reject' ? 'required' : 'optional'})</span>
+            </span>
+            <Textarea id={noteId} value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={2000} autoFocus
+              required={needsNote} aria-required={needsNote} className="mt-1"
+              placeholder={mode === 'reject' ? 'e.g. Keep the current wording of section 2: Legal agreed it last year.' : ''} />
+          </label>
+        )}
+        {problem && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">{problem}</p>}
+      </div>
+    </AnimatedModal>
+  );
+}
+
+/** The buttons a proposal offers this person: Accept and Reject (who decides; a stale one only Reject), Propose again and Withdraw (the
+ *  proposer). Nothing for anyone else. */
+export function ProposalActions({ documentId, p, onProposeAgain, small = false }: {
+  documentId: number; p: Proposal; onProposeAgain?: (p: Proposal) => void; small?: boolean;
+}) {
+  const meId = useMyUserId();
+  const [mode, setMode] = useState<Decision | null>(null);
+  const accept = p.status === 'pending' && p.may_accept && !p.stale;
+  const reject = p.status === 'pending' && p.may_reject;
+  const again = !!onProposeAgain && mayProposeAgain(p, meId);
+  const withdraw = p.may_withdraw && (p.status === 'pending' || p.status === 'rejected');
+  if (!accept && !reject && !again && !withdraw) return null;
+  const size = small ? 'sm' : 'md';
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {accept && <Button variant="primary" size={size} leftIcon={<Check aria-hidden />} onClick={() => setMode('accept')}>Accept</Button>}
+      {reject && <Button variant="dangerOutline" size={size} leftIcon={<X aria-hidden />} onClick={() => setMode('reject')}>Reject</Button>}
+      {again && <Button variant={accept || reject ? 'secondary' : 'primary'} size={size} leftIcon={<RotateCcw aria-hidden />} onClick={() => onProposeAgain?.(p)}>Propose again</Button>}
+      {withdraw && <Button size={size} leftIcon={<Undo2 aria-hidden />} onClick={() => setMode('withdraw')}>Withdraw</Button>}
+      {mode && <DecisionDialog documentId={documentId} p={p} mode={mode} onClose={() => setMode(null)} />}
+    </div>
+  );
+}
+
+// ── the banner on the document page and the route's hold ─────────────────────
+/** "2 changes are waiting for your decision · Review them" for the owner or author; "Your change is waiting for Olivia's decision"
+ *  (or "Olivia did not accept your change") for the proposer. */
+export function ProposalsBanner({ documentId, doc, onOpen }: { documentId: number; doc: any; onOpen: (pid: number) => void }) {
+  const list = useProposals(documentId).data;
+  const meId = useMyUserId();
+  const b = pageBanner(list, meId, deciderName(doc));
+  if (!b) return null;
+  const rose = b.kind === 'rejected';
+  return (
+    <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2 ${rose ? 'border-rose-300 bg-rose-50' : 'border-amber-300 bg-amber-50'}`} role="status">
+      <GitPullRequest className={`h-4 w-4 shrink-0 ${rose ? 'text-[#9b1c1c]' : 'text-amber-700'}`} aria-hidden />
+      <span className={`min-w-0 flex-1 text-[13px] font-medium ${rose ? 'text-[#7a1616]' : 'text-amber-950'}`}>{b.text}</span>
+      <Button variant={b.kind === 'decide' ? 'primary' : 'secondary'} onClick={() => onOpen(b.proposalId)}>{b.action}</Button>
+    </div>
+  );
+}
+
+/** The route on hold for a proposed change: who proposed it and who decides; the decider reviews it; after a rejection the proposer
+ *  signs the document as it is (their own step, `my_step.may_sign_as_is`) or proposes again. */
+export function ProposalHold({ documentId, hold, stage, onProposeAgain }: {
+  documentId: number; hold: RouteHold; stage?: string | null; onProposeAgain?: (p: Proposal) => void;
+}) {
+  const signoff = useSignoff(documentId).data;
+  const list = useProposals(documentId).data;
+  const doc = useDocument(documentId).data;
+  const meId = useMyUserId();
+  const p = list?.items.find((x) => x.id === hold.proposal_id) ?? null;
+  const decider = deciderName(doc);
+  const proposer = p?.proposed_by?.name || hold.requested_by || 'Someone';
+  const me: 'decider' | 'proposer' | 'other' = list?.can_decide ? 'decider'
+    : (p ? isMine(p, meId) : meId != null && hold.requested_by_id === meId) ? 'proposer' : 'other';
+  const status = hold.proposal_status ?? p?.status ?? 'pending';
+  const href = proposalHref(documentId, hold.proposal_id);
+  const rejected = status === 'rejected';
+  const message = p?.message || hold.comment;
+  // what the review waits for: the third line this banner used to print, now behind its (i)
+  const waitsFor = rejected ? `Nobody signs until ${me === 'proposer' ? 'you sign it as it is or propose another change' : `${proposer} signs it as it is or proposes another change`}.`
+    : `Nobody signs until ${me === 'decider' ? 'you decide' : `${decider} decides`}. Accepted, it becomes the next version and everyone at this stage reviews again; a major change starts again from the first stage.`;
+  return (
+    <section className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2" role="status">
+      <GitPullRequest className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
+      <div className="min-w-[14rem] flex-1 text-[13px] text-amber-950">
+        <p><span className="font-semibold">{holdLine({ proposer, decider, status, me })}</span>{stage ? ` (at ${stage})` : ''}</p>
+        {rejected && p?.decision_note ? (
+          <p className="mt-0.5">{me === 'decider' ? 'Your note' : `${p.decided_by?.name || decider} wrote`}: “{p.decision_note}”</p>
+        ) : message ? <p className="mt-0.5 italic">“{message}”</p> : null}
+      </div>
+      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        <InfoTip align="end" label="About this hold" text={waitsFor} />
+        {me === 'decider' && !rejected && <Button href={href} variant="primary">Review it</Button>}
+        {me === 'proposer' && rejected && signoff?.my_step?.may_sign_as_is && <Button href={`/governance/documents/${documentId}?act=sign`} variant="primary">Sign it as it is</Button>}
+        {me === 'proposer' && rejected && (onProposeAgain && p
+          ? <Button leftIcon={<RotateCcw aria-hidden />} onClick={() => onProposeAgain(p)}>Propose again</Button>
+          : <Button href={href}>Propose again</Button>)}
+        {me !== 'decider' && !rejected && <Button href={href}>See it</Button>}
+      </div>
+    </section>
+  );
+}
+
+// ── the comparison ───────────────────────────────────────────────────────────
+function StatementChange({ p }: { p: Proposal }) {
+  const rows = fieldRows(p.statement?.before, p.statement?.after);
+  return (
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 sm:p-4" aria-label="The statement before and after">
+      <h4 className="text-sm font-semibold text-[#1f2933]">
+        {p.statement?.code ? `Statement ${p.statement.code}` : 'A new statement'}{p.source === 'statement_delete' ? ': removed' : ''}
+      </h4>
+      <table className="mt-2 w-full table-fixed border-collapse">
+        <thead>
+          <tr className="border-b border-[#d5dbe1]">
+            <th scope="col" className="w-24 px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472] sm:w-32">Field</th>
+            <th scope="col" className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472]">Now</th>
+            <th scope="col" className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-[#586472]">Proposed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key} className={`border-b border-[#eef1f4] ${r.changed ? 'bg-[#fffbeb]' : ''}`}>
+              <th scope="row" className="px-2 py-1.5 text-left align-top text-[12px] font-semibold text-[#3f4b58]">
+                {r.label}{r.changed && <span className="block text-xs font-medium text-[#8a6100]">changed</span>}
+              </th>
+              <td className="break-words px-2 py-1.5 align-top text-[13px] leading-relaxed text-[#26323d]">{r.before}</td>
+              <td className={`break-words px-2 py-1.5 align-top text-[13px] leading-relaxed ${r.changed ? 'font-medium text-[#1f2933]' : 'text-[#26323d]'}`}>{r.after}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+const CHANGE_KIND: Record<string, string> = { inserted: 'Added', deleted: 'Removed', modified: 'Changed' };
+
+/** The changes between the two files, as words (beside the two panes). */
+function ChangeList({ q, className = '' }: { q: UseQueryResult<DocumentCompare, unknown>; className?: string }) {
+  const changes = q.data?.changes ?? [];
+  return (
+    <section className={`min-w-0 rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 ${className}`} aria-label="What changed">
+      <h4 className="text-sm font-semibold text-[#1f2933]">What changed</h4>
+      {q.data && <p className={`text-xs ${MUTED}`}><StatsLine stats={q.data.stats} /></p>}
+      {q.isLoading && <SkeletonLines className="mt-2" lines={3} label="Comparing" />}
+      {q.isError && <div className="mt-2"><ErrorState compact title="Couldn't compare the files" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} /></div>}
+      {q.data && !changes.length && <p className={`mt-2 text-sm ${MUTED}`}>No text changes</p>}
+      {changes.length > 0 && (
+        <ol className="mt-2 space-y-2 2xl:max-h-[70vh] 2xl:overflow-y-auto">
+          {changes.map((h) => (
+            <li key={h.id} className="rounded-lg border border-[#e3e8ec] p-2">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#26323d]">
+                <span className="min-w-0 break-words">{h.section || 'Top of the document'}</span>
+                <span className="rounded-full bg-[#eef1f4] px-1.5 py-px text-xs text-[#3f4b58]">{CHANGE_KIND[h.status] ?? 'Changed'}</span>
+              </p>
+              {h.status !== 'inserted' && h.before_text && (
+                <div className="mt-1 rounded border-l-[3px] border-l-rose-500 bg-rose-50/60 px-2 py-1">
+                  <p className="text-xs font-semibold text-[#7a1616]">Now</p>
+                  <p className="whitespace-pre-wrap break-words text-[12px] text-rose-950">{h.before_text}</p>
+                </div>
+              )}
+              {h.status !== 'deleted' && h.after_text && (
+                <div className="mt-1 rounded border-l-[3px] border-l-emerald-500 bg-emerald-50/60 px-2 py-1">
+                  <p className="text-xs font-semibold text-emerald-800">Proposed</p>
+                  <p className="whitespace-pre-wrap break-words text-[12px] text-emerald-950">{h.after_text}</p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/** One file of the comparison: a Word file as Word draws it, a PDF in the browser's own viewer. */
+function FilePane({ label, q, name }: { label: string; q: UseQueryResult<Blob, unknown>; name?: string | null }) {
+  const blob = q.data ?? null;
+  const pdf = !!blob && (/pdf/i.test(blob.type) || (!/word|officedocument/i.test(blob.type) && /\.pdf$/i.test(name ?? '')));
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blob || !pdf) { setUrl(null); return; }
+    const u = URL.createObjectURL(blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' }));
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [blob, pdf]);
+  return (
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-[#fff]" aria-label={label}>
+      <h4 className="border-b border-[#e3e8ec] px-3 py-2 text-xs font-semibold text-[#1f2933]">{label}</h4>
+      <div className="h-[70vh] min-h-[320px] overflow-y-auto bg-[#e8ecf0]">
+        {q.isError ? <div className="p-3"><ErrorState compact title="Couldn't read this file" message={errorMessage(q.error)} onRetry={() => { void q.refetch(); }} /></div>
+          : pdf ? (url ? <iframe src={url} title={label} className="h-full w-full" /> : null)
+          : <WordView file={blob} label={label} />}
+        {q.isLoading && <div className="p-4"><SkeletonLines lines={6} label="Reading the file" /></div>}
+      </div>
+    </section>
+  );
+}
+
+function DocumentChange({ documentId, doc, p }: { documentId: number; doc: any; p: Proposal }) {
+  const [layout, setLayout] = useState<'sides' | 'redline'>('sides');
+  const compareQ = useQuery({ queryKey: ['document-proposal-compare', documentId, p.id], queryFn: () => proposalsApi.compare(documentId, p.id),
+    staleTime: 60_000, retry: retryUnlessRefused });
+  // the document's own file, and the proposed file (fetched only for a proposal that carries one)
+  const nowQ = useQuery({ queryKey: ['document-file-blob', documentId, doc?.current_version], enabled: p.has_file, staleTime: 60_000, retry: retryUnlessRefused,
+    queryFn: async () => { const r = await governanceApi.downloadDocumentFile(documentId); return r.data instanceof Blob ? r.data : new Blob([r.data as BlobPart]); } });
+  const fileQ = useQuery({ queryKey: ['document-proposal-file', documentId, p.id], queryFn: () => proposalsApi.file(documentId, p.id), enabled: p.has_file,
+    staleTime: Infinity, retry: retryUnlessRefused });
+  const titles = compareTitles(p, doc?.current_version, day);
+  if (p.has_file) {
+    return (
+      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
+        <FilePane label={titles.before} q={nowQ} name={doc?.file_name} />
+        <FilePane label={titles.after} q={fileQ} name={doc?.file_name} />
+        <ChangeList q={compareQ} className="order-first lg:col-span-2 2xl:order-none 2xl:col-span-1" />
+      </div>
+    );
+  }
+  return (
+    <section className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-3 sm:p-4" aria-label="The library's text and the proposed text">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        {/* the legend: green is added, red is removed */}
+        <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED}`}>
+          {compareQ.data ? <StatsLine stats={compareQ.data.stats} /> : null}
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" aria-hidden /> added</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200" aria-hidden /> removed</span>
+        </p>
+        <Layout value={layout} onChange={setLayout} />
+      </div>
+      {compareQ.isLoading && <SkeletonLines lines={3} label="Comparing" />}
+      {compareQ.isError && <ErrorState compact title="Couldn't compare with the library" message={errorMessage(compareQ.error)} onRetry={() => { void compareQ.refetch(); }} />}
+      {compareQ.data && (
+        <RedlineView rows={compareQ.data.rows} empty="No text changes" sides={layout === 'sides' ? titles : undefined} />
+      )}
+    </section>
+  );
+}
+
+// ── the view ─────────────────────────────────────────────────────────────────
+function ProposalCard({ p, on, onPick, mine }: { p: Proposal; on: boolean; onPick: () => void; mine: boolean }) {
+  return (
+    <button type="button" onClick={onPick} aria-current={on ? 'true' : undefined}
+      className={`w-full rounded-xl border px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${on ? 'border-[#0f766e] bg-[#effaf8] ring-1 ring-[#0f766e]' : 'border-[#d5dbe1] bg-[#fff] hover:bg-[#f7f9fa]'}`}>
+      <span className="flex items-center gap-2">
+        <InitialsAvatar name={p.proposed_by?.name} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1f2933]">{p.proposed_by?.name}{mine ? ' (you)' : ''}</span>
+        {on && <Check className="h-4 w-4 shrink-0 text-[#0f766e]" aria-hidden />}
+      </span>
+      <span className="mt-1 block text-xs text-[#26323d]">{whatLine(p)}</span>
+      <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#586472]"><StatusPill status={p.status} stale={p.stale} /> {dateTime(p.proposed_at)}</span>
+      {p.message && <span className="mt-1 line-clamp-2 block text-xs italic text-[#3f4b58]">“{p.message}”</span>}
+    </button>
+  );
+}
+
+function ProposalDetail({ documentId, doc, p, meId, canDecide, onProposeAgain }: {
+  documentId: number; doc: any; p: Proposal; meId: number | null; canDecide: boolean; onProposeAgain: (p: Proposal) => void;
+}) {
+  const decider = deciderName(doc);
+  const mine = isMine(p, meId);
+  const clause = p.finding ? [p.finding.clause_reference, p.finding.clause_title].filter(Boolean).join(' ') : '';
+  return (
+    <article className="min-w-0 space-y-3" aria-labelledby={`proposal-${p.id}`}>
+      <header className="rounded-xl border border-[#d5dbe1] bg-[#fff] p-4">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <h3 id={`proposal-${p.id}`} className="break-words text-base font-semibold text-[#1f2933]">{whatLine(p)}</h3>
+            <p className={`mt-0.5 text-xs ${MUTED}`}>
+              {p.proposed_by?.name}{mine ? ' (you)' : ''} · {dateTime(p.proposed_at)}{p.base?.number ? ` · on v${p.base.number}` : ''}
+            </p>
+          </div>
+          <StatusPill status={p.status} stale={p.stale} />
+        </div>
+        <blockquote className="mt-3 rounded-lg border-l-4 border-[#0f766e] bg-[#f3fbf9] px-3 py-2">
+          <p className="text-xs font-semibold text-[#0b4f46]">{p.kind === 'statement' ? 'Justification' : 'Message'}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[#1f2933]">{p.message || 'No message'}</p>
+        </blockquote>
+        {clause && <p className="mt-2 text-xs text-[#26323d]">Closes gap in <span className="font-semibold">{clause}</span></p>}
+        {p.status === 'pending' && p.stale && (
+          <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950" role="note">{staleLine(p, doc?.current_version, mine)}</p>
+        )}
+        {p.status === 'accepted' && (
+          <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[13px] text-emerald-900">
+            <span className="font-semibold">Accepted by {p.decided_by?.name || decider}{p.decided_at ? ` · ${day(p.decided_at)}` : ''}{p.applied_version ? ` · v${p.applied_version.number}` : ''}</span>
+            {p.decision_note ? <span className="block italic">“{p.decision_note}”</span> : null}
+          </p>
+        )}
+        {p.status === 'rejected' && (
+          <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[13px] text-[#7a1616]">
+            <span className="font-semibold">Not accepted by {p.decided_by?.name || decider}{p.decided_at ? ` · ${day(p.decided_at)}` : ''}</span>
+            {p.decision_note ? <span className="block italic">“{p.decision_note}”</span> : null}
+          </p>
+        )}
+        {p.status === 'withdrawn' && <p className={`mt-2 text-[13px] ${MUTED}`}>Withdrawn{p.decided_at ? ` · ${day(p.decided_at)}` : ''}</p>}
+        {p.status === 'pending' && !canDecide && !mine && <p className={`mt-2 text-[13px] ${MUTED}`}>Waiting for {decider}</p>}
+        <div className="mt-3"><ProposalActions documentId={documentId} p={p} onProposeAgain={onProposeAgain} /></div>
+      </header>
+      {p.kind === 'statement' ? <StatementChange p={p} /> : <DocumentChange documentId={documentId} doc={doc} p={p} />}
+    </article>
+  );
+}
+
+export default function ProposalsView({ documentId, doc, asked, onPick, onProposeAgain }: {
+  documentId: number; doc: any;
+  /** the proposal the link asked for (?proposal=<id>) */
+  asked: number | null;
+  onPick: (pid: number) => void;
+  /** the proposer sends a change that was not accepted again: the AI Studio for the document, the statement's form for a statement */
+  onProposeAgain: (p: Proposal) => void;
+}) {
+  const listQ = useProposals(documentId);
+  const meId = useMyUserId();
+  const items = listQ.data?.items ?? NONE;
+  const chosen = pick(items, asked);
+  const decider = deciderName(doc);
+  if (listQ.isLoading) return <SkeletonLines lines={6} label="Reading the proposed changes" />;
+  if (listQ.isError) return <ErrorState title="Couldn't load the proposed changes" message={errorMessage(listQ.error)} onRetry={() => { void listQ.refetch(); }} />;
+  const canDecide = !!listQ.data?.can_decide;
+  return (
+    <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start">
+      <section className="min-w-0 space-y-2 lg:sticky lg:top-0" aria-labelledby="proposals-title">
+        {/* the heading and its (i) stay outside the part that scrolls, so the note is never cut off by it */}
+        <div className="flex items-center justify-between gap-1">
+          <h2 id="proposals-title" className="text-sm font-semibold text-[#1f2933]">Proposed changes</h2>
+          <InfoTip align="end" label="About proposed changes"
+            text={canDecide ? 'Changes others made to this document wait here for your decision: accepted, a change becomes the next version, credited to them; rejected, they are told your note.'
+              : `Changes by people who are not its owner or author wait here for ${decider}'s decision.`} />
+        </div>
+        <div className="lg:max-h-[calc(100vh-11rem)] lg:overflow-y-auto lg:pr-1">
+          {items.length === 0 ? (
+            <p className={`flex items-center gap-2 rounded-xl border border-dashed border-[#b8c4c8] bg-[#fff] p-4 text-sm ${MUTED}`}>
+              <GitPullRequest className="h-4 w-4 shrink-0" aria-hidden /> No proposed changes
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((p) => <li key={p.id}><ProposalCard p={p} on={p.id === chosen?.id} mine={isMine(p, meId)} onPick={() => onPick(p.id)} /></li>)}
+            </ul>
+          )}
+        </div>
+      </section>
+      {chosen && <ProposalDetail key={chosen.id} documentId={documentId} doc={doc} p={chosen} meId={meId} canDecide={canDecide} onProposeAgain={onProposeAgain} />}
+    </div>
+  );
+}

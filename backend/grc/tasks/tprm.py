@@ -58,6 +58,14 @@ def write_tprm_snapshot_for_tenant(self, tenant_slug: str, db: Session = None) -
     except Exception:
         logger.exception("metric snapshot failed for tenant=%s", tenant_slug)
 
+    # Programme measures (coverage, overdue, cycle times) behind the committee pack's trends.
+    try:
+        from ..modules.vendor_risk.tpra.reports import write_snapshot
+        write_snapshot(db, tenant_id)
+    except Exception:
+        db.rollback()
+        logger.exception("tprm programme snapshot failed for tenant=%s", tenant_slug)
+
     logger.info("write_tprm_snapshot_for_tenant tenant=%s vendors=%d", tenant_slug, len(vendors))
     return {"status": "ok", "tenant_slug": tenant_slug, "vendors": len(vendors)}
 
@@ -90,6 +98,62 @@ def daily_tprm_snapshot_sweep(self) -> dict:
     return {"status": "ok", "tenants_dispatched": dispatched}
 
 
+# ── Reminders: reassessments, questionnaires, remediation, acceptances, contracts ──
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.tprm.send_reminders_for_tenant",
+    queue="parsing",
+    max_retries=0,
+)
+def send_reminders_for_tenant(self, tenant_slug: str, db: Session = None) -> dict:
+    """Tell people about third-party risk dates coming due or overdue — once per
+    reminder period, however often this runs (modules/vendor_risk/tpra/reminders.py)."""
+    from ..models import Tenant
+    from ..modules.vendor_risk.tpra.bootstrap import get_tiering_config
+    from ..modules.vendor_risk.tpra.reminders import run
+
+    from ..modules.vendor_risk.tpra.action_plans import fire_due
+
+    tenant = db.query(Tenant).first()
+    if not tenant:
+        return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
+    # Planned sends, check-ins and reassessments whose date has come happen first,
+    # so one that could not happen is told about in the same run.
+    actions = fire_due(db, tenant.id)
+    counts = run(db, tenant.id, get_tiering_config(db, tenant.id)["reminder_policy"])
+    counts.update({f"actions_{k}": v for k, v in actions.items()})
+    logger.info("tprm reminders tenant=%s %s", tenant_slug, counts)
+    return {"status": "ok", "tenant_slug": tenant_slug, **counts}
+
+
+@celery_app.task(
+    bind=True,
+    name="grc.tasks.tprm.daily_reminder_sweep",
+    queue="parsing",
+    max_retries=0,
+)
+def daily_reminder_sweep(self) -> dict:
+    """Scheduled fan-out: one reminder task per active tenant."""
+    from ..db import MasterSession
+    from ..models import Tenant
+
+    master = MasterSession()
+    try:
+        slugs = [t.slug for t in master.query(Tenant.slug).filter(Tenant.is_active.is_(True)).all() if t.slug]
+    finally:
+        master.close()
+    dispatched = 0
+    for slug in slugs:
+        try:
+            send_reminders_for_tenant.delay(tenant_slug=slug)
+            dispatched += 1
+        except Exception:
+            logger.exception("daily_reminder_sweep: dispatch failed for tenant=%s", slug)
+    return {"status": "ok", "tenants_dispatched": dispatched}
+
+
 # ── Continuous-monitoring connector poll (Wave 4 scaffolding) ─────────────────
 
 @celery_app.task(
@@ -105,11 +169,17 @@ def poll_monitoring_connectors_for_tenant(self, tenant_slug: str, db: Session = 
     from ..models import Tenant
     from ..modules.vendor_risk.tpra.monitoring_connectors import run_connectors
 
+    from ..modules.vendor_risk.tpra.shadow_saas import scheduled_sync
+
     tenant = db.query(Tenant).first()
     if not tenant:
         return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
     result = run_connectors(db, tenant.id)
     db.commit()
+    # Shadow SaaS from Grip, and our own domains in public code, once a day when asked for.
+    from ..modules.vendor_risk.tpra.leaks import own_sweep
+    result["grip"] = scheduled_sync(db, tenant.id)
+    result["own_leaks"] = own_sweep(db, tenant.id)
     return {"status": "ok", "tenant_slug": tenant_slug, **result}
 
 
@@ -165,17 +235,16 @@ def send_questionnaire_invite(self, tenant_slug: str, response_id: int,
         return {"status": "skipped", "reason": "no_recipient_or_token"}
     tenant = db.query(Tenant).first()
     vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+    from ..modules.vendor_risk.tpra.emails import render
+
     vendor_name = vendor.name if vendor else "your organization"
     link = f"{(base_url or '').rstrip('/')}/vendor-risk/questionnaires/{qr.token}"
-    verb = "Reminder: please complete" if is_reminder else "Please complete"
-    subject = f"{'Reminder — ' if is_reminder else ''}Security questionnaire for {vendor_name}"
-    body_html = (
-        f"<p>Hello,</p><p>{verb} the security assessment questionnaire for "
-        f"<strong>{vendor_name}</strong>.</p>"
-        f'<p><a href="{link}">Open the questionnaire</a></p>'
-        f"<p>Or paste this link into your browser:<br>{link}</p>"
-    )
-    body_text = f"{verb} the security questionnaire for {vendor_name}: {link}"
+    due = f"on {qr.due_date:%d %b %Y}" if getattr(qr, "due_date", None) else "as soon as you can"
+    values = {"vendor": vendor_name, "link": link, "due": due, "when": f"due {due}",
+              "organisation": tenant.name if tenant else "",
+              "title": f"Reminder: please complete the security questionnaire for {vendor_name}"}
+    subject, body_text, body_html = render(db, qr.tenant_id, "questionnaire_reminder" if is_reminder else "questionnaire_invite",
+                                           values)
     result = send_email(db, tenant.id if tenant else qr.tenant_id, qr.respondent_email,
                         subject, body_html, body_text)
     if result.get("success"):

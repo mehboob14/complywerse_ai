@@ -1,26 +1,39 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+// Governance > Committees > Oversight Actions: every committee's actions in one register. Four totals, filters (the status, the committee and "Overdue only" go to
+// the API, so they work on every action; the search reads the page that is shown), the list as a table (a card each below 768px), a page at a time.
+// On the design-system kit: PageHeader variant="page", StatTile, RegisterTable + Pager, StatusPill, PersonChip, Menu for the status change, EmptyState / ErrorState,
+// useReportedMutation for every write. Four things this page used to get wrong, fixed here:
+//  - a failed request is an error with Retry. It used to be answered with made-up committees and seven made-up actions, so an outage looked like data;
+//  - "Overdue" is what the API means by it (is_overdue: open or in progress and past its due date); the page tested status === 'overdue', which nothing writes, so the
+//    tile and the red border said 0 beside rows the SLA badge called "Overdue 6d";
+//  - the four totals are the server's (the overview endpoint: every committee, or the one chosen), not the length of a list cut at 100;
+//  - all 18 action types read as themselves (4 had a label, the rest said "Follow Up").
+// "Add manual action" is open to every signed-in user, as it always was (the server asks for no more): recorded in G3_permission_matrix, not changed here.
+// Opening the page with ?overdue=1 (the Governance Overview's counter links there) starts on the overdue ones.
+import { useMemo, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, CheckSquare, Clock, Plus, Search, Sparkles, Upload, CheckCircle, Pencil } from 'lucide-react';
 import { committeeApi } from '@/lib/api';
-import {
-  CheckSquare,
-  AlertCircle,
-  Clock,
-  CheckCircle,
-  ArrowLeft,
-  Calendar,
-  Users,
-  Building2,
-  Plus,
-  Sparkles,
-  Upload,
-  Loader2,
-} from 'lucide-react';
-import Link from 'next/link';
-import { SearchInput } from '@/components/ui/SearchInput';
-import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { PageHeader } from '@/components/ui';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { useModuleSettings } from '@/components/settings/CustomFields';
+import { priorityChoices, slaDays } from '@/components/settings/PrioritySla';
+import {
+  Button, Checkbox, EmptyState, ErrorState, FormField, Menu, Pager, PersonChip, RegisterTable, Select, Skeleton, Textarea, TextInput,
+  type MenuItem, type RegisterColumn,
+} from '@/components/ui/ds';
+import { errorMessage } from '@/components/ui/ds/reportOutcome';
+import { useReportedMutation } from '@/components/ui/ds/useReportedMutation';
+import { NOT_SET, formatCount, truncate } from '@/lib/format';
+import { routeFor } from '@/lib/navRegistry';
+import { actionStatus } from '@/lib/status';
+import {
+  ACTION_PAGE_SIZE, ACTION_PAGE_SIZES, ACTION_TYPES, actionListParams, actionTypeLabel, dueDay, dueRelative, formChanged, isOverdueAction, listOf, overdueFromSearch,
+  type Overview, type SlaLike,
+} from '@/lib/committees';
+import { ActionStatusPills, DrawerFooter, FileInput, FormProblem, PriorityTag, SlaTag, StatTile } from '../_ui';
 
 interface Action {
   id: number;
@@ -30,612 +43,348 @@ interface Action {
   meeting_title?: string;
   title: string;
   description?: string;
-  action_type: 'follow_up' | 'policy_approval' | 'risk_review' | 'audit_response';
-  status: 'open' | 'in_progress' | 'completed' | 'overdue';
-  due_date: string;
-  assigned_to_id?: number;
+  action_type: string;
+  status: string;
+  is_overdue?: boolean;
+  priority?: string;
+  sla?: SlaLike | null;
+  due_date: string | null;
   assigned_to_name?: string;
-  created_at: string;
-  updated_at: string;
 }
+interface Committee { id: number; name: string }
+interface CommitteeMeeting { id: number; title: string }
 
-interface Committee {
-  id: number;
-  name: string;
-}
-
-interface CommitteeMeeting {
-  id: number;
-  title: string;
-}
-
-const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  open: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', icon: Clock },
-  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle },
-};
-
-const ACTION_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  follow_up: { label: 'Follow Up', bg: 'bg-slate-100', text: 'text-slate-600' },
-  policy_approval: { label: 'Policy Approval', bg: 'bg-blue-50', text: 'text-blue-700' },
-  risk_review: { label: 'Risk Review', bg: 'bg-rose-50', text: 'text-rose-700' },
-  audit_response: { label: 'Audit Response', bg: 'bg-slate-100', text: 'text-slate-600' },
-};
+const STATUS_FILTERS = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'completed', label: 'Completed' },
+];
+const NEW_ACTION = { committee_id: '', meeting_id: '', title: '', description: '', action_type: 'follow_up', priority: 'medium', due_date: '' };
 
 export default function ActionsPage() {
+  const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [committeeFilter, setCommitteeFilter] = useState<string>('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [committeeFilter, setCommitteeFilter] = useState('');
+  const [overdueOnly, setOverdueOnly] = useState(() => overdueFromSearch(searchParams?.toString() ?? ''));
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(ACTION_PAGE_SIZE);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createFormData, setCreateFormData] = useState({
-    committee_id: '',
-    meeting_id: '',
-    title: '',
-    description: '',
-    action_type: 'follow_up',
-    due_date: '',
-  });
+  const [createFormData, setCreateFormData] = useState(NEW_ACTION);
   const [aiFile, setAiFile] = useState<File | null>(null);
-  const queryClient = useQueryClient();
+  // Task Management's SLA table: the days each priority allows (a person without access just gets no hints)
+  const { data: taskSettings } = useModuleSettings('tasks');
 
-  const { data: committees } = useQuery({
+  const committeesQ = useQuery({
     queryKey: ['committees-list'],
-    queryFn: async () => {
-      try {
-        const response = await committeeApi.getCommittees();
-        // The API returns a paginated object ({ items: [...] }) — unwrap it the
-        // same way the actions/meetings queries do, otherwise `committees` is an
-        // object and `.map` throws ("(committees || []).map is not a function").
-        const payload = response.data as unknown;
-        const items = Array.isArray(payload)
-          ? payload
-          : (((payload as { items?: unknown[] })?.items || []) as unknown[]);
-        return items as Committee[];
-      } catch {
-        return [
-          { id: 1, name: 'Board of Directors' },
-          { id: 2, name: 'Risk Management Committee' },
-          { id: 3, name: 'Audit Committee' },
-          { id: 4, name: 'Compliance Committee' },
-          { id: 5, name: 'IT Steering Committee' },
-        ] as Committee[];
-      }
-    },
+    queryFn: async () => listOf<Committee>((await committeeApi.getCommittees()).data).items,
   });
+  const committees = committeesQ.data ?? [];
 
-  const { data: actions, isLoading } = useQuery({
+  // the page of actions the filters ask for; `total` is the API's, never the length of what came back
+  const actionsQ = useQuery({
     placeholderData: keepPreviousData,
-    queryKey: ['all-actions', statusFilter, committeeFilter, overdueOnly],
+    queryKey: ['all-actions', statusFilter, committeeFilter, overdueOnly, page, pageSize],
     queryFn: async () => {
-      try {
-        const response = await committeeApi.getActions({
-          status: statusFilter || undefined,
-          committee_id: committeeFilter ? parseInt(committeeFilter) : undefined,
-          overdue_only: overdueOnly || undefined,
-        });
-        const payload = response.data as unknown;
-        const rawItems = Array.isArray(payload)
-          ? payload
-          : (((payload as { items?: unknown[] })?.items || []) as unknown[]);
-
-        return rawItems.map((item: any) => ({
-          ...item,
-          assigned_to_name: item.assigned_to_name || item.assignee_name || '',
-        })) as Action[];
-      } catch {
-        return [
-          { id: 1, committee_id: 2, committee_name: 'Risk Management Committee', meeting_id: 2, meeting_title: 'January Risk Update', title: 'Update Risk Register for Q1', description: 'Review and update the enterprise risk register', action_type: 'risk_review', status: 'in_progress', due_date: '2025-02-01', assigned_to_name: 'David Lee', created_at: '2025-01-20', updated_at: '2025-01-22' },
-          { id: 2, committee_id: 2, committee_name: 'Risk Management Committee', meeting_id: 2, meeting_title: 'January Risk Update', title: 'Review Cyber Insurance Policy', description: 'Evaluate current cyber insurance coverage', action_type: 'policy_approval', status: 'open', due_date: '2025-02-15', assigned_to_name: 'Emily Brown', created_at: '2025-01-20', updated_at: '2025-01-20' },
-          { id: 3, committee_id: 2, committee_name: 'Risk Management Committee', meeting_id: 3, meeting_title: 'Emergency Cyber Incident Review', title: 'Incident Response Improvement Plan', description: 'Develop improvement plan based on incident review', action_type: 'follow_up', status: 'overdue', due_date: '2025-01-25', assigned_to_name: 'Robert Johnson', created_at: '2025-01-10', updated_at: '2025-01-15' },
-          { id: 4, committee_id: 3, committee_name: 'Audit Committee', meeting_id: 5, meeting_title: 'Q4 Audit Review', title: 'Address Internal Audit Finding #12', description: 'Remediate control weakness identified in audit', action_type: 'audit_response', status: 'in_progress', due_date: '2025-02-28', assigned_to_name: 'Sarah Wilson', created_at: '2025-01-05', updated_at: '2025-01-18' },
-          { id: 5, committee_id: 4, committee_name: 'Compliance Committee', meeting_id: 8, meeting_title: 'Regulatory Update Meeting', title: 'Update Compliance Training Materials', description: 'Incorporate new regulatory requirements', action_type: 'follow_up', status: 'open', due_date: '2025-03-01', assigned_to_name: 'Michael Chen', created_at: '2025-01-15', updated_at: '2025-01-15' },
-          { id: 6, committee_id: 1, committee_name: 'Board of Directors', meeting_id: 10, meeting_title: 'Board Strategy Session', title: 'Review Executive Compensation Policy', description: 'Annual review of compensation structure', action_type: 'policy_approval', status: 'open', due_date: '2025-02-20', assigned_to_name: 'HR Director', created_at: '2025-01-10', updated_at: '2025-01-10' },
-          { id: 7, committee_id: 5, committee_name: 'IT Steering Committee', meeting_id: 12, meeting_title: 'Technology Roadmap Review', title: 'Evaluate Cloud Migration Progress', description: 'Assess Phase 2 cloud migration milestones', action_type: 'risk_review', status: 'completed', due_date: '2025-01-20', assigned_to_name: 'CTO', created_at: '2025-01-05', updated_at: '2025-01-20' },
-        ] as Action[];
-      }
+      const response = await committeeApi.getActions(actionListParams({ status: statusFilter, committee: committeeFilter, overdueOnly }, page, pageSize));
+      const { items, total } = listOf<Record<string, any>>(response.data);
+      return { total, items: items.map((item) => ({ ...item, assigned_to_name: item.assigned_to_name || item.assignee_name || '' })) as Action[] };
     },
   });
+  const actions = actionsQ.data?.items ?? [];
+  const total = actionsQ.data?.total ?? 0;
+
+  // the four totals: the overview endpoint's own counts (all committees, or the one chosen), the same numbers and the same meaning of "overdue" as the Overview
+  const overviewQ = useQuery({
+    queryKey: ['committee-overview'],
+    queryFn: async () => (await committeeApi.getOverview()).data as Overview,
+  });
+  const totals = useMemo(() => {
+    const overview = overviewQ.data;
+    if (!overview) return null;
+    if (!committeeFilter) return overview.kpis.actions;
+    const c = overview.committees.find((row) => String(row.id) === committeeFilter);
+    return c ? { open: c.open_actions, in_progress: c.in_progress_actions, overdue: c.overdue_actions, completed: c.completed_actions, total: c.total_actions } : null;
+  }, [overviewQ.data, committeeFilter]);
 
   const { data: meetings = [], isLoading: isMeetingsLoading } = useQuery({
     queryKey: ['committee-meetings-for-actions', createFormData.committee_id],
     enabled: !!createFormData.committee_id,
-    queryFn: async () => {
-      const response = await committeeApi.getMeetings(parseInt(createFormData.committee_id, 10));
-      const payload = response.data as any;
-      const items = Array.isArray(payload) ? payload : payload.items || [];
-      return items.map((m: any) => ({ id: m.id, title: m.title })) as CommitteeMeeting[];
-    },
+    queryFn: async () => listOf<{ id: number; title: string }>((await committeeApi.getMeetings(parseInt(createFormData.committee_id, 10))).data).items
+      .map((m) => ({ id: m.id, title: m.title })) as CommitteeMeeting[],
   });
 
-  const updateActionMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { status: string } }) => committeeApi.updateAction(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-actions'] });
-    },
+  const refresh = [['all-actions'], ['committee-overview']];       // the list, and the totals above it
+  const updateAction = useReportedMutation({
+    mutationFn: ({ id, status }: { id: number; status: string; title: string }) => committeeApi.updateAction(id, { status }),
+    success: (_r, v) => ({ title: `Marked ${actionStatus.label(v.status).toLowerCase()}`, message: truncate(v.title, 80).text }),
+    failure: "Couldn't change the status",
+    invalidate: refresh,
   });
 
-  const createActionMutation = useMutation({
+  const createAction = useReportedMutation({
     mutationFn: (data: Record<string, unknown>) => committeeApi.createManualAction(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-actions'] });
-      setIsCreateModalOpen(false);
-      setCreateFormData({
-        committee_id: '',
-        meeting_id: '',
-        title: '',
-        description: '',
-        action_type: 'follow_up',
-        due_date: '',
-      });
-      setAiFile(null);
-    },
+    success: (_r, data) => ({ title: 'Action created', message: truncate(String(data.title), 80).text }),
+    failure: "Couldn't create the action",
+    retryable: false,                                              // a create is not safe to repeat blindly: the drawer stays open to try again
+    invalidate: refresh,
+    onSuccess: () => { setIsCreateModalOpen(false); setCreateFormData(NEW_ACTION); setAiFile(null); },
   });
 
-  const aiRewordMutation = useMutation({
+  const aiReword = useReportedMutation({
     mutationFn: async () => {
       const formData = new FormData();
-      if (createFormData.description.trim()) {
-        formData.append('text', createFormData.description.trim());
-      }
-      if (aiFile) {
-        formData.append('file', aiFile);
-      }
+      if (createFormData.description.trim()) formData.append('text', createFormData.description.trim());
+      if (aiFile) formData.append('file', aiFile);
       formData.append('tone', 'professional');
-      const response = await committeeApi.aiRewordActionText(formData);
-      return response.data as { text: string };
+      return (await committeeApi.aiRewordActionText(formData)).data as { text: string };
     },
-    onSuccess: (result) => {
-      setCreateFormData((prev) => ({ ...prev, description: result.text || prev.description }));
-    },
+    success: 'Description reworded',
+    failure: "Couldn't reword the description",
+    onSuccess: (result) => setCreateFormData((prev) => ({ ...prev, description: result.text || prev.description })),
   });
 
-  const aiSummaryMutation = useMutation({
+  const aiSummary = useReportedMutation({
     mutationFn: async () => {
       const formData = new FormData();
-      if (createFormData.description.trim()) {
-        formData.append('text', createFormData.description.trim());
-      }
-      if (aiFile) {
-        formData.append('file', aiFile);
-      }
-      const response = await committeeApi.aiSummarizeActionText(formData);
-      return response.data as { text: string };
+      if (createFormData.description.trim()) formData.append('text', createFormData.description.trim());
+      if (aiFile) formData.append('file', aiFile);
+      return (await committeeApi.aiSummarizeActionText(formData)).data as { text: string };
     },
-    onSuccess: (result) => {
-      setCreateFormData((prev) => ({
-        ...prev,
-        description: result.text || prev.description,
-      }));
-    },
+    success: 'Summary added to the description',
+    failure: "Couldn't summarise the description",
+    onSuccess: (result) => setCreateFormData((prev) => ({ ...prev, description: result.text || prev.description })),
   });
 
   const handleCreateManualAction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!createFormData.committee_id || !createFormData.title.trim()) return;
-
     const payload: Record<string, unknown> = {
       committee_id: parseInt(createFormData.committee_id, 10),
       title: createFormData.title.trim(),
       action_type: createFormData.action_type,
+      priority: createFormData.priority,
     };
-
     if (createFormData.meeting_id) payload.meeting_id = parseInt(createFormData.meeting_id, 10);
     if (createFormData.description.trim()) payload.description = createFormData.description.trim();
     if (createFormData.due_date) payload.due_date = createFormData.due_date;
+    createAction.mutate(payload);
+  };
+  const closeCreate = () => { createAction.reset(); setIsCreateModalOpen(false); };
 
-    createActionMutation.mutate(payload);
+  // the search reads what is on the page (the API has no text search); the filters above it are the API's
+  const query = searchTerm.trim().toLowerCase();
+  const shown = useMemo(
+    () => (query
+      ? actions.filter((a) => a.title.toLowerCase().includes(query) || (a.description || '').toLowerCase().includes(query) || (a.assigned_to_name || '').toLowerCase().includes(query))
+      : actions),
+    [actions, query],
+  );
+  const filtering = Boolean(statusFilter || committeeFilter || overdueOnly || query);
+  const clearFilters = () => { setStatusFilter(''); setCommitteeFilter(''); setOverdueOnly(false); setSearchTerm(''); setPage(1); };
+
+  const title = routeFor('/governance/committees/actions')?.label ?? 'Oversight Actions';
+  const add = <Button variant="primary" leftIcon={<Plus aria-hidden />} onClick={() => setIsCreateModalOpen(true)}>Add manual action</Button>;
+
+  const rowMenu = (a: Action) => {
+    const items: MenuItem[] = STATUS_FILTERS.map((s) => ({
+      key: s.value,
+      label: `Mark as ${s.label.toLowerCase()}`,
+      icon: s.value === 'completed' ? CheckCircle : s.value === 'in_progress' ? Clock : Pencil,
+      onSelect: () => updateAction.mutate({ id: a.id, status: s.value, title: a.title }),
+      disabled: a.status === s.value || updateAction.isPending,
+    }));
+    return <Menu label={`Change the status of ${truncate(a.title, 50).text}`} iconOnly items={items} />;
   };
 
-  const filteredActions = (actions || []).filter(action => {
-    const matchesSearch = action.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (action.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (action.assigned_to_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
-  const openCount = (actions || []).filter(a => a.status === 'open').length;
-  const inProgressCount = (actions || []).filter(a => a.status === 'in_progress').length;
-  const overdueCount = (actions || []).filter(a => a.status === 'overdue').length;
-  const completedCount = (actions || []).filter(a => a.status === 'completed').length;
-
-  const committeeItems = useMemo(
-    () => (Array.isArray(committees) ? committees : []).map((c) => ({ value: String(c.id), label: c.name })),
-    [committees],
-  );
-  const meetingItems = useMemo(
-    () => meetings.map((m) => ({ value: String(m.id), label: m.title })),
-    [meetings],
-  );
-
-  if (isLoading) {
-    return (
-      <div className="space-y-8">
-        <div className="page-header">
-          <div className="skeleton h-8 w-48 mb-2" />
-          <div className="skeleton h-5 w-80" />
-        </div>
-        <div className="grid grid-cols-1 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="card p-6">
-              <div className="skeleton h-6 w-3/4 mb-2" />
-              <div className="skeleton h-4 w-full mb-4" />
-              <div className="skeleton h-4 w-1/2" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const statusItems = [
-    { value: 'open', label: 'Open' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'overdue', label: 'Overdue' },
-  ];
-  const actionTypeItems = [
-    { value: 'follow_up',         label: 'Follow Up'         },
-    { value: 'policy_approval',   label: 'Policy Approval'   },
-    { value: 'risk_review',       label: 'Risk Review'       },
-    { value: 'audit_response',    label: 'Audit Response'    },
-    { value: 'corrective_action', label: 'Corrective Action' },
-    { value: 'preventive_action', label: 'Preventive Action' },
-    { value: 'investigation',     label: 'Investigation'     },
-    { value: 'escalation',        label: 'Escalation'        },
-    { value: 'decision_record',   label: 'Decision Record'   },
-    { value: 'recommendation',    label: 'Recommendation'    },
-    { value: 'training',          label: 'Training'          },
-    { value: 'monitoring',        label: 'Monitoring'        },
-    { value: 'vendor_review',     label: 'Vendor Review'     },
-    { value: 'incident_review',   label: 'Incident Review'   },
-    { value: 'compliance_review', label: 'Compliance Review' },
-    { value: 'communication',     label: 'Communication'     },
-    { value: 'documentation',     label: 'Documentation'     },
-    { value: 'other',             label: 'Other'             },
+  const columns: RegisterColumn<Action>[] = [
+    {
+      key: 'action', header: 'Action', isRowHeader: true,
+      cell: (a) => (
+        <>
+          <span className="line-clamp-2 break-words font-[600] text-ds-fg" title={a.title}>{a.title}</span>
+          <span className="block text-ds-label font-normal text-ds-fg-muted">{a.committee_name || 'No committee'} · {actionTypeLabel(a.action_type)}</span>
+          {a.meeting_title && <span className="line-clamp-1 break-words text-ds-label font-normal text-ds-fg-muted" title={a.meeting_title}>From: {a.meeting_title}</span>}
+          {a.description && <span className="mt-[2px] line-clamp-2 break-words text-ds-label font-normal text-ds-fg-body" title={a.description}>{a.description}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'due', header: 'Due', width: 'w-[132px]', card: 'meta',
+      cell: (a) => (a.due_date
+        ? (<><span className={isOverdueAction(a) ? 'whitespace-nowrap text-ds-danger' : 'whitespace-nowrap'}>{dueDay(a.due_date)}</span><span className="block text-ds-label text-ds-fg-muted">{dueRelative(a.due_date)}</span></>)
+        : <span className="text-ds-fg-muted">{NOT_SET}</span>),
+    },
+    { key: 'assigned', header: 'Assigned to', priority: 3, width: 'w-[168px]', card: 'meta', cell: (a) => <PersonChip name={a.assigned_to_name} /> },
+    {
+      key: 'priority', header: 'Priority', priority: 3, width: 'w-[140px]', card: 'meta',
+      cell: (a) => (<span className="flex flex-col items-start gap-[4px]"><PriorityTag size="sm" value={a.priority} /><SlaTag size="sm" sla={a.sla} /></span>),
+    },
+    { key: 'status', header: 'Status', width: 'w-[148px]', card: 'meta', cell: (a) => <ActionStatusPills size="sm" action={a} /> },
+    { key: 'menu', header: 'Actions', align: 'right', width: 'w-[56px]', cell: rowMenu },
   ];
 
+  const noun = 'actions';
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="page-header">
-        <div>
-          <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Committees
-          </Link>
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Oversight Actions</h1>
-          <p className="text-slate-600 mt-1">Track and manage actions across all committees</p>
-        </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="mt-4 sm:mt-0 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Add Manual Action
-        </button>
-      </div>
+    <div className="space-y-[16px]">
+      <PageHeader
+        variant="page"
+        title={title}
+        back={{ href: '/governance/committees', label: 'Back to committees' }}
+        info="Track and manage the actions of every committee."
+        meta={actionsQ.data ? `${formatCount(total)} ${total === 1 ? 'action' : noun}` : undefined}
+        actions={add}
+      />
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50">
-              <Clock className="h-6 w-6 text-amber-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{openCount}</p>
-              <p className="text-sm text-slate-600">Open</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
-              <Clock className="h-6 w-6 text-blue-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{inProgressCount}</p>
-              <p className="text-sm text-slate-600">In Progress</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50">
-              <AlertCircle className="h-6 w-6 text-rose-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{overdueCount}</p>
-              <p className="text-sm text-slate-600">Overdue</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
-              <CheckCircle className="h-6 w-6 text-emerald-700" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">{completedCount}</p>
-              <p className="text-sm text-slate-600">Completed</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-[200px] max-w-md">
-          <SearchInput
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder="Search actions..."
-            size="md"
-          />
-        </div>
-        <MultiSelectDropdown
-          title="Status"
-          items={statusItems}
-          selectedValues={statusFilter ? [statusFilter] : []}
-          onApply={(values) => setStatusFilter(values[0] || '')}
-          multiSelect={false}
-        />
-        <MultiSelectDropdown
-          title="Committee"
-          items={committeeItems}
-          selectedValues={committeeFilter ? [committeeFilter] : []}
-          onApply={(values) => setCommitteeFilter(values[0] || '')}
-          multiSelect={false}
-        />
-        <label className="flex items-center gap-2 text-slate-700 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={overdueOnly}
-            onChange={(e) => setOverdueOnly(e.target.checked)}
-            className="rounded border-slate-300 bg-white text-primary-500 focus:ring-primary-500"
-          />
-          Overdue Only
-        </label>
-      </div>
-
-      <div className="space-y-4">
-        {filteredActions.map((action) => {
-          const statusStyle = STATUS_COLORS[action.status] || STATUS_COLORS.open;
-          const StatusIcon = statusStyle.icon;
-          const typeStyle = ACTION_TYPE_LABELS[action.action_type] || ACTION_TYPE_LABELS.follow_up;
-          const isOverdue = action.status === 'overdue';
-
-          return (
-            <div key={action.id} className={`card p-6 ${isOverdue ? 'border-rose-200' : ''}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-slate-900 font-medium">{action.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
-                      <StatusIcon className="h-3 w-3" />
-                      {action.status.replace('_', ' ')}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
-                      {typeStyle.label}
-                    </span>
-                  </div>
-                  {action.description && (
-                    <p className="text-slate-600 text-sm mb-3">{action.description}</p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <Building2 className="h-4 w-4" />
-                      {action.committee_name}
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="h-4 w-4" />
-                      Due: {new Date(action.due_date).toLocaleDateString()}
-                    </span>
-                    {action.assigned_to_name && (
-                      <span className="flex items-center gap-1.5">
-                        <Users className="h-4 w-4" />
-                        {action.assigned_to_name}
-                      </span>
-                    )}
-                    {action.meeting_title && (
-                      <span className="text-slate-600">
-                        From: {action.meeting_title}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="ml-4">
-                  <MultiSelectDropdown
-                    title="Status"
-                    items={[
-                      { value: 'open', label: 'Open' },
-                      { value: 'in_progress', label: 'In Progress' },
-                      { value: 'completed', label: 'Completed' },
-                    ]}
-                    selectedValues={[action.status]}
-                    onApply={(values) => {
-                      const next = values[0];
-                      if (next && next !== action.status) {
-                        updateActionMutation.mutate({ id: action.id, data: { status: next } });
-                      }
-                    }}
-                    multiSelect={false}
-                    triggerVariant="input"
-                    showSelectionInTrigger
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {filteredActions.length === 0 && (
-        <div className="card flex flex-col items-center py-8 text-center">
-          <CheckSquare className="mb-2 h-8 w-8 text-slate-300" />
-          <p className="text-sm text-slate-500">No actions found</p>
-          <button onClick={() => setIsCreateModalOpen(true)} className="mt-2 text-sm font-medium text-primary-700 hover:text-primary-800">
-            Add manual action
-          </button>
+      {/* ── the four totals (the server's counts, for every committee or the one chosen) ── */}
+      {overviewQ.isError && !totals ? (
+        <ErrorState compact className="rounded-ds-card border border-ds-border bg-ds-surface" title="Couldn't load the totals" message={errorMessage(overviewQ.error)} onRetry={() => { void overviewQ.refetch(); }} />
+      ) : (
+        <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
+          {totals === null && overviewQ.isLoading ? (
+            [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[88px]" />)
+          ) : (
+            <>
+              <StatTile label="Open" icon={Clock} value={totals ? formatCount(totals.open) : '—'} />
+              <StatTile label="In progress" icon={Clock} value={totals ? formatCount(totals.in_progress) : '—'} />
+              <StatTile label="Overdue" icon={AlertTriangle} value={totals ? formatCount(totals.overdue) : '—'} tone={totals && totals.overdue > 0 ? 'danger' : 'default'}
+                note="Open or in progress, past its due date" />
+              <StatTile label="Completed" icon={CheckCircle} value={totals ? formatCount(totals.completed) : '—'} tone="success" />
+            </>
+          )}
         </div>
       )}
 
+      {/* ── filters ── */}
+      <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+        <TextInput
+          type="search"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search this page"
+          aria-label="Search the actions on this page"
+          leftAdornment={<Search aria-hidden />}
+          className="min-w-[200px] max-w-md flex-1"
+        />
+        <Select aria-label="Status" value={statusFilter} placeholder="All statuses" onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }} className="w-[160px]">
+          {STATUS_FILTERS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </Select>
+        <Select aria-label="Committee" value={committeeFilter} placeholder="All committees" onChange={(e) => { setCommitteeFilter(e.target.value); setPage(1); }} className="w-[220px]"
+          disabled={committeesQ.isError}>
+          {committees.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+        </Select>
+        <Checkbox label="Overdue only" checked={overdueOnly} onChange={(e) => { setOverdueOnly(e.target.checked); setPage(1); }} />
+        {committeesQ.isError && (
+          <span role="alert" className="inline-flex items-center gap-[8px] text-ds-body text-ds-danger">
+            Couldn&apos;t load the committees <Button size="sm" onClick={() => { void committeesQ.refetch(); }}>Retry</Button>
+          </span>
+        )}
+      </div>
+      {query && total > actions.length && (
+        <p className="text-ds-label font-normal text-ds-fg-muted">The search reads the {formatCount(actions.length)} actions on this page, not all {formatCount(total)}.</p>
+      )}
+
+      <RegisterTable<Action>
+        caption="Oversight actions"
+        columns={columns}
+        rows={shown}
+        getRowId={(a) => a.id}
+        loading={actionsQ.isLoading}
+        error={actionsQ.isError && !actionsQ.data ? { message: `Couldn't load the actions. ${errorMessage(actionsQ.error)}`, onRetry: () => { void actionsQ.refetch(); } } : null}
+        cardTitle={(a) => (
+          <>
+            <span className="block break-words font-[600] text-ds-fg">{a.title}</span>
+            <span className="block text-ds-label font-normal text-ds-fg-muted">{a.committee_name || 'No committee'} · {actionTypeLabel(a.action_type)}</span>
+            <span className="mt-[4px] flex items-start justify-between gap-[8px]">
+              {a.meeting_title ? <span className="line-clamp-1 break-words text-ds-label font-normal text-ds-fg-muted">From: {a.meeting_title}</span> : <span />}
+              {rowMenu(a)}
+            </span>
+          </>
+        )}
+        empty={filtering ? (
+          <EmptyState kind="noMatches" bare title="No actions match" description="No action fits these filters on this page." onClearFilters={clearFilters} />
+        ) : (
+          <EmptyState kind="firstUse" bare icon={CheckSquare} title="No oversight actions yet" description="Actions made in a meeting, or added by hand, are listed here." action={add} />
+        )}
+        footer={actionsQ.data ? <Pager page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} pageSizes={ACTION_PAGE_SIZES} noun={noun} /> : undefined}
+      />
+
       <RightSlidePanel
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        title="Add Manual Action Item"
-        footer={
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setIsCreateModalOpen(false)}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="create-action-form"
-              disabled={createActionMutation.isPending || !createFormData.committee_id || !createFormData.title.trim()}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {createActionMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create Action
-            </button>
-          </div>
-        }
+        onClose={closeCreate}
+        title="Add manual action"
+        dirty={formChanged(NEW_ACTION, createFormData) || aiFile !== null}
+        footer={<DrawerFooter onCancel={closeCreate} form="create-action-form" pending={createAction.isPending} label="Create action" pendingLabel="Creating…" disabled={!createFormData.committee_id || !createFormData.title.trim()} />}
       >
-        <form id="create-action-form" onSubmit={handleCreateManualAction} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Committee *</label>
-              <MultiSelectDropdown
-                title="Committee"
-                items={committeeItems}
-                selectedValues={createFormData.committee_id ? [createFormData.committee_id] : []}
-                onApply={(values) =>
-                  setCreateFormData((prev) => ({
-                    ...prev,
-                    committee_id: values[0] || '',
-                    meeting_id: '',
-                  }))
-                }
-                multiSelect={false}
-                triggerVariant="input"
+        <form id="create-action-form" onSubmit={handleCreateManualAction} className="flex flex-col gap-[16px]">
+          {createAction.isError && <FormProblem message={errorMessage(createAction.error, 'The action could not be created.')} />}
+          {committeesQ.isError && <FormProblem message="The committees could not be loaded, so none can be chosen. Close this and try again." />}
+          <div className="grid grid-cols-1 gap-[16px] md:grid-cols-2">
+            <FormField label="Committee" required>
+              <Select
+                value={createFormData.committee_id}
                 placeholder="Select committee"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Meeting (Optional)</label>
-              <MultiSelectDropdown
-                title="Meeting"
-                items={meetingItems}
-                selectedValues={createFormData.meeting_id ? [createFormData.meeting_id] : []}
-                onApply={(values) =>
-                  setCreateFormData((prev) => ({ ...prev, meeting_id: values[0] || '' }))
-                }
-                multiSelect={false}
-                triggerVariant="input"
-                placeholder={
-                  !createFormData.committee_id
-                    ? 'Select committee first'
-                    : isMeetingsLoading
-                      ? 'Loading meetings...'
-                      : 'No linked meeting'
-                }
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Title *</label>
-            <input
-              type="text"
-              value={createFormData.title}
-              onChange={(e) => setCreateFormData((prev) => ({ ...prev, title: e.target.value }))}
-              className="input w-full"
-              placeholder="Action item title"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Action Type</label>
-              <MultiSelectDropdown
-                title="Action Type"
-                items={actionTypeItems}
-                selectedValues={[createFormData.action_type]}
-                onApply={(values) =>
-                  setCreateFormData((prev) => ({ ...prev, action_type: values[0] || 'follow_up' }))
-                }
-                multiSelect={false}
-                triggerVariant="input"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-              <input
-                type="date"
-                value={createFormData.due_date}
-                onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))}
-                className="input w-full"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-            <textarea
-              value={createFormData.description}
-              onChange={(e) => setCreateFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="input w-full h-28"
-              placeholder="Describe the action item"
-            />
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <p className="mb-2 text-sm font-medium text-slate-800">AI Assistant</p>
-            <div className="mb-3">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Upload reference file (optional)</label>
-              <input
-                type="file"
-                onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-                accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => aiRewordMutation.mutate()}
-                disabled={aiRewordMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                required
+                onChange={(e) => setCreateFormData((prev) => ({ ...prev, committee_id: e.target.value, meeting_id: '' }))}
               >
-                {aiRewordMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                AI Reword
-              </button>
-              <button
-                type="button"
-                onClick={() => aiSummaryMutation.mutate()}
-                disabled={aiSummaryMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                {committees.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Meeting" optional>
+              <Select
+                value={createFormData.meeting_id}
+                disabled={!createFormData.committee_id}
+                placeholder={!createFormData.committee_id ? 'Select a committee first' : isMeetingsLoading ? 'Loading meetings…' : 'No linked meeting'}
+                onChange={(e) => setCreateFormData((prev) => ({ ...prev, meeting_id: e.target.value }))}
               >
-                {aiSummaryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Generate Summary
-              </button>
-            </div>
+                {meetings.map((m) => <option key={m.id} value={String(m.id)}>{m.title}</option>)}
+              </Select>
+            </FormField>
           </div>
 
-          {createActionMutation.isError && (
-            <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-600">
-              Failed to create action item. Please check required fields and try again.
+          <FormField label="Title" required>
+            <TextInput value={createFormData.title} onChange={(e) => setCreateFormData((prev) => ({ ...prev, title: e.target.value }))} placeholder="Action item title" maxLength={500} required />
+          </FormField>
+
+          <div className="grid grid-cols-1 gap-[16px] md:grid-cols-2">
+            <FormField label="Action type">
+              <Select value={createFormData.action_type} onChange={(e) => setCreateFormData((prev) => ({ ...prev, action_type: e.target.value }))}>
+                {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </Select>
+            </FormField>
+            <FormField label="Priority">
+              <Select value={createFormData.priority} onChange={(e) => setCreateFormData((prev) => ({ ...prev, priority: e.target.value }))}>
+                {priorityChoices(taskSettings).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </Select>
+            </FormField>
+          </div>
+
+          <FormField
+            label="Due date"
+            optional
+            hint={!createFormData.due_date && slaDays(taskSettings, createFormData.priority) != null
+              ? `Left blank, it is due ${slaDays(taskSettings, createFormData.priority)} days from today (the ${createFormData.priority} SLA).`
+              : undefined}
+          >
+            <TextInput type="date" value={createFormData.due_date} onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))} className="md:max-w-[50%]" />
+          </FormField>
+
+          <FormField label="Description" optional>
+            <Textarea value={createFormData.description} onChange={(e) => setCreateFormData((prev) => ({ ...prev, description: e.target.value }))} rows={5} placeholder="Describe the action item" />
+          </FormField>
+
+          <fieldset className="min-w-0 rounded-ds-card border border-ds-border bg-ds-surface-subtle p-[12px]">
+            <legend className="px-[4px] text-ds-label text-ds-fg">AI assistant</legend>
+            <div className="flex flex-col gap-[12px]">
+              <FormField label="Reference file" optional>
+                <FileInput accept=".txt,.md,.csv,.json,.pdf,.doc,.docx" onPick={setAiFile} />
+              </FormField>
+              <div className="flex flex-wrap gap-[8px]">
+                <Button leftIcon={<Sparkles aria-hidden />} loading={aiReword.isPending} disabled={aiSummary.isPending || (!createFormData.description.trim() && !aiFile)} onClick={() => aiReword.mutate()}>AI reword</Button>
+                <Button leftIcon={<Upload aria-hidden />} loading={aiSummary.isPending} disabled={aiReword.isPending || (!createFormData.description.trim() && !aiFile)} onClick={() => aiSummary.mutate()}>Generate summary</Button>
+              </div>
             </div>
-          )}
+          </fieldset>
         </form>
       </RightSlidePanel>
     </div>

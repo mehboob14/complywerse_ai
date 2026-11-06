@@ -1,4 +1,6 @@
 from ....config import get_openai_model
+import contextlib
+import logging
 import os
 import re
 import json
@@ -19,15 +21,39 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
+from ....services.ai_gateway.errors import AIBlocked
 from ..action_logger import log_governance_action
+from ..permissions import require_doc_changer, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
+logger = logging.getLogger(__name__)
 
 MAX_PARSE_CHUNKS = 12
 MAX_PARSE_CHARACTERS = 180000
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+AI_UNAVAILABLE = "Comply Agent is not available right now. Try again later."
+NOT_COMPLETED = "It could not be completed. Try again."
+# what the jobs write for people (shown as they are); anything else is a technical error, kept for the logs only
+_PLAIN_JOB_ERRORS = {
+    "Document not found", "Document has no content or file to parse", "No text could be extracted from the document",
+    "Framework not found", "The gap analysis could not be started.", "The gap analysis did not finish. Run it again.",
+    "The gap analysis stopped before it finished. Run it again.",
+    "Another gap analysis of this document was running. Run it again when it is done.",
+    "Cancelled automatically: the gap analysis stopped before it finished (the server or the worker restarted). Run it again.",
+}
+_AI_DOWN = re.compile(r"openai|anthropic|not configured|api[ _-]?key|connection error|error code: \d{3}|rate.?limit|timed? ?out|"
+                      r"quota|budget|overloaded|AIBlocked", re.I)
+
+
+def public_job_error(message):
+    """A background job's stored error as a page shows it: a sentence written for people as it is, else never the stored text
+    (a vendor's name, an HTTP code), but Comply Agent being unavailable or that it could not be completed."""
+    if not message or message in _PLAIN_JOB_ERRORS:
+        return message
+    return AI_UNAVAILABLE if _AI_DOWN.search(str(message)) else NOT_COMPLETED
 
 
 def _sanitize_policy_text(raw_text: str) -> str:
@@ -70,6 +96,10 @@ class CreatePolicyStatementRequest(BaseModel):
     is_mandatory: bool = True
     source_section: Optional[str] = None
     ai_extracted_keywords: Optional[List[str]] = None
+    # the justification for this change (kept in its history and the Change log): optional for the document's owner or author,
+    # required from anyone else, whose change waits for them (proposals.py); ``message`` is the same by its other name
+    change_reason: Optional[str] = None
+    message: Optional[str] = None
 
 
 class UpdatePolicyStatementRequest(BaseModel):
@@ -79,11 +109,26 @@ class UpdatePolicyStatementRequest(BaseModel):
     priority: Optional[str] = None
     is_mandatory: Optional[bool] = None
     source_section: Optional[str] = None
-    change_reason: Optional[str] = None
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest)
+    message: Optional[str] = None
 
 
 class RollbackStatementRequest(BaseModel):
     version_id: int
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest)
+    message: Optional[str] = None
+
+
+class DeleteStatementRequest(BaseModel):
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest); also ?change_reason=
+    message: Optional[str] = None
+
+
+def _justified(request):
+    """The justification of a statement change, whichever of its names it came by (change_reason, else message)."""
+    if not (request.change_reason or "").strip() and (getattr(request, "message", None) or "").strip():
+        request.change_reason = request.message
+    return request
 
 
 class ApplyReparseProposalsRequest(BaseModel):
@@ -337,6 +382,8 @@ def _vision_transcribe_png(client, b64_png: str) -> str:
                 }],
             )
             return (resp.choices[0].message.content or "").strip()
+        except AIBlocked:       # pixels never leave: another model would be refused the same way
+            raise
         except Exception as exc:  # noqa: BLE001
             log.warning("vision OCR model %s failed: %s", model, exc)
             continue
@@ -371,6 +418,8 @@ def _openai_vision_ocr_pdf(pdf_bytes: bytes, max_pages: int | None = None) -> st
                 t = _vision_transcribe_png(client, b64)
                 if t:
                     parts.append(t)
+            except AIBlocked:   # the same refusal for every page: stop at the first
+                break
             except Exception as exc:  # noqa: BLE001
                 log.warning("vision OCR failed on page %s: %s", i, exc)
     finally:
@@ -596,6 +645,8 @@ def _split_text_into_chunks(text: str, chunk_size: int = 20000, overlap: int = 5
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
+        if end >= len(text):        # the end is read: without this the last 500 characters came again, one shorter each time (12 calls)
+            break
 
         start = max(start + 1, end - overlap)
 
@@ -615,7 +666,9 @@ def _is_duplicate(new_text: str, existing_statements: List[dict], threshold: flo
     return False
 
 
-def parse_policy_statements_with_openai(text: str, document_title: str, progress_callback=None) -> List[dict]:
+def parse_policy_statements_with_openai(text: str, document_title: str, progress_callback=None, at_least: int = 15) -> List[dict]:
+    """The statements of ``text``. ``at_least``: how many a section of a whole document is expected to hold (0 for the few parts of a
+    new version that changed: there a floor would make the AI split or invent statements)."""
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -649,6 +702,7 @@ def parse_policy_statements_with_openai(text: str, document_title: str, progress
     )
 
     total_chunks = len(chunks)
+    floor = f"You must extract AT LEAST {at_least} statements from this section if it contains policy language.\n\n" if at_least else ""
 
     for chunk_idx, chunk_text in enumerate(chunks):
         current_chunk = chunk_idx + 1
@@ -661,9 +715,7 @@ Analyze the following section from the document titled "{document_title}" and ex
 
 Extract EVERY individual policy statement, requirement, obligation, and mandate. Copy the EXACT wording from the document - do NOT paraphrase, summarize, rewrite, or generalize. Each extracted statement must be a direct quote from the document text. Do NOT combine statements. Each sentence that contains 'shall', 'must', 'should', 'will', 'required', 'responsible', 'prohibited', or similar directive language is a separate statement. A typical policy document contains 30-100+ statements.
 
-You must extract AT LEAST 15 statements from this section if it contains policy language.
-
-IMPORTANT: Extract EVERY distinct statement. Look for ALL sentences containing directive language (shall, must, should, will, required, prohibited, responsible for, etc.). Include statements from tables, appendices, and all subsections. Each distinct requirement is a separate statement.
+{floor}IMPORTANT: Extract EVERY distinct statement. Look for ALL sentences containing directive language (shall, must, should, will, required, prohibited, responsible for, etc.). Include statements from tables, appendices, and all subsections. Each distinct requirement is a separate statement.
 
 For each policy statement you find, extract:
 1. statement_text: Copy the EXACT text from the document - do NOT paraphrase, summarize, or rewrite. Use the precise wording as it appears in the document. If a statement spans multiple sentences, include all of them exactly as written.
@@ -724,6 +776,8 @@ Return a JSON object with a "statements" array containing all extracted policy s
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to parse OpenAI response: {str(e)}"
             )
+        except AIBlocked:       # the data-protection guard refused: its message is already written for a person
+            raise
         except Exception as e:
             error_msg = str(e)
             if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
@@ -741,6 +795,44 @@ Return a JSON object with a "statements" array containing all extracted policy s
 
 _parsing_status = {}
 _reparse_proposals = {}
+
+#: Re-parse proposals are written by the parse job and read by the review
+#: endpoints. The job runs in a Celery worker, a different process from the API,
+#: so a module dict alone left the review screen empty ("review required", then
+#: nothing to review). Redis — the store parse status already uses — is shared.
+_PROPOSALS_NS = "policy_reparse_proposals"
+
+
+def _save_proposals(tenant_slug, document_id, data):
+    _reparse_proposals[document_id] = data
+    if tenant_slug:
+        try:
+            from ....job_status import set_status as _set
+            _set(tenant_slug, _PROPOSALS_NS, document_id, data)
+        except Exception:
+            pass  # the in-process copy still serves a thread-dispatched parse
+
+
+def _load_proposals(tenant_slug, document_id):
+    if tenant_slug:
+        try:
+            from ....job_status import get_status as _get
+            data = _get(tenant_slug, _PROPOSALS_NS, document_id, default={})
+            if data:
+                return data
+        except Exception:
+            pass
+    return _reparse_proposals.get(document_id)
+
+
+def _clear_proposals(tenant_slug, document_id):
+    _reparse_proposals.pop(document_id, None)
+    if tenant_slug:
+        try:
+            from ....job_status import delete_status as _del
+            _del(tenant_slug, _PROPOSALS_NS, document_id)
+        except Exception:
+            pass
 
 
 def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int] = None) -> dict:
@@ -773,7 +865,11 @@ def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int]
         "updated_at": statement.updated_at.isoformat() if statement.updated_at else None,
         "current_version": current_version,
         "created_by": statement.created_by,
-        "compliance_id": compliance_id
+        "compliance_id": compliance_id,
+        # document sync (cfsb): is this the file's own wording, and has it been edited since
+        "source_match": statement.source_match,
+        "pending_in_document": bool(statement.source_text is not None
+                                    and (statement.statement_text or "").strip() != statement.source_text.strip()),
     }
 
 
@@ -807,7 +903,39 @@ def _create_version_snapshot(db: Session, statement: PolicyStatement, change_typ
     return version
 
 
-@router.get("/{document_id}/parse-status")
+WORDING_CAP = 300          # characters of a statement's wording kept in its document's audit log (the Change log)
+_OTHER_FIELDS = {"statement_summary": "summary", "category": "category", "priority": "priority", "is_mandatory": "mandatory",
+                 "source_section": "section"}          # what an edit can change besides the wording, as the Change log names it
+
+
+def _wording(old: Optional[str], new: Optional[str], cap: int = WORDING_CAP):
+    """A statement's wording before and after as the Change log keeps it: white space collapsed, each cut to ``cap`` characters
+    from a little before where the two first differ, so a change late in a long statement still shows."""
+    a, b = (" ".join(t.split()) if t else None for t in (old, new))
+    start = 0
+    if a and b and max(len(a), len(b)) > cap:
+        start = max(0, next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b))) - cap // 4)
+
+    def cut(t):
+        return t and ("… " if start else "") + t[start:start + cap] + (" …" if len(t) > start + cap else "")
+    return cut(a), cut(b)
+
+
+def log_statement_change(db: Session, statement: PolicyStatement, user_id: Optional[int], action: str, *, old: Optional[str] = None,
+                         new: Optional[str] = None, detail: str = "") -> None:
+    """One row in the audit log of the statement's document, which its Change log shows: the statement's code and what happened
+    (``detail``), its wording before and after. Nothing without a person to name (a row needs one)."""
+    if not user_id:
+        return
+    from .documents import create_audit_log
+
+    before, after = _wording(old, new)
+    create_audit_log(db=db, document_id=statement.document_id, tenant_id=statement.tenant_id, user_id=user_id, action=action,
+                     action_details=" · ".join(p for p in (statement.statement_code or f"Statement {statement.id}", detail) if p),
+                     field_changed="statement", old_value=before, new_value=after)
+
+
+@router.get("/{document_id}/parse-status", dependencies=[Depends(require_doc_reader)])
 def get_parse_status(
     document_id: int,
     request: Request,
@@ -869,10 +997,12 @@ def get_parse_status(
                     pass
             _parsing_status.pop(document_id, None)
             status_info = {"status": "idle", "stale_cleared": True}
+    if status_info.get("error"):
+        status_info = {**status_info, "error": public_job_error(status_info["error"])}
     return status_info
 
 
-def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = None):
+def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = None, incremental: bool = False):
     """Body of the policy-parse job. Takes an open tenant-scoped session and
     runs to completion.
 
@@ -880,7 +1010,12 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
     legacy in-process callers) AND Redis `job_status` (for cross-process
     visibility — uvicorn and the celery worker are different processes, so
     only Redis is observable from the HTTP status endpoint).
+
+    ``incremental``: started by a new version of the document (statement_reparse): a document with statements has them follow the
+    new text, reading only the parts that changed; one without is parsed whole, as on create.
     """
+    from .. import statement_reparse
+
     # Cross-process status helper. Captures `tenant_slug` + `document_id` from
     # the closure so each call site is a one-liner. Stamps `updated_at` on
     # every write so the status endpoint can detect dead workers (entries
@@ -901,21 +1036,24 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
         if not document:
             _write_status({"status": "failed", "error": "Document not found"})
             return
+        if user_id is None:                     # a change nobody was named for (a workflow, say)
+            user_id = statement_reparse.actor(db, document)
 
-        file_path = document.file_path
-        file_type = document.file_type
+        if incremental:
+            if db.query(PolicyStatement.id).filter(PolicyStatement.document_id == document_id).first():
+                try:
+                    return statement_reparse.run(db, document, user_id, tenant_slug, _write_status)
+                except Exception as e:
+                    db.rollback()
+                    _write_status({"status": "failed", "error": str(e)[:500], "automatic": True})
+                    raise
+            if not _auto_parseable(document):   # nothing an automatic parse reads, as on create
+                _write_status({"status": "idle"})
+                return {"status": "skipped"}
 
-        extracted_text = None
-
+        read_as = statement_reparse.text_key(document)
         # Prefer source file extraction for uploaded documents to avoid parsing rendered HTML blobs.
-        if file_path and os.path.exists(file_path):
-            try:
-                extracted_text = extract_text_from_file(file_path, file_type)
-            except Exception:
-                extracted_text = None
-
-        if (not extracted_text or not extracted_text.strip()) and document.content and document.content.strip():
-            extracted_text = document.content
+        extracted_text = statement_reparse.document_text(document)
 
         if not extracted_text or not extracted_text.strip():
             _write_status({"status": "failed", "error": "Document has no content or file to parse"})
@@ -1014,13 +1152,15 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
 
                     proposals.append(proposal)
 
-                _reparse_proposals[document_id] = {
+                _save_proposals(tenant_slug, document_id, {
                     "proposals": proposals,
                     "created_at": datetime.utcnow().isoformat(),
                     "total": len(proposals),
                     "new_count": sum(1 for p in proposals if p["type"] == "new"),
                     "update_count": sum(1 for p in proposals if p["type"] == "update"),
-                }
+                    # the text this read, by its parts: what the statements reflect once the proposals are applied
+                    "parts": [p.hash for p in statement_reparse.parts_of(extracted_text)],
+                })
 
                 _write_status({
                     "status": "review_required",
@@ -1064,7 +1204,18 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
                     )
                     db.add(compliance_record)
 
+                statement_reparse.record(db, document, extracted_text)      # the parts of the text each statement came from
                 db.commit()
+
+                # Hold each statement to the document's own wording (tenants with document sync only).
+                from ..doc_sync import anchor_after_parse
+                anchor_after_parse(db, document_id, user_id)
+                if statement_reparse.text_key(document) != read_as:          # saved again while it was read: that change too
+                    try:
+                        statement_reparse.run(db, document, user_id, tenant_slug, _write_status, remap=False)
+                    except Exception:       # noqa: BLE001 - the statements of what was read stand; the next version catches up
+                        db.rollback()
+                        logger.warning("document %s: the version saved during its parse was not read", document_id, exc_info=True)
 
                 # ── Recommend & link controls (internal ERM + framework) for every
                 # new statement. Dispatched as its OWN background step now that the
@@ -1128,7 +1279,7 @@ def _parse_policy_background(document_id: int, user_id: int, tenant_slug: str):
         db.close()
 
 
-@router.post("/{document_id}/parse-policy")
+@router.post("/{document_id}/parse-policy", dependencies=[Depends(require_doc_changer)])
 def parse_policy_document(
     document_id: int,
     request: Request,
@@ -1152,6 +1303,14 @@ def parse_policy_document(
     if current_status.get("status") == "parsing":
         return {"status": "parsing", "message": "Document is already being parsed"}
 
+    # Per-tenant rate limit first, so a refused parse leaves no "queued" status behind. It fails open without Redis (optional
+    # locally), and then Celery, whose broker is that Redis, is not tried: the job runs on a thread at once.
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        redis_up = tenant_rate_limit(tenant_slug, bucket="governance_parse")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
+
     initial = {
         "status": "queued",
         "message": "Job queued; waiting for a worker",
@@ -1159,19 +1318,14 @@ def parse_policy_document(
         "total_chunks": 0,
         "current_chunk": 0,
         "progress_percent": 0,
+        "updated_at": datetime.utcnow().isoformat(),     # without it the status endpoint takes it for a leftover
     }
     _parsing_status[document_id] = initial
 
     # Mirror to Redis so the status endpoint can read it across processes.
     from ....job_status import set_status as _set_redis_status
-    _set_redis_status(tenant_slug, "policy_parse", document_id, initial)
-
-    # Per-tenant rate limit + idempotent dispatch.
-    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
-    try:
-        tenant_rate_limit(tenant_slug, bucket="governance_parse")
-    except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
+    if redis_up:
+        _set_redis_status(tenant_slug, "policy_parse", document_id, initial)
 
     # Dispatch strategy: try Celery first (works when a worker is running),
     # fall back to a daemon thread inside the FastAPI process if the broker
@@ -1183,7 +1337,7 @@ def parse_policy_document(
     import os as _os
     task_id: str
     dispatched_via = "celery"
-    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    force_thread = not redis_up or _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
 
     if not force_thread:
         try:
@@ -1193,11 +1347,8 @@ def parse_policy_document(
         except Exception as _celery_exc:  # noqa: BLE001
             # Broker unreachable / Celery misconfigured. Fall through to
             # the thread path so the user's parse runs anyway.
-            print(
-                f"[DISPATCH] policy_parse → celery FAILED, falling back to thread "
-                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
-                flush=True,
-            )
+            logger.warning("policy_parse: celery dispatch failed, falling back to a thread (%s: %.140s)",
+                           type(_celery_exc).__name__, _celery_exc)
             force_thread = True
 
     if force_thread:
@@ -1205,11 +1356,8 @@ def parse_policy_document(
         task_id = dispatch_parse_in_thread(tenant_slug, document_id, current_user.id)
         dispatched_via = "thread"
 
-    print(
-        f"[DISPATCH] policy_parse → {dispatched_via} task_id={task_id} "
-        f"tenant={tenant_slug} doc={document_id}",
-        flush=True,
-    )
+    with contextlib.suppress(Exception):            # the job is on its way: a diagnostic never turns that into an error
+        logger.info("policy_parse dispatched via %s task_id=%s tenant=%s doc=%s", dispatched_via, task_id, tenant_slug, document_id)
 
     return {
         "status": "queued",
@@ -1218,6 +1366,22 @@ def parse_policy_document(
         "message": "Policy parsing queued. Poll /parse-status for progress.",
         "document_id": document_id,
     }
+
+
+def _auto_parseable(document) -> bool:
+    """Something an automatic parse can read. Only a FILE whose type is text-extractable —
+    extract_text_from_file handles pdf/docx/doc; xls/xlsx raise, which
+    would otherwise dispatch a guaranteed-"failed" parse on a perfectly
+    valid spreadsheet upload (and that terminal "failed" status is never
+    swept). Non-extractable uploads fall back to requiring inline content."""
+    file_type = str(getattr(document, "file_type", "") or "").lower()
+    has_extractable_file = bool(
+        getattr(document, "file_path", None)
+        and os.path.exists(document.file_path)
+        and file_type in ("pdf", "docx", "doc")
+    )
+    has_content = bool(getattr(document, "content", None) and str(document.content).strip())
+    return has_extractable_file or has_content
 
 
 def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_id: int, user_id: int) -> bool:
@@ -1244,24 +1408,15 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         ).first()
         if not document:
             return False
+        from ..statement_reparse import STARTED
+        if document_id in (db.info.get(STARTED) or ()):     # its new text already started a parse when it was committed
+            return True
         already_parsed = db.query(PolicyStatement.id).filter(
             PolicyStatement.document_id == document_id
         ).first()
         if already_parsed:
             return False
-        # Only auto-parse a FILE when its type is text-extractable —
-        # extract_text_from_file handles pdf/docx/doc; xls/xlsx raise, which
-        # would otherwise dispatch a guaranteed-"failed" parse on a perfectly
-        # valid spreadsheet upload (and that terminal "failed" status is never
-        # swept). Non-extractable uploads fall back to requiring inline content.
-        file_type = str(getattr(document, "file_type", "") or "").lower()
-        has_extractable_file = bool(
-            getattr(document, "file_path", None)
-            and os.path.exists(document.file_path)
-            and file_type in ("pdf", "docx", "doc")
-        )
-        has_content = bool(getattr(document, "content", None) and str(document.content).strip())
-        if not (has_extractable_file or has_content):
+        if not _auto_parseable(document):
             return False
 
         # Share the manual parse endpoint's per-tenant ceiling so a burst of
@@ -1270,7 +1425,7 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         # skip auto-parse silently; the user can still parse manually.
         from ....tasks.base import tenant_rate_limit, RateLimitExceeded
         try:
-            tenant_rate_limit(tenant_slug, bucket="governance_parse")
+            redis_up = tenant_rate_limit(tenant_slug, bucket="governance_parse")
         except RateLimitExceeded:
             return False
 
@@ -1287,12 +1442,10 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
             "updated_at": datetime.utcnow().isoformat(),
         })
 
-        from ....tasks.governance import dispatch_parse
-        dispatch_parse(tenant_slug, document_id, user_id)
-        print(
-            f"[DISPATCH] auto-parse-on-create → dispatched tenant={tenant_slug} doc={document_id}",
-            flush=True,
-        )
+        from ....tasks.governance import dispatch_parse, dispatch_parse_in_thread
+        # without Redis the create request does not wait a minute on Celery's broker: a thread at once
+        (dispatch_parse if redis_up else dispatch_parse_in_thread)(tenant_slug, document_id, user_id)
+        logger.info("auto-parse-on-create dispatched tenant=%s doc=%s", tenant_slug, document_id)
         return True
     except Exception:  # noqa: BLE001
         _logging.getLogger(__name__).warning(
@@ -1301,7 +1454,7 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         return False
 
 
-@router.get("/{document_id}/policy-statements")
+@router.get("/{document_id}/policy-statements", dependencies=[Depends(require_doc_reader)])
 def get_document_policy_statements(
     document_id: int,
     category: Optional[str] = None,
@@ -1342,6 +1495,36 @@ def get_document_policy_statements(
         ).first()
         result.append(serialize_statement(statement, compliance.id if compliance else None))
     
+    # Controls that already answer these statements, so the page can show what a
+    # statement has been turned into rather than offering to create it again.
+    for row in result:
+        row["controls"] = []
+    by_id = {row.get("id"): row for row in result}
+    if by_id:
+        from ....models import NormalizedControl, StatementControlMapping
+
+        mappings = (
+            db.query(StatementControlMapping)
+            .filter(StatementControlMapping.statement_id.in_(list(by_id)),
+                    StatementControlMapping.control_kind == "normalized")
+            .all()
+        )
+        sources = dict(
+            db.query(NormalizedControl.id, NormalizedControl.source)
+            .filter(NormalizedControl.id.in_(
+                [m.normalized_control_id for m in mappings if m.normalized_control_id] or [0])).all()
+        ) if mappings else {}
+        for m in mappings:
+            row = by_id.get(m.statement_id)
+            if row is None or not m.control_code:
+                continue
+            row["controls"].append({
+                "code": m.control_code,
+                "title": m.control_title,
+                "custom": sources.get(m.normalized_control_id) == "custom",
+                "coverage_type": m.coverage_type,
+            })
+
     return {
         "document_id": document_id,
         "document_title": document.title,
@@ -1350,7 +1533,7 @@ def get_document_policy_statements(
     }
 
 
-@router.post("/{document_id}/statements")
+@router.post("/{document_id}/statements", dependencies=[Depends(require_doc_changer)])
 def add_policy_statement(
     document_id: int,
     request: CreatePolicyStatementRequest,
@@ -1380,12 +1563,34 @@ def add_policy_statement(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="statement_text is required"
         )
+    from .. import proposals
 
+    request = _justified(request)
+    if proposals.required(db, current_user, document):
+        # the new statement waits for the owner (or author) to accept it; its code is given when it is added
+        after = {"statement_text": request.statement_text[:10000], "category": request.category, "priority": request.priority or "medium",
+                 "is_mandatory": request.is_mandatory, "source_section": request.source_section}
+        proposal = proposals.propose(db, document, current_user, source="statement_add", message=request.change_reason,
+                                     payload={"request": request.model_dump(), "code": None, "before": None, "after": after})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+
+    statement, compliance_record = _add_statement(db, document, current_user, request)
+    logger.info(f"[ADD STATEMENT] Statement created successfully: id={statement.id}, code={statement.statement_code}")
+    return serialize_statement(statement, compliance_record.id)
+
+
+def _add_statement(db: Session, document: GovernanceDocument, user: GRCUser, request: CreatePolicyStatementRequest, commit: bool = True):
+    """A statement added by hand (``request.change_reason``: why, kept in its history): the next code of the document, its first
+    snapshot, its compliance record, the Change log row and the governance action. Add, and an accepted proposal of one
+    (proposals.py, ``commit`` False). Returns ``(statement, compliance record)``."""
+    document_id = document.id
     existing_count = db.query(PolicyStatement).filter(
         PolicyStatement.document_id == document_id
     ).count()
     next_idx = existing_count + 1
     statement_code = f"PS-{document_id:04d}-{next_idx:03d}"
+    reason = (request.change_reason or "").strip() or None
 
     statement = PolicyStatement(
         tenant_id=document.tenant_id,
@@ -1399,13 +1604,14 @@ def add_policy_statement(
         source_section=request.source_section,
         ai_extracted_keywords=request.ai_extracted_keywords or [],
         status="active",
-        created_by=current_user.id,
+        created_by=user.id,
         created_at=datetime.utcnow()
     )
     db.add(statement)
     db.flush()
 
-    _create_version_snapshot(db, statement, "manual_add", current_user.id)
+    _create_version_snapshot(db, statement, "manual_add", user.id, reason)
+    log_statement_change(db, statement, user.id, "statement_added", new=statement.statement_text, detail=reason or "")
 
     compliance_record = PolicyStatementCompliance(
         tenant_id=document.tenant_id,
@@ -1414,8 +1620,11 @@ def add_policy_statement(
         owner_id=document.owner_id
     )
     db.add(compliance_record)
-    db.commit()
-    db.refresh(statement)
+    if commit:
+        db.commit()
+        db.refresh(statement)
+    else:
+        db.flush()
 
     # Log the action for review
     log_governance_action(
@@ -1424,7 +1633,7 @@ def add_policy_statement(
         action_type="policy_statement_created",
         action_description=f"Policy statement '{statement.statement_code}' created: {statement.statement_text[:100]}...",
         entity_type="policy_statement",
-        action_user_id=current_user.id,
+        action_user_id=user.id,
         entity_id=statement.id,
         action_metadata={
             "document_id": document_id,
@@ -1433,13 +1642,12 @@ def add_policy_statement(
             "priority": statement.priority
         }
     )
-    db.commit()
+    if commit:
+        db.commit()
+    return statement, compliance_record
 
-    logger.info(f"[ADD STATEMENT] Statement created successfully: id={statement.id}, code={statement.statement_code}")
-    return serialize_statement(statement, compliance_record.id)
 
-
-@router.put("/{document_id}/statements/{statement_id}")
+@router.put("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def update_policy_statement(
     document_id: int,
     statement_id: int,
@@ -1470,23 +1678,19 @@ def update_policy_statement(
             detail="Policy statement not found for this document"
         )
 
-    if request.statement_text is not None:
-        statement.statement_text = request.statement_text[:10000]
-    if request.statement_summary is not None:
-        statement.statement_summary = request.statement_summary[:500] if request.statement_summary else None
-    if request.category is not None:
-        statement.category = request.category
-    if request.priority is not None:
-        statement.priority = request.priority
-    if request.is_mandatory is not None:
-        statement.is_mandatory = request.is_mandatory
-    if request.source_section is not None:
-        statement.source_section = request.source_section
+    from .. import proposals
 
-    statement.updated_at = datetime.utcnow()
-
-    # Snapshot the resulting state so version history always includes the edited content.
-    _create_version_snapshot(db, statement, "manual_edit", current_user.id, request.change_reason)
+    request = _justified(request)
+    was = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
+    if _edited(statement, request) != was and proposals.required(db, current_user, document):
+        # the edit waits for the owner (or author) to accept it; the statement stays as it is until then
+        after = {**proposals.statement_fields(statement), **{k: v for k, v in _edited(statement, request).items() if k in proposals.STATEMENT_FIELDS}}
+        proposal = proposals.propose(db, document, current_user, source="statement_edit", message=request.change_reason, statement=statement,
+                                     payload={"request": request.model_dump(exclude_unset=True), "code": statement.statement_code,
+                                              "before": proposals.statement_fields(statement), "after": after})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    _edit_statement(db, statement, current_user, request)
 
     db.commit()
     db.refresh(statement)
@@ -1498,7 +1702,39 @@ def update_policy_statement(
     return serialize_statement(statement, compliance.id if compliance else None)
 
 
-@router.get("/{document_id}/statements/{statement_id}/versions")
+def _edited(statement: PolicyStatement, request: UpdatePolicyStatementRequest) -> dict:
+    """The statement's wording and fields as the edit would leave them (nothing is changed here)."""
+    out = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
+    if request.statement_text is not None:
+        out["statement_text"] = request.statement_text[:10000]
+    if request.statement_summary is not None:
+        out["statement_summary"] = request.statement_summary[:500] if request.statement_summary else None
+    for key in ("category", "priority", "is_mandatory", "source_section"):
+        if getattr(request, key) is not None:
+            out[key] = getattr(request, key)
+    return out
+
+
+def _edit_statement(db: Session, statement: PolicyStatement, user: GRCUser, request: UpdatePolicyStatementRequest) -> None:
+    """An edit of a statement by hand: its new wording and fields, the snapshot with the justification, the Change log row. Edit, and
+    an accepted proposal of one (proposals.py). Does not commit."""
+    was = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
+    for key, value in _edited(statement, request).items():
+        setattr(statement, key, value)
+
+    statement.updated_at = datetime.utcnow()
+
+    # Snapshot the resulting state so version history always includes the edited content.
+    _create_version_snapshot(db, statement, "manual_edit", user.id, request.change_reason)
+    reworded = statement.statement_text != was["statement_text"]
+    others = [label for k, label in _OTHER_FIELDS.items() if getattr(statement, k) != was[k]]
+    if reworded or others:
+        log_statement_change(db, statement, user.id, "statement_edited", old=was["statement_text"] if reworded else None,
+                             new=statement.statement_text if reworded else None,
+                             detail=" · ".join(p for p in ("changed: " + ", ".join(others) if others else "", (request.change_reason or "").strip()) if p))
+
+
+@router.get("/{document_id}/statements/{statement_id}/versions", dependencies=[Depends(require_doc_reader)])
 def get_statement_versions(
     document_id: int,
     statement_id: int,
@@ -1558,7 +1794,7 @@ def get_statement_versions(
     }
 
 
-@router.post("/{document_id}/statements/{statement_id}/rollback")
+@router.post("/{document_id}/statements/{statement_id}/rollback", dependencies=[Depends(require_doc_changer)])
 def rollback_statement(
     document_id: int,
     statement_id: int,
@@ -1588,7 +1824,38 @@ def rollback_statement(
     ).first()
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
+    from .. import proposals
 
+    request = _justified(request)
+    if proposals.required(db, current_user, document):
+        # the rollback waits for the owner (or author) to accept it; the statement stays as it is until then
+        proposal = proposals.propose(db, document, current_user, source="statement_rollback", message=request.change_reason,
+                                     statement=statement,
+                                     payload={"version_id": target_version.id, "code": statement.statement_code,
+                                              "before": proposals.statement_fields(statement), "after": proposals.statement_fields(target_version)})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    target_display_version = _rollback_statement(db, document, statement, target_version, current_user, request.change_reason)
+    db.commit()
+    db.refresh(statement)
+
+    compliance = db.query(PolicyStatementCompliance).filter(
+        PolicyStatementCompliance.statement_id == statement.id
+    ).first()
+
+    return {
+        "message": f"Statement rolled back to version {target_display_version}",
+        "statement": serialize_statement(statement, compliance.id if compliance else None)
+    }
+
+
+def _rollback_statement(db: Session, document: GovernanceDocument, statement: PolicyStatement, target_version: PolicyStatementVersion,
+                        current_user: GRCUser, change_reason: Optional[str] = None) -> int:
+    """A statement back to one of its versions (``change_reason``: why, kept with its snapshot): its snapshot, the Change log and the
+    audit rows. Rollback, and an accepted proposal of one (proposals.py). Does not commit. Returns the version number it went back to."""
+    statement_id, document_id, target_version_id = statement.id, document.id, target_version.id
+    reason = (change_reason or "").strip()
+    old_text = statement.statement_text
     statement.statement_text = target_version.statement_text
     statement.statement_summary = target_version.statement_summary
     statement.category = target_version.category
@@ -1614,8 +1881,12 @@ def rollback_statement(
         statement,
         "rollback",
         current_user.id,
-        f"Rolled back to version {target_display_version}"
+        f"Rolled back to version {target_display_version}" + (f": {reason}" if reason else "")
     )
+    reworded = statement.statement_text != old_text
+    log_statement_change(db, statement, current_user.id, "statement_rolled_back", old=old_text if reworded else None,
+                         new=statement.statement_text if reworded else None,
+                         detail=f"back to version {target_display_version}" + (f" · {reason}" if reason else ""))
 
     audit = AuditLog(
         tenant_id=document.tenant_id,
@@ -1631,20 +1902,10 @@ def rollback_statement(
         }
     )
     db.add(audit)
-    db.commit()
-    db.refresh(statement)
-
-    compliance = db.query(PolicyStatementCompliance).filter(
-        PolicyStatementCompliance.statement_id == statement.id
-    ).first()
-
-    return {
-        "message": f"Statement rolled back to version {target_display_version}",
-        "statement": serialize_statement(statement, compliance.id if compliance else None)
-    }
+    return target_display_version
 
 
-@router.get("/{document_id}/statements/{statement_id}/diff")
+@router.get("/{document_id}/statements/{statement_id}/diff", dependencies=[Depends(require_doc_reader)])
 def compare_versions(
     document_id: int,
     statement_id: int,
@@ -1657,6 +1918,10 @@ def compare_versions(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
+    # the statement must be this document's, else its history would be read through any document the person may open
+    if not db.query(PolicyStatement.id).filter(PolicyStatement.id == statement_id,
+                                               PolicyStatement.document_id == document_id).first():
+        raise HTTPException(status_code=404, detail="Statement not found")
 
     va = db.query(PolicyStatementVersion).filter(
         PolicyStatementVersion.id == version_a,
@@ -1705,9 +1970,10 @@ def compare_versions(
     }
 
 
-@router.get("/{document_id}/reparse-proposals")
+@router.get("/{document_id}/reparse-proposals", dependencies=[Depends(require_doc_reader)])
 def get_reparse_proposals(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1716,17 +1982,18 @@ def get_reparse_proposals(
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
 
-    proposals = _reparse_proposals.get(document_id)
+    proposals = _load_proposals(getattr(request.state, "tenant_slug", None), document_id)
     if not proposals:
         return {"document_id": document_id, "proposals": [], "total": 0}
 
-    return {"document_id": document_id, **proposals}
+    return {"document_id": document_id, **{k: v for k, v in proposals.items() if k != "parts"}}   # (parts: hashes for the server)
 
 
-@router.post("/{document_id}/reparse-proposals/apply")
+@router.post("/{document_id}/reparse-proposals/apply", dependencies=[Depends(require_doc_changer)])
 def apply_reparse_proposals(
     document_id: int,
     request: ApplyReparseProposalsRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1735,7 +2002,8 @@ def apply_reparse_proposals(
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
 
-    proposals_data = _reparse_proposals.get(document_id)
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    proposals_data = _load_proposals(tenant_slug, document_id)
     if not proposals_data:
         raise HTTPException(status_code=404, detail="No pending proposals found")
 
@@ -1743,6 +2011,8 @@ def apply_reparse_proposals(
 
     accepted = 0
     rejected = 0
+    changed, added = [], []             # the statements' codes, for the document's Change log
+    touched = []                    # the statements changed or added: placed in the document and mapped again below
 
     version_id = None
     from ....models import DocumentVersion
@@ -1786,9 +2056,12 @@ def apply_reparse_proposals(
                     statement.ai_confidence = new_data.get("ai_confidence", statement.ai_confidence)
                     statement.ai_extracted_keywords = new_data.get("ai_extracted_keywords", statement.ai_extracted_keywords)
                     statement.updated_at = datetime.utcnow()
+                    statement.source_match = statement.source_text = statement.source_start = None   # matched to the file again below
 
                     _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
                     accepted += 1
+                    changed.append(statement.statement_code or str(statement.id))
+                    touched.append(statement.id)
 
             elif proposal["type"] == "new":
                 existing_count = db.query(PolicyStatement).filter(
@@ -1826,6 +2099,16 @@ def apply_reparse_proposals(
                 )
                 db.add(compliance_record)
                 accepted += 1
+                added.append(statement_code)
+                touched.append(new_statement.id)
+
+    if accepted:
+        from .documents import create_audit_log
+
+        create_audit_log(db=db, document_id=document_id, tenant_id=document.tenant_id, user_id=current_user.id, action="statements_reparsed",
+                         field_changed="statement", action_details=" · ".join(p for p in (
+                             f"{len(changed)} changed ({', '.join(changed)})" if changed else "",
+                             f"{len(added)} added ({', '.join(added)})" if added else "", f"{rejected} not taken" if rejected else "") if p))
 
     audit = AuditLog(
         tenant_id=document.tenant_id,
@@ -1841,15 +2124,37 @@ def apply_reparse_proposals(
     )
     db.add(audit)
     db.commit()
+    from ..doc_sync import anchor_after_parse
+    anchor_after_parse(db, document_id, current_user.id)
 
     all_resolved = all(p["status"] != "pending" for p in proposals_data["proposals"])
     if all_resolved:
-        del _reparse_proposals[document_id]
-        _parsing_status[document_id] = {
+        _clear_proposals(tenant_slug, document_id)
+        done = {
             "status": "completed",
             "total_statements": accepted,
-            "message": f"Applied {accepted} changes, rejected {rejected}"
+            "message": f"Applied {accepted} changes, rejected {rejected}",
+            "updated_at": datetime.utcnow().isoformat(),
         }
+        _parsing_status[document_id] = done
+        # The status endpoint prefers the shared copy, which still says
+        # "review_required" from the worker; overwrite it too.
+        if tenant_slug:
+            try:
+                from ....job_status import set_status as _set_redis_status
+                _set_redis_status(tenant_slug, "policy_parse", document_id, done)
+            except Exception:
+                pass
+    else:
+        # Keep the reviewer's decisions so far for the next call.
+        _save_proposals(tenant_slug, document_id, proposals_data)
+    if touched:
+        from .. import statement_reparse
+        try:
+            statement_reparse.after_proposals(db, document, touched, proposals_data.get("parts"), current_user.id, tenant_slug)
+        except Exception:       # noqa: BLE001 - the choices are applied; the next version places and maps them
+            db.rollback()
+            logger.warning("document %s: applied statements were not placed or mapped again", document_id, exc_info=True)
 
     return {
         "message": f"Processed {accepted + rejected} proposals: {accepted} accepted, {rejected} rejected",
@@ -1859,10 +2164,98 @@ def apply_reparse_proposals(
     }
 
 
-@router.delete("/{document_id}/statements/{statement_id}")
+class DocumentSyncRequest(BaseModel):
+    change_reason: Optional[str] = None
+    message: Optional[str] = None           # the why by its other name (a proposed change: proposals.py)
+
+
+def _sync_target(db: Session, document_id: int, current_user: GRCUser):
+    document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Governance document not found")
+    validate_document_access(current_user, document, db)
+    return document
+
+
+@router.get("/{document_id}/document-sync", dependencies=[Depends(require_doc_reader)])
+def get_document_sync(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Statements edited since the file was last written, and how well statements match the file. Tenants without
+    document sync get ``{"enabled": false}``."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    return doc_sync.state(db, document) if doc_sync.enabled(db) else {"enabled": False}
+
+
+@router.post("/{document_id}/document-sync/check", dependencies=[Depends(require_doc_changer)])
+def check_document_sync(document_id: int, again: bool = False, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    """Match the statements to the document's file (statements already matched are kept unless ``again``)."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    if not doc_sync.enabled(db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document sync is not enabled for this organisation")
+    doc_sync.anchor(db, document, current_user.id, again=again)
+    return doc_sync.state(db, document)
+
+
+@router.post("/{document_id}/document-sync/apply", dependencies=[Depends(require_doc_changer)])
+def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    """Write the edited statements into the document's file as a new version."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    if not doc_sync.enabled(db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document sync is not enabled for this organisation")
+    from .. import proposals
+
+    reason = body.change_reason or body.message
+    proposing = proposals.required(db, current_user, document)
+    if proposing and not (reason or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=proposals.MESSAGE_REQUIRED)
+    try:
+        if not proposing:
+            return doc_sync.apply(db, document, current_user, reason)
+        # writing the statements into the document waits for the owner (or author): the new file is made now, beside the library's
+        prepared = doc_sync.prepare(db, document)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    kept = {k: v for k, v in prepared.items() if k not in ("before", "after")}         # the texts are read from the files again
+    proposal = proposals.propose(
+        db, document, current_user, source="write_back", message=reason, content=prepared["content"],
+        file={"path": prepared["new_path"], "name": prepared["new_name"], "type": "docx", "size": os.path.getsize(prepared["new_path"])},
+        payload={"prepared": kept, "change_reason": reason})
+    db.commit()
+    return {"version": document.current_version, "version_id": None, "updated": 0, "conflicts": prepared["conflicts"],
+            "status": document.status, "sent_to_review": False, "file_type": "docx", "word_copy": not prepared["editable"],
+            **proposals.answer(db, proposal, current_user, document)}
+
+
+from ....models import IssueGovernanceLink, PolicyGapFinding, StatementControlMapping  # noqa: E402
+
+# Deleting a statement. Its ORM cascade removes its versions, compliance records and evidence links; every other row that points at
+# it is listed here, as for a deleted document (documents._DELETE_WITH_DOCUMENT): a link that exists only for it goes with it, a
+# record that merely came from it (a control made from it, a gap fix that changed it) is kept and unlinked. Without this a mapped
+# statement could not be deleted (a foreign-key error on Postgres). tests/test_statement_change_log.py fails on a new reference.
+from ....models import DocumentChangeProposal  # noqa: E402
+
+_DELETE_WITH_STATEMENT = (StatementControlMapping.statement_id, IssueGovernanceLink.policy_statement_id)
+# (a proposed change to the statement keeps its wording before and after: it stays, no longer linked)
+_UNLINK_FROM_STATEMENT = (InternalControl.source_statement_id, PolicyGapFinding.applied_statement_id, DocumentChangeProposal.statement_id)
+
+
+@router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def delete_policy_statement(
     document_id: int,
     statement_id: int,
+    body: Optional[DeleteStatementRequest] = None,
+    change_reason: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1888,18 +2281,66 @@ def delete_policy_statement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Policy statement not found for this document"
         )
+    reason = ((_justified(body).change_reason if body is not None else None) or change_reason or "").strip() or None
+    from .. import proposals
 
-    db.query(PolicyStatementCompliance).filter(
-        PolicyStatementCompliance.statement_id == statement_id
-    ).delete(synchronize_session='fetch')
-
-    db.delete(statement)
+    if proposals.required(db, current_user, document):
+        # removing it waits for the owner (or author) to accept it; the statement stays until then
+        proposal = proposals.propose(db, document, current_user, source="statement_delete", message=reason, statement=statement,
+                                     payload={"code": statement.statement_code, "before": proposals.statement_fields(statement), "after": None})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    _delete_statement(db, statement, current_user, reason)
     db.commit()
 
     return {"message": "Statement deleted"}
 
 
-@router.post("/{document_id}/statements/convert-to-controls", response_model=List[InternalControlFromStatementResponse])
+def _delete_statement(db: Session, statement: PolicyStatement, user: GRCUser, reason: Optional[str] = None) -> None:
+    """A statement removed (``reason``: why, in its Change log row): its compliance records and links go with it, records that came from
+    it are kept, unlinked. Delete, and an accepted proposal of it (proposals.py). Does not commit."""
+    statement_id = statement.id
+    db.query(PolicyStatementCompliance).filter(
+        PolicyStatementCompliance.statement_id == statement_id
+    ).delete(synchronize_session='fetch')
+    for column in _UNLINK_FROM_STATEMENT:
+        db.query(column.class_).filter(column == statement_id).update({column: None}, synchronize_session=False)
+    for column in _DELETE_WITH_STATEMENT:
+        db.query(column.class_).filter(column == statement_id).delete(synchronize_session=False)
+    log_statement_change(db, statement, user.id, "statement_deleted", old=statement.statement_text, detail=reason or "")
+
+    db.delete(statement)
+
+
+def apply_statement_proposal(db: Session, document: GovernanceDocument, user: GRCUser, p) -> None:
+    """A change to a statement someone proposed, accepted (proposals.py): as its own endpoint makes it, by them, with their
+    justification. Does not commit."""
+    from .. import proposals
+
+    payload = p.payload or {}
+    reason = p.message
+    if p.source == "statement_add":
+        request = CreatePolicyStatementRequest(**{**(payload.get("request") or {}), "change_reason": reason})
+        statement, _record = _add_statement(db, document, user, request, commit=False)
+        p.statement_id, p.payload = statement.id, {**payload, "code": statement.statement_code}       # the statement it became
+        return
+    statement = db.get(PolicyStatement, p.statement_id) if p.statement_id else None
+    if statement is None or statement.document_id != document.id:
+        raise proposals.Stale("The statement this change is about is no longer there. Reject it.")
+    if p.source == "statement_edit":
+        _edit_statement(db, statement, user, UpdatePolicyStatementRequest(**{**(payload.get("request") or {}), "change_reason": reason}))
+    elif p.source == "statement_delete":
+        _delete_statement(db, statement, user, reason)
+    elif p.source == "statement_rollback":
+        target = db.get(PolicyStatementVersion, payload.get("version_id"))
+        if target is None or target.statement_id != statement.id:
+            raise proposals.Stale("The version this change rolls back to is no longer there. Reject it.")
+        _rollback_statement(db, document, statement, target, user, reason)
+    else:
+        raise ValueError(f"Unknown proposed change to a statement: {p.source}")
+
+
+@router.post("/{document_id}/statements/convert-to-controls", dependencies=[Depends(require_doc_changer)], response_model=List[InternalControlFromStatementResponse])
 def convert_statements_to_controls(
     document_id: int,
     request: ConvertStatementsRequest,

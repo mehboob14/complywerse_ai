@@ -8,17 +8,30 @@
   ],
   "label": "Auth0",
   "category": "identity",
-  "needs_domain": true
+  "needs_domain": true,
+  "token_exchange": {
+   "url": "https://{domain}/oauth/token",
+   "form": {
+    "grant_type": "client_credentials",
+    "client_id": "{access_key_id}",
+    "client_secret": "{token}",
+    "audience": "https://{domain}/api/v2/"
+   }
+  }
  },
  "jumpcloud": {
-  "base": "https://console.jumpcloud.com/api",
+  "base": "https://{domain}/api",
   "verify": "/systemusers?limit=1",
   "auth": "header:x-api-key",
   "controls": [
    "CC6.1"
   ],
   "label": "JumpCloud",
-  "category": "identity"
+  "category": "identity",
+  "domain_default": "console.jumpcloud.com",
+  "header_templates": {
+   "x-org-id": "{access_key_id}"
+  }
  },
  "onelogin": {
   "base": "https://{domain}/api/2",
@@ -29,12 +42,22 @@
   ],
   "label": "OneLogin",
   "category": "identity",
-  "needs_domain": true
+  "needs_domain": true,
+  "token_exchange": {
+   "url": "https://{domain}/auth/oauth2/v2/token",
+   "json": true,
+   "form": {
+    "grant_type": "client_credentials"
+   },
+   "headers": {
+    "Authorization": "client_id:{access_key_id}, client_secret:{token}"
+   }
+  }
  },
  "sentinelone": {
   "base": "https://{domain}/web/api/v2.1",
   "verify": "/system/info",
-  "auth": "raw",
+  "auth": "none",
   "controls": [
    "CC6.1",
    "CC6.6",
@@ -44,31 +67,43 @@
   ],
   "label": "SentinelOne",
   "category": "security",
-  "needs_domain": true
+  "needs_domain": true,
+  "header_templates": {
+   "Authorization": "ApiToken {token}"
+  }
  },
  "snyk": {
-  "base": "https://api.snyk.io",
+  "base": "https://{domain}",
   "verify": "/rest/orgs?version=2024-10-15",
-  "auth": "raw",
+  "auth": "none",
   "controls": [
    "CC7.1"
   ],
   "label": "Snyk",
-  "category": "security"
+  "category": "security",
+  "domain_default": "api.snyk.io",
+  "header_templates": {
+   "Authorization": "token {token}"
+  }
  },
  "tenable": {
-  "base": "https://cloud.tenable.com",
-  "verify": "/session",
-  "auth": "header:X-ApiKeys",
+  "base": "https://{domain}",
+  "verify": "/server/properties",
+  "auth": "none",
   "controls": [
    "CC7.1"
   ],
   "label": "Tenable Vulnerability Management",
-  "category": "security"
+  "category": "security",
+  "needs_key_id": true,
+  "header_templates": {
+   "X-ApiKeys": "accessKey={access_key_id};secretKey={token};"
+  },
+  "domain_default": "cloud.tenable.com"
  },
  "sonarcloud": {
-  "base": "https://sonarcloud.io/api",
-  "verify": "/authentication/validate",
+  "base": "https://{domain}/api",
+  "verify": "/organizations/search?member=true",
   "auth": "bearer",
   "controls": [
    "CC6.1",
@@ -76,7 +111,8 @@
    "CC8.1"
   ],
   "label": "SonarCloud",
-  "category": "security"
+  "category": "security",
+  "domain_default": "sonarcloud.io"
  },
  "semgrep": {
   "base": "https://semgrep.dev/api/v1",
@@ -106,15 +142,19 @@
   "needs_email": true
  },
  "opsgenie": {
-  "base": "https://api.opsgenie.com/v2",
+  "base": "https://{domain}/v2",
   "verify": "/users?limit=1",
-  "auth": "raw",
+  "auth": "none",
   "controls": [
    "CC7.3",
    "CC7.4"
   ],
   "label": "Opsgenie",
-  "category": "incident"
+  "category": "incident",
+  "domain_default": "api.opsgenie.com",
+  "header_templates": {
+   "Authorization": "GenieKey {token}"
+  }
  },
  "databricks": {
   "base": "https://{domain}/api",
@@ -169,10 +209,19 @@
   ],
   "label": "Dropbox",
   "category": "cloud",
-  "method": "POST"
+  "method": "POST",
+  "token_exchange": {
+   "url": "https://api.dropboxapi.com/oauth2/token",
+   "form": {
+    "grant_type": "refresh_token",
+    "refresh_token": "{token}",
+    "client_id": "{access_key_id}",
+    "client_secret": "{secret2}"
+   }
+  }
  },
  "bamboohr": {
-  "base": "https://api.bamboohr.com/api/gateway.php/{domain}/v1",
+  "base": "https://{domain}.bamboohr.com/api/v1",
   "verify": "/employees/directory",
   "auth": "basic",
   "controls": [
@@ -181,7 +230,8 @@
   "label": "BambooHR",
   "category": "hr",
   "needs_domain": true,
-  "needs_email": true
+  "basic_user": "{token}",
+  "basic_password": "x"
  },
  "rippling": {
   "base": "https://rest.ripplingapis.com",
@@ -213,7 +263,15 @@
   ],
   "label": "Jamf Pro",
   "category": "mdm",
-  "needs_domain": true
+  "needs_domain": true,
+  "token_exchange": {
+   "url": "https://{domain}/api/v1/oauth/token",
+   "form": {
+    "grant_type": "client_credentials",
+    "client_id": "{access_key_id}",
+    "client_secret": "{token}"
+   }
+  }
  },
  "fastly": {
   "base": "https://api.fastly.com",
@@ -238,7 +296,7 @@
  },
  "stripe": {
   "base": "https://api.stripe.com/v1",
-  "verify": "/account",
+  "verify": "/webhook_endpoints?limit=1",
   "auth": "bearer",
   "controls": [
    "CC6.1"
@@ -260,16 +318,21 @@
  },
  "zoom": {
   "base": "https://api.zoom.us/v2",
-  "verify": "/users/me",
+  "verify": "/users?page_size=1",
   "auth": "bearer",
   "controls": [
    "CC6.1"
   ],
   "label": "Zoom",
-  "category": "comms"
+  "category": "comms",
+  "token_exchange": {
+   "url": "https://zoom.us/oauth/token?grant_type=account_credentials&account_id={access_key_id}",
+   "basic": "{email}:{token}",
+   "form": {}
+  }
  },
  "mailgun": {
-  "base": "https://api.mailgun.net",
+  "base": "https://{domain}",
   "verify": "/v4/domains?limit=1",
   "auth": "basic",
   "controls": [
@@ -277,7 +340,8 @@
   ],
   "label": "Mailgun",
   "category": "email",
-  "needs_email": true
+  "domain_default": "api.mailgun.net",
+  "basic_user": "api"
  },
  "postmark": {
   "base": "https://api.postmarkapp.com",

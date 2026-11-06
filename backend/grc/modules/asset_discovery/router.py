@@ -56,6 +56,9 @@ logger = logging.getLogger(__name__)
 # Defining what to scan is a security-sensitive act — gate writes the same way
 # the live CIDR/AD probes are gated.
 _require_discover = require_tenant_permission("compliance:discover:execute")
+# What discovery found, as Cybersecurity Assurance → Performance and IT Asset Discovery show it: the asset inventory's view right
+# (the sidebar's IT Asset Discovery permission)
+_require_inventory_view = require_tenant_permission("assets:asset_inventory:view")
 
 router = APIRouter(prefix="/discovery", tags=["Asset Discovery"])
 
@@ -509,6 +512,49 @@ def delete_campaign(
     return None
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Delete ONE discovery run (a single scan). Its jobs + observations cascade
+    (delete-orphan). Assets already adopted from it stay in inventory — deleting
+    the scan record never removes an asset."""
+    tid = get_user_primary_tenant(current_user, db)
+    run = db.query(DiscoveryRun).filter(
+        DiscoveryRun.id == run_id, DiscoveryRun.tenant_id == tid).first()
+    if run is None:
+        raise HTTPException(404, "run not found")
+    db.delete(run)  # jobs + observation_rows cascade
+    db.commit()
+    return None
+
+
+@router.post("/runs/{run_id}/cancel", status_code=200)
+def cancel_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Stop a running scan ASAP. Cooperative: signals the in-process sweep to
+    short-circuit its remaining probes, and marks the run 'cancelled' so the UI
+    updates immediately. Still 200 (a no-op) if the run already finished."""
+    tid = get_user_primary_tenant(current_user, db)
+    run = db.query(DiscoveryRun).filter(
+        DiscoveryRun.id == run_id, DiscoveryRun.tenant_id == tid).first()
+    if run is None:
+        raise HTTPException(404, "run not found")
+    from .services.executor import request_cancel
+    signalled = request_cancel(run_id)
+    if run.status in ("running", "queued"):
+        run.status = "cancelled"
+        db.commit()
+    return {"cancelled": True, "was_active": signalled}
+
+
 # ── Scope endpoints ──────────────────────────────────────────────────────────
 
 @router.post("/campaigns/{campaign_id}/scopes", status_code=201)
@@ -707,6 +753,7 @@ class ResolveIn(BaseModel):
 def easm_scorecard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_inventory_view),
 ):
     """Attack-surface health scorecard — the tenant's external (outside-in) assets
     graded by the EASM probe, aggregated for a fleet dashboard plus a per-asset
@@ -815,6 +862,39 @@ _LINUX_FAMS = ("linux", "ubuntu", "debian", "rhel", "centos", "rocky", "almalinu
                "oraclelinux", "amazonlinux", "sles", "suse")
 
 
+@router.get("/topology")
+def network_topology(
+    run_id: Optional[int] = Query(
+        default=None, description="Scope the map to one discovery run; omit for the current state across all runs."),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Nodes + edges for the network map.
+
+    Nodes are the DISCOVERED DEVICES (deduped observations) — the same set the
+    Overview radar / Connect / Review queues show — so every device a sweep found
+    appears here, not just the ones promoted to inventory. Edges are computed on
+    read: the SNMP-measured switch tree (LLDP/CDP/FDB) where a device answered, and
+    the inferred /24 gateway star everywhere else. `measured` flags them apart so
+    the UI draws solid vs dashed. Read-only.
+    """
+    from .services.network_topology import build_topology_view
+
+    tid = get_user_primary_tenant(current_user, db)
+    view = build_topology_view(db, tid, run_id)
+    nodes = [{
+        "id": n["id"],
+        "label": n["name"],
+        "ip": n["ip"],
+        "type": n["type"],
+        "subnet": n["subnet"],
+        "in_inventory": n["in_inventory"],
+    } for n in view["nodes"]]
+    edges = [{"source": e["source"], "target": e["target"], "measured": e["measured"]}
+             for e in view["edges"]]
+    return {"nodes": nodes, "edges": edges}
+
+
 @router.get("/discovered-devices")
 def list_discovered_devices(
     run_id: Optional[int] = Query(
@@ -823,6 +903,7 @@ def list_discovered_devices(
                     "Omit for the full backlog (every unclaimed device across all runs)."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_inventory_view),
 ):
     """The devices discovery found — read from OBSERVATIONS, not from inventory.
 
@@ -848,12 +929,65 @@ def list_discovered_devices(
     if run_id is not None:
         q = q.filter(DiscoveryObservation.run_id == run_id)
     obs_rows = q.order_by(DiscoveryObservation.id.desc()).all()
-    latest: Dict[str, DiscoveryObservation] = {}
+    # Dedup a host's observations to one row, MAC-first — the strongest stable
+    # identity the rest of the pipeline already trusts (resolver tier 3, the
+    # known_ips linker). Keying on hostname/IP alone made one machine show twice
+    # when a scan missed its name or its IP drifted, and collapsed two distinct
+    # hosts that shared a hostname. Fall back to hostname, then IP, then obs id.
+    from .services.dhcp_enrich import normalize_mac as _norm_mac
+    from .services.deep_collect import login_methods_for_observation as _lm0
+
+    def _ip_shaped(sv: Optional[str]) -> bool:
+        try:
+            ipaddress.ip_address((sv or "").strip()); return True
+        except ValueError:
+            return False
+
+    def _ports_of(o: DiscoveryObservation) -> set:
+        raw = o.raw if isinstance(o.raw, dict) else {}
+        out = set()
+        for pp in (raw.get("open_ports") or []):
+            try: out.add(int(pp))
+            except (TypeError, ValueError): pass
+        return out
+
+    # Collapse a machine's observations to ONE row. Key on a REAL hostname first,
+    # so a laptop's several NICs (Wi-Fi + Ethernet = 2 MACs, same Windows name)
+    # become a single device instead of duplicating; else MAC, else IP. The
+    # representative is the most-connectable NIC, and the row carries the UNION of
+    # every NIC's open ports — so "reachable on ANY interface" shows as reachable.
+    groups: Dict[str, List[DiscoveryObservation]] = {}
     for o in obs_rows:
-        key = (o.host_name or "").lower() or (o.ip_address or f"obs-{o.id}")
-        if key not in latest:
-            latest[key] = o
-    observations = sorted(latest.values(), key=lambda o: (o.ip_address or ""))
+        rn = (o.host_name or "").strip().lower()
+        key = ("name:" + rn) if (rn and not _ip_shaped(rn)) else               (_norm_mac(o.mac_address) or (o.ip_address or f"obs-{o.id}"))
+        groups.setdefault(key, []).append(o)
+
+    merged_ports: Dict[int, list] = {}
+    other_ips_map: Dict[int, list] = {}
+    other_macs_map: Dict[int, list] = {}
+    observations: List[DiscoveryObservation] = []
+    for grp in groups.values():
+        # Only the machine's MOST RECENT sighting decides current open ports, so
+        # an old run can't resurrect a port that is now closed. Older sightings
+        # still collapse into the same row (no duplicate), they just don't add ports.
+        latest_run = max((x.run_id or 0) for x in grp)
+        cur = [x for x in grp if (x.run_id or 0) == latest_run] or grp
+        rep = max(cur, key=lambda x: (len(_lm0(x)), len(_ports_of(x)), x.id))
+        union: set = set()
+        ips: list = []
+        macs: list = []
+        for x in cur:
+            union |= _ports_of(x)
+            if x.ip_address and x.ip_address not in ips:
+                ips.append(x.ip_address)
+            m = _norm_mac(x.mac_address)
+            if m and m not in macs:
+                macs.append(m)
+        merged_ports[rep.id] = sorted(union)
+        other_ips_map[rep.id] = [i for i in ips if i != rep.ip_address]
+        other_macs_map[rep.id] = macs
+        observations.append(rep)
+    observations = sorted(observations, key=lambda o: (o.ip_address or ""))
 
     # The latest run id, so the UI can flag devices NOT seen in it as stale
     # (last seen in an older scan — machine may have been powered off).
@@ -877,14 +1011,21 @@ def list_discovered_devices(
         ).all() if row[0]
     }
 
-    def _covered(ip: Optional[str]) -> bool:
+    def _covered(ip: Optional[str], transport: Optional[str] = None) -> bool:
+        # A saved login "covers" a host only if its KIND matches the host's login
+        # transport — a WinRM login does not cover a Linux/SSH host and vice
+        # versa. When the transport is unknown (unclassified device), any kind
+        # may apply, so we don't filter by kind (advisory badge, never blocks).
         if not ip:
             return False
         try:
             addr = ipaddress.ip_address(ip)
         except ValueError:
             return False
+        want_kind = {"windows": "winrm", "linux": "ssh"}.get(transport or "")
         for c in creds:
+            if want_kind and c.kind != want_kind:
+                continue
             cidrs = c.applies_to_cidrs or []
             if not cidrs:
                 return True
@@ -899,11 +1040,68 @@ def list_discovered_devices(
     from grc.modules.asset_discovery.services.deep_collect import (
         transport_for_observation, agentless_port_state,
         service_suggestions_for as _svc_suggest,
+        login_methods_for_observation, login_methods_from,
     )
+
+    # ── Recognise already-inventoried machines the moment they are re-discovered ──
+    # A PC's IP and even its shown name change between sweeps; what does not
+    # change is the identity the credentialed connect stored on the asset:
+    # primary_mac (and serial / known_ips). Match every not-yet-promoted row
+    # against those, unchangeable-first (MAC → any known IP → hostname), so the
+    # queue tags the SAME machine "In inventory" instead of offering it as a new
+    # device to adopt. Read-only annotation — a GET never writes.
+    _assets_all = db.query(ITAsset).filter(ITAsset.tenant_id == tid).all()
+    _by_mac: Dict[str, ITAsset] = {}
+    _by_ip: Dict[str, ITAsset] = {}
+    _by_name: Dict[str, ITAsset] = {}
+    def _looks_ip(sv: Optional[str]) -> bool:
+        try:
+            ipaddress.ip_address((sv or "").strip()); return True
+        except ValueError:
+            return False
+    for _a in _assets_all:
+        _m = _norm_mac(getattr(_a, "primary_mac", None))
+        if _m:
+            _by_mac.setdefault(_m, _a)
+        for _ipx in ([_a.ip_address] if _a.ip_address else []) + list(getattr(_a, "known_ips", None) or []):
+            _by_ip.setdefault(_ipx, _a)
+        for _nm in (_a.host_name, _a.name):
+            if _nm and not _looks_ip(_nm):
+                _by_name.setdefault(_nm.strip().lower(), _a)
+
+    def _match_known_asset(o: DiscoveryObservation) -> Tuple[Optional[ITAsset], Optional[str]]:
+        obs_mac = _norm_mac(o.mac_address)
+        cand = _by_mac.get(obs_mac) if obs_mac else None
+        if cand is not None:
+            return cand, "mac"
+        def _conflicts(a: ITAsset) -> bool:
+            # A DIFFERENT device holding a recycled IP/name must never be tagged
+            # as the asset: when both sides know their MAC and they disagree,
+            # the weaker tiers are lies (the .182-became-a-phone case).
+            am = _norm_mac(getattr(a, "primary_mac", None))
+            return bool(obs_mac and am and am != obs_mac)
+        cand = _by_ip.get(o.ip_address) if o.ip_address else None
+        if cand is not None and not _conflicts(cand):
+            return cand, "ip"
+        # A real, resolved hostname is a strong same-machine signal EVEN when the
+        # MAC differs: a laptop's Wi-Fi and Ethernet NICs have different MACs but
+        # the same Windows name, so a MAC-conflict guard here would split one
+        # multi-NIC PC into two rows — the exact duplication the owner hit with
+        # DESKTOP-EQ55Q8H (.54 Wi-Fi + .146 Ethernet). A recycled IP can't reach
+        # this tier: IP-only rows carry no hostname, and placeholder IP-shaped
+        # names are excluded from _by_name when it is built.
+        nm = (o.host_name or "").strip().lower()
+        cand = _by_name.get(nm) if nm else None
+        if cand is not None:
+            return cand, "hostname"
+        return None, None
 
     out = []
     for o in observations:
         asset = db.get(ITAsset, o.resolved_asset_id) if o.resolved_asset_id else None
+        identity_match = None
+        if asset is None:
+            asset, identity_match = _match_known_asset(o)
         transport = transport_for_observation(o)
         if transport is None and asset is not None:
             fam = (asset.os_family or "").lower()
@@ -914,8 +1112,18 @@ def list_discovered_devices(
         # (445) open but WinRM off is "identified, not connectable", NOT a device
         # a host login can reach. login_state: open | closed | unknown | none.
         login_state = agentless_port_state(o, transport) if transport else "none"
-        connectable = bool(transport) and login_state == "open"
         raw = o.raw if isinstance(o.raw, dict) else {}
+        # What the device itself says it accepts — decided by the sweep, not by
+        # the operator picking a method first. WinRM/SSH/WMI/SNMP are all real
+        # ways in, so any one of them makes the device connectable. Judge on the
+        # UNION of every NIC of this machine (multi-NIC merge above), so a laptop
+        # reachable on its Wi-Fi shows reachable even if the row's representative
+        # NIC is the blocked Ethernet one.
+        eff_ports = merged_ports.get(o.id)
+        if eff_ports is None:
+            eff_ports = sorted(_ports_of(o))
+        login_methods = login_methods_from(eff_ports, raw.get("evidence"))
+        connectable = bool(login_methods)
         host = o.host_name or o.ip_address
         out.append({
             "observation_id": o.id,
@@ -932,23 +1140,36 @@ def list_discovered_devices(
             "name": o.host_name or o.fqdn or o.ip_address,
             "host_name": o.host_name,
             "ip_address": o.ip_address,
+            # The unchangeable identifier — shown as its own column and used above
+            # to recognise an already-inventoried machine after its IP/name changes.
+            "mac_address": o.mac_address,
             "os_family": asset.os_family if asset else None,
             "transport": transport,
             # login_state = state of the port a host login would actually dial
             # (WinRM/SSH), NOT merely that the box looks like Windows/Linux.
             "login_state": login_state,
             "connectable": connectable,
+            # Best-first list, e.g. ["winrm"] or ["wmi","snmp"] — the UI shows
+            # WHICH door is open instead of a bare "not confirmed".
+            "login_methods": login_methods,
+            # Set when an unpromoted row was recognised as an EXISTING asset by
+            # stored identity ("mac" | "ip" | "hostname") — the anti-duplicate tag.
+            "identity_match": identity_match,
+            # Other interfaces of this SAME machine folded into this one row
+            # (multi-NIC): the extra IPs/MACs, shown so nothing looks hidden.
+            "other_ips": other_ips_map.get(o.id) or [],
+            "other_macs": [m for m in (other_macs_map.get(o.id) or []) if m != _norm_mac(o.mac_address)],
             # Discovery→kind bridge: typed connects that make sense from the open
             # ports (e.g. 5432 → connect as PostgreSQL with a postgres credential).
             "service_suggestions": _svc_suggest(raw.get("open_ports")),
-            "open_ports": raw.get("open_ports") or [],
+            "open_ports": eff_ports,
             # Where discovery saw this device (ARP/fingerprint protocols for LAN
             # scans, EASM intel sources for external ones) — same helper the
             # observation serializer uses, so "found via Shodan" shows here too.
             "discovery_sources": _discovery_sources(raw.get("evidence"), o.mac_address, raw.get("vendor_source")),
             # In inventory with a real collected profile behind it.
             "profiled": bool(asset and asset.os_family),
-            "has_credential": _covered(o.ip_address),
+            "has_credential": _covered(o.ip_address, transport),
             # "connected" requires BOTH a live connection AND an actual asset.
             # A connection that outlived its deleted asset must not read as
             # "In inventory" — that stranded the row with a Disconnect button
@@ -1011,16 +1232,42 @@ def _resolve_host_profile(db, tid, body, *, name, kind, ip, current_user):
         return prof
     if not body.username or not body.password:
         raise HTTPException(400, "Provide a username + password, or a credential_id to reuse a saved login.")
-    prof = CredentialProfile(
-        tenant_id=tid, name=name, kind=kind, username=body.username,
-        secret_kind="password", secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
-    )
-    db.add(prof)
-    db.commit()
+    cidr = f"{ip}/32"
+    # Upsert by (tenant, name): reuse/refresh an existing same-named profile
+    # rather than blind-insert. The unique (tenant_id, name) constraint otherwise
+    # 500s the operator's retry after a mistyped password, and a corrected
+    # password on retry must actually take effect.
+    prof = db.query(CredentialProfile).filter(
+        CredentialProfile.tenant_id == tid, CredentialProfile.name == name,
+    ).first()
+    if prof:
+        prof.kind = kind
+        prof.username = body.username
+        prof.secret_kind = "password"
+        prof.secret_encrypted = encrypt_secret(body.password)
+        prof.domain = (body.domain or None)
+        prof.is_active = True
+        if cidr not in (prof.applies_to_cidrs or []):
+            prof.applies_to_cidrs = (prof.applies_to_cidrs or []) + [cidr]
+    else:
+        prof = CredentialProfile(
+            tenant_id=tid, name=name, kind=kind, username=body.username,
+            secret_kind="password", secret_encrypted=encrypt_secret(body.password),
+            domain=(body.domain or None), applies_to_cidrs=[cidr],
+            priority=100, is_active=True,
+            created_by_id=getattr(current_user, "id", None),
+            created_by_name=getattr(current_user, "username", None),
+        )
+        db.add(prof)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.tenant_id == tid, CredentialProfile.name == name,
+        ).first()
+        if prof is None:
+            raise
     db.refresh(prof)
     return prof
 
@@ -1031,6 +1278,7 @@ def connect_discovered_device(
     body: DeviceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Give ONE discovered device a login, and promote it if the login works.
 
@@ -1056,9 +1304,10 @@ def connect_discovered_device(
         promote_observation, transport_for_observation,
     )
     transport = (body.transport or "").lower()
-    if transport not in ("windows", "linux"):
+    if transport not in ("windows", "linux", "wmi"):
         transport = transport_for_observation(obs) or "windows"
-    kind = "winrm" if transport == "windows" else "ssh"
+    # WMI is an alternate Windows transport (DCOM) — it reuses a Windows login.
+    kind = "winrm" if transport in ("windows", "wmi") else "ssh"
     prof = _resolve_host_profile(
         db, tid, body, name=f"{obs.host_name or ip} - {kind}", kind=kind, ip=ip,
         current_user=current_user,
@@ -1082,6 +1331,45 @@ def connect_discovered_device(
     return result
 
 
+@router.get("/devices/{observation_id}/explain")
+def explain_discovered_device(
+    observation_id: int,
+    ai: bool = Query(True, description="Reword with the AI layer; false = deterministic text only"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Plain-language 'why is this device in this state, and what do I do'.
+
+    The diagnosis + fix are computed deterministically from this device's real
+    sweep signals (transport / login-port state / open ports / last connect
+    attempt), so the advice is always correct; the AI layer only rewords it and
+    is skipped gracefully when no key is configured.
+    """
+    tid = get_user_primary_tenant(current_user, db)
+    obs = db.query(DiscoveryObservation).filter(
+        DiscoveryObservation.id == observation_id,
+        DiscoveryObservation.tenant_id == tid,
+    ).first()
+    if not obs:
+        raise HTTPException(404, "Device not found")
+    from grc.modules.asset_discovery.services import explainer
+    signals = explainer.signals_from_observation(db, obs, tid)
+    return explainer.explain(signals, use_ai=ai)
+
+
+@router.get("/explain-nameless")
+def explain_nameless_devices(
+    count: int = Query(0, ge=0, description="How many nameless devices the queue is showing"),
+    ai: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Why N discovered devices have no name, and the two ways to fix it."""
+    get_user_primary_tenant(current_user, db)  # auth/tenant guard
+    from grc.modules.asset_discovery.services import explainer
+    return explainer.explain_nameless(count, sources=[], use_ai=ai)
+
+
 class ServiceConnectBody(BaseModel):
     kind: str                      # postgres | mysql | mssql | oracle | k8s | ldap | cisco
     username: Optional[str] = None # k8s uses token-only (password field)
@@ -1097,6 +1385,7 @@ def connect_discovered_service(
     body: ServiceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Discovery→kind bridge: connect a discovered device AS the service the
     sweep detected on it (PostgreSQL on 5432, LDAP on 389/636, …) using that
@@ -1123,8 +1412,10 @@ def connect_discovered_service(
     if itype is None:
         raise HTTPException(400, f"Unsupported kind '{kind}'. One of: {', '.join(_TYPED_ITYPE)}")
     default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
-    port = int(body.port or default_port or 0)
-    if port and not live_port_open(ip, [port]):
+    port = int(body.port or default_port or (161 if kind == "snmp" else 0))
+    # SNMP is UDP — a TCP reachability precheck would wrongly reject it, so skip
+    # it and let the SNMP collector itself determine reachability over UDP/161.
+    if port and kind != "snmp" and not live_port_open(ip, [port]):
         reason = f"{kind} port {port} is not reachable on {ip} right now."
         obs.resolution_note = reason; db.commit()
         return {"collected": False, "error": reason}
@@ -1147,16 +1438,43 @@ def connect_discovered_service(
             raise HTTPException(400, "Provide a password, or a credential_id to reuse a saved login.")
         username = body.username or ""
         creds = typed_credentials_dict(kind, ip, port, username, body.password, body.database)
-        prof = CredentialProfile(
-            tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
-            username=username, secret_kind="password",
-            secret_encrypted=encrypt_secret(body.password),
-            port=port or None, applies_to_cidrs=[f"{ip}/32"],
-            priority=100, is_active=True,
-            created_by_id=getattr(current_user, "id", None),
-            created_by_name=getattr(current_user, "username", None),
-        )
-        db.add(prof); db.commit(); db.refresh(prof)
+        # Upsert by (tenant, name) — same reasoning as _resolve_host_profile:
+        # a blind insert 500s the retry after a wrong password.
+        prof_name = f"{obs.host_name or ip} - {kind}"
+        cidr = f"{ip}/32"
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.tenant_id == tid, CredentialProfile.name == prof_name,
+        ).first()
+        if prof:
+            prof.kind = kind
+            prof.username = username
+            prof.secret_kind = "password"
+            prof.secret_encrypted = encrypt_secret(body.password)
+            prof.port = port or None
+            prof.is_active = True
+            if cidr not in (prof.applies_to_cidrs or []):
+                prof.applies_to_cidrs = (prof.applies_to_cidrs or []) + [cidr]
+        else:
+            prof = CredentialProfile(
+                tenant_id=tid, name=prof_name, kind=kind,
+                username=username, secret_kind="password",
+                secret_encrypted=encrypt_secret(body.password),
+                port=port or None, applies_to_cidrs=[cidr],
+                priority=100, is_active=True,
+                created_by_id=getattr(current_user, "id", None),
+                created_by_name=getattr(current_user, "username", None),
+            )
+            db.add(prof)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            prof = db.query(CredentialProfile).filter(
+                CredentialProfile.tenant_id == tid, CredentialProfile.name == prof_name,
+            ).first()
+            if prof is None:
+                raise
+        db.refresh(prof)
     result: Dict[str, Any] = {"collected": False, "kind": kind, "credential_id": prof.id}
     try:
         asset = promote_observation_typed(db, obs, kind, itype, creds)
@@ -1185,6 +1503,7 @@ def reconnect_asset(
     body: DeviceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Re-apply a login to a device that is ALREADY in inventory.
 
@@ -1200,10 +1519,24 @@ def reconnect_asset(
     if not ip:
         raise HTTPException(400, "Asset has no IP address to connect to")
     transport = (body.transport or "").lower()
-    if transport not in ("windows", "linux"):
+    if transport not in ("windows", "linux", "wmi"):
         fam = (a.os_family or "").lower()
-        transport = "linux" if fam.startswith(_LINUX_FAMS) else "windows"
-    kind = "winrm" if transport == "windows" else "ssh"
+        if fam.startswith(_LINUX_FAMS):
+            transport = "linux"
+        elif fam.startswith("windows"):
+            transport = "windows"
+        elif getattr(body, "credential_id", None):
+            # Unknown OS (e.g. an evidence-only adopted asset): trust the chosen
+            # saved login's kind rather than blindly assuming Windows — otherwise
+            # an SSH reconnect builds WinRM and fails as a "bad credential".
+            ck = db.query(CredentialProfile.kind).filter(
+                CredentialProfile.id == body.credential_id,
+                CredentialProfile.tenant_id == tid,
+            ).scalar()
+            transport = "linux" if ck == "ssh" else "windows"
+        else:
+            transport = "windows"
+    kind = "winrm" if transport in ("windows", "wmi") else "ssh"
     prof = _resolve_host_profile(
         db, tid, body, name=f"{a.name or ip} - {kind}", kind=kind, ip=ip,
         current_user=current_user,
@@ -1226,6 +1559,7 @@ def disconnect_discovered_device(
     asset_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Undo a device connection so a different login can be tried.
 
@@ -1311,6 +1645,7 @@ def connect_all_discovered(
                           "whole backlog. Matches the queue's run filter."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Try the saved login(s) against the devices discovery found, and promote
     the ones that accept.
@@ -1465,6 +1800,11 @@ class ConnectSelectedIn(BaseModel):
     observation_ids: List[int] = Field(min_length=1)
     credential_ids: Optional[List[int]] = None
     credential_id: Optional[int] = None
+    # Bulk connect METHOD: "host" (default; WinRM/SSH by device type) | "wmi"
+    # (Windows over DCOM/135, reuses the WinRM login) | "snmp" (community string
+    # over UDP/161). credential_ids apply to host/wmi; community applies to snmp.
+    method: Optional[str] = None
+    community: Optional[str] = None
 
 
 @router.post("/connect-selected", status_code=202)
@@ -1472,6 +1812,7 @@ def connect_selected(
     body: ConnectSelectedIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Run the ticked saved login(s) against the specific devices the operator
     ticked, and promote the ones that accept a login.
@@ -1482,28 +1823,43 @@ def connect_selected(
     leaves the device unclaimed with the reason, never an empty inventory row.
     """
     tid = get_user_primary_tenant(current_user, db)
+    # "auto" (the default) = use whatever each device answered on during the
+    # sweep, decided per device below. The explicit methods force one way in.
+    method = (body.method or "auto").lower()
+    if method not in ("auto", "host", "winrm", "ssh", "wmi", "snmp"):
+        raise HTTPException(400, "method must be one of: auto, host, wmi, snmp")
+    community = (body.community or "").strip()
 
     wanted_ids: List[int] = list(body.credential_ids or [])
     if body.credential_id is not None:
         wanted_ids.append(body.credential_id)
     wanted_ids = list(dict.fromkeys(wanted_ids))  # de-dupe, keep order
 
-    forced_profiles: List[CredentialProfile] = []
-    if wanted_ids:
-        forced_profiles = db.query(CredentialProfile).filter(
-            CredentialProfile.id.in_(wanted_ids),
-            CredentialProfile.tenant_id == tid,
-            CredentialProfile.is_active.is_(True),
-        ).all()
-        if not forced_profiles:
-            raise HTTPException(404, "None of the chosen logins were found (or active).")
-        if any(p.kind not in ("winrm", "ssh") for p in forced_profiles):
-            raise HTTPException(400, "Only host logins (WinRM / SSH) can be run against discovered devices.")
-
     from grc.modules.asset_discovery.services.deep_collect import transport_for_observation
     _KIND_TRANSPORT = {"winrm": "windows", "ssh": "linux"}
-    # Transports the ticked logins can drive (None = auto: any transport allowed).
-    covered = {_KIND_TRANSPORT[p.kind] for p in forced_profiles} if forced_profiles else None
+
+    forced_profiles: List[CredentialProfile] = []
+    if method == "snmp":
+        # SNMP authenticates with a community string, not a saved host login.
+        if not community:
+            community = "public"
+        covered = None  # any device with an IP is eligible
+    else:
+        if wanted_ids:
+            forced_profiles = db.query(CredentialProfile).filter(
+                CredentialProfile.id.in_(wanted_ids),
+                CredentialProfile.tenant_id == tid,
+                CredentialProfile.is_active.is_(True),
+            ).all()
+            if not forced_profiles:
+                raise HTTPException(404, "None of the chosen logins were found (or active).")
+            if any(p.kind not in ("winrm", "ssh") for p in forced_profiles):
+                raise HTTPException(400, "Only host logins (WinRM / SSH) can be run against discovered devices.")
+        # WMI drives ONLY Windows (over DCOM/135, reusing the WinRM login). Host
+        # mode uses the ticked kinds' transports (None = auto, any transport).
+        covered = {"windows"} if method == "wmi" else (
+            None if method == "auto" else
+            {_KIND_TRANSPORT[p.kind] for p in forced_profiles} if forced_profiles else None)
 
     # Only this tenant's still-unclaimed picks; silently drop anything already
     # promoted or out of scope rather than erroring the whole batch.
@@ -1534,8 +1890,9 @@ def connect_selected(
         wdb = Sess()
         try:
             from grc.modules.asset_discovery.services.deep_collect import (
-                promote_observation, select_credential,
-                transport_for_observation as _t,
+                promote_observation, promote_observation_typed, typed_credentials_dict,
+                select_credential, transport_for_observation as _t,
+                login_methods_for_observation as _login_methods,
                 live_port_open as _live_open, classify_collect_error as _classify,
             )
             # Load the ticked logins once for this batch (worker session).
@@ -1547,20 +1904,99 @@ def connect_selected(
                     _sweep_update(tid, done=1, already=1)
                     continue
                 _sweep_update(tid, current=(o.host_name or o.ip_address))
+
+                # In auto mode the device decides: use the best login service the
+                # sweep actually saw answering on it. Nothing open = nothing to try.
+                m = method
+                if method == "auto":
+                    _avail = _login_methods(o)
+                    if not _avail:
+                        o.resolution_note = ("no login service answered on this device — "
+                                             "no WinRM (5985), SSH (22), WMI (135) or SNMP (161)")
+                        wdb.commit(); _sweep_update(tid, done=1, unknown_type=1); continue
+                    m = "host" if _avail[0] in ("winrm", "ssh") else _avail[0]
+
+                # ── SNMP bulk: community string over UDP/161 (no host login) ──────
+                if m == "snmp":
+                    if not o.ip_address:
+                        _sweep_update(tid, done=1, unknown_type=1); continue
+                    try:
+                        creds = typed_credentials_dict("snmp", o.ip_address, 161, "", community, None)
+                        promote_observation_typed(wdb, o, "snmp", "snmp_v2c", creds)
+                        wdb.commit(); _sweep_update(tid, done=1, connected=1)
+                    except Exception as exc:  # noqa: BLE001
+                        wdb.rollback()
+                        o2 = wdb.get(DiscoveryObservation, oid)
+                        if o2 is not None:
+                            o2.resolution_note = f"snmp: {str(exc)[:220]}"; wdb.commit()
+                        _sweep_update(tid, done=1, rejected=1)
+                    continue
+
                 transport = _t(o)
                 if transport is None:
                     o.resolution_note = ("type unknown: the sweep saw no Windows (445/3389) "
                                          "or Linux (22) port, so no login type applies")
                     wdb.commit(); _sweep_update(tid, done=1, unknown_type=1); continue
+
+                # ── WMI bulk: Windows over DCOM/135, reusing the WinRM login ──────
+                if m == "wmi":
+                    if transport != "windows":
+                        _sweep_update(tid, done=1, unknown_type=1); continue  # WMI is Windows-only
+                    if not _live_open(o.ip_address, (135,)):
+                        o.resolution_note = (f"WMI (135) is not reachable on {o.ip_address} right now — the host "
+                                             f"answered discovery but DCOM/RPC is disabled or firewalled.")
+                        wdb.commit(); _sweep_update(tid, done=1, unreachable=1); continue
+                    if forced_id_list:
+                        cands = [p for p in fps if p.kind == "winrm"]
+                        prof = min(cands, key=lambda p: (p.priority if p.priority is not None else 100)) if cands else None
+                    else:
+                        prof = select_credential(wdb, tid, o.ip_address, "windows")
+                    if prof is None:
+                        o.resolution_note = (f"no Windows login saved that covers {o.ip_address} — "
+                                             f"add one under Connect → Add connection")
+                        wdb.commit(); _sweep_update(tid, done=1, no_login=1); continue
+                    try:
+                        promote_observation(wdb, o, prof, "wmi")
+                        wdb.commit(); _sweep_update(tid, done=1, connected=1)
+                    except Exception as exc:  # noqa: BLE001
+                        wdb.rollback()
+                        cls = _classify(exc)
+                        o2 = wdb.get(DiscoveryObservation, oid)
+                        if o2 is not None:
+                            o2.resolution_note = (f"unreachable: could not reach WMI (135) on {o.ip_address}. The login was never tested."
+                                                  if cls == "unreachable" else f"login failed: {str(exc)[:250]}"
+                                                  if cls == "auth" else f"collect error: {str(exc)[:250]}")
+                            wdb.commit()
+                        _sweep_update(tid, done=1, **({"unreachable": 1} if cls == "unreachable" else {"rejected": 1}))
+                    continue
+
                 # "Try anyway": re-check the login port LIVE (not the stale sweep), so a
                 # host that just had WinRM enabled connects, and a truly-off one fails in
-                # ~2s as unreachable (a connection error, never an auth lockout).
+                # a probe-timeout or two as unreachable (a connection error, never an auth
+                # lockout). Uses the SAME timeout budget as the sweep — a tighter one here
+                # made a WinRM host the sweep saw over a slow tunnel read "not reachable".
                 login_ports = (5985, 5986) if transport == "windows" else (22,)
+                _seen_ports = (o.raw or {}).get("open_ports") if isinstance(o.raw, dict) else None
+                logger.warning("login-sweep: host=%r ip=%s transport=%s method=%s ticked_logins=%d "
+                               "open_ports_seen=%s -> live re-check ports %s",
+                               o.host_name, o.ip_address, transport, m, len(fps),
+                               _seen_ports, login_ports)
                 if not _live_open(o.ip_address, login_ports):
                     svc = "WinRM (5985/5986)" if transport == "windows" else "SSH (22)"
-                    o.resolution_note = (f"{svc} is not reachable on {o.ip_address} right now — the host "
-                                         f"answered discovery but remote login is disabled or firewalled. "
-                                         f"Enable it (or the agent) and try again.")
+                    # Tell "login service down" apart from "scanner can't reach this host at all":
+                    # re-probe ONE baseline port the sweep saw open. Dead too = a route/vantage gap
+                    # (open-ports were recorded on a different network) — no login/timeout change fixes it.
+                    _baseline = next((p for p in (_seen_ports or []) if p not in login_ports), None)
+                    if _baseline is not None and not _live_open(o.ip_address, [_baseline]):
+                        o.resolution_note = (f"no network route to {o.ip_address} from this scanner — its "
+                                             f"previously-open port {_baseline} does not answer either. Those "
+                                             f"ports were seen from a different network; this scanner is on a "
+                                             f"different subnet and can't reach it. Run discovery/login from a "
+                                             f"collector on the host's network (or connect this box to it).")
+                    else:
+                        o.resolution_note = (f"{svc} is not reachable on {o.ip_address} right now — the host "
+                                             f"answered discovery but remote login is disabled or firewalled. "
+                                             f"Enable it (or the agent) and try again.")
                     wdb.commit(); _sweep_update(tid, done=1, unreachable=1); continue
                 if forced_id_list:
                     # Only the ticked logins of THIS device's kind; highest
@@ -1604,7 +2040,10 @@ def connect_selected(
     _sweep_start(tid, len(obs_ids), forced_profiles[0].kind if len(forced_profiles) == 1 else None)
     threading.Thread(target=_connect_in_background, daemon=True,
                      name=f"disc-connect-sel-{tid}").start()
-    label = (forced_profiles[0].name if len(forced_profiles) == 1
+    label = ("SNMP (community string)" if method == "snmp"
+             else f"WMI · {forced_profiles[0].name}" if method == "wmi" and len(forced_profiles) == 1
+             else "WMI (auto Windows login)" if method == "wmi"
+             else forced_profiles[0].name if len(forced_profiles) == 1
              else f"{len(forced_profiles)} chosen logins" if forced_profiles
              else "best match per device")
     return {
@@ -1709,8 +2148,10 @@ def resolve_observation_endpoint(
 class CredentialIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     kind: str  # winrm | ssh | ldap
-    username: str = Field(min_length=1, max_length=255)
-    secret: str = Field(min_length=1)          # password or PEM key — write-only
+    # Optional: SNMP v2c is community-only and k8s is token-only — no username.
+    # Enforced per-kind in create_credential for the kinds that do need one.
+    username: Optional[str] = Field(default=None, max_length=255)
+    secret: str = Field(min_length=1)          # password / PEM key / community — write-only
     secret_kind: str = "password"              # password | ssh_key
     domain: Optional[str] = None
     port: Optional[int] = Field(default=None, ge=1, le=65535)
@@ -1754,6 +2195,7 @@ def _credential_dict(c: CredentialProfile) -> dict:
 def list_credentials(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     tid = get_user_primary_tenant(current_user, db)
     rows = db.query(CredentialProfile).filter(
@@ -1822,6 +2264,9 @@ def create_credential(
         raise HTTPException(400, f"Invalid kind. One of: {', '.join(CREDENTIAL_KINDS)}")
     if body.secret_kind not in SECRET_KINDS:
         raise HTTPException(400, f"Invalid secret_kind. One of: {', '.join(SECRET_KINDS)}")
+    # SNMP (community-only) and k8s (token-only) carry no username; everything else needs one.
+    if body.kind not in ("snmp", "k8s") and not (body.username or "").strip():
+        raise HTTPException(400, "A username is required for this credential kind.")
     for cidr in (body.applies_to_cidrs or []):
         try:
             ipaddress.ip_network(cidr, strict=False)
@@ -1833,7 +2278,7 @@ def create_credential(
         raise HTTPException(409, f"A credential named '{body.name}' already exists.")
 
     c = CredentialProfile(
-        tenant_id=tid, name=body.name, kind=body.kind, username=body.username,
+        tenant_id=tid, name=body.name, kind=body.kind, username=(body.username or ""),
         secret_kind=body.secret_kind,
         secret_encrypted=encrypt_secret(body.secret),  # encrypted at rest
         domain=body.domain, port=body.port, winrm_transport=body.winrm_transport,

@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -115,7 +116,7 @@ export default function CloudConnectorsAdminPage() {
     },
     onError: (e: unknown) => {
       setBannerError(
-        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ||
+        detailText((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail) ||
         (e as { message?: string })?.message || 'Sync failed',
       );
       setBannerOk(null);
@@ -131,7 +132,7 @@ export default function CloudConnectorsAdminPage() {
     },
     onError: (e: unknown) => {
       setBannerError(
-        (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ||
+        detailText((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail) ||
         (e as { message?: string })?.message || 'Health check failed',
       );
     },
@@ -574,7 +575,7 @@ function AddConnectorModal({
       onSaved();
     } catch (err: unknown) {
       onError(
-        (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ||
+        detailText((err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail) ||
         (err as { message?: string })?.message ||
         'Create failed',
       );

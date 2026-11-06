@@ -109,6 +109,10 @@ interface LinkedControl {
   control_id: number;
   code: string;
   name: string;
+  scf_id?: string | null;
+  custom?: boolean;
+  control_status?: string | null;
+  check_status?: string | null;
 }
 
 interface LinkedInternalControl {
@@ -495,6 +499,14 @@ export default function AssetDetailPage() {
     },
   });
 
+  const unlinkNormalizedControlMutation = useMutation({
+    mutationFn: (linkId: number) => assetsApi.unlinkControl(assetId, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+    },
+  });
+
   const unlinkEvidenceMutation = useMutation({
     mutationFn: (linkId: number) => assetsApi.unlinkEvidence(assetId, linkId),
     onSuccess: () => {
@@ -715,6 +727,7 @@ export default function AssetDetailPage() {
 
   const tabCounts: Partial<Record<TabType, number>> = {
     risks: (asset?.linked_risks?.length ?? 0)
+      + (asset?.linked_controls?.length ?? 0)
       + (asset?.linked_internal_controls?.length ?? 0)
       + (asset?.linked_framework_controls?.length ?? 0),
     vulnerabilities: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
@@ -744,7 +757,8 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
+    // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
+    // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
 
   // Live data mapped into the shape the delivered AssetOverview design consumes.
@@ -777,7 +791,8 @@ export default function AssetDetailPage() {
     })),
     actions: [
       ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
-      { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
+      // "Assess risk" opened the now-hidden Criticality Assessments tab — hidden with it.
+      // { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
       { label: 'CIS scans', onClick: () => router.push(`/compliance-plugins/asset/${assetId}`) },
@@ -807,7 +822,11 @@ export default function AssetDetailPage() {
               <>
                 {/* External (EASM) assets: scanning-scope authorization sits above
                     the telemetry — passive is always allowed, active needs sign-off. */}
-                {overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
+                {/* Scanning-scope/authorization card hidden: it gated "active scanning", which is
+                    DELIBERATELY not implemented (external_probe.py) — so it exposed no extra data and
+                    only implied the passive scan was incomplete. Re-enable ONLY alongside a real
+                    active-scan feature (which the backend requires be authorization-gated). */}
+                {false && overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
                 <AssetOverviewDesign A={overviewData} />
               </>
             )}
@@ -907,8 +926,10 @@ export default function AssetDetailPage() {
                 isLinkingControl={linkControlMutation.isPending}
                 onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
                 onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                onUnlinkNormalizedControl={(linkId) => unlinkNormalizedControlMutation.mutate(linkId)}
                 isUnlinkingInternal={unlinkInternalControlMutation.isPending}
                 isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
+                isUnlinkingNormalized={unlinkNormalizedControlMutation.isPending}
               />
             )}
             {activeTab === 'criticality' && (
@@ -1387,7 +1408,7 @@ function EditAssetModal({
     queryFn: () => assetsApi.getTenantUsers().then((r) => r.data),
     staleTime: 60 * 1000,
   });
-  // Active org teams — drives the Owning Team dropdown.
+  // Active org departments (each as its picker record, /admin/teams) — drives the Owning department dropdown.
   const { data: teams } = useQuery({
     queryKey: ['teams-for-asset-edit'],
     queryFn: () => apiClient.get('/admin/teams').then((r) => r.data as Array<{
@@ -1784,8 +1805,8 @@ function EditAssetModal({
 
           {/* ── Phase 5.2: Ownership Chain ────────────────────────────── */}
           {/* Pickers feed off the existing /assets/tenant-users endpoint;
-              the team picker uses the new /admin/teams endpoint. If no
-              teams are configured yet, the user falls back to a free-text
+              the department picker uses the /admin/teams endpoint. If no
+              departments are configured yet, the user falls back to a free-text
               field — that legacy value still saves on the backend. */}
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -1803,7 +1824,7 @@ function EditAssetModal({
                 onChange={(v) => setForm({ ...form, secondary_owner_id: v })}
               />
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Owning Team</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Owning department</label>
                 {teams && teams.length > 0 ? (
                   <select
                     value={form.owning_team_id === '' ? '' : form.owning_team_id}
@@ -1827,13 +1848,13 @@ function EditAssetModal({
                   <input
                     value={form.owning_team}
                     onChange={(e) => setForm({ ...form, owning_team: e.target.value, owning_team_id: '' })}
-                    placeholder="Create teams in Admin → Teams"
+                    placeholder="Create departments in Admin → Departments"
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                   />
                 )}
                 {teams && teams.length === 0 && (
                   <p className="mt-1 text-[10px] text-slate-500">
-                    No teams configured yet. <a href="/admin" className="text-blue-600 hover:underline">Manage teams →</a>
+                    No departments configured yet. <a href="/admin?tab=departments" className="text-blue-600 hover:underline">Manage departments →</a>
                   </p>
                 )}
               </div>
@@ -2184,7 +2205,7 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
             </p>
           </div>
           <div>
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owning Team</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owning department</span>
             <p className="text-sm text-slate-700">{asset.owning_team || <span className="text-slate-400">Not assigned</span>}</p>
           </div>
           <div>
@@ -3793,10 +3814,22 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
   });
 
   const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
-  const lastRun = runs[0];
+  // Newest run by timestamp — runs isn't guaranteed newest-first, so runs[0]
+  // could be an old run (stale "last scan" time).
+  const lastRun = runs.length
+    ? runs.reduce((m: any, r: any) =>
+        new Date(r?.started_at || r?.created_at || 0).getTime() >
+        new Date(m?.started_at || m?.created_at || 0).getTime() ? r : m)
+    : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
-    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    try {
+      // Backend sends naive UTC (no 'Z'); without it new Date() parses as LOCAL
+      // and shifts by the browser offset. Force UTC.
+      const s = String(iso);
+      const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+      return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z').toLocaleString();
+    } catch { return iso; }
   };
   // Each run = ONE CIS check executed. Backend stores its outcome as
   // `status` (passed | failed | error | running) — not a pass/fail count.
@@ -4634,7 +4667,12 @@ function ScanSessions({
         );
         const span = Math.max(0, session.endedAt ? (session.startedAt - session.endedAt) : 0);
         const spanSec = Math.round(span / 1000);
-        const passRate = totals.total ? Math.round((totals.passed / totals.total) * 100) : 0;
+        // CIS score basis: passed / (passed+failed) — n/a (skipped) and errored
+        // rules drop out of the denominator, same as the header/card/posture.
+        // (Was passed/total, which counted not-applicable rules and read low,
+        // e.g. 58% instead of 68% for the same session.)
+        const evaluated = totals.passed + totals.failed;
+        const passRate = evaluated ? Math.round((totals.passed / evaluated) * 100) : 0;
         const filteredRuns = session.runs.filter((r: any) => filter === 'all' ? true : (r.status || '').toLowerCase() === filter);
 
         return (

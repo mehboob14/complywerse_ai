@@ -1,6 +1,7 @@
 import type { ChartKind, ColumnDef, ReportSpec, Row } from './types';
 import { fieldDomain } from './pivot';
 import { fmtDate } from './grid-utils';
+import { isCountColumn } from './filter-utils';
 
 /** Empty-first: never auto-pick columns. Users add exactly what they want. */
 export function defaultVisibleColumns(_cols: ColumnDef[]): string[] {
@@ -127,13 +128,33 @@ export function cellAlign(col: ColumnDef, overrides?: Record<string, 'left' | 'r
   return overrides?.[col.key] ?? col.align ?? 'left';
 }
 
+/** What an empty cell should SAY. A blank is a fact, and which fact it is
+ *  depends on the column: a link/mapping count that came back with nothing is
+ *  genuinely zero, an unset owner is unassigned, and a missing CVSS score is
+ *  unknown — printing "—" for all three tells the reader nothing.
+ *
+ *  Only derived counts become 0. A real measure (score, valuation, days open)
+ *  stays "—", because zeroing a blank measure is the same defect grid-utils
+ *  `numericValue` guards against: it would read as a genuine zero and drag
+ *  every average that quotes the column. */
+export function emptyLabel(col: ColumnDef): string {
+  if (col.type === 'linkage' || isCountColumn(col)) return '0';
+  if (col.type === 'number') return '—';
+  if (/(^|_)(owner|assignee|assigned_to|custodian)(_|$)/i.test(col.key)) return 'Unassigned';
+  if (col.type === 'date') return 'Not set';
+  if (col.type === 'badge') return 'Not set';
+  return '—';
+}
+
 export function cellDisplay(col: ColumnDef, row: Row): string {
   const raw = col.accessor ? col.accessor(row) : row[col.key];
-  if (col.format) return col.format(raw, row);
+  // A formatter that returns nothing is still an empty cell — fall through to
+  // the same label rather than leaving one blank column among the labelled ones.
+  if (col.format) return col.format(raw, row) || emptyLabel(col);
   // Dates are ISO strings — render them human-readably instead of printing the
   // raw "2026-08-27T00:00:00". Matches grid-utils.displayText (used for
   // filtering/grouping/export), so the table now shows the same value.
-  if (col.type === 'date') return fmtDate(raw) || '—';
-  if (raw == null || raw === '') return '—';
+  if (col.type === 'date') return fmtDate(raw) || emptyLabel(col);
+  if (raw == null || raw === '') return emptyLabel(col);
   return String(raw);
 }

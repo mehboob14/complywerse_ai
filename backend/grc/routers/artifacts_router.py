@@ -24,6 +24,7 @@ from ..models import (
     get_db,
 )
 from .auth_router import require_auth, get_user_primary_tenant
+from ..modules.scf.ownership import refuse_artifact_self_approval
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,44 @@ def _load_artifact_content() -> dict:
         return _content_cache["data"]
     except Exception:  # noqa: BLE001 — content is an optional enhancement
         logger.warning("could not load artifact_content.json", exc_info=True)
+        return {}
+
+
+_provides_cache: dict = {"mtime": None, "data": {}}
+
+
+def _provides_by_artifact(framework_key: str) -> dict:
+    """{artifact_id: [evidence item names it provides]} from the curated catalog file, for the frameworks whose artifacts follow
+    their evidence recommendations (UAE IA); {} for the others. The database rows do not carry the list. Cached by mtime."""
+    try:
+        mtime = _CATALOG_PATH.stat().st_mtime
+        if _provides_cache["mtime"] != mtime:
+            raw = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+            _provides_cache["data"] = {k: {a["artifact_id"]: a["evidence"] for a in v.get("artifacts", []) if a.get("evidence")}
+                                       for k, v in raw.items()}
+            _provides_cache["mtime"] = mtime
+        return _provides_cache["data"].get(framework_key, {})
+    except Exception:  # noqa: BLE001 — an optional enhancement of the per-requirement list
+        logger.warning("could not read the evidence lists of artifact_catalog.json", exc_info=True)
+        return {}
+
+
+_sub_controls_cache: dict = {"mtime": None, "data": {}}
+
+
+def _sub_controls_by_artifact(framework_key: str) -> dict:
+    """{artifact_id: [codes of the sub-controls whose evidence it provides]} from the curated catalog file (UAE IA, where an
+    artifact serves sub-controls of several controls); {} for the others. The database rows do not carry the list. Cached by mtime."""
+    try:
+        mtime = _CATALOG_PATH.stat().st_mtime
+        if _sub_controls_cache["mtime"] != mtime:
+            raw = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+            _sub_controls_cache["data"] = {k: {a["artifact_id"]: a["sub_controls"] for a in v.get("artifacts", []) if a.get("sub_controls")}
+                                           for k, v in raw.items()}
+            _sub_controls_cache["mtime"] = mtime
+        return _sub_controls_cache["data"].get(framework_key, {})
+    except Exception:  # noqa: BLE001 — an optional enhancement of the per-requirement list
+        logger.warning("could not read the sub-control lists of artifact_catalog.json", exc_info=True)
         return {}
 
 # Map assessment_type strings → catalog framework_key
@@ -204,6 +243,11 @@ ASSESSMENT_TYPE_MAP: dict[str, str] = {
     "data transfer outside kingdom": "ksa_data_transfer",
     "regulation on personal data transfer outside the kingdom": "ksa_data_transfer",
     "regulation on personal data transfer outside ksa": "ksa_data_transfer",
+    # UAE Information Assurance Standard (UAE Cyber Security Council)
+    "uae ia": "uae_ia",
+    "uae_ia": "uae_ia",
+    "uae information assurance": "uae_ia",
+    "uae information assurance standard": "uae_ia",
 }
 
 # Artifact names that map to real platform data
@@ -224,6 +268,14 @@ def _get_platform_data_type(artifact_name: str) -> Optional[str]:
         if pattern in name_lower:
             return dtype
     return None
+
+
+def _catalog_control_ref(art: dict) -> Optional[str]:
+    """The artifact's control_ref. A document that serves several controls (`also_controls`, the UAE IA catalog) is stored as
+    "T2.3.1, T2.3.2": `_split_catalog_ref` already reads a comma list as several references, so the per-requirement list shows
+    the artifact under each control whose evidence it provides. Entries without `also_controls` are stored exactly as before."""
+    refs = [r for r in [art.get("control_ref"), *(art.get("also_controls") or [])] if r]
+    return ", ".join(refs) or None
 
 
 def _ensure_catalog_seeded(db: Session) -> None:
@@ -278,7 +330,7 @@ def _ensure_catalog_seeded(db: Session) -> None:
                     stage_number=stage_num,
                     name=art.get("name", ""),
                     artifact_type=art.get("type", ""),
-                    control_ref=art.get("control_ref") or None,
+                    control_ref=_catalog_control_ref(art),
                     mandatory=art.get("mandatory", False),
                     description=art.get("description") or None,
                     format=art.get("format") or None,
@@ -676,6 +728,8 @@ def _artifact_out(artifact: TenantArtifact) -> dict:
         "assigned_to_name": assigned_name,
         "created_by_id": artifact.created_by_id,
         "created_by_name": created_name,
+        "reviewed_by_id": artifact.reviewed_by_id,
+        "approved_by_id": artifact.approved_by_id,
         "is_platform_native": artifact.is_platform_native or False,
         "platform_data_type": artifact.platform_data_type,
         "platform_record_count": artifact.platform_record_count,
@@ -970,6 +1024,9 @@ def list_artifacts_by_control(
     Empty result (`catalog: []`) is normal — most parsed-framework
     requirements don't have a corresponding artifact catalog entry, and the
     UI hides the section in that case.
+
+    A reference may also be a sub-control code (UAE IA, "M1.1.1.1"): it finds the
+    artifacts that serve it, and every item lists the sub-controls it serves.
     """
     _ensure_catalog_seeded(db)
     tenant_id = get_user_primary_tenant(current_user, db)
@@ -999,9 +1056,15 @@ def list_artifacts_by_control(
         .filter(ArtifactCatalogItem.framework_key == resolved_key)
         .all()
     )
+    # A requested code that is one of the sub-controls an artifact serves (UAE IA) matches it too, token for token like a control
+    # reference ("M1.2.1" does not match an artifact that lists only "M1.2.1.1"). The documents already created from such an
+    # item come with it, so the row shows "View" and not "Create" again.
+    sub_codes = _sub_controls_by_artifact(resolved_key)
+    wanted = {_normalize_ref(c) for c in requirement_codes}
+    via_sub = {i.id for i in catalog_items if any(_normalize_ref(c) in wanted for c in sub_codes.get(i.artifact_id, []))}
     matched_catalog = [
         i for i in catalog_items
-        if _ref_matches_any(i.control_ref, requirement_codes)
+        if i.id in via_sub or _ref_matches_any(i.control_ref, requirement_codes)
     ]
 
     tenant_artifacts = (
@@ -1014,9 +1077,10 @@ def list_artifacts_by_control(
     )
     matched_tenant = [
         a for a in tenant_artifacts
-        if _ref_matches_any(a.control_ref, requirement_codes)
+        if a.catalog_item_id in via_sub or _ref_matches_any(a.control_ref, requirement_codes)
     ]
 
+    provides = _provides_by_artifact(resolved_key)
     return {
         "framework_key": resolved_key,
         "control_ref": control_ref,
@@ -1035,6 +1099,8 @@ def list_artifacts_by_control(
                 "owner": i.owner,
                 "is_platform_native": i.is_platform_native,
                 "platform_data_type": i.platform_data_type,
+                "provides": provides.get(i.artifact_id, []),
+                "sub_controls": sub_codes.get(i.artifact_id, []),
             }
             for i in matched_catalog
         ],
@@ -1328,6 +1394,8 @@ def create_artifact(
                 platform_count = db.query(func.count(ITAsset.id)).filter(ITAsset.tenant_id == tenant_id).scalar()
         except Exception:
             pass
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.assigned_to_id])
 
     artifact = TenantArtifact(
         tenant_id=tenant_id,
@@ -1405,9 +1473,43 @@ def update_artifact(
         artifact.description = payload.description
     if payload.content is not None:
         artifact.content = payload.content
+
+    prev_status = artifact.status
     if payload.status is not None:
-        artifact.status = payload.status
-    if payload.assigned_to_id is not None:
+        new_status = payload.status
+        if new_status == "approved" and prev_status != "approved":
+            from .admin_router import check_permission
+            if not check_permission(current_user, db, "controls:artifacts:approve"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Permission denied: controls:artifacts:approve required to approve artifacts",
+                )
+            try:
+                refuse_artifact_self_approval(
+                    current_user.id,
+                    artifact.created_by_id,
+                    artifact.assigned_to_id,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+            artifact.status = "approved"
+            artifact.approved_by_id = current_user.id
+        elif new_status == "in_review":
+            artifact.status = "in_review"
+            _notify_artifact_users(
+                db,
+                tenant_id=tenant_id,
+                artifact=artifact,
+                subject=f"Artifact '{artifact.name}' submitted for review",
+                message=f"Artifact '{artifact.name}' is now in review.",
+            )
+        else:
+            artifact.status = new_status
+
+    # sent-as-null means "unassign"; a None check would silently keep the owner
+    if "assigned_to_id" in payload.model_fields_set:
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [payload.assigned_to_id], kept=[artifact.assigned_to_id])
         artifact.assigned_to_id = payload.assigned_to_id
     if payload.format is not None:
         artifact.format = payload.format
@@ -1415,6 +1517,29 @@ def update_artifact(
     db.commit()
     db.refresh(artifact)
     return _artifact_out(artifact)
+
+
+def _notify_artifact_users(db, *, tenant_id: int, artifact: TenantArtifact, subject: str, message: str):
+    ids = []
+    if artifact.assigned_to_id:
+        ids.append(artifact.assigned_to_id)
+    if artifact.created_by_id and artifact.created_by_id not in ids:
+        ids.append(artifact.created_by_id)
+    if not ids:
+        return
+    try:
+        from ..modules.workflow_engine.services.notification_service import send_workflow_notification
+        send_workflow_notification(
+            db,
+            tenant_id=tenant_id,
+            subject=subject,
+            message=message,
+            workflow_instance_id=None,
+            user_ids=ids,
+            notification_type="info",
+        )
+    except Exception:
+        logger.exception("artifact notification failed id=%s", artifact.id)
 
 
 @router.delete("/{artifact_id}")
@@ -1452,7 +1577,26 @@ def assign_artifact(
     user = db.query(GRCUser).filter(GRCUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [user_id])
     artifact.assigned_to_id = user_id
+    # Keep draft/planned ownership assign even with no content yet.
+    if not artifact.status:
+        artifact.status = "draft"
     db.commit()
     db.refresh(artifact)
+    try:
+        from ..modules.workflow_engine.services.notification_service import send_workflow_notification
+        send_workflow_notification(
+            db,
+            tenant_id=tenant_id,
+            subject=f"Artifact '{artifact.name}' assigned to you",
+            message=f"You have been assigned artifact '{artifact.name}'.",
+            workflow_instance_id=None,
+            user_ids=[user_id],
+            notification_type="info",
+        )
+        db.commit()
+    except Exception:
+        logger.exception("assign notify failed artifact_id=%s", artifact_id)
     return _artifact_out(artifact)

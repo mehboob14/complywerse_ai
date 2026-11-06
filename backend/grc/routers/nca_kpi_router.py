@@ -144,6 +144,8 @@ def create_entry(
     user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(user, db)
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.owner_user_id])
     entry = NcaKpiEntry(
         tenant_id=tenant_id,
         kpi_identifier=_next_identifier(tenant_id, db),
@@ -185,6 +187,8 @@ def update_entry(
     ).first()
     if not entry:
         raise HTTPException(status_code=404, detail="NCA KPI entry not found")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.owner_user_id], kept=[entry.owner_user_id])
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(entry, k, v)
     entry.updated_at = datetime.utcnow()

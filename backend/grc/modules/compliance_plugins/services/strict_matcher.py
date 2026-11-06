@@ -35,12 +35,50 @@ from __future__ import annotations
 import logging
 from typing import List, Optional, Tuple
 
-from sqlalchemy import or_, cast, String
+from sqlalchemy import or_, cast, String, func
 from sqlalchemy.orm import Session
 
 from ....models import BenchmarkOsMapping, CompliancePlugin
 
 logger = logging.getLogger(__name__)
+
+
+def runnable_check_clauses() -> list:
+    """The check_definition content-exclusions that define a well-formed,
+    executable rule — the single source of truth for owner-rule #5
+    ("keep the exclusion set IDENTICAL across scanner / card pass% /
+    residual / full-posture"). Splice with ``*runnable_check_clauses()``
+    into any query's ``.filter(...)`` so the four callers can never drift.
+
+    Excludes (each manufactures a bogus result if executed):
+      • TODO stubs — compare host output against the literal
+        "TODO_expected_value", so they can only ever fail.
+      • ``expect.kind == "any"`` auto-pass placeholders (both JSON
+        spacings) — the PDF-ingest "reviewer must tighten" marker; the
+        rule passes unconditionally, manufacturing compliance.
+      • Dangling-pipe commands (``grep ... |`` with nothing after the
+        final pipe) — 129 enabled linux_ssh rows that always error
+        (empty stdout + nonzero exit trips the run integrity guard) yet
+        slipped past the old filter and inflated the failure count.
+
+    Structural eligibility (``enabled``, ``runner_type != 'manual'``,
+    ``review_status``, tenant scope, benchmark) stays inline per site —
+    those legitimately differ (the scan path filters by an explicit
+    runner_type, the matcher by ``!= 'manual'``).
+    """
+    cdef_text = cast(CompliancePlugin.check_definition, String)
+    # check_definition is a plain ``json`` column (no ``.astext``); pull the
+    # command out with the native json_extract_path_text (NULL when absent,
+    # e.g. oscap rows — coalesced to '' so the guard never drops them).
+    command_text = func.coalesce(
+        func.json_extract_path_text(CompliancePlugin.check_definition, "command"), ""
+    )
+    return [
+        ~cdef_text.ilike("%TODO%"),
+        ~cdef_text.ilike('%%"kind": "any"%%'),
+        ~cdef_text.ilike('%%"kind":"any"%%'),
+        command_text.op("!~")(r"\|\s*$"),
+    ]
 
 
 def pick_benchmark_for_os(
@@ -259,4 +297,54 @@ def applicable_plugins_for_asset_multi(
     counts = Counter(p.benchmark for p in plugins)
     for b in benchmarks:
         b["rule_count"] = counts.get(b["benchmark"], 0)
+    return (plugins, benchmarks)
+
+
+def applicable_manual_plugins_for_asset(
+    db: Session, tenant_id: int, asset,
+) -> Tuple[List[CompliancePlugin], List[dict]]:
+    """Manual / attestation rules that apply to an asset — the human-attested
+    companion to ``applicable_plugins_for_asset_multi`` (which returns only the
+    automatable rules).
+
+    Same benchmark resolution (OS benchmark + every merged software benchmark),
+    but ``runner_type == 'manual'``. These are the CIS items a scanner can't
+    verify — a human confirms them — so they belong in a per-asset "manual
+    checks" tab alongside the automated scan, NOT in the automated pass-rate.
+
+    Only genuinely-unwritten TODO stubs are excluded. NOTE the deliberate
+    difference from the automated path: ``expect.kind == 'any'`` is NOT
+    excluded here. For an automated rule kind:any is a hollow auto-pass; for a
+    manual rule it is *normal* — the check has no machine expectation because a
+    human decides. These rows carry full title / description / audit-steps /
+    remediation (they are real CIS attestation items), so excluding them would
+    hide the majority of an asset's manual checks. Returns ``(plugins,
+    benchmarks)`` like the ``_multi`` variant, with a per-benchmark
+    ``manual_count``.
+    """
+    benchmarks = applicable_benchmarks_for_asset(db, tenant_id, asset)
+    if not benchmarks:
+        return ([], [])
+    names = [b["benchmark"] for b in benchmarks]
+    cdef = cast(CompliancePlugin.check_definition, String)
+    plugins = (
+        db.query(CompliancePlugin)
+        .filter(
+            or_(
+                CompliancePlugin.tenant_id == tenant_id,
+                CompliancePlugin.tenant_id.is_(None),
+            ),
+            CompliancePlugin.benchmark.in_(names),
+            CompliancePlugin.enabled.is_(True),
+            CompliancePlugin.runner_type == "manual",
+            # Only exclude genuinely unwritten stubs. kind:any is intentionally
+            # kept — see docstring (it is the normal shape of a manual check).
+            ~cdef.ilike("%TODO%"),
+        )
+        .all()
+    )
+    from collections import Counter
+    counts = Counter(p.benchmark for p in plugins)
+    for b in benchmarks:
+        b["manual_count"] = counts.get(b["benchmark"], 0)
     return (plugins, benchmarks)

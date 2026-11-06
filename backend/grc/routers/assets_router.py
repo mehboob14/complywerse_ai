@@ -33,7 +33,7 @@ from ..schemas import (
     AssetDetailResponse, AssetCoverageAnalysis,
     LifecycleTransitionRequest,
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts, has_tenant_permission
 # Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
@@ -115,8 +115,11 @@ def get_tenant_users(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Get all users in the current tenant DB for owner selection."""
-    users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
+    """Get all users in the current tenant DB for owner selection (not accounts an access review imported)."""
+    from .auth_router import platform_account
+
+    users = (db.query(GRCUser).filter(GRCUser.is_active == True, platform_account())
+             .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc()).all())
     return [
         {
             "id": u.id,
@@ -301,6 +304,7 @@ def list_assets(
     lifecycle_state: Optional[str] = None,
     data_classification: Optional[str] = None,
     internet_facing: Optional[bool] = None,
+    search: Optional[str] = Query(None, max_length=100, description="part of the name or host name"),
     stale_only: bool = Query(False, description="When true, return assets where last_seen_at is older than `stale_days` (default 30)."),
     stale_days: int = Query(30, ge=1, le=365),
     skip: int = 0,
@@ -335,6 +339,9 @@ def list_assets(
         query = query.filter(ITAsset.data_classification == data_classification)
     if internet_facing is not None:
         query = query.filter(ITAsset.internet_facing == internet_facing)
+    if search and search.strip():
+        like = f"%{search.strip()}%"
+        query = query.filter(ITAsset.name.ilike(like) | ITAsset.host_name.ilike(like))
     if stale_only:
         from datetime import timedelta
         cutoff = datetime.utcnow() - timedelta(days=stale_days)
@@ -369,6 +376,8 @@ _BULK_ALLOWED_FIELDS = {
     "department", "data_classification", "owner_id", "primary_owner_id",
     "internet_facing",
 }
+# The people an asset names: each must use the platform (not an account an access review imported).
+_ASSET_PEOPLE = ("owner_id", "primary_owner_id", "secondary_owner_id", "business_owner_id", "escalation_contact_id")
 
 
 @router.get("/facets")
@@ -425,6 +434,7 @@ def bulk_update_assets(
             clean[col] = value
     if not clean:
         return {"updated": 0, "fields": []}
+    refuse_imported_accounts(db, [clean.get(k) for k in _ASSET_PEOPLE])
 
     assets = (
         db.query(ITAsset)
@@ -565,6 +575,7 @@ def create_asset(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="criticality_override_reason is required when overriding the derived criticality",
             )
+    refuse_imported_accounts(db, [getattr(asset, k, None) for k in _ASSET_PEOPLE])
 
     # Derive a canonical os_normalized key from whatever OS text the
     # operator supplied (os_version / os_family), so a manually-added asset
@@ -587,9 +598,16 @@ def create_asset(
         except Exception:  # noqa: BLE001 — never block asset creation
             _os_normalized = _os_normalized or _os_family
 
+    try:
+        from ..services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "assets", asset.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     db_asset = ITAsset(
         origin_source="manual",  # stamped once at birth; never mutated
         tenant_id=tenant_id,
+        custom_values=custom_values,
         name=asset.name,
         description=asset.description,
         asset_type=asset.asset_type,
@@ -1435,6 +1453,8 @@ def get_asset(
         "cde_environment": asset.cde_environment or False,
         "ephi_environment": asset.ephi_environment or False,
         "created_at": asset.created_at.isoformat(),
+        # The edit form opened from here sends these back; without them it would clear them.
+        "custom_values": asset.custom_values or {},
         # Phase 5 operational context fields.
         "internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
         # `is_internet_facing` is a legacy wire alias (the Risk Posture page still uses
@@ -1486,6 +1506,14 @@ def update_asset(
         )
     
     update_data = asset_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get(k) for k in _ASSET_PEOPLE], kept=[getattr(asset, k, None) for k in _ASSET_PEOPLE])
+    if "custom_values" in update_data:
+        try:
+            from ..services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, asset.tenant_id, "assets", update_data["custom_values"], asset.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     # Validate any criticality override before applying any fields so we
     # don't half-update the row.
@@ -1786,6 +1814,66 @@ def link_asset_to_control(
     return MessageResponse(message="Control linked successfully")
 
 
+@router.get("/{asset_id}/controls")
+def list_asset_controls(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """SCF Stage F — reverse view of AssetControlLink rows for one asset."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found",
+        )
+    from grc.modules.scf.asset_links import list_controls_for_asset
+
+    try:
+        items = list_controls_for_asset(db, asset.tenant_id, asset_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"items": items}
+
+
+@router.delete("/{asset_id}/controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_asset_from_control(
+    asset_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+
+    db_link = db.query(AssetControlLink).filter(
+        AssetControlLink.id == link_id,
+        AssetControlLink.asset_id == asset_id
+    ).first()
+    if not db_link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link not found"
+        )
+
+    db.delete(db_link)
+    db.commit()
+    return None
+
+
 @router.post("/{asset_id}/assess", response_model=AssetRiskAssessmentResponse)
 def assess_asset(
     asset_id: int,
@@ -1929,14 +2017,27 @@ def get_asset_detail(
         )
     
     linked_controls = []
+    from grc.modules.scf.risk_links import control_status_indicator
+    from grc.modules.scf.asset_links import per_asset_check_status
     for link in asset.control_links:
         control = db.query(NormalizedControl).filter(NormalizedControl.id == link.normalized_control_id).first()
         if control:
+            scf_key = getattr(control, "scf_id", None) or getattr(control, "code", None) or ""
             linked_controls.append({
                 "id": link.id,
                 "control_id": control.id,
                 "code": control.code,
-                "name": control.name
+                "name": control.name,
+                "scf_id": getattr(control, "scf_id", None),
+                "source": getattr(control, "source", None),
+                "custom": (getattr(control, "source", None) or "") == "custom",
+                "control_status": control_status_indicator(
+                    db, control, tenant_id=asset.tenant_id,
+                ),
+                "check_status": per_asset_check_status(
+                    db, asset.tenant_id, str(scf_key), asset.id,
+                ) if scf_key else "unknown",
+                "control_status_indicator": True,
             })
     
     linked_internal_controls = []
@@ -2175,6 +2276,15 @@ def get_asset_detail(
     )
 
 
+def _require_collect(db: Session, user: GRCUser) -> None:
+    """Re-collecting an asset over a saved login, and reading the saved service
+    logins, use stored credentials — gate them the same as live discovery:
+    compliance:discover:execute or assets:asset_inventory:edit (administrators pass)."""
+    if not has_tenant_permission(db, user, "compliance:discover:execute", "assets:asset_inventory:edit"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not have permission to collect this asset's inventory.")
+
+
 @router.post("/{asset_id}/probe-inventory")
 def probe_asset_inventory(
     asset_id: int,
@@ -2185,6 +2295,7 @@ def probe_asset_inventory(
     credential — a re-scan that refreshes OS / hardware / software / deep
     inventory without re-entering a login. No-op with a clear message when no
     saved credential covers the host."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
@@ -2234,6 +2345,7 @@ def list_asset_service_logins(
     """Saved logins that can collect this asset's typed service — so the UI can
     offer a pick-a-saved-login dropdown (and an 'add new' option) instead of
     making the operator re-enter a credential they already saved."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
@@ -2279,6 +2391,7 @@ def collect_asset_service(
     already saved when you set the software up (its IntegrationConnection); only
     if none exists does it need a login in the body. No re-discovery, no
     duplicate, and no re-entering a credential you already gave."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),

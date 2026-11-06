@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { certificationsApi } from '@/lib/api';
+import { certificationsApi, scfApi, type ScfMyWorkItem } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ChevronRight, Loader2, Lock, Plus } from 'lucide-react';
 
@@ -27,6 +27,92 @@ function greeting() {
 }
 function fmtDate(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function fmtDue(iso?: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+function scfCode(item: ScfMyWorkItem) {
+  return String(item.scf_id || item.control_id || '');
+}
+function scfTitle(item: ScfMyWorkItem) {
+  return String(item.title || item.name || scfCode(item) || '(untitled)');
+}
+
+function ScfSection({
+  title,
+  hint,
+  items,
+  empty,
+  hrefFor,
+  badgeFor,
+}: {
+  title: string;
+  hint?: string;
+  items: ScfMyWorkItem[];
+  empty: string;
+  hrefFor: (item: ScfMyWorkItem) => string | null;
+  badgeFor?: (item: ScfMyWorkItem) => { label: string; cls: string } | null;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="flex items-baseline gap-2 border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <span className="text-xs tabular-nums text-slate-400">{items.length}</span>
+        {hint && <span className="text-xs text-slate-400">{hint}</span>}
+      </div>
+      {items.length === 0 ? (
+        <div className="px-5 py-8 text-center text-sm text-slate-400">{empty}</div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {items.map((item, i) => {
+            const code = scfCode(item);
+            const href = hrefFor(item);
+            const badge = badgeFor?.(item);
+            const due = fmtDue(item.next_due_at as string | null | undefined);
+            const overdue = item.next_due_at ? new Date(String(item.next_due_at)).getTime() < Date.now() : false;
+            const inner = (
+              <>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {code && <span className="font-mono text-sm text-primary-600">{code}</span>}
+                    <span className="text-sm font-semibold text-slate-900">{scfTitle(item)}</span>
+                    {badge && (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
+                    )}
+                  </div>
+                  {(item.status || item.overall_status) && (
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {STATUS_LABELS[String(item.status || item.overall_status)] || String(item.status || item.overall_status)}
+                    </p>
+                  )}
+                </div>
+                {due && (
+                  <span className={`hidden flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-block ${overdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {due}{overdue ? ' · overdue' : ''}
+                  </span>
+                )}
+                {href && <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />}
+              </>
+            );
+            return href ? (
+              <Link
+                key={`${code}-${i}`}
+                href={href}
+                className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-slate-50 ${overdue ? 'bg-rose-50/40' : ''}`}
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div key={`${code}-${i}`} className={`flex items-center gap-3 px-5 py-3 ${overdue ? 'bg-rose-50/40' : ''}`}>
+                {inner}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function MyWorkPage() {
@@ -58,6 +144,12 @@ export default function MyWorkPage() {
       }));
       return { per };
     },
+    enabled: userId != null && canView,
+  });
+
+  const scfQ = useQuery({
+    queryKey: ['scf-my-work', userId],
+    queryFn: async () => (await scfApi.myWork()).data,
     enabled: userId != null && canView,
   });
 
@@ -111,6 +203,14 @@ export default function MyWorkPage() {
     };
   }, [data, items, now]);
 
+  const scf = scfQ.data;
+  const scfControls = scf?.controls || [];
+  const scfNa = scf?.na_reviews || [];
+  const scfOverdue = scf?.overdue || [];
+  const scfArtifacts = scf?.artifacts || [];
+  const scfFailing = scf?.failing || [];
+  const scfOpenCount = scfControls.length + scfNa.length + scfOverdue.length + scfArtifacts.length + scfFailing.length;
+
   if (permLoading || (canView && (isLoading || userId == null))) {
     return <div className="flex items-center justify-center py-32 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
@@ -125,6 +225,10 @@ export default function MyWorkPage() {
   }
 
   const barTone = (pct: number) => pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-rose-500';
+  const controlHref = (item: ScfMyWorkItem) => {
+    const code = scfCode(item);
+    return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null;
+  };
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -132,8 +236,14 @@ export default function MyWorkPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{greeting()}, {userName}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {openItems.length} item{openItems.length === 1 ? '' : 's'} in your queue across {frameworks.length} framework{frameworks.length === 1 ? '' : 's'}
-            {overdueCount > 0 && <span className="font-semibold text-rose-600"> · {overdueCount} overdue</span>}
+            {openItems.length} journey item{openItems.length === 1 ? '' : 's'}
+            {scfOpenCount > 0 && <> · {scfOpenCount} control-plane item{scfOpenCount === 1 ? '' : 's'}</>}
+            {' '}across {frameworks.length} framework{frameworks.length === 1 ? '' : 's'}
+            {(overdueCount > 0 || scfOverdue.length > 0) && (
+              <span className="font-semibold text-rose-600">
+                {' '}· {overdueCount + scfOverdue.length} overdue
+              </span>
+            )}
           </p>
         </div>
         <Link href="/compliance" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-semibold text-[#0a0a0a] hover:bg-primary-600">
@@ -143,10 +253,52 @@ export default function MyWorkPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* My queue */}
-        <div className="lg:col-span-2">
+        <div className="space-y-5 lg:col-span-2">
+          <ScfSection
+            title="Controls you own / assigned"
+            items={scfControls}
+            empty={scfQ.isLoading ? 'Loading…' : 'No SCF controls assigned to you.'}
+            hrefFor={controlHref}
+          />
+          <ScfSection
+            title="N/A reviews waiting"
+            items={scfNa}
+            empty="No applicability reviews waiting on you."
+            hrefFor={controlHref}
+            badgeFor={() => ({ label: 'N/A review', cls: 'bg-amber-50 text-amber-700' })}
+          />
+          <ScfSection
+            title="Overdue re-attestations"
+            items={scfOverdue}
+            empty="Nothing overdue."
+            hrefFor={controlHref}
+            badgeFor={() => ({ label: 'Overdue', cls: 'bg-rose-50 text-rose-700' })}
+          />
+          <ScfSection
+            title="Artifacts to write / review"
+            items={scfArtifacts as ScfMyWorkItem[]}
+            empty="No artifacts in your queue."
+            hrefFor={(item) => {
+              const code = String(item.scf_id || item.control_ref || item.control_id || '');
+              return code ? `/automation/soc2-controls/${encodeURIComponent(code)}` : null;
+            }}
+            badgeFor={(item) => item.status
+              ? { label: String(item.status).replace(/_/g, ' '), cls: 'bg-slate-100 text-slate-600' }
+              : null}
+          />
+          {scfFailing.length > 0 && (
+            <ScfSection
+              title="Failing checks"
+              items={scfFailing}
+              empty="No failing checks."
+              hrefFor={controlHref}
+              badgeFor={() => ({ label: 'Failing', cls: 'bg-rose-50 text-rose-700' })}
+            />
+          )}
+
           <div className="rounded-xl border border-slate-200 bg-white">
             <div className="flex items-baseline gap-2 border-b border-slate-100 px-5 py-4">
-              <h2 className="text-sm font-semibold text-slate-900">My queue</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Journey-assigned requirements</h2>
               <span className="text-xs text-slate-400">sorted by urgency</span>
             </div>
             {items.length === 0 ? (
@@ -215,6 +367,7 @@ export default function MyWorkPage() {
               <div className="flex items-center justify-between"><span className="text-slate-600">Evidence approved</span><span className="font-semibold text-slate-700">{week.evidenceApproved}</span></div>
               <div className="flex items-center justify-between"><span className="text-slate-600">Awaiting reviewer</span><span className="font-semibold text-amber-600">{week.awaitingReviewer}</span></div>
               <div className="flex items-center justify-between"><span className="text-slate-600">Due next 7 days</span><span className="font-semibold text-slate-700">{week.dueNext7}</span></div>
+              <div className="flex items-center justify-between"><span className="text-slate-600">SCF overdue</span><span className="font-semibold text-rose-600">{scfOverdue.length}</span></div>
             </div>
           </div>
         </div>

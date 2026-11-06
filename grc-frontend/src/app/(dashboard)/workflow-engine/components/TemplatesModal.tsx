@@ -10,16 +10,15 @@ type Props = {
   onUse: (templateId: number) => void;
 };
 
+// Categories are the sidebar's modules, so a template sits where its records do.
 const CATEGORY_COLORS: Record<string, string> = {
-  'Incident Response': 'bg-red-100 text-red-700',
+  'Governance': 'bg-blue-100 text-blue-700',
   'Risk Management': 'bg-orange-100 text-orange-700',
-  'Policy': 'bg-blue-100 text-blue-700',
-  'Access Review': 'bg-violet-100 text-violet-700',
-  'Vendor Onboarding': 'bg-teal-100 text-teal-700',
-  'Compliance': 'bg-green-100 text-green-700',
-  'Audit': 'bg-yellow-100 text-yellow-700',
-  'Vulnerability Management': 'bg-red-100 text-red-800',
-  'Asset Management': 'bg-slate-100 text-slate-700',
+  'Third-Party Vendor Risk': 'bg-teal-100 text-teal-700',
+  'Compliance Management': 'bg-green-100 text-green-700',
+  'Issue & Incident Management': 'bg-red-100 text-red-700',
+  'Cybersecurity Assurance': 'bg-slate-100 text-slate-700',
+  'Auditor Portal': 'bg-yellow-100 text-yellow-700',
 };
 
 // ─── System Template Graphs ──────────────────────────────────────────────────
@@ -222,10 +221,10 @@ const policySubmittedEdges: BackendEdge[] = [
 ];
 
 const vulnerabilityCreatedNodes: BackendNode[] = [
-  { node_key: 'start', node_type: 'start', name: 'Vulnerability Created', config: { trigger_type: 'vulnerability_created', module: 'Vulnerability Management', domains: ['vulnerability'] }, is_start: true, position_x: 350, position_y: 30 },
-  { node_key: 'check_severity', node_type: 'condition', name: 'Check Severity', config: { condition_kind: 'check_vulnerability_severity', severity: 'high', operator: 'at_least', module: 'Vulnerability Management', domains: ['vulnerability'] }, position_x: 350, position_y: 160 },
+  { node_key: 'start', node_type: 'start', name: 'Vulnerability Created', config: { trigger_type: 'vulnerability_created', module: 'Cybersecurity Assurance', domains: ['vulnerability'] }, is_start: true, position_x: 350, position_y: 30 },
+  { node_key: 'check_severity', node_type: 'condition', name: 'Check Severity', config: { condition_kind: 'check_vulnerability_severity', severity: 'high', operator: 'at_least', module: 'Cybersecurity Assurance', domains: ['vulnerability'] }, position_x: 350, position_y: 160 },
   { node_key: 'alert_critical', node_type: 'action', name: 'Alert Security Team', config: { action_name: 'escalate_to_management', escalation_levels: [{ level: 1, subject: 'Critical/High Vulnerability: {{title}}', message: 'Severity: {{severity}}\nCVSS: {{cvss_score}}\nAffected: {{affected_component}}\nBy: {{created_by_name}}', user_ids: [], role_ids: [], timeout_value: 24, timeout_unit: 'hours', escalation_mode: 'always' }], module: 'Workflow Engine', domains: ['shared'] }, position_x: 100, position_y: 300 },
-  { node_key: 'assign_owner', node_type: 'action', name: 'Assign Vulnerability Owner', config: { action_name: 'assign_vulnerability_owner', module: 'Vulnerability Management', domains: ['vulnerability'] }, position_x: 600, position_y: 300 },
+  { node_key: 'assign_owner', node_type: 'action', name: 'Assign Vulnerability Owner', config: { action_name: 'assign_vulnerability_owner', module: 'Cybersecurity Assurance', domains: ['vulnerability'] }, position_x: 600, position_y: 300 },
   { node_key: 'notify_email', node_type: 'action', name: 'Send Notification', config: { action_name: 'send_notification_email', subject: 'New Vulnerability: {{title}}', body: 'A new vulnerability has been detected.\n\nTitle: {{title}}\nSeverity: {{severity}}\nAffected: {{affected_component}}\nVuln ID: {{vuln_id}}', module: 'Workflow Engine', domains: ['shared'] }, position_x: 350, position_y: 440 },
   { node_key: 'sla_timer', node_type: 'timer', name: 'Remediation SLA', config: { timer_kind: 'sla_countdown', wait_seconds: 604800, module: 'Workflow Engine', domains: ['workflow'] }, position_x: 350, position_y: 570 },
   { node_key: 'end', node_type: 'end', name: 'End', config: { module: 'Workflow Engine', domains: ['workflow'] }, is_terminal: true, position_x: 350, position_y: 700 },
@@ -267,7 +266,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -1,
     name: 'Incident Response Playbook',
-    category: 'Incident Response',
+    category: 'Issue & Incident Management',
     description: 'Automated incident detection, triage, escalation, and resolution workflow with management notifications.',
     trigger_event: 'erm.incident_reported',
     nodes_json: incidentResponseNodes,
@@ -276,7 +275,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -2,
     name: 'Vendor Onboarding & Risk Assessment',
-    category: 'Vendor Onboarding',
+    category: 'Third-Party Vendor Risk',
     description: 'End-to-end vendor onboarding with risk scoring, document collection, and approval gates.',
     trigger_event: 'manual.trigger',
     nodes_json: vendorOnboardingNodes,
@@ -285,7 +284,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -3,
     name: 'Policy Approval & Distribution',
-    category: 'Policy',
+    category: 'Governance',
     description: 'Policy drafting, multi-level review, approval chain, publication, and employee acknowledgment.',
     trigger_event: 'governance.policy_review_due',
     nodes_json: policyApprovalNodes,
@@ -294,7 +293,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -4,
     name: 'Quarterly Access Review',
-    category: 'Access Review',
+    category: 'Compliance Management',
     description: 'Automated access certification campaign with manager review, approval, and revocation actions.',
     trigger_event: 'scheduler.recurring',
     nodes_json: accessReviewNodes,
@@ -312,7 +311,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -6,
     name: 'Compliance Gap Remediation',
-    category: 'Compliance',
+    category: 'Compliance Management',
     description: 'Automated gap tracking with task assignment, evidence collection, and re-assessment loop.',
     trigger_event: 'compliance.assessment_status_change',
     nodes_json: complianceGapNodes,
@@ -321,7 +320,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -7,
     name: 'Annual Audit Planning',
-    category: 'Audit',
+    category: 'Auditor Portal',
     description: 'Audit universe scoping, resource planning, engagement scheduling, and reporting workflow.',
     trigger_event: 'scheduler.recurring',
     nodes_json: annualAuditNodes,
@@ -330,7 +329,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -8,
     name: 'Policy Review & Approval',
-    category: 'Policy',
+    category: 'Governance',
     description: 'Automatically routes a submitted policy through reviewer approval with notification on both approval and rejection outcomes.',
     trigger_event: 'policy_submitted_for_review',
     nodes_json: policySubmittedNodes,
@@ -339,7 +338,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -9,
     name: 'Vulnerability Triage & Remediation',
-    category: 'Vulnerability Management',
+    category: 'Cybersecurity Assurance',
     description: 'Triages newly created vulnerabilities by severity, escalates critical/high findings, assigns ownership, and starts a remediation SLA timer.',
     trigger_event: 'vulnerability_created',
     nodes_json: vulnerabilityCreatedNodes,
@@ -348,7 +347,7 @@ export const SYSTEM_TEMPLATES: WorkflowTemplate[] = [
   {
     id: -10,
     name: 'IT Asset Onboarding',
-    category: 'Asset Management',
+    category: 'Cybersecurity Assurance',
     description: 'Processes newly registered IT assets — notifies the asset owner, requests baseline evidence for critical assets, and creates a risk entry.',
     trigger_event: 'asset_created',
     nodes_json: assetCreatedNodes,

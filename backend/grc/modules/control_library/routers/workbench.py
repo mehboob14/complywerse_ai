@@ -23,18 +23,20 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
 
-from ....config import get_openai_model
+from ....config import get_openai_base_url, get_openai_model
+from ....services.licence_guard import is_restricted_control
 from ....models import (
     get_db, GRCUser, Tenant,
-    ControlWorkItem, ControlWorkTest, ControlWorkTestProcedure, ControlWorkEvidence,
+    ControlWorkItem, ControlWorkTest, ControlWorkTestProcedure, ControlWorkEvidence, ControlWorkSample,
     ControlWorkEscalation, ControlWorkWorkflowAction, ControlWorkRiskLink,
     ControlAssuranceSnapshot, CONTROL_WORKBENCH_MODELS,
     NormalizedControl, NormalizedControlLink, NormalizationRun,
     InternalControl, InternalControlTest, InternalControlEscalation,
     InternalControlRiskLink, InternalControlEvidence,
-    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping, Risk,
+    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
+    Risk, RiskControlLink,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workbench", tags=["Control Library - Workbench"])
@@ -100,6 +102,20 @@ def _get_scope(db: Session, tenant_id: int) -> dict:
     return dict(settings.get(_SETTINGS_KEY, {}) or {})
 
 
+def _resolved_scope_framework_ids(db: Session, tenant_id: int) -> list:
+    """Prefer Automation SCF default scope slugs; else Tenant.settings workbench."""
+    try:
+        from grc.modules.scf.scope_service import (
+            ensure_default_scope, uploaded_framework_ids_for_scope,
+        )
+        scf = ensure_default_scope(db, tenant_id)
+        if scf.framework_slugs:
+            return uploaded_framework_ids_for_scope(db, tenant_id, scf)
+    except Exception:  # noqa: BLE001
+        pass
+    return list(_get_scope(db, tenant_id).get("framework_ids", []) or [])
+
+
 def _set_scope(db: Session, tenant_id: int, framework_ids, updated_by=None) -> dict:
     t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not t:
@@ -126,23 +142,7 @@ def _set_scope(db: Session, tenant_id: int, framework_ids, updated_by=None) -> d
     return cfg
 
 
-def _is_admin(db, user) -> bool:
-    """Mirror auth_router's /me logic: admin = has the 'Administrator' role, or is
-    the tenant's primary contact."""
-    try:
-        from ....models import UserRole, Role
-        role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-        if role_ids:
-            names = [r.name for r in db.query(Role).filter(Role.id.in_(role_ids)).all()]
-            if any(n == "Administrator" for n in names):
-                return True
-        t = db.query(Tenant).first()
-        pce = getattr(t, "primary_contact_email", None) if t else None
-        if pce and getattr(user, "email", None) and pce.lower() == user.email.lower():
-            return True
-    except Exception:  # noqa: BLE001
-        pass
-    return False
+_is_admin = is_tenant_admin  # the shared admin rule (auth_router)
 
 
 def _scope_framework_ids(db: Session, tids):
@@ -500,11 +500,28 @@ def _light_row(source_type, source_id, disp, wi):
 @router.get("/scope")
 def get_scope(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """Selected frameworks (tenant-wide) + all available uploaded frameworks
-    (with control counts) + the change log — powers the Configure Frameworks page."""
+    (with control counts) + the change log — powers the Configure Frameworks page.
+
+    Prefer Automation → SCF default scope when it has framework_slugs set; else
+    fall back to Tenant.settings control_workbench (legacy).
+    """
     tid = _tenant(current_user, db)
     if not tid:
-        return {"framework_ids": [], "available": [], "can_edit": False, "history": []}
+        return {"framework_ids": [], "available": [], "can_edit": False, "history": [],
+                "source": "none"}
     cfg = _get_scope(db, tid)
+    framework_ids = _resolved_scope_framework_ids(db, tid)
+    source = "scf" if framework_ids and framework_ids != list(cfg.get("framework_ids", []) or []) else (
+        "scf" if (cfg.get("scf_scope_id") and framework_ids == list(cfg.get("framework_ids", []) or [])) else "workbench"
+    )
+    # Prefer explicit SCF when default scope has slugs.
+    try:
+        from grc.modules.scf.scope_service import ensure_default_scope
+        scf = ensure_default_scope(db, tid)
+        if scf.framework_slugs:
+            source = "scf"
+    except Exception:  # noqa: BLE001
+        source = "workbench"
     avail = _scope_framework_ids(db, get_user_tenants(current_user, db))
     fw_names = {fid: name for (fid, name) in avail}
     # control count per framework
@@ -525,8 +542,9 @@ def get_scope(db: Session = Depends(get_db), current_user: GRCUser = Depends(req
         "removed": [fw_names.get(i, f"#{i}") for i in e.get("removed", [])],
         "total": e.get("total"),
     } for e in reversed(log)]
-    return {"framework_ids": cfg.get("framework_ids", []), "available": available,
-            "can_edit": _is_admin(db, current_user), "history": history}
+    return {"framework_ids": framework_ids, "available": available,
+            "can_edit": _is_admin(db, current_user), "history": history,
+            "source": source}
 
 
 @router.put("/scope")
@@ -547,7 +565,9 @@ def tenant_users(db: Session = Depends(get_db), current_user: GRCUser = Depends(
     tid = _tenant(current_user, db)
     if not tid:
         return []
-    rows = db.query(GRCUser).filter(GRCUser.is_active == True).all()  # noqa: E712
+    from ....routers.auth_router import platform_account
+
+    rows = db.query(GRCUser).filter(GRCUser.is_active == True, platform_account()).order_by(GRCUser.id).all()  # noqa: E712
     out = []
     seen = set()
     for u in rows:
@@ -574,7 +594,7 @@ def overview(db: Session = Depends(get_db), current_user: GRCUser = Depends(requ
     if not tid:
         return {"domains": [], "totals": {}, "frameworks": []}
     pmap, domains = _canonical_maps(db, tid)
-    scope_fw = set(_get_scope(db, tid).get("framework_ids", []))
+    scope_fw = set(_resolved_scope_framework_ids(db, tid))
     visible = dict(_scope_framework_ids(db, tids))
     if scope_fw:
         visible = {k: v for k, v in visible.items() if k in scope_fw}
@@ -722,7 +742,7 @@ def domain_groups(domain: str, db: Session = Depends(get_db),
     if not tid:
         return {"groups": []}
     pmap, domains = _canonical_maps(db, tid)
-    scope_fw = set(_get_scope(db, tid).get("framework_ids", []))
+    scope_fw = set(_resolved_scope_framework_ids(db, tid))
     visible = dict(_scope_framework_ids(db, tids))
     if scope_fw:
         visible = {k: v for k, v in visible.items() if k in scope_fw}
@@ -802,7 +822,7 @@ def list_controls(
     if not tid:
         return {"total": 0, "items": []}
     cfg = _get_scope(db, tid)
-    scope_fw = cfg.get("framework_ids", [])
+    scope_fw = _resolved_scope_framework_ids(db, tid)
     want = source or "all"
     pmap, cdomains = _canonical_maps(db, tid)
 
@@ -1205,6 +1225,8 @@ def assign(work_item_id: int, body: dict = Body(...), db: Session = Depends(get_
         valid = {u.id for u in db.query(GRCUser.id).filter(
             GRCUser.id.in_(clean), GRCUser.is_active == True).all()}  # noqa: E712
         clean = [i for i in clean if i in valid]
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, clean, kept=list(wi.assigned_user_ids or []) + [wi.assigned_to_user_id])
     wi.assigned_user_ids = clean
     wi.assigned_to_user_id = clean[0] if clean else None
     flag_modified(wi, "assigned_user_ids")
@@ -1300,6 +1322,7 @@ def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depen
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     action = (body.get("action") or "reviewed").lower()
     if action == "reopen":
         t.status = "completed"
@@ -1313,16 +1336,27 @@ def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depen
     return {"ok": True, "id": t.id, "status": t.status}
 
 
+def _refuse_locked(t: ControlWorkTest) -> None:
+    """A test signed off on the Assurance tab is locked as the audit record; the
+    catalog shares those rows, so it must not rewrite or delete them either."""
+    if getattr(t, "locked_at", None):
+        raise HTTPException(409, "This test was signed off and is locked as the audit record.")
+
+
 def _resync_effectiveness(db, wi: ControlWorkItem) -> None:
     """Recompute a work item's design/operating effectiveness from its LATEST
     test of each type (after a test is edited or deleted) + sync the internal
     control source."""
+    # Only a concluded test rates a control. The Assurance tab opens a test while
+    # its samples are still being worked (status in_progress, result "pending");
+    # counting that as the latest test would stamp a rating nobody concluded.
+    concluded = ControlWorkTest.status.in_(("completed", "reviewed"))
     for ttype, field in (("design", "design_effectiveness"), ("operating", "operating_effectiveness")):
         latest = (db.query(ControlWorkTest)
-                  .filter(ControlWorkTest.work_item_id == wi.id, ControlWorkTest.test_type == ttype)
+                  .filter(ControlWorkTest.work_item_id == wi.id, ControlWorkTest.test_type == ttype, concluded)
                   .order_by(ControlWorkTest.test_date.desc()).first())
         setattr(wi, field, latest.result if latest else None)
-    last = (db.query(ControlWorkTest).filter(ControlWorkTest.work_item_id == wi.id)
+    last = (db.query(ControlWorkTest).filter(ControlWorkTest.work_item_id == wi.id, concluded)
             .order_by(ControlWorkTest.test_date.desc()).first())
     wi.last_tested_at = last.test_date if last else None
     if wi.source_type == "internal":
@@ -1352,6 +1386,7 @@ def update_test(test_id: int, body: TestUpdate, db: Session = Depends(get_db),
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     for k, v in body.dict(exclude_unset=True).items():
         setattr(t, k, v)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == t.work_item_id).first()
@@ -1372,7 +1407,10 @@ def delete_test(test_id: int, db: Session = Depends(get_db),
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     wid = t.work_item_id
+    # samples reference the test with no cascade; a sampled test otherwise failed to delete
+    db.query(ControlWorkSample).filter(ControlWorkSample.test_id == t.id).delete(synchronize_session=False)
     db.delete(t)
     db.flush()
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == wid).first()
@@ -1390,6 +1428,7 @@ CONTROL
 - Title: {title}
 - Requirement / how it is implemented: {description}
 - Framework(s): {framework}
+{artifacts}
 
 EVIDENCE THE ORGANISATION HAS PROVIDED — your procedures must test AGAINST these actual artefacts:
 {evidence}
@@ -1439,10 +1478,30 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
         nm, etype = ev_meta.get(e.evidence_id, (e.file_name, None))
         if nm:
             ev_lines.append(f"- {nm}" + (f" (type: {etype})" if etype else ""))
-    # supplement with the normalized control's recommended evidence, if any
-    if wi.source_type == "normalized":
-        nc = db.query(NormalizedControl).filter(NormalizedControl.id == wi.source_id).first()
-        rec = getattr(nc, "recommended_evidence", None) if nc else None
+    nc = (db.query(NormalizedControl).filter(NormalizedControl.id == wi.source_id).first()
+          if wi.source_type == "normalized" else None)
+    restricted = bool(nc) and is_restricted_control(nc)
+
+    # What the model may be told about the control itself. An SCF control's name,
+    # statement and objective are SCF text (CC BY-ND, no AI derivatives), and so
+    # may be its recommended_evidence, so none of it goes in. It gets the SCF id
+    # plus our own consolidated evidence set for that control, the artefacts an
+    # assessor collects, which NOTICE.md records as our text.
+    title, description, artifacts_block = wi.name or "", (wi.description or "Not provided")[:2000], ""
+    if restricted:
+        title = f"SCF control {nc.scf_id}"
+        description = "Withheld: this control's wording is licensed text that may not be sent to an AI model."
+        try:
+            from ...automation.router import _consolidated_evidence
+            arts = (_consolidated_evidence().get(nc.scf_id or "") or {}).get("artifacts") or []
+        except Exception:  # noqa: BLE001
+            arts = []
+        if arts:
+            artifacts_block = "EVIDENCE AN ASSESSOR COLLECTS FOR THIS CONTROL:\n" + "\n".join(
+                f"- {a.get('name')} ({a.get('collection_method') or 'manual'}): {a.get('description') or ''}"[:400]
+                for a in arts[:15])
+    elif nc is not None:
+        rec = getattr(nc, "recommended_evidence", None)
         if isinstance(rec, list):
             for r in rec[:6]:
                 if r:
@@ -1454,11 +1513,10 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
     try:
         from ....config import get_openai_api_key
         from openai import OpenAI
-        client = OpenAI(api_key=get_openai_api_key())
-        prompt = _AI_PROMPT.format(code=wi.code or "", title=wi.name or "",
-                                   description=(wi.description or "Not provided")[:2000],
+        client = OpenAI(api_key=get_openai_api_key(), base_url=get_openai_base_url())
+        prompt = _AI_PROMPT.format(code=wi.code or "", title=title, description=description,
                                    framework=wi.framework_name or "General",
-                                   evidence=evidence_block)
+                                   artifacts=artifacts_block, evidence=evidence_block)
         resp = client.chat.completions.create(
             model=get_openai_model(),
             messages=[{"role": "system", "content": "You are a Senior GRC Auditor. Respond only with valid JSON."},
@@ -1473,20 +1531,47 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
         procedures = json.loads(txt.strip()).get("test_procedures")
     except Exception:  # noqa: BLE001 — resilient: fall back to a sensible default set
         logger.warning("AI procedure generation failed for work item %s", work_item_id, exc_info=True)
+    source = "ai"
     if not procedures:
         procedures = _fallback_procedures(disp)
+        # Canned steps were saved as source="ai", so a failed call looked
+        # identical to a real recommendation in the checklist.
+        source = "template"
 
     if replace:
-        db.query(ControlWorkTestProcedure).filter(
+        # Only replace steps nobody has worked on. A step with samples attached
+        # is referenced by grc_control_work_evidence (no cascade), so deleting it
+        # raised an FK violation on "Regenerate"; a ticked step is recorded work.
+        worked = {pid for (pid,) in db.query(ControlWorkEvidence.test_procedure_id).filter(
+            ControlWorkEvidence.work_item_id == wi.id,
+            ControlWorkEvidence.test_procedure_id.isnot(None)).all()}
+        # a step a test sample was performed against is recorded work too (and an FK)
+        worked |= {pid for (pid,) in db.query(ControlWorkSample.procedure_id).filter(
+            ControlWorkSample.work_item_id == wi.id,
+            ControlWorkSample.procedure_id.isnot(None)).all()}
+        stale = db.query(ControlWorkTestProcedure).filter(
             ControlWorkTestProcedure.work_item_id == wi.id,
-            ControlWorkTestProcedure.source == "ai").delete(synchronize_session=False)
-    start = db.query(ControlWorkTestProcedure).filter(
-        ControlWorkTestProcedure.work_item_id == wi.id).count()
+            ControlWorkTestProcedure.source.in_(("ai", "template")),
+            ControlWorkTestProcedure.is_checked.isnot(True))
+        if worked:
+            stale = stale.filter(ControlWorkTestProcedure.id.notin_(worked))
+        stale.delete(synchronize_session=False)
+    # Number after the highest surviving step, not after the count of them: kept
+    # steps keep their numbers, so a count can land on one that is still in use.
+    start = db.query(func.max(ControlWorkTestProcedure.seq)).filter(
+        ControlWorkTestProcedure.work_item_id == wi.id).scalar() or 0
+    def _clip(value, limit):
+        # the model writes prose ("25 records, or 100% if fewer than 25; stratified…");
+        # the columns hold 50/100 characters, and one long answer failed the whole insert
+        text = str(value).strip() if value is not None else ""
+        return (text[: limit - 1] + "…" if len(text) > limit else text) or None
+
     for idx, p in enumerate(procedures):
         db.add(ControlWorkTestProcedure(
             work_item_id=wi.id, tenant_id=tid, seq=start + idx + 1,
-            procedure_type=p.get("procedure_type"), description=p.get("description") or "",
-            frequency=p.get("frequency"), sample_size=str(p.get("sample_size") or ""), source="ai"))
+            procedure_type=_clip(p.get("procedure_type"), 50), description=p.get("description") or "",
+            frequency=_clip(p.get("frequency"), 100), sample_size=_clip(p.get("sample_size"), 100) or "",
+            source=source))
     db.commit()
     rows = db.query(ControlWorkTestProcedure).filter(
         ControlWorkTestProcedure.work_item_id == wi.id).order_by(ControlWorkTestProcedure.seq).all()
@@ -1544,6 +1629,18 @@ def _map_sample_to_control(db, evidence_id, wi: ControlWorkItem, proc, uid):
                             if proc else "Uploaded as a control sample from Control Testing & Assurance")))
 
 
+def _start_ocr(db: Session, evidence_id: int, tenant_id: int) -> None:
+    """Kick off the evidence module's OCR + assessment pipeline (best-effort)."""
+    try:
+        from ...evidence.routers.evidence import process_evidence_background
+        slug = db.query(Tenant.slug).filter(Tenant.id == tenant_id).scalar()
+        if slug:
+            threading.Thread(target=process_evidence_background, args=(evidence_id, slug),
+                             daemon=True).start()
+    except Exception:  # noqa: BLE001
+        logger.debug("OCR kickoff skipped for evidence %s", evidence_id, exc_info=True)
+
+
 @router.post("/items/{work_item_id}/evidence")
 async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None),
                        test_procedure_id: Optional[int] = Form(None),
@@ -1567,6 +1664,7 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
 
     fname = None
     file_path = None
+    ocr_evidence_id = None
     if evidence_id:
         ev = db.query(Evidence).filter(Evidence.id == evidence_id, Evidence.tenant_id == tid).first()
         if not ev:
@@ -1600,13 +1698,8 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
         db.add(ev)
         db.flush()
         evidence_id = ev.id
-        # kick off OCR the same way the evidence module does (best-effort)
         if ev.ocr_status == "pending":
-            try:
-                from ...evidence.routers.evidence import process_evidence_background
-                threading.Thread(target=process_evidence_background, args=(ev.id,), daemon=True).start()
-            except Exception:  # noqa: BLE001
-                logger.debug("OCR kickoff skipped for evidence %s", ev.id, exc_info=True)
+            ocr_evidence_id = ev.id  # started after commit, below
 
     cwe = ControlWorkEvidence(
         work_item_id=wi.id, tenant_id=tid, test_procedure_id=test_procedure_id,
@@ -1616,6 +1709,13 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
     if wi.implementation_status == "not_started":
         wi.implementation_status = "in_progress"
     db.commit()  # the sample + its work-item link are safely persisted first
+    if ocr_evidence_id:
+        # OCR runs in its own session, so it starts only once the row is committed
+        # (it was started before, and could look up a row that did not exist yet),
+        # and it needs the tenant slug to open that tenant's database. It was
+        # called without one, raised TypeError inside the thread, and no workbench
+        # upload was ever read, so its text never reached search or matching.
+        _start_ocr(db, ocr_evidence_id, tid)
     # then maintain the control → (procedure) → sample hierarchy in Evidence
     # Management (best-effort, separate txn so it can never lose the upload)
     try:
@@ -1727,6 +1827,8 @@ def add_escalation(work_item_id: int, body: dict = Body(...), db: Session = Depe
                                           ControlWorkItem.tenant_id == tid).first()
     if not wi:
         raise HTTPException(404, "Work item not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("escalate_to_user_id")])
     e = ControlWorkEscalation(
         work_item_id=wi.id, tenant_id=tid, escalation_level=body.get("escalation_level", 1),
         escalation_name=body.get("escalation_name", "Escalation"),
@@ -1756,6 +1858,12 @@ def del_escalation(esc_id: int, db: Session = Depends(get_db),
 @router.post("/items/{work_item_id}/risks")
 def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
+    """Link a risk to a work item.
+
+    When the work item resolves to a NormalizedControl, write only the canonical
+    ``RiskControlLink`` (Control Library's separate copy is no longer written).
+    Legacy internal-only work items without an NC keep ``ControlWorkRiskLink``.
+    """
     tid = _tenant(current_user, db)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == work_item_id,
                                           ControlWorkItem.tenant_id == tid).first()
@@ -1764,10 +1872,27 @@ def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(ge
     rid = body.get("risk_id")
     if not rid:
         raise HTTPException(400, "risk_id required")
+    risk = db.query(Risk).filter(Risk.id == rid, Risk.tenant_id == tid).first()
+    if not risk:
+        raise HTTPException(404, "Risk not found")
+
+    nc_id = wi.source_id if wi.source_type == "normalized" else None
+    if nc_id:
+        existing = db.query(RiskControlLink).filter(
+            RiskControlLink.risk_id == rid,
+            RiskControlLink.normalized_control_id == nc_id,
+        ).first()
+        if existing:
+            return {"ok": True, "id": existing.id, "canonical": True}
+        link = RiskControlLink(risk_id=rid, normalized_control_id=nc_id)
+        db.add(link)
+        db.commit()
+        return {"ok": True, "id": link.id, "canonical": True}
+
     exists = db.query(ControlWorkRiskLink).filter(
         ControlWorkRiskLink.work_item_id == wi.id, ControlWorkRiskLink.risk_id == rid).first()
     if exists:
-        return {"ok": True, "id": exists.id}
+        return {"ok": True, "id": exists.id, "canonical": False}
     r = ControlWorkRiskLink(
         work_item_id=wi.id, tenant_id=tid, risk_id=rid,
         link_type=body.get("link_type", "mitigates"),
@@ -1775,14 +1900,37 @@ def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(ge
         created_by=getattr(current_user, "id", None))
     db.add(r)
     db.commit()
-    return {"ok": True, "id": r.id}
+    return {"ok": True, "id": r.id, "canonical": False}
 
 
 @router.delete("/risks/{link_id}")
 def del_risk(link_id: int, db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
     tid = _tenant(current_user, db)
-    db.query(ControlWorkRiskLink).filter(ControlWorkRiskLink.id == link_id,
-                                         ControlWorkRiskLink.tenant_id == tid).delete()
-    db.commit()
-    return {"ok": True}
+    cwl = db.query(ControlWorkRiskLink).filter(
+        ControlWorkRiskLink.id == link_id,
+        ControlWorkRiskLink.tenant_id == tid,
+    ).first()
+    if cwl:
+        wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == cwl.work_item_id).first()
+        nc_id = wi.source_id if wi and wi.source_type == "normalized" else None
+        if nc_id:
+            db.query(RiskControlLink).filter(
+                RiskControlLink.risk_id == cwl.risk_id,
+                RiskControlLink.normalized_control_id == nc_id,
+            ).delete(synchronize_session=False)
+        db.delete(cwl)
+        db.commit()
+        return {"ok": True}
+
+    rcl = (
+        db.query(RiskControlLink)
+        .join(Risk, Risk.id == RiskControlLink.risk_id)
+        .filter(RiskControlLink.id == link_id, Risk.tenant_id == tid)
+        .first()
+    )
+    if rcl:
+        db.delete(rcl)
+        db.commit()
+        return {"ok": True}
+    raise HTTPException(404, "Risk link not found")

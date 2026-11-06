@@ -30,6 +30,8 @@ export interface ReportDataset {
   /** Permissions that grant this dataset — the same strings the module's own nav
    *  entry uses, so Reports can never surface data a user can't already open. */
   permissions?: string[];
+  /** A client-specific module the tenant must have (/auth/me tenant.features). */
+  feature?: string;
 }
 
 export interface SortSpec { key: string; dir: 'asc' | 'desc' }
@@ -79,6 +81,20 @@ export type ChartKind =
  *  · ChartKind   — one chart built from the Summarize setup */
 export type ReportBodyView = 'table' | 'dashboard' | ChartKind;
 
+/** User-defined derived fields. Shape lives in ./calcColumns; re-declared as a
+ *  structural type here so types.ts stays dependency-free. */
+export interface CalcColumnSpec {
+  id: string;
+  label: string;
+  kind: 'days_between' | 'difference' | 'ratio' | 'bucket' | 'concat';
+  a: string;
+  b?: string;
+  asPercent?: boolean;
+  decimals?: number;
+  bands?: { max: number | null; label: string }[];
+  separator?: string;
+}
+
 /** A saved report definition — the unit the builder edits and persists. */
 export interface ReportSpec {
   id: string;
@@ -100,6 +116,7 @@ export interface ReportSpec {
   pinnedColumns?: string[];
   sorts?: SortSpec[];
   includes?: string[];         // cross-module linkage keys to enrich (e.g. vulnerabilities, risks)
+  calcColumns?: CalcColumnSpec[];  // derived fields (days open, inherent-residual, %…)
   showLegend?: boolean;        // chart option (default on)
   showLabels?: boolean;        // data labels on marks (default off)
   shared?: boolean;            // visible to everyone in the tenant
@@ -110,7 +127,7 @@ export interface ReportSpec {
 export const emptySpec = (dataset: string): ReportSpec => ({
   id: '', name: '', description: '', dataset, rows: [], col: null, measures: [],
   rules: { logic: 'AND', conditions: [] }, search: '', view: 'table', measureIdx: 0,
-  includes: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
+  includes: [], calcColumns: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
 });
 
 /** Server-mode aggregate contract — mirrors backend POST /reporting/aggregate. */
@@ -137,6 +154,7 @@ export interface FilterRules { logic: 'AND' | 'OR'; conditions: FilterRule[] }
 /** Operators available per column type in the advanced builder. */
 export const OPERATORS: Record<string, { key: string; label: string }[]> = {
   text: [
+    { key: 'in', label: 'is any of' }, { key: 'notin', label: 'is none of' },
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
     { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
     { key: 'starts', label: 'starts with' },
@@ -152,10 +170,10 @@ export const OPERATORS: Record<string, { key: string; label: string }[]> = {
     { key: 'on', label: 'on' }, { key: 'before', label: 'before' }, { key: 'after', label: 'after' },
     { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
-  // Enum / status / Yes-No flags — pick from known values; no numeric compares.
+  // Enum / status / Yes-No flags — multi-select first; single compares kept for saved reports.
   badge: [
+    { key: 'in', label: 'is any of' }, { key: 'notin', label: 'is none of' },
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
-    { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
     { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
   // Cross-module linkage presence. Orphan-finding ("not linked to any X") is the
@@ -167,10 +185,10 @@ export const OPERATORS: Record<string, { key: string; label: string }[]> = {
 
 /** Short plain-language hint for filter panel copy (by column type). */
 export const FILTER_TYPE_HINT: Record<string, string> = {
-  text: 'Text: is / contains / starts with / empty',
+  text: 'Text: any of / contains / empty',
   number: 'Numbers: equals, greater/less than, empty',
   date: 'Dates: on / before / after / empty',
-  badge: 'Tags & status: is / is not / empty',
+  badge: 'Tags & status: any of / none of / empty',
   linkage: 'Links: linked to any / not linked to any',
 };
 export interface ColumnFilter {

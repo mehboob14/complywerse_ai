@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 import {
   Users,
   Search,
@@ -42,7 +44,12 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; i
   inactive: { label: 'Inactive', bg: 'bg-slate-50', text: 'text-slate-600', icon: UserX },
 };
 
-export default function UsersPage() {
+// every user with their e-mail and role: Administration > User Management > view, else the no-access page
+export default function GuardedUsersPage() {
+  return <PermissionGuard required={navPermissions('/users')}><UsersPage /></PermissionGuard>;
+}
+
+function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
 

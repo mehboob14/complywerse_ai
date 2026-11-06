@@ -43,6 +43,7 @@ from ..models import (
     get_db,
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..services import evidence_review
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,11 @@ class AISuggestRequest(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _public_ai_model(model: Optional[str]) -> Optional[str]:
+    """Pages say 'AI', never a model or vendor name; the row keeps the real name, the API shows this."""
+    return model if not model or model == "rules.v1" else "AI"
+
+
 def _serialize(e: AIRiskAssessmentEntry) -> Dict[str, Any]:
     return {
         "id": e.id,
@@ -137,7 +143,7 @@ def _serialize(e: AIRiskAssessmentEntry) -> Dict[str, Any]:
         "ai_suggested_residual_level": e.ai_suggested_residual_level,
         "ai_rationale": e.ai_rationale,
         "ai_generated_at": e.ai_generated_at.isoformat() if e.ai_generated_at else None,
-        "ai_model": e.ai_model,
+        "ai_model": _public_ai_model(e.ai_model),
         "ai_suggestion_accepted": bool(e.ai_suggestion_accepted),
         "source": e.source,
         "source_file_name": e.source_file_name,
@@ -216,6 +222,8 @@ def create_entry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No tenant available for current user")
 
     data = payload.model_dump()
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.get("risk_owner_user_id")])
     # Auto compute risk score when both axes set and score is not.
     if data.get("risk_score") is None:
         data["risk_score"] = _calc_score(data.get("likelihood"), data.get("impact"))
@@ -261,6 +269,8 @@ def update_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI risk entry not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [changes.get("risk_owner_user_id")], kept=[row.risk_owner_user_id])
     for k, v in changes.items():
         setattr(row, k, v)
     # Recompute score when either axis changed.
@@ -825,10 +835,11 @@ def list_tenant_users(
     if not user_tenants:
         return []
     from ..models import TenantUser
+    from .auth_router import platform_account
     rows = (
         db.query(GRCUser)
         .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(TenantUser.tenant_id.in_(user_tenants))
+        .filter(TenantUser.tenant_id.in_(user_tenants), platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )
@@ -1017,6 +1028,7 @@ async def upload_and_link_evidence(
     db.commit()
     db.refresh(ev)
     db.refresh(link)
+    evidence_review.rate_upload(db, ev, current_user.id)
     return _serialize_evidence(ev, link)
 
 

@@ -11,7 +11,8 @@ from ....models import (
     DocumentWorkflowInstance, DocumentWorkflowAction, WorkflowTemplate, WorkflowStep,
     WorkflowStepApprover
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, platform_user, refuse_imported_accounts
+from .. import permissions
 
 router = APIRouter(prefix="/workflows", tags=["Governance - Workflows"])
 
@@ -116,7 +117,7 @@ def serialize_pending_approval(step: DocumentApprovalStep, document: GovernanceD
     }
 
 
-@router.get("/pending")
+@router.get("/pending", dependencies=[Depends(permissions.require_library_reader)])
 def list_pending_approvals(
     tenant_id: Optional[int] = None,
     include_delegated: bool = True,
@@ -164,7 +165,7 @@ def list_pending_approvals(
     }
 
 
-@router.get("/documents/{document_id}/steps")
+@router.get("/documents/{document_id}/steps", dependencies=[Depends(permissions.require_doc_reader)])
 def get_approval_steps(
     document_id: int,
     db: Session = Depends(get_db),
@@ -217,12 +218,14 @@ def submit_for_approval(
             detail="Document not found"
         )
     
+    permissions.ensure_editor(db, current_user, document)
+    permissions.ensure_not_archived(document)
     if document.status not in ["draft", "pending_review"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Document cannot be submitted for approval in '{document.status}' status"
         )
-    
+
     if not document.owner_id:
         document.owner_id = current_user.id
     if not document.author_id:
@@ -338,8 +341,8 @@ def approve_step(
             detail="Access denied"
         )
     
-    # Temporary simplified model: any logged-in user from the same tenant can
-    # approve a pending document review step.
+    _ensure_step_approver(db, current_user, step)
+    permissions.ensure_not_archived(step.document)     # approving it would bring it out of the archive
     if step.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -404,6 +407,12 @@ def approve_step(
     }
 
 
+def _ensure_step_approver(db: Session, user: GRCUser, step) -> None:
+    """A step is approved or rejected by its approver (or the person it was delegated to), or an administrator."""
+    if user.id not in (step.approver_id, step.delegated_to) and not permissions.is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the approver of this step can decide it.")
+
+
 @router.post("/steps/{step_id}/reject")
 def reject_step(
     step_id: int,
@@ -430,6 +439,8 @@ def reject_step(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
         )
+    _ensure_step_approver(db, current_user, step)
+    permissions.ensure_not_archived(step.document)
     
     # Temporary simplified model: any logged-in user from the same tenant can
     # reject a pending document review step.
@@ -533,6 +544,7 @@ def delegate_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Delegate user not found or inactive"
         )
+    refuse_imported_accounts(db, [request.delegate_to_user_id])
     
     if request.delegate_to_user_id == current_user.id:
         raise HTTPException(
@@ -622,6 +634,7 @@ def escalate_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Escalation user not found or inactive"
         )
+    refuse_imported_accounts(db, [request.escalate_to_user_id])
     
     original_approver_name = step.approver.display_name if step.approver else "Unknown"
     
@@ -663,7 +676,7 @@ def escalate_approval(
     }
 
 
-@router.get("/documents/{document_id}/history")
+@router.get("/documents/{document_id}/history", dependencies=[Depends(permissions.require_doc_reader)])
 def get_workflow_history(
     document_id: int,
     action_filter: Optional[str] = None,
@@ -722,7 +735,7 @@ def get_workflow_history(
     }
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", dependencies=[Depends(permissions.require_library_reader)])
 def get_workflow_dashboard(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -794,7 +807,7 @@ def get_workflow_dashboard(
     }
 
 
-@router.get("/overdue")
+@router.get("/overdue", dependencies=[Depends(permissions.require_library_reader)])
 def list_overdue_approvals(
     tenant_id: Optional[int] = None,
     skip: int = 0,
@@ -897,9 +910,13 @@ def get_approvers_for_step(step: WorkflowStep, document: GovernanceDocument, db:
             approver_user_ids.append(document.owner_id)
         elif approver.approver_type == "role" and approver.role_id:
             from ....models import UserRole
+            from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
             role_users = db.query(UserRole).filter(
                 UserRole.role_id == approver.role_id,
-                UserRole.tenant_id == document.tenant_id
+                UserRole.tenant_id == document.tenant_id,
+                PLATFORM_GRANT,
+                platform_user(UserRole.user_id),        # not a member an access review imported
             ).all()
             for ru in role_users:
                 approver_user_ids.append(ru.user_id)
@@ -935,7 +952,7 @@ def check_step_completion(instance: DocumentWorkflowInstance, db: Session) -> bo
     return len(actions) >= 1
 
 
-@router.post("/documents/{document_id}/start")
+@router.post("/documents/{document_id}/start", dependencies=[Depends(permissions.require_doc_editor)])
 def start_workflow(
     document_id: int,
     request: StartWorkflowRequest,
@@ -954,6 +971,7 @@ def start_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # out of the archive only by Restore
     
     existing_instance = db.query(DocumentWorkflowInstance).filter(
         DocumentWorkflowInstance.document_id == document_id,
@@ -1058,7 +1076,7 @@ def start_workflow(
     }
 
 
-@router.get("/documents/{document_id}/status")
+@router.get("/documents/{document_id}/status", dependencies=[Depends(permissions.require_doc_reader)])
 def get_workflow_status(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1145,6 +1163,7 @@ def advance_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # each of its steps sets the document's status
     
     instance = db.query(DocumentWorkflowInstance).options(
         joinedload(DocumentWorkflowInstance.template).joinedload(WorkflowTemplate.steps),
@@ -1196,6 +1215,7 @@ def advance_workflow(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Delegate user not found or inactive"
             )
+        refuse_imported_accounts(db, [request.delegate_to_user_id])
     
     action = DocumentWorkflowAction(
         instance_id=instance.id,
@@ -1338,7 +1358,7 @@ def advance_workflow(
     return result
 
 
-@router.post("/documents/{document_id}/rollback")
+@router.post("/documents/{document_id}/rollback", dependencies=[Depends(permissions.require_doc_changer)])
 def rollback_workflow(
     document_id: int,
     request: RollbackWorkflowRequest,
@@ -1434,7 +1454,7 @@ def rollback_workflow(
     }
 
 
-@router.post("/documents/{document_id}/cancel")
+@router.post("/documents/{document_id}/cancel", dependencies=[Depends(permissions.require_doc_changer)])
 def cancel_workflow(
     document_id: int,
     request: CancelWorkflowRequest,

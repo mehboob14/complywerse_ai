@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { backendGrcBase } from '@/lib/backendUrl';
+import { proxyBody } from '@/lib/proxyReply';
+
+const FAILURE = 'The statements could not be read now. Try again in a minute.';
 
 export const maxDuration = 300; // 5 minutes (Vercel limit, but works for dev too)
 export const dynamic = 'force-dynamic';
@@ -8,10 +12,8 @@ export async function POST(
   { params }: { params: { documentId: string } }
 ) {
   const documentId = params.documentId;
-  const backendUrl = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
-  
-  console.log(`[Parse Policy API Route] Starting for document ${documentId}`);
-  
+  const backendUrl = backendGrcBase();
+
   try {
     // Get cookies and headers from the request
     const cookie = request.headers.get('cookie') || '';
@@ -23,14 +25,8 @@ export async function POST(
     const authorization = request.headers.get('authorization') ||
                           request.headers.get('Authorization') || '';
 
-    console.log(`[Parse Policy API Route] Tenant slug: ${tenantSlug}, hasAuth=${!!authorization}`);
-    console.log(`[Parse Policy API Route] Backend URL: ${backendUrl}/grc/governance/documents/${documentId}/parse-policy`);
-
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.log(`[Parse Policy API Route] Request timeout after 15 minutes`);
-      controller.abort();
-    }, 900000); // 15 minutes
+    const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minutes
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -39,9 +35,8 @@ export async function POST(
     };
     if (authorization) headers['Authorization'] = authorization;
 
-    const startTime = Date.now();
     const response = await fetch(
-      `${backendUrl}/grc/governance/documents/${documentId}/parse-policy`,
+      `${backendUrl}/governance/documents/${documentId}/parse-policy`,
       {
         method: 'POST',
         headers,
@@ -50,18 +45,10 @@ export async function POST(
     );
     
     clearTimeout(timeoutId);
-    const duration = Date.now() - startTime;
-    console.log(`[Parse Policy API Route] Request completed in ${duration}ms with status ${response.status}`);
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error(`[Parse Policy API Route] Backend error:`, data);
-      return NextResponse.json(data, { status: response.status });
-    }
-    
-    console.log(`[Parse Policy API Route] Success - extracted ${data.total_statements} statements`);
-    return NextResponse.json(data);
+    // a plain-text error (the backend's "Internal Server Error") is not JSON: one plain sentence, the backend's status
+    const data = proxyBody(await response.text(), FAILURE);
+    if (!response.ok) console.error(`[Parse Policy API Route] Backend error ${response.status}:`, data);
+    return NextResponse.json(data, { status: response.status });
   } catch (error: any) {
     console.error('Policy parsing proxy error:', error);
     
@@ -72,9 +59,6 @@ export async function POST(
       );
     }
     
-    return NextResponse.json(
-      { detail: error.message || 'Failed to parse policy document' },
-      { status: 500 }
-    );
+    return NextResponse.json({ detail: FAILURE }, { status: 502 });   // the backend could not be reached
   }
 }

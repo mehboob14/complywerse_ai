@@ -7,6 +7,11 @@ import apiClient, { evidenceAIApi, QuickAssessResponse, assetsApi } from '@/lib/
 import type { ITAsset } from '@/types';
 import { MultiSelectDropdown } from '@/components/ui';
 import {
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
+import ModuleSettingsPanel, { ModuleSettingsSwitch } from '@/components/settings/ModuleSettingsPanel';
+import CommonControlSuggest, { type CommonControlRec } from './_CommonControlSuggest';
+import {
   FileCheck,
   Loader2,
   AlertCircle,
@@ -137,6 +142,9 @@ export default function EvidencePage() {
   // auditors and reviewers want a quick look, not a context switch.
   const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [pageView, setPageView] = useState<'records' | 'settings'>('records');
+  // Common controls the file just uploaded can stand for (offered once, right after the upload).
+  const [suggest, setSuggest] = useState<{ id: number; name: string; recs: CommonControlRec[] } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: evidenceTypes } = useQuery({
@@ -165,7 +173,7 @@ export default function EvidencePage() {
       }
       return res;
     },
-    onSuccess: () => {
+    onSuccess: async (res) => {
       // Legacy keys (kept for any old lists) …
       queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
       queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
@@ -175,11 +183,32 @@ export default function EvidencePage() {
       queryClient.invalidateQueries({ queryKey: ['ev-ws-summary'] });
       queryClient.invalidateQueries({ queryKey: ['ev-ws-expiring'] });
       setIsUploadModalOpen(false);
+      // Say which common controls a document like this can stand for, while the person is here.
+      const created = res.data as { id?: number; name?: string } | undefined;
+      if (created?.id) {
+        try {
+          const r = await apiClient.post(`/evidence-mgmt/ai/${created.id}/recommend-links`, null, { params: { target: 'common_controls' } });
+          const recs = (r.data?.recommendations || []) as CommonControlRec[];
+          if (recs.length) setSuggest({ id: created.id, name: created.name || 'This file', recs });
+        } catch {
+          // a bonus: the evidence page offers the same suggestions again
+        }
+      }
     },
   });
 
+  if (pageView === 'settings') {
+    return (
+      <div className="space-y-4">
+        <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Evidence" />
+        <ModuleSettingsPanel moduleKey="evidence" />
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div className="space-y-4">
+      <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Evidence" />
       <EvidenceWorkspace
         canCreate={canCreate}
         canDelete={canDelete}
@@ -195,6 +224,10 @@ export default function EvidencePage() {
         />
       )}
 
+      {suggest && (
+        <CommonControlSuggest evidence={{ id: suggest.id, name: suggest.name }} recs={suggest.recs} onClose={() => setSuggest(null)} />
+      )}
+
       {/* Shared in-browser file viewer for the central evidence list.
           Replaces the older "go to detail page just to see the file"
           flow â€” clicking the eye-icon now opens a quick popup. Edit
@@ -203,7 +236,7 @@ export default function EvidencePage() {
         evidence={previewFile}
         onClose={() => setPreviewFile(null)}
       />
-    </>
+    </div>
   );
 }
 
@@ -241,6 +274,9 @@ function UploadModal({
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>({});
+  const { data: fieldSettings } = useModuleSettings('evidence');
 
   // Owner dropdown source: tenant users.
   const { data: tenantUsers = [] } = useQuery({
@@ -336,6 +372,8 @@ function UploadModal({
     if (resolvedValidityDays) formData.append('validity_period_days', String(resolvedValidityDays));
     if (sourceSystemLabel) formData.append('source_system', sourceSystemLabel);
     if (ownerId) formData.append('owner_id', String(ownerId));
+    const custom = valuesToSave(fieldSettings, customValues, null);
+    if (custom) formData.append('custom_values', JSON.stringify(custom));
     formData.append('file', file);
     onUpload(formData, linkedAssetIds);
   };
@@ -386,7 +424,12 @@ function UploadModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} onInvalidCapture={(e) => {
+          const held = (e.target as HTMLElement | null)?.closest?.('[data-tab]')?.getAttribute('data-tab');
+          setTab(held === 'custom' ? 'custom' : 'details');
+        }} className="p-6 space-y-4">
+          <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
+          <div data-tab="details" className={tab === 'details' ? 'space-y-4' : 'hidden'}>
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -448,7 +491,7 @@ function UploadModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">Name *</label>
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'name', 'Name')} *</label>
               <input
                 type="text"
                 value={name}
@@ -459,8 +502,8 @@ function UploadModal({
               />
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">Description</label>
+            {showBuiltin(fieldSettings, 'description') && <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -468,24 +511,24 @@ function UploadModal({
                 placeholder="Describe this evidence..."
                 rows={2}
               />
-            </div>
+            </div>}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Evidence Type</label>
+            {showBuiltin(fieldSettings, 'evidence_type') && <div>
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'evidence_type', 'Evidence Type')}</label>
               <select
                 value={evidenceType}
                 onChange={(e) => setEvidenceType(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Select type...</option>
-                {evidenceTypes.map(type => (
+                {listOptions(fieldSettings, 'evidence_type', evidenceType, evidenceTypes).map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
-            </div>
+            </div>}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Owner</label>
+            {showBuiltin(fieldSettings, 'owner') && <div>
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'owner', 'Owner')}</label>
               <MultiSelectDropdown
                 title="Owner"
                 items={ownerItems}
@@ -500,20 +543,20 @@ function UploadModal({
                 size="md"
                 triggerClassName="mt-1 w-full"
               />
-            </div>
+            </div>}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Collection Date</label>
+            {showBuiltin(fieldSettings, 'collection_date') && <div>
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'collection_date', 'Collection Date')}</label>
               <input
                 type="date"
                 value={collectionDate}
                 onChange={(e) => setCollectionDate(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
-            </div>
+            </div>}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">Validity Period</label>
+            {showBuiltin(fieldSettings, 'validity') && <div>
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'validity', 'Validity Period')}</label>
               <select
                 value={validityPreset}
                 onChange={(e) => setValidityPreset(e.target.value)}
@@ -534,10 +577,10 @@ function UploadModal({
                   autoFocus
                 />
               )}
-            </div>
+            </div>}
 
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">Source System / Linked Assets</label>
+            {showBuiltin(fieldSettings, 'source') && <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700">{builtinLabel(fieldSettings, 'source', 'Source System / Linked Assets')}</label>
               <MultiSelectDropdown
                 title="Linked Assets"
                 items={assetItems}
@@ -555,7 +598,11 @@ function UploadModal({
               <p className="mt-1 text-xs text-slate-500">
                 Pick one or more assets this evidence was sourced from. You can link more later from the evidence detail page.
               </p>
-            </div>
+            </div>}
+          </div>
+          </div>
+          <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
+            <CustomFieldsTab moduleKey="evidence" values={customValues} onChange={setCustomValues} />
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">

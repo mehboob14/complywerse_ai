@@ -13,6 +13,8 @@ from ....models import (
     PolicyAttestation, Evidence, TenantUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import esign
+from ..permissions import require_doc_reader, require_library_reader
 
 router = APIRouter(prefix="/attestations", tags=["Policy Attestations"])
 
@@ -31,6 +33,7 @@ class AttestationCreate(BaseModel):
 
 class AttestationComplete(BaseModel):
     user_comments: Optional[str] = None
+    signature_image: Optional[str] = None   # PNG data URL drawn on screen (optional)
 
 
 class BulkLinkEvidenceRequest(BaseModel):
@@ -210,7 +213,20 @@ async def complete_attestation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Attestation is already {attestation.status}"
         )
-    
+
+    if completion_data.signature_image:
+        # The person's drawn signature, kept and sealed with this attestation (checked before it is completed).
+        document = db.query(GovernanceDocument).filter(GovernanceDocument.id == attestation.document_id).first()
+        statement = attestation.attestation_text or f"Attested: {document.title if document else 'document'}"
+        esign.record(
+            db, tenant_id=attestation.tenant_id, record_type="policy_attestation", record_id=attestation.id,
+            signature_image=completion_data.signature_image, meaning=statement,
+            signer_name=current_user.display_name or current_user.username, signer_user_id=current_user.id,
+            signer_email=current_user.email, signer_title=getattr(current_user, "designation", None), document=document,
+            content_sha256=esign.document_fingerprint(document) if document else esign.fingerprint(text=statement),
+            request=request,
+        )
+
     attestation.status = "completed"
     attestation.completed_at = datetime.utcnow()
     attestation.user_comments = completion_data.user_comments
@@ -247,7 +263,7 @@ async def complete_attestation(
     }
 
 
-@router.get("/document/{document_id}")
+@router.get("/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 async def get_document_attestations(
     document_id: int,
     status_filter: Optional[str] = None,
@@ -322,7 +338,7 @@ async def get_document_attestations(
     }
 
 
-@router.get("/coverage-map")
+@router.get("/coverage-map", dependencies=[Depends(require_library_reader)])
 async def get_attestation_coverage_map(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -444,7 +460,7 @@ async def get_attestation_history(
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_library_reader)])
 async def get_attestation_statistics(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)

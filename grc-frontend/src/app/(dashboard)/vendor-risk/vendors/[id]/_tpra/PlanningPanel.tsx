@@ -2,17 +2,19 @@
 
 // Stage 03 — Due Diligence Planning. Persists the assessment plan (questionnaire
 // template + assigned reviewer + due date) so the dd_planning exit gate can pass,
-// lets you issue the questionnaire to the vendor, and manages the evidence request
-// list (reused EvidencePanel).
+// and manages the evidence request list (reused EvidencePanel). Sending the questionnaires
+// is the Assessments tab's: this links to it rather than doing it twice.
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Save, Send, CheckCircle2, ClipboardList } from 'lucide-react';
-import { tpraApi, vendorRiskApi, adminApi } from '@/lib/api';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { TpraAssessment } from './types';
 import EvidencePanel from './EvidencePanel';
+import { reviewsApi } from '../../../_lib/reviewsApi';
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
@@ -23,8 +25,8 @@ function errMsg(e: unknown, fallback: string): string {
 }
 
 export default function PlanningPanel({
-  vendorId, assessmentId, assessment,
-}: { vendorId: number; assessmentId: number; assessment: TpraAssessment }) {
+  vendorId, assessmentId, assessment, engagementId = null,
+}: { vendorId: number; assessmentId: number; assessment: TpraAssessment; engagementId?: number | null }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -40,15 +42,12 @@ export default function PlanningPanel({
     },
   });
 
+  // The TPRA directory, which anyone working an assessment can read (/admin/users needs admin rights).
   const { data: users } = useQuery({
-    queryKey: ['admin-users-for-tpra-intake'],
+    queryKey: ['tpra-config-directory', 'people'],
     queryFn: async () => {
       try {
-        const r = await adminApi.getUsers();
-        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
-          id: u.id,
-          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
-        }));
+        return ((await tpraApi.configDirectory()).data as { people: Array<{ id: number; name: string }> }).people || [];
       } catch { return []; }
     },
   });
@@ -73,17 +72,18 @@ export default function PlanningPanel({
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
   });
 
-  const sendQ = useMutation({
-    mutationFn: () => vendorRiskApi.sendQuestionnaire({
-      vendor_id: vendorId, assessment_id: assessmentId,
-      template_id: templateId === '' ? null : Number(templateId),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tpra-lifecycle'] }); toast({ type: 'success', title: 'Questionnaire issued', message: 'Sent to the vendor for completion.' }); },
-    onError: (e) => toast({ type: 'error', title: 'Could not send', message: errMsg(e, 'Try again.') }),
+  // The gate's own count of different reviewers (the plan's, Assign duties, section reviewers). Under the
+  // lifecycle's key, so whatever refreshes the lifecycle refreshes this.
+  const { data: reviewers } = useQuery({
+    queryKey: ['tpra-lifecycle', 'reviewers', assessmentId],
+    queryFn: async () => (await reviewsApi.planning(assessmentId)).data,
   });
-
   const templateSet = templateId !== '';
-  const reviewerSet = reviewerId !== '';
+  const reviewerSet = !!reviewers && reviewers.assigned >= reviewers.required;
+  const reviewerLabel = !reviewers ? 'Reviewer needed'
+    : reviewers.required > 1 ? `Reviewers ${reviewers.assigned}/${reviewers.required}`
+      : reviewers.required === 0 && reviewers.assigned === 0 ? 'No reviewer needed'
+        : `Reviewer ${reviewerSet ? 'assigned' : 'needed'}`;
 
   return (
     <div className="space-y-4">
@@ -119,17 +119,17 @@ export default function PlanningPanel({
             <span className={`inline-flex items-center gap-1 ${templateSet ? 'text-emerald-600' : 'text-gray-400'}`}>
               <CheckCircle2 className="h-3 w-3" /> Template {templateSet ? 'selected' : 'needed'}
             </span>
-            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Reviewer {reviewerSet ? 'assigned' : 'needed'}
+            <span className={`inline-flex items-center gap-1 ${reviewerSet ? 'text-emerald-600' : 'text-gray-400'}`}
+              title={reviewers?.roles.length ? `This tier needs ${reviewers.roles.join(', ')}` : undefined}>
+              <CheckCircle2 className="h-3 w-3" /> {reviewerLabel}
             </span>
           </div>
           {canEdit && (
             <div className="flex items-center gap-2">
-              <button onClick={() => sendQ.mutate()} disabled={sendQ.isPending || !templateSet}
-                title={!templateSet ? 'Select a template first' : 'Issue the questionnaire to the vendor'}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                {sendQ.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send questionnaire
-              </button>
+              <Link href={`/vendor-risk/vendors/${vendorId}?tab=assessments${engagementId ? `&engagement=${engagementId}` : ''}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                <Send className="h-3.5 w-3.5" /> Send questionnaires
+              </Link>
               <button onClick={() => savePlan.mutate()} disabled={savePlan.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">
                 {savePlan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save plan
