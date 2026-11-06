@@ -125,14 +125,17 @@ test('FilterChips: a toolbar of real buttons that say whether they are pressed, 
   assert.match(chips, /if \(e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey\) return;/);       // Alt+Left is the browser's Back
 });
 
-test('FilterChips: a flag always has words (screen-reader text and tooltip), a count is the true number, an empty row draws nothing', () => {
+test('FilterChips: a flag always has words (screen-reader text in the name, a tooltip on its mark), a chip is announced once (no title on the button), a count is the true number, an empty row draws nothing', () => {
   const chips = code('FilterChips.tsx');
   assert.match(chips, /\{flag && <span className="sr-only">\{`, \$\{flag\.label\}`\}<\/span>\}/);
-  assert.match(chips, /aria-hidden className=\{clsx\('h-\[8px\] w-\[8px\] shrink-0 rounded-full'/);   // the dot is decoration: its words are the sr-only text
+  assert.match(chips, /aria-hidden title=\{flagTip\(flag\)\} className=\{clsx\('h-\[8px\] w-\[8px\] shrink-0 rounded-full'/);   // the dot is decoration: its words are the sr-only text
   assert.match(chips, /const count = countText\(chip\.count\);/);
   assert.match(chips, /if \(row\.length === 0\) return null;/);
   assert.match(chips, /<Menu\s+label=\{trigger\.text\}\s+size="sm"/);                    // the "+N more" menu is the kit's Menu
-  assert.match(chips, /title=\{chip\.title \?\? \(clipped \|\| flag \? chipText\(chip\) : undefined\)\}/);   // the whole text, only when it is cut (or a flag needs words)
+  assert.match(chips, /\n\s+title=\{chip\.title\}\r?\n/);                                 // only the page's own tooltip is on the button ...
+  assert.doesNotMatch(chips, /chipText|title=\{chip\.title \?\?/);                       // ... never the chip's whole text: a title on the button is read again as its description
+  assert.match(chips, /<span ref=\{word\} title=\{labelTip\(chip\.label, clipped\)\} className="min-w-0 truncate">/);   // the whole label, where it is cut
+  assert.equal((chips.match(/title=\{flagTip\(flag\)\}/g) ?? []).length, 2);              // the dot and the badge
   assert.match(chips, /h-ds-control-sm/);                                                // 28px, 44px on a phone: the token
   assert.doesNotMatch(chips, /99\+|window\.(confirm|alert|prompt)|opacity-0|group-hover/);
 });

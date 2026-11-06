@@ -1131,7 +1131,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('icon', 'LucideIcon', 'A small icon before the label.'),
           prop('disabled', 'boolean', 'Shown, cannot be toggled; the arrow keys skip it.'),
           prop('hidden', 'boolean', 'Not shown at all.'),
-          prop('title', 'string', 'A tooltip of your own.'),
+          prop('title', 'string', 'A tooltip of your own for the whole chip. A screen reader reads it as the chip\'s description after its name, so say something the name does not. A label that is cut and a flag\'s mark carry their own tooltips: leave this out for them.'),
         ],
       },
       {

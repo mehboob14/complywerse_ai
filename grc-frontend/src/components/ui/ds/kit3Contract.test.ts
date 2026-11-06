@@ -82,6 +82,30 @@ test('WorkRow: stacked below 640px and at any width with `compact`; the template
   assert.match(row, /first:border-t-0/);
 });
 
+// ── the two findings of the Kit-2 probe ───────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('a chip is announced once: no tooltip of its whole text on the button, the cut label and the flag\'s mark carry their own', () => {
+  const chips = code('FilterChips.tsx');
+  assert.doesNotMatch(chips, /chipText|title=\{chip\.title \?\?/);
+  assert.match(chips, /<span ref=\{word\} title=\{labelTip\(chip\.label, clipped\)\}/);
+  assert.equal((chips.match(/aria-hidden title=\{flagTip\(flag\)\}/g) ?? []).length, 2);
+  assert.match(code('filterChipsModel.ts'), /export function labelTip\(label: string, clipped: boolean\): string \| undefined/);
+  assert.match(code('filterChipsModel.ts'), /export function flagTip\(flag: ChipFlag \| undefined\): string \| undefined/);
+});
+
+test('a facet group header says its count once: the number, then "selected" for a screen reader, and no aria-label to repeat them', () => {
+  const d = code('Disclosure.tsx');
+  assert.match(d, /\{chosen\}\s*<span className="sr-only">\{countLabel\}<\/span>/);
+  assert.doesNotMatch(d, /aria-label=/);
+});
+
+test('an AccordionRow keeps a readable title column on a phone: the header wraps, the title asks for 10rem, the status drops under it instead of squeezing it', () => {
+  const d = code('Disclosure.tsx');
+  assert.match(d, /relative min-h-ds-control flex-wrap gap-x-\[10px\] gap-y-\[4px\] py-\[8px\] pl-\[4px\] pr-\[28px\]/);
+  assert.match(d, /<span className="min-w-0 flex-1 basis-\[10rem\]">/);
+  assert.match(d, /\{trailing && <span className="flex shrink-0 flex-wrap items-center gap-\[6px\]/);
+});
+
 // ── CountRow ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('CountRow is ONE target: a link, a button or plain text, never two controls; a count is read by workModel, never capped', () => {

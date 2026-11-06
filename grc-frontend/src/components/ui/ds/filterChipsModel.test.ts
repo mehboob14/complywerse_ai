@@ -1,10 +1,10 @@
 // node --test "src/components/ui/ds/filterChipsModel.test.ts"
-// The rules of a row of FilterChips apart from React: the count reads true ("1,247"), what stays in the row and what goes to "+N more", what a chip says,
-// the roving tab stop and the arrow keys.
+// The rules of a row of FilterChips apart from React: the count reads true ("1,247"), what stays in the row and what goes to "+N more", where the tooltips
+// sit (never on the button), the roving tab stop and the arrow keys.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chipStop, chipText, countText, moreItems, moreText, nextChip, splitChips, type ChipLike } from './filterChipsModel.ts';
+import { chipStop, countText, flagTip, labelTip, moreItems, moreText, nextChip, splitChips, type ChipLike } from './filterChipsModel.ts';
 
 const chip = (key: string, extra: Partial<ChipLike> = {}): ChipLike => ({ key, label: key[0].toUpperCase() + key.slice(1), ...extra });
 
@@ -19,12 +19,18 @@ test('a count reads true: 1,247, never 99+; 0 is a count; nothing is nothing', (
   for (const none of [undefined, null, NaN, Infinity]) assert.equal(countText(none as number), '', String(none));
 });
 
-test('a chip says its label, its count and its flag in words', () => {
-  assert.equal(chipText(chip('all', { count: 1247 })), 'All, 1,247');
-  assert.equal(chipText(chip('mine')), 'Mine');
-  assert.equal(chipText(chip('audit', { label: ' Audit Committee ', count: 3, flag: { tone: 'danger', text: 3, label: '3 overdue actions' } })), 'Audit Committee, 3, 3 overdue actions');
-  assert.equal(chipText(chip('live', { flag: { tone: 'info', label: 'meeting in progress' } })), 'Live, meeting in progress');
-  assert.equal(chipText(chip('zero', { count: 0 })), 'Zero, 0');
+test('a label that is cut is its own tooltip, a label that fits has none (and the count and the flag are never in it: the name has them)', () => {
+  assert.equal(labelTip('Information security management system', true), 'Information security management system');
+  assert.equal(labelTip('  Audit Committee ', true), 'Audit Committee');
+  assert.equal(labelTip('Mine', false), undefined);
+  assert.equal(labelTip('   ', true), undefined);                                                   // nothing to say
+});
+
+test('the tooltip of a flag is its words, trimmed; a chip with no flag, or a flag with blank words, has none', () => {
+  assert.equal(flagTip({ tone: 'danger', text: 3, label: '3 overdue actions' }), '3 overdue actions');
+  assert.equal(flagTip({ tone: 'info', label: ' meeting in progress ' }), 'meeting in progress');
+  assert.equal(flagTip(undefined), undefined);
+  assert.equal(flagTip({ tone: 'info', label: '   ' }), undefined);
 });
 
 test('with no maxVisible every shown chip stays in the row; a hidden chip is in neither list', () => {
