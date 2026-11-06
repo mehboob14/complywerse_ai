@@ -2,11 +2,10 @@
 // `node --test src/lib/committees.test.ts` can pin it. Nothing here computes a score: the formulas are the server's (committees.py, /overview), these
 // functions only decide what the page may CLAIM about what the server sent.
 //
-// NOT RECORDED. A tile whose source cannot be set today does not show 0% or an empty bar, it says "Not recorded" and, from an (i), what is missing.
-// The meeting lifecycle is separate work: no screen can mark a meeting completed or enter attendance and quorum (committeeApi.updateMeeting and
-// updateMinutes have no callers), so the measures that read those (attendance, quorum met, minutes recorded, meetings held) have no data on any tenant
-// today. The reasons below are derived from the numbers the API returns (completed meetings, meetings with quorum data, the metric's denominator), so they
-// stay true on the day the lifecycle exists: they stop being said when there is data.
+// NOT RECORDED. A tile whose source has no data does not show 0% or an empty bar, it says "Not recorded" and, from an (i), what is missing.
+// A meeting can now be started and ended and its roll taken (the meeting page: committeeApi.startMeeting, endMeeting, saveAttendance), so the measures that read those
+// (attendance, quorum met, minutes recorded, meetings held) have data once a meeting has been run. Until then the reasons below say what to do, derived from the numbers
+// the API returns (completed meetings, meetings with quorum data, the metric's denominator): they stop being said when there is data.
 import { formatCount, formatDate, formatDateTime, formatPercent, formatRelative, statusLabel, type DateInput } from './format.ts';
 import { parseUtc } from './serverTime.ts';
 
@@ -51,6 +50,11 @@ export interface OverviewCommittee {
   overdue_actions: number;
   completed_actions: number;
   total_actions: number;
+  // the health strip (committees.py _committee_health): the same values GET /committees/{id} carries
+  attendance_pct?: number | null;
+  next_meeting?: { id: number; date: string; title: string; has_agenda: boolean; papers_count: number; invitees_count: number } | null;
+  charter_in_force?: { id: number; version: string; expires_on: string | null } | null;
+  meetings_in_progress?: number;
 }
 
 export interface OverviewMeeting {
@@ -100,8 +104,8 @@ export interface Reading {
 }
 
 const NO_ACTIONS = 'No oversight action has been recorded yet.';
-/** Said beside every measure that needs a held meeting. True of these screens today (the meeting lifecycle is separate work); the counts that precede it are the API's. */
-const NO_LIFECYCLE = 'These screens cannot mark a meeting completed or record who attended yet.';
+/** Said beside every measure that needs a held meeting: how to get one (start the meeting, take the roll call, end it). The counts that precede it are the API's. */
+const NO_LIFECYCLE = 'Start a meeting, take the roll call and end it to record one.';
 
 const plural = (n: number, one: string, many: string = `${one}s`): string => `${formatCount(n)} ${n === 1 ? one : many}`;
 
@@ -113,7 +117,7 @@ const MEASURE_REASON: Record<string, string> = {
   action_health: 'No action is open, so it counts as 100% instead of being measured.',
   action_completion: NO_ACTIONS,
   meeting_cadence: 'There is no active committee.',
-  minutes_discipline: 'No meeting has been marked completed in the last 180 days.',
+  minutes_discipline: 'No meeting has been completed in the last 180 days.',
   quorum_rate: 'No completed meeting has quorum and attendance recorded.',
 };
 
@@ -180,8 +184,8 @@ export function overdueReading(k: OverviewKpis): Reading {
 /** Why no attendance is recorded, from the counts the API sends: no meeting completed, or some completed and none with quorum data. */
 export function attendanceWhy(k: OverviewKpis): string {
   const completed = k.meetings_completed;
-  if (completed === 0) return `No meeting has been marked completed. ${NO_LIFECYCLE}`;
-  return `${plural(completed, 'meeting')} marked completed, none with quorum and attendance recorded. ${NO_LIFECYCLE}`;
+  if (completed === 0) return `No meeting has been completed. ${NO_LIFECYCLE}`;
+  return `${plural(completed, 'meeting')} completed, none with quorum and attendance recorded. Take the roll call of a meeting to record them.`;
 }
 
 /** "Attendance": the average share of members present at held meetings; not recorded while no held meeting has quorum data. */
@@ -193,7 +197,7 @@ export function attendanceReading(k: OverviewKpis): Reading {
 
 /** The chart's "Meetings held" line counts meetings marked completed. While none is, the line is left out and this is why. */
 export function meetingsHeldReading(k: OverviewKpis): { recorded: boolean; why: string } {
-  return k.meetings_completed > 0 ? { recorded: true, why: '' } : { recorded: false, why: `No meeting has been marked completed. ${NO_LIFECYCLE}` };
+  return k.meetings_completed > 0 ? { recorded: true, why: '' } : { recorded: false, why: `No meeting has been completed. ${NO_LIFECYCLE}` };
 }
 
 // ── counts that come from a capped list ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -233,7 +237,8 @@ export function upcomingMeetings<T extends MeetingLike>(items: readonly T[], now
 }
 
 // ── tabs of a committee ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The tabs of a committee, the way they have always been named; the open one is in the address (?tab=members). Meetings is the default. */
+/** The tabs the old committee page had, the way they were named (?tab=members): the address of that page still works, and lib/committeeHome.ts legacyCommitteeAddress says
+ *  where each one lands now (the management sheet's tabs and the lanes of the filtered home). */
 export const COMMITTEE_TABS = ['members', 'charters', 'meetings', 'actions', 'settings'] as const;
 export type CommitteeTab = typeof COMMITTEE_TABS[number];
 export const DEFAULT_COMMITTEE_TAB: CommitteeTab = 'meetings';

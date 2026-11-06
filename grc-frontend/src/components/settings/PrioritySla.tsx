@@ -3,8 +3,9 @@
 /** Priority and its SLA, for records whose SLA follows a priority: the pill, the choices and a small editor of the
  *  days allowed per priority. A committee action item measures itself against Task Management's SLA table, so the
  *  editor on its page edits that same table. */
-import { AlertTriangle, Check, Clock, Loader2, Save } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/ds';
 import { errorText, useCanCustomise, useModuleSettings, useSaveModuleSettings, type ModuleSettings, type SlaTarget } from './CustomFields';
 
 export const PRIORITIES = [
@@ -39,7 +40,8 @@ export const priorityChoices = (settings?: ModuleSettings) =>
     return { value: p.value, label: days == null ? p.label : `${p.label} · ${days} days` };
   });
 
-const input = 'w-16 rounded-md border border-slate-300 px-1.5 py-1 text-sm focus:border-primary-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
+// the kit's control height (44px on a phone or a coarse pointer): the days are typed with a thumb in the committee sheet
+const input = 'h-ds-control w-[72px] rounded-ds-control border border-ds-border-strong bg-ds-surface px-[8px] text-ds-body text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring disabled:bg-ds-surface-subtle disabled:text-ds-fg-muted';
 
 export function PrioritySlaEditor({ moduleKey, title, note }: { moduleKey: string; title: string; note: string }) {
   const { data } = useModuleSettings(moduleKey);
@@ -89,11 +91,9 @@ export function PrioritySlaEditor({ moduleKey, title, note }: { moduleKey: strin
               </label>
             ))}
             {canEdit && (
-              <button type="button" disabled={save.isPending} onClick={() => save.mutate(patch, { onSuccess: () => setSaved(true) })}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
-                {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+              <Button variant="primary" size="sm" loading={save.isPending} leftIcon={saved ? <Check aria-hidden /> : <Save aria-hidden />} onClick={() => save.mutate(patch, { onSuccess: () => setSaved(true) })}>
                 {saved ? 'Saved' : 'Save SLA'}
-              </button>
+              </Button>
             )}
           </div>
         ) : (

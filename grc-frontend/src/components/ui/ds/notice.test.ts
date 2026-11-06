@@ -72,10 +72,10 @@ test('the warning tone draws exactly what ListNotice drew: the same frame, paddi
   }
 });
 
-test('the three pages that show a ListNotice still import it by its old path', () => {
+// (the committee page was the third: it forwards to the Committees home now and shows no notice)
+test('the pages that show a ListNotice still import it by its old path', () => {
   for (const page of [
     'src/app/(dashboard)/governance/exceptions/page.tsx',
     'src/app/(dashboard)/governance/documents/attestation/page.tsx',
-    'src/app/(dashboard)/governance/committees/[id]/page.tsx',
   ]) assert.match(read(page), /import \{ ListNotice \} from '@\/components\/governance\/ListNotice';/, page);
 });
