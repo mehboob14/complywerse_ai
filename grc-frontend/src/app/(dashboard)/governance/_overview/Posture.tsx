@@ -125,7 +125,7 @@ function Details({ row, panelId, onAdjust }: { row: SectionRow; panelId: string;
 function SectionItem({ row, target, open, onToggle, onAdjust }: { row: SectionRow; target: number; open: boolean; onToggle: () => void; onAdjust: () => void }) {
   const panelId = `posture-${row.key}-panel`;
   return (
-    <li className="min-w-0 border-t border-ds-border first:border-t-0">
+    <li className="min-w-0 border-b border-ds-border">
       <div className="grid min-h-ds-control grid-cols-[minmax(0,1fr)_minmax(40px,18%)_36px_var(--ds-control-h)] items-center gap-x-[12px] rounded-ds-control hover:bg-ds-surface-hover max-sm:grid-cols-[minmax(0,1fr)_64px_32px_var(--ds-control-h)]">
         <button
           type="button"
@@ -149,10 +149,8 @@ function SectionItem({ row, target, open, onToggle, onAdjust }: { row: SectionRo
   );
 }
 
-export function PostureCard({ feed, wide, onOpenScore, onAdjust }: {
+export function PostureCard({ feed, onOpenScore, onAdjust }: {
   feed: Feed<Scorecard>;
-  /** the card has the width of the page (the worklist is a short strip): the sections run in two columns */
-  wide: boolean;
   onOpenScore: () => void;
   /** open the shared dialog of a section, which holds the weight tuner */
   onAdjust: (sectionKey: string) => void;
@@ -181,7 +179,8 @@ export function PostureCard({ feed, wide, onOpenScore, onAdjust }: {
       {feed.load === 'ready' && rows.length > 0 && (
         <>
           <Head head={head} />
-          <ul id="breakdown" aria-label={`Section scores, target ${head.target}`} className={`m-0 grid list-none items-start p-0 ${wide ? 'md:grid-cols-2 md:gap-x-[24px]' : ''}`}>
+          {/* as many columns as fit 340px each: one beside the worklist, two when the card has the width of the page (a short worklist, or a window that stacks the two) */}
+          <ul id="breakdown" aria-label={`Section scores, target ${head.target}`} style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))' }} className="m-0 grid list-none items-start gap-x-[24px] p-0">
             {rows.map((row) => (
               <SectionItem key={row.key} row={row} target={head.target} open={open === row.key} onToggle={() => setOpen(open === row.key ? null : row.key)} onAdjust={() => onAdjust(row.key)} />
             ))}

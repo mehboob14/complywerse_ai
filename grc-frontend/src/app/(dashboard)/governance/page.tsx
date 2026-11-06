@@ -229,7 +229,6 @@ export default function GovernanceDashboardPage() {
         posture={(
           <PostureCard
             feed={feeds.scorecard}
-            wide={mode === 'solo'}
             onOpenScore={() => setPerfOpen(true)}
             onAdjust={(key) => setOpenSection(feeds.scorecard.data?.sections?.[key] ?? null)}
           />
