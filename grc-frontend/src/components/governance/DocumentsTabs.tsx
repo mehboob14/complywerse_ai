@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The Documents area's tabs (Documents · Overview · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
+ * The Documents area's tabs (Library · At a glance · Comply AI Studio · Attestation · Reviews · Exceptions · Settings), shown in the top bar instead of a row
  * of their own so the page below gets the height. Every tab is an icon and a label (Settings is just the gear) while the strip fits; when it does not,
  * only the open tab keeps its label (the others have it as their tooltip and for a screen reader). The strip is measured with every label showing, once the tabs are
  * known, and again whenever its width changes (the window, the menu opening): with the Studio and the Settings gear it needs 648px at 1280, where the top bar leaves
@@ -20,7 +20,7 @@ import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, LayoutDashboard
 import { clsx } from 'clsx';
 import { studioApi } from '@/lib/studio/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { activeTab, isInArea, tabsFor } from '@/lib/navRegistry';
+import { activeTab, isInArea, tabName, tabText, tabsFor } from '@/lib/navRegistry';
 import { scrollDelta } from '@/lib/tabsModel';
 
 // the look of each tab of the registry's 'documents' strip, by its id
@@ -90,12 +90,12 @@ export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boole
         const active = t === open;
         const { icon: Icon, iconOnly } = LOOK[t.tab.id];
         return (
-          <Link key={t.path} href={t.path} title={t.label} aria-label={t.label} aria-current={active ? 'page' : undefined}
+          <Link key={t.path} href={t.path} title={tabName(t)} aria-label={tabName(t)} aria-current={active ? 'page' : undefined}
             // the ring is inset: the strip scrolls sideways, which would clip one drawn outside the tab
             className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 xl:max-[1359px]:px-1 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]',
               active ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:border-[#c3ccd5] hover:text-[#1f2933]')}>
             <Icon size={16} strokeWidth={1.75} aria-hidden />
-            <span className={iconOnly ? 'sr-only' : active || !tight ? undefined : 'hidden'}>{t.shortLabel ?? t.label}</span>
+            <span className={iconOnly ? 'sr-only' : active || !tight ? undefined : 'hidden'}>{tabText(t)}</span>
           </Link>
         );
       })}

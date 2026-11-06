@@ -95,7 +95,7 @@ test('only the Documents entry is a door, and the top bar gives the owner the tw
   const { readFileSync } = await import('node:fs');
   assert.deepEqual(flattenLeaves(navigation).filter((i) => i.ownerDoor).map((i) => i.name), ['Documents']);
   const header = readFileSync(new URL('./Header.tsx', import.meta.url), 'utf8');
-  assert.ok(header.includes('perms.headsDepartment ? <DocumentsTabs ownerOnly /> : null'), 'the strip for someone with no governance right but a department');
+  assert.ok(header.includes('(canSeeGovernance || access.headsDepartment)') && header.includes('<DocumentsTabs ownerOnly={!canSeeGovernance} />'), 'the strip for someone with no governance right but a department');
   const tabs = readFileSync(new URL('../governance/DocumentsTabs.tsx', import.meta.url), 'utf8');
   assert.ok(tabs.includes('ownerOnly = false') && tabs.includes('ownerOnly })'), 'the strip asks the registry for the owner\'s tabs');
   const hook = readFileSync(new URL('../../hooks/usePermissions.ts', import.meta.url), 'utf8');

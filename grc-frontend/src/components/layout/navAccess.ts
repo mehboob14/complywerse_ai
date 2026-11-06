@@ -26,6 +26,8 @@ export interface NavItem {
   ownerDoor?: true;
   /** Shown to every signed-in person, whatever their rights: the page is the person's own queue, and each source it reads answers only for them (Needs my action). */
   signedIn?: boolean;
+  /** The short name under the icon of the shell's rail (12px, a few letters); the full name stays its tooltip and accessible name. */
+  rail?: string;
 }
 
 export interface NavGroup {
@@ -35,18 +37,21 @@ export interface NavGroup {
   defaultOpen?: boolean;
   requiredModules?: string[];
   adminOnly?: boolean;
+  /** The short name under the icon of the shell's rail (see NavItem.rail). */
+  rail?: string;
 }
 
 export type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) | NavGroup;
 
 export const navigation: NavEntry[] = [
   // The person's own queue, for everyone signed in: what they are asked to decide, acknowledge or have sent (it replaced Governance > My Approvals; the old address forwards to it)
-  { name: 'Needs my action', href: '/needs-my-action', activeMatch: '/governance/approvals', icon: ClipboardCheck, signedIn: true },
+  { name: 'Needs my action', href: '/needs-my-action', activeMatch: '/governance/approvals', icon: ClipboardCheck, signedIn: true, rail: 'My action' },
   {
     name: 'Performance Overview',
     href: '/dashboard',
     icon: LayoutDashboard,
     exact: true,
+    rail: 'Overview',
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
   },
@@ -56,12 +61,14 @@ export const navigation: NavEntry[] = [
     href: '/tasks',
     activeMatch: '/my-work',
     icon: ListTodo,
+    rail: 'Tasks',
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
   {
     name: 'Governance',
     icon: Landmark,
+    rail: 'Governance',
     requiredModules: ['governance'],
     items: [
       { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
@@ -76,6 +83,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Risk Management',
     icon: ShieldAlert,
+    rail: 'Risk',
     requiredModules: ['risks', 'erm'],
     items: [
       // the area's own pages that have no entry (its tab strip) light the Overview, as they always did
@@ -99,12 +107,14 @@ export const navigation: NavEntry[] = [
     name: 'Third-Party Vendor Risk',
     href: '/vendor-risk',
     icon: Building2,
+    rail: 'Vendors',
     requiredModules: ['erm'],
     requiredPermissions: ['erm:risks:*'],
   },
   {
     name: 'Compliance Management',
     icon: ShieldCheck,
+    rail: 'Compliance',
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Overview', href: '/compliance', exact: true, activeMatch: ['/compliance/assessments', '/compliance/statements', '/controls', '/control-library'], icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
@@ -147,6 +157,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Controls Automation',
     icon: Zap,
+    rail: 'Controls',
     requiredModules: ['controls'],
     items: [
       { name: 'Overview', href: '/automation/overview', exact: true, activeMatch: ['/automation/assurance', '/automation/checks'], icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
@@ -156,6 +167,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Issue & Incident Management',
     icon: AlertCircle,
+    rail: 'Issues',
     items: [
       { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
       { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
@@ -164,6 +176,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Cybersecurity Assurance',
     icon: ShieldCheck,
+    rail: 'Cyber',
     // Cloned from Ava (the standalone cyber product) into the /cyber-assurance
     // namespace: these routes render Ava's UI on GRC's shell + DB + login.
     // Mirrors Ava's own sidebar exactly. GRC's native cyber pages
@@ -184,6 +197,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Auditor Portal',
     icon: Gavel,
+    rail: 'Audit',
     // issue_management: a role with only issue permissions still reaches the
     // Issue Register; the other items keep their own permission gates.
     requiredModules: ['frameworks', 'compliance', 'issue_management'],
@@ -200,6 +214,7 @@ export const navigation: NavEntry[] = [
   {
     name: 'Reports',
     icon: BarChart3,
+    rail: 'Reports',
     items: [
       { name: 'Analytics', href: '/reports/analytics', icon: LayoutDashboard, activeMatch: '/reports/analytics', requiredPermissions: ['reports:analytics:*'] },
       { name: 'Quick export', href: '/reports', icon: BarChart3, requiredPermissions: ['reports:reports:*'] },
@@ -269,7 +284,8 @@ export function navAccessFromMe(me: any): NavAccess {
   return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department, signedIn: true };
 }
 
-function holds(granted: string[], requiredPerm: string): boolean {
+/** Whether the granted permissions (as /auth/me lists them, normalised) cover a required one: the rule the menu, the palette and the panel share. */
+export function holds(granted: string[], requiredPerm: string): boolean {
   const required = normalizePerm(requiredPerm);
   if (granted.includes('*:*:*') || granted.includes(required)) return true;
   // "risks:risk_register:*": any permission under that prefix

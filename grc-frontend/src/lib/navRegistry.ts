@@ -158,7 +158,8 @@ const PROJECTS = '/is-projects';
 const OF_LEAF: Record<string, Extra> = {
   '/governance': { title: 'Governance Overview', subtitle: 'Real-time policy, framework, and review posture', ownHeading: true },
   '/governance/kpi-report': { ownHeading: true },
-  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, keywords: ['Document library'] },
+  // the strip's first tab says Library ("Documents" under "Documents" read twice); the leaf keeps its sidebar name and the tab's accessible name holds both (tabName)
+  [DOCS]: { tab: { area: 'documents', id: 'documents', order: 1, ownerDoor: true }, shortLabel: 'Library', keywords: ['Document library'] },
   '/governance/approvals': { keywords: ['Pending Approvals'] },
   [COMMITTEES]: { keywords: ['Board & Committee Management'], ownHeading: true },
   '/erm/kris': { keywords: ['Key Risk Indicators'] },
@@ -232,6 +233,7 @@ export const routes: readonly RouteEntry[] = drafts.map((draft) => {
 });
 
 const byPath: Record<string, RouteEntry> = {};
+const leafPaths = new Set<string>(sidebar.map(({ item }) => item.href));
 routes.forEach((entry) => { byPath[entry.path] = entry; });
 const patterns = routes.map((entry) => ({ entry, segments: entry.path.split('/').filter(Boolean) }));
 
@@ -387,6 +389,28 @@ export function fold(text: string): string {
 
 /** Folded, with every run of other characters as one space: "/erm/Risk-Library" -> " erm risk library " (a leading and a trailing space make a word test one `includes`). */
 const spaced = (text: string): string => ` ${fold(text).replace(SEPARATORS, ' ').trim()} `;
+
+/** The sidebar leaf a page belongs to: the entry itself when it is a leaf, else the first leaf on the way up through `aliasOf` / `parent` (a detail page, a tab, a forward).
+ *  undefined for a page that hangs under no leaf (the Administration pages, /users, /complychat, the public page). The shell offers a page only where its leaf is on the person's menu. */
+export function sidebarLeafOf(entry: RouteEntry): RouteEntry | undefined {
+  let at: RouteEntry | undefined = entry;
+  for (let hops = 0; at && hops < 8; hops++) {
+    if (leafPaths.has(at.path)) return at;
+    const next: string | undefined = at.aliasOf ?? at.parent;
+    at = next ? byPath[next] : undefined;
+  }
+  return undefined;
+}
+
+/** What a tab shows: its short label, else its label. */
+export const tabText = (entry: Pick<RouteEntry, 'label' | 'shortLabel'>): string => entry.shortLabel ?? entry.label;
+
+/** What a tab is called for a screen reader and as its tooltip: the label when the visible text is part of it ("Reviews" in "Document Reviews"), else both ("Library (Documents)"),
+ *  so what a person reads or says is always inside the accessible name. */
+export function tabName(entry: Pick<RouteEntry, 'label' | 'shortLabel'>): string {
+  const text = tabText(entry);
+  return text === entry.label || fold(entry.label).indexOf(fold(text)) >= 0 ? entry.label : `${text} (${entry.label})`;
+}
 
 /** A destination a person can go to: a path with no :param (a record needs its id), not another URL of a destination, not an older copy of a page the sidebar has. */
 const openable = (entry: RouteEntry): boolean => entry.path.indexOf(':') < 0 && !entry.aliasOf && !entry.duplicateOf;
