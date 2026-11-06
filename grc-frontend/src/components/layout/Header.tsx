@@ -1,74 +1,33 @@
 'use client';
 
+// The top bar (48px: pages that fill the window size themselves against it). Left to right:
+//   the menu button (below 1024, where the menu is the drawer) · where you are (the trail of crumbs, or in the Documents area its tab strip) · the command bar (Ctrl K) ·
+//   Comply Agent (a question box from 1440, an icon below) · the Guide · Work and context (the panel, with the queue's count) · notifications · the account.
+// Titles and trails come from the navigation registry (components/shell/Breadcrumbs.tsx); the queue, its count and the panel are components/shell/WorkPanel.tsx.
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, LogOut, Menu, UserCircle, Users, Search, Loader2, Sparkles, ClipboardCheck } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight, LogOut, Menu, PanelRight, UserCircle, Users, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { apiClient, searchApi } from '@/lib/api';
+import { apiClient } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
-import { usePermissions } from '@/hooks/usePermissions';
-import { ownHeadingSection, registryNamesPage, subtitleFor, titleFor } from '@/lib/navRegistry';
-import { badgeLabel, badgeText, dropdownOf, KIND_META } from '@/lib/inbox/buildInbox';
-import { dueLine } from '@/lib/inbox/inboxView';
-import { useInbox } from '@/lib/inbox/inboxApi';
+import Breadcrumbs from '@/components/shell/Breadcrumbs';
+import CommandBar from '@/components/shell/CommandBar';
+import { mayAskComplyAgent, offeredEntry, visibleLeafHrefs } from '@/components/shell/shellAccess';
+import { useShell, useShellAccess, useShellQueue } from '@/components/shell/ShellProvider';
+import { useNotifications } from '@/components/shell/useNotifications';
+import { routeFor } from '@/lib/navRegistry';
 import { notificationHref } from './headerLinks';
-import { navPermissions } from './navAccess';
+import { holds } from './navAccess';
 import { MAIN_MENU_ID, useShellMenu } from './ShellMenu';
-import { readCollapsed, writeCollapsed } from './shellMode';
 
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
-// the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
+// the Notifications dropdown: under the bar across a phone's width, else at the button
 const DROPDOWN = 'fixed inset-x-3 top-14 z-50 rounded-lg border border-gray-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2';
-
-const navIconProps = {
-  size: 18,
-  strokeWidth: 1.5,
-};
-
-// The top-bar title of every page that is not a Governance page (those are named by the navigation registry, lib/navRegistry.ts)
-const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: string }> = {
-  '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization', section: 'Cybersecurity Assurance' },
-  '/vulnerabilities/dashboard': { title: 'Vulnerability Dashboard', subtitle: 'Real-time security posture' },
-  '/vulnerabilities/sla': { title: 'SLA Configuration' },
-  '/vulnerabilities/reports': { title: 'Vulnerability Reports' },
-  '/vulnerabilities/departments': { title: 'Department Management' },
-  '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
-  '/cyber-security': { title: 'Cyber Security', section: 'Compliance Management' },
-  '/nca': { title: 'NCA', subtitle: 'National Cybersecurity Authority — DCC, registers and audit plan' },
-  '/frameworks': { title: 'Frameworks' },
-  '/controls': { title: 'Control Catalog' },
-  '/erm': { title: 'Enterprise Risk Management', subtitle: 'Comprehensive risk identification, assessment, and monitoring' },
-  '/erm/risks': { title: 'Risk Register' },
-  '/erm/risk-assessments': { title: 'Risk Assessments', subtitle: 'Manage and track risk assessment activities' },
-  '/erm/rcsa/templates': { title: 'RCSA Templates', subtitle: 'Upload and download RCSA templates' },
-  '/erm/analytics': { title: 'Advanced Risk Analytics', subtitle: 'Comprehensive risk analysis tools for enterprise risk intelligence' },
-  '/erm/analytics/heatmap': { title: 'Interactive Risk Heat Map', subtitle: 'Visualize risk distribution across likelihood and impact dimensions' },
-  '/erm/analytics/bowtie': { title: 'Bow-Tie Risk Analysis', subtitle: 'Visualize threats, controls, and consequences for any risk' },
-  '/erm/analytics/scenario': { title: 'Scenario Analysis', subtitle: 'Model what-if scenarios to understand risk impact changes' },
-  '/erm/analytics/aggregation': { title: 'Risk Aggregation', subtitle: 'Enterprise-wide risk aggregation and analysis' },
-  '/erm/analytics/kri-triggers': { title: 'Automated KRI Triggers', subtitle: 'Real-time alerts for Key Risk Indicator threshold breaches' },
-  '/erm/rcsa': { title: 'RCSA Dashboard', subtitle: 'Risk and control self-assessment overview' },
-  '/compliance/assessments': { title: 'Assessment Control Center' },
-  '/compliance/assessments/approvals': { title: 'Pending Approvals', subtitle: 'Compliance assessments awaiting review' },
-  '/control-library': { title: 'Control Library' },
-  '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
-  '/auditor-portal/statutory-audit': { title: 'Statutory Audit', subtitle: 'Register and track regulator requirements and audit observations' },
-  '/auditor-portal/issue-register': { title: 'Issue Register', section: 'Auditor Portal' },
-  '/assets': { title: 'IT Asset Inventory', subtitle: 'Manage and track IT assets with CIA ratings and valuations.', section: 'Cybersecurity Assurance' },
-  '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.', section: 'Cybersecurity Assurance' },
-  '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
-  '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
-  '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
-  '/reports': { title: 'Quick export', subtitle: 'Module → columns → download' },
-  '/reports/saved': { title: 'Saved exports', subtitle: 'Reopen what you saved' },
-  '/reports/analytics': { title: 'Analytics', subtitle: 'Cross-module dashboards' },
-  '/reports/trends': { title: 'Trends', subtitle: 'KPI history across every module' },
-  '/reports/dashboards': { title: 'Dashboards', subtitle: 'Saved reports, side by side' },
-  '/admin': { title: 'Administration' },
-};
+// the bar's icon buttons: the control height (32px; 44px on a phone or a coarse pointer)
+const BAR_BUTTON = 'relative inline-flex h-ds-control min-w-[var(--ds-control-h)] shrink-0 items-center justify-center rounded-ds-control text-ds-fg-muted transition-colors hover:bg-ds-surface-hover hover:text-ds-fg focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 export default function Header() {
   const router = useRouter();
@@ -78,16 +37,11 @@ export default function Header() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userButtonRef = useRef<HTMLButtonElement>(null);
   const { open: menuOpen, setOpen: setMenuOpen } = useShellMenu();
-  const dropdownIds = { approvals: useId(), notifications: useId(), user: useId() };
+  const dropdownIds = { notifications: useId(), user: useId() };
 
-  const { data: me } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => apiClient.get('/auth/me').then((r) => r.data),
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnReconnect: 'always',
-    refetchOnWindowFocus: true,
-  });
+  const { me, access, nav } = useShellAccess();
+  const ui = useShell();
+  const queue = useShellQueue();
 
   const currentUser = me?.user;
   const displayName = currentUser?.display_name || currentUser?.username || 'User';
@@ -99,10 +53,6 @@ export default function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const notifButtonRef = useRef<HTMLButtonElement>(null);
-
-  const [approvalsOpen, setApprovalsOpen] = useState(false);
-  const approvalsRef = useRef<HTMLDivElement>(null);
-  const approvalsButtonRef = useRef<HTMLButtonElement>(null);
   const [chatQ, setChatQ] = useState('');
 
   const submitChat = (e?: React.FormEvent) => {
@@ -112,52 +62,15 @@ export default function Header() {
     setChatQ('');
   };
 
-  // Real workflow in-app notifications
-  const { data: notifData, refetch: refetchNotifs } = useQuery({
-    queryKey: ['workflow-notifications'],
-    queryFn: () => apiClient.get('/workflow-engine/notifications/in-app?limit=20').then((r) => r.data),
-    refetchInterval: 30000, // poll every 30s
-    enabled: !!currentUser,
-  });
+  // Real workflow in-app notifications (30 s poll, the 20 newest; the palette's "Mark all notifications read" uses the same query)
+  const { items: notifications, unread: unreadCount, refetch: refetchNotifs, markAllRead, markOneRead } = useNotifications(!!currentUser);
 
-  const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string; link?: string | null; url?: string | null}> =
-    notifData?.items ?? [];
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  // Needs my action: the same inbox as its page (lib/inbox), so the number on this chip is the page's "To decide". It asks the documents, sign-offs and assessments the way the two
-  // queries here did (same keys, 60 s), through one hook, and opening the dropdown asks again.
-  const { inbox, refetch: refetchInbox } = useInbox({ enabled: !!currentUser });
-  const needs = dropdownOf(inbox);
-  const needsText = badgeText(inbox.badge);
-  const perms = usePermissions();
-  const canSeeGovernance = perms.hasPermission('governance:policies:*');
-  // the top bar's own links, each shown to the people its page lets in (as the sidebar's entries are)
-  const canAskComplyChat = perms.hasAnyPermission(navPermissions('/complychat'));
-  const canSeeUsers = perms.hasAnyPermission(navPermissions('/users'));
-  const canSeeAssessments = perms.hasPermission('compliance:assessments:*');
-
-  // shown as read at once (row and badge), then told to the server; the refetch corrects it if that failed
-  const showRead = (id?: number) => {
-    void queryClient.cancelQueries({ queryKey: ['workflow-notifications'] });     // a poll already on its way would show it unread again
-    queryClient.setQueryData(['workflow-notifications'], (old: any) => (Array.isArray(old?.items)
-      ? { ...old, items: old.items.map((n: any) => (id === undefined || n.id === id ? { ...n, is_read: true } : n)) } : old));
-  };
-
-  const markAllRead = async () => {
-    showRead();
-    try {
-      await apiClient.post('/workflow-engine/notifications/in-app/read-all');
-    } catch {/* ignore */}
-    refetchNotifs();
-  };
-
-  const markOneRead = async (id: number) => {
-    showRead(id);
-    try {
-      await apiClient.post(`/workflow-engine/notifications/in-app/${id}/read`);
-    } catch {/* ignore */}
-    refetchNotifs();
-  };
+  // the top bar's own links, each shown to the people its page lets in (as the menu's entries are)
+  const leaves = visibleLeafHrefs(nav);
+  const canAskComplyChat = mayAskComplyAgent(access, leaves);
+  const usersPage = routeFor('/users');
+  const canSeeUsers = !!usersPage && offeredEntry(usersPage, access, leaves);
+  const canSeeGovernance = access.isAdmin || holds(access.permissions, 'governance:policies:*');
 
   const timeAgo = (iso: string) => {
     const normalized = iso && !/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? `${iso}Z` : iso;
@@ -176,9 +89,6 @@ export default function Header() {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
-      if (approvalsRef.current && !approvalsRef.current.contains(event.target as Node)) {
-        setApprovalsOpen(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -186,11 +96,10 @@ export default function Header() {
 
   // Escape closes an open dropdown, and gives focus back to its button when focus was inside it
   useEffect(() => {
-    if (!approvalsOpen && !notifOpen && !isUserMenuOpen) return undefined;
+    if (!notifOpen && !isUserMenuOpen) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const dropdowns = [
-        { open: approvalsOpen, close: () => setApprovalsOpen(false), wrap: approvalsRef, button: approvalsButtonRef },
         { open: notifOpen, close: () => setNotifOpen(false), wrap: notifRef, button: notifButtonRef },
         { open: isUserMenuOpen, close: () => setIsUserMenuOpen(false), wrap: userMenuRef, button: userButtonRef },
       ];
@@ -202,7 +111,7 @@ export default function Header() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [approvalsOpen, notifOpen, isUserMenuOpen]);
+  }, [notifOpen, isUserMenuOpen]);
 
   const handleLogout = async () => {
     try {
@@ -210,10 +119,7 @@ export default function Header() {
     } catch (error) {
       console.error('Logout failed:', error);
     }
-    // the collapsed sidebar is a preference of this browser, not of the session: it survives signing out
-    const collapsedSidebar = readCollapsed();
     localStorage.clear();
-    writeCollapsed(collapsedSidebar);
     sessionStorage.clear(); // Clear permission cache so next user gets fresh permissions
     queryClient.clear();
     setIsUserMenuOpen(false);
@@ -221,9 +127,13 @@ export default function Header() {
     router.refresh();
   };
 
+  // The Documents area keeps its tab strip in the bar (the open tab names the page, and the pages below it get the row they would otherwise lose); it is the library's, so
+  // someone only asked about a document (no library right) gets the trail. The owner of a department who holds no governance right gets the two tabs made for them.
+  const showTabs = inDocumentsArea(pathname) && (canSeeGovernance || access.headsDepartment);
+
   return (
-    <header className="top-nav flex h-12 items-center justify-between px-4 lg:px-5">
-      {/* Below lg the menu is the off-canvas drawer (Sidebar.tsx); from lg there is the sidebar, or on a middle-width window the rail's own button. */}
+    <header className="top-nav flex h-12 items-center justify-between gap-[6px] px-4 lg:px-5">
+      {/* Below lg the menu is the off-canvas drawer (Sidebar.tsx); from lg there is the rail. */}
       <button
         type="button"
         onClick={(e) => { e.currentTarget.focus({ preventScroll: true }); setMenuOpen(true); }}
@@ -231,174 +141,57 @@ export default function Header() {
         aria-haspopup="dialog"
         aria-expanded={menuOpen}
         aria-controls={menuOpen ? MAIN_MENU_ID : undefined}
-        className="-ml-1 mr-1 inline-flex min-h-ds-control min-w-[var(--ds-control-h)] flex-shrink-0 items-center justify-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] lg:hidden"
+        className={`-ml-1 ${BAR_BUTTON} lg:hidden`}
       >
         <Menu size={20} strokeWidth={1.75} />
       </button>
-      <div className="flex flex-1 min-w-0 self-stretch items-center px-1">
-        {(() => {
-          // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
-          // they are the library's, so someone only asked about a document (no library right) gets none
-          // (the owner of a department who holds no governance right gets the two tabs made for them: the library and its overview)
-          if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : perms.headsDepartment ? <DocumentsTabs ownerOnly /> : null;
-          // a Governance page is named by the registry, whatever page it is, and so is any page that has moved to the kit's own heading
-          // (`ownHeading`); every other page still reads PAGE_TITLES
-          const named = registryNamesPage(pathname) ? titleFor(pathname) : undefined;
-          const info: { title: string; subtitle?: string; section?: string } | undefined = named ? { title: named, subtitle: subtitleFor(pathname), section: ownHeadingSection(pathname) } : PAGE_TITLES[pathname ?? ''];
-          // Asset detail pages (/assets/<id>) have no static entry — show the
-          // section breadcrumb here so the page needs no second bar of its own.
-          if (!info && /^\/assets\/[^/]+$/.test(pathname ?? '')) {
-            return (
-              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
-                <span className="font-medium text-[var(--color-muted)] truncate">Cybersecurity Assurance</span>
-                <span className="text-[var(--color-muted)]">/</span>
-                <Link href="/assets" className="font-semibold text-[var(--color-text)]">IT Asset Inventory</Link>
-              </div>
-            );
-          }
-          // An assessment of the Cyber Security module, or one type's questionnaire, names itself in the body: the bar says which module it belongs to.
-          if (!info && /^\/cyber-security\/(assessments|questionnaires)\/[^/]+$/.test(pathname ?? '')) {
-            return (
-              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
-                <Link href="/cyber-security" className="font-semibold text-[var(--color-text)]">Cyber Security</Link>
-              </div>
-            );
-          }
-          if (!info) return null;
-          // Pages that render their own big heading in the body (redesign kit)
-          // get a breadcrumb here instead of a repeated title+subtitle, so the
-          // page name doesn't appear twice on screen.
-          if (info.section !== undefined) {
-            // Section label only — the page name lives in the body <h1>, so we
-            // deliberately don't repeat the title here (no double heading).
-            // '' = the page is its module's top page: its own heading IS the module's name, so the bar names nothing.
-            return (
-              <div className="flex items-center min-w-0 text-sm leading-none">
-                <span className="font-medium text-[var(--color-muted)] truncate">{info.section}</span>
-              </div>
-            );
-          }
-          return (
-            <div className="flex items-baseline gap-2 min-w-0">
-              <span className="text-sm font-semibold text-[var(--color-text)] truncate leading-none">{info.title}</span>
-              {info.subtitle && (
-                <span className="hidden xl:block text-[11px] text-[var(--color-muted)] truncate">{info.subtitle}</span>
-              )}
-            </div>
-          );
-        })()}
+      <div className="flex min-w-0 flex-1 self-stretch items-center px-1">
+        {showTabs ? <DocumentsTabs ownerOnly={!canSeeGovernance} /> : <Breadcrumbs />}
       </div>
 
-      <div className="ml-2 flex items-center gap-1.5 sm:ml-3 sm:gap-2.5">
-        {/* Comply Agent — global AI assistant, as a wide input (replaces the
-            old search bar). Type a question and hit Enter to open the chat. */}
+      <div className="flex shrink-0 items-center gap-[4px] sm:gap-[6px]">
+        <CommandBar />
+
+        {/* Comply Agent — global AI assistant: a question box from 1440 (type a question and hit Enter to open the chat), an icon below that. */}
         {canAskComplyChat && (
-          <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
-            <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
+          <form onSubmit={submitChat} className="relative hidden min-[1440px]:block">
+            <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" aria-hidden />
             <input
               value={chatQ}
               onChange={(e) => setChatQ(e.target.value)}
               placeholder="Ask Comply Agent anything…"
               aria-label="Ask Comply Agent"
-              className={`h-8 ${inDocumentsArea(pathname) ? 'w-44 2xl:w-64' : 'w-64'} rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30`}
+              className={`h-8 ${showTabs ? 'w-44 2xl:w-64' : 'w-64'} rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-72 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30`}
             />
             <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
               <ChevronRight size={14} />
             </button>
           </form>
         )}
-        {/* where the input is not shown (below md; in the Documents area, which needs the room for its tabs, below lg) Comply Agent is an icon.
-            It opens what the input opens when it is submitted empty: the chat. */}
         {canAskComplyChat && (
-          <Link href="/complychat" aria-label="Ask Comply Agent" title="Ask Comply Agent"
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-md text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${inDocumentsArea(pathname) ? 'lg:hidden' : 'md:hidden'}`}>
+          <Link href="/complychat" aria-label="Ask Comply Agent" title="Ask Comply Agent" className={`${BAR_BUTTON} !text-[var(--color-base)] hover:bg-[var(--color-base)]/10 max-md:hidden min-[1440px]:hidden`}>
             <Sparkles size={18} strokeWidth={1.75} />
           </Link>
         )}
 
-        {/* Issues moved into the sidebar "Issue & Incident Management" module. */}
+        {/* Guide mode — toggles small numbered markers on key UI elements. A phone's bar has no room for it: it is a row of the menu there. */}
+        <span className="hidden md:inline-flex"><GuideToggle /></span>
 
-        {/* Guide mode — toggles small numbered markers on key UI elements. */}
-        <GuideToggle />
-
-        {/* Pending compliance approvals — opens a dropdown (not a page). */}
-        <div className="relative" ref={approvalsRef}>
-          <button
-            ref={approvalsButtonRef}
-            type="button"
-            onClick={() => {
-              // opened: the list as it is now (an item done a moment ago is gone)
-              if (!approvalsOpen) refetchInbox();
-              setApprovalsOpen(!approvalsOpen);
-            }}
-            title={badgeLabel(inbox)}
-            aria-label={badgeLabel(inbox)}
-            aria-haspopup="dialog"
-            aria-expanded={approvalsOpen}
-            aria-controls={approvalsOpen ? dropdownIds.approvals : undefined}
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
-          >
-            <ClipboardCheck size={18} strokeWidth={1.75} />
-            {needsText && (
-              <span aria-hidden className={`absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[4px] text-[12px] font-bold text-white leading-none ${inbox.badge.kind === 'count' && inbox.badge.overdue > 0 ? 'bg-[#b42318]' : 'bg-[#b45309]'}`}>
-                {needsText}
-              </span>
-            )}
-          </button>
-          {approvalsOpen && (
-            <div id={dropdownIds.approvals} role="dialog" aria-label="Needs my action" className={`${DROPDOWN} sm:w-96`}>
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-                <span className="text-sm font-semibold text-gray-800">Needs my action</span>
-                {needs.pending > 0 && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-600">{needs.pending} to decide</span>
-                )}
-              </div>
-              <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-                {needs.notices.map((n) => (
-                  <div key={n.source} role="alert" className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[#9b1c1c]">
-                    <span>{n.label} could not be loaded.</span>
-                    <button type="button" onClick={() => refetchInbox(n.source)} className="flex-shrink-0 rounded px-1.5 py-0.5 font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">Retry</button>
-                  </div>
-                ))}
-                {needs.items.map((it) => {
-                  const due = dueLine(it);
-                  return (
-                    <Link key={it.key} href={it.href} onClick={() => setApprovalsOpen(false)} className={ITEM_LINK}>
-                      <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium leading-snug truncate text-[#1f2933]" title={it.title}>{it.title}</p>
-                        <p className={`mt-0.5 ${due.tone === 'danger' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>{KIND_META[it.kind].label} · {due.text}</p>
-                      </div>
-                      <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
-                    </Link>
-                  );
-                })}
-                {needs.items.length === 0 && needs.notices.length === 0 && (
-                  <div className="px-4 py-6 text-center text-xs text-gray-400">{inbox.badge.kind === 'loading' ? 'Loading…' : 'Nothing to decide.'}</div>
-                )}
-                {needs.more > 0 && (
-                  <Link href="/needs-my-action" onClick={() => setApprovalsOpen(false)} className={`${ITEM_LINK} font-medium text-[#0f766e]`}>{needs.more} more to decide →</Link>
-                )}
-                {needs.acknowledgements > 0 && (
-                  <Link href="/needs-my-action?section=ack" onClick={() => setApprovalsOpen(false)} className={`${ITEM_LINK} font-medium text-[#0f766e]`}>
-                    {needs.acknowledgements.toLocaleString('en-US')} to acknowledge →
-                  </Link>
-                )}
-              </div>
-              {/* the page is everyone's own queue; the assessments page is theirs only with assessments access */}
-              <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
-                <Link href="/needs-my-action" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                  See all →
-                </Link>
-                {canSeeAssessments && (
-                  <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                    Assessment approvals →
-                  </Link>
-                )}
-              </div>
-            </div>
+        {/* Work and context: the panel with the person's queue (it replaced the Pending approvals dropdown); the number is the queue's, the inbox's count rule */}
+        <button
+          ref={ui.panelButton}
+          type="button"
+          onClick={ui.togglePanel}
+          aria-pressed={ui.panelShown}
+          aria-label={`Work and context. ${queue.label}`}
+          title="Work and context (Ctrl .)"
+          className={`${BAR_BUTTON} ${ui.panelShown ? 'bg-ds-surface-hover !text-ds-fg' : ''} ${queue.text ? 'gap-[4px] px-[6px]' : ''}`}
+        >
+          <PanelRight size={18} strokeWidth={1.75} aria-hidden />
+          {queue.text && (
+            <span aria-hidden className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[4px] text-[12px] font-[600] leading-none text-ds-on-primary ${queue.urgent ? 'bg-ds-danger' : 'bg-ds-warning'}`}>{queue.text}</span>
           )}
-        </div>
+        </button>
 
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
@@ -409,13 +202,13 @@ export default function Header() {
               if (!notifOpen) refetchNotifs();
               setNotifOpen(!notifOpen);
             }}
-            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+            className={BAR_BUTTON}
             aria-label="Notifications"
             aria-haspopup="dialog"
             aria-expanded={notifOpen}
             aria-controls={notifOpen ? dropdownIds.notifications : undefined}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
             {unreadCount > 0 && (
@@ -433,7 +226,7 @@ export default function Header() {
                     <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">{unreadCount} new</span>
                   )}
                   {unreadCount > 0 && (
-                    <button onClick={markAllRead} className="text-xs text-blue-600 hover:underline">Mark all read</button>
+                    <button onClick={markAllRead} className="text-xs text-blue-600 hover:underline [@media(pointer:coarse)]:min-h-[44px]">Mark all read</button>
                   )}
                 </div>
               </div>
@@ -453,7 +246,8 @@ export default function Header() {
                         } ${n.is_read ? 'opacity-30' : ''}`} />
                         <div className="flex-1 min-w-0">
                           <p className={`font-medium leading-snug truncate ${!n.is_read ? 'text-[#1f2933]' : 'text-[#586472]'}`}>{n.subject}</p>
-                          {n.message && <p className="mt-0.5 text-[#586472] leading-snug">{n.message}</p>}
+                          {/* the message is cut at two lines and its whole text is the tooltip */}
+                          {n.message && <p title={n.message} className="mt-0.5 line-clamp-2 text-[#586472] leading-snug">{n.message}</p>}
                           <p className="mt-0.5 text-[#7b8794]">{timeAgo(n.created_at)}</p>
                         </div>
                       </>
@@ -473,7 +267,7 @@ export default function Header() {
                         {body}
                         {!n.is_read && (
                           <button type="button" onClick={() => markOneRead(n.id)}
-                            className="h-fit flex-shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                            className="h-fit flex-shrink-0 rounded px-1.5 py-0.5 text-[12px] font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] [@media(pointer:coarse)]:min-h-[44px]">
                             Mark read
                           </button>
                         )}
@@ -492,7 +286,7 @@ export default function Header() {
             ref={userButtonRef}
             type="button"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
-            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+            className="flex min-h-ds-control items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] max-md:min-w-[44px] max-md:justify-center max-md:border-0 max-md:bg-transparent"
             aria-label="User menu"
             aria-haspopup="dialog"
             aria-expanded={isUserMenuOpen}
@@ -512,9 +306,10 @@ export default function Header() {
               <div className="border-b border-[var(--color-border)] px-3 py-2.5">
                 <p className="text-sm font-semibold text-[var(--color-text)]">{displayName}</p>
                 {userEmail && (
-                  <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{userEmail}</p>
+                  <p title={userEmail} className="mt-0.5 truncate text-xs text-[var(--color-text-muted)]">{userEmail}</p>
                 )}
-                <p className="mt-1 text-xs text-[var(--color-text-muted)]">{tenantName}</p>
+                {/* a tenant name can be long: two lines, the whole name as its tooltip */}
+                <p title={tenantName} className="mt-1 line-clamp-2 break-words text-xs text-[var(--color-text-muted)]">{tenantName}</p>
               </div>
 
               <div className="py-1">
@@ -525,7 +320,7 @@ export default function Header() {
                       setIsUserMenuOpen(false);
                       router.push('/users');
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+                    className="flex min-h-ds-control w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
                   >
                     <Users size={16} className="text-[var(--color-text-muted)]" />
                     Users
@@ -539,7 +334,7 @@ export default function Header() {
                       setIsUserMenuOpen(false);
                       router.push('/admin/users');
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+                    className="flex min-h-ds-control w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
                   >
                     <UserCircle size={16} className="text-[var(--color-text-muted)]" />
                     Admin Users
@@ -549,7 +344,7 @@ export default function Header() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50"
+                  className="flex min-h-ds-control w-full items-center gap-2 px-3 py-2 text-sm text-rose-600 transition-colors hover:bg-rose-50"
                 >
                   <LogOut size={16} />
                   Logout
@@ -560,112 +355,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-  );
-}
-
-// ─── Phase 9: Global search bar ───────────────────────────────────────────
-// Debounced cross-domain search. Triggers after 2+ characters with a 250ms
-// delay so we don't slam the backend on every keystroke. Results are typed
-// (vulnerability / asset / risk) and link straight to the detail page.
-
-function GlobalSearchBar() {
-  const router = useRouter();
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const [debounced, setDebounced] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(q.trim()), 250);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  const { data, isFetching } = useQuery({
-    queryKey: ['global-search', debounced],
-    queryFn: () => searchApi.power({ q: debounced, per_domain_limit: 6 }).then((r) => r.data),
-    enabled: debounced.length >= 2,
-    staleTime: 30 * 1000,
-  });
-
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-
-  const hasResults =
-    !!data &&
-    Object.values(data.results || {}).some((arr) => Array.isArray(arr) && arr.length > 0);
-
-  const onHit = (url: string) => {
-    setOpen(false);
-    setQ('');
-    router.push(url);
-  };
-
-  return (
-    <div className="relative hidden md:block" ref={containerRef}>
-      <div className="relative">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search…"
-          className="h-8 w-56 rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs text-slate-700 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
-        />
-        {isFetching && (
-          <Loader2
-            size={12}
-            className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-slate-400"
-          />
-        )}
-      </div>
-
-      {open && debounced.length >= 2 && (
-        <div className="absolute right-0 z-50 mt-1 w-96 rounded-lg border border-slate-200 bg-white shadow-xl">
-          {!hasResults && !isFetching && (
-            <p className="px-3 py-3 text-xs text-slate-500">No results for &ldquo;{debounced}&rdquo;.</p>
-          )}
-          {data && hasResults && (
-            <div className="max-h-96 overflow-y-auto p-1">
-              {(['vulnerabilities', 'assets', 'risks'] as const).map((domain) => {
-                const arr = (data.results || {})[domain] || [];
-                if (arr.length === 0) return null;
-                return (
-                  <div key={domain} className="px-1 py-1">
-                    <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
-                      {domain}
-                    </p>
-                    {arr.map((hit) => (
-                      <button
-                        key={`${hit.type}-${hit.id}`}
-                        onClick={() => onHit(hit.url)}
-                        className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50"
-                      >
-                        <p className="font-medium text-slate-800 truncate">{hit.title}</p>
-                        <p className="text-slate-500 text-[11px] truncate">
-                          {hit.subtitle || ''}
-                          {hit.severity ? ` · ${hit.severity}` : ''}
-                          {hit.criticality ? ` · ${hit.criticality}` : ''}
-                          {hit.asset_type ? ` · ${hit.asset_type}` : ''}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }

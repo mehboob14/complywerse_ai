@@ -1,12 +1,13 @@
 'use client';
 
 // The shell's mode for the window as it is now (see shellMode.ts), kept current while the window is resized.
-// useSyncExternalStore: the server (and a hydration pass) answers 'full', the browser answers from matchMedia before it paints, and a resize
-// re-renders with the new answer. Without matchMedia (an old browser) the shell stays 'full'.
+// useSyncExternalStore: the server (and a hydration pass) answers 'docked', the browser answers from matchMedia before it paints, and a resize
+// re-renders with the new answer. Without matchMedia (an old browser) the shell stays 'docked'. The shell is mounted by the dashboard layout after
+// AuthGuard has run in the browser, never on the server, so the first paint already has the right answer.
 import { useSyncExternalStore } from 'react';
-import { FULL_QUERY, RAIL_QUERY, shellModeFromMatches, type ShellMode } from './shellMode';
+import { DOCK_QUERY, RAIL_QUERY, shellModeFromMatches, type ShellMode } from './shellMode';
 
-const queries = () => [window.matchMedia(FULL_QUERY), window.matchMedia(RAIL_QUERY)];
+const queries = () => [window.matchMedia(DOCK_QUERY), window.matchMedia(RAIL_QUERY)];
 const canMatch = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function';
 
 function subscribe(onChange: () => void): () => void {
@@ -17,11 +18,11 @@ function subscribe(onChange: () => void): () => void {
 }
 
 function snapshot(): ShellMode {
-  if (!canMatch()) return 'full';
-  const [full, rail] = queries();
-  return shellModeFromMatches(full.matches, rail.matches);
+  if (!canMatch()) return 'docked';
+  const [dock, rail] = queries();
+  return shellModeFromMatches(dock.matches, rail.matches);
 }
 
 export function useShellMode(): ShellMode {
-  return useSyncExternalStore(subscribe, snapshot, () => 'full');
+  return useSyncExternalStore(subscribe, snapshot, () => 'docked');
 }
