@@ -2,19 +2,26 @@
 // of facts under the title and what the whole page says when it has nothing to show. Pure: `node --test src/lib/inbox/inboxView.test.ts`. The numbers come from buildInbox; this
 // file only chooses words and views, so a cap here never changes a count.
 import { formatCount, formatDate, formatRelative } from '../format.ts';
-import { KIND_META, SOURCE_DEFS, type Inbox, type InboxItem, type InboxNotice, type Section, type SourceId } from './buildInbox.ts';
+import { KIND_META, SOURCE_DEFS, type Counts, type Inbox, type InboxItem, type InboxNotice, type Section, type SourceId } from './buildInbox.ts';
 
 /** Rows shown at a time in a section; "Show 50 more" adds the next ones. */
 export const PAGE_SIZE = 50;
 
 export type SectionKey = 'decide' | 'ack' | 'sent';
-export interface SectionSpec { key: SectionKey; section: Section; title: string; empty: string }
+/** `loading`: what a screen reader is told while the section's sources are asked (a sentence of its own: "Loading to decide" is not one) */
+export interface SectionSpec { key: SectionKey; section: Section; title: string; empty: string; loading: string }
 
 export const SECTIONS: readonly SectionSpec[] = [
-  { key: 'decide', section: 'decision', title: 'To decide', empty: 'Nothing needs your decision.' },
-  { key: 'ack', section: 'acknowledgement', title: 'To acknowledge', empty: 'Nothing to acknowledge.' },
-  { key: 'sent', section: 'sent', title: 'Sent by me', empty: 'None of the requests you sent is waiting.' },
+  { key: 'decide', section: 'decision', title: 'To decide', empty: 'Nothing needs your decision.', loading: 'Loading what needs your decision' },
+  { key: 'ack', section: 'acknowledgement', title: 'To acknowledge', empty: 'Nothing to acknowledge.', loading: 'Loading the documents to acknowledge' },
+  { key: 'sent', section: 'sent', title: 'Sent by me', empty: 'None of the requests you sent is waiting.', loading: 'Loading the requests you sent' },
 ];
+
+/** The server sends at most 200 of the requests the person sent (the most urgent first) and says how many there are; the page says so, because its number is the true one.
+ *  '' when nothing was cut. */
+export function sentCutLine(c: Pick<Counts, 'sent' | 'sentTotal'>): string {
+  return c.sentTotal > c.sent ? `Showing the ${formatCount(c.sent)} most urgent of ${formatCount(c.sentTotal)} requests you sent.` : '';
+}
 
 const ALIAS: Record<string, SectionKey> = {
   decide: 'decide', decision: 'decide', decisions: 'decide', ack: 'ack', acknowledge: 'ack', acknowledgement: 'ack', acknowledgements: 'ack', sent: 'sent',
@@ -98,7 +105,7 @@ export function metaLine(inbox: Inbox): string {
   if (c.overdue) parts.push(`${formatCount(c.overdue)} overdue`);
   if (c.canDecide) parts.push(`${formatCount(c.canDecide)} more you can decide`);
   if (c.acknowledgement) parts.push(`${formatCount(c.acknowledgement)} to acknowledge`);
-  if (c.sent) parts.push(`${formatCount(c.sent)} sent`);
+  if (c.sentTotal) parts.push(`${formatCount(c.sentTotal)} sent`);
   return parts.join(' · ');
 }
 

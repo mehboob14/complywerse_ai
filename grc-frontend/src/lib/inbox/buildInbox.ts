@@ -107,7 +107,8 @@ export interface SourceDef {
   inBadge: boolean;
   /** the server says it has nothing (not an error) */
   off?: (raw: unknown) => boolean;
-  toItems: (raw: unknown, now: Date) => { items: InboxItem[]; skipped: number };
+  /** `total`: the true number the server says it holds when it sent only the most urgent ones (the sent list is cut at 200 groups) */
+  toItems: (raw: unknown, now: Date) => { items: InboxItem[]; skipped: number; total?: number };
 }
 
 type Row = Record<string, unknown>;
@@ -188,7 +189,9 @@ function evidenceItems(raw: unknown): { items: InboxItem[]; skipped: number } {
     if (!isRow(r) || id === null) { skipped++; continue; }
     const item = text(r.item_number);
     items.push({
-      key: `assessment.evidence:evidence:${id}`, source: 'assessment.evidence', recordType: 'AssessmentItemEvidence', recordId: id, kind: 'evidence', section: 'decision',
+      // the key names the step the evidence waits at (pending_tier_1...): the server does not check that a decision is made at the step the person saw (an approval of evidence that has moved
+      // on counts for the NEXT tier), so evidence that moved is another item, and a dialog opened on the old one is told that it no longer waits (lib/inbox/decisionModel.ts: evidenceStillWaits)
+      key: `assessment.evidence:evidence:${id}:${text(r.status) ?? 'pending'}`, source: 'assessment.evidence', recordType: 'AssessmentItemEvidence', recordId: id, kind: 'evidence', section: 'decision',
       title: text(r.evidence_name) ?? (item ? `Evidence for item ${item}` : `Evidence #${id}`),
       context: [text(r.assessment_name), item ? `item ${item}` : null, whole(r.current_tier) ? `tier ${whole(r.current_tier)}` : null].filter(Boolean).join(' · ') || null,
       detail: text(r.control_description), requester: text(r.submitted_by_name), requesterId: null, createdAt: text(r.submitted_at), dueAt: null, overdue: false,
@@ -201,7 +204,7 @@ function evidenceItems(raw: unknown): { items: InboxItem[]; skipped: number } {
   return { items, skipped };
 }
 
-function sentItems(raw: unknown, now: Date): { items: InboxItem[]; skipped: number } {
+function sentItems(raw: unknown, now: Date): { items: InboxItem[]; skipped: number; total?: number } {
   const items: InboxItem[] = [];
   let skipped = 0;
   for (const r of rowsOf(raw, ['items'])) {
@@ -220,7 +223,8 @@ function sentItems(raw: unknown, now: Date): { items: InboxItem[]; skipped: numb
         more: Math.max(0, whole(r.waiting_more) ?? 0) },
     });
   }
-  return { items, skipped };
+  // the server cuts the list at 200 groups (the most urgent first) and says how many there are: the number on the page is that, not the length of the cut list
+  return { items, skipped, total: isRow(raw) ? whole(raw.total) ?? undefined : undefined };
 }
 
 export const SOURCE_DEFS: Record<SourceId, SourceDef> = {
@@ -253,7 +257,10 @@ export interface Counts {
   overdue: number;
   acknowledgement: number;
   ackOverdue: number;
+  /** the requests of the sent list that are listed (the server sends at most 200 groups) */
   sent: number;
+  /** the requests the person sent that still wait, as the server counts them: never less than `sent`, more when the list was cut */
+  sentTotal: number;
   /** rows a source sent that this build cannot read (counted, not shown) */
   skipped: number;
 }
@@ -283,7 +290,7 @@ const answered = (s: SourceState) => s.state === 'ready' || s.state === 'stale' 
 /** The inbox for the sources given (a missing source is not part of it). `now` is injected so the model is a pure function of its inputs. */
 export function buildInbox(inputs: SourceInput[], now: Date = new Date()): Inbox {
   const sources: Partial<Record<SourceId, SourceState>> = {};
-  const parts = new Map<SourceId, { items: InboxItem[]; skipped: number }>();
+  const parts = new Map<SourceId, { items: InboxItem[]; skipped: number; total?: number }>();
   for (const input of inputs) {
     const def = SOURCE_DEFS[input.id];
     if (!def) continue;
@@ -308,6 +315,7 @@ export function buildInbox(inputs: SourceInput[], now: Date = new Date()): Inbox
   const counts: Counts = {
     decision: counted.length, canDecide: decisions.length - counted.length, overdue: counted.filter((i) => i.overdue).length,
     acknowledgement: bySection.acknowledgement.length, ackOverdue: bySection.acknowledgement.filter((i) => i.overdue).length, sent: bySection.sent.length,
+    sentTotal: Math.max(bySection.sent.length, parts.get('doc.sent')?.total ?? 0),
     skipped: Array.from(parts.values()).reduce((n, p) => n + p.skipped, 0),
   };
 
@@ -322,11 +330,13 @@ export function buildInbox(inputs: SourceInput[], now: Date = new Date()): Inbox
 
   const header = BADGE_SOURCES.map((id) => sources[id]).filter((s): s is SourceState => !!s);
   const someAnswered = header.some(answered);
-  const incomplete = header.some((s) => s.state === 'loading' || s.state === 'unavailable');
+  const loadingSome = header.some((s) => s.state === 'loading');
+  const failedSome = header.some((s) => s.state === 'unavailable');
   let badge: Badge;
-  if (!someAnswered) badge = header.some((s) => s.state === 'unavailable') ? { kind: 'unknown' } : { kind: 'loading' };
-  else if (counts.decision === 0) badge = incomplete ? { kind: 'unknown' } : { kind: 'none' };     // never a 0 over a source that failed
-  else badge = { kind: 'count', n: counts.decision, overdue: counts.overdue, incomplete };
+  if (!someAnswered) badge = failedSome ? { kind: 'unknown' } : { kind: 'loading' };
+  // nothing counted yet: never a 0 over a source that failed ("!"), and never a "!" over one that is only slow ("loading": no badge, no claim, until it answers)
+  else if (counts.decision === 0) badge = failedSome ? { kind: 'unknown' } : loadingSome ? { kind: 'loading' } : { kind: 'none' };
+  else badge = { kind: 'count', n: counts.decision, overdue: counts.overdue, incomplete: loadingSome || failedSome };
 
   return { items: all, bySection, counts, badge, notices, sources };
 }

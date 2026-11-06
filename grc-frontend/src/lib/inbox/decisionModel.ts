@@ -3,6 +3,7 @@
 // (governanceApi.signDocumentOff / rejectDocumentSignoff / requestSignoffChanges; POST /compliance/assessments/evidence/{id}/approval). `node --test src/lib/inbox/decisionModel.test.ts`.
 import { SIGN_LABEL, type StageKind } from '../approvalRoutes.ts';
 import { canRetry, errorMessage, statusOf } from '../../components/ui/ds/reportOutcome.ts';
+import { SOURCE_DEFS } from './buildInbox.ts';
 
 export type Choice = 'sign' | 'changes' | 'reject' | 'approve' | 'return';
 
@@ -111,6 +112,21 @@ export function failureOf(error: unknown): Failure {
   if (canRetry(error)) return { kind: 'retry', headline: 'Your decision could not be sent', message };
   return { kind: 'refused', headline: 'Your decision was not accepted', message };
 }
+
+/** Whether the evidence a decision is about still waits at the step the person saw, in a FRESH answer of the assessment approvals list. The server refuses a document's second
+ *  signature (403) and a document that changed (409), but it does not check that evidence is still pending where the decision names it: a repeated approval, or one from a list a minute
+ *  old, would count for the NEXT tier (an administrator or an editor may decide every tier). So the dialog asks again right before it sends, and a retry after a lost answer never repeats a
+ *  decision the server already took. `key` is the item's key, which names the step (buildInbox: pending_tier_1...). */
+export function evidenceStillWaits(raw: unknown, key: string): boolean {
+  return SOURCE_DEFS['assessment.evidence'].toItems(raw, new Date()).items.some((i) => i.key === key);
+}
+
+/** What the dialog says when that fresh answer no longer holds the evidence where the person saw it. */
+export const EVIDENCE_MOVED: Failure = {
+  kind: 'stale',
+  headline: 'This is no longer waiting for you',
+  message: 'Someone decided it, or it moved to another step, since this list was drawn. Nothing was sent.',
+};
 
 /** The query keys to refresh after a decision, so the row is gone and the badge drops on the next draw: the four lists, and what the document page reads. */
 export function keysAfterDecision(documentId: number | null): Array<readonly unknown[]> {

@@ -7,7 +7,7 @@
 //   * a failed decision shows the server's own words here, with Try again where trying again can help (a repeated decision is refused by the server, so it never decides twice);
 //   * an item that is no longer waiting (the list was refreshed without it, or the server says so) says so and offers Close;
 //   * a document that changed since the dialog opened is refused by the server (409): the dialog says so and asks to read it again, and the signature is drawn again, deliberately.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, RotateCw } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
@@ -17,8 +17,9 @@ import { againLine, seeChangesHref } from '@/lib/approvalRoutes';
 import { formatDate } from '@/lib/format';
 import { signRoleOf } from '@/lib/proposals';
 import { KIND_META, type InboxItem } from '@/lib/inbox/buildInbox';
+import { askSource } from '@/lib/inbox/inboxApi';
 import {
-  doneWords, documentChoices, documentRequest, evidenceChoices, evidenceRequest, failureOf, problemWith, type Choice, type ChoiceSpec, type Failure,
+  EVIDENCE_MOVED, doneWords, documentChoices, documentRequest, evidenceChoices, evidenceRequest, evidenceStillWaits, failureOf, problemWith, type Choice, type ChoiceSpec, type Failure,
 } from '@/lib/inbox/decisionModel';
 import { dueLine, factsOf } from '@/lib/inbox/inboxView';
 import { useSignoff } from '../governance/documents/_SignoffControl';
@@ -189,6 +190,7 @@ function EvidenceForm({ item, onDirty, onClose, onDecided, onStale }: Pick<Decis
   const [comment, setComment] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [finished, setFinished] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const typed = comment.trim() !== '';
   useEffect(() => { onDirty(typed); }, [typed]);        // eslint-disable-line react-hooks/exhaustive-deps -- told when it changes
@@ -202,22 +204,36 @@ function EvidenceForm({ item, onDirty, onClose, onDecided, onStale }: Pick<Decis
     onSuccess: async () => { setFinished(true); await onDecided(item); },
     onError: (error) => { const f = failureOf(error); setFailure(f); if (f.kind === 'stale' || f.kind === 'changed') onStale(item); },
   });
-  const submit = () => { setFailure(null); send.mutate(choice); };
+  // Unlike a document, evidence is not protected by the server against a second decision (it does not check that the evidence still waits at the step named): the list may be a minute old, and a
+  // retry after a lost answer may repeat what the server took. So the list is asked again right before sending; a decision is only sent for evidence that is still where the person saw it.
+  // When that asking itself fails, the decision goes on: the server decides, as it always did.
+  const open = useRef(true);                              // the person may close the dialog while the list is being asked (up to 20 s on a slow line): nothing is sent then
+  useEffect(() => () => { open.current = false; }, []);
+  const submit = async () => {
+    setFailure(null);
+    setChecking(true);
+    try {
+      const fresh = await askSource('assessment.evidence').catch(() => null);
+      if (!open.current) return;
+      if (fresh !== null && !evidenceStillWaits(fresh, item.key)) { setFailure(EVIDENCE_MOVED); onStale(item); return; }
+    } finally { setChecking(false); }
+    send.mutate(choice);
+  };
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-[8px]">
-        <Button href={item.href} leftIcon={<ExternalLink aria-hidden />}>Open the assessment approval</Button>
+        <Button href={item.href} target="_blank" rel="noopener noreferrer" leftIcon={<ExternalLink aria-hidden />}>Open the assessment approval</Button>
         <span className="text-ds-label text-ds-fg-muted">{KIND_META.evidence.authority}</span>
       </div>
-      <Choices choices={choices} value={choice.id} onChange={(c) => { setChoiceId(c); setFailure(null); }} disabled={send.isPending || finished} />
+      <Choices choices={choices} value={choice.id} onChange={(c) => { setChoiceId(c); setFailure(null); }} disabled={send.isPending || finished || checking} />
       <FormField label="Comment" optional>
-        <Textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} disabled={send.isPending || finished} />
+        <Textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} disabled={send.isPending || finished || checking} />
       </FormField>
       {failure && <Problem failure={failure} onRetry={submit} onReload={submit} onClose={onClose} />}
       <div className="flex flex-wrap justify-end gap-[8px]">
         <Button onClick={onClose} disabled={send.isPending || finished}>Cancel</Button>
-        <Button variant={choice.destructive ? 'danger' : 'primary'} loading={send.isPending || finished} onClick={submit} disabled={failure?.kind === 'stale'}>{choice.submit}</Button>
+        <Button variant={choice.destructive ? 'danger' : 'primary'} loading={send.isPending || finished || checking} onClick={submit} disabled={failure?.kind === 'stale'}>{choice.submit}</Button>
       </div>
     </>
   );

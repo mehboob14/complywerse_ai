@@ -35,11 +35,20 @@ export const SOURCE_REQUESTS: Record<SourceId, SourceRequest> = {
 export const STALE_MS = 60_000;
 export const TIMEOUT_MS = 20_000;
 
+/** One source asked right now, outside the lists: a decision that must not rest on a list up to a minute old asks again first (the 20 s timeout, no retry). */
+export async function askSource(id: SourceId): Promise<unknown> {
+  const request = SOURCE_REQUESTS[id];
+  return (await apiClient.get(request.path, { params: request.params, timeout: TIMEOUT_MS })).data as unknown;
+}
+
 export interface UseInboxOptions {
   /** ask at all (the top bar waits for the signed-in person) */
   enabled?: boolean;
   /** also ask for the requests the person sent (the page; the top bar does not) */
   includeSent?: boolean;
+  /** the page asks again every time it is opened, however fresh the lists the top bar holds: a person who acted on a document page or the assessments page and comes back sees what is true,
+   *  not what was true up to a minute ago (those pages refresh only some of the four lists) */
+  freshOnOpen?: boolean;
 }
 
 export interface UseInbox {
@@ -51,7 +60,7 @@ export interface UseInbox {
   fetchingSource: Partial<Record<SourceId, boolean>>;
 }
 
-export function useInbox({ enabled = true, includeSent = false }: UseInboxOptions = {}): UseInbox {
+export function useInbox({ enabled = true, includeSent = false, freshOnOpen = false }: UseInboxOptions = {}): UseInbox {
   const ids: SourceId[] = includeSent ? [...BADGE_SOURCES, 'doc.sent'] : BADGE_SOURCES;
   const results = useQueries({
     queries: ids.map((id) => {
@@ -63,6 +72,7 @@ export function useInbox({ enabled = true, includeSent = false }: UseInboxOption
         staleTime: STALE_MS,
         refetchInterval: request.pollMs,
         refetchOnWindowFocus: true,
+        refetchOnMount: freshOnOpen ? ('always' as const) : true,
         retry: (count: number, error: unknown) => count < 1 && !(request.missingMeansOff && statusOf(error) === 404),
         retryDelay: 1000,
       };

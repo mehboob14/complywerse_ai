@@ -159,6 +159,25 @@ test('a source that answered with nothing next to one that failed is "!", not a 
   assert.deepEqual(inbox.badge, { kind: 'unknown' });
 });
 
+test('a source that answered with nothing next to one that is only SLOW is "loading": no badge and no "!", because nothing has failed (a "!" means a problem)', () => {
+  const slow = (id: SourceId): SourceInput => ({ id, state: { state: 'loading' } });
+  const inbox = build(slow('doc.lifecycle'), slow('doc.signoff'), input('assessment.evidence', { pending_approvals: [] }));
+  assert.deepEqual(inbox.badge, { kind: 'loading' });
+  assert.equal(badgeText(inbox.badge), '');
+  assert.equal(badgeLabel(inbox), 'Needs my action, loading');
+  // the same with a failure among them: the failure says "!", the slowness does not hide it
+  assert.deepEqual(build(slow('doc.lifecycle'), failed('doc.signoff'), input('assessment.evidence', { pending_approvals: [] })).badge, { kind: 'unknown' });
+  // and once everything answered with nothing: no badge, as ever
+  assert.deepEqual(build(input('doc.lifecycle', lifeRaw()), input('doc.signoff', { items: [] }), input('assessment.evidence', { pending_approvals: [] })).badge, { kind: 'none' });
+});
+
+test('a number with a source still loading keeps its "!" (the count may grow); with nothing failed the label says "loading"-style incomplete without naming a failure', () => {
+  const inbox = build(input('doc.lifecycle', lifeRaw(life('approval'))), { id: 'doc.signoff', state: { state: 'loading' } }, input('assessment.evidence', { pending_approvals: [] }));
+  assert.deepEqual(inbox.badge, { kind: 'count', n: 1, overdue: 0, incomplete: true });
+  assert.equal(badgeText(inbox.badge), '1!');
+  assert.equal(badgeLabel(inbox), 'Needs my action: 1 to decide, may be incomplete');
+});
+
 test('above 99 the badge says 99+ and the label keeps the exact number', () => {
   const rows = Array.from({ length: 120 }, (_, i) => life('review', { document_id: 2000 + i }));
   const inbox = build(input('doc.lifecycle', lifeRaw(...rows)), input('doc.signoff', { items: [] }), input('assessment.evidence', { pending_approvals: [] }));
