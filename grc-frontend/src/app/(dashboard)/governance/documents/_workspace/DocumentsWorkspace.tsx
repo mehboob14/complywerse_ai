@@ -393,7 +393,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     }
     return { items: recordRows(pageRows, 0, toggleRow), drawn: pageRows.map((r) => r.doc.id) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inBoard, waitingForData, folders, foldView.saved, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
+  }, [inBoard, waitingForData, folders, foldView.saved, folderPrefs, shut, filtering, filteredDocs.length, extra, uid, selectable, selection.selected, at, fold, pageRows]);
   const pageIds = listItems.items.filter((i) => i.kind === 'row' && !i.context).map((i) => (i as { id: number }).id);
 
   // ── handlers ──
@@ -533,9 +533,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     }
   };
   const allParentsOpen = parents.every((id) => openOf(id) != null);
+  // read when it is pressed, not when it was made: the rows' cells keep the function they were drawn with until the columns change
+  const filtersNow = useRef(filters);
+  filtersNow.current = filters;
   const pickFramework = (id: number) => {
     const key = String(id);
-    setFilters({ ...filters, frameworks: filters.frameworks.includes(key) ? filters.frameworks.filter((f) => f !== key) : [...filters.frameworks, key] });
+    const current = filtersNow.current;
+    setFilters({ ...current, frameworks: current.frameworks.includes(key) ? current.frameworks.filter((f) => f !== key) : [...current.frameworks, key] });
   };
 
   // the file says what it holds: cut, its name says how many of the loaded documents and how many exist
