@@ -168,7 +168,8 @@ test('the page asks again every time it is opened (what was done on another page
   assert.match(api, /refetchOnMount: freshOnOpen \? \('always' as const\) : true/);
   assert.match(api, /freshOnOpen = false/, 'the default is the top bar\'s');
   assert.match(read(`${PAGE}/page.tsx`), /useInbox\(\{ includeSent: true, freshOnOpen: true \}\)/);
-  assert.match(read('src/components/layout/Header.tsx'), /useInbox\(\{ enabled: !!currentUser \}\)/, 'the top bar passes no freshOnOpen');
+  // the top bar's own hook moved into the shell (S2-SH): the one request the rail, the bar button and the Work and context panel share
+  assert.match(read('src/components/shell/ShellProvider.tsx'), /useInbox\(\{ enabled: access\.signedIn \}\)/, 'the shell passes no freshOnOpen');
 });
 
 test('a row keeps to one line of facts from a tablet up: the due line beside the action, the actions one width, the words (escalated, archived...) on the facts line; stacked below', () => {
