@@ -89,7 +89,7 @@ export function loadFolderPrefs(store: KeyValueStore | null, key: string): Folde
   const out: FolderPrefs = { view: null, open: {} };
   const raw = read(store, key) as { view?: unknown; open?: unknown } | null;
   if (!raw || typeof raw !== 'object') return out;
-  if (raw.view === 'table' || raw.view === 'folders') out.view = raw.view;
+  if (raw.view === 'table' || raw.view === 'folders' || raw.view === 'board') out.view = raw.view;
   if (raw.open && typeof raw.open === 'object' && !Array.isArray(raw.open)) {
     const open = raw.open as Record<string, unknown>;
     Object.keys(open).filter((k) => /^(d\d+|none)$/.test(k)).slice(0, FOLDERS_KEPT).forEach((k) => { if (typeof open[k] === 'boolean') out.open[k] = open[k] as boolean; });

@@ -128,15 +128,23 @@ test('the requests: the legacy keys, a 20 second timeout, one retry a second lat
   assert.match(api, /path: '\/governance\/documents\/lifecycle\/sent'/);
 });
 
-test('the top bar uses the same hook and the same model: the chip\'s number is the page\'s To decide count, and "see all" opens the page', () => {
+// The Pending approvals dropdown of the top bar became the Work and context panel (components/shell, S2-SH): the shell asks the inbox ONCE (ShellProvider), and the rail, the top bar's
+// button and the panel read that answer. The pins moved with the code.
+test('the shell uses the same hook and the same model: the number on the rail and on the panel button is the page\'s To decide count, and the panel opens the page', () => {
+  const provider = read('src/components/shell/ShellProvider.tsx');
+  const panel = read('src/components/shell/WorkPanel.tsx');
   const header = read('src/components/layout/Header.tsx');
-  assert.match(header, /useInbox\(\{ enabled: !!currentUser \}\)/);
-  assert.match(header, /badgeText\(inbox\.badge\)/);
-  assert.match(header, /dropdownOf\(inbox\)/);
-  assert.match(header, /href="\/needs-my-action"/);
-  assert.match(header, /href="\/needs-my-action\?section=ack"/);
-  assert.doesNotMatch(header, /\/governance\/approvals/);
-  assert.doesNotMatch(header, /queryKey: \['header-pending-approvals'\]|queryKey: \['my-document-requests'\]/, 'the two private queries are gone: one hook asks');
+  assert.match(provider, /useInbox\(\{ enabled: access\.signedIn \}\)/);
+  assert.match(provider, /badgeText\(inboxState\.inbox\.badge\)/);
+  assert.match(provider, /badgeLabel\(inboxState\.inbox\)/);
+  assert.match(panel, /dropdownOf\(queue\.inbox, 6\)/);
+  assert.match(panel, /href="\/needs-my-action"/);
+  assert.match(panel, /href="\/needs-my-action\?section=ack"/);
+  assert.match(header, /queue\.text/);
+  for (const [name, source] of [['Header', header], ['WorkPanel', panel], ['ShellProvider', provider]]) {
+    assert.doesNotMatch(source, /\/governance\/approvals/, name);
+    assert.doesNotMatch(source, /queryKey: \['header-pending-approvals'\]|queryKey: \['my-document-requests'\]/, `${name}: the two private queries are gone: one hook asks`);
+  }
 });
 
 test('a decision refreshes the lists it came from and the document it was about, so the row is gone and the number has dropped when the dialog closes', () => {
@@ -160,7 +168,8 @@ test('the page asks again every time it is opened (what was done on another page
   assert.match(api, /refetchOnMount: freshOnOpen \? \('always' as const\) : true/);
   assert.match(api, /freshOnOpen = false/, 'the default is the top bar\'s');
   assert.match(read(`${PAGE}/page.tsx`), /useInbox\(\{ includeSent: true, freshOnOpen: true \}\)/);
-  assert.match(read('src/components/layout/Header.tsx'), /useInbox\(\{ enabled: !!currentUser \}\)/, 'the top bar passes no freshOnOpen');
+  // the top bar's own hook moved into the shell (S2-SH): the one request the rail, the bar button and the Work and context panel share
+  assert.match(read('src/components/shell/ShellProvider.tsx'), /useInbox\(\{ enabled: access\.signedIn \}\)/, 'the shell passes no freshOnOpen');
 });
 
 test('a row keeps to one line of facts from a tablet up: the due line beside the action, the actions one width, the words (escalated, archived...) on the facts line; stacked below', () => {

@@ -20,6 +20,8 @@ export interface DocListParams {
   sort_order?: 'asc' | 'desc';
   skip?: number;
   limit?: number;
+  /** 1: the library's lean complete load (no text, no query per row, up to LIBRARY_LIMIT rows, the attestation on each row). A server from before it ignores this and sends the full rows. */
+  lean?: 1;
 }
 
 export interface DocListResponse {
@@ -27,7 +29,14 @@ export interface DocListResponse {
   total: number;
   skip: number;
   limit: number;
+  /** a lean answer says so; an older server's does not */
+  lean?: boolean;
+  /** the answer does not hold every document (`total` is the true number) */
+  truncated?: boolean;
 }
+
+/** How many documents the library asks for in ONE request (the most a lean answer holds). */
+export const LIBRARY_LIMIT = 10_000;
 
 export async function fetchDocuments(params?: DocListParams): Promise<DocListResponse> {
   const res = await governanceApi.getDocuments(params as Record<string, unknown>);
@@ -36,6 +45,9 @@ export async function fetchDocuments(params?: DocListParams): Promise<DocListRes
   if (Array.isArray(data)) return { items: data as GovDoc[], total: (data as GovDoc[]).length, skip: 0, limit: (data as GovDoc[]).length };
   return data as DocListResponse;
 }
+
+/** The library's whole list: ONE lean request, newest first (the order the lists have always had). */
+export const fetchLibrary = () => fetchDocuments({ lean: 1, limit: LIBRARY_LIMIT, sort_by: 'updated_at', sort_order: 'desc' });
 
 /** The documents the Documents Overview names for one of its figures (GET /governance/document-overview/ids): what the Attention filter (`?attn=`) keeps.
  *  `department`: the one department the library is filtered to ('none' for none; '' lets the server choose its own scope). */
@@ -116,6 +128,18 @@ export async function fetchCoverage(): Promise<Coverage> {
   } catch {
     return { pct: {}, counts: {} };
   }
+}
+
+/** The coverage a lean list carries on its rows (`attestation`): the same numbers the coverage map says, without asking for them. */
+export function coverageFromRows(docs: readonly Pick<GovDoc, 'id' | 'attestation'>[]): Coverage {
+  const out: Coverage = { pct: {}, counts: {} };
+  for (const d of docs) {
+    const a = d.attestation;
+    if (!a || !Number.isFinite(a.pct)) continue;
+    out.pct[d.id] = a.pct;
+    if (Number.isFinite(a.done) && Number.isFinite(a.total)) out.counts[d.id] = { done: a.done, total: a.total };
+  }
+  return out;
 }
 
 /** The % only (what the library showed before the counts). */

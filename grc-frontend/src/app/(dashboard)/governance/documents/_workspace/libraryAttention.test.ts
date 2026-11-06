@@ -104,9 +104,9 @@ test('the data layer asks the server for the ids of one kind, with the departmen
   assert.ok(api.includes("apiClient.get('/governance/document-overview/ids', { params: { kind, ...(department ? { department_id: department } : {}) } })"));
   const workspace = readFileSync(new URL('./DocumentsWorkspace.tsx', import.meta.url), 'utf8');
   assert.ok(workspace.includes('fetchAttention(attnKind as string, attentionDepartment(filters))') && workspace.includes('enabled: attnKind != null'));
-  assert.ok(workspace.includes('attention: attnIds') && workspace.includes('|| attnWaiting') && workspace.includes('attentionTotal={attn.data?.total ?? null}'));
+  assert.ok(workspace.includes('attention: attnIds') && workspace.includes('|| attnWaiting') && workspace.includes('attentionTotal: attn.data?.total ?? null'));
   // a failed read is said (with Retry where it can help), never a table of everything under the chip
-  assert.ok(workspace.includes('attnFailed && attnKind ?') && workspace.includes('Couldn\'t load “${ATTENTION_LABEL[attnKind]}”'));
+  assert.ok(workspace.includes('if (attnFailed && attnKind)') && workspace.includes('Couldn\'t load “${ATTENTION_LABEL[attnKind]}”'));
 });
 
 test('the ids the server answers are the ones the Overview counts (the backend that writes them is read when it is beside the frontend)', () => {

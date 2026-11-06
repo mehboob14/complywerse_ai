@@ -58,3 +58,5 @@ export { ChipList, type ChipListProps, type ChipListItem } from './ChipList';
 export { Fact, FactList, type FactProps, type FactListProps } from './Facts';
 export { TitleLink, CardLink, type TitleLinkProps, type CardLinkProps } from './Links';
 export { linkClasses, type LinkTone, type LinkSize } from './linkModel';
+export { DebouncedSearch, type DebouncedSearchProps } from './DebouncedSearch';
+export { FormError, type FormErrorProps } from './FormError';

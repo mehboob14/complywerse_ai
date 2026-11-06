@@ -18,6 +18,8 @@ export interface FilterOptions {
 
 /** The words of the optional expiry filter, on its chip and in the filter list. */
 export const EXPIRING_LABEL = 'Expiring in 30 days';
+/** The words of the "Waiting for me" view, on its chip and its filter. */
+export const WAITING_LABEL = 'Waiting for me';
 
 /** The (i) beside the Department filter: choosing a department keeps the documents of the departments under it too (libraryModel.matchesFilters). */
 export const DEPARTMENT_FILTER_NOTE = 'Includes the departments under it.';
@@ -25,7 +27,7 @@ export const DEPARTMENT_FILTER_NOTE = 'Includes the departments under it.';
 export interface FilterChip {
   /** unique among the chips shown */
   key: string;
-  facet: FacetKey | 'search' | 'mine' | 'expiring' | 'attention';
+  facet: FacetKey | 'search' | 'mine' | 'expiring' | 'attention' | 'waiting';
   /** the one value this chip stands for (the search text for the search chip) */
   value: string;
   /** "Type: Policy", "Search: “data”", "My documents" */
@@ -63,6 +65,7 @@ export function filterChips(filters: Filters, options: FilterOptions, extra: { a
   const query = filters.search.trim();
   if (query) chips.push({ key: 'search', facet: 'search', value: filters.search, label: `Search: “${query}”` });
   if (filters.mine) chips.push({ key: 'mine', facet: 'mine', value: 'mine', label: 'My documents' });
+  if (filters.waiting) chips.push({ key: 'waiting', facet: 'waiting', value: 'waiting', label: WAITING_LABEL });
   return chips;
 }
 
@@ -72,6 +75,7 @@ export function removeChip(filters: Filters, chip: FilterChip): Filters {
   if (chip.facet === 'mine') return { ...filters, mine: false };
   if (chip.facet === 'expiring') return { ...filters, expiring: false };
   if (chip.facet === 'attention') return { ...filters, attention: null };
+  if (chip.facet === 'waiting') return { ...filters, waiting: false };
   const left = (filters[chip.facet] as string[]).filter((v) => v !== chip.value);
   if (chip.facet === 'statuses') return { ...filters, statuses: nextStatuses(filters.statuses, left) };
   return { ...filters, [chip.facet]: left } as Filters;
