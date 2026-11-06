@@ -99,7 +99,7 @@ export default function SignaturePad({
           onPointerCancel={up}
         />
       </div>
-      <button type="button" onClick={reset} disabled={disabled} className="mt-1.5 text-xs text-slate-500 hover:text-slate-800 disabled:opacity-50">
+      <button type="button" onClick={reset} disabled={disabled} className="mt-1.5 inline-flex min-h-[44px] items-center text-xs text-slate-500 hover:text-slate-800 disabled:opacity-50 sm:min-h-[24px]">
         Clear signature
       </button>
     </div>

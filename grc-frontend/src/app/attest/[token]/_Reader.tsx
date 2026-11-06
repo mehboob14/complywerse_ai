@@ -15,14 +15,15 @@ import styles from './_reading.module.css';
 
 const PAPER = 'rounded-ds-card border border-ds-border bg-ds-surface px-[20px] py-[24px] sm:px-[48px] sm:py-[40px]';
 // the renderer sets 14px type on its own elements; reading wants a little more, and a picture must never be wider than the paper
-const MARKDOWN_READING = 'text-ds-fg-body [&_p]:text-[16px] [&_p]:leading-[1.7] [&_li]:text-[16px] [&_li]:leading-[1.7] [&_td]:text-[14px] [&_th]:text-[14px] [&_img]:h-auto [&_img]:max-w-full [&_a]:!text-[#0b5cad] [&_a:hover]:!text-[#084a8c]';       // (the platform CSS repaints text-blue-600 in the brand mint: 1.9:1 on white)
+// (styles.ink: the shell's colour overrides repaint every text-gray-* / text-slate-* / text-blue-* class, so a document came out in muted grey and its links in mint 1.9:1)
+const MARKDOWN_READING = `${styles.ink} [&_p]:text-[16px] [&_p]:leading-[1.7] [&_li]:text-[16px] [&_li]:leading-[1.7] [&_td]:text-[14px] [&_th]:text-[14px] [&_img]:h-auto [&_img]:max-w-full`;
 
 // below this width an A4 page shrunk to the screen cannot be read: a Word file opens as its text there (Pages is one tap away)
 const NARROW = '(max-width: 639px)';
 const VIEWS = [{ value: 'page', label: 'Pages' }, { value: 'text', label: 'Text' }] as const;
 type WordMode = (typeof VIEWS)[number]['value'];
 
-const LINK = 'inline-flex min-h-[44px] items-center gap-[6px] rounded-ds-control px-[4px] text-ds-primary-text underline hover:text-ds-primary-hover focus-visible:shadow-ds-ring focus-visible:outline-none sm:min-h-0';
+const LINK = 'inline-flex min-h-[44px] items-center gap-[6px] rounded-ds-control px-[4px] text-ds-primary-text underline hover:text-ds-primary-hover focus-visible:shadow-ds-ring focus-visible:outline-none sm:min-h-[24px]';
 
 function WordReader({ doc, base, tenantSlug }: { doc: PublicDocument; base: string; tenantSlug: string | null }) {
   const url = doc.file?.url || '';

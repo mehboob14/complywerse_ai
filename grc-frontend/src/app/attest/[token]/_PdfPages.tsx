@@ -57,7 +57,7 @@ export default function PdfPages({ pages, fileUrl, base, tenantSlug }: { pages: 
           href={withTenant(`${base}${fileUrl}`, tenantSlug)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex min-h-[44px] items-center gap-[6px] rounded-ds-control px-[4px] text-ds-primary-text underline hover:text-ds-primary-hover focus-visible:shadow-ds-ring focus-visible:outline-none sm:min-h-0"
+          className="inline-flex min-h-[44px] items-center gap-[6px] rounded-ds-control px-[4px] text-ds-primary-text underline hover:text-ds-primary-hover focus-visible:shadow-ds-ring focus-visible:outline-none sm:min-h-[24px]"
         >
           Open the PDF
           <ExternalLink aria-hidden className="h-[14px] w-[14px]" />

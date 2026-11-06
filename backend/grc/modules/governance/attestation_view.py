@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 MAX_PAGES = 150                 # pages of a PDF drawn for the page; the rest are in "Open the PDF"
 PAGE_WIDTH_PX = 1240            # a drawn page is this wide: sharp at 880 px on a screen of 1.5x, readable when zoomed on a phone
-DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+MAX_PIXELS = 12_000_000         # a drawn page never has more pixels than this (an A4 page is 2.2 million)
+DOCX_MEDIA ="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 # ── what a file is ───────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ def _draw(path: str, mtime: float, number: int) -> bytes:
     with fitz.open(path) as d:
         page = d.load_page(number - 1)
         zoom = max(0.5, min(3.0, PAGE_WIDTH_PX / max(page.rect.width, 1.0)))
+        zoom = min(zoom, (MAX_PIXELS / max(page.rect.width * page.rect.height, 1.0)) ** 0.5)       # a poster-sized page must not fill the server's memory
         return page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False).tobytes("png")
 
 

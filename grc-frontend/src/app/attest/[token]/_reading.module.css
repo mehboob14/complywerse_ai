@@ -26,6 +26,14 @@
 .doc sup { vertical-align: super; font-size: 0.75em; }
 .plain { white-space: pre-wrap; }
 
+/* Markdown drawn by the document viewer's renderer: its elements carry text-gray-* classes that the shell repaints (!important) in muted grey.
+   A document is read in ink; the selector is one element more specific than those classes. */
+.ink :is(h1, h2, h3, h4, h5, h6, p, li, td, th, dt, dd, blockquote, strong, em, code, span) { color: #1f2933 !important; }
+.ink :is(h1, h2, h3, h4, h5, h6, strong, th) { color: #111827 !important; }
+.ink blockquote { color: #3e4c59 !important; }
+.ink a { color: #0b5cad !important; }
+.ink a:hover { color: #084a8c !important; }
+
 /* a wide table scrolls inside its own box instead of the page */
 .scroll { overflow-x: auto; }
 

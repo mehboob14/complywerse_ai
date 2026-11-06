@@ -118,3 +118,12 @@ test('the page draws HTML only from the server\'s cleaned kind, and says nothing
   assert.ok(!/max-h-\[\d+vh\]|overflow-y-auto/.test(reader + page), 'the document is read at full height, not in a small scroll box');
   assert.match(source('../layout.tsx'), /referrer: 'no-referrer'/);
 });
+
+test('a text drawn by the document renderer is read in ink: the shell repaints its text-gray-* classes in muted grey unless the page says otherwise', () => {
+  const dir = new URL('./', import.meta.url);
+  const reader = readFileSync(new URL('_Reader.tsx', dir), 'utf8');
+  const css = readFileSync(new URL('_reading.module.css', dir), 'utf8');
+  assert.match(reader, /MARKDOWN_READING = `\$\{styles\.ink\}/);
+  assert.match(css, /\.ink :is\([^)]*\bp\b[^)]*\)\s*\{\s*color: #1f2933 !important/);
+  assert.match(css, /\.ink a \{ color: #0b5cad !important/);
+});

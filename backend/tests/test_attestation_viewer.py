@@ -250,6 +250,20 @@ def test_a_long_pdf_is_drawn_up_to_a_limit(world, monkeypatch):
     assert world.http.get(f"{base}/pages/2").status_code == 200 and world.http.get(f"{base}/pages/3").status_code == 404
 
 
+def test_a_poster_sized_page_is_drawn_smaller_so_it_cannot_fill_the_servers_memory(world, monkeypatch):
+    monkeypatch.setattr(view, "MAX_PIXELS", 400_000)
+    path = world.dir / "poster.pdf"
+    d = fitz.open()
+    d.new_page(width=5000, height=5000)
+    d.save(str(path))
+    d.close()
+    base = make(world, file_path=str(path), file_name="poster.pdf", file_type="pdf")
+    r = world.http.get(f"{base}/pages/1")
+    assert r.status_code == 200
+    pic = fitz.Pixmap(r.content)
+    assert pic.width * pic.height <= 400_000 * 1.02
+
+
 def test_a_file_that_cannot_be_shown_says_so_and_shows_the_text_when_there_is_one(world):
     bogus = world.dir / "old.docx"
     bogus.write_bytes(b"\xd0\xcf\x11\xe0 an old .doc saved as .docx")
@@ -282,6 +296,8 @@ def test_the_version_in_force_is_shown_and_a_newer_round_is_not(world):
     doc = get(world, base)
     assert (doc["kind"], doc["version"], doc["file_name"]) == ("pdf", "1.0", "v1.pdf") and doc["pages"]["count"] == 2
     assert world.http.get(f"{base}/file").headers["content-type"] == "application/pdf"          # not the 1.1 Word file
+    assert world.http.get(f"{base}/pages/2").status_code == 200 and world.http.get(f"{base}/pages/3").status_code == 404
+    assert world.http.get(f"{base}/text").status_code == 404                                    # the 1.1 Word file's words are not served either
     assert "New rule" not in json.dumps(doc) and "v11" not in json.dumps(doc)
 
 
