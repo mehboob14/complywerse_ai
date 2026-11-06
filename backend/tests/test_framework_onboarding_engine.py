@@ -254,3 +254,11 @@ def test_a_minimum_of_zero_rows_asks_for_nothing_and_a_number_may_have_a_ceiling
     assert engine.normalise(score, "3") == 3
     with pytest.raises(F, match="3 or less"):
         engine.normalise(score, 4)
+
+
+def test_a_rule_names_the_step_of_the_first_answer_it_reads_so_the_screen_can_open_it():
+    k = by_key(ev({}))
+    assert k["order"]["step"] == "route" and k["who"]["step"] == "people" and k["carve"]["step"] == "people"
+    assert by_key(ev({"route": {"goal": "Certify"}}))["certonly"]["step"] == "route"
+    org = engine.evaluate_org({})
+    assert all("step" not in c for c in org["checks"])                 # the profile's own checks belong to no step

@@ -164,7 +164,8 @@ export function FrameworkJourneyPicker({
         return;
       }
       const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setError(err?.response?.data?.detail || err?.message || 'Failed to start journey');
+      const why = err?.response?.data?.detail;       // a string; an object detail (the onboarding gate's) was handled above
+      setError(typeof why === 'string' && why ? why : err?.message || 'Failed to start journey');
       setTimeout(() => setError(null), 5000);
     },
   });

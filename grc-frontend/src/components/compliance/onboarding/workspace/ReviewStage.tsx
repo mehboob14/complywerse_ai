@@ -30,6 +30,7 @@ function CheckRow({ check, stages, onJump }: { check: ReadinessCheck; stages: re
   return (
     <li className="flex items-start gap-[4px]">
       {jump.kind === 'field' && <button type="button" onClick={() => onJump(jump.stage, jump.field)} className={`${ROW} ${tone}`}>{body}</button>}
+      {jump.kind === 'stage' && <button type="button" onClick={() => onJump(jump.stage, '')} className={`${ROW} ${tone}`}>{body}</button>}
       {jump.kind === 'org' && <Link href={jump.href} className={`${ROW} ${tone}`}>{body}</Link>}
       {jump.kind === 'none' && <div className={`${ROW} ${tone}`}>{body}</div>}
       {check.kind === 'field' && check.hint && <InfoTip text={check.hint} label={`About ${check.label.toLowerCase()}`} />}

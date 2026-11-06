@@ -351,8 +351,19 @@ def _check(c: Dict[str, Any], look: Lookup) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def _gate_entry(g: Dict[str, Any], ok: bool) -> Dict[str, Any]:
-    return {"key": g["key"], "label": g["label"], "ok": ok, "required": g.get("level") == "required", "hint": g.get("hint"), "kind": "gate"}
+def _gate_entry(g: Dict[str, Any], ok: bool, step: Optional[str] = None) -> Dict[str, Any]:
+    out = {"key": g["key"], "label": g["label"], "ok": ok, "required": g.get("level") == "required", "hint": g.get("hint"), "kind": "gate"}
+    if step:
+        out["step"] = step                  # the step the first answer it reads is on: where the screen sends the person
+    return out
+
+
+def _gate_step(check: Dict[str, Any], steps: Set[str]) -> Optional[str]:
+    refs = list(check.get("fields") or []) + [check[k] for k in ("field", "first", "second") if k in check]
+    for r in refs:
+        if not r.startswith("org.") and r.split(".")[0] in steps:
+            return r.split(".")[0]
+    return None
 
 
 def evaluate_org(org_values: Dict[str, Any], reviewed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -424,7 +435,7 @@ def evaluate(resolved: Dict[str, Any], answers: Dict[str, Any], org_values: Dict
         if g.get("when") and not condition(g["when"], look, visible):
             continue
         ok, _ = _check(g["check"], look)
-        checks.append(_gate_entry(g, ok))
+        checks.append(_gate_entry(g, ok, _gate_step(g["check"], {s["key"] for s in resolved["steps"]})))
 
     org_checks: List[Dict[str, Any]] = []
     for key, grp in org_eval["groups"].items():

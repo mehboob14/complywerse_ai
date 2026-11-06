@@ -128,7 +128,8 @@ export default function OnboardingWorkspace({ id }: { id: number }) {
     (field ? target.querySelector<HTMLElement>('input, select, textarea, button, [tabindex="0"]') ?? target : target).focus({ preventScroll: true });
   };
   const pickStage = (stage: string) => setAddress({ step: stage });                // a tab: focus stays on the tab
-  const goStage = (stage: string, field: string | null = null) => {
+  const goStage = (stage: string, to: string | null = null) => {
+    const field = to || null;                           // '' = the stage itself
     if (stage === current) { focusTarget(stage, field); return; }
     focusAfter.current = { stage, field };
     setAddress({ step: stage });

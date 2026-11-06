@@ -117,15 +117,16 @@ export function splitOrgChecks(checks: readonly Check[]): { needed: Check[]; pro
   return { needed: checks.filter((c) => c.key.startsWith('org.need.')), profile: checks.filter((c) => !c.key.startsWith('org.need.')) };
 }
 
-export type Jump = { kind: 'field'; stage: string; field: string } | { kind: 'org'; href: string } | { kind: 'none' };
+export type Jump = { kind: 'field'; stage: string; field: string } | { kind: 'stage'; stage: string } | { kind: 'org'; href: string } | { kind: 'none' };
 
-/** Where a check is put right: a field of a stage, the organisation profile, or nowhere (a check across several answers is explained by its hint). */
+/** Where a check is put right: a field of a stage, the stage a rule reads its first answer from, the organisation profile, or nowhere. */
 export function jumpOf(check: Pick<Check, 'key' | 'kind' | 'step'>, stages: readonly Stage[]): Jump {
   if (check.kind === 'org') return { kind: 'org', href: ORG_HREF };
   if (check.kind === 'field' && check.step && stages.some((s) => s.key === check.step && !s.review)) {
     const { field } = splitRef(check.key);
     return field ? { kind: 'field', stage: check.step, field } : { kind: 'none' };
   }
+  if (check.kind === 'gate' && check.step && stages.some((s) => s.key === check.step && !s.review)) return { kind: 'stage', stage: check.step };
   return { kind: 'none' };
 }
 

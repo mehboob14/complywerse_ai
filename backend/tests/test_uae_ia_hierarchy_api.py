@@ -144,7 +144,8 @@ def world(engine):
 
     def start(data):
         fw = seed_framework_from_json(db, copy.deepcopy(data), tenant_id=1)
-        db.commit()
+        db.add(m.FrameworkOnboarding(tenant_id=1, uploaded_framework_id=fw.id, family="general", state="underway", answers={}))
+        db.commit()   # the journey gate (framework onboarding): a framework that already runs is "underway"
         journey = http.post("/certifications", json={"framework_id": fw.id, "name": f"{fw.name} journey"})
         assert journey.status_code == 201, journey.text
         return fw, journey.json()["id"]
