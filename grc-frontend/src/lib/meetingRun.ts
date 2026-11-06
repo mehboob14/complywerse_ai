@@ -95,13 +95,18 @@ export const rollQuorum = (roll: Pick<Roll, 'quorum_required' | 'quorum_present'
 export const meetingQuorum = (m: { quorum_required?: number | null; quorum_present?: number | null; quorum_met?: boolean | null }): QuorumReading =>
   quorumReading({ required: m.quorum_required, present: m.quorum_present, met: m.quorum_met, recorded: m.quorum_present != null });
 
-export interface RollCount { present: number; late: number; absent: number; notMarked: number; observers: number }
+/** `observersPresent` / `observersLate`: the observers among `present` / `late` (an observer is on the roll and counts here, but never toward quorum). */
+export interface RollCount { present: number; late: number; absent: number; notMarked: number; observers: number; observersPresent: number; observersLate: number }
 
 /** How many members stand where on the roll. */
 export function rollCount(members: readonly RollMember[]): RollCount {
-  const count: RollCount = { present: 0, late: 0, absent: 0, notMarked: 0, observers: 0 };
+  const count: RollCount = { present: 0, late: 0, absent: 0, notMarked: 0, observers: 0, observersPresent: 0, observersLate: 0 };
   for (const m of members) {
-    if (m.role === 'observer') count.observers += 1;
+    if (m.role === 'observer') {
+      count.observers += 1;
+      if (m.status === 'present') count.observersPresent += 1;
+      else if (m.status === 'late') count.observersLate += 1;
+    }
     if (m.status === 'present') count.present += 1;
     else if (m.status === 'late') count.late += 1;
     else if (m.status === 'absent') count.absent += 1;
@@ -239,10 +244,12 @@ export function canRecordOutcome(meetingStatus: string | null | undefined, minut
   return (meetingStatus === 'in_progress' || meetingStatus === 'completed') && minutesStatus !== 'approved';
 }
 
-/** A short line for the roll's heading while it is on screen: "4 present, 1 late, 2 absent" (the words of a roll nobody took are left out). */
+/** A short line for the roll's heading while it is on screen: "4 present, 1 late, 2 absent" (the words of a roll nobody took are left out). Observers who are here are named
+ *  ("41 present (1 observer)"): the quorum beside it is the server's count, which leaves them out, and the two numbers must not look like a disagreement. */
 export function rollLine(count: RollCount): string {
-  const parts = [`${formatCount(count.present)} present`];
-  if (count.late > 0) parts.push(`${formatCount(count.late)} late`);
+  const here = (n: number, word: string, observers: number) => `${formatCount(n)} ${word}${observers > 0 ? ` (${formatCount(observers)} observer${observers === 1 ? '' : 's'})` : ''}`;
+  const parts = [here(count.present, 'present', count.observersPresent)];
+  if (count.late > 0) parts.push(here(count.late, 'late', count.observersLate));
   if (count.absent > 0) parts.push(`${formatCount(count.absent)} absent`);
   if (count.notMarked > 0) parts.push(`${formatCount(count.notMarked)} not marked`);
   return parts.join(', ');

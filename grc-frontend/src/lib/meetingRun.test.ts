@@ -71,10 +71,12 @@ const member = (id: number, status: string | null, role = 'member', active = tru
 
 test('the roll counts who stands where, with the members nobody marked and the observers on their own line', () => {
   const members = [member(1, 'present', 'chair'), member(2, 'late'), member(3, 'absent'), member(4, null), member(5, 'present', 'observer')];
-  assert.deepEqual(rollCount(members), { present: 2, late: 1, absent: 1, notMarked: 1, observers: 1 });
-  assert.equal(rollLine(rollCount(members)), '2 present, 1 late, 1 absent, 1 not marked');
+  assert.deepEqual(rollCount(members), { present: 2, late: 1, absent: 1, notMarked: 1, observers: 1, observersPresent: 1, observersLate: 0 });
+  // the observer is here but the server's quorum leaves them out: the line names them, so "2 present" and "1 present, 4 required" do not look like a disagreement
+  assert.equal(rollLine(rollCount(members)), '2 present (1 observer), 1 late, 1 absent, 1 not marked');
+  assert.equal(rollLine(rollCount([member(1, 'late', 'observer'), member(2, 'late', 'observer'), member(3, 'present')])), '1 present, 2 late (2 observers)');
   assert.equal(rollLine(rollCount([member(1, 'present')])), '1 present');
-  assert.deepEqual(rollCount([]), { present: 0, late: 0, absent: 0, notMarked: 0, observers: 0 });
+  assert.deepEqual(rollCount([]), { present: 0, late: 0, absent: 0, notMarked: 0, observers: 0, observersPresent: 0, observersLate: 0 });
 });
 
 test('the roll\'s search finds a member by name, e-mail or role, in any case', () => {
