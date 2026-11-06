@@ -106,10 +106,12 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
   const isOpen = (id: string, dflt = true) => (id in shut ? !shut[id] : id === 'queue' && onQueuePage ? false : dflt);
   const toggle = (id: string) => (open: boolean) => setShut((s) => ({ ...s, [id]: !open }));
 
-  // Ctrl . asks for focus (once: a panel opened by its button never takes it): the first pending item, else the first row
+  // Ctrl . asks for focus (once: a panel opened by its button never takes it): the first pending item, else the first row.
+  // The request is taken inside the frame, not before it: a development build runs a mounting effect twice (run, clean up, run), and a request taken by the first run
+  // would be lost with its cancelled frame, so a panel that opens with Ctrl . would not get the focus.
   useEffect(() => {
-    if (!ui.takeFocusRequest()) return undefined;
     const frame = window.requestAnimationFrame(() => {
+      if (!ui.takeFocusRequest()) return;
       const el = root.current?.querySelector<HTMLElement>('[data-panel-first]') ?? root.current?.querySelector<HTMLElement>('a[href], button');
       el?.focus({ preventScroll: true });
     });
@@ -145,7 +147,9 @@ function PanelContent({ onPick, vendorCounts }: { onPick: () => void; vendorCoun
   };
 
   return (
-      <div ref={root} data-work-panel="">
+      // `relative`: the docked column sits in the page flow, and a visually hidden label (the kit's sr-only is absolutely positioned) far down a long list would otherwise be placed
+      // against the window, outside the list's own scroll box, and stretch the document: a scrollbar of its own that narrows the whole shell by 15px
+      <div ref={root} data-work-panel="" className="relative">
         <Disclosure label="Needs my action" level={3} region={false} count={queue.inbox.counts.decision} countLabel="to decide" open={isOpen('queue')} onOpenChange={toggle('queue')}>
           <div aria-busy={loading}>
             {needs.notices.map((n) => (

@@ -92,7 +92,8 @@ export default function DocumentsTabs({ ownerOnly = false }: { ownerOnly?: boole
         return (
           <Link key={t.path} href={t.path} title={tabName(t)} aria-label={tabName(t)} aria-current={active ? 'page' : undefined}
             // the ring is inset: the strip scrolls sideways, which would clip one drawn outside the tab
-            className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 xl:max-[1359px]:px-1 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]',
+            // on a phone a tab is at least 44px wide, also the icon-only ones
+            className={clsx('inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 max-md:min-w-[44px] xl:max-[1359px]:px-1 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]',
               active ? 'border-[#0f766e] text-[#0f766e]' : 'border-transparent text-[#586472] hover:border-[#c3ccd5] hover:text-[#1f2933]')}>
             <Icon size={16} strokeWidth={1.75} aria-hidden />
             <span className={iconOnly ? 'sr-only' : active || !tight ? undefined : 'hidden'}>{tabText(t)}</span>

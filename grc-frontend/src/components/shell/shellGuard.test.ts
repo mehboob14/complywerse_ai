@@ -64,6 +64,8 @@ test('the panel is the kit\'s SidePanel in three places, with sections that are 
   assert.match(src, /mode=\{docked \? 'docked' : ui\.placement === 'overlay' \? 'overlay' : 'sheet'\}/);
   assert.match(src, /initialFocus=\{docked \? undefined : '\[data-panel-first\]'\}/, 'a docked column takes no focus by itself');
   assert.match(src, /restoreFocus=\{ui\.panelButton\}/);
+  assert.match(src, /requestAnimationFrame\(\(\) => \{\s*if \(!ui\.takeFocusRequest\(\)\) return;/, 'the Ctrl . request is taken inside the frame: a mounting effect that runs twice (development) must not lose it with its cancelled frame');
+  assert.match(src, /<div ref=\{root\} data-work-panel="" className="relative">/, 'the list is the containing block of its visually hidden labels: a docked column in the page flow would otherwise let them stretch the document (a 15px scrollbar that shifts the shell)');
   assert.match(src, /<nav aria-label=\{section\.navLabel\}>/);
   assert.match(src, /aria-current=\{row\.current \? 'page' : undefined\}/);
   assert.equal((src.match(/<Disclosure /g) ?? []).length, 5, 'the queue, the committee, the module, Pinned, Recent');
