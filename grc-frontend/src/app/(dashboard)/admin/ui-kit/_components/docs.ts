@@ -635,7 +635,7 @@ export const DOCS: Record<string, ComponentDoc> = {
     name: 'RegisterTable',
     importFrom: UI,
     use: 'a list of one kind of record needs sortable columns, a row that opens, and a state for every moment (loading, failed, empty). A table from 768 px, cards below.',
-    dont: 'Do not put ids in a column `cell`, and do not put an input there that must exist once: a cell is drawn twice, in the table and on the card (a `cardCell` gives the card its own version). Never pass [] for a request that has not answered or has failed: use `loading` and `error`.',
+    dont: 'Do not put ids in a column `cell`, and do not put an input there that must exist once: a cell is drawn twice, in the table and on the card (a `cardCell` gives the card its own version). Never pass [] for a request that has not answered or has failed: use `loading` and `error`. The tick and the toggle columns take 88 px: beside them keep fewer priority-3 columns than a register without them, or a date wraps into a narrow column at 1024 px.',
     parts: [
       {
         name: 'RegisterTable', source: `${DS}/RegisterTable.tsx`, own: 'RegisterTableProps',
@@ -685,7 +685,7 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('chosen', 'RowId[]', 'The ids that are chosen. The page holds them, across pages: the header tick touches only the rows listed, an id of another page stays.'),
           prop('onChange', '(next: RowId[]) => void', 'The ids after a tick was pressed: a row\'s (added at the end or taken out), or the header\'s (every row listed when some or none were chosen, none of them when all were).'),
           prop('label', '(row) => string', 'Names a row\'s tick for a screen reader: "Select Information security policy".'),
-          prop('allLabel', 'string', 'Names the header\'s tick: "Select all documents on this page".', "'Select all rows on this page'"),
+          prop('allLabel', 'string', 'Names the header\'s tick: "Select all documents on this page". Left out, it says "Select all rows on this page".'),
         ],
       },
       {

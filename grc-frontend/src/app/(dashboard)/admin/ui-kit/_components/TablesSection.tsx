@@ -104,6 +104,7 @@ function RegisterDemo() {
  *  and a press inside an open row are not presses on the row, which opens the document (here: says so). */
 function SelectDemo() {
   const rows = DOCUMENTS.slice(0, 8);
+  const columns = COLUMNS.filter((c) => ['title', 'status', 'owner', 'reviewDue'].indexOf(c.key) >= 0);                     // the two extra columns take 88 px: fewer columns beside them at 1024
   const [chosen, setChosen] = useState<RowId[]>([DOCUMENTS[1].id]);
   const [open, setOpen] = useState<RowId[]>([DOCUMENTS[0].id]);
   const [pressed, setPressed] = useState('nothing yet');
@@ -120,7 +121,7 @@ function SelectDemo() {
       </div>
       <RegisterTable
         caption="Documents with a selection column and details"
-        columns={COLUMNS}
+        columns={columns}
         rows={rows}
         getRowId={(d) => d.id}
         onRowActivate={(d) => setPressed(`the row of "${d.title.slice(0, 28)}"`)}
