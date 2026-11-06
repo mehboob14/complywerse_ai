@@ -75,7 +75,8 @@ test("the rights of a page without a menu entry are those of the page it hangs u
   const rightsOf = (e: RouteEntry): RouteEntry => { let at = e; while (at.aliasOf || at.parent) at = entry((at.aliasOf ?? at.parent) as string); return at; };
   for (const e of routes.filter((r) => !leafPaths.includes(r.path) && navPermissions(r.path).length === 0)) {
     // a Governance page: no page of it gates itself, so it is offered to whoever is offered the page it hangs under (a root with no rights: everyone)
-    if (e.area === 'governance') assert.deepEqual(e.permissions, rightsOf(e).permissions, e.path);
+    // (except the pages made for the owner of a department who reads no library - `ownerDoor`, At a glance: they take no right, pinned in the At a glance test below)
+    if (e.area === 'governance' && !e.tab?.ownerDoor) assert.deepEqual(e.permissions, rightsOf(e).permissions, e.path);
   }
   // the Governance pages that guard nothing today (any signed-in user opens them by URL; navAccess lists no right for them); G3_permission_matrix lists which of their APIs are open too
   const unguarded = routes.filter((e) => e.area === 'governance' && !leafPaths.includes(e.path) && navPermissions(e.path).length === 0).map((e) => e.path);

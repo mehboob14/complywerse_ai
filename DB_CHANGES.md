@@ -32,6 +32,63 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-06 - Committee meetings: the roll call gets its own table (one new table; auto-applied)
+
+### What
+
+- **New table `grc_meeting_attendance`** (class `MeetingAttendance` in `backend/grc/models/_29_board_committee_management_models.py`, made by `create_all` at a tenant's
+  first access after a restart): one row per member and committee meeting written by the roll call - `status` present | late | absent, the member's committee
+  `role` when the roll was taken (an observer is on the roll but does not count toward quorum), who marked it and when. Unique per meeting and member. It is
+  kept apart from `MeetingMinutes.attendees` on purpose: that needs a minutes row, and a minutes row is what the overviews read as "minutes recorded".
+- No column added to an existing table, no row written or rewritten, no seed. A meeting that exists today has no attendance rows, which the pages read as
+  "no roll taken". The rest of the same change (start / end a meeting, outcomes, the decisions feed, Deactivate / Reactivate for a committee, the Overview
+  posture aggregate) is code only and uses the existing `is_active` and status columns.
+
+### Why
+
+The meeting life cycle (start, roll call and quorum, outcomes, end) needs somewhere to keep who was present.
+
+### How
+
+Nothing to run. Equivalent SQL for a manual replay (idempotent):
+
+```sql
+CREATE TABLE IF NOT EXISTS grc_meeting_attendance (
+	id SERIAL NOT NULL,
+	tenant_id INTEGER NOT NULL,
+	meeting_id INTEGER NOT NULL,
+	user_id INTEGER NOT NULL,
+	status VARCHAR(20) NOT NULL,
+	role VARCHAR(50),
+	marked_by INTEGER,
+	marked_at TIMESTAMP WITHOUT TIME ZONE,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_meeting_attendance_user UNIQUE (meeting_id, user_id),
+	FOREIGN KEY(tenant_id) REFERENCES grc_tenants (id),
+	FOREIGN KEY(meeting_id) REFERENCES grc_committee_meetings (id),
+	FOREIGN KEY(user_id) REFERENCES grc_users (id),
+	FOREIGN KEY(marked_by) REFERENCES grc_users (id)
+);
+CREATE INDEX IF NOT EXISTS ix_grc_meeting_attendance_id ON grc_meeting_attendance (id);
+CREATE INDEX IF NOT EXISTS ix_grc_meeting_attendance_marked_by ON grc_meeting_attendance (marked_by);
+CREATE INDEX IF NOT EXISTS ix_grc_meeting_attendance_meeting_id ON grc_meeting_attendance (meeting_id);
+CREATE INDEX IF NOT EXISTS ix_grc_meeting_attendance_tenant_id ON grc_meeting_attendance (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_grc_meeting_attendance_user_id ON grc_meeting_attendance (user_id);
+```
+
+The statements are what SQLAlchemy emits for the model on the PostgreSQL dialect; not yet run against a real tenant database (the tests use SQLite).
+
+### Risk
+
+None for existing data: the table is new and empty. One behaviour to know: ending a meeting without a roll call now records that no quorum was reached, which lowers the
+Governance quorum measure that was unfed before (committees whose meetings were never run through the new screens are unchanged).
+
+### Auto-applied?
+
+Yes, at each tenant's first access after the backend restart.
+
+---
+
 ## 2026-11-06 — Cyber Security assessments: nine scoping columns, the NIST item data and the artifact tag on evidence (additive, auto-applied)
 
 ### What

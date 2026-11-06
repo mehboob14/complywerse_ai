@@ -18,4 +18,7 @@ export const PAGES: PageSpec[] = [
   { path: '/frameworks', label: 'Compliance Frameworks', area: AREA, parent: MANAGE, hidden: 'the Dashboard tab beside Manage Frameworks, and the Frameworks card of the Compliance overview', keywords: ['Frameworks dashboard', 'Compliance posture'] },
   { path: '/frameworks/:id', label: 'Framework', area: AREA, parent: MANAGE, hidden: 'opens from a Manage Frameworks row and from the framework cards of the Frameworks dashboard' },
   { path: '/frameworks/overview/:id', label: 'Framework overview', area: AREA, parent: MANAGE, hidden: 'opens from a framework of the library in Manage Frameworks and from the Start a journey picker' },
+  // Framework onboarding (D66): the third tab of Frameworks, and the workspace of one framework's onboarding.
+  { path: '/frameworks/onboarding', label: 'Onboarding', area: AREA, parent: MANAGE, hidden: 'the third tab of Frameworks, beside Manage Frameworks and the Dashboard', keywords: ['Framework onboarding', 'Certification journey', 'Framework journey'] },
+  { path: '/frameworks/onboarding/:id', label: 'Framework onboarding', area: AREA, parent: '/frameworks/onboarding', hidden: 'opens from a framework of the onboarding register' },
 ];

@@ -97,7 +97,7 @@ test('the palette finds the pages by the names people use: acronyms, old names, 
 test('pagesForArea: the openable pages of one module, the menu\'s leaves first in menu order, every other page after', () => {
   const risk = pagesForArea('risk-management');
   assert.ok(risk.length >= 15);
-  assert.deepEqual(paths(risk).slice(0, 3), ['/erm', '/erm/risk-library', '/erm/risks'], 'the sidebar order');
+  assert.deepEqual(paths(risk).slice(0, 3), ['/erm', '/erm/risks', '/erm/risk-assessments'], 'the sidebar order (the Risk Library left the menu with D64)');
   assert.ok(risk.every((e) => e.area === 'risk-management' && !e.path.includes(':') && !e.aliasOf && !e.duplicateOf));
   assert.ok(paths(risk).includes('/erm/appetite') && !paths(risk).includes('/erm/risks/:id') && !paths(risk).includes('/erm/risks/dashboard'));
   const vendor = pagesForArea('third-party-vendor-risk');

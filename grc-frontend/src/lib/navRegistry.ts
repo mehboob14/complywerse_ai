@@ -180,7 +180,8 @@ const gov = (path: string, label: string, rest: Extra & { aliasOf?: string }): D
 
 const pages: Draft[] = [
   gov(`${DOCS}/:id`, 'Document', { parent: DOCS, hidden: 'opens from a library row or its drawer, a task, a notification or an e-mail link' }),
-  gov(`${DOCS}/overview`, 'At a glance', { parent: DOCS, tab: { area: 'documents', id: 'overview', order: 2, ownerDoor: true }, keywords: ['Overview', 'Documents overview'] }),
+  // `permissions: null` is its own say, not "not said": the owner of a department who reads no library opens this page (`ownerDoor`), so it must not take the library's right
+  gov(`${DOCS}/overview`, 'At a glance', { parent: DOCS, permissions: null, tab: { area: 'documents', id: 'overview', order: 2, ownerDoor: true }, keywords: ['Overview', 'Documents overview'] }),
   gov(`${DOCS}/studio`, 'Comply AI Studio', { parent: DOCS, tab: { area: 'documents', id: 'studio', order: 3, studio: true, claims: `${DOCS}/:id` } }),
   gov(`${DOCS}/studio/:sessionId`, 'Studio draft', { parent: `${DOCS}/studio`, hidden: 'opens from the Studio start page ("Your work") or from a document' }),
   gov(ATTEST, 'Attestation', { parent: DOCS, tab: { area: 'documents', id: 'attestation', order: 4 } }),

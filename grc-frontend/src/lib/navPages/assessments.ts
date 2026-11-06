@@ -31,4 +31,7 @@ export const PAGES: PageSpec[] = [
   { path: '/compliance/assessments/:id', label: 'Assessment', area: AREA, parent: '/compliance/assessments', hidden: 'opens from a Pending Approvals row, an evidence item, a report row and the inline assessment panel' },
   { path: '/compliance/assessments/approvals', label: 'Pending Approvals', area: AREA, parent: '/compliance/assessments', hidden: 'opens from the Pending approvals menu in the top bar and from an evidence item', keywords: ['Assessment approvals'] },
   { path: '/compliance/statements', label: 'Statements', area: AREA, parent: '/compliance', hidden: 'opens from the Governance Overview (Statements) and from the Documents page' },
+  // The Cyber Security hub's own pages (D55): one page per assessment type, and the workspace of one assessment of a type.
+  { path: '/cyber-security/questionnaires/:format', label: 'Assessment type', area: AREA, parent: '/cyber-security', hidden: 'opens from an assessment type on the Cyber Security hub', keywords: ['Questionnaire'] },
+  { path: '/cyber-security/assessments/:id', label: 'Cyber Security assessment', area: AREA, parent: '/cyber-security', hidden: 'opens from an assessment on its type page and on the Cyber Security hub' },
 ];
