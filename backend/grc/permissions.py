@@ -10,7 +10,7 @@ PERMISSION_MATRIX = [
             },
             {
                 "name": "ai_insights",
-                "display_name": "ComplyChat",
+                "display_name": "Comply Agent",
                 "actions": ["view"]
             }
         ]

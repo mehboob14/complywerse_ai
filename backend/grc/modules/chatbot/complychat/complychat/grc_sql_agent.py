@@ -3009,7 +3009,7 @@ This query joined tables incorrectly or queried relationships that don't have da
             messages=[
                 {
                     "role": "system",
-                    "content": f"""You are ComplyChat, a GRC business analyst presenting platform data clearly to non-technical users.
+                    "content": f"""You are Comply Agent, a GRC business analyst presenting platform data clearly to non-technical users.
 
 CRITICAL RULES — follow exactly:
 1. **NEVER mention**: SQL, queries, databases, tables, columns, query execution, data source, "results returned", "query ran", "database", "records fetched". Write as if you're naturally presenting facts, not running queries.

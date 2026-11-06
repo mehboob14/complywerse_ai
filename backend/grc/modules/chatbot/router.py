@@ -772,7 +772,7 @@ def answer_grc_knowledge_question(
             pass
 
         system_prompt = (
-            "You are ComplyChat, an expert GRC AI assistant inside the ComplyVerse enterprise GRC platform.\n\n"
+            "You are Comply Agent, an expert GRC AI assistant inside the ComplyVerse enterprise GRC platform.\n\n"
             "You are deeply knowledgeable about:\n"
             "- Compliance frameworks: ISO 27001 (2013 & 2022), PCI DSS (v3.2.1 & v4.0.1), NIST CSF (1.1 & 2.0), "
             "SAMA Cyber Security Framework, SBP ETGRMF, DORA, GDPR, SOC 2, HIPAA, SOX, COBIT, CIS Controls, Basel\n"
@@ -1105,7 +1105,7 @@ def analyze_uploaded_files_with_llm(
         files_content = "\n\n".join(file_blocks)
 
         system_prompt = (
-            "You are ComplyChat, an expert GRC (Governance, Risk & Compliance) AI assistant. "
+            "You are Comply Agent, an expert GRC (Governance, Risk & Compliance) AI assistant. "
             "You have been given one or more uploaded document(s) to analyze.\n\n"
             "Your capabilities include:\n"
             "- Gap analysis against compliance frameworks (ISO 27001, PCI DSS, NIST CSF, SAMA, SBP, DORA, GDPR, SOC 2, HIPAA etc.)\n"
@@ -2846,7 +2846,7 @@ async def ask_compliance_question(
 
         if request_mode == "blocked_injection":
             answer = (
-                "This request contains patterns that ComplyChat cannot process. "
+                "This request contains patterns that Comply Agent cannot process. "
                 "Please ask a genuine GRC question about compliance frameworks, risks, controls, policies, or governance."
             )
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
@@ -2862,7 +2862,7 @@ async def ask_compliance_question(
 
         if request_mode == "blocked_harmful":
             answer = (
-                "ComplyChat cannot assist with requests related to bypassing, defeating, or circumventing "
+                "Comply Agent cannot assist with requests related to bypassing, defeating, or circumventing "
                 "security controls, audit trails, or compliance mechanisms. "
                 "If you have a legitimate security testing requirement, please work through your authorized "
                 "security team and follow your organization's change management and approval process."
@@ -2880,7 +2880,7 @@ async def ask_compliance_question(
 
         if request_mode == "off_topic":
             answer = (
-                "ComplyChat is limited to GRC topics only. "
+                "Comply Agent is limited to GRC topics only. "
                 "Please ask about compliance frameworks, ISO, PCI DSS, SBP, governance, evidence, risks, vulnerabilities, assets, or related organizational controls."
             )
             store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)

@@ -146,7 +146,7 @@ const SUGGESTED_PROMPTS = [
   },
 ];
 
-// opened without Dashboard > ComplyChat > view (the top bar shows ComplyChat to the same people): the no-access page
+// opened without Dashboard > Comply Agent > view (the top bar shows Comply Agent to the same people): the no-access page
 export default function GuardedComplyChatPage() {
   return <PermissionGuard required={navPermissions('/complychat')}><ComplyChatPage /></PermissionGuard>;
 }
@@ -559,7 +559,7 @@ function ComplyChatPage() {
               <Sparkles className="h-4 w-4 text-primary-600" />
             </div>
             <div>
-              <h1 className="text-base font-semibold text-slate-900">ComplyChat AI</h1>
+              <h1 className="text-base font-semibold text-slate-900">Comply Agent</h1>
               <p className="text-xs text-slate-600">Your GRC Compliance Assistant</p>
             </div>
           </div>
@@ -580,7 +580,7 @@ function ComplyChatPage() {
                 <MessageSquare className="h-10 w-10 text-primary-600" />
               </div>
               <h2 className="mb-2 text-xl font-bold text-slate-900">
-                Welcome to ComplyChat
+                Welcome to Comply Agent
               </h2>
               <p className="mb-6 max-w-md text-sm text-slate-600">
                 Your AI-powered GRC compliance assistant. Ask me anything about controls,
@@ -943,7 +943,7 @@ function ComplyChatPage() {
             </div>
           </form>
           <p className="text-xs text-slate-800 mt-2 text-center">
-            ComplyChat can make mistakes. Verify important information with official documentation. Chats stay here until you delete them.
+            Comply Agent can make mistakes. Verify important information with official documentation. Chats stay here until you delete them.
           </p>
         </div>
       </div>

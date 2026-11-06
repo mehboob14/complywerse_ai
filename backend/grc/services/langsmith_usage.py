@@ -29,10 +29,10 @@ _DEFAULT_OUTPUT_COST_PER_1M = 0.60
 
 # Friendly labels for common run names / run types.
 _FEATURE_LABELS: dict[str, str] = {
-    "complychat": "ComplyChat",
-    "ask": "ComplyChat",
-    "answer_grc_knowledge_question": "ComplyChat",
-    "generate_sql_query": "ComplyChat (SQL)",
+    "complychat": "Comply Agent",
+    "ask": "Comply Agent",
+    "answer_grc_knowledge_question": "Comply Agent",
+    "generate_sql_query": "Comply Agent (SQL)",
     "embeddings": "Document search / embeddings",
     "embedding": "Document search / embeddings",
     "ai_drafting": "Policy drafting",
