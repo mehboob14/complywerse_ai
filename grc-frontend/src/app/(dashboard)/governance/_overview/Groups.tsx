@@ -11,7 +11,7 @@ import { Button, ErrorState, Skeleton, TitleLink } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { formatCount } from '@/lib/format';
 import type { PostureQuery } from './postureApi';
-import { Denied, FOCUS } from './parts';
+import { Denied, FOCUS, link } from './parts';
 import { isRefused } from './overviewModel';
 import { groupNoun, groupRow, showMoreLabel, type GroupBy, type GroupRow } from './postureModel';
 
@@ -24,14 +24,14 @@ function Row({ g }: { g: GroupRow }) {
   return (
     <div role="row" className={`${GRID} min-h-[36px] border-t border-ds-border first:border-t-0 hover:bg-ds-surface-hover`}>
       <div role="rowheader" className="min-w-0 py-[2px]">
-        <TitleLink href={g.href} title={g.name} lines={2} size="body" />
+        <TitleLink href={link(g.href)} title={g.name} lines={2} size="body" />
         <p className="text-ds-label text-ds-fg-muted sm:hidden">{g.line}</p>
       </div>
       <div role="cell" className={`${NUM} ${WIDE}`}>{g.documents}</div>
       <div role="cell" className={NUM}>{g.onTime}</div>
       <div role="cell" className="flex justify-end">
         {g.overdue > 0 ? (
-          <Link href={g.overdueHref} aria-label={`${g.overdueText} overdue ${g.overdue === 1 ? 'review' : 'reviews'} in ${g.name}`} className={`inline-flex min-h-ds-control items-center gap-[4px] rounded-ds-control px-[4px] text-ds-body font-[600] tabular-nums text-ds-danger hover:underline ${FOCUS}`}>
+          <Link href={link(g.overdueHref)} aria-label={`${g.overdueText} overdue ${g.overdue === 1 ? 'review' : 'reviews'} in ${g.name}`} className={`inline-flex min-h-ds-control items-center gap-[4px] rounded-ds-control px-[4px] text-ds-body font-[600] tabular-nums text-ds-danger hover:underline ${FOCUS}`}>
             <AlertTriangle aria-hidden className="h-[14px] w-[14px]" strokeWidth={2} />
             {g.overdueText}
           </Link>
@@ -83,7 +83,7 @@ export function GroupRows({ query, by }: { query: PostureQuery; by: GroupBy }) {
         <span role="status">{`Showing ${formatCount(rows.length)} of ${formatCount(total)} ${groupNoun(by, total)}, weakest first`}</span>
         <span className="flex flex-wrap items-center gap-[8px]">
           {query.hasNextPage && <Button size="sm" loading={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>{showMoreLabel(rows.length, total)}</Button>}
-          {by === 'department' && <TitleLink href="/governance/documents/overview" title="Open At a glance" lines={1} tone="text" size="label" />}
+          {by === 'department' && <TitleLink href={link('/governance/documents/overview')} title="Open At a glance" lines={1} tone="text" size="label" />}
         </span>
       </div>
       {query.isError && (

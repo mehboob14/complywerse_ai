@@ -3,7 +3,8 @@
 // The cockpit frame of a module's Overview (the Governance Overview is its first content; Compliance, Risk and Performance can fill the same slots): a
 // band of counters on top, the person's own prioritised work beside one compact posture card, and the breakdowns below. The frame only arranges what the
 // page hands it, and the layout rules are cockpitModel.ts:
-//   full       work (7 parts) beside posture (5 parts); stacked when the page is narrower than the two need
+//   full       work (8 parts, at least 600px: a row of it needs that for its title to have a line of its own) beside posture (5 parts, at least 340px);
+//              stacked when the page is narrower than the two need (under 956px: a laptop with the rail, a window with the panel docked is 1032px)
 //   solo       the person has little to do: a short strip of work, the posture across the page
 //   work-only  the programme's scores may not be read: `refusal` says so ONCE, the person's own work takes the page, nothing else is drawn
 // The breakdowns are cards in a grid (two across from 768px, three from 1280px; a card may take two cells or the whole row); on a phone each is a closed
@@ -96,7 +97,7 @@ export function Cockpit({ mode, narrow, band, refusal, work, posture, breakdowns
         </div>
       ) : (
         <div className="flex flex-wrap items-start gap-[16px]">
-          <div className="min-w-0 flex-[7_1_480px]">{work}</div>
+          <div className="min-w-0 flex-[8_1_600px]">{work}</div>
           <div className="min-w-0 flex-[5_1_340px]">{posture}</div>
         </div>
       )}

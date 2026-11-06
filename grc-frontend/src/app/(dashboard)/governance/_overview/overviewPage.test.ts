@@ -94,16 +94,35 @@ test('every file of the Overview and of the cockpit frame follows the kit\'s rul
 test('the head is the kit\'s, with the three actions of the page and their addresses (two of them fold into "More" on a phone)', () => {
   assert.match(page, /<PageHeader\s+variant="page"/);
   assert.match(page, /titleFor\('\/governance'\)/, 'the heading is the registry\'s name for the page');
-  assert.match(page, /<Button href="\/governance\/documents\/attestation"[^\n]*>Attestations<\/Button>/);
-  assert.match(page, /<Button href="\/compliance\/statements"[^\n]*>Statements<\/Button>/);
-  assert.match(page, /<Button href="\/governance\/documents" variant="primary"[^\n]*>Manage Documents<\/Button>/);
-  assert.match(page, /router\.push\('\/governance\/documents\/attestation'\)/);
-  assert.match(page, /router\.push\('\/compliance\/statements'\)/);
+  assert.match(page, /<Button href=\{link\('\/governance\/documents\/attestation'\)\}[^\n]*>Attestations<\/Button>/);
+  assert.match(page, /<Button href=\{link\('\/compliance\/statements'\)\}[^\n]*>Statements<\/Button>/);
+  assert.match(page, /<Button href=\{link\('\/governance\/documents'\)\} variant="primary"[^\n]*>Manage Documents<\/Button>/);
+  assert.match(page, /router\.push\(link\('\/governance\/documents\/attestation'\)\)/);
+  assert.match(page, /router\.push\(link\('\/compliance\/statements'\)\)/);
+});
+
+test('every link out of the Overview remembers the page it is on (?from=), so the shell keeps the Overview lit and in the trail on arrival', () => {
+  const parts = read('./parts.tsx');
+  assert.match(parts, /import \{ withFrom \} from '@\/components\/shell\/withFrom';/);
+  assert.match(parts, /export const HERE = '\/governance';/);
+  assert.match(parts, /export const link = \(href: string\): string => withFrom\(href, HERE\);/);
+  for (const [name, text] of Object.entries(files)) {
+    if (name === 'parts') continue;
+    const src = code(text);
+    // no link is written as a bare path: a literal address is the argument of link(...) or comes from a model
+    assert.doesNotMatch(src, /(href|to)=("|')\//, `${name}: a bare in-app address`);
+    assert.doesNotMatch(src, /router\.push\(('|")\//, `${name}: a bare in-app address pushed`);
+  }
+  for (const name of ['library', 'groups', 'posture'] as const) assert.match(files[name], /\blink\(/, `${name} draws its links through link()`);
+  assert.match(files.workCard, /href=\{link\(r\.href\)\}/);
+  assert.match(files.workCard, /action=\{\{ label: r\.action\.label, href: link\(r\.action\.href\) \}\}/);
+  assert.match(files.workCard, /href=\{link\(seeAllHref\(chosen\)\)\}/);
+  assert.match(files.workCard, /href=\{link\(r\.extraLink\.href\)\}/);
 });
 
 test('all eight counters are on the band, each with the address and tone the model gives it', () => {
   assert.match(page, /ATTENTION\.map\(\(def\) => \(\{ def, counter: counterFor\(def, sources\) \}\)\)/);
-  assert.match(page, /key: def\.key, label: def\.label, href: def\.href, tone: def\.tone,/);
+  assert.match(page, /key: def\.key, label: def\.label, href: link\(def\.href\), tone: def\.tone,/);
   assert.match(page, /title="Programme needs attention"/);
   assert.match(page, /id="attention"/);
 });

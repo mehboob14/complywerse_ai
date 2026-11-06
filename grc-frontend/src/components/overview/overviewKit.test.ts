@@ -74,8 +74,8 @@ test('on a phone each breakdown is a closed disclosure with its controls inside;
 
 test('the top row wraps by what its parts need (flex bases), not by the window, so a docked panel that narrows the page stacks it at the right moment', () => {
   const frame = code(SOURCES.find((s) => s.file === 'Cockpit.tsx')!.text);
-  assert.match(frame, /flex-\[7_1_480px\]/);
-  assert.match(frame, /flex-\[5_1_340px\]/);
+  assert.match(frame, /flex-\[8_1_600px\]/, 'the work: a row of it needs about 600px for its title to have a line of its own');
+  assert.match(frame, /flex-\[5_1_340px\]/, 'the posture: its bars give way before its names do');
 });
 
 test('the narrow hook is drawn wide on the server and corrected on the client (a desktop is never drawn as a phone first)', () => {

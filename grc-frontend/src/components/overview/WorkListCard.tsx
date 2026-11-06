@@ -26,13 +26,15 @@ export interface WorkListCardProps {
   onRetry: (source: SourceId) => void;
   /** the sources being asked right now (a Retry shows it) */
   fetching: Partial<Record<SourceId, boolean>>;
+  /** every address the card links to goes through this: the page adds the place the person came from (the shell keeps its menu entry lit by it) */
+  link: (href: string) => string;
 }
 
 function Late({ n }: { n: number }) {
   return <span className="font-[600] text-ds-danger">{`${formatCount(n)} overdue`}</span>;
 }
 
-export function WorkListCard({ id, title, info, work, filter, onFilter, limit, onRetry, fetching }: WorkListCardProps) {
+export function WorkListCard({ id, title, info, work, filter, onFilter, limit, onRetry, fetching, link }: WorkListCardProps) {
   const options = filterOptions(work);
   const chosen = effectiveFilter(work, filter);
   const { all, overdue } = work.counts;
@@ -80,15 +82,15 @@ export function WorkListCard({ id, title, info, work, filter, onFilter, limit, o
               const r = rowOf(item);
               return (
                 <li key={r.key} className="border-t border-ds-border first:border-t-0">
-                  <WorkRow as="div" kind={r.kind} title={r.title} href={r.href} context={r.context || undefined} requester={r.requester} due={r.due} overdue={r.overdue} action={r.action} />
-                  {r.extraLink && <TitleLink href={r.extraLink.href} title={r.extraLink.label} lines={1} tone="text" size="label" className="mb-[8px] ml-[12px]" />}
+                  <WorkRow as="div" kind={r.kind} title={r.title} href={link(r.href)} context={r.context || undefined} requester={r.requester} due={r.due} overdue={r.overdue} action={{ label: r.action.label, href: link(r.action.href) }} />
+                  {r.extraLink && <TitleLink href={link(r.extraLink.href)} title={r.extraLink.label} lines={1} tone="text" size="label" className="mb-[8px] ml-[12px]" />}
                 </li>
               );
             })}
           </ul>
           <div className="mt-[4px] flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[4px] border-t border-ds-border px-[8px] pt-[8px] text-ds-label text-ds-fg-muted">
             <span role="status">{page.cut ? `Showing ${formatCount(page.rows.length)} of ${formatCount(page.total)}` : `${formatCount(page.total)} ${page.total === 1 ? 'item' : 'items'}`}</span>
-            <TitleLink href={seeAllHref(chosen)} title={page.cut ? `See all ${formatCount(page.total)}` : 'Open Needs my action'} lines={1} tone="text" size="label" />
+            <TitleLink href={link(seeAllHref(chosen))} title={page.cut ? `See all ${formatCount(page.total)}` : 'Open Needs my action'} lines={1} tone="text" size="label" />
           </div>
         </>
       )}

@@ -12,7 +12,7 @@ import { ArrowRight, ArrowUpRight, ChevronRight, SlidersHorizontal, TrendingDown
 import { Button, EmptyState, Fact, FactList, SectionCard, Skeleton, StatusPill } from '@/components/ui/ds';
 import { TONE, type Tone } from '@/lib/status';
 import type { Scorecard } from './overviewModel';
-import { FOCUS, FeedError, type Feed } from './parts';
+import { FOCUS, FeedError, link, type Feed } from './parts';
 import { postureHead, scoredWords, sectionName, sectionRows, trendAlt, type PostureHead, type SectionRow, type TrendPoint } from './postureModel';
 
 const BRAND = '#0f766e';                  // --ds-primary: an SVG attribute cannot read a class
@@ -65,9 +65,9 @@ function ScoreBar({ score, tone, target }: { score: number | null; tone: Tone; t
 function Head({ head }: { head: PostureHead }) {
   const down = head.delta !== null && head.delta.value < 0;
   return (
-    <div className="mb-[8px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-b border-ds-border pb-[12px]">
+    <div className="mb-[8px] flex items-center gap-[12px] border-b border-ds-border pb-[12px]">
       <Ring score={head.score} tone={head.grade?.tone ?? 'neutral'} />
-      <div className="min-w-0 flex-1 basis-[10rem]">
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
           {head.grade && <StatusPill tone={head.grade.tone} label={head.grade.label} />}
           {head.delta && (
@@ -78,8 +78,8 @@ function Head({ head }: { head: PostureHead }) {
           )}
         </div>
         <p className="mt-[2px] text-ds-label text-ds-fg-muted">{scoredWords(head)}</p>
+        {head.trend.length > 1 && <div className="mt-[2px]"><Trend points={head.trend} down={down} /></div>}
       </div>
-      {head.trend.length > 1 && <Trend points={head.trend} down={down} />}
     </div>
   );
 }
@@ -115,7 +115,7 @@ function Details({ row, panelId, onAdjust }: { row: SectionRow; panelId: string;
         </div>
       )}
       <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-        <Button size="sm" href={row.page} rightIcon={<ArrowRight aria-hidden />}>{`Open ${row.label}`}</Button>
+        <Button size="sm" href={link(row.page)} rightIcon={<ArrowRight aria-hidden />}>{`Open ${row.label}`}</Button>
         {row.metrics.length > 0 && <Button size="sm" aria-haspopup="dialog" leftIcon={<SlidersHorizontal aria-hidden />} onClick={onAdjust}>Adjust weights</Button>}
       </div>
     </div>
@@ -126,7 +126,7 @@ function SectionItem({ row, target, open, onToggle, onAdjust }: { row: SectionRo
   const panelId = `posture-${row.key}-panel`;
   return (
     <li className="min-w-0 border-t border-ds-border first:border-t-0">
-      <div className="grid min-h-ds-control grid-cols-[minmax(0,1fr)_minmax(56px,112px)_36px_var(--ds-control-h)] items-center gap-x-[12px] rounded-ds-control hover:bg-ds-surface-hover max-sm:grid-cols-[minmax(0,1fr)_64px_32px_var(--ds-control-h)]">
+      <div className="grid min-h-ds-control grid-cols-[minmax(0,1fr)_minmax(40px,18%)_36px_var(--ds-control-h)] items-center gap-x-[12px] rounded-ds-control hover:bg-ds-surface-hover max-sm:grid-cols-[minmax(0,1fr)_64px_32px_var(--ds-control-h)]">
         <button
           type="button"
           aria-expanded={open}
@@ -140,7 +140,7 @@ function SectionItem({ row, target, open, onToggle, onAdjust }: { row: SectionRo
         </button>
         <ScoreBar score={row.score} tone={row.band.tone} target={target} />
         <span className="text-right text-ds-body font-[600] tabular-nums text-ds-fg">{row.scoreText}</span>
-        <Link href={row.page} aria-label={`Open ${row.label}`} className={`grid h-ds-control w-[var(--ds-control-h)] place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg ${FOCUS}`}>
+        <Link href={link(row.page)} aria-label={`Open ${row.label}`} className={`grid h-ds-control w-[var(--ds-control-h)] place-items-center rounded-ds-control text-ds-fg-muted hover:bg-ds-surface-hover hover:text-ds-fg ${FOCUS}`}>
           <ArrowUpRight aria-hidden className="h-[16px] w-[16px]" strokeWidth={1.75} />
         </Link>
       </div>

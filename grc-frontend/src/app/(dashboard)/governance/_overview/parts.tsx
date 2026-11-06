@@ -9,7 +9,13 @@ import { Lock } from 'lucide-react';
 import { ErrorState } from '@/components/ui/ds';
 import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import { NO_ACCESS } from '@/components/ui/ds/statModel';
+import { withFrom } from '@/components/shell/withFrom';
 import { isRefused, loadOf, type Source } from './overviewModel';
+
+/** The page the Overview's cards are on. Every link out of them remembers it (`?from=`), so the shell keeps the Overview lit in the rail and in the trail when
+ *  the person arrives on a document or a list. */
+export const HERE = '/governance';
+export const link = (href: string): string => withFrom(href, HERE);
 
 export interface Feed<T> extends Source<T> {
   error: unknown;

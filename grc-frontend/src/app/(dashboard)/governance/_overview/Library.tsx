@@ -11,7 +11,7 @@ import { Skeleton, StatusPill } from '@/components/ui/ds';
 import { EMPTY, formatCount } from '@/lib/format';
 import { documentStatus, exceptionStatus, statusPill } from '@/lib/status';
 import { coverageTile, documentsHref, documentsTile, type DocumentsSummary, type Scorecard } from './overviewModel';
-import { Denied, FOCUS, FeedError, refused, type Feed } from './parts';
+import { Denied, FOCUS, FeedError, link, refused, type Feed } from './parts';
 
 const NUMBER = 'min-w-[24px] w-fit rounded-ds-control text-[24px] leading-[32px] font-[600] tabular-nums text-ds-fg';
 
@@ -39,7 +39,7 @@ function Figure({ label, what, feed, failTitle, info, children }: { label: strin
 
 function StatusLink({ href, status, n }: { href: string; status: string; n: number }) {
   return (
-    <Link href={href} aria-label={`${documentStatus.label(status)}: ${formatCount(n)}`} className={`inline-flex min-h-ds-control items-center gap-[6px] rounded-ds-control text-ds-label text-ds-fg-body hover:text-ds-fg ${FOCUS}`}>
+    <Link href={link(href)} aria-label={`${documentStatus.label(status)}: ${formatCount(n)}`} className={`inline-flex min-h-ds-control items-center gap-[6px] rounded-ds-control text-ds-label text-ds-fg-body hover:text-ds-fg ${FOCUS}`}>
       <StatusPill size="sm" {...statusPill(documentStatus, status)} />
       <span className="font-[600] tabular-nums text-ds-fg">{formatCount(n)}</span>
     </Link>
@@ -61,10 +61,10 @@ export function LibraryBody({ summary, scorecard, exceptions }: {
     <div>
       <Figure label="Documents" what="the document counts" feed={summary} failTitle="Couldn't load documents">
         <div className="mt-[2px] flex flex-wrap items-center gap-x-[8px]">
-          <Link href={documentsHref.all} aria-label={`${formatCount(d.active)} ${docNoun}. Open the library`} className={`${NUMBER} hover:underline ${FOCUS}`}>{formatCount(d.active)}</Link>
+          <Link href={link(documentsHref.all)} aria-label={`${formatCount(d.active)} ${docNoun}. Open the library`} className={`${NUMBER} hover:underline ${FOCUS}`}>{formatCount(d.active)}</Link>
           <span className="text-ds-body text-ds-fg-muted">{docNoun}</span>
           {d.archived > 0 && (
-            <Link href={documentsHref.archived} className={`inline-flex min-h-ds-control items-center rounded-ds-control text-ds-label text-ds-fg-muted hover:text-ds-fg hover:underline ${FOCUS}`}>{`${formatCount(d.archived)} archived`}</Link>
+            <Link href={link(documentsHref.archived)} className={`inline-flex min-h-ds-control items-center rounded-ds-control text-ds-label text-ds-fg-muted hover:text-ds-fg hover:underline ${FOCUS}`}>{`${formatCount(d.archived)} archived`}</Link>
           )}
         </div>
         <div className="flex flex-wrap gap-x-[12px]">
@@ -85,7 +85,7 @@ export function LibraryBody({ summary, scorecard, exceptions }: {
 
       <Figure label="Exceptions" what="the exceptions" feed={exceptions} failTitle="Couldn't load exceptions">
         <div className="mt-[2px] flex flex-wrap items-center gap-x-[8px]">
-          <Link href="/governance/exceptions" aria-label={`${formatCount(total)} ${excNoun}. Open the exceptions`} className={`${NUMBER} hover:underline ${FOCUS}`}>{formatCount(total)}</Link>
+          <Link href={link('/governance/exceptions')} aria-label={`${formatCount(total)} ${excNoun}. Open the exceptions`} className={`${NUMBER} hover:underline ${FOCUS}`}>{formatCount(total)}</Link>
           <span className="text-ds-body text-ds-fg-muted">{excNoun}</span>
         </div>
         <div className="mt-[4px] flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-ds-label">

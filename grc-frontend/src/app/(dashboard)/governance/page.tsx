@@ -35,7 +35,7 @@ import { PerformanceDialog, type OverviewCard } from './_overview/PerformanceDia
 import { PostureCard } from './_overview/Posture';
 import { ThroughputBody } from './_overview/Throughput';
 import { GroupRows } from './_overview/Groups';
-import { toFeed, refused } from './_overview/parts';
+import { link, refused, toFeed } from './_overview/parts';
 import { usePosture } from './_overview/postureApi';
 import { groupsMeta, type GroupBy } from './_overview/postureModel';
 import {
@@ -104,7 +104,7 @@ export default function GovernanceDashboardPage() {
   const views = ATTENTION.map((def) => ({ def, counter: counterFor(def, sources) }));
   const retryNames = (names: SourceName[]) => names.forEach((name) => feeds[name].retry());
   const counters: BandCounter[] = views.map(({ def, counter }) => ({
-    key: def.key, label: def.label, href: def.href, tone: def.tone,
+    key: def.key, label: def.label, href: link(def.href), tone: def.tone,
     state: counter.state, value: counter.state === 'ready' ? counter.value : undefined,
     onRetry: counter.state === 'error' && counter.retry.some((name) => canRetry(feeds[name].error)) ? () => retryNames(counter.retry) : undefined,
   }));
@@ -169,18 +169,18 @@ export default function GovernanceDashboardPage() {
             <Menu
               label="More"
               items={[
-                { key: 'attestations', label: 'Attestations', icon: FileCheck, onSelect: () => router.push('/governance/documents/attestation') },
-                { key: 'statements', label: 'Statements', icon: FileText, onSelect: () => router.push('/compliance/statements') },
+                { key: 'attestations', label: 'Attestations', icon: FileCheck, onSelect: () => router.push(link('/governance/documents/attestation')) },
+                { key: 'statements', label: 'Statements', icon: FileText, onSelect: () => router.push(link('/compliance/statements')) },
               ]}
             />
-            <Button href="/governance/documents" variant="primary" leftIcon={<FileText aria-hidden />}>Manage Documents</Button>
+            <Button href={link('/governance/documents')} variant="primary" leftIcon={<FileText aria-hidden />}>Manage Documents</Button>
           </>
         ) : (
           <>
             {/* Attestations + Statements moved here from the sidebar: they live under the Governance documents area now */}
-            <Button href="/governance/documents/attestation" leftIcon={<FileCheck aria-hidden />}>Attestations</Button>
-            <Button href="/compliance/statements" leftIcon={<FileText aria-hidden />}>Statements</Button>
-            <Button href="/governance/documents" variant="primary" leftIcon={<FileText aria-hidden />}>Manage Documents</Button>
+            <Button href={link('/governance/documents/attestation')} leftIcon={<FileCheck aria-hidden />}>Attestations</Button>
+            <Button href={link('/compliance/statements')} leftIcon={<FileText aria-hidden />}>Statements</Button>
+            <Button href={link('/governance/documents')} variant="primary" leftIcon={<FileText aria-hidden />}>Manage Documents</Button>
           </>
         )}
       />
@@ -223,6 +223,7 @@ export default function GovernanceDashboardPage() {
             limit={workRowLimit(mode, narrow)}
             onRetry={(source) => refetchInbox(source)}
             fetching={fetchingSource}
+            link={link}
           />
         )}
         posture={(
