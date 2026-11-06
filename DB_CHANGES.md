@@ -32,6 +32,46 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-11-06 — Cyber Security assessments: nine scoping columns, the NIST item data and the artifact tag on evidence (additive, auto-applied)
+
+### What
+
+- **Nine columns on `grc_compliance_assessment_documents`** (D55, built 2026-11-04: a page per Cyber Security type, one assessment per application or function, scoped as a draft before the questions open): `scope_model` VARCHAR(16), `phase` VARCHAR(24), `template_id` INTEGER, `owner_id` INTEGER, `primary_asset_id` INTEGER, `scope` JSON DEFAULT '{}', `scope_snapshot` JSON, `subject_summary` TEXT, `started_at` TIMESTAMP.
+- **Two columns for the NIST assessments** (D56, built 2026-11-04): `grc_compliance_assessment_document_items.assessment_data` JSON (the control or subcategory with its objectives, methods and determinations) and `grc_assessment_item_evidence.artifact_ref` VARCHAR(300) (the artifact an evidence link answers; NULL = the item as a whole).
+- No new table, no data rewritten, no backfill, no seed row. A document that exists today keeps `scope_model` NULL, which the pages read as an unscoped questionnaire, exactly as before.
+
+### Why
+
+An assessment is made per application or function and scoped in stages (the stage, the scope and the people live in these columns); a NIST control is decided by its objectives, and evidence can say which object NIST names it answers.
+
+### How
+
+Nothing to run by hand: the backend adds them at each tenant's first access after a restart (`schema_migrations._COLUMN_ADDS`). To do it by hand, idempotent:
+
+```sql
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS scope_model VARCHAR(16);
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS phase VARCHAR(24);
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS template_id INTEGER;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS primary_asset_id INTEGER;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS scope JSON DEFAULT '{}'::json;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS scope_snapshot JSON;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS subject_summary TEXT;
+ALTER TABLE grc_compliance_assessment_documents ADD COLUMN IF NOT EXISTS started_at TIMESTAMP;
+ALTER TABLE grc_compliance_assessment_document_items ADD COLUMN IF NOT EXISTS assessment_data JSON;
+ALTER TABLE grc_assessment_item_evidence ADD COLUMN IF NOT EXISTS artifact_ref VARCHAR(300);
+```
+
+### Risk
+
+None: every column is nullable or has a default, and nothing reads them for a document that does not use them. The shipped data files (`seed_data/nist/*.json`, the baselines and the 800-53A objectives) are read from disk, not from the database.
+
+### Auto-applied?
+
+Yes, at the first request of each tenant after the backend restarts (rehearsed on the local PostgreSQL 17 for the nine columns in a rolled-back temporary table; the two NIST columns use the same statement shape and were exercised on SQLite by the tests, not on PostgreSQL).
+
+---
+
 ## 2026-11-06 — Risk Library removed from the code: nothing is dropped, changed or created (code-only)
 
 ### What
