@@ -611,6 +611,7 @@ export const DOCS: Record<string, ComponentDoc> = {
         props: [
           prop('onActivate', '() => void', 'The row opens something: it becomes a tab stop; a click on it (not on a control inside) or Enter / Space calls this.'),
           prop('selected', 'boolean', 'The row that is open or chosen: tinted and aria-selected.', 'false'),
+          prop('chosen', 'boolean', 'The row\'s own tick is on (a selection column): tinted like the open row, but not aria-selected: the tick says it.', 'false'),
         ],
       },
       {
@@ -647,6 +648,8 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('onSortChange', '(next) => void', 'Without it no header sorts.'),
           prop('onRowActivate', '(row) => void', 'Rows (and cards) become tab stops; click, Enter and Space call this.'),
           prop('selectedId', 'string | number | null', 'The row that is open or chosen.', 'null'),
+          prop('selection', 'RegisterSelection<T>', 'A column of ticks (and a tick before each card title) with a header tick for the rows LISTED: none, some (the mixed tick) or all. The page holds the chosen ids and draws its own bulk bar ("3 selected", "Select all 1,247 matching"). A press on a tick is not a press on the row.'),
+          prop('expand', 'RegisterExpand<T>', 'A toggle column that opens a panel under the row across every column, and a "Details" button inside the card on a phone. The page holds the open ids. The panel is drawn in the table and in the card, so give it no ids.'),
           prop('loading', 'boolean', 'The header and skeleton rows; no count, no footer.', 'false'),
           prop('loadingRows', 'number', 'How many skeleton rows.', '6'),
           prop('error', '{ message; onRetry? } | null', 'The request failed: a message (and Retry) in place of rows.', 'null'),
@@ -676,19 +679,41 @@ export const DOCS: Record<string, ComponentDoc> = {
           prop('cardCell', '(row) => ReactNode', 'What the card\'s line holds instead of `cell`, when the cell is an inline control (an input, a select) that must not be drawn twice: show its value as words. Only for a column with card: \'meta\'.'),
         ],
       },
+      {
+        name: 'RegisterSelection', source: `${DS}/RegisterTable.tsx`, own: 'RegisterSelection',
+        props: [
+          prop('chosen', 'RowId[]', 'The ids that are chosen. The page holds them, across pages: the header tick touches only the rows listed, an id of another page stays.'),
+          prop('onChange', '(next: RowId[]) => void', 'The ids after a tick was pressed: a row\'s (added at the end or taken out), or the header\'s (every row listed when some or none were chosen, none of them when all were).'),
+          prop('label', '(row) => string', 'Names a row\'s tick for a screen reader: "Select Information security policy".'),
+          prop('allLabel', 'string', 'Names the header\'s tick: "Select all documents on this page".', "'Select all rows on this page'"),
+        ],
+      },
+      {
+        name: 'RegisterExpand', source: `${DS}/RegisterTable.tsx`, own: 'RegisterExpand',
+        props: [
+          prop('open', 'RowId[]', 'The ids of the rows that are open. The page holds them.'),
+          prop('onChange', '(next: RowId[]) => void', 'The ids after a toggle was pressed.'),
+          prop('render', '(row) => ReactNode', 'What an open row shows: under the row across every column, and inside the card on a phone, so it is drawn twice: no ids in it. A press inside it is not a press on the row.'),
+          prop('label', '(row) => string', 'Names a row\'s toggle for a screen reader: "Details of Information security policy". It must contain the word "Details": the card\'s button says it.'),
+        ],
+      },
     ],
   },
   'Table logic': {
     name: 'Table logic',
     importFrom: UI,
-    imports: ['nextSort', 'ariaSort', 'sortRows', 'priorityClass', 'rowCountText'],
-    use: 'you need the rules behind the register apart from React (tested): which way a click sorts, what aria-sort says, how a client-held list is ordered, which columns give way, how many rows to say there are.',
+    imports: ['nextSort', 'ariaSort', 'sortRows', 'priorityClass', 'rowCountText', 'chosenState', 'toggleId', 'toggleAllListed', 'includesId'],
+    use: 'you need the rules behind the register apart from React (tested): which way a click sorts, what aria-sort says, how a client-held list is ordered, which columns give way, how many rows to say there are, and what the ticks and toggles of a selection column do to the page\'s list of ids.',
     parts: [
       { name: 'nextSort', fn: true, props: [prop('(current, key, cycle?, firstDir?)', 'SortState', 'The sort a header click asks for: first click firstDir, then reversed, then (asc-desc-none) cleared.')] },
       { name: 'ariaSort', fn: true, props: [prop('(columnKey, sort, sortable)', "'ascending' | 'descending' | 'none' | undefined", 'The aria-sort of a header; undefined (attribute left off) for a column that cannot sort.')] },
       { name: 'sortRows', fn: true, props: [prop('(rows, sort, valueOf)', 'T[]', 'A new array in order: numbers by value, text in natural order, empty values last, ties keep their order.')] },
       { name: 'priorityClass', fn: true, props: [prop('(priority?)', 'string', 'The classes that hide a priority-2 or -3 cell on a narrower window.')] },
       { name: 'rowCountText', fn: true, props: [prop('({ shown, total, noun, plural?, loading?, failed? })', 'string | null', '"25 of 312 documents"; null while loading, after a failure or with no known total: a count is never made up.')] },
+      { name: 'chosenState', fn: true, props: [prop('(listed, chosen)', "'none' | 'some' | 'all'", 'The state of the header tick: only the rows LISTED count (an id chosen on another page is not a row of this one); no rows listed is none.')] },
+      { name: 'toggleId', fn: true, props: [prop('(ids, id)', 'RowId[]', 'The ids after one tick (or toggle): the id added at the end, or taken out; every other id and the order kept. Ids compare as text (7 and "7" are one row).')] },
+      { name: 'toggleAllListed', fn: true, props: [prop('(listed, chosen)', 'RowId[]', 'The chosen ids after the header tick: every listed row when some or none were chosen, none of them when all were; the ids of other pages stay.')] },
+      { name: 'includesId', fn: true, props: [prop('(ids, id)', 'boolean', 'Whether a row is among the chosen (or open) ones, comparing as text.')] },
     ],
   },
   Formatting: {

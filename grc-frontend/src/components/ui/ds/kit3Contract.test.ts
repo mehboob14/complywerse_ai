@@ -155,6 +155,45 @@ test('the barrels export every new piece once, from the kit and from @/component
   }
 });
 
+// ── RegisterTable: the selection column and the expandable row ────────────────────────────────────────────────────────────────────────────
+
+test('RegisterTable: the tick column and the toggle column exist only when asked for, so a register that passes neither is exactly what it was', () => {
+  const r = code('RegisterTable.tsx');
+  assert.match(r, /\{selection && \(\s*<Th sticky=\{stickyHead\} className=\{EXTRA_CELL\}>/);
+  assert.match(r, /\{expand && <Th sticky=\{stickyHead\} className=\{EXTRA_CELL\}><span className="sr-only">Details<\/span><\/Th>\}/);
+  assert.match(r, /\{selection && <Td className=\{EXTRA_CELL\} \/>\}\s*\{expand && <Td className=\{EXTRA_CELL\} \/>\}/);        // the skeleton rows keep the same columns
+  assert.match(r, /<Td colSpan=\{span\}><Failure /);
+  assert.match(r, /const span = columns\.length \+ \(selection \? 1 : 0\) \+ \(expand \? 1 : 0\);/);
+  assert.match(r, /selection && 'relative pl-\[44px\]'/);                                                    // only a card with a tick gives up its left padding
+});
+
+test('RegisterTable: the header tick is for the rows LISTED and shows none, some (mixed) or all; a row\'s tick adds or takes out its own id; each is named for a screen reader', () => {
+  const r = code('RegisterTable.tsx');
+  assert.match(r, /const all = selection \? chosenState\(listed, selection\.chosen\) : 'none';/);
+  assert.match(r, /aria-label=\{selection\.allLabel \?\? 'Select all rows on this page'\}\s+checked=\{all === 'all'\}\s+indeterminate=\{all === 'some'\}/);
+  assert.match(r, /onChange=\{\(\) => selection\.onChange\(toggleAllListed\(listed, selection\.chosen\)\)\}/);
+  assert.equal((r.match(/onChange=\{\(\) => selection\.onChange\(toggleId\(selection\.chosen, id\)\)\}/g) ?? []).length, 2);       // the table's tick and the card's
+  assert.equal((r.match(/aria-label=\{selection\.label\(row\)\}/g) ?? []).length, 2);
+  assert.match(r, /disabled=\{loading \|\| failed \|\| rows\.length === 0\}/);                                // nothing to choose while it loads or after it failed
+});
+
+test('RegisterTable: a toggle says whether its row is open and what it opens, the panel is drawn only while open, and the table and the card never share an id', () => {
+  const r = code('RegisterTable.tsx');
+  assert.match(r, /aria-expanded=\{open\}\s+aria-controls=\{open \? panelId\(id, 'table'\) : undefined\}\s+aria-label=\{expand\.label\(row\)\}/);
+  assert.match(r, /\{expand && open && \(\s*<Tr id=\{panelId\(id, 'table'\)\}>\s*<Td colSpan=\{span\} className="bg-ds-surface-subtle">\{expand\.render\(row\)\}<\/Td>/);
+  assert.match(r, /aria-expanded=\{isOpen\}\s+aria-controls=\{isOpen \? panelId\(id, 'card'\) : undefined\}\s+aria-label=\{expand\.label\(row\)\}/);
+  assert.match(r, /\{isOpen && <div id=\{panelId\(id, 'card'\)\} data-row-ignore /);                          // a press inside the details is not a press on the card
+  assert.match(r, /const panelId = \(id: RowId, where: 'table' \| 'card'\) => `\$\{uid\}-\$\{where\}-details-\$\{encodeURIComponent\(String\(id\)\)\}`;/);
+  assert.doesNotMatch(r, FORBIDDEN);
+});
+
+test('Tr: a chosen row is tinted like the open one but is not aria-selected (a tick says it); the open row is as it was', () => {
+  const t = code('Table.tsx');
+  assert.match(t, /const tinted = selected \|\| chosen;/);
+  assert.match(t, /aria-selected=\{selected \|\| undefined\}/);
+  assert.match(t, /className=\{clsx\(tinted \? ROW_SELECTED : ROW_BASE, onActivate && ROW_PRESSABLE, onActivate && !tinted && ROW_HOVER, className\)\}/);
+});
+
 // ── the two findings of the Kit-2 probe ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 test('a chip is announced once: no tooltip of its whole text on the button, the cut label and the flag\'s mark carry their own', () => {

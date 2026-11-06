@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import {
   Button, EmptyState, Menu, PersonChip, RegisterTable, RowHeaderCell, Select, StatusPill, Table, TableFrame, TBody, Td, Th, THead, Tr,
-  ariaSort, nextSort, priorityClass, rowCountText, sortRows, type RegisterColumn, type SortState, type SortValue,
+  ariaSort, includesId, nextSort, priorityClass, rowCountText, sortRows, type RegisterColumn, type RowId, type SortState, type SortValue,
 } from '@/components/ui';
 import { formatCount, formatDate, formatDateTime, statusLabel } from '@/lib/format';
 import { parseUtc } from '@/lib/serverTime';
@@ -97,6 +97,47 @@ function RegisterDemo() {
       maxHeight="max-h-[420px]"
       footer={<p className="text-ds-label text-ds-fg-muted">{rowCountText({ shown: rows.length, total: 312, noun: 'document' })}</p>}
     />
+  );
+}
+
+/** A selection column and an expandable row: the page holds the chosen ids and the open ids; its bulk bar says how many (the register does not). A tick, a toggle
+ *  and a press inside an open row are not presses on the row, which opens the document (here: says so). */
+function SelectDemo() {
+  const rows = DOCUMENTS.slice(0, 8);
+  const [chosen, setChosen] = useState<RowId[]>([DOCUMENTS[1].id]);
+  const [open, setOpen] = useState<RowId[]>([DOCUMENTS[0].id]);
+  const [pressed, setPressed] = useState('nothing yet');
+  const [others, setOthers] = useState(false);
+  const ids = rows.map((d) => d.id);
+  const total = chosen.length;
+  return (
+    <div className="space-y-[8px]">
+      <div className="flex flex-wrap items-center gap-[8px] rounded-ds-card border border-ds-border bg-ds-surface-subtle px-[12px] py-[6px] text-ds-body text-ds-fg-body" aria-live="polite" data-guide-bulkbar>
+        <span className="min-w-0 flex-1 basis-[10rem]">{total === 0 ? 'Nothing selected' : `${formatCount(total)} selected`}</span>
+        <Button size="sm" onClick={() => setChosen(ids.slice())}>Select these {rows.length}</Button>
+        <Button size="sm" onClick={() => setChosen([])} disabled={total === 0}>Clear</Button>
+        <Button size="sm" onClick={() => { setOthers(true); setChosen((c) => (includesId(c, 'another-page') ? c : c.concat(['another-page']))); }} disabled={others}>Add a choice from another page</Button>
+      </div>
+      <RegisterTable
+        caption="Documents with a selection column and details"
+        columns={COLUMNS}
+        rows={rows}
+        getRowId={(d) => d.id}
+        onRowActivate={(d) => setPressed(`the row of "${d.title.slice(0, 28)}"`)}
+        selection={{ chosen, onChange: setChosen, label: (d) => `Select ${d.title}`, allLabel: 'Select all documents on this page' }}
+        expand={{
+          open, onChange: setOpen, label: (d) => `Details of ${d.title}`,
+          render: (d) => (
+            <div className="space-y-[6px] py-[4px]">
+              <p className="text-ds-body text-ds-fg-body">{d.title}: {d.status}, owned by {d.owner}, {formatCount(d.open)} open items.</p>
+              <Button size="sm" onClick={() => setPressed('a button inside the details')}>A button in the details</Button>
+            </div>
+          ),
+        }}
+        cardTitle={(d) => d.title}
+      />
+      <p className="text-ds-label text-ds-fg-muted" aria-live="polite" data-guide-select-log>Pressed last: {pressed}. A tick, a toggle and a press inside the details are not presses on the row.</p>
+    </div>
   );
 }
 
@@ -236,6 +277,9 @@ export function TablesSection() {
         </Specimen>
         <Specimen label="cardCell and cardActions: an inline Select in the table is a pill on the card (not drawn twice), and the row's menu sits at the top right of each card">
           <InlineDemo />
+        </Specimen>
+        <Specimen label="selection and expand: a tick column with a header tick for the rows listed (none, some, all), a toggle that opens details under the row; on a phone a tick on each card and a &quot;Details&quot; button. The bulk bar is the page's">
+          <SelectDemo />
         </Specimen>
         <Specimen label="No empty state given: the register's own plain line"><RegisterTable caption="Documents (plain empty demo)" columns={COLUMNS} rows={[]} getRowId={(d) => d.id} cardTitle={(d) => d.title} /></Specimen>
       </Spec>
