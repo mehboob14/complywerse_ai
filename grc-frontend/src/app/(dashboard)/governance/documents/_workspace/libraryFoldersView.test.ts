@@ -10,7 +10,9 @@ const rows = read('FolderRows.tsx');
 const cells = read('cells.tsx');
 const workspace = read('DocumentsWorkspace.tsx');
 const popover = read('MovePopover.tsx');
-const filters = read('LibraryFilters.tsx');
+const libraryRows = read('libraryRows.tsx');
+const facets = read('libraryFacets.ts');
+const explorer = readFileSync(new URL('../../../../../components/records/RecordExplorer.tsx', import.meta.url), 'utf8');
 
 test('the Folders view is the same table: the same rows, columns without Department, no pager, and a folder header for each department', () => {
   // a folder's documents sit one step under its arrow, level with a folder inside it: a row's own cells are one step right of a folder header at the same depth
@@ -31,10 +33,9 @@ test('a folder header is a real button that says whether it is open and what it 
 });
 
 test('Move to… is in the row menu and the bulk bar of the working list only, for the documents the person may change, never an archived one', () => {
-  assert.ok(cells.includes("key: 'move'") && cells.includes('hidden: !(canMove && onMove)'));
-  assert.ok(table.includes("a.id === 'archive' && onMove && bulkMove"));                             // beside Archive: the Archived list (Restore only) has none
-  assert.ok(table.includes('canMove={!!onMove && !!canMoveRow?.(doc)}'));
-  assert.ok(workspace.includes('canMoveRow={mayChange}'));
+  assert.ok(libraryRows.includes("key: 'move'") && libraryRows.includes('hidden: !env.canMove(doc)'));
+  assert.ok(workspace.includes("key: 'move', label: 'Move to…'") && workspace.includes('hidden: archivedList || !canEdit || targets.length === 0'));   // beside the other bulk actions: the Archived list (Restore only) has none
+  assert.ok(workspace.includes('canMove: (d) => !!targets.length && mayChange(d)'));
   assert.ok(/const mayChange = \(d: GovDoc\) => \(canEdit \|\| mine\(d\)\) && d\.status !== 'archived'/.test(workspace));   // the server's can_edit and ensure_not_archived
   // one request each, ONE message about how it went, said by its kind (a success goes by itself; a failure stays until it is read: useNotify)
   assert.ok(workspace.includes('moveAll(ids, to.id') && workspace.split('moveMessage(').length - 1 === 1);
@@ -42,19 +43,19 @@ test('Move to… is in the row menu and the bulk bar of the working list only, f
 });
 
 test('what is moved leaves the selection; what could not be moved stays ticked, also when the refresh reorders the list under it', () => {
-  assert.ok(table.includes('failed = await onMove(ids, target)'));
-  assert.ok(table.includes('const stay = ticks.filter((id) => failed.includes(id))'));
-  assert.ok(table.includes('ids.forEach((id) => next.delete(id));') && table.includes('stay.forEach((id) => next.add(id));'));
-  assert.ok(table.includes('kept && kept.until > Date.now() ? new Set(kept.ids.filter((id) => matchIds.has(id))) : NONE'));
+  assert.ok(workspace.includes('failed = await onMove(ids, target)'));
+  assert.ok(workspace.includes('const stay = tickedHere.filter((id) => failed.includes(id))'));
+  assert.ok(workspace.includes('ids.forEach((id) => next.delete(id)); stay.forEach((id) => next.add(id));') && workspace.includes('selection.keep(stay)'));
+  const selection = readFileSync(new URL('../../../../../components/records/useSelection.ts', import.meta.url), 'utf8');
+  assert.ok(selection.includes('kept && kept.until > Date.now() ? new Set(kept.ids) : NONE'));
 });
 
 test('the layout is in the address, the switch is in the toolbar, and the choice is remembered', () => {
-  assert.ok(workspace.includes('withLibraryParams(new URLSearchParams(window.location.search), state, openId, viewParam)'));
-  assert.ok(workspace.includes('[state, openId, viewParam]'));
+  assert.ok(workspace.includes('useAddressState(LIBRARY_SCHEMA)') && workspace.includes('viewPatch(next)'));
   assert.ok(workspace.includes('saveFolderPrefs(browserStore(), foldersKey(currentUserId), next)'));
-  // the switch is the kit's SegmentedControl (a native radio group named "Library layout"): the same two choices, and a choice calls the page's onView
-  assert.ok(filters.includes('label="Library layout"') && filters.includes("{ value: 'table', label: 'Table' }, { value: 'folders', label: 'Folders' }"));
-  assert.ok(filters.includes('<SegmentedControl') && filters.includes('onChange={onView}'));
+  // the switch is the kit's SegmentedControl (a native radio group named "Library view"): List, Folders and the read-only Board; a choice calls the page's changeView
+  assert.ok(workspace.includes("label: 'Library view'") && workspace.includes("{ value: 'table', label: 'List' }, { value: 'folders', label: 'Folders' }, { value: 'board', label: 'Board' }"));
+  assert.ok(explorer.includes('<SegmentedControl') && workspace.includes('changeView(v as LibraryViewId)'));
 });
 
 test('the Folders view says why it has nothing to show instead of an empty table: no departments yet (a way to make them), or none could be read', () => {
@@ -70,13 +71,13 @@ test('the Move to… popover is a dialog with a search box and a list, closes on
   assert.ok(popover.includes('if (t && !busy && !isCurrent(t)) onPick(t)'));
 });
 
-test('the library reads the department tree: the filter takes in what is under a department, the lists carry the level names, the column keeps the path as its title (D57)', () => {
+test('the library reads the department tree: the filter takes in what is under a department, the rail lists the tree with the level names, the column keeps the path as its title (D57)', () => {
   assert.ok(workspace.includes('departmentScope: departmentScopes(departments), departmentPaths: departmentPaths(departments)'));
   assert.ok(workspace.includes('useDepartmentLevels().data?.labels'));                                       // the organisation's words for the levels, the default names until they arrive
-  assert.ok(workspace.includes('departmentFilterOptions(departmentsQ.data, allDocs, levelNames)'));
+  assert.ok(workspace.includes('railOptions({ docs: allDocs, people: users, departments, levelNames, frameworks: frameworkInfo })'));
+  assert.ok(facets.includes('departmentPickItems(departments ?? [], { labels: input.levelNames, keep: docs.map((d) => d.department_id) })'));
   assert.ok(workspace.includes('moveTargets(departments, levelNames)'));
-  assert.ok(table.includes('lookups.departmentPaths?.[String(doc.department_id)]') && table.includes('<DepartmentCell name={department} path={departmentPath} />'));
-  assert.ok(cells.includes('title={path || name}'));                                                         // the name is drawn; the whole path is on hover
+  assert.ok(libraryRows.includes('lookups.departmentPaths?.[key]') && libraryRows.includes('title: [parts.join'));
   assert.ok(popover.includes('t.subLabel &&'));                                                              // the level beside each place in Move to…
 });
 

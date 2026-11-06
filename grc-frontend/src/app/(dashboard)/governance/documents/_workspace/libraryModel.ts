@@ -326,18 +326,20 @@ export interface Filters {
   expiring: boolean;
   /** only what the Documents Overview names (stuck, late approvals ...): the server says which, `?attn=` */
   attention: AttentionKind | null;
+  /** only the documents that wait for the signed-in person's decision (the inbox says which: lib/inbox), `?waiting=1` */
+  waiting: boolean;
 }
 
 export const NO_FILTERS: Filters = {
   search: '', types: [], statuses: [], owners: [], departments: [], frameworks: [], review: [], attestation: [], classifications: [], mine: false,
-  expiring: false, attention: null,
+  expiring: false, attention: null, waiting: false,
 };
 
-export type FacetKey = Exclude<keyof Filters, 'search' | 'mine' | 'expiring' | 'attention'>;
+export type FacetKey = Exclude<keyof Filters, 'search' | 'mine' | 'expiring' | 'attention' | 'waiting'>;
 
 /** How many things are being filtered on (the search counts one). */
 export function filterCount(f: Filters): number {
-  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0) + (f.expiring ? 1 : 0) + (f.attention ? 1 : 0)
+  return (f.search.trim() ? 1 : 0) + (f.mine ? 1 : 0) + (f.expiring ? 1 : 0) + (f.attention ? 1 : 0) + (f.waiting ? 1 : 0)
     + (['types', 'statuses', 'owners', 'departments', 'frameworks', 'review', 'attestation', 'classifications'] as FacetKey[])
       .reduce((n, k) => n + (f[k].length ? 1 : 0), 0);
 }
@@ -376,6 +378,8 @@ export interface MatchContext extends Lookups {
   now: Date;
   /** the documents the server names for the Attention filter (`?attn=`); none until it has answered, and then that filter keeps nothing */
   attention?: ReadonlySet<number> | null;
+  /** the documents that wait for the signed-in person (the inbox's decisions addressed to them); none until it has answered, and then that filter keeps nothing */
+  waiting?: ReadonlySet<number> | null;
 }
 
 /** Whether a document passes every filter: one facet keeps the documents that have ANY of the values chosen in it; the facets
@@ -398,6 +402,7 @@ export function matchesFilters(d: LibDoc, f: Filters, ctx: MatchContext): boolea
   if (f.attestation.length && !f.attestation.includes(attestationBucket(ctx.coverage[d.id]))) return false;
   if (f.expiring && !expiringSoon(d, ctx.now)) return false;
   if (f.attention && !ctx.attention?.has(d.id)) return false;
+  if (f.waiting && !ctx.waiting?.has(d.id)) return false;
   if (f.mine && !(ctx.me != null && (d.owner_id === ctx.me || d.author_id === ctx.me))) return false;
   const terms = searchTerms(f.search);
   if (terms.length) {
@@ -491,6 +496,23 @@ export function compareDocs(sort: Sort, lk: Lookups = NO_LOOKUPS): (a: LibDoc, b
   };
 }
 
+const COLLATOR = new Intl.Collator(undefined, { numeric: true });
+
+/** The documents in the order chosen: the order of `[...docs].sort(compareDocs(sort, lk))`, with each document's sort value worked out ONCE (a title is folded once, not once per
+ *  comparison) and one collator for the text: 10,000 documents sort in tens of milliseconds, not seconds. */
+export function sortDocs<T extends LibDoc>(docs: readonly T[], sort: Sort, lk: Lookups = NO_LOOKUPS): T[] {
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  const keyed = docs.map((d) => ({ d, v: sortValue(d, sort.key, lk) }));
+  keyed.sort((a, b) => {
+    if (a.v === NO_VALUE && b.v === NO_VALUE) return b.d.id - a.d.id;
+    if (a.v === NO_VALUE) return 1;
+    if (b.v === NO_VALUE) return -1;
+    const c = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : COLLATOR.compare(String(a.v), String(b.v));
+    return c !== 0 ? sign * c : b.d.id - a.d.id;
+  });
+  return keyed.map((k) => k.d);
+}
+
 // ─── The page's state in the address ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface LibraryState { filters: Filters; sort: Sort }
@@ -510,6 +532,7 @@ export function toParams(state: LibraryState): URLSearchParams {
   if (f.mine) p.set('mine', '1');
   if (f.expiring) p.set('expiry', EXPIRY_PARAM);
   if (f.attention) p.set('attn', f.attention);
+  if (f.waiting) p.set('waiting', '1');
   if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) p.set('sort', `${sort.key}:${sort.dir}`);
   return p;
 }
@@ -528,6 +551,7 @@ export function fromParams(p: URLSearchParams): LibraryState {
   f.expiring = p.get('expiry') === EXPIRY_PARAM;
   const attn = p.get('attn');
   f.attention = isAttention(attn) ? attn : null;                       // a kind this page does not know is ignored, never an error
+  f.waiting = p.get('waiting') === '1';
   const [key, dir] = (p.get('sort') ?? '').split(':');
   const sort: Sort = (SORT_KEYS as string[]).includes(key) && (dir === 'asc' || dir === 'desc') ? { key: key as SortKey, dir } : DEFAULT_SORT;
   return { filters: f, sort };
@@ -535,17 +559,17 @@ export function fromParams(p: URLSearchParams): LibraryState {
 
 /** How the library is laid out: the register table, or a folder for each department. Not part of LibraryState: a saved view is the
  *  same view in either layout, so views are matched without it. */
-export type LibraryViewId = 'table' | 'folders';
+export type LibraryViewId = 'table' | 'folders' | 'board';
 
 /** The layout an address asks for (`?view=folders`); null when it says none, so a link without it behaves as it always did. */
 export function viewFromParams(p: URLSearchParams): LibraryViewId | null {
   const v = p.get('view');
-  return v === 'table' || v === 'folders' ? v : null;
+  return v === 'table' || v === 'folders' || v === 'board' ? v : null;
 }
 
 /** The address keys that are the library's own (a link may carry others, e.g. the AI Studio's "+ Draft" link; they are left alone).
  *  `open` is the document peeked at in the drawer; `view` the layout. */
-export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'attn', 'sort', 'open', 'id', 'view'];
+export const PARAM_KEYS = ['q', 'type', 'status', 'owner', 'dept', 'fw', 'review', 'att', 'cls', 'mine', 'expiry', 'attn', 'waiting', 'sort', 'open', 'id', 'view'];
 
 /** The address with the library's keys replaced by this state (and the open document, and the layout when the person has chosen
  *  one); every other key is kept as it was. */
@@ -579,6 +603,7 @@ const view = (id: string, name: string, filters: Partial<Filters>): SavedView =>
 export const BUILT_IN_VIEWS: SavedView[] = [
   view('all', 'All documents', {}),
   view('mine', 'My documents', { mine: true }),
+  view('waiting', 'Waiting for me', { waiting: true }),
   view('overdue', 'Review overdue', { review: ['overdue'] }),
   view('drafts', 'Drafts and in review', { statuses: ['draft', 'pending_review', 'pending_approval'] }),
   view('in-force', 'In force', { statuses: ['published'] }),

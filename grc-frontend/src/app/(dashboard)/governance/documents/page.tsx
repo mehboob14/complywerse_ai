@@ -4,15 +4,13 @@ export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { problemOf, studioApi } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, RightSlidePanel, PageLoader } from '@/components/ui';
-import { ErrorState } from '@/components/ui/ds';
-import { canRetry, errorMessage } from '@/components/ui/ds/reportOutcome';
 import {
   FileText,
   Loader2,
@@ -155,10 +153,6 @@ export default function GovernanceDocumentsPage() {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [ownerFilter, setOwnerFilter] = useState('');
   const [uploadingToDocumentId, setUploadingToDocumentId] = useState<number | null>(null);
   const [parsingDocumentId, setParsingDocumentId] = useState<number | null>(null);
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
@@ -187,22 +181,8 @@ export default function GovernanceDocumentsPage() {
       .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
   };
 
-  // Kept solely so its `error` can drive the load-failure banner below.
-  // The list/hierarchy body that consumed `data` was replaced by
-  // <DocumentsWorkspace/>, so we no longer thread sort/pagination here.
-  const { error, refetch: refetchProbe } = useQuery({
-    queryKey: ['governance-documents-probe', typeFilter, statusFilter, searchTerm],
-    queryFn: async () => {
-      const params: Record<string, string | number> = {};
-      if (typeFilter) params.doc_type = typeFilter;
-      if (statusFilter) params.status = statusFilter;
-      if (searchTerm) params.search = searchTerm;
-
-      const response = await governanceApi.getDocuments(params as any);
-      return response.data as unknown as DocumentListResponse;
-    },
-    placeholderData: keepPreviousData,
-  });
+  // There is no second request here that only exists to drive a load-failure banner (it used to ask for 100 full documents, with their text, on every visit):
+  // the library asks for its own list, once, and says in its own words and with its own Retry when that fails (DocumentsWorkspace).
 
   const uploadToDocumentMutation = useMutation({
     mutationFn: ({ documentId, formData }: { documentId: number; formData: FormData }) => 
@@ -317,17 +297,6 @@ export default function GovernanceDocumentsPage() {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString();
   };
-
-  if (error) {
-    // not a dead end: what failed, in the server's words, and a way to ask again (the library's own list is asked again with it)
-    return (
-      <ErrorState
-        title="Couldn't load the documents"
-        message={errorMessage(error)}
-        onRetry={canRetry(error) ? () => { void refetchProbe(); void queryClient.invalidateQueries({ queryKey: ['gov-docs-workspace'] }); } : undefined}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4 sm:space-y-6">

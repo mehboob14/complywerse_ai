@@ -72,25 +72,25 @@ test('every write of the page is reported when the server has answered, and arch
   assert.ok(workspace.includes('Delete the view'));
 });
 
-test('the numbers the page states come from libraryNumbers.ts: the head, the filter bar, the tiles, the pager and the export say what they are over', () => {
+test('the numbers the page states come from libraryNumbers.ts: the head, the filter bar, the pager and the export say what they are over', () => {
   const workspace = read('DocumentsWorkspace.tsx');
-  for (const word of ['headCount(', 'loadedNotice(', 'tilesNote(', 'tileNoun(', 'csvName(', 'noMatch(', 'missingOpen(', "<ListNotice title={notice.title}>"]) assert.ok(workspace.includes(word), word);
-  assert.ok(read('LibraryFilters.tsx').includes('exportWords(') && read('LibraryFilters.tsx').includes('resultLine(') && read('LibraryFilters.tsx').includes('shownOf('));
-  assert.ok(read('LibraryTable.tsx').includes('pagerNoun(cut)') && read('LibraryTable.tsx').includes('<Pager'));
+  for (const word of ['headCount(', 'loadedNotice(', 'csvName(', 'noMatch(', 'missingOpen(', 'exportWords(', 'pagerNoun(cut)', '<Pager', "<ListNotice title={notice.title}>"]) assert.ok(workspace.includes(word), word);
   // a failed list is an error with Retry, never an empty library
-  assert.ok(workspace.includes('noList ?') && workspace.includes('<ErrorState title="Couldn\'t load the documents"'));
+  assert.ok(workspace.includes('if (noList) return <ErrorState title="Couldn\'t load the documents"'));
+  // the library asks for its whole list ONCE, lean (no text, no query per row), and the page keeps no second request that only drives a banner
+  assert.ok(read('api.ts').includes("fetchDocuments({ lean: 1, limit: LIBRARY_LIMIT, sort_by: 'updated_at', sort_order: 'desc' })") && workspace.includes('queryFn: fetchLibrary'));
+  assert.ok(!/getDocuments\(/.test(readFileSync(new URL('../page.tsx', DIR), 'utf8')));
 });
 
-test('the register is on the kit table: sortable headers with aria-sort, rows that open from the keyboard, columns by window width, cards below 768px', () => {
-  const table = read('LibraryTable.tsx');
-  for (const word of ['<TableFrame', '<Th', '<Tr', 'RowHeaderCell', 'placeClass(', 'rowHandlers', 'className="hidden md:block"', 'className="md:hidden"', 'onActivate={() => onPeek(doc.id)}']) assert.ok(table.includes(word), word);
-  assert.ok(!/<table\b|<th\b|<thead\b/.test(table));                                                                 // no bare table elements of its own: the kit's primitives
+test('the register is on the kit table: sortable headers with aria-sort, rows that open from the keyboard, columns by window width, cards below 768px (only the one for the width is drawn); the details open over the list', () => {
+  const table = readFileSync(new URL('../../../../../components/records/RecordTable.tsx', import.meta.url), 'utf8');
+  for (const word of ['<TableFrame', '<Th', '<Tr', 'priority={c.priority}', 'sortKey={c.sortKey}', 'onActivate={() => onActivate(record)}', 'useMinWidth(768)', 'wide ? (']) assert.ok(table.includes(word), word);
+  assert.ok(!/<table\b|<th\b|<thead\b/.test(table));                                                              // no bare table elements of its own: the kit's primitives
   assert.ok(table.includes('table-fixed'));
-  // the details panel: beside the register from 1024px, a modal sheet below
-  const workspace = read('DocumentsWorkspace.tsx');
-  assert.ok(workspace.includes('useMinWidth(1024)') && workspace.includes('mode="side"') && workspace.includes('mode="sheet"'));
-  const drawer = read('DocumentDrawer.tsx');
-  assert.ok(drawer.includes('useDialogFocus(sheet, panelRef)') && drawer.includes('lockBodyScroll()') && drawer.includes("aria-modal={sheet ? true : undefined}"));
+  // the details: the kit's SidePanel as an overlay at every width (never docked), a sheet on a phone, with ONE scrolling body
+  const detail = read('DocumentDetail.tsx');
+  assert.ok(detail.includes('<SidePanel') && detail.includes('dockFrom={Infinity}') && detail.includes('restoreFocus={rowOf(doc?.id ?? null)}'));
+  assert.ok(!/useMinWidth/.test(read('DocumentsWorkspace.tsx')));
 });
 
 test('the table and the phone cards are both in the page (the width hides one), so their folder ids differ: an id may appear once, and aria-controls must name the right one', () => {
@@ -104,7 +104,7 @@ test('the table and the phone cards are both in the page (the width hides one), 
 test('the files that were rewritten on the kit hold its token rules: no named text size, palette colour, hex, named shadow or radius, no text under 12px', () => {
   const rewritten = [
     'atoms.tsx', 'cells.tsx', 'DocumentDrawer.tsx', 'DocumentsWorkspace.tsx', 'FolderRows.tsx', 'FrameworkList.tsx', 'FrameworksCell.tsx', 'LibraryFilters.tsx', 'LibraryKpis.tsx',
-    'LibraryTable.tsx', 'LifecycleHover.tsx', 'MovePopover.tsx', 'Versions.tsx',
+    'LibraryTable.tsx', 'LifecycleHover.tsx', 'MovePopover.tsx', 'Versions.tsx', 'libraryRows.tsx', 'libraryItems.tsx', 'DocumentDetail.tsx',
   ];
   const found: string[] = [];
   for (const name of rewritten) for (const v of findViolations(read(name))) found.push(`${name}:${v.line} ${v.rule} ${v.text}`);

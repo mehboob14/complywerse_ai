@@ -71,7 +71,7 @@ const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 // ─── Small pieces ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function Section({ title, first = false, children }: { title: string; first?: boolean; children: ReactNode }) {
+export function Section({ title, first = false, children }: { title: string; first?: boolean; children: ReactNode }) {
   return (
     <section className={first ? '' : 'mt-5 border-t border-ds-border pt-4'}>
       <h3 className="!text-ds-body font-[600] !text-ds-fg">{title}</h3>
@@ -141,7 +141,7 @@ function Description({ text }: { text: string | null }) {
   );
 }
 
-function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; counts: DocumentDrawerProps['counts'] }) {
+export function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; counts: DocumentDrawerProps['counts'] }) {
   const att = attestationSummary(lookups.coverage[doc.id], counts[doc.id]);
   const tags = doc.tags ?? [];
   const scope = doc.regulatory_scope ?? [];
@@ -194,7 +194,7 @@ function OwnDates({ doc, failed }: { doc: GovDoc; failed: boolean }) {
 }
 
 // fetched only while this tab is open (it is mounted only then); the same cache entry as the life-cycle hover card
-function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => void }) {
+export function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => void }) {
   const q = useQuery<LifecycleReply>({
     queryKey: ['document-lifecycle', String(doc.id)],
     queryFn: async () => (await apiClient.get(`/governance/documents/${doc.id}/lifecycle`)).data,
@@ -266,7 +266,7 @@ function Workflow({ doc, onOpenDoc }: { doc: GovDoc; onOpenDoc: (id: number) => 
 
 // ─── Frameworks ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lookups; active: string[]; onPick: (id: number) => void }) {
+export function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; lookups: Lookups; active: string[]; onPick: (id: number) => void }) {
   const ids = mappedFrameworkIds(doc);
   if (ids.length === 0) {
     return (
