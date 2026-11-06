@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "family": "general",
+  "fallback": true,
+  "label": "Custom and other frameworks",
+  "summary": "The fallback for custom, uploaded and unknown frameworks (the library's GCRF is the only one listed). With no catalog of its own, the practical start is the one management-system standards use: say why the framework is taken on, write the scope down, name an owner and a sponsor, and decide who assesses first and when.",
+  "frameworks": [
+    {"slug": "gcrf", "label": "Global Cyber Resilience Framework", "flow_id": "gcrf"}
+  ],
+  "requires_org": [
+    {"field": "entities_sites.legal_entities", "reason": "The scope names the legal entities it covers, picked from the profile."},
+    {"field": "entities_sites.sites", "reason": "Sites inside the scope are picked from the profile."},
+    {"field": "data_systems.key_systems", "reason": "Systems inside the scope are picked from the key systems list."},
+    {"field": "risk_people.sponsor", "reason": "Every framework needs an executive who backs the work and approves the scope."}
+  ],
+  "steps": [
+    {
+      "key": "why", "label": "Reason",
+      "source": {"ref": "ISO management-system practice, clauses 4.1 and 4.2 (issues and interested parties with their requirements), used here as the general pattern for why a framework is taken on", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/Final-27001-Gap-Guide.pdf", "https://advisera.com/iso27001/clause-4-context-of-the-organization/"]},
+      "fields": [
+        {"key": "driver", "label": "Driver", "type": "choice", "level": "required", "options": ["Regulatory", "Customer", "Internal", "Voluntary"], "note": "Why the organisation takes this framework on. A regulator or customer brings a deadline and often a named assessor; an internal or voluntary decision does not."},
+        {"key": "required_by", "label": "Required by", "type": "text", "level": "required", "when": {"field": "why.driver", "in": ["Regulatory", "Customer"]}, "note": "The regulator or customer that requires it, with the contract or clause reference. Auditors and the other party ask for it."},
+        {"key": "deadline", "label": "Deadline", "type": "date", "level": "advised", "when": {"field": "why.driver", "in": ["Regulatory", "Customer"]}, "note": "Date set by the regulator or customer for compliance or attestation."},
+        {"key": "version_used", "label": "Version used", "type": "text", "level": "advised", "note": "Edition or version of the framework being followed, so the scope and the assessment refer to the same text."}
+      ]
+    },
+    {
+      "key": "scope", "label": "Scope",
+      "source": {"ref": "ISO management-system scoping practice, clause 4.3 (boundaries, activities, locations, interfaces; documented; exclusions justified)", "asked_by": "auditor, certification body", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/", "https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/NQA-ISO-22301-Business-Continuity-Checklist.pdf"]},
+      "fields": [
+        {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "required", "note": "One written statement of what is covered, where and for whom, as management-system standards ask. Auditors and customers read it first."},
+        {"key": "entities", "label": "Entities", "type": "org_pick", "of": "entities", "level": "advised", "note": "Legal entities inside the scope, picked from the organisation profile."},
+        {"key": "sites", "label": "Sites", "type": "org_pick", "of": "sites", "level": "advised", "note": "Sites inside the scope. An assessor plans visits and sampling from this list."},
+        {"key": "systems", "label": "Systems", "type": "org_pick", "of": "systems", "level": "advised", "note": "Systems and services inside the boundary. Include the interfaces to systems outside it."},
+        {"key": "units", "label": "Units", "type": "org_pick", "of": "departments", "level": "advised", "note": "Departments inside the scope."},
+        {"key": "exclusions", "label": "Exclusions", "type": "table", "level": "advised", "note": "Anything inside the organisation left out, each with the reason. An unjustified exclusion draws a finding. Leave empty if nothing is excluded.", "columns": [{"key": "item", "label": "Item", "type": "text", "required": true}, {"key": "reason", "label": "Reason", "type": "text", "required": true}]}
+      ]
+    },
+    {
+      "key": "people", "label": "Owner and sponsor",
+      "source": {"ref": "ISO management-system practice, clause 5.3 (top management assigns and communicates roles) and clause 5 (leadership)", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/Final-27001-Gap-Guide.pdf"]},
+      "fields": [
+        {"key": "owner", "label": "Framework owner", "type": "person", "level": "required", "prefill_from": "org.risk_people.compliance_lead", "note": "The person accountable for compliance with this framework day to day. Auditors and customers ask who it is."},
+        {"key": "sponsor", "label": "Sponsor", "type": "person", "level": "required", "prefill_from": "org.risk_people.sponsor", "note": "The executive who backs the work and approves scope and risk acceptance. Top-management ownership is what auditors look for."}
+      ]
+    },
+    {
+      "key": "assessment", "label": "First assessment",
+      "source": {"ref": "Certification-body practice: an independent assessment is planned before the audit and repeats on a cycle (Stage 1 and Stage 2, annual surveillance)", "asked_by": "certification body, auditor", "confidence": "secondary", "urls": ["https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
+      "fields": [
+        {"key": "assessor_kind", "label": "Assessed by", "type": "choice", "level": "required", "options": ["Self-assessment", "Internal review", "Third party"], "note": "Who judges compliance: the team itself, an internal function independent of the team such as internal audit, or an outside body. Customers and regulators usually expect more independence for higher stakes."},
+        {"key": "assessor", "label": "Third-party assessor", "type": "text", "level": "advised", "when": {"field": "assessment.assessor_kind", "eq": "Third party"}, "note": "Name of the outside assessor or certification body. Name it early; it sets the scope data it will ask for."},
+        {"key": "reviewer", "label": "Internal reviewer", "type": "person", "level": "advised", "when": {"field": "assessment.assessor_kind", "eq": "Internal review"}, "note": "The person or function that reviews. They should not review what they run."},
+        {"key": "first_date", "label": "First assessment", "type": "date", "level": "advised", "note": "Planned date of the first assessment. It sets the pace of the work."},
+        {"key": "cadence", "label": "Repeat cycle", "type": "choice", "level": "advised", "options": ["One-off", "Yearly", "Every two years", "Every three years"], "note": "How often the assessment repeats. Certificates and attestations expire, and internal programmes drift without a cycle."}
+      ]
+    }
+  ],
+  "gate": [
+    {"key": "scope_written", "label": "A scope statement is written", "level": "required", "check": {"type": "filled", "field": "scope.statement"}, "hint": "Say what is covered, where and for whom."},
+    {"key": "scope_has_target", "label": "The scope names a site, system or unit", "level": "required", "check": {"type": "any_filled", "fields": ["scope.sites", "scope.systems", "scope.units"]}, "hint": "Pick at least one site, system or unit from the organisation profile."},
+    {"key": "owner_named", "label": "An owner is named", "level": "required", "check": {"type": "filled", "field": "people.owner"}, "hint": "Name the person accountable day to day."},
+    {"key": "sponsor_named", "label": "A sponsor is named", "level": "required", "check": {"type": "filled", "field": "people.sponsor"}, "hint": "Name the executive who backs the work."},
+    {"key": "owner_not_sponsor", "label": "Owner and sponsor are different people", "level": "advised", "check": {"type": "distinct", "fields": ["people.owner", "people.sponsor"]}, "hint": "The sponsor backs; the owner runs."},
+    {"key": "assessment_before_deadline", "label": "The first assessment falls before the deadline", "level": "advised", "when": {"field": "why.driver", "in": ["Regulatory", "Customer"]}, "check": {"type": "before", "first": "assessment.first_date", "second": "why.deadline"}, "hint": "Leave time to fix findings before the date set by the regulator or customer."}
+  ]
+}

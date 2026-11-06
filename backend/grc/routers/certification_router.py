@@ -516,7 +516,11 @@ def create_certification(
     if existing_journey:
         existing_journey.progress = calculate_progress_summary(existing_journey, db)
         return existing_journey
-    
+
+    # Framework onboarding gate (D66): a 409 until the framework's onboarding is complete or marked underway.
+    from ..modules.framework_onboarding import gate as onboarding_gate
+    onboarding_gate.assert_can_start(db, tenant_id, framework)
+
     journey = CertificationJourney(
         tenant_id=tenant_id,
         uploaded_framework_id=journey_data.framework_id,
@@ -526,6 +530,8 @@ def create_certification(
         status="in_progress"
     )
     db.add(journey)
+    db.flush()
+    onboarding_gate.record_started(db, tenant_id, framework, current_user.id)
     db.commit()
     db.refresh(journey)
     

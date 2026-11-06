@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "family": "iso_management",
+  "label": "Management system standards",
+  "summary": "Certifiable management systems (ISO/IEC 27001, ISO 22301, ISO/IEC 42001, ISO 45001). The certification body fixes audit time from scope, headcount, sites and complexity before Stage 1, and the auditor reads the scope, interested parties and Statement of Applicability first.",
+  "frameworks": [
+    {"slug": "iso_27001", "label": "ISO/IEC 27001:2022", "flow_id": "iso27001"},
+    {"slug": "iso_22301", "label": "ISO 22301:2019", "flow_id": "iso22301"},
+    {"slug": "iso_42001", "label": "ISO/IEC 42001:2023", "flow_id": "iso42001"},
+    {"slug": "iso_45001", "label": "ISO 45001:2018", "flow_id": "iso45001"}
+  ],
+  "requires_org": [
+    {"field": "entities_sites.sites", "reason": "Sites are the unit of audit planning and multi-site sampling."},
+    {"field": "data_systems.key_systems", "reason": "The scope names the systems and interfaces inside the boundary."},
+    {"field": "risk_people.sponsor", "reason": "Top management must own the scope and the policy."}
+  ],
+  "steps": [
+    {
+      "key": "route", "label": "Certification route",
+      "source": {"ref": "Certification-body quote forms and service procedures: Stage 1, Stage 2, 3-year certificate, annual surveillance", "asked_by": "certification body", "confidence": "secondary", "urls": ["https://www.nsai.ie/download/certification/AD-27-01_ISO_27001_RFQ_Rev.6.docx", "https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
+      "fields": [
+        {"key": "goal", "label": "Goal", "type": "choice", "level": "required", "options": ["Certification by an accredited body", "Aligned, no certificate", "Internal readiness only"], "note": "Decides how strict the gate is. A certificate needs a named body and audit dates; alignment does not."},
+        {"key": "cert_body", "label": "Certification body", "type": "text", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "note": "The accredited body that will audit. It asks for the scope data below in its application, so name it early."},
+        {"key": "cert_kind", "label": "Certificate type", "type": "choice", "level": "required", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "options": ["Initial certification", "Transfer from another body", "Recertification"], "note": "Transfers and recertifications need the previous certificate and its audit reports."},
+        {"key": "consultant", "label": "Consultant used", "type": "text", "level": "advised", "note": "Name any adviser that helped build the system and when. The certification body has to manage that conflict of interest."},
+        {"key": "prior_cert_ref", "label": "Current certificate", "type": "text", "level": "advised", "when": {"field": "route.cert_kind", "in": ["Transfer from another body", "Recertification"]}, "note": "Certificate number and expiry. The body checks the previous scope and open nonconformities."},
+        {"key": "stage1_target", "label": "Stage 1 target", "type": "date", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "note": "Stage 1 is the documentation and readiness review. Bodies check that internal audit and management review are planned before it."},
+        {"key": "stage2_target", "label": "Stage 2 target", "type": "date", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "note": "Stage 2 is the implementation audit. Each certification body sets its own deadline for closing nonconformities; ask yours."}
+      ]
+    },
+    {
+      "key": "context", "label": "Context",
+      "source": {"ref": "Clauses 4.1 and 4.2 of each standard (issues, interested parties and their requirements), as restated in certification-body gap guides", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/Final-27001-Gap-Guide.pdf", "https://advisera.com/iso27001/clause-4-context-of-the-organization/"]},
+      "fields": [
+        {"key": "issues", "label": "Issues", "type": "longtext", "level": "advised", "note": "Internal and external issues that affect the management system (market, regulation, technology, ownership). The auditor checks they were thought about, not their length."},
+        {"key": "interested_parties", "label": "Interested parties", "type": "table", "level": "required", "min_rows": 1, "note": "Who has requirements of the system and what they are. Listing parties without their requirements is the commonest gap.", "columns": [{"key": "party", "label": "Party", "type": "text", "required": true}, {"key": "kind", "label": "Kind", "type": "choice", "options": ["Customer", "Regulator", "Employee", "Supplier", "Owner or board", "Partner", "Public"], "required": true}, {"key": "requirement", "label": "Requirement", "type": "text", "required": true}, {"key": "how_addressed", "label": "Addressed by", "type": "text"}]},
+        {"key": "obligations_reviewed", "label": "Obligations reviewed", "type": "bool", "level": "required", "note": "Confirms the legal, regulatory and contractual requirements in the organisation profile were reviewed for this system."},
+        {"key": "climate", "label": "Climate change", "type": "choice", "level": "advised", "options": ["Relevant", "Not relevant", "Not decided yet"], "source": {"ref": "ISO Amendment 1:2024 adds a climate-change question to clause 4.1 (reported by certification bodies; not read in the standard text)", "asked_by": "auditor", "confidence": "unverified"}, "note": "Since the 2024 amendment, auditors ask whether climate change is a relevant issue and expect the decision recorded."}
+      ]
+    },
+    {
+      "key": "scope", "label": "Scope",
+      "source": {"ref": "Clause 4.3 (boundaries, activities, products, locations, interfaces and dependencies; documented; exclusions justified) and the certification body's sizing data", "asked_by": "auditor, certification body", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/scoping-out-an-iso-27001-certification", "https://www.dataguard.com/knowledge/iso-27001/clause-4-3-how-to-determine-the-scope-of-your-isms/", "https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/NQA-ISO-22301-Business-Continuity-Checklist.pdf"]},
+      "fields": [
+        {"key": "statement", "label": "Scope statement", "type": "longtext", "level": "required", "note": "The sentence printed on the certificate. Say what is covered, where, and for whom. Too narrow a scope drawn for one customer is the commonest reason to redraw it later."},
+        {"key": "kind", "label": "Scope kind", "type": "choice", "level": "required", "options": ["Whole organisation", "Business unit or department", "Service line", "Product or application", "Site or sites"], "note": "Whole organisation, a unit, a service line, a product or application, or particular sites."},
+        {"key": "entities", "label": "Entities", "type": "org_pick", "of": "entities", "level": "required", "min_rows": 1, "note": "Legal entities inside the scope, picked from the organisation profile."},
+        {"key": "sites", "label": "Sites", "type": "org_pick", "of": "sites", "level": "required", "min_rows": 1, "note": "Sites inside the scope. The body spreads audit days across sites by relevance and risk; multi-site sampling needs a central function."},
+        {"key": "units", "label": "Units", "type": "org_pick", "of": "departments", "level": "advised", "note": "Departments inside the scope."},
+        {"key": "systems", "label": "Systems", "type": "org_pick", "of": "systems", "level": "required", "min_rows": 1, "applies_to": ["iso_27001", "iso_42001", "iso_22301"], "note": "Systems and services inside the boundary. Include the interfaces to systems outside it."},
+        {"key": "headcount", "label": "Staff in scope", "type": "number", "level": "required", "min": 1, "note": "People inside the scope including contractors and freelancers. ISO/IEC 27006-1 counts non-employees for audit time."},
+        {"key": "shifts", "label": "Shift pattern", "type": "text", "level": "advised", "note": "Shifts and staff per shift when work runs round the clock. Bodies add audit time for shifts."},
+        {"key": "tech_size", "label": "Technology size", "type": "longtext", "level": "advised", "applies_to": ["iso_27001"], "note": "Approximate counts of systems, servers, networks, privileged users and remote users. Certification bodies use them to set audit time."},
+        {"key": "outsourced", "label": "Outsourced", "type": "org_pick", "of": "third_parties", "level": "advised", "when": {"field": "org.data_systems.no_third_parties", "ne": true}, "note": "Outsourced processes and providers inside the scope. An outsourced process stays in scope; its provider's controls are covered by contract or evidence."},
+        {"key": "interfaces", "label": "Interfaces", "type": "longtext", "level": "required", "note": "Dependencies on organisations or systems outside the boundary (clause 4.3). Auditors ask what happens at each interface."},
+        {"key": "exclusions", "label": "Exclusions", "type": "table", "level": "advised", "note": "Anything inside the organisation left out, each with the reason. An unjustified exclusion is a finding. Leave empty if nothing is excluded.", "columns": [{"key": "item", "label": "Item", "type": "text", "required": true}, {"key": "reason", "label": "Reason", "type": "text", "required": true}]},
+        {"key": "complexity_business", "label": "Business type", "type": "choice", "level": "advised", "applies_to": ["iso_27001"], "options": ["Non-critical, non-regulated", "Customers in critical sectors", "Works in critical sectors"], "source": {"ref": "NSAI ISO 27001 quote form, complexity categories 1 to 3 (authoritative for that body only, others differ)", "asked_by": "certification body", "confidence": "secondary", "urls": ["https://www.nsai.ie/download/certification/AD-27-01_ISO_27001_RFQ_Rev.6.docx"]}, "note": "Feeds the body's audit-time calculation. Bodies word these categories differently."},
+        {"key": "complexity_process", "label": "Process type", "type": "choice", "level": "advised", "applies_to": ["iso_27001"], "options": ["Standard and repetitive", "Standard, non-repetitive or many products", "Complex"], "note": "How varied the work in scope is. Same use as above."},
+        {"key": "ms_maturity", "label": "System maturity", "type": "choice", "level": "advised", "applies_to": ["iso_27001"], "options": ["Well established", "Partly established", "None or new"], "note": "How far a management system already exists. Same use as above."},
+        {"key": "products_services", "label": "Services in scope", "type": "table", "level": "required", "min_rows": 1, "applies_to": ["iso_22301"], "source": {"ref": "ISO 22301 clause 4.3: products and services in scope, locations, exclusions; BIA inputs", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/NQA-ISO-22301-Business-Continuity-Checklist.pdf"]}, "note": "Products and services the continuity system protects, with the longest outage the business can tolerate.", "columns": [{"key": "service", "label": "Service", "type": "text", "required": true}, {"key": "owner", "label": "Owner", "type": "person"}, {"key": "max_outage_hours", "label": "Max outage (h)", "type": "number"}]},
+        {"key": "ai_role", "label": "AI role", "type": "choice", "level": "required", "applies_to": ["iso_42001"], "options": ["AI producer", "AI provider", "AI user", "More than one role"], "source": {"ref": "ISO/IEC 42001 clause 4.1 and ISO/IEC 22989 roles, as explained by certification and audit firms", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.schellman.com/blog/ai-governance/iso-42001-roles-and-responsibilities", "https://isoqar.com/wp-content/uploads/2025/09/ISOQAR-ISO-42001-2023-Gap-Analysis-CLAUSES.pdf"]}, "note": "The organisation's role towards its AI systems decides which controls matter. One organisation can hold several roles."},
+        {"key": "ai_inventory", "label": "AI systems", "type": "table", "level": "required", "min_rows": 1, "applies_to": ["iso_42001"], "note": "Every AI system in scope, including bought and embedded AI. Inventories that miss third-party AI are the usual gap.", "columns": [{"key": "system", "label": "System", "type": "text", "required": true}, {"key": "purpose", "label": "Purpose", "type": "text", "required": true}, {"key": "origin", "label": "Origin", "type": "choice", "options": ["Built in-house", "Bought", "Embedded in a product", "Open source"], "required": true}, {"key": "impact_assessed", "label": "Impact assessed", "type": "bool"}]},
+        {"key": "workers", "label": "Workers in scope", "type": "number", "level": "required", "min": 1, "applies_to": ["iso_45001"], "source": {"ref": "ISO 45001 clauses 4.1 to 4.3: workers and other persons under the organisation's control; scope by workplace and activity", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nsai.ie/images/uploads/certification/ISO_45001_-_Presentation_Oct_18.pdf", "https://assets.lrqa.com/m/61fa627d8c82613b/original/CIN040-ISO-45001-Assessment-Process-Global.pdf"]}, "note": "Paid or unpaid people doing work under the organisation's control, including contractors on site."},
+        {"key": "hazardous_activities", "label": "Hazardous work", "type": "longtext", "level": "required", "applies_to": ["iso_45001"], "note": "Main hazards and hazardous activities, shutdown periods and contractors on site. The body schedules Stage 2 around them."}
+      ]
+    },
+    {
+      "key": "method", "label": "Method",
+      "source": {"ref": "Clauses 6.1.2 and 6.1.3 (risk criteria, risk treatment, Statement of Applicability); ISO 22301 BIA; ISO 42001 clause 6.1.4 impact assessment; ISO 45001 hazards and consultation", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://advisera.com/27001academy/knowledgebase/the-importance-of-statement-of-applicability-for-iso-27001/", "https://isoqar.com/wp-content/uploads/2025/09/ISOQAR-ISO-42001-2023-Gap-Analysis-CLAUSES.pdf", "https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/NQA-ISO-22301-Transition-Gap-Guide.pdf"]},
+      "fields": [
+        {"key": "risk_criteria", "label": "Risk criteria", "type": "choice", "level": "required", "applies_to": ["iso_27001", "iso_42001", "iso_22301"], "options": ["Approved by top management", "Drafted", "Not defined"], "note": "Acceptance and assessment criteria must exist before risks are assessed, or results are not comparable."},
+        {"key": "risk_owners", "label": "Risk owners named", "type": "bool", "level": "advised", "applies_to": ["iso_27001", "iso_42001"], "note": "Risk owners approve the treatment plan and accept residual risk."},
+        {"key": "soa_status", "label": "SoA status", "type": "choice", "level": "required", "applies_to": ["iso_27001", "iso_42001"], "options": ["Not started", "Draft", "Approved"], "note": "The one table the auditor reads first: each security control marked in or out, with the reason and its status. Not started is fine at onboarding."},
+        {"key": "soa_owner", "label": "SoA owner", "type": "person", "level": "advised", "applies_to": ["iso_27001", "iso_42001"], "note": "Who keeps the SoA current."},
+        {"key": "bia_status", "label": "BIA status", "type": "choice", "level": "required", "applies_to": ["iso_22301"], "options": ["Not started", "In progress", "Approved"], "note": "The business impact analysis fixes impact criteria, time frames and prioritised activities. Auditors expect it linked to the risk assessment."},
+        {"key": "impact_process", "label": "Impact process", "type": "choice", "level": "required", "applies_to": ["iso_42001"], "options": ["Documented", "Being drafted", "None"], "note": "A written way to judge how each AI system could affect people and society, kept as records."},
+        {"key": "hazard_method", "label": "Hazard method", "type": "text", "level": "required", "applies_to": ["iso_45001"], "note": "How hazards and risks are identified and assessed."},
+        {"key": "consultation", "label": "Worker consultation", "type": "text", "level": "required", "applies_to": ["iso_45001"], "note": "How workers take part (committee, representatives). Auditors ask for evidence that they did."}
+      ]
+    },
+    {
+      "key": "roles", "label": "Roles",
+      "source": {"ref": "Clause 5.3 (top management assigns and communicates roles) and clause 5 (leadership, policy)", "asked_by": "auditor", "confidence": "secondary", "urls": ["https://www.nqa.com/medialibraries/NQA/NQA-Media-Library/PDFs/Final-27001-Gap-Guide.pdf"]},
+      "fields": [
+        {"key": "sponsor", "label": "Top management", "type": "person", "level": "required", "prefill_from": "org.risk_people.sponsor", "note": "The member of top management who owns the system and approves scope, policy and risk acceptance."},
+        {"key": "system_manager", "label": "System manager", "type": "person", "level": "required", "note": "Runs the system day to day (ISMS, BCM, AI or OH&S manager). No role title is mandated; someone must be named."},
+        {"key": "policy_status", "label": "Policy status", "type": "choice", "level": "required", "options": ["Approved", "Draft", "None"], "note": "The top-level policy of the system. Bodies expect it approved before Stage 1."}
+      ]
+    },
+    {
+      "key": "audit_path", "label": "Audit readiness",
+      "source": {"ref": "Certification-body procedure: Stage 1 checks that internal audit and management review are planned and performed before Stage 2", "asked_by": "certification body", "confidence": "secondary", "urls": ["https://www.tuev-nord.de/fileadmin/Sites/TUEV_NORD/Dienstleistungen/Certification/Files/service_descriptions/tuev-nord-cert-iso-27001-22301-20000-1-service-description.pdf"]},
+      "fields": [
+        {"key": "internal_audit", "label": "Internal audit date", "type": "date", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "note": "Planned date of the first internal audit. It must happen before Stage 2."},
+        {"key": "management_review", "label": "Management review", "type": "date", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "note": "Planned date of the first management review. Same rule."},
+        {"key": "internal_auditor", "label": "Internal auditor", "type": "person", "level": "advised", "note": "Who audits. They should not audit what they run."}
+      ]
+    }
+  ],
+  "gate": [
+    {"key": "scope_has_sites", "label": "Scope names at least one site", "level": "required", "check": {"type": "count_at_least", "field": "scope.sites", "n": 1}, "hint": "Pick the sites inside the boundary."},
+    {"key": "audit_before_stage2", "label": "Internal audit is planned before Stage 2", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "check": {"type": "before", "first": "audit_path.internal_audit", "second": "route.stage2_target"}, "hint": "Bodies check that an internal audit has been done before Stage 2.", "source": {"ref": "Certification-body procedure", "asked_by": "certification body", "confidence": "secondary"}},
+    {"key": "review_before_stage2", "label": "Management review is planned before Stage 2", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "check": {"type": "before", "first": "audit_path.management_review", "second": "route.stage2_target"}, "hint": "Same rule for the management review."},
+    {"key": "stage1_before_stage2", "label": "Stage 1 is planned before Stage 2", "level": "advised", "when": {"field": "route.goal", "eq": "Certification by an accredited body"}, "check": {"type": "before", "first": "route.stage1_target", "second": "route.stage2_target"}, "hint": "Stage 1 findings are fixed before Stage 2."},
+    {"key": "sponsor_not_manager", "label": "Top management and system manager are different people", "level": "advised", "check": {"type": "distinct", "fields": ["roles.sponsor", "roles.system_manager"]}, "hint": "Top management owns; the manager runs."}
+  ]
+}

@@ -7,6 +7,9 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import apiClient, { certificationsApi } from '@/lib/api';
+import { problemOf } from '@/lib/frameworkOnboarding';
+import { OnboardingNeeded, useOnboardingGates } from '@/components/compliance/onboarding/gate/OnboardingNeeded';
+import { refusalFromProblem, type Refusal } from '@/components/compliance/onboarding/gate/gateModel';
 import { 
   ArrowLeft,
   Shield,
@@ -101,7 +104,10 @@ export default function FrameworkOverviewPage() {
     onSuccess: (response) => {
       router.push(`/frameworks/${response.data.id}`);
     },
+    onError: (e) => { const refused = refusalFromProblem(problemOf(e)); if (refused) setRefusal(refused); },   // the journey waits for the onboarding
   });
+  const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const gateOf = useOnboardingGates();
 
   if (isLoading) {
     return (
@@ -123,6 +129,7 @@ export default function FrameworkOverviewPage() {
     );
   }
 
+  const gate = refusal ? { needed: true, state: refusal.state ?? 'not_started', onboardingId: refusal.onboardingId } : gateOf(framework.id);
   const isCertification = framework.classification === 'certification';
   const isCompliance = framework.classification === 'compliance';
 
@@ -137,6 +144,8 @@ export default function FrameworkOverviewPage() {
           Back to Frameworks
         </Link>
       </div>
+
+      {gate?.needed && <OnboardingNeeded frameworkId={framework.id} onboardingId={gate.onboardingId} state={gate.state} open={refusal?.open} />}
 
       <div className="card border-slate-200">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -179,23 +188,25 @@ export default function FrameworkOverviewPage() {
               <Shield className="h-4 w-4" />
               View Controls ({framework.controls_count})
             </Link>
-            <button
-              onClick={() => startCertificationMutation.mutate()}
-              disabled={startCertificationMutation.isPending}
-              className="btn-primary flex items-center justify-center gap-2"
-            >
-              {startCertificationMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  {isCertification ? 'Start Certification Journey' : 'Start Compliance Program'}
-                </>
-              )}
-            </button>
+            {!gate?.needed && (
+              <button
+                onClick={() => startCertificationMutation.mutate()}
+                disabled={startCertificationMutation.isPending}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                {startCertificationMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    {isCertification ? 'Start Certification Journey' : 'Start Compliance Program'}
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

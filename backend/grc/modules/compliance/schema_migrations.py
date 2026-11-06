@@ -1365,6 +1365,23 @@ def _backfill_regulatory_task_twins(engine: Engine) -> None:
         logger.exception("regulatory task twin backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
+def _backfill_framework_onboarding_legacy(engine: Engine) -> None:
+    """Framework onboarding (D66): every certification journey that exists without an onboarding gets one marked "underway" (source
+    legacy), so nothing already running is ever blocked by the gate. Additive and idempotent."""
+    try:
+        insp = inspect(engine)
+        if not (insp.has_table("grc_framework_onboardings") and insp.has_table("grc_framework_onboarding_events")
+                and insp.has_table("grc_certification_journeys") and insp.has_table("grc_uploaded_frameworks")):
+            return
+        from ..framework_onboarding.service import backfill_legacy
+        with Session(bind=engine) as db:
+            made = backfill_legacy(db)
+        if made:
+            logger.info("Marked %s running journeys as already underway on %s", made, getattr(engine.url, "database", "?"))
+    except Exception:
+        logger.exception("framework onboarding legacy backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
 def _backfill_committee_task_twins(engine: Engine) -> None:
     """Every committee action without a Task Management twin gets one."""
     try:
@@ -1569,6 +1586,9 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Teams become departments: each team without one gets a department (with its people), each department a picker record.
         _backfill_departments_from_teams(engine)
+
+        # Framework onboarding: a journey that was running before it existed counts as "already underway". Idempotent.
+        _backfill_framework_onboarding_legacy(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

@@ -8,7 +8,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FolderKanban, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, ClipboardCheck, ExternalLink } from 'lucide-react';
 
 const TABS = [
   {
@@ -25,13 +25,20 @@ const TABS = [
     icon: FolderKanban,
     hint: 'Active journeys + available library',
   },
+  {
+    id: 'onboarding',
+    label: 'Onboarding',
+    href: '/frameworks/onboarding',
+    icon: ClipboardCheck,
+    hint: 'What a framework needs before its journey starts',
+  },
 ];
 
 export function FrameworksTabs({ leadingAction }: { leadingAction?: React.ReactNode }) {
   const pathname = usePathname();
   // Manage page lives at /frameworks/manage; everything else under /frameworks
   // (root + journey detail + overview) treats the Dashboard tab as active.
-  const activeId = pathname?.startsWith('/frameworks/manage') ? 'manage' : 'dashboard';
+  const activeId = pathname?.startsWith('/frameworks/manage') ? 'manage' : pathname?.startsWith('/frameworks/onboarding') ? 'onboarding' : 'dashboard';
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -41,7 +48,9 @@ export function FrameworksTabs({ leadingAction }: { leadingAction?: React.ReactN
           <p className="mt-0.5 text-sm text-slate-500">
             {activeId === 'dashboard'
               ? 'Live posture across active framework journeys.'
-              : 'Browse the library and manage existing journeys.'}
+              : activeId === 'onboarding'
+                ? 'What each framework needs before its journey starts.'
+                : 'Browse the library and manage existing journeys.'}
           </p>
         </div>
         {/* Slot for a small action (e.g. Start Journey launcher) that should

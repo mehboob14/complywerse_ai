@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { certificationsApi } from '@/lib/api';
+import { Notice, StatusPill } from '@/components/ui/ds';
+import { ONBOARDING_KEYS, problemOf } from '@/lib/frameworkOnboarding';
+import { OnboardingButton, useOnboardingGates } from '@/components/compliance/onboarding/gate/OnboardingNeeded';
+import { neededWords, refusalFromProblem, type GateFacts, type Refusal } from '@/components/compliance/onboarding/gate/gateModel';
 
 interface FrameworkOption {
   id: number;
@@ -54,6 +58,8 @@ export function FrameworkJourneyPicker({
   const [modalFramework, setModalFramework] = useState<FrameworkOption | null>(null);
   const [targetDate, setTargetDate] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<Refusal | null>(null);   // the server's "onboarding needed", in case the register on this screen was stale
+  const gateOf = useOnboardingGates();                            // one read of the onboarding register answers for every framework in the list
 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -130,6 +136,7 @@ export function FrameworkJourneyPicker({
     setModalFramework(null);
     setTargetDate('');
     setError(null);
+    setRefusal(null);
   };
 
   const startMutation = useMutation({
@@ -150,8 +157,15 @@ export function FrameworkJourneyPicker({
       if (journeyId) router.push(`/frameworks/${journeyId}`);
     },
     onError: (e: unknown) => {
+      const refused = refusalFromProblem(problemOf(e));
+      if (refused) {
+        setRefusal(refused);
+        queryClient.invalidateQueries({ queryKey: ONBOARDING_KEYS.register });
+        return;
+      }
       const err = e as { response?: { data?: { detail?: string } }; message?: string };
-      setError(err?.response?.data?.detail || err?.message || 'Failed to start journey');
+      const why = err?.response?.data?.detail;       // a string; an object detail (the onboarding gate's) was handled above
+      setError(typeof why === 'string' && why ? why : err?.message || 'Failed to start journey');
       setTimeout(() => setError(null), 5000);
     },
   });
@@ -227,6 +241,7 @@ export function FrameworkJourneyPicker({
                               <span className="truncate text-xs font-medium text-slate-800 group-hover:text-primary-700">
                                 {display}
                               </span>
+                              {gateOf(f.id)?.needed && <StatusPill tone="warning" size="sm" label="Onboarding needed" />}
                               {f.controls_count != null && (
                                 <span className="rounded bg-slate-100 px-1 py-px text-[9px] font-medium text-slate-600 shrink-0">
                                   {f.controls_count}
@@ -259,6 +274,8 @@ export function FrameworkJourneyPicker({
           minDate={minDate}
           error={error}
           isStarting={startMutation.isPending}
+          gate={refusal ? { needed: true, state: refusal.state ?? 'not_started', onboardingId: refusal.onboardingId } : gateOf(modalFramework.id)}
+          open={refusal?.open ?? 0}
           onCancel={closeModal}
           onStart={() => startMutation.mutate()}
           stripCertificationPostfix={stripCertificationPostfix}
@@ -270,7 +287,7 @@ export function FrameworkJourneyPicker({
 
 // ─── Detail Modal ───────────────────────────────────────────────────────
 function FrameworkStartModal({
-  framework, targetDate, setTargetDate, minDate, error, isStarting,
+  framework, targetDate, setTargetDate, minDate, error, isStarting, gate, open,
   onCancel, onStart, stripCertificationPostfix,
 }: {
   framework: FrameworkOption;
@@ -279,6 +296,8 @@ function FrameworkStartModal({
   minDate: string;
   error: string | null;
   isStarting: boolean;
+  gate: GateFacts | null;
+  open: number;
   onCancel: () => void;
   onStart: () => void;
   stripCertificationPostfix: (s?: string) => string;
@@ -450,6 +469,10 @@ function FrameworkStartModal({
             </p>
           </div>
 
+          {gate?.needed && (
+            <Notice tone="warning" role="status" title="Onboarding needed">{neededWords(gate.state, open)}</Notice>
+          )}
+
           {error && (
             <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700">
               <AlertCircle className="h-3.5 w-3.5" />
@@ -466,21 +489,25 @@ function FrameworkStartModal({
           >
             Cancel
           </button>
-          <button
-            onClick={onStart}
-            disabled={isStarting}
-            className="group inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm transition-all hover:bg-primary-700 hover:shadow-md hover:translate-y-[-1px] disabled:bg-slate-300 disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed"
-          >
-            {isStarting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-            Start Journey
-            {!isStarting && (
-              <ChevronRight className="h-3 w-3 transition-transform group-enabled:group-hover:translate-x-0.5" />
-            )}
-          </button>
+          {gate?.needed ? (
+            <OnboardingButton frameworkId={framework.id} onboardingId={gate.onboardingId} state={gate.state} />
+          ) : (
+            <button
+              onClick={onStart}
+              disabled={isStarting}
+              className="group inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm transition-all hover:bg-primary-700 hover:shadow-md hover:translate-y-[-1px] disabled:bg-slate-300 disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed"
+            >
+              {isStarting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              Start Journey
+              {!isStarting && (
+                <ChevronRight className="h-3 w-3 transition-transform group-enabled:group-hover:translate-x-0.5" />
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

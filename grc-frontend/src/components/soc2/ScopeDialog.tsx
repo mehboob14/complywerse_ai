@@ -11,7 +11,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Check, Loader2, Search } from 'lucide-react';
 import { scfApi, type ScfFramework, type ScfScope, type ScfScopeUpdateBody } from '@/lib/api';
+import Link from 'next/link';
 import { AnimatedModal, useToast } from '@/components/ui';
+import { Notice } from '@/components/ui/ds';
+import { blockedFrom, type BlockedJourney } from '@/components/compliance/onboarding/gate/gateModel';
 import { frameworkColor } from './ui';
 
 type Obligation = 'MCR' | 'DSR';
@@ -35,7 +38,7 @@ interface Impact {
   unchanged?: number;
   applicable_count?: number;
   total_count?: number;
-  journeys?: { created?: unknown[]; missing_frameworks?: string[] };
+  journeys?: { created?: unknown[]; missing_frameworks?: string[]; blocked?: unknown };
 }
 
 const CMM_LEVELS = [
@@ -85,6 +88,7 @@ export function ScopeDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [search, setSearch] = useState('');
   const [impact, setImpact] = useState<Impact | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<BlockedJourney[]>([]);   // in scope, but their journey waits for the framework's onboarding
 
   const frameworksQ = useQuery({
     queryKey: ['scf-frameworks'],
@@ -101,7 +105,7 @@ export function ScopeDialog({ open, onClose }: { open: boolean; onClose: () => v
 
   // Each opening starts from the saved scope, not from an abandoned edit.
   useEffect(() => {
-    if (!open) { setForm(null); setImpact(null); setError(null); setSearch(''); return; }
+    if (!open) { setForm(null); setImpact(null); setError(null); setSearch(''); setBlocked([]); return; }
     if (scopeQ.data && !form) setForm(fromScope(scopeQ.data));
   }, [open, scopeQ.data, form]);
 
@@ -157,13 +161,16 @@ export function ScopeDialog({ open, onClose }: { open: boolean; onClose: () => v
     onSuccess: (r) => {
       for (const key of SCOPED_KEYS) qc.invalidateQueries({ queryKey: [key] });
       const missing = r.journeys?.missing_frameworks ?? [];
+      const held = blockedFrom(r.journeys);
       toast({
-        type: missing.length ? 'warning' : 'success',
+        type: missing.length || held.length ? 'warning' : 'success',
         title: `Scope applied: ${r.applicable_count ?? '—'} controls in scope`,
         message: `${count(r.added, r.added_count)} added · ${count(r.removed, r.removed_count)} removed`
-          + (missing.length ? ` · Not uploaded yet: ${missing.join(', ')}` : ''),
+          + (missing.length ? ` · Not uploaded yet: ${missing.join(', ')}` : '')
+          + (held.length ? ` · Journey not started: ${held.map((b) => labelOf.get(b.slug) ?? b.slug).join(', ')}` : ''),
       });
-      onClose();
+      if (held.length) setBlocked(held);        // the dialog stays, so the way to each onboarding is there to follow
+      else onClose();
     },
     onError: (e) => setError(errMessage(e, 'Couldn’t apply the scope.')),
   });
@@ -302,6 +309,21 @@ export function ScopeDialog({ open, onClose }: { open: boolean; onClose: () => v
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-primary-500 focus:outline-none" />
             </label>
           </section>
+
+          {blocked.length > 0 && (
+            <div className="md:col-span-2">
+              <Notice tone="warning" title="Journey not started: onboarding incomplete">
+                <ul className="mt-[4px] space-y-[2px]">
+                  {blocked.map((b) => (
+                    <li key={b.slug} className="flex flex-wrap items-center gap-x-[8px]">
+                      <span>{labelOf.get(b.slug) ?? b.slug}</span>
+                      <Link href="/frameworks/onboarding" className="text-ds-primary-text underline focus-visible:outline-none focus-visible:shadow-ds-ring">Open onboarding</Link>
+                    </li>
+                  ))}
+                </ul>
+              </Notice>
+            </div>
+          )}
 
           {(impact || error) && (
             <div className="md:col-span-2">
