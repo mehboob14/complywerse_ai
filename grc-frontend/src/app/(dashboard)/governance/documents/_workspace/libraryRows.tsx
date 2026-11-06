@@ -132,7 +132,7 @@ export function DocumentCard({ row, env }: { row: RecordRow<GovDoc>; env: RowEnv
       <span dir="auto" title={doc.title} className={`truncate text-ds-body ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}>{doc.title}</span>
       <span className="flex min-w-0 flex-wrap items-center gap-x-[10px] gap-y-[4px]">
         <StatusPill size="sm" {...statusPill(documentStatus, doc.status)} />
-        {s.label && <span className="text-ds-label text-ds-fg-muted">{s.long || s.label}</span>}
+        {s.label && <span className="whitespace-nowrap text-ds-label text-ds-fg-muted" title={s.long || undefined}>{s.label}</span>}
         <span className="ml-auto"><OwnerAvatar doc={doc} /></span>
       </span>
     </div>
