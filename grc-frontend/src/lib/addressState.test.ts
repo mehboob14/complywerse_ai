@@ -243,7 +243,7 @@ test('it is exported from the kit index and the ui barrel, and the Tabs onChange
   const tabs = readFileSync('src/components/ui/ds/Tabs.tsx', 'utf8').replace(/\r\n/g, '\n');
   assert.match(tabs, /export interface TabsProps<K extends string = string> \{/);
   assert.match(tabs, /value: K;\n\s*\/\*\*[^\n]*\n\s*onChange: \(key: K\) => void;/);
-  assert.match(tabs, /export function Tabs<K extends string = string>\(\{ tabs, value, onChange, ariaLabel, children, className \}: TabsProps<K>\)/);
+  assert.match(tabs, /export function Tabs<K extends string = string>\(\{ tabs, value, onChange, ariaLabel, countFormat = 'capped', children, className \}: TabsProps<K>\)/);      // (`countFormat` is Kit 2's: exact counts beyond 99 on request)
   assert.match(readFileSync('src/components/ui/ds/useTabParam.ts', 'utf8'), /\): \[K, \(key: K\) => void\] \{/);                            // what useTabParam hands out
 });
 

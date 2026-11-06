@@ -33,7 +33,7 @@ export interface StepFacts {
 export function documentChoices(step: StepFacts | null | undefined, role: 'reviewer' | 'approver' | null, asIs = false): ChoiceSpec[] {
   const kind: StageKind = step?.kind ?? (role === 'reviewer' ? 'review' : 'approval');
   const sign: ChoiceSpec = { id: 'sign', label: SIGN_LABEL[kind] ?? 'Sign', submit: SIGN_LABEL[kind] ?? 'Sign', signature: true, reason: 'optional', destructive: false,
-    note: 'Your drawn signature is kept with this sign-off, with your name, the time and a fingerprint of the document.' };
+    note: 'Your drawn signature is kept with this sign-off, with your name, the time and your IP address, and added to the audit trail.' };
   if (asIs) return [sign];
   const out: ChoiceSpec[] = [sign, { id: 'changes', label: 'Ask for changes', submit: 'Ask for changes', signature: false, reason: 'required', destructive: false,
     note: 'The review pauses until the author resubmits.' }];
