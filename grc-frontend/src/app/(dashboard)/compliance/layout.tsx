@@ -8,8 +8,8 @@ export default function ComplianceLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname() || '';
-  // Assessments and Access Reviews head their own pages (one h1 per page, with their own breadcrumbs).
-  const hideModuleHeader = pathname.startsWith('/compliance/assessments') || pathname.startsWith('/compliance/access-reviews');
+  // Assessments, Access Reviews and the Organisation Profile head their own pages (one h1 per page, with their own breadcrumbs).
+  const hideModuleHeader = pathname.startsWith('/compliance/assessments') || pathname.startsWith('/compliance/access-reviews') || pathname.startsWith('/compliance/organisation');
 
   if (hideModuleHeader) {
     return <div>{children}</div>;
