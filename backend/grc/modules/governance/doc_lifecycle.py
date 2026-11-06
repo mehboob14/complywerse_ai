@@ -91,6 +91,7 @@ _NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowl
 _PROPOSAL_KINDS = ("decide", "revise")                                # they open the proposed change (``action_href``)
 _SIGNING = ("review", "approval")
 _PENDING_STAGE = ("pending_review", "pending_approval")
+INBOX_ACK_LINK = "/needs-my-action?section=ack"         # the digest of several documents: the inbox, on its acknowledgements (/governance/approvals forwards to the inbox)
 
 
 def _link(doc, kind: str = "", proposal_id: Optional[int] = None) -> str:
@@ -1538,7 +1539,7 @@ def _email_waiting(db, pending, docs) -> int:
         one = docs[items[0].document_id] if len(ids) == 1 else None
         sent += _notify(db, one or anchor, [uid], f"{len(ids)} document{'' if len(ids) == 1 else 's'} to acknowledge",
                         "Please read and acknowledge: " + "; ".join(titles[:15]) + (f" and {len(titles) - 15} more" if len(titles) > 15 else "") + ".",
-                        "info", link=_link(one, "acknowledgement") if one else "/governance/approvals", event="published")
+                        "info", link=_link(one, "acknowledgement") if one else INBOX_ACK_LINK, event="published")
         for ob in items:
             ob.emailed_at = datetime.utcnow()
     return sent
@@ -1552,7 +1553,47 @@ def mine(db, user_id: int) -> list:
     rows = (db.query(DocumentObligation, GovernanceDocument).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
             .filter(DocumentObligation.user_id == user_id, DocumentObligation.status == "pending")
             .order_by(DocumentObligation.due_date.asc(), DocumentObligation.id).all())
+    names = _names(db, {ob.requested_by for ob, _d in rows})            # who asked (the inbox's "asked by"): one query for the whole list
     return [{"id": ob.id, "kind": ob.kind, "document_id": d.id, "title": d.title, "doc_type": d.doc_type, "status": d.status,
              "version": ob.document_version, "due_date": _iso(ob.due_date), "overdue": bool(ob.due_date and ob.due_date < now),
              "escalation_level": ob.escalation_level or 0, "again": again_of(db, d, ob),
-             "proposal_id": ob.proposal_id} for ob, d in rows]           # decide / revise: the proposed change
+             "proposal_id": ob.proposal_id,                               # decide / revise: the proposed change
+             "requested_at": _iso(ob.requested_at), "requested_by_id": ob.requested_by,
+             "requested_by_name": names.get(ob.requested_by)} for ob, d in rows]
+
+
+SENT_KINDS = ("review", "approval", "changes", "decide", "revise")       # what "Sent by me" lists: workflow requests, not acknowledgement campaigns
+SENT_CAP = 200
+
+
+def sent_requests(db, user, kinds: Iterable[str] = SENT_KINDS) -> Dict[str, Any]:
+    """The requests ``user`` asked of other people that still wait, one row per document, kind and proposed change (the inbox's "Sent by
+    me"): who they wait for (three names and how many more), the soonest due date, whether any is overdue or escalated. Only documents the
+    person may read (a title never leaves for one they cannot). Overdue first, then the soonest due date, then the document; at most
+    ``SENT_CAP`` rows, ``total`` being the true number. ``requested_by`` is whoever caused the request (the sign-off hooks pass the
+    actor), so a request made when the previous person signed is that person's."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    now = datetime.utcnow()
+    rows = (db.query(DocumentObligation).filter(DocumentObligation.requested_by == user.id, DocumentObligation.user_id != user.id,
+                                                DocumentObligation.status == "pending", DocumentObligation.kind.in_(list(kinds)))
+            .order_by(DocumentObligation.id).all())
+    readable = permissions.readable_among(db, user, {ob.document_id for ob in rows})
+    groups: Dict[tuple, list] = {}
+    for ob in rows:
+        if ob.document_id in readable:
+            groups.setdefault((ob.document_id, ob.kind, ob.proposal_id), []).append(ob)
+    docs = {d.id: d for d in db.query(GovernanceDocument).filter(GovernanceDocument.id.in_({k[0] for k in groups}))} if groups else {}
+    names = _names(db, {ob.user_id for group in groups.values() for ob in group[:3]})
+    out = []
+    for (document_id, kind, proposal_id), group in groups.items():
+        d = docs[document_id]
+        due, asked = [ob.due_date for ob in group if ob.due_date], [ob.requested_at for ob in group if ob.requested_at]
+        waiting = [names.get(ob.user_id) for ob in group[:3]]
+        out.append({"document_id": document_id, "title": d.title, "doc_type": d.doc_type, "status": d.status, "kind": kind,
+                    "proposal_id": proposal_id, "pending": len(group), "overdue": any(t < now for t in due),
+                    "escalated": any((ob.escalation_level or 0) > 0 for ob in group), "next_due": _iso(min(due)) if due else None,
+                    "oldest_requested_at": _iso(min(asked)) if asked else None,
+                    "waiting": waiting, "waiting_more": len(group) - len(waiting)})
+    out.sort(key=lambda r: (not r["overdue"], r["next_due"] is None, r["next_due"] or "", r["document_id"], r["kind"], r["proposal_id"] or 0))
+    return {"total": len(out), "truncated": len(out) > SENT_CAP, "items": out[:SENT_CAP]}

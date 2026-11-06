@@ -148,7 +148,7 @@ const CONTRACT: Array<[string, string | undefined]> = [
   ['/governance/attestations/campaigns/4', DOCUMENTS],
   ['/governance/attestations/complete/4', DOCUMENTS],
   ['/governance/attestations/my', DOCUMENTS],
-  ['/governance/approvals', '/governance/approvals'],
+  ['/governance/approvals', '/needs-my-action'],                      // the old address forwards to the queue and lights it
   ['/governance/committees', '/governance/committees'],
   ['/governance/committees/actions', '/governance/committees'],
   ['/governance/committees/3', '/governance/committees'],

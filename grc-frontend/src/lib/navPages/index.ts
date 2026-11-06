@@ -27,8 +27,9 @@ import * as evidence from './evidence.ts';
 import * as assessments from './assessments.ts';
 import * as bcm from './bcm.ts';
 import * as regulatory from './regulatory.ts';
+import * as inbox from './inbox.ts';
 
-const groups: Array<{ LEAVES: Record<string, RouteExtra>; PAGES: PageSpec[] }> = [dashboard, tasks, frameworks, evidence, assessments, bcm, regulatory];
+const groups: Array<{ LEAVES: Record<string, RouteExtra>; PAGES: PageSpec[] }> = [dashboard, tasks, frameworks, evidence, assessments, bcm, regulatory, inbox];
 
 // The rest of the app (R-REG, 2026-11-01): one file per module, listed here in its own array so a group added to the line above merges cleanly.
 const registry: Array<{ LEAVES: Record<string, RouteExtra>; PAGES: PageSpec[] }> = [risk, vendor, controls, accessReviews, issues, auditor, reports, admin, workflow, complychat, cyberAssurance, cyberNative, misc];

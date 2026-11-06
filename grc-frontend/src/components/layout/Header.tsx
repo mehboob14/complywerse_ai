@@ -10,14 +10,14 @@ import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ownHeadingSection, registryNamesPage, subtitleFor, titleFor } from '@/lib/navRegistry';
-import { parseUtc } from '@/lib/serverTime';
-import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
+import { badgeLabel, badgeText, dropdownOf, KIND_META } from '@/lib/inbox/buildInbox';
+import { dueLine } from '@/lib/inbox/inboxView';
+import { useInbox } from '@/lib/inbox/inboxApi';
+import { notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
 import { MAIN_MENU_ID, useShellMenu } from './ShellMenu';
 import { readCollapsed, writeCollapsed } from './shellMode';
 
-const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise',
-  decide: 'A proposed change to decide on', revise: 'Your change was not accepted' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
 // the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
@@ -124,37 +124,17 @@ export default function Header() {
     notifData?.items ?? [];
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  // Pending compliance approvals — surfaced as a top-bar quick-action so it's
-  // visible from anywhere (it used to be a Compliance sidebar row).
-  const { data: pendingApprovalsData, refetch: refetchApprovals } = useQuery({
-    queryKey: ['header-pending-approvals'],
-    queryFn: () => apiClient.get('/compliance/assessments/pending-approvals').then((r) => r.data),
-    refetchInterval: 60000,
-    enabled: !!currentUser,
-  });
-  const pendingApprovalItems: Array<{
-    id: number; assessment_name?: string; control_description?: string;
-    item_number?: number; evidence_name?: string; status?: string; submitted_at?: string;
-  }> = Array.isArray(pendingApprovalsData?.pending_approvals)
-    ? pendingApprovalsData.pending_approvals
-    : Array.isArray(pendingApprovalsData) ? pendingApprovalsData : [];
-  // Documents waiting for the person to review, approve or acknowledge (same query and key as My Approvals)
-  const { data: docRequests, refetch: refetchDocRequests } = useQuery({
-    queryKey: ['my-document-requests'],
-    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
-      enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean; proposal_id?: number | null }>;
-    },
-    refetchInterval: 60000,
-    enabled: !!currentUser,
-  });
-  const docRequestItems = docRequests?.enabled ? docRequests.items ?? [] : [];
+  // Needs my action: the same inbox as its page (lib/inbox), so the number on this chip is the page's "To decide". It asks the documents, sign-offs and assessments the way the two
+  // queries here did (same keys, 60 s), through one hook, and opening the dropdown asks again.
+  const { inbox, refetch: refetchInbox } = useInbox({ enabled: !!currentUser });
+  const needs = dropdownOf(inbox);
+  const needsText = badgeText(inbox.badge);
   const perms = usePermissions();
   const canSeeGovernance = perms.hasPermission('governance:policies:*');
   // the top bar's own links, each shown to the people its page lets in (as the sidebar's entries are)
   const canAskComplyChat = perms.hasAnyPermission(navPermissions('/complychat'));
   const canSeeUsers = perms.hasAnyPermission(navPermissions('/users'));
   const canSeeAssessments = perms.hasPermission('compliance:assessments:*');
-  const pendingApprovalCount = pendingApprovalItems.length + docRequestItems.length;
 
   // shown as read at once (row and badge), then told to the server; the refetch corrects it if that failed
   const showRead = (id?: number) => {
@@ -348,93 +328,74 @@ export default function Header() {
             type="button"
             onClick={() => {
               // opened: the list as it is now (an item done a moment ago is gone)
-              if (!approvalsOpen) { refetchApprovals(); refetchDocRequests(); }
+              if (!approvalsOpen) refetchInbox();
               setApprovalsOpen(!approvalsOpen);
             }}
-            title="Pending approvals"
-            aria-label="Pending approvals"
+            title={badgeLabel(inbox)}
+            aria-label={badgeLabel(inbox)}
             aria-haspopup="dialog"
             aria-expanded={approvalsOpen}
             aria-controls={approvalsOpen ? dropdownIds.approvals : undefined}
             className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
           >
             <ClipboardCheck size={18} strokeWidth={1.75} />
-            {pendingApprovalCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#b45309] px-[4px] text-[12px] font-bold text-white leading-none">
-                {pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}
+            {needsText && (
+              <span aria-hidden className={`absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-[4px] text-[12px] font-bold text-white leading-none ${inbox.badge.kind === 'count' && inbox.badge.overdue > 0 ? 'bg-[#b42318]' : 'bg-[#b45309]'}`}>
+                {needsText}
               </span>
             )}
           </button>
           {approvalsOpen && (
-            <div id={dropdownIds.approvals} role="dialog" aria-label="Pending approvals" className={`${DROPDOWN} sm:w-96`}>
+            <div id={dropdownIds.approvals} role="dialog" aria-label="Needs my action" className={`${DROPDOWN} sm:w-96`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
-                <span className="text-sm font-semibold text-gray-800">Pending Approvals</span>
-                {pendingApprovalCount > 0 && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-600">{pendingApprovalCount} pending</span>
+                <span className="text-sm font-semibold text-gray-800">Needs my action</span>
+                {needs.pending > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-600">{needs.pending} to decide</span>
                 )}
               </div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-                {docRequestItems.slice(0, 12).map((it) => (
-                  <Link
-                    key={`doc-${it.id}`}
-                    href={docRequestHref(it)}
-                    onClick={() => setApprovalsOpen(false)}
-                    className={ITEM_LINK}
-                  >
-                    <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium leading-snug truncate text-[#1f2933]">{it.title}</p>
-                      <p className={`mt-0.5 ${it.overdue ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
-                        {DOC_ASK[it.kind] || it.kind}
-                        {it.due_date ? ` · due ${parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) ?? ''}` : ''}
-                        {it.overdue ? ' · overdue' : ''}
-                      </p>
-                    </div>
-                    <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
-                  </Link>
+                {needs.notices.map((n) => (
+                  <div key={n.source} role="alert" className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[#9b1c1c]">
+                    <span>{n.label} could not be loaded.</span>
+                    <button type="button" onClick={() => refetchInbox(n.source)} className="flex-shrink-0 rounded px-1.5 py-0.5 font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">Retry</button>
+                  </div>
                 ))}
-                {pendingApprovalCount === 0 ? (
-                  <div className="px-4 py-6 text-center text-xs text-gray-400">Nothing awaiting your approval.</div>
-                ) : (
-                  pendingApprovalItems.slice(0, 12).map((item) => (
-                    <Link
-                      key={item.id}
-                      href={assessmentApprovalHref(item)}
-                      onClick={() => setApprovalsOpen(false)}
-                      className={ITEM_LINK}
-                    >
+                {needs.items.map((it) => {
+                  const due = dueLine(it);
+                  return (
+                    <Link key={it.key} href={it.href} onClick={() => setApprovalsOpen(false)} className={ITEM_LINK}>
                       <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium leading-snug truncate text-[#1f2933]">
-                          {item.assessment_name || item.evidence_name || item.control_description || `Item #${item.item_number ?? item.id}`}
-                        </p>
-                        {(item.control_description || item.evidence_name) && (
-                          <p className="mt-0.5 text-[#26323d] leading-snug truncate">{item.control_description || item.evidence_name}</p>
-                        )}
-                        <p className="mt-0.5 text-[#586472]">
-                          {item.status ? String(item.status).replace(/_/g, ' ') : 'pending'}{item.submitted_at ? ` · ${timeAgo(item.submitted_at)}` : ''}
-                        </p>
+                        <p className="font-medium leading-snug truncate text-[#1f2933]" title={it.title}>{it.title}</p>
+                        <p className={`mt-0.5 ${due.tone === 'danger' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>{KIND_META[it.kind].label} · {due.text}</p>
                       </div>
                       <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
                     </Link>
-                  ))
+                  );
+                })}
+                {needs.items.length === 0 && needs.notices.length === 0 && (
+                  <div className="px-4 py-6 text-center text-xs text-gray-400">{inbox.badge.kind === 'loading' ? 'Loading…' : 'Nothing to decide.'}</div>
+                )}
+                {needs.more > 0 && (
+                  <Link href="/needs-my-action" onClick={() => setApprovalsOpen(false)} className={`${ITEM_LINK} font-medium text-[#0f766e]`}>{needs.more} more to decide →</Link>
+                )}
+                {needs.acknowledgements > 0 && (
+                  <Link href="/needs-my-action?section=ack" onClick={() => setApprovalsOpen(false)} className={`${ITEM_LINK} font-medium text-[#0f766e]`}>
+                    {needs.acknowledgements.toLocaleString('en-US')} to acknowledge →
+                  </Link>
                 )}
               </div>
-              {/* without governance or assessment access each item above still opens; the pages are theirs only with access */}
-              {(canSeeGovernance || canSeeAssessments) && (
-                <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
-                  {canSeeGovernance && (
-                    <Link href="/governance/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                      My Approvals →
-                    </Link>
-                  )}
-                  {canSeeAssessments && (
-                    <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                      Assessment approvals →
-                    </Link>
-                  )}
-                </div>
-              )}
+              {/* the page is everyone's own queue; the assessments page is theirs only with assessments access */}
+              <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
+                <Link href="/needs-my-action" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                  See all →
+                </Link>
+                {canSeeAssessments && (
+                  <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                    Assessment approvals →
+                  </Link>
+                )}
+              </div>
             </div>
           )}
         </div>

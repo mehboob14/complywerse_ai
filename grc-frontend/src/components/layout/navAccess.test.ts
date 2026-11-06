@@ -13,11 +13,13 @@ const me = (permissions: string[], extra: Record<string, unknown> = {}, features
   tenant: { features },
 });
 const sees = (data: unknown) => shape(visibleNav(navigation, navAccessFromMe(data)));
+const QUEUE = 'Needs my action';       // everyone who is signed in has their own queue, whatever their rights
 
-test("cfsb's Demo staff (Policies & Documents view + Task Management view) see Task Management and Governance only", () => {
+test("cfsb's Demo staff (Policies & Documents view + Task Management view) see their queue, Task Management and Governance only (My Approvals became the queue)", () => {
   assert.deepEqual(sees(me(['governance:policies:view', 'critical_tasks:tasks:view'])), [
+    QUEUE,
     'Task Management',
-    ['Governance', ['Overview', 'Documents', 'My Approvals']],
+    ['Governance', ['Overview', 'Documents']],
   ]);
 });
 
@@ -31,24 +33,36 @@ test('an administrator sees every entry; a client feature still needs the tenant
 
 test('Cybersecurity Assurance and Reports show their entries to the rights that open them', () => {
   assert.deepEqual(sees(me(['vulnerabilities:vulnerability_register:view'])), [
+    QUEUE,
     ['Cybersecurity Assurance', ['Performance', 'Vulnerabilities', 'Vulnerability Scanning', 'AI Pentest']],
   ]);
   assert.deepEqual(sees(me(['assets:asset_inventory:view'])), [
+    QUEUE,
     ['Cybersecurity Assurance', ['Performance', 'IT Asset Discovery', 'IT Asset Inventory']],
   ]);
-  assert.deepEqual(sees(me(['reports:analytics:view'])), [['Reports', ['Analytics']]]);
-  assert.deepEqual(sees(me(['reports:reports:export'])), [['Reports', ['Quick export', 'Saved exports']]]);
+  assert.deepEqual(sees(me(['reports:analytics:view'])), [QUEUE, ['Reports', ['Analytics']]]);
+  assert.deepEqual(sees(me(['reports:reports:export'])), [QUEUE, ['Reports', ['Quick export', 'Saved exports']]]);
 });
 
-test('nobody signed in, or a role with no permission, sees nothing', () => {
+test('nobody signed in sees nothing; a signed-in person with no permission sees only their own queue (a reviewer asked about a document has nothing else to open)', () => {
   assert.deepEqual(sees(null), []);
   assert.deepEqual(sees({ authenticated: false, user: null }), []);
-  assert.deepEqual(sees(me([])), []);
+  assert.deepEqual(sees(me([])), [QUEUE]);
+  assert.deepEqual(sees(me(['dashboard:overview:view'])).slice(0, 1), [QUEUE]);
+});
+
+test('Needs my action is the first entry, open to everyone signed in by what it says (signedIn), not by a hole in the rule: no other entry is', () => {
+  const first = navigation[0];
+  assert.ok(!isGroup(first) && first.name === QUEUE && first.href === '/needs-my-action' && first.signedIn === true);
+  assert.deepEqual(flattenLeaves(navigation).filter((l) => l.signedIn).map((l) => l.name), [QUEUE]);
+  assert.deepEqual(flattenLeaves(navigation).filter((l) => !l.requiredPermissions?.length).map((l) => l.name), [QUEUE]);
+  assert.equal(flattenLeaves(navigation).some((l) => l.href === '/governance/approvals'), false, 'the old address forwards: it has no entry of its own');
+  assert.deepEqual(navPermissions('/needs-my-action'), [], 'no right is needed: the page guards nothing, its three sources answer only for the person');
 });
 
 test('every entry names the permissions that open it, and its page guards itself with the same ones', () => {
   for (const item of flattenLeaves(navigation)) {
-    assert.ok(item.requiredPermissions?.length, `${item.name} (${item.href}) would be shown to everyone`);
+    assert.ok(item.requiredPermissions?.length || item.signedIn, `${item.name} (${item.href}) would be shown to everyone`);
   }
   for (const href of ['/cyber-assurance/dashboard', '/cyber-assurance/pentest', '/reports', '/reports/saved', '/reports/analytics',
     '/reports/dashboards', '/reports/trends', '/reports/print', '/users', '/complychat']) {
@@ -62,12 +76,13 @@ test('every entry names the permissions that open it, and its page guards itself
 
 test('the owner of a department sees the Documents area whatever their rights, and nothing else of Governance opens with it', () => {
   const owner = (permissions: string[] = []) => me(permissions, { heads_department: true });
-  assert.deepEqual(sees(owner()), [['Governance', ['Documents']]], 'no right at all: the one door');
-  assert.deepEqual(sees(me([])), [], 'a person who heads nothing sees nothing');
-  assert.deepEqual(sees(me([], { heads_department: false })), []);
+  // (Needs my action is the one entry every signed-in person has, rights or none: it is listed first in every expectation here)
+  assert.deepEqual(sees(owner()), ['Needs my action', ['Governance', ['Documents']]], 'no right at all: the queue and the one door');
+  assert.deepEqual(sees(me([])), ['Needs my action'], 'a person who heads nothing sees only the queue');
+  assert.deepEqual(sees(me([], { heads_department: false })), ['Needs my action']);
   assert.deepEqual(sees(owner(['governance:policies:view'])), sees(me(['governance:policies:view'])), 'with the governance right the door adds nothing');
-  assert.deepEqual(sees(owner(['critical_tasks:tasks:view'])), ['Task Management', ['Governance', ['Documents']]], 'a right in another module: the group opens for the door only');
-  assert.deepEqual(sees(owner(['governance:committees:view'])), [['Governance', ['Documents', 'Committees']]], 'and what their rights open stays');
+  assert.deepEqual(sees(owner(['critical_tasks:tasks:view'])), ['Needs my action', 'Task Management', ['Governance', ['Documents']]], 'a right in another module: the group opens for the door only');
+  assert.deepEqual(sees(owner(['governance:committees:view'])), ['Needs my action', ['Governance', ['Documents', 'Committees']]], 'and what their rights open stays');
   assert.deepEqual(sees(owner(['erm:kris:view'])).find((e) => Array.isArray(e) && e[0] === 'Governance'), ['Governance', ['Documents']], 'KRIs is a Governance entry they cannot reach by the door');
   const admin = { permissions: ['*:*:*'], allowed_modules: [], is_admin: true };
   assert.deepEqual(sees(me([], { ...admin, heads_department: true })), sees(me([], admin)), 'an administrator sees what an administrator sees');

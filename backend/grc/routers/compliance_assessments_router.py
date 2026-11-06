@@ -4445,7 +4445,8 @@ def get_pending_approvals(
     pending_items = db.query(AssessmentItemEvidence).options(
         joinedload(AssessmentItemEvidence.evidence),
         joinedload(AssessmentItemEvidence.assessment_item).joinedload(ComplianceAssessmentDocumentItem.assessment),
-        joinedload(AssessmentItemEvidence.workflow).joinedload(AssessmentEvidenceApprovalWorkflow.tiers)
+        joinedload(AssessmentItemEvidence.workflow).joinedload(AssessmentEvidenceApprovalWorkflow.tiers),
+        joinedload(AssessmentItemEvidence.submitter)
     ).filter(
         AssessmentItemEvidence.tenant_id.in_(user_tenants),
         AssessmentItemEvidence.status.in_(["pending_review", "pending_tier_1", "pending_tier_2", "pending_tier_3"])
@@ -4479,6 +4480,8 @@ def get_pending_approvals(
             "status": item.status,
             "workflow_name": item.workflow.name if item.workflow else None,
             "can_approve": can_approve,
+            "addressed_to_me": tier_approver,        # the person is this tier's approver (an administrator or editor sees the rest too: "you can decide")
+            "submitted_by_name": (item.submitter.display_name or item.submitter.username) if item.submitter else None,
             "submitted_at": item.submitted_at.isoformat() if item.submitted_at else None
         })
     

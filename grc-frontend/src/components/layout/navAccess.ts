@@ -1,6 +1,7 @@
 // The sidebar's entries and who sees each one. Pure (no React), so navAccess.test.ts can check what a role sees.
 // An entry is shown to an administrator, or to someone who holds one of its requiredPermissions, inside the modules and the
-// client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone.
+// client feature it names. An entry that names no permission is an administrator's: it used to be shown to everyone. The one exception says so on the entry (`signedIn`): Needs my action,
+// the person's own queue, is shown to everyone who is signed in.
 import {
   Activity, AlertCircle, AlertTriangle, BarChart3, Bookmark, Bot, Bug, Building2, CalendarClock, ClipboardCheck, ClipboardList,
   Crosshair, FileSpreadsheet, FileText, FolderKanban, Gavel, GitPullRequest, Landmark, Layers, LayoutDashboard, LifeBuoy,
@@ -23,6 +24,8 @@ export interface NavItem {
   /** Also shown to the owner (head) of a department, whatever their rights: the Documents area is theirs to read (D59). Their group opens with it,
    *  showing only the entries that have this. */
   ownerDoor?: true;
+  /** Shown to every signed-in person, whatever their rights: the page is the person's own queue, and each source it reads answers only for them (Needs my action). */
+  signedIn?: boolean;
 }
 
 export interface NavGroup {
@@ -37,6 +40,8 @@ export interface NavGroup {
 export type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) | NavGroup;
 
 export const navigation: NavEntry[] = [
+  // The person's own queue, for everyone signed in: what they are asked to decide, acknowledge or have sent (it replaced Governance > My Approvals; the old address forwards to it)
+  { name: 'Needs my action', href: '/needs-my-action', activeMatch: '/governance/approvals', icon: ClipboardCheck, signedIn: true },
   {
     name: 'Performance Overview',
     href: '/dashboard',
@@ -62,7 +67,6 @@ export const navigation: NavEntry[] = [
       { name: 'Overview', href: '/governance', exact: true, icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
       // the Documents area: its tabs (Studio, Attestation, Exceptions, Settings) and the pages that sit with a document
       { name: 'Documents', href: '/governance/documents', activeMatch: ['/governance/exceptions', '/governance/settings', '/governance/reviews', '/governance/mappings', '/governance/workflows', '/governance/attestations', '/documents'], icon: ScrollText, requiredPermissions: ['governance:policies:*'], ownerDoor: true },
-      { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
       { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },
@@ -242,9 +246,11 @@ export interface NavAccess {
   features: string[];
   /** the person is the owner (head) of a department (/auth/me user.heads_department) */
   headsDepartment: boolean;
+  /** a person is signed in (with any rights, or none) */
+  signedIn: boolean;
 }
 
-export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [], headsDepartment: false };
+export const NO_ACCESS: NavAccess = { isAdmin: false, permissions: [], modules: [], features: [], headsDepartment: false, signedIn: false };
 
 const normalizePerm = (perm: string): string => {
   const cleaned = perm.trim();
@@ -260,7 +266,7 @@ export function navAccessFromMe(me: any): NavAccess {
     .map(normalizePerm);
   const explicit: string[] = Array.isArray(user.allowed_modules) ? user.allowed_modules : [];
   const modules = Array.from(new Set([...explicit, ...permissions.map((perm) => perm.split(':')[0]).filter((mod) => !!mod)]));
-  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department };
+  return { isAdmin: !!user.is_admin, permissions, modules, features: Array.isArray(me.tenant?.features) ? me.tenant.features : [], headsDepartment: !!user.heads_department, signedIn: true };
 }
 
 function holds(granted: string[], requiredPerm: string): boolean {
@@ -288,7 +294,7 @@ export function visibleNav(entries: NavEntry[], access: NavAccess): NavEntry[] {
     }
     if (!inModules(entry.requiredModules) && !door(entry)) return acc;
     if (entry.requiredFeature && !access.features.includes(entry.requiredFeature)) return acc;
-    if (access.isAdmin || (entry.requiredPermissions ?? []).some((perm) => holds(access.permissions, perm)) || door(entry)) acc.push(entry);
+    if (access.isAdmin || (entry.signedIn && access.signedIn) || (entry.requiredPermissions ?? []).some((perm) => holds(access.permissions, perm)) || door(entry)) acc.push(entry);
     return acc;
   }, []);
 }
