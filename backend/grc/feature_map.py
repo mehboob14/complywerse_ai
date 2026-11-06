@@ -208,6 +208,8 @@ CYBER_SECURITY_FORMATS = {
     "asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security",
     "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity",
 }
+# NIST assessments (modules/assessments/nist.py) are made from the NIST library tab of the Cyber Security hub
+NIST_ASSESSMENT_FORMATS = {"nist_800_53a", "nist_csf2"}
 _FORMAT_PAGES = {
     "digital_ops_maturity": ("Assessments", "Digital Operations Maturity"),
     "dpia_pia": ("Assessments", "DPIA / PIA"),
@@ -294,7 +296,7 @@ def assessment_place(fmt: Optional[str]) -> Optional[Place]:
     fmt = (fmt or "").strip().lower()
     if not fmt:
         return None
-    if fmt in CYBER_SECURITY_FORMATS:
+    if fmt in CYBER_SECURITY_FORMATS or fmt in NIST_ASSESSMENT_FORMATS:
         return ("Assessments", "Cyber Security")
     if fmt.startswith("nca_"):
         return ("Assessments", "NCA")

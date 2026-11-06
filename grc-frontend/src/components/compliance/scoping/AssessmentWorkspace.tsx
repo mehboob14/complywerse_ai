@@ -18,15 +18,17 @@ import ASVSAssessmentTab from '../ASVSAssessmentTab';
 import OwaspTestingTab from '../OwaspTestingTab';
 import MobileAppSecurityTab from '../MobileAppSecurityTab';
 import MaturityAssessmentTab from '../MaturityAssessmentTab';
+import NistWorkbench from './nist/NistWorkbench';
 import { PeopleStage, PlanStage, ScopeStage, type StageProps } from './ScopeForms';
 import StageTabs, { panelId, tabId } from './StageTabs';
-import { fieldErrors, PHASE_LABEL, PHASE_TONE, stageOfCheck, STAGES, stageState, TYPE_INFO, unmet, type Stage } from './scopingModel';
+import { fieldErrors, infoOf, isNistFormat, PHASE_LABEL, PHASE_TONE, stageOfCheck, STAGES, stageState, typeHref, unmet, type Stage } from './scopingModel';
 import { refreshAssessmentLists, scopingApi, type Scope, type ScopePatch, type ScopeView } from './scopingApi';
 
 const SHELL = 'mx-auto flex max-w-7xl flex-col gap-[16px]';
 
 /** The questionnaire screen of a type, showing one assessment (without an id: the type's questionnaire). A scoped assessment may not upload over its questions: the workbook is the questionnaire's. */
 export function QuestionnaireTab({ format, id, allowUpload }: { format: string; id?: number; allowUpload: boolean }) {
+  if (isNistFormat(format)) return id ? <NistWorkbench assessmentId={id} format={format} /> : null;                // made from the NIST library: no workbook, no upload
   switch (format) {
     case 'asvs_checklist': return <ASVSAssessmentTab assessmentId={id} allowUpload={allowUpload} />;
     case 'owasp_v4_testing_checklist': return <OwaspTestingTab assessmentId={id} allowUpload={allowUpload} />;
@@ -114,8 +116,8 @@ export default function AssessmentWorkspace({ id }: { id: number }) {
   });
 
   const v = view.data;
-  const info = v ? TYPE_INFO[v.assessment_format] : undefined;
-  const back = `/cyber-security?tab=${info?.tab ?? ''}`;
+  const info = v ? infoOf(v.assessment_format) : undefined;
+  const back = v ? typeHref(v.assessment_format) : '/cyber-security';
   if (view.isLoading) return <div className={SHELL}><SkeletonLines lines={6} label="Loading the assessment" /></div>;
   if (view.isError || !v) {
     const gone = statusOf(view.error) === 404;                                    // deleted (from the questionnaire's own Delete) or never there
@@ -160,7 +162,7 @@ export default function AssessmentWorkspace({ id }: { id: number }) {
     <div className={SHELL}>
       <PageHeading title={v.name} back={{ href: back, label: `Back to ${info?.label ?? 'assessments'}` }}
         meta={v.phase === 'scoping' ? (save.isPending ? 'Saving…' : pending ? 'Unsaved changes' : 'Saved') : v.started_at ? `Started ${v.started_at.slice(0, 10)}` : undefined}
-        chips={<><StatusPill tone={PHASE_TONE[v.phase ?? 'scoping']} label={PHASE_LABEL[v.phase ?? 'scoping']} /><StatusPill tone="neutral" label={v.family === 'process' ? 'Function or process' : 'Application'} /></>}
+        chips={<><StatusPill tone={PHASE_TONE[v.phase ?? 'scoping']} label={PHASE_LABEL[v.phase ?? 'scoping']} /><StatusPill tone="neutral" label={v.family === 'process' ? 'Function or process' : v.family === 'nist' ? (info?.subject ?? 'system').replace(/^./, (c) => c.toUpperCase()) : 'Application'} /></>}
         actions={!started ? (
           <>
             <Button leftIcon={<Trash2 aria-hidden />} loading={discard.isPending} onClick={() => void ask()}>Discard draft</Button>

@@ -256,7 +256,7 @@ Y target_date
 R ai_recommendation_generated_at closed_at created_at updated_at
 T area_domain subdomain_name control_description gaps_identified proposed_solution remarks evidence_reference timeline ai_evidence_recommendation
 P responsible_party
-D assignees asset_status
+D assignees asset_status assessment_data
 S assessment_id tenant_id
 """)
 

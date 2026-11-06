@@ -118,6 +118,10 @@ class ComplianceAssessmentDocumentItem(Base):
     # services/assessment_assignees.py). responsible_party stays the free text
     # a workbook may carry.
     assignees = Column(JSON, default=list)
+    # What an assessment that follows NIST's own method adds to the question (modules/assessments/nist.py): for SP 800-53A the control statement, the
+    # objectives with their determinations and the methods with their objects; for CSF 2.0 the outcome, its implementation examples and the rating.
+    # NULL on every other assessment.
+    assessment_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

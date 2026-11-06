@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from ...feature_map import CYBER_SECURITY_FORMATS, HUB_ASSESSMENTS
+from .nist import BASELINES, CSF_FUNCTIONS, NIST_FORMATS
 
 # ── which assessment is which ────────────────────────────────────────────────────────────────────────────────────
 LABELS: Dict[str, str] = dict(HUB_ASSESSMENTS["Cyber Security"])          # format -> "OWASP ASVS", in the hub's order
@@ -26,9 +27,18 @@ SCOPE_MODEL: Dict[str, str] = {
     "asvs_checklist": "asset", "owasp_v4_testing_checklist": "asset", "mobile_app_security": "asset",
     "csir_maturity": "process", "cti_maturity": "process", "incident_maturity": "process", "itsecops_maturity": "process",
 }
-FAMILY: Dict[str, str] = {"asset": "technical", "process": "process"}
+FAMILY: Dict[str, str] = {"asset": "technical", "process": "process", "system": "nist"}
 PHASES = ("scoping", "in_progress")
 assert set(SCOPE_MODEL) == set(CYBER_SECURITY_FORMATS) == set(LABELS), "the scoping rules and the Cyber Security hub name different assessments"
+
+
+def model_of(fmt: Optional[str]) -> Optional[str]:
+    """The kind of scope an assessment type has: its application, its function, or (NIST assessments, made from the library) its system or unit."""
+    return SCOPE_MODEL.get(fmt or "") or ("system" if fmt in NIST_FORMATS else None)
+
+
+def label_of(fmt: Optional[str]) -> str:
+    return LABELS.get(fmt or "") or (NIST_FORMATS.get(fmt or "") or {}).get("label") or (fmt or "")
 
 # ── the shape of a scope ─────────────────────────────────────────────────────────────────────────────────────────
 Environment = Literal["production", "staging", "test", "development", "other"]
@@ -36,6 +46,8 @@ Trigger = Literal["periodic", "regulatory", "change", "incident", "audit", "thir
 AssetRole = Literal["primary", "component", "supporting", "sample", "excluded"]
 ParticipantRole = Literal["owner", "contributor", "assessor", "reviewer", "approver", "sponsor", "observer"]
 Platform = Literal["android", "ios", "web", "api"]
+Baseline = Literal["low", "moderate", "high"]
+CsfFunction = Literal["GV", "ID", "PR", "DE", "RS", "RC"]
 
 
 class _Strict(BaseModel):
@@ -186,10 +198,39 @@ class ProcessScope(_Strict):
         return self
 
 
-MODELS = {"asset": AssetScope, "process": ProcessScope}
+class SystemScope(_Strict):
+    """What a NIST assessment is of: a system (SP 800-53A) or an organisation or unit (CSF 2.0 profile), with the choice that decides its questions: the control
+    baseline, or the functions in scope. Tailoring is written as exclusions (a control label first, then why it does not apply)."""
+    organisation: str = Field(default="", max_length=200)
+    business_unit: str = Field(default="", max_length=200)
+    system: str = Field(default="", max_length=200)                        # the system or unit assessed
+    boundary: str = Field(default="", max_length=1000)                     # what is inside it (800-53: the authorization boundary)
+    baseline: Optional[Baseline] = None                                    # SP 800-53B baseline, from the system's impact level
+    privacy_overlay: bool = False                                          # add the privacy baseline
+    functions: List[CsfFunction] = Field(default_factory=list, max_length=6)
+    as_of: Optional[date] = None                                           # the date the assessment is of
+    exclusions: List[Exclusion] = Field(default_factory=list, max_length=60)
+    trigger: Optional[Trigger] = None
+    assets: List[AssetRef] = Field(default_factory=list, max_length=50)     # the system's components: context for the evidence, never scored
+    participants: List[Participant] = Field(default_factory=list, max_length=50)
+    evidence_plan: EvidencePlan = Field(default_factory=EvidencePlan)
+    notes: str = Field(default="", max_length=2000)
+
+    @field_validator("baseline", "as_of", "trigger", mode="before")
+    @classmethod
+    def _blank(cls, v: Any) -> Any:
+        return _blank_to_none(v)
+
+    @field_validator("functions")
+    @classmethod
+    def _functions(cls, v: List[str]) -> List[str]:
+        return [f for f in CSF_FUNCTIONS if f in v]                        # once each, in NIST's order
+
+
+MODELS = {"asset": AssetScope, "process": ProcessScope, "system": SystemScope}
 # what may still change once the questionnaire is open: who takes part and the notes. The subject, environment, level, period and exclusions are what
 # the assessment was done on; changing them afterwards is an approved amendment (the next release), never an overwrite.
-OPEN_AFTER_START = {"asset": {"participants", "notes"}, "process": {"participants", "notes", "evidence_plan"}}
+OPEN_AFTER_START = {"asset": {"participants", "notes"}, "process": {"participants", "notes", "evidence_plan"}, "system": {"participants", "notes", "evidence_plan"}}
 
 
 class ScopeError(ValueError):
@@ -256,6 +297,25 @@ def readiness(model: str, fmt: str, scope: Dict[str, Any], owner_id: Optional[in
         add("reviewer", "Reviewer named", role("reviewer"), required=False, hint="Someone who reviews the conclusions before they are final.")
         add("independence", "Assessor independent of the application's team", any(p.get("independent") for p in role("assessor")), required=False,
             hint="The person who operates a control should not be the only one who verifies it.")
+    elif model == "system":
+        control = fmt == "nist_800_53a"
+        add("system", "System named" if control else "Organisation or unit named", s.get("system"), hint="The system the controls are assessed on." if control else "What the assessment is of.")
+        add("organisation", "Organisation or business unit named", s.get("organisation") or s.get("business_unit"))
+        if control:
+            add("baseline", "Control baseline chosen", s.get("baseline"),
+                hint="Low, Moderate or High, from the system's impact level (FIPS 199, SP 800-60): the baseline decides which controls are assessed.")
+        else:
+            add("functions", "Functions in scope chosen", s.get("functions"), hint="Which of Govern, Identify, Protect, Detect, Respond and Recover the profile covers.")
+        add("owner", "Assessment owner named", owner_id, hint="Who runs the assessment.")
+        add("system_owner", "System owner named" if control else "Profile owner named", role("owner"),
+            hint="Who is accountable for the system and answers for it." if control else "Who is accountable for the cybersecurity outcomes assessed.")
+        add("assessor", "Assessor named", role("assessor"), required=control,
+            hint="SP 800-53A: the control assessor who performs the assessment procedures." if control else "Who rates the outcomes.")
+        add("independence", "Assessor independent of the system's team" if control else "Assessor independent of the team assessed", any(p.get("independent") for p in role("assessor")), required=False,
+            hint="The person who operates a control should not be the only one who assesses it.")
+        add("sponsor", "Authorizing official or sponsor named", role("approver") or role("sponsor"), required=False, hint="Who accepts the result and the remaining risk.")
+        add("as_of", "Assessment date set", s.get("as_of"), required=False)
+        add("evidence_plan", "Evidence deadline set", (s.get("evidence_plan") or {}).get("deadline"), required=False)
     else:
         start, end = _day(s.get("period_start")), _day(s.get("period_end"))
         add("function", "Function or process named", s.get("function"), hint="For example the Security Operations Centre or the CSIRT.")
@@ -314,6 +374,24 @@ def summary_text(model: str, fmt: str, scope: Dict[str, Any], facts: Optional[Di
             # only what was recorded: an assessor not marked independent is not thereby known to be part of the team
             out.append("The assessor is independent of the application's team." if any(p.get("independent") for p in assessors)
                        else "The assessor's independence of the application's team is not recorded.")
+    elif model == "system":
+        where = _list([s.get("business_unit"), s.get("organisation")], 2)
+        kind = "system" if fmt == "nist_800_53a" else "organisation or unit"
+        out.append(f"Subject: the {kind} \"{s.get('system') or 'unnamed'}\"" + (f" of {where}" if where else "") + ".")
+        if fmt == "nist_800_53a" and s.get("baseline"):
+            out.append(f"Control baseline: SP 800-53B {s['baseline'].title()}" + (" with the privacy baseline" if s.get("privacy_overlay") else "") + ".")
+        if fmt == "nist_csf2" and s.get("functions"):
+            out.append("CSF functions in scope: " + _list([CSF_FUNCTIONS[f].title() for f in s["functions"]]) + ".")
+        if s.get("boundary"):
+            out.append(f"Boundary: {s['boundary'][:400]}")
+        if s.get("as_of"):
+            out.append(f"Assessment date: {s['as_of']}.")
+        support = [name(r) for r in refs if r.get("role") != "excluded"]
+        if support:
+            out.append(f"Components (context for the evidence, not scored): {_list(support)}.")
+        excluded = [e.get("what", "") for e in s.get("exclusions") or []]
+        if any(excluded):
+            out.append(f"Tailored out or excluded: {_list(excluded)}.")
     else:
         where = _list([s.get("business_unit"), s.get("organisation")], 2)
         out.append(f"Subject: the function or process \"{s.get('function') or 'unnamed'}\"" + (f" of {where}" if where else "") + ".")

@@ -70,6 +70,8 @@ class AssessmentItemEvidence(Base):
     status = Column(String(50), default="draft")  # draft, pending_review, in_approval, approved, rejected
     ai_recommendation = Column(Text, nullable=True)
     ai_recommendation_generated_at = Column(DateTime, nullable=True)
+    # The artifact this evidence answers: one of the assessment objects NIST names for the item (a NIST assessment lists them under the control). NULL = the item as a whole.
+    artifact_ref = Column(String(300), nullable=True)
     submitted_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     submitted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

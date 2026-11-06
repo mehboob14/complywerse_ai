@@ -13,7 +13,7 @@ import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { Button, FormField, Notice, StatusPill, TextInput } from '@/components/ui/ds';
 import { errorMessage } from '@/components/ui/ds/reportOutcome';
 import { AssetPicker } from './AssetPicker';
-import { TYPE_INFO } from './scopingModel';
+import { infoOf } from './scopingModel';
 import { refreshAssessmentLists, scopingApi, type AssetRow } from './scopingApi';
 
 export function assessmentHref(id: number): string {
@@ -21,7 +21,7 @@ export function assessmentHref(id: number): string {
 }
 
 export default function StartDialog({ format, onClose }: { format: string; onClose: () => void }) {
-  const info = TYPE_INFO[format];
+  const info = infoOf(format) ?? { model: 'process', label: format, subject: 'function' };
   const router = useRouter();
   const qc = useQueryClient();
   const [asset, setAsset] = useState<AssetRow | null>(null);
@@ -57,7 +57,7 @@ export default function StartDialog({ format, onClose }: { format: string; onClo
             <p className="text-ds-label text-ds-fg-muted">The owner, environment and related assets come from the asset library; you confirm them in the scope.</p>
           </>
         ) : (
-          <FormField label={`The ${info.subject} to assess`} required hint={`For example: ${format === 'itsecops_maturity' ? 'Security Operations Centre' : format === 'cti_maturity' ? 'Enterprise threat intelligence' : format === 'csir_maturity' ? 'Enterprise CSIRT' : 'Security incident management'}.`}>
+          <FormField label={`The ${info.subject} to assess`} required hint={`For example: ${({ itsecops_maturity: 'Security Operations Centre', cti_maturity: 'Enterprise threat intelligence', csir_maturity: 'Enterprise CSIRT', nist_800_53a: 'Core Banking Platform', nist_csf2: 'Demo Bank, enterprise profile' } as Record<string, string>)[format] ?? 'Security incident management'}.`}>
             <TextInput value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} autoFocus onKeyDown={(e) => { if (e.key === 'Enter' && ready && !make.isPending) make.mutate(); }} />
           </FormField>
         )}

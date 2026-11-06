@@ -6,12 +6,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 
-export type ScopeModel = 'asset' | 'process';
+export type ScopeModel = 'asset' | 'process' | 'system';
 export type Phase = 'scoping' | 'in_progress';
 export type ParticipantRole = 'owner' | 'contributor' | 'assessor' | 'reviewer' | 'approver' | 'sponsor' | 'observer';
 export type AssetRole = 'primary' | 'component' | 'supporting' | 'sample' | 'excluded';
 export type Environment = 'production' | 'staging' | 'test' | 'development' | 'other';
 export type Platform = 'android' | 'ios' | 'web' | 'api';
+export type Baseline = 'low' | 'moderate' | 'high';
 
 export interface Participant {
   kind: 'user' | 'team' | 'external';
@@ -52,6 +53,13 @@ export interface Scope {
   geography?: string[];
   services?: string[];
   evidence_plan?: EvidencePlan;
+  // a system or unit assessed against NIST (SP 800-53A, CSF 2.0)
+  system?: string;
+  boundary?: string;
+  baseline?: Baseline | null;
+  privacy_overlay?: boolean;
+  functions?: string[];
+  as_of?: string | null;
   // both
   exclusions?: Exclusion[];
   trigger?: string | null;
@@ -85,11 +93,15 @@ export interface Domain { name: string; count: number }
 export interface Snapshot {
   taken_at: string;
   taken_by: { id: number; name: string | null };
-  template: { id: number; name: string; items: number; file_name: string | null; uploaded_at: string | null };
+  template: { id: number | null; name: string; items: number; file_name: string | null; uploaded_at: string | null; library?: LibrarySource };
   owner: { id: number | null; name: string | null };
   assets: Array<AssetRef & Partial<AssetFacts>>;
   participants: Array<Participant & { display: string | null }>;
 }
+
+export interface LibrarySource { publication: string; version: string | null; url: string; licence: string | null }
+/** What a NIST assessment is made from (null on every other assessment). */
+export interface LibraryInfo { title: string; publication: string; version: string; url: string; source: LibrarySource; baselines?: Record<string, { controls: number; objectives: number }> | null }
 
 /** One assessment's scope, readiness and snapshot (GET/PUT /{id}/scope, initiate, start). `scope_model` is null for a questionnaire. */
 export interface ScopeView {
@@ -98,7 +110,7 @@ export interface ScopeView {
   assessment_format: string;
   format_label: string | null;
   scope_model: ScopeModel | null;
-  family: 'technical' | 'process' | null;
+  family: 'technical' | 'process' | 'nist' | null;
   phase: Phase | null;
   status: string | null;
   locked: boolean;
@@ -116,14 +128,17 @@ export interface ScopeView {
   snapshot: Snapshot | null;
   subject_summary: string | null;
   readiness: Readiness | null;
+  library: LibraryInfo | null;
 }
 
 export interface TemplateRow {
   assessment_format: string;
   label: string;
   scope_model: ScopeModel;
-  family: 'technical' | 'process';
-  questionnaire: { assessment_id: number; name: string; items: number; domains: Domain[] } | null;
+  family: 'technical' | 'process' | 'nist';
+  /** `assessment_id` is null for a NIST assessment: it has no workbook, its questions come from the library */
+  questionnaire: { assessment_id: number | null; name: string; items: number; domains: Domain[] } | null;
+  library?: LibraryInfo;
   scoping: number;
   in_progress: number;
 }

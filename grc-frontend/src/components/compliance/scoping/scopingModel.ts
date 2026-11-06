@@ -69,25 +69,50 @@ export const TYPE_INFO: Record<string, TypeInfo> = {
 
 export const typeOfTab = (tab: string): string | undefined => Object.keys(TYPE_INFO).find((f) => TYPE_INFO[f].tab === tab);
 
+/** The NIST assessments, made from the NIST library tab (modules/assessments/nist.py): their words, like TYPE_INFO's. They have no workbook to upload. */
+export const NIST_INFO: Record<string, TypeInfo & { publication: string; method: string }> = {
+  nist_800_53a: {
+    tab: 'nist_library', label: 'NIST SP 800-53A', model: 'system', subject: 'system', publication: 'SP800-53A',
+    about: 'Assesses the security and privacy controls of one system the way NIST SP 800-53A Rev. 5 describes: the controls of the baseline you choose, each with its assessment objectives, the methods (examine, interview, test) and the objects to look at.',
+    needs: ['The system and its authorization boundary', 'Its impact level, to choose the Low, Moderate or High baseline', 'The system owner and the assessor, ideally independent of the team', 'Policies, procedures, records and configurations to examine'],
+    how: 'Each objective is determined Satisfied, Other than satisfied or Not applicable, with the evidence behind it. A control is satisfied only when every objective is.',
+    method: 'Each control lists the assessment objects NIST names: what to examine, whom to interview, what to test.',
+  },
+  nist_csf2: {
+    tab: 'nist_library', label: 'NIST CSF 2.0', model: 'system', subject: 'organisation or unit', publication: 'CSF2',
+    about: 'Builds a Cybersecurity Framework 2.0 profile of one organisation or unit: how far each outcome is implemented today, and where it should be.',
+    needs: ['The organisation or unit the profile is of', 'Which of the six functions the profile covers', 'The profile owner and who rates the outcomes', 'Policies, records and examples that show each outcome in practice'],
+    how: 'Each subcategory is rated not, partially, largely or fully implemented, with a target, so the gaps between current and target show where to act.',
+    method: 'Each subcategory lists the implementation examples NIST gives for it.',
+  },
+};
+/** The words of any assessment type: one of the seven, or a NIST one. */
+export const infoOf = (format: string): (TypeInfo & { publication?: string; method?: string }) | undefined => TYPE_INFO[format] ?? NIST_INFO[format];
+export const isNistFormat = (format: string): boolean => format in NIST_INFO;
+/** Where the page of a type lives in the hub: its own tab, or the NIST library tab with the assessment named. */
+export const typeHref = (format: string): string => (isNistFormat(format) ? `/cyber-security?tab=nist_library&assessment=${format}` : `/cyber-security?tab=${TYPE_INFO[format]?.tab ?? 'overview'}`);
+
 export const PHASE_LABEL: Record<Phase, string> = { scoping: 'Scoping', in_progress: 'In progress' };
 export const PHASE_TONE: Record<Phase, 'pending' | 'progress'> = { scoping: 'pending', in_progress: 'progress' };
 
-export const ROLE_LABEL = (role: ParticipantRole, model: ScopeModel | null): string => {
-  const own = model === 'process' ? 'Process owner' : 'Application owner';
-  return ({ owner: own, contributor: 'Contributor', assessor: 'Assessor', reviewer: model === 'process' ? 'Independent reviewer' : 'Reviewer', approver: 'Approver', sponsor: 'Sponsor', observer: 'Observer' } as const)[role];
+export const ROLE_LABEL = (role: ParticipantRole, model: ScopeModel | null, format?: string): string => {
+  const own = model === 'process' ? 'Process owner' : model === 'system' ? (format === 'nist_csf2' ? 'Profile owner' : 'System owner') : 'Application owner';
+  const approver = model === 'system' ? 'Authorizing official' : 'Approver';
+  return ({ owner: own, contributor: 'Contributor', assessor: 'Assessor', reviewer: model === 'process' ? 'Independent reviewer' : 'Reviewer', approver, sponsor: 'Sponsor', observer: 'Observer' } as const)[role];
 };
 
 /** The roles offered for a kind of assessment, in the order a person fills them. */
 export const ROLES_OF: Record<ScopeModel, readonly ParticipantRole[]> = {
   asset: ['owner', 'assessor', 'reviewer', 'approver', 'contributor', 'observer'],
   process: ['owner', 'sponsor', 'contributor', 'reviewer', 'assessor', 'observer'],
+  system: ['owner', 'assessor', 'reviewer', 'approver', 'contributor', 'sponsor', 'observer'],
 };
 
 export const ASSET_ROLE_LABEL: Record<AssetRole, string> = {
   primary: 'The application', component: 'Component in scope', supporting: 'Supporting', sample: 'Sample', excluded: 'Excluded',
 };
 /** What a related or listed asset can be to the assessment (the primary application is not one of these). */
-export const ASSET_ROLES_OF: Record<ScopeModel, readonly AssetRole[]> = { asset: ['component', 'supporting', 'sample', 'excluded'], process: ['supporting', 'sample', 'excluded'] };
+export const ASSET_ROLES_OF: Record<ScopeModel, readonly AssetRole[]> = { asset: ['component', 'supporting', 'sample', 'excluded'], process: ['supporting', 'sample', 'excluded'], system: ['supporting', 'sample', 'excluded'] };
 
 export const ENVIRONMENTS = [['production', 'Production'], ['staging', 'Staging'], ['test', 'Test'], ['development', 'Development'], ['other', 'Other']] as const;
 export const TRIGGERS = [['periodic', 'Periodic review'], ['regulatory', 'Regulatory requirement'], ['change', 'A major change'], ['incident', 'After an incident'], ['audit', 'An audit finding'], ['third_party', 'Third-party assurance'], ['other', 'Other']] as const;
@@ -96,8 +121,9 @@ export const LEVELS = [[1, 'Level 1', 'The minimum for every application.'], [2,
 // ── stages ──────────────────────────────────────────────────────────────────────────────────────────────────────
 const CHECK_STAGE: Record<string, Exclude<Stage, 'assessment'>> = {
   subject: 'scope', environment: 'scope', version: 'scope', level: 'scope', platforms: 'scope', function: 'scope', organisation: 'scope', period: 'scope', assets: 'scope',
-  owner: 'people', application_owner: 'people', process_owner: 'people', assessor: 'people', reviewer: 'people', sponsor: 'people', contributors: 'people', independence: 'people',
-  rules_of_engagement: 'plan', window: 'plan', evidence_plan: 'plan',
+  system: 'scope', baseline: 'scope', functions: 'scope',
+  owner: 'people', application_owner: 'people', process_owner: 'people', system_owner: 'people', assessor: 'people', reviewer: 'people', sponsor: 'people', contributors: 'people', independence: 'people',
+  rules_of_engagement: 'plan', window: 'plan', evidence_plan: 'plan', as_of: 'plan',
 };
 export const stageOfCheck = (key: string): Exclude<Stage, 'assessment'> => CHECK_STAGE[key] ?? 'scope';
 
@@ -137,7 +163,7 @@ export function progressOf(row: Pick<AssessmentRow, 'total_items' | 'complied_co
 /** What an assessment is of, for a register: the application's name, or the function (read out of the name made at initiation). */
 export function subjectOf(row: Pick<AssessmentRow, 'name' | 'primary_asset_name' | 'scope_model' | 'assessment_format'>): string {
   if (row.primary_asset_name) return row.primary_asset_name;
-  const label = TYPE_INFO[row.assessment_format]?.label;
+  const label = infoOf(row.assessment_format)?.label;
   if (label && row.name.startsWith(`${label} - `)) return row.name.slice(label.length + 3);
   return row.name;
 }
