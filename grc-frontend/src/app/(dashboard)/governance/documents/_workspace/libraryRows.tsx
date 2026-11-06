@@ -16,6 +16,7 @@ import { ReviewDate } from './atoms';
 import { FileTile, LifecycleCell } from './cells';
 import { FrameworksCell } from './FrameworksCell';
 import { inForceNote, verLabel, type GovDoc } from './lib';
+import { DOCUMENT_FIT } from './libraryFit';
 import { reviewState, reviewable, type FrameworkInfo, type Lookups } from './libraryModel';
 
 /** A plain left click; a click with a modifier (or the middle button) belongs to the browser: a new tab. */
@@ -32,6 +33,8 @@ export interface RowEnv {
   /** the title was pressed: the details open over the list */
   onPeek: (id: number) => void;
   onPickFramework: (id: number) => void;
+  /** where a document's page is, from this list (the shell's `?from=` says which page it was opened from) */
+  hrefOf: (id: number) => string;
   /** what the row's menu offers this person for this document */
   rights: (doc: GovDoc) => { edit: boolean; archive: boolean; restore: boolean };
   canMove: (doc: GovDoc) => boolean;
@@ -66,18 +69,20 @@ function DocumentTitle({ row, env }: { row: RecordRow<GovDoc>; env: RowEnv }) {
       <FileTile doc={doc} compact />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-[8px]">
-          <Link
-            href={`/governance/documents/${doc.id}`}
-            prefetch={false}
-            dir="auto"
-            title={doc.title}
-            aria-current={undefined}
-            onClick={(e) => { e.stopPropagation(); if (plainClick(e)) { e.preventDefault(); env.onPeek(doc.id); } }}
-            className={`min-w-0 truncate rounded-ds-control py-[1px] text-ds-body hover:text-ds-primary-text hover:underline focus-visible:bg-ds-primary-soft focus-visible:outline-none focus-visible:shadow-ds-ring ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}
-          >
-            {doc.title}
-            {row.depth > 0 && <span className="sr-only">, under another document</span>}
-          </Link>
+          {/* the clamp is on the wrapper and the link stays inline, so only the words are the link: a title takes two lines (one in the compact density) and its whole text is the link's title */}
+          <div dir="auto" className={`min-w-0 text-ds-body [overflow-wrap:anywhere] ${env.compact ? 'truncate' : 'line-clamp-2'}`}>
+            <Link
+              href={env.hrefOf(doc.id)}
+              prefetch={false}
+              title={doc.title}
+              aria-current={undefined}
+              onClick={(e) => { e.stopPropagation(); if (plainClick(e)) { e.preventDefault(); env.onPeek(doc.id); } }}
+              className={`scroll-mt-[44px] rounded-ds-control py-[1px] hover:text-ds-primary-text hover:underline focus-visible:bg-ds-primary-soft focus-visible:text-ds-primary-text focus-visible:underline focus-visible:outline-none ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}
+            >
+              {doc.title}
+              {row.depth > 0 && <span className="sr-only">, under another document</span>}
+            </Link>
+          </div>
           {doc.status === 'archived' && <span className="shrink-0 rounded-ds-control border border-ds-border-strong bg-ds-surface-hover px-[6px] text-ds-label text-ds-fg-muted">Archived</span>}
           {!open && row.nested && row.nested.count > 0 && <span className="shrink-0 whitespace-nowrap text-ds-label text-ds-fg-muted" title={`${row.nested.count} ${row.nested.count === 1 ? 'document' : 'documents'} under it`}>+{row.nested.count}</span>}
           {row.context && <span className="shrink-0 whitespace-nowrap text-ds-label text-ds-fg-muted" title="Shown because a document under it matches">Parent of a match</span>}
@@ -113,23 +118,23 @@ export function OwnerAvatar({ doc, withName = false }: { doc: GovDoc; withName?:
 export function documentColumns(env: RowEnv): RecordColumn<GovDoc>[] {
   return [
     { key: 'title', header: 'Document', sortKey: 'title', cell: (row) => <RowLead row={row}><DocumentTitle row={row} env={env} /></RowLead> },
-    { key: 'status', header: 'Status', sortKey: 'lifecycle', width: 'w-[116px]', cell: (row) => <LifecycleCell doc={row.record} /> },
-    { key: 'review', header: 'Next review', sortKey: 'review', width: 'w-[124px]', priority: 2, cell: (row) => <ReviewDate doc={row.record} now={env.now} compact={env.compact} /> },
-    { key: 'owner', header: 'Owner', sortKey: 'owner', width: 'w-[68px] 2xl:w-[176px]', priority: 2, cell: (row) => <><span className="2xl:hidden"><OwnerAvatar doc={row.record} /></span><span className="hidden min-w-0 2xl:inline"><OwnerAvatar doc={row.record} withName /></span></> },
+    { key: 'status', header: 'Status', sortKey: 'lifecycle', fit: DOCUMENT_FIT.status, cell: (row) => <LifecycleCell doc={row.record} /> },
+    { key: 'review', header: 'Next review', sortKey: 'review', fit: DOCUMENT_FIT.review, cell: (row) => <ReviewDate doc={row.record} now={env.now} compact={env.compact} /> },
+    { key: 'owner', header: 'Owner', sortKey: 'owner', fit: DOCUMENT_FIT.owner, cell: (row, look) => <OwnerAvatar doc={row.record} withName={look.wide} /> },
     {
-      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', width: 'w-[92px] max-xl:hidden', priority: 3,           // from 1280px: below it the title is worth more than the count (the details list the frameworks)
+      key: 'frameworks', header: 'Frameworks', sortKey: 'frameworks', firstDir: 'desc', fit: DOCUMENT_FIT.frameworks,
       cell: (row) => <FrameworksCell as="count" doc={row.record} info={env.info} prefer={env.preferFrameworks} onPick={env.onPickFramework} />,
     },
   ];
 }
 
-/** The card a phone gets: the title, then the status, the next review and the owner. */
+/** The card a row is where the list has no room for a table: the title (two lines at most), then the status, the next review and the owner. */
 export function DocumentCard({ row, env }: { row: RecordRow<GovDoc>; env: RowEnv }) {
   const doc = row.record;
   const s = reviewState(doc, env.now);
   return (
     <div className="flex min-w-0 flex-col gap-[4px]">
-      <span dir="auto" title={doc.title} className={`truncate text-ds-body ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}>{doc.title}</span>
+      <span dir="auto" title={doc.title} className={`line-clamp-2 text-ds-body [overflow-wrap:anywhere] ${row.context ? 'text-ds-fg-muted' : 'font-[600] text-ds-fg'}`}>{doc.title}</span>
       <span className="flex min-w-0 flex-wrap items-center gap-x-[10px] gap-y-[4px]">
         <StatusPill size="sm" {...statusPill(documentStatus, doc.status)} />
         {s.label && <span className="whitespace-nowrap text-ds-label text-ds-fg-muted" title={s.long || undefined}>{s.label}</span>}

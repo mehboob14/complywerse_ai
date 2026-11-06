@@ -37,6 +37,8 @@ import {
   STUDIO_NEW_DOCUMENT, artifactStart, lawFileName, lawStart, ncaStart, recommendedStart, sessionBody, studioDraftUrl, type TemplateStart,
 } from './_templateStart';
 import { DocumentsWorkspace } from './_workspace/DocumentsWorkspace';
+import { useHere } from './_workspace/useHere';
+import { withFrom } from '@/components/shell/withFrom';
 
 interface TenantUser {
   id: number;
@@ -139,6 +141,7 @@ const getFileTypeColor = (fileType: string | null): string => {
 
 export default function GovernanceDocumentsPage() {
   const router = useRouter();
+  const here = useHere();               // what the library's links to the Studio carry (?from=), so the way back is this view
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:policies:create');
@@ -285,7 +288,7 @@ export default function GovernanceDocumentsPage() {
       }
       return session;
     },
-    onSuccess: (session) => router.push(`/governance/documents/studio/${session.id}`),
+    onSuccess: (session) => router.push(withFrom(`/governance/documents/studio/${session.id}`, here)),
     onError: (e) => toast({
       type: 'error',
       title: 'Could not open the template',
@@ -337,8 +340,8 @@ export default function GovernanceDocumentsPage() {
         canCreate={canCreate}
         canEdit={canEdit}
         currentUserId={currentUserId}
-        onNewDocument={() => router.push('/governance/documents/studio')}     // the AI Studio: upload, write, edit, compare
-        onAIDraft={() => router.push(STUDIO_NEW_DOCUMENT)}                    // the AI Studio's new-document popup
+        onNewDocument={() => router.push(withFrom('/governance/documents/studio', here))}     // the AI Studio: upload, write, edit, compare
+        onAIDraft={() => router.push(withFrom(STUDIO_NEW_DOCUMENT, here))}        // the AI Studio's new-document popup
         onTemplates={() => setIsRecommendedOpen(true)}
       />
 

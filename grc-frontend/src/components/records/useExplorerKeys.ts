@@ -14,7 +14,8 @@ export interface ExplorerKeyHandlers {
 }
 
 const FIELD = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
-const OVERLAY = '[role="menu"], [role="dialog"], [role="listbox"], [role="combobox"], [aria-modal="true"]';
+// a docked side panel (the shell's Work and context panel) is beside the page, not over it, and its keys are its own as much as a dialog's: j, k and Escape in it are not the list's
+const OVERLAY = '[role="menu"], [role="dialog"], [role="listbox"], [role="combobox"], [aria-modal="true"], [data-side-panel]';
 const CONTROL = 'button, a[href], summary, [role="tab"], [role="menuitem"], [role="checkbox"], tr[tabindex]';
 
 export function placeOf(target: EventTarget | null): KeyPlace {

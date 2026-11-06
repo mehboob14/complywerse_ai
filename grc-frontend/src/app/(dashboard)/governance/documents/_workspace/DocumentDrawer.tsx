@@ -1,73 +1,29 @@
 'use client';
 
 /**
- * DocumentDrawer — the "peek" of the Governance → Documents library: the document's key facts, workflow, versions and framework mappings, with a button to open the full
- * page. It opens when a row (or a card) is clicked; clicking another row swaps the content and the tab chosen stays.
- *
- * It has two shapes, decided by the window (the page passes `mode`):
- *   side   from 1024px: a panel BESIDE the register (in the page's flow, sticky under the app header), not over it. The register narrows to make room and keeps the columns the
- *          person is reading (libraryColumns.PEEK_FROM); nothing is hidden behind the panel. It does not trap focus (the page stays usable): focus goes to its Close button
- *          when it opens, Escape closes it from inside it or from the row it came from, and focus goes back to that row.
- *   sheet  below 1024px: a full-screen sheet, modal: focus goes in and is kept inside (Tab wraps), the page behind does not scroll, Escape closes it, and focus goes back to the
- *          row or card that opened it (useDialogFocus, the platform's overlay focus). Its Close button is the first thing focused.
- * What it says (the facts, the fallback timeline, the tabs, the attestation line) is decided in drawerLogic.ts, which node --test checks. Written on the design-system kit:
- * kit Buttons, Menu and Tabs, StatusPill, --ds tokens, 12px at the least, dates through lib/format.ts.
+ * The sections of the library's details panel (DocumentDetail.tsx puts them in one scrolling body): Overview (the facts, the attestation line, the description, the tags), Workflow
+ * (who the document waits for, the acknowledgements, the recent activity) and Frameworks (what it maps to): the facts, the words and the requests the library has always shown.
+ * What they say is decided in drawerLogic.ts, which node --test checks. Written on the design-system kit: kit Buttons, --ds tokens, 12px at the least, dates through lib/format.ts.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { ArchiveRestore, Archive, ArrowUpRight, ChevronDown, ChevronUp, Download, Loader2, Pencil, X } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { Avatar, Button, IconButton, Menu, StatusPill, TabPanel, Tabs, type MenuItem } from '@/components/ui/ds';
+import { Avatar, Button } from '@/components/ui/ds';
+import { withFrom } from '@/components/shell/withFrom';
 import { LIFECYCLE_KIND_LABEL, eventLabel, type LifecycleReply, type LifecycleRow } from '@/lib/documentLifecycle';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { documentStatus, statusPill } from '@/lib/status';
-import { useDialogFocus } from '@/components/ui/useDialogFocus';
-import { lockBodyScroll } from '@/components/ui/scrollLock';
 import { AttestationRing, ReviewDate, attestationColour, shortDate } from './atoms';
-import {
-  attestationSummary, inForceText, inWorkflow, keyInfoRows, mappedFrameworkIds, mappedLine, tabsFor, timelineFromDates, versionText,
-  type InfoRow, type TabId,
-} from './drawerLogic';
+import { attestationSummary, keyInfoRows, mappedFrameworkIds, mappedLine, timelineFromDates, type InfoRow } from './drawerLogic';
 import { FrameworkList } from './FrameworkList';
-import { type GovDoc, LifecycleDots } from './lib';
-import { type Lookups, typeLabel } from './libraryModel';
-import { Versions } from './Versions';
-
-export interface DocumentDrawerProps {
-  /** null = closed (nothing is drawn) */
-  doc: GovDoc | null;
-  /** departments, frameworks, coverage (document id -> %), the signed-in person */
-  lookups: Lookups;
-  /** attestation "4 of 5" (may be empty) */
-  counts: Record<number, { done: number; total: number }>;
-  /** the frameworks the library is already filtered by */
-  activeFrameworks: string[];
-  /** `side`: beside the register (from 1024px, not modal); `sheet`: a full-screen modal sheet below that */
-  mode: 'side' | 'sheet';
-  onClose: () => void;
-  /** the full document page */
-  onOpenDoc: (id: number) => void;
-  /** a framework row was clicked: the library filters by it (the panel stays open) */
-  onPickFramework: (id: number) => void;
-  onEdit: (doc: GovDoc) => void;
-  canEdit: boolean;
-  onDownload: (doc: GovDoc) => void;
-  onArchive: (doc: GovDoc) => void;
-  canArchive: boolean;
-  onRestore?: (doc: GovDoc) => void;
-  canRestore: boolean;
-  /** previous / next row of the table (the caller moves the selection) */
-  onStep?: (dir: -1 | 1) => void;
-  hasPrev?: boolean;
-  hasNext?: boolean;
-}
+import type { GovDoc } from './lib';
+import type { Lookups } from './libraryModel';
+import { useHere } from './useHere';
 
 const WAITING_SHOWN = 6;
 const ACTIVITY_SHOWN = 6;
 
 const MUTED = 'text-ds-label text-ds-fg-muted';
-const FOCUS = 'focus-visible:outline-none focus-visible:shadow-ds-ring';
 
 // ─── Small pieces ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -141,7 +97,8 @@ function Description({ text }: { text: string | null }) {
   );
 }
 
-export function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; counts: DocumentDrawerProps['counts'] }) {
+export function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Lookups; counts: Record<number, { done: number; total: number }> }) {
+  const here = useHere();
   const att = attestationSummary(lookups.coverage[doc.id], counts[doc.id]);
   const tags = doc.tags ?? [];
   const scope = doc.regulatory_scope ?? [];
@@ -160,7 +117,7 @@ export function Overview({ doc, lookups, counts }: { doc: GovDoc; lookups: Looku
             {att.detail && <p className={MUTED}>{att.detail}</p>}
           </div>
         </div>
-        <Button href="/governance/documents/attestation" variant="link" size="sm" className="mt-2">Manage attestation</Button>
+        <Button href={withFrom('/governance/documents/attestation', here)} variant="link" size="sm" className="mt-2">Manage attestation</Button>
       </Section>
       <Section title="Description"><Description text={doc.description} /></Section>
       {tags.length > 0 && <Section title="Tags"><Chips items={tags} /></Section>}
@@ -283,150 +240,3 @@ export function Frameworks({ doc, lookups, active, onPick }: { doc: GovDoc; look
     </div>
   );
 }
-
-// ─── The panel ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-/** Escape closes the panel unless something else owns it: an open menu or dialog, or a search box with text to clear; and only when
- *  focus is in the panel, on the page itself or on the table's row (never in a field elsewhere). */
-function escapeCloses(e: KeyboardEvent, panel: HTMLElement | null): boolean {
-  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return false;
-  const over = document.querySelector('[role="menu"], [role="listbox"], [role="dialog"], [aria-modal="true"]');
-  if (over && !panel?.contains(over)) return false;
-  const t = e.target;
-  if (t instanceof HTMLInputElement && t.type === 'search' && t.value) return false;
-  const focus = document.activeElement;
-  return !focus || focus === document.body || !!panel?.contains(focus) || !!focus.closest('[data-doc-row], [data-folder-row]');
-}
-
-/** The row or card of a document that is on screen (the table and the cards are both drawn, one hidden by the window's width). */
-function visibleRowOf(id: number): HTMLElement | null {
-  return Array.from(document.querySelectorAll<HTMLElement>(`[data-doc-row="${id}"]`)).find((el) => el.getClientRects().length > 0) ?? null;
-}
-
-function DrawerPanel({
-  doc, lookups, counts, activeFrameworks, mode, onClose, onOpenDoc, onPickFramework, onEdit, canEdit, onDownload, onArchive, canArchive,
-  onRestore, canRestore, onStep, hasPrev, hasNext,
-}: DocumentDrawerProps & { doc: GovDoc }) {
-  const sheet = mode === 'sheet';
-  const uid = useId();
-  const [tab, setTab] = useState<TabId>('overview');         // kept while the panel shows another document; gone when it closes
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
-  const latest = useRef({ id: doc.id, onClose });
-  latest.current = { id: doc.id, onClose };
-
-  // the sheet is modal: focus is kept inside it and goes back to what opened it, and the page behind does not scroll (the platform's overlay focus and scroll lock)
-  useDialogFocus(sheet, panelRef);
-  useEffect(() => (sheet ? lockBodyScroll() : undefined), [sheet]);
-
-  // opening: focus the close button, the sheet slides in (unless motion is reduced); closing: the side panel puts focus back on the row it came from
-  useEffect(() => {
-    const panel = panelRef.current;
-    closeRef.current?.focus({ preventScroll: true });
-    if (sheet && panel && typeof panel.animate === 'function' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      panel.animate([{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }], { duration: 150, easing: 'ease-out' });
-    }
-    // capture phase: this looks at the page before a menu's own Escape handler closes it
-    const onKey = (e: KeyboardEvent) => { if (escapeCloses(e, panelRef.current)) latest.current.onClose(); };
-    document.addEventListener('keydown', onKey, true);
-    return () => {
-      document.removeEventListener('keydown', onKey, true);
-      if (sheet) return;                                      // the sheet's focus goes back through useDialogFocus
-      const focus = document.activeElement;
-      if (focus && focus !== document.body) return;           // focus went somewhere on purpose
-      const row = visibleRowOf(latest.current.id);
-      if (!row) return;
-      if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '-1');
-      row.focus({ preventScroll: true });
-    };
-  }, [sheet]);
-
-  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [doc.id, tab]);
-
-  const tabs = tabsFor(doc);
-  const menu: MenuItem[] = [
-    { key: 'archive', label: 'Archive', icon: Archive, onSelect: () => onArchive(doc), danger: true, hidden: !canArchive },
-    { key: 'restore', label: 'Restore', icon: ArchiveRestore, onSelect: () => onRestore?.(doc), hidden: !(onRestore && canRestore) },
-  ];
-  const inForce = inForceText(doc);
-  const titleId = `${uid}-title`;
-
-  return (
-    <div
-      ref={panelRef}
-      role={sheet ? 'dialog' : 'complementary'}
-      aria-modal={sheet ? true : undefined}
-      aria-labelledby={sheet ? titleId : undefined}
-      aria-label={sheet ? undefined : 'Document details'}
-      tabIndex={sheet ? -1 : undefined}
-      data-doc-drawer=""
-      className={sheet
-        ? 'fixed inset-0 z-[60] flex flex-col bg-ds-surface'
-        : 'sticky top-[64px] flex max-h-[calc(100vh-80px)] w-[400px] shrink-0 flex-col self-start overflow-hidden rounded-ds-card border border-ds-border bg-ds-surface shadow-ds-pop'}
-    >
-      <div className="shrink-0 border-b border-ds-border px-[16px] pb-[12px] pt-[12px]">
-        <div className="flex items-start gap-[12px]">
-          <div className="min-w-0 flex-1">
-            <h2 id={titleId} dir="auto" title={doc.title} className="line-clamp-3 break-words !text-ds-section !text-ds-fg">{doc.title}</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-ds-label text-ds-fg-muted">
-              {doc.document_code && <><span className="font-mono text-ds-fg-body">{doc.document_code}</span><span aria-hidden>·</span></>}
-              <span>{typeLabel(doc.doc_type)}</span>
-              {doc.current_version && <><span aria-hidden>·</span><span>{versionText(doc.current_version)}</span></>}
-              {inForce && <><span aria-hidden>·</span><span>{inForce}</span></>}
-            </p>
-          </div>
-          <div className="-mr-2 -mt-1 flex shrink-0 items-center gap-0.5">
-            {onStep && (
-              <>
-                <IconButton label="Previous document" aria-disabled={hasPrev === false || undefined} onClick={() => { if (hasPrev !== false) onStep(-1); }}><ChevronUp aria-hidden /></IconButton>
-                <IconButton label="Next document" aria-disabled={hasNext === false || undefined} onClick={() => { if (hasNext !== false) onStep(1); }}><ChevronDown aria-hidden /></IconButton>
-              </>
-            )}
-            <Menu label="More actions" iconOnly items={menu} />
-            <IconButton label="Close details" ref={closeRef} data-autofocus="" onClick={onClose}><X aria-hidden /></IconButton>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <StatusPill {...statusPill(documentStatus, doc.status)} />
-          {inWorkflow(doc.status) && <span aria-hidden><LifecycleDots status={doc.status} showLabel={false} /></span>}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={() => onOpenDoc(doc.id)} rightIcon={<ArrowUpRight aria-hidden />}>Open document</Button>
-          <Button onClick={() => onDownload(doc)} leftIcon={<Download aria-hidden />}>Download</Button>
-          {canEdit && <Button onClick={() => onEdit(doc)} title="Edit the document's details" leftIcon={<Pencil aria-hidden />}>Edit</Button>}
-        </div>
-      </div>
-
-      <Tabs tabs={tabs.map((t) => ({ key: t.id, label: t.label }))} value={tab} onChange={(key) => setTab(key as TabId)} ariaLabel="Document sections" className="flex min-h-0 flex-1 flex-col">
-        {/* the strip above does not scroll; this body does. Focusable (the kit's tab panel), so the keyboard can scroll it */}
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[16px] pb-6 pt-4">
-          <TabPanel tabKey={tab}>
-            {/* keyed by the document: a search box, a "Show more" or a loading state never carries over to the next one */}
-            <div key={doc.id}>
-              {tab === 'overview' && <Overview doc={doc} lookups={lookups} counts={counts} />}
-              {tab === 'workflow' && <Workflow doc={doc} onOpenDoc={onOpenDoc} />}
-              {tab === 'versions' && (
-                <div>
-                  <Versions doc={doc} />
-                </div>
-              )}
-              {tab === 'frameworks' && <Frameworks doc={doc} lookups={lookups} active={activeFrameworks} onPick={onPickFramework} />}
-            </div>
-          </TabPanel>
-        </div>
-      </Tabs>
-    </div>
-  );
-}
-
-export function DocumentDrawer(props: DocumentDrawerProps): JSX.Element | null {
-  const { doc } = props;
-  if (!doc || typeof document === 'undefined') return null;
-  const panel = <DrawerPanel {...props} doc={doc} />;
-  return props.mode === 'sheet' ? createPortal(panel, document.body) : panel;
-}
-
-export default DocumentDrawer;

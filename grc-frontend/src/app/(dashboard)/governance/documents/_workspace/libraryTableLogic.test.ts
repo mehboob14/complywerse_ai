@@ -132,10 +132,12 @@ test('a row\'s menu: the per-row rule where the page gave one, the page-wide edi
   assert.equal(rowRights({ canRestore: false, canRestoreRow: () => true }, doc).restore, false);   // a yes without a way to restore
 });
 
-test('what the rest of the page leans on: the row marker the drawer returns focus to, and one fixed-height line of frameworks whatever their number', () => {
-  const table = readFileSync(new URL('./LibraryTable.tsx', import.meta.url), 'utf8');
-  assert.ok(table.includes('data-doc-row={doc.id}'));
-  assert.ok(table.includes('compareDocs(') && table.indexOf('compareDocs(') < table.indexOf('buildTree(ordered'));      // the order is chosen before the tree is built
+test('what the rest of the page leans on: the row marker the details return focus to, and one fixed-height line of frameworks whatever their number', () => {
+  const list = readFileSync(new URL('../../../../../components/records/RecordTable.tsx', import.meta.url), 'utf8');
+  const detail = readFileSync(new URL('./DocumentDetail.tsx', import.meta.url), 'utf8');
+  assert.ok(list.includes('data-record-row={id}') && detail.includes('[data-record-row="${id}"]'));
+  const workspace = readFileSync(new URL('./DocumentsWorkspace.tsx', import.meta.url), 'utf8');
+  assert.ok(workspace.includes('const sortedScope = useMemo(() => sortDocs(') && workspace.indexOf('const sortedScope') < workspace.indexOf('buildTree(inFolders ? [] : sortedScope'));      // the order is chosen before the tree is built
   const cell = readFileSync(new URL('./FrameworksCell.tsx', import.meta.url), 'utf8');
   assert.ok(cell.includes('const MAX_CHIPS = 2;') && cell.includes('max: MAX_CHIPS'));       // two chips, the rest behind "+N"
   assert.ok(cell.includes('flex-nowrap') && cell.includes('overflow-hidden'));                  // on one line, clipped: the row never grows
