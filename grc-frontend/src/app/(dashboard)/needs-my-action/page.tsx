@@ -29,7 +29,8 @@ export default function NeedsMyActionPage() {
 }
 
 function Queue() {
-  const { inbox, refetch, fetching, fetchingSource } = useInbox({ includeSent: true });
+  // the page asks again every time it is opened (freshOnOpen): what the person did on a document page or on the assessments page, which refresh only some of the lists, shows at once, not up to a minute later
+  const { inbox, refetch, fetching, fetchingSource } = useInbox({ includeSent: true, freshOnOpen: true });
   const search = useSearchParams();
   const asked = sectionParam(search?.get('section'));
   const queryClient = useQueryClient();
@@ -43,14 +44,32 @@ function Queue() {
   const open = { ...openByDefault(inbox.bySection.decision.length, asked), ...toggled };
   const [shown, setShown] = useState<Record<SectionKey, number>>({ decide: PAGE_SIZE, ack: PAGE_SIZE, sent: PAGE_SIZE });
 
-  // a link that names a section (?section=ack) brings it into view once there is something to show, and puts the keyboard on its heading
+  // a link that names a section (?section=ack) brings it into view once there is something to show, and puts the keyboard on its heading. The sources answer one after the other and a late
+  // one adds rows ABOVE the section (the sign-offs, the evidence): once the last has answered, the section is brought to the top again, unless the person has scrolled in the meantime
   const scrolled = useRef(false);
+  const rescrolled = useRef(false);
+  const moved = useRef(false);
   useEffect(() => {
-    if (!asked || scrolled.current || state !== 'content') return;
-    scrolled.current = true;
-    document.getElementById(`inbox-section-${asked}`)?.scrollIntoView({ block: 'start' });
-    document.getElementById(`inbox-heading-${asked}`)?.focus({ preventScroll: true });
-  }, [asked, state]);
+    const mark = () => { moved.current = true; };
+    window.addEventListener('wheel', mark, { passive: true });
+    window.addEventListener('touchmove', mark, { passive: true });
+    window.addEventListener('keydown', mark);
+    return () => { window.removeEventListener('wheel', mark); window.removeEventListener('touchmove', mark); window.removeEventListener('keydown', mark); };
+  }, []);
+  const settled = Object.values(inbox.sources).every((s) => s.state !== 'loading');
+  useEffect(() => {
+    if (!asked || state !== 'content') return;
+    const section = document.getElementById(`inbox-section-${asked}`);
+    if (!scrolled.current) {
+      scrolled.current = true;
+      rescrolled.current = settled;                      // nothing is still to arrive: nothing to correct
+      section?.scrollIntoView({ block: 'start' });
+      document.getElementById(`inbox-heading-${asked}`)?.focus({ preventScroll: true });
+    } else if (settled && !rescrolled.current) {
+      rescrolled.current = true;
+      if (!moved.current) section?.scrollIntoView({ block: 'start' });
+    }
+  }, [asked, state, settled]);
 
   // the dialog: the item being decided; `done` is the key of one the server took (the list then drops it, which is no "no longer waiting" for the person who just decided it)
   const [deciding, setDeciding] = useState<InboxItem | null>(null);

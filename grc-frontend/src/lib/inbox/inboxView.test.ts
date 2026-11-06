@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 process.env.TZ = 'UTC';       // a due line counts calendar days on the viewer's clock: the test fixes the viewer's zone (each test file runs in its own process)
 
 import { buildInbox, type SourceInput, type SourceState } from './buildInbox.ts';
-import { PAGE_SIZE, SECTIONS, chipsOf, clockOf, dueLine, factsOf, metaLine, openByDefault, pageOf, pageState, sectionParam, sectionStatus, sectionVisible } from './inboxView.ts';
+import { PAGE_SIZE, SECTIONS, chipsOf, clockOf, dueLine, factsOf, metaLine, openByDefault, pageOf, pageState, sectionParam, sectionStatus, sectionVisible, sentCutLine } from './inboxView.ts';
 
 const NOW = new Date('2026-11-01T12:00:00Z');
 const day = (n: number, hour = 12) => new Date(NOW.getTime() + n * 86_400_000 + (hour - 12) * 3_600_000).toISOString().replace(/\.\d+Z$/, '');
@@ -127,4 +127,24 @@ test('the facts under a row: what is asked and of what and who asked; for a sent
   assert.deepEqual(factsOf(plain), ['To acknowledge'], 'nothing is invented for what the source does not say; a row is never blank');
   const [sent] = build(input('doc.sent', { items: [{ document_id: 9, kind: 'review', title: 'S', doc_type: 'policy', pending: 4, waiting: ['Rana Reviewer', 'Rafay Reviewer'], waiting_more: 2 }] })).items;
   assert.deepEqual(factsOf(sent), ['Review requested', 'Policy', 'waiting for Rana Reviewer, Rafay Reviewer +2', '4 pending']);
+});
+
+test('every section has a loading sentence of its own for a screen reader, never "Loading to decide"', () => {
+  assert.deepEqual(SECTIONS.map((s) => s.loading), ['Loading what needs your decision', 'Loading the documents to acknowledge', 'Loading the requests you sent']);
+  for (const s of SECTIONS) assert.doesNotMatch(s.loading, /^Loading (to|sent)/, s.key);
+});
+
+test('the sent list is cut by the server at 200: the number is the server\'s true total and the page says how many it lists', () => {
+  const rows = Array.from({ length: 200 }, (_, i) => ({ document_id: i + 1, kind: 'review', title: `S${i}`, doc_type: 'policy', pending: 1, waiting: ['A'], waiting_more: 0 }));
+  const cut = build(input('doc.sent', { enabled: true, total: 312, truncated: true, items: rows }));
+  assert.deepEqual([cut.counts.sent, cut.counts.sentTotal], [200, 312]);
+  assert.equal(metaLine(cut), '312 sent', 'the facts line says the true number, not the length of the cut list');
+  assert.equal(sentCutLine(cut.counts), 'Showing the 200 most urgent of 312 requests you sent.');
+  // nothing cut: the total is the list, and the page says nothing; a server that sends no total (an older one) is read as the list
+  const whole = build(input('doc.sent', { enabled: true, total: 2, truncated: false, items: rows.slice(0, 2) }));
+  assert.deepEqual([whole.counts.sent, whole.counts.sentTotal, sentCutLine(whole.counts)], [2, 2, '']);
+  const old = build(input('doc.sent', { items: rows.slice(0, 3) }));
+  assert.deepEqual([old.counts.sent, old.counts.sentTotal, sentCutLine(old.counts)], [3, 3, '']);
+  // a total smaller than the list (never sent, but never believed) cannot make the number smaller than what is listed
+  assert.equal(build(input('doc.sent', { total: 1, items: rows.slice(0, 3) })).counts.sentTotal, 3);
 });

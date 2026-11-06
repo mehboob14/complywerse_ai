@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  NEEDS_SIGNATURE, doneWords, documentChoices, documentRequest, evidenceChoices, evidenceRequest, failureOf, keysAfterDecision, problemWith,
+  EVIDENCE_MOVED, NEEDS_SIGNATURE, doneWords, documentChoices, documentRequest, evidenceChoices, evidenceRequest, evidenceStillWaits, failureOf, keysAfterDecision, problemWith,
 } from './decisionModel.ts';
+import { buildInbox } from './buildInbox.ts';
 
 const http = (status: number | null, detail?: unknown) => ({ isAxiosError: true, code: status ? undefined : 'ERR_NETWORK', response: status ? { status, data: { detail } } : undefined });
 
@@ -88,4 +89,30 @@ test('the confirmation of every choice is a title and a sentence', () => {
     assert.ok(words.title && words.message, `${choice}/${evidence}`);
   }
   assert.notEqual(doneWords('reject', true).message, doneWords('reject', false).message);
+});
+
+// ── evidence: the server does not check that it still waits where the person saw it ─────────────────────────────────────────────────────────────────────
+const evidenceRow = (id: number, status: string, tier: number) => ({ id, evidence_name: `scan-${id}.pdf`, item_number: '2.1', current_tier: tier, status, addressed_to_me: true, can_approve: true });
+
+test('evidence is asked again right before a decision: it still waits where the person saw it only if a fresh list holds the same item at the same step', () => {
+  const seen = buildInbox([{ id: 'assessment.evidence', state: { state: 'ready', at: 1 }, raw: { pending_approvals: [evidenceRow(7, 'pending_tier_1', 1)] } }], new Date()).items[0];
+  assert.equal(seen.key, 'assessment.evidence:evidence:7:pending_tier_1', 'the key names the step the evidence waits at');
+  assert.equal(evidenceStillWaits({ pending_approvals: [evidenceRow(7, 'pending_tier_1', 1), evidenceRow(8, 'pending_tier_1', 1)] }, seen.key), true);
+  assert.equal(evidenceStillWaits([evidenceRow(7, 'pending_tier_1', 1)], seen.key), true, 'the bare array an older server sends is read too');
+  assert.equal(evidenceStillWaits({ pending_approvals: [evidenceRow(7, 'pending_tier_2', 2)] }, seen.key), false, 'it moved to the next tier: an approval now would count for that tier');
+  assert.equal(evidenceStillWaits({ pending_approvals: [evidenceRow(8, 'pending_tier_1', 1)] }, seen.key), false, 'decided (gone from the list)');
+  assert.equal(evidenceStillWaits({ pending_approvals: [] }, seen.key), false);
+  assert.equal(evidenceStillWaits(null, seen.key), false, 'an answer that is not a list holds nothing');
+  assert.equal(EVIDENCE_MOVED.kind, 'stale', 'and the dialog says it is no longer waiting, offering Close, with nothing sent');
+  assert.match(EVIDENCE_MOVED.message, /Nothing was sent/);
+});
+
+test('the evidence dialog asks right before it sends, through the same request as the list, and a failure of that asking does not stop the decision (the server decides as it always did)', () => {
+  const dialog = readFileSync('src/app/(dashboard)/needs-my-action/_DecisionDialog.tsx', 'utf8');
+  assert.match(dialog, /askSource\('assessment\.evidence'\)/);
+  assert.match(dialog, /evidenceStillWaits\(fresh, item\.key\)/);
+  assert.match(dialog, /EVIDENCE_MOVED/);
+  assert.match(dialog, /\.catch\(\(\) => null\)[\s\S]{0,80}fresh !== null/, 'only an answer that arrived can stop the decision');
+  assert.match(dialog, /if \(!open\.current\) return;/, 'a dialog closed while the list was being asked sends nothing');
+  assert.match(dialog, /target="_blank" rel="noopener noreferrer" leftIcon=\{<ExternalLink aria-hidden \/>\}>Open the assessment approval/, 'the link leaves the dialog (and what was typed) where it is');
 });

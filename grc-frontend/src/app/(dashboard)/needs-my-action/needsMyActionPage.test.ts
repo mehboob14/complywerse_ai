@@ -152,3 +152,37 @@ test('?section= opens and brings a section into view', () => {
   assert.match(page, /sectionParam\(search\?\.get\('section'\)\)/);
   assert.match(page, /scrollIntoView/);
 });
+
+// ── what the browser pass (S2-IN, 2026-11-06) found and fixed ───────────────────────────────────────────────────────────────────────────────────────────
+
+test('the page asks again every time it is opened (what was done on another page shows at once); the top bar does not, it only polls', () => {
+  const api = read(`${LIB}/inboxApi.ts`);
+  assert.match(api, /refetchOnMount: freshOnOpen \? \('always' as const\) : true/);
+  assert.match(api, /freshOnOpen = false/, 'the default is the top bar\'s');
+  assert.match(read(`${PAGE}/page.tsx`), /useInbox\(\{ includeSent: true, freshOnOpen: true \}\)/);
+  assert.match(read('src/components/layout/Header.tsx'), /useInbox\(\{ enabled: !!currentUser \}\)/, 'the top bar passes no freshOnOpen');
+});
+
+test('a row keeps to one line of facts from a tablet up: the due line beside the action, the actions one width, the words (escalated, archived...) on the facts line; stacked below', () => {
+  const row = read(`${PAGE}/_InboxRow.tsx`);
+  assert.match(row, /md:flex-row md:items-center md:gap-\[12px\]/);
+  assert.match(row, /md:w-\[176px\] md:justify-end/, 'the actions share one width so the due lines make a column');
+  assert.match(row, /py-\[10px\]/);
+  assert.match(row, /\{chips\.map\(\(word\) => <StatusPill/);
+  assert.doesNotMatch(row, /mt-\[6px\] flex flex-wrap items-center gap-\[6px\]/, 'the words no longer take a line of their own');
+});
+
+test('the sent section shows the server\'s true total and says how many of them it lists; each section tells a screen reader what it is loading in a sentence', () => {
+  const section = read(`${PAGE}/_Section.tsx`);
+  assert.match(section, /inbox\.counts\.sentTotal/);
+  assert.match(section, /sentCutLine\(inbox\.counts\)/);
+  assert.match(section, /label=\{spec\.loading\}/);
+});
+
+test('?section= is brought to the top again when the last source has answered, unless the person scrolled (a late source adds rows above the section)', () => {
+  const page = read(`${PAGE}/page.tsx`);
+  assert.match(page, /const settled = Object\.values\(inbox\.sources\)\.every\(\(s\) => s\.state !== 'loading'\)/);
+  assert.match(page, /rescrolled\.current = settled/);
+  assert.match(page, /if \(!moved\.current\) section\?\.scrollIntoView/);
+  for (const event of ['wheel', 'touchmove', 'keydown']) assert.ok(page.includes(`'${event}'`), event);
+});

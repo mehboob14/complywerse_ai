@@ -8,7 +8,7 @@ import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react';
 import { Button, Notice, SkeletonRows, StatusPill } from '@/components/ui/ds';
 import { formatCount } from '@/lib/format';
 import type { Inbox, InboxItem } from '@/lib/inbox/buildInbox';
-import { clockOf, pageOf, sectionStatus, type SectionSpec } from '@/lib/inbox/inboxView';
+import { clockOf, pageOf, sectionStatus, sentCutLine, type SectionSpec } from '@/lib/inbox/inboxView';
 import { InboxRow } from './_InboxRow';
 
 export interface SectionProps {
@@ -30,8 +30,9 @@ export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, 
   const items = inbox.bySection[spec.section];
   const status = sectionStatus(inbox, spec.section);
   const decisions = spec.key === 'decide';
-  // the true number: the decisions are the ones addressed to the person (the badge's number); acknowledgements and sent requests are all of them
-  const count = decisions ? inbox.counts.decision : items.length;
+  // the true number: the decisions are the ones addressed to the person (the badge's number); acknowledgements are all of them; the sent requests are as many as the server counts (it lists the 200 most urgent)
+  const count = decisions ? inbox.counts.decision : spec.key === 'sent' ? inbox.counts.sentTotal : items.length;
+  const cut = spec.key === 'sent' ? sentCutLine(inbox.counts) : '';
   const overdue = decisions ? inbox.counts.overdue : spec.key === 'ack' ? inbox.counts.ackOverdue : 0;
   const page = pageOf(items, shown);
   const firstOther = decisions ? page.rows.findIndex((i) => !i.counted) : -1;
@@ -71,7 +72,7 @@ export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, 
               )}
             </div>
           ))}
-          {status.loading && items.length === 0 && <div className="p-[12px]"><SkeletonRows rows={3} columns={3} label={`Loading ${spec.title.toLowerCase()}`} /></div>}
+          {status.loading && items.length === 0 && <div className="p-[12px]"><SkeletonRows rows={3} columns={3} label={spec.loading} /></div>}
           {items.length === 0 && !status.loading && status.notices.length === 0 && <p className="px-[12px] py-[16px] text-ds-body text-ds-fg-muted">{spec.empty}</p>}
           {items.length > 0 && (
             <ul className="m-0 list-none p-0" aria-label={spec.title}>
@@ -88,6 +89,7 @@ export function InboxSection({ spec, inbox, open, onToggle, shown, onMore, now, 
               <Button onClick={onMore}>{page.more}</Button>
             </div>
           )}
+          {cut && <p className="border-t border-ds-border px-[12px] py-[8px] text-ds-label text-ds-fg-muted">{cut}</p>}
         </div>
       )}
     </section>

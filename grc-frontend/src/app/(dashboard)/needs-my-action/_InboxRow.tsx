@@ -18,7 +18,7 @@ const ICON: Record<Kind, LucideIcon> = {
   approval: ShieldCheck, review: UserCheck, signoff: PenLine, decide: GitPullRequest, revise: RotateCcw, changes: Pencil, evidence: FileCheck, acknowledgement: FileCheck2,
 };
 
-const CONTROL = 'group flex w-full items-start gap-[12px] px-[12px] py-[12px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring max-sm:flex-wrap';
+const CONTROL = 'group flex w-full items-start gap-[12px] px-[12px] py-[10px] text-left hover:bg-ds-surface-hover focus-visible:outline-none focus-visible:shadow-ds-ring max-sm:flex-wrap';
 
 export function InboxRow({ item, now, onOpen }: { item: InboxItem; now: Date; onOpen: (item: InboxItem) => void }) {
   const sent = item.section === 'sent';
@@ -36,20 +36,23 @@ export function InboxRow({ item, now, onOpen }: { item: InboxItem; now: Date; on
       </span>
       <span className="min-w-0 flex-1">
         <span title={item.title} className="block text-ds-body font-[600] text-ds-fg [overflow-wrap:anywhere]"><span className="line-clamp-2">{item.title}</span></span>
-        <span className="mt-[2px] block text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]">{factsOf(item).join(' · ')}</span>
+        {/* what is asked and of what, and the words the row carries (escalated, archived...) on the same line while they fit: a row stays one line of facts */}
+        <span className="mt-[2px] flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
+          <span className="text-ds-label text-ds-fg-muted [overflow-wrap:anywhere]">{factsOf(item).join(' · ')}</span>
+          {chips.map((word) => <StatusPill key={word} size="sm" {...statusPill(inboxChip, word)} />)}
+        </span>
         {item.detail && <span title={item.detail} className="mt-[2px] block text-ds-label text-ds-fg-body [overflow-wrap:anywhere]"><span className="line-clamp-1">{item.detail}</span></span>}
         {note && <span className="mt-[4px] block text-ds-label text-ds-fg-body [overflow-wrap:anywhere]">{note}</span>}
-        {chips.length > 0 && (
-          <span className="mt-[6px] flex flex-wrap items-center gap-[6px]">
-            {chips.map((word) => <StatusPill key={word} size="sm" {...statusPill(inboxChip, word)} />)}
-          </span>
-        )}
       </span>
-      <span className="flex shrink-0 flex-col items-end gap-[6px] max-sm:w-full max-sm:flex-row max-sm:items-center max-sm:justify-between max-sm:pl-[44px]">
-        <span className={clsx('text-ds-label', due.tone === 'danger' ? 'font-[600] text-ds-danger' : due.tone === 'warning' ? 'font-[600] text-ds-fg' : 'text-ds-fg-body')}>{due.text}</span>
-        <span className="inline-flex min-h-ds-control items-center gap-[2px] rounded-ds-control border border-ds-border-control bg-ds-surface px-[10px] text-ds-label font-[600] text-ds-primary-text group-hover:bg-ds-primary-soft">
-          {action}
-          <ChevronRight aria-hidden className="h-[14px] w-[14px]" strokeWidth={1.75} />
+      {/* the due line beside the action from a tablet up (a row is then one line of facts, as the prototype's: 12 rows in a 900px window, not 8); stacked below, and on a phone a row of its own */}
+      <span className="flex shrink-0 flex-col items-end gap-[6px] md:flex-row md:items-center md:gap-[12px] max-sm:w-full max-sm:flex-row max-sm:items-center max-sm:justify-between max-sm:pl-[44px]">
+        <span className={clsx('text-ds-label md:min-w-[104px] md:text-right', due.tone === 'danger' ? 'font-[600] text-ds-danger' : due.tone === 'warning' ? 'font-[600] text-ds-fg' : 'text-ds-fg-body')}>{due.text}</span>
+        {/* the actions share one width from a tablet up, so the due lines make a column of their own */}
+        <span className="flex md:w-[176px] md:justify-end">
+          <span className="inline-flex min-h-ds-control items-center gap-[2px] rounded-ds-control border border-ds-border-control bg-ds-surface px-[10px] text-ds-label font-[600] text-ds-primary-text group-hover:bg-ds-primary-soft">
+            {action}
+            <ChevronRight aria-hidden className="h-[14px] w-[14px]" strokeWidth={1.75} />
+          </span>
         </span>
       </span>
     </>
