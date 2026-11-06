@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  DECISION_MAX, DEFAULT_OUTCOME, OUTCOMES, alreadyMarked, canRecordOutcome, currentItem, dueToStart, endPlan, markEveryone, markOne, meetingQuorum, notClosed, outcomeBody, outcomeWord,
+  DECISION_MAX, DEFAULT_OUTCOME, OUTCOMES, alreadyMarked, barKind, canRecordOutcome, currentItem, dueToStart, endPlan, markEveryone, markOne, meetingQuorum, notClosed, outcomeBody, outcomeWord,
   outlineLabel, outlineOrder, quorumReading, rollCount, rollFilter, rollLine, rollQuorum, sectionInView, startPlan, undecidedItems, type RollMember,
 } from './meetingRun.ts';
 
@@ -44,7 +44,7 @@ test('the quorum says nothing was recorded rather than 0 when no roll was taken'
 });
 
 test('the quorum says met or not met against the threshold, with how far it is', () => {
-  assert.deepEqual(quorumReading({ required: 4, present: 5, met: true, recorded: true }), { text: '5 of 4 required present', label: 'Quorum met', tone: 'success', fraction: 1 });
+  assert.deepEqual(quorumReading({ required: 4, present: 5, met: true, recorded: true }), { text: '5 present, 4 required', label: 'Quorum met', tone: 'success', fraction: 1 });
   assert.deepEqual(quorumReading({ required: 4, present: 3, met: false, recorded: true }), { text: '3 of 4 required present', label: 'Quorum not met', tone: 'warning', fraction: 0.75 });
   assert.equal(quorumReading({ required: 4, present: 0, met: false, recorded: true }).fraction, 0, 'a recorded zero is 0 of 4');
   // a reply without the verdict is judged against the threshold the same way
@@ -110,6 +110,18 @@ test('a meeting is due to start from its own day, and "not closed" once its time
   assert.equal(dueToStart({ status: 'scheduled', scheduled_date: null }, noon), false);
 });
 
+test('the bar under the head is the live bar while the meeting runs, the "due to start" bar for someone who may start it, and nothing otherwise', () => {
+  const noon = new Date(2026, 10, 6, 12, 0);
+  const today = new Date(2026, 10, 6, 9, 0).toISOString();
+  const later = new Date(2026, 10, 9, 9, 0).toISOString();
+  assert.equal(barKind({ status: 'in_progress', scheduled_date: today }, false, noon), 'live', 'everyone sees that it is on');
+  assert.equal(barKind({ status: 'scheduled', scheduled_date: today }, true, noon), 'due');
+  assert.equal(barKind({ status: 'scheduled', scheduled_date: today }, false, noon), null, 'nothing to offer someone who may not start it');
+  assert.equal(barKind({ status: 'scheduled', scheduled_date: later }, true, noon), null, 'not its day yet');
+  assert.equal(barKind({ status: 'completed', scheduled_date: today }, true, noon), null);
+  assert.equal(barKind({ status: 'cancelled', scheduled_date: today }, true, noon), null);
+});
+
 test('the start question names the meeting and what follows', () => {
   const p = startPlan({ status: 'scheduled', scheduled_date: null, title: 'Q4 meeting' });
   assert.deepEqual([p.title, p.confirmLabel, p.tone], ['Start this meeting?', 'Start meeting', 'default']);
@@ -121,7 +133,7 @@ test('the end question says what is complete and what is not: quorum met, quorum
   const met = { quorum_required: 4, quorum_present: 5, quorum_met: true, recorded: true };
   const full = endPlan({ meeting, roll: met, openItems: 0, hasMinutes: true });
   assert.deepEqual([full.title, full.confirmLabel, full.tone], ['End this meeting?', 'End meeting', 'default']);
-  assert.deepEqual(full.lines.map((l) => l.text), ['“Board” becomes Completed.', 'Quorum met: 5 of 4 required present.', 'Minutes are drafted.']);
+  assert.deepEqual(full.lines.map((l) => l.text), ['“Board” becomes Completed.', 'Quorum met: 5 present, 4 required.', 'Minutes are drafted.']);
 
   const noRoll = endPlan({ meeting, roll: { quorum_required: 4, quorum_present: null, quorum_met: null, recorded: false }, openItems: 2, hasMinutes: false });
   assert.deepEqual([noRoll.confirmLabel, noRoll.tone], ['End anyway', 'danger'], 'ending with no roll is asked as a caution: focus starts on Cancel');

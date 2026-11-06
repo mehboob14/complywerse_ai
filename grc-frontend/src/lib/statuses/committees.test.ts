@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 import { statusPill } from '../status.ts';
-import { agendaStatus, decisionOutcome, rollStatus } from './committees.ts';
+import { agendaStatus, agendaVote, decisionOutcome, rollStatus } from './committees.ts';
 
 const ROUTER = new URL('../../../../backend/grc/modules/governance/routers/committees.py', import.meta.url);
 const source = existsSync(ROUTER) ? readFileSync(ROUTER, 'utf8') : null;
@@ -50,4 +50,18 @@ test('a word nobody registered is neutral with its own readable label, never a g
   assert.deepEqual(statusPill(decisionOutcome, 'Escalated'), { tone: 'neutral', label: 'Escalated' });
   assert.deepEqual(statusPill(decisionOutcome, undefined), { tone: 'neutral', label: '—' });
   assert.deepEqual(statusPill(rollStatus, 'on_leave'), { tone: 'neutral', label: 'On leave' });
+});
+
+test('the four votes the server accepts are the four registered, said the way the buttons say them', { skip: source === null && 'backend not beside the frontend' }, () => {
+  const hit = /_VALID_AGENDA_VOTES\s*=\s*\{([^}]*)\}/.exec(source as string);
+  assert.ok(hit, '_VALID_AGENDA_VOTES: not found in committees.py (did the router change shape?)');
+  const words = Array.from((hit as RegExpExecArray)[1].matchAll(/"([^"]+)"/g)).map((m) => m[1]);
+  assert.deepEqual([...words].sort(), ['abstain', 'agreed', 'disagreed', 'partial']);
+  assert.deepEqual([...agendaVote.words].sort(), [...words].sort(), 'nothing is registered that the server does not accept');
+  assert.deepEqual(['agreed', 'partial', 'disagreed', 'abstain'].map((w) => statusPill(agendaVote, w)), [
+    { tone: 'success', label: 'Agree' },
+    { tone: 'warning', label: 'Partly agree' },
+    { tone: 'danger', label: 'Disagree' },
+    { tone: 'neutral', label: 'Abstain' },
+  ]);
 });

@@ -1,6 +1,6 @@
 // The words of the Committees screens that are not a committee's, a meeting's or an action's status (those are in lib/status.ts): what a committee DECIDED about an
 // agenda item (the outcome), whether a member was in the room (the roll call) and where an agenda item stands. The words are the ones the server writes
-// (routers/committees.py: OUTCOME_WORDS, ATTENDANCE_WORDS, the agenda item's status); statuses/committees.test.ts re-reads that file, so a word the server starts writing fails a
+// (routers/committees.py: OUTCOME_WORDS, ATTENDANCE_WORDS, _VALID_AGENDA_VOTES, the agenda item's status); statuses/committees.test.ts re-reads that file, so a word the server starts writing fails a
 // test until it is registered here. A word nobody registered (an outcome typed by hand through the raw API: "Escalated") is neutral with its own readable label, never a guess.
 // Tones: success = agreed or present, danger = refused, warning = put off or arrived late, neutral = at rest or noted. Always shown as a word, never a colour alone.
 import { defineStatuses } from '../status.ts';
@@ -26,4 +26,12 @@ export const agendaStatus = defineStatuses('agenda item', {
   pending: 'neutral',
   discussed: 'success',
   deferred: 'warning',
+});
+
+/** A member's vote on an agenda item (MeetingAgendaItemVote.vote): the four the server accepts, said the way the vote buttons say them. */
+export const agendaVote = defineStatuses('agenda vote', {
+  agreed: { tone: 'success', label: 'Agree' },
+  partial: { tone: 'warning', label: 'Partly agree' },
+  disagreed: { tone: 'danger', label: 'Disagree' },
+  abstain: 'neutral',
 });

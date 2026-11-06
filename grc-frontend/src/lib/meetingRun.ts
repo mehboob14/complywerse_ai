@@ -80,7 +80,8 @@ export function quorumReading({ required, present, met, recorded }: { required: 
   const threshold = typeof required === 'number' && required >= 1 ? required : null;
   if (threshold === null) return { text: `${formatCount(present)} present`, label: 'No quorum set', tone: 'neutral', fraction: null };
   const fraction = Math.max(0, Math.min(1, present / threshold));
-  const text = `${formatCount(present)} of ${formatCount(threshold)} required present`;
+  // "3 of 4 required present" while short of it; "5 present, 4 required" once past it (5 of 4 reads wrongly)
+  const text = present >= threshold ? `${formatCount(present)} present, ${formatCount(threshold)} required` : `${formatCount(present)} of ${formatCount(threshold)} required present`;
   return met === false || (met == null && present < threshold)
     ? { text, label: 'Quorum not met', tone: 'warning', fraction }
     : { text, label: 'Quorum met', tone: 'success', fraction };
@@ -141,6 +142,12 @@ export function dueToStart(m: MeetingLike, now: Date = new Date()): boolean {
 export function notClosed(m: MeetingLike, now: Date = new Date()): boolean {
   const at = parseUtc(m.scheduled_date);
   return m.status === 'scheduled' && !!at && at.getTime() < now.getTime();
+}
+
+/** The bar under the page head: while the meeting runs ('live'), or when it is time to start it and the person may ('due'); otherwise there is none. */
+export function barKind(m: MeetingLike, canRun: boolean, now: Date = new Date()): 'live' | 'due' | null {
+  if (m.status === 'in_progress') return 'live';
+  return m.status === 'scheduled' && canRun && dueToStart(m, now) ? 'due' : null;
 }
 
 export interface RunPlan {
