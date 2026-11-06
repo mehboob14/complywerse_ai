@@ -10,7 +10,7 @@
 // The breakdowns are cards in a grid (two across from 768px, three from 1280px; a card may take two cells or the whole row); on a phone each is a closed
 // disclosure, so the first screen is the work. The two-part top row wraps by what each part needs (flex bases), not by the window, so a docked side panel
 // that narrows the page stacks it at the right moment. Tokens and arbitrary values only (kit rules).
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { Disclosure, SectionCard } from '@/components/ui/ds';
 import type { CockpitMode } from './cockpitModel';
@@ -58,23 +58,31 @@ export function SkipToWork({ href = '#work' }: { href?: string }) {
   );
 }
 
-function BreakdownCard({ b, narrow }: { b: Breakdown; narrow: boolean }) {
-  if (!narrow) {
-    return (
-      <div className={clsx('min-w-0', SPAN[b.size ?? 'normal'])}>
-        <SectionCard id={b.id} title={b.title} info={b.info} meta={b.meta} actions={b.actions}>{b.children}</SectionCard>
-      </div>
-    );
-  }
+/** A phone's breakdown: a closed disclosure. Its content is drawn once it is opened: a chart in a shut panel has no width to measure. */
+function FoldedCard({ b }: { b: Breakdown }) {
+  const [open, setOpen] = useState(false);
   return (
     <section id={b.id} className="min-w-0 rounded-ds-card border border-ds-border bg-ds-surface px-[12px]">
-      <Disclosure label={b.title} level={2}>
-        {(b.meta || b.actions) && (
-          <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[8px] px-[8px] pb-[8px] text-ds-body text-ds-fg-muted">{b.meta}{b.actions}</div>
+      <Disclosure label={b.title} level={2} open={open} onOpenChange={setOpen}>
+        {open && (
+          <>
+            {(b.meta || b.actions) && (
+              <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[8px] px-[8px] pb-[8px] text-ds-body text-ds-fg-muted">{b.meta}{b.actions}</div>
+            )}
+            <div className="px-[8px] pb-[8px]">{b.children}</div>
+          </>
         )}
-        <div className="px-[8px] pb-[8px]">{b.children}</div>
       </Disclosure>
     </section>
+  );
+}
+
+function BreakdownCard({ b, narrow }: { b: Breakdown; narrow: boolean }) {
+  if (narrow) return <FoldedCard b={b} />;
+  return (
+    <div className={clsx('min-w-0', SPAN[b.size ?? 'normal'])}>
+      <SectionCard id={b.id} title={b.title} info={b.info} meta={b.meta} actions={b.actions}>{b.children}</SectionCard>
+    </div>
   );
 }
 

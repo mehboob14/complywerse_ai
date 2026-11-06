@@ -67,8 +67,10 @@ test('the frame is configuration-driven: the page hands it the band, the work, t
 
 test('on a phone each breakdown is a closed disclosure with its controls inside; on a screen it is a section card', () => {
   const frame = code(SOURCES.find((s) => s.file === 'Cockpit.tsx')!.text);
-  assert.match(frame, /<Disclosure label=\{b\.title\} level=\{2\}>/);
-  assert.doesNotMatch(frame, /defaultOpen/, 'closed until the person opens it');
+  assert.match(frame, /<Disclosure label=\{b\.title\} level=\{2\} open=\{open\} onOpenChange=\{setOpen\}>/);
+  assert.match(frame, /const \[open, setOpen\] = useState\(false\);/, 'closed until the person opens it');
+  assert.match(frame, /\{open && \(\s*<>[\s\S]*\{b\.children\}/, 'the content is drawn once it is opened: a chart in a shut panel has no width to measure');
+  assert.doesNotMatch(frame, /defaultOpen/);
   assert.match(frame, /<SectionCard id=\{b\.id\} title=\{b\.title\} info=\{b\.info\} meta=\{b\.meta\} actions=\{b\.actions\}>/);
 });
 
