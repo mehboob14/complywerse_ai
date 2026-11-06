@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Lock, Mail, Plus } from 'lucide-react';
 import { Button, EmptyState, ErrorState, NoAccessState, Notice, Skeleton, SkeletonLines, SkeletonRows } from '@/components/ui';
 import { Grid, GuideSection, Spec, Specimen } from './Guide';
+import { FormErrorDemo } from './SearchDemo';
 
 function Counter({ label, count }: { label: string; count: number }) {
   return <p className="mt-2 text-center text-ds-label text-ds-fg-muted" aria-live="polite">{label}: {count}</p>;
@@ -110,6 +111,7 @@ export function StatesSection() {
       <Spec name="ErrorState"><ErrorDemo /></Spec>
       <Spec name="Skeleton"><SkeletonDemo /></Spec>
       <Spec name="Notice"><NoticeDemo /></Spec>
+      <Spec name="FormError"><FormErrorDemo /></Spec>
       <Spec name="NoAccessState">
         <Grid>
           <Specimen label="Default words"><NoAccessState /></Specimen>

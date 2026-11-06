@@ -7,6 +7,7 @@ import { Bell, ChevronRight, Pencil, Plus, Search, Trash2, X } from 'lucide-reac
 import { Button, Checkbox, FormField, IconButton, InfoTip, Select, Textarea, TextInput } from '@/components/ui';
 import { Grid, GuideSection, MONO, Row, Spec, Specimen } from './Guide';
 import { ComboboxDemo, MultiSelectDemo } from './SelectsDemo';
+import { SearchDemo } from './SearchDemo';
 
 const VARIANTS = ['primary', 'secondary', 'ghost', 'danger', 'dangerOutline', 'link'] as const;
 
@@ -154,6 +155,8 @@ export function FormsSection() {
       <Spec name="MultiSelect"><MultiSelectDemo /></Spec>
 
       <Spec name="Combobox"><ComboboxDemo /></Spec>
+
+      <Spec name="DebouncedSearch"><SearchDemo /></Spec>
 
       <Spec name="Checkbox">
         <Grid>

@@ -1288,6 +1288,44 @@ export const DOCS: Record<string, ComponentDoc> = {
       },
     ],
   },
+  DebouncedSearch: {
+    name: 'DebouncedSearch',
+    importFrom: UI,
+    use: 'a list is searched as the person types (the library, a register, a facet): the list is asked ONCE, 300 ms after the last letter, not for every letter. Enter asks at once; Escape with text in the box (or the ×) clears it, asks for everything and keeps focus in the box; with the box empty Escape is not its key, so a panel around it closes. The page holds the query that was asked (its state or its address) and may change it by itself: the box then shows it.',
+    dont: 'Do not debounce by hand in the page, or ask on every `onChange` of a TextInput (nine requests for "retention"). Do not wire `value` to what is typed: it is the query the list was last ASKED with (the box keeps its own draft, and an echo of its own ask never overwrites letters typed since). Do not put a form around it that submits on Enter: Enter is taken.',
+    parts: [
+      {
+        name: 'DebouncedSearch', source: `${DS}/DebouncedSearch.tsx`, own: 'DebouncedSearchProps',
+        props: [
+          prop('value', 'string', 'The query the list was asked with now. The page holds it; when the page changes it by itself (a "Clear filters" button, a link with ?q=) the box shows it.'),
+          prop('onSearch', '(query: string) => void', 'The person stopped typing (after `delay`), pressed Enter, or cleared the box: the query to ask for, without the spaces at either end ("" is everything). Called only when the query changed.'),
+          prop('label', 'string', 'Names the box for a screen reader ("Search documents") and its clear button ("Clear search documents").'),
+          prop('placeholder', 'string', 'What the empty box says.'),
+          prop('delay', 'number', 'Milliseconds of quiet before the list is asked.', '300'),
+          prop('loading', 'boolean', 'The list is being asked: the magnifier becomes a spinner and the box says it is busy.', 'false'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
+  FormError: {
+    name: 'FormError',
+    importFrom: UI,
+    use: 'a save failed and the form is still open: the server\'s own words (cleaned: no markup, no stack trace, at most 240 characters) once, at the top of the form, with what the person typed kept, and a Retry that repeats the same save when asking again can help. A danger Notice, so an alert with an icon: never colour alone. With nothing failed it draws nothing.',
+    dont: 'Do not pass the message instead of the error: whether a Retry makes sense (not for a refusal: a conflict, a missing right, an invalid value) is read from the error the request threw. Do not toast the same failure as well (use `toast: \'success\'` on the mutation) and do not write the words yourself: the server\'s win, `fallback` is for when it said nothing.',
+    parts: [
+      {
+        name: 'FormError', source: `${DS}/FormError.tsx`, own: 'FormErrorProps',
+        props: [
+          prop('title', 'string', 'What failed, as a headline: "Couldn\'t save the document". The Retry button is named "Retry: <title>".'),
+          prop('error', 'unknown', 'What the request threw, or null while nothing has failed (then nothing is drawn). A string is taken as the message and may always be retried.'),
+          prop('onRetry', '() => void', 'Repeats the save. Offered only when asking again can help (not for a refusal); left out, no Retry.'),
+          prop('fallback', 'string', 'Said when the server gave no usable words, instead of "Please try again."; what the server says always wins.'),
+          CLASS_NAME,
+        ],
+      },
+    ],
+  },
   ClampedText: {
     name: 'ClampedText',
     importFrom: UI,

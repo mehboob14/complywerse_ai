@@ -155,6 +155,31 @@ test('the barrels export every new piece once, from the kit and from @/component
   }
 });
 
+// ── DebouncedSearch and FormError ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('DebouncedSearch: asked once after the quiet time, at once on Enter; Escape with text clears and is taken; the page\'s own change overwrites the box and its echo does not', () => {
+  const s = code('DebouncedSearch.tsx');
+  // a new letter restarts the quiet time, and when it fires it looks again: Enter may have asked for this text already (the same query is never asked twice)
+  assert.match(s, /const timer = setTimeout\(\(\) => \{ if \(shouldAsk\(draft, asked\.current\)\) ask\(draft\); \}, delay\);\s+return \(\) => clearTimeout\(timer\);/);
+  assert.match(s, /if \(!shouldAsk\(draft, asked\.current\)\) return undefined;/);
+  assert.match(s, /if \(pageChangedQuery\(value, asked\.current\)\) \{\s+asked\.current = queryOf\(value\);\s+setDraft\(value\);/);
+  assert.match(s, /latest\.current = onSearch;/);                                                    // a timer started a render ago calls the page's current handler
+  assert.match(s, /if \(e\.key === 'Enter'\) \{\s+e\.preventDefault\(\);[^]*?if \(shouldAsk\(draft, asked\.current\)\) ask\(draft\);/);
+  assert.match(s, /else if \(e\.key === 'Escape' && escapeClears\(draft\)\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+clear\(\);/);
+  assert.match(s, /type="search"[^]*aria-label=\{label\}[^]*aria-busy=\{loading \|\| undefined\}/);
+  assert.match(s, /<IconButton label=\{clearName\(label\)\} onClick=\{\(\) => \{ clear\(\); input\.current\?\.focus\(\); \}\}>/);     // the clear button keeps focus in the box
+  assert.match(s, /leftAdornment=\{loading \? <Loader2 aria-hidden className="animate-spin" \/> : <Search aria-hidden \/>\}/);
+  assert.doesNotMatch(s, FORBIDDEN);
+});
+
+test('FormError: nothing without an error; otherwise a danger Notice with the server\'s cleaned words, and a Retry named for what failed only when asking again can help', () => {
+  const f = code('FormError.tsx');
+  assert.match(f, /if \(error === null \|\| error === undefined \|\| error === false\) return null;/);
+  assert.match(f, /onRetry && canRetry\(error\)\s+\? <Button size="sm" aria-label=\{`Retry: \$\{title\}`\} onClick=\{onRetry\}>Retry<\/Button>/);
+  assert.match(f, /<Notice tone="danger" title=\{title\} action=\{retry\} className=\{className\}>\{errorMessage\(error, fallback\)\}<\/Notice>/);
+  assert.match(f, /import \{ canRetry, errorMessage \} from '\.\/reportOutcome';/);                // the rules of the feedback standard, not copies of them
+});
+
 // ── RegisterTable: the selection column and the expandable row ────────────────────────────────────────────────────────────────────────────
 
 test('RegisterTable: the tick column and the toggle column exist only when asked for, so a register that passes neither is exactly what it was', () => {
